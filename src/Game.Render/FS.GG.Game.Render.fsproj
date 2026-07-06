@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <IsPackable>true</IsPackable>
+    <PackageId>FS.GG.Game.Render</PackageId>
+    <AssemblyName>FS.GG.Game.Render</AssemblyName>
+    <Title>FS.GG.Game.Render</Title>
+    <Description>Pure Scene adapter for FS.GG.Game — projects FS.GG.Game.Core simulation primitives (Point/Rect/Cell and pathfinding routes) onto FS.GG.UI.Scene drawables at the render edge. Reaches UP to FS.GG.UI.Scene; no Skia, deterministic. Per ADR-0022 §2.</Description>
+    <PackageTags>fsharp;game;simulation;rendering;scene;adapter</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Game.Render.Tests" />
+  </ItemGroup>
+
+  <!-- The render edge (ADR-0022 §2): Game.Core reaches up to nothing; this adapter is the one
+       place that reaches UP to FS.GG.UI.Scene (consumed from nuget.org / the org feed, @0.1.64,
+       FSharp.Core-only, Skia-free). Establishes the Game.Render -> FS.GG.UI.Scene dependency edge. -->
+  <ItemGroup>
+    <Compile Include="Adapter.fsi" />
+    <Compile Include="Adapter.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Core\FS.GG.Game.Core.fsproj" />
+    <PackageReference Include="FS.GG.UI.Scene" />
+  </ItemGroup>
+
+</Project>

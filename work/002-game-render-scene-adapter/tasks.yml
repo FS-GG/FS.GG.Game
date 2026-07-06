@@ -1,0 +1,96 @@
+schemaVersion: 1
+work:
+  id: 002-game-render-scene-adapter
+  title: "Game Render Scene Adapter"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/002-game-render-scene-adapter/spec.md
+  sourceClarifications: work/002-game-render-scene-adapter/clarifications.md
+  sourceChecklist: work/002-game-render-scene-adapter/checklist.md
+  sourcePlan: work/002-game-render-scene-adapter/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/002-game-render-scene-adapter/spec.md
+    digest: 70db63c27332bfe4248c232c47e7405f80822c2f54df221ddecab8233ee32c5b
+    schemaVersion: 1
+  - label: clarifications
+    path: work/002-game-render-scene-adapter/clarifications.md
+    digest: 848883a310bda3cc34f87b90b37b07b7894617eb98b6f3ee64d2302121cf913c
+    schemaVersion: 1
+  - label: checklist
+    path: work/002-game-render-scene-adapter/checklist.md
+    digest: 8712e13ea951cdefda50d83bef260a992ea869f4dc1ea6cfdc0d1d6bdbc827c0
+    schemaVersion: 1
+  - label: plan
+    path: work/002-game-render-scene-adapter/plan.md
+    digest: dae0bfdc93fbbc6bc2b3aa153f64800b89231d8e236f9900dc1c286fa0d4f1a4
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: "Implement requirement FR-001"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-001"]
+    decisions: []
+    sourceIds: ["AC-001", "FR-001"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV001"]
+  - id: T002
+    title: "Implement plan decision PD-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-001", "FR-001", "PD-001"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV002"]
+  - id: T003
+    title: "Update contract surface PC-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PD-001"]
+    requiredSkills: ["fsharp"]
+    requiredEvidence: ["EV003"]
+  - id: T004
+    title: "Record verification evidence VO-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PD-001", "VO-001"]
+    requiredSkills: ["automated-tests", "readiness-evidence"]
+    requiredEvidence: ["EV004"]
+  - id: T005
+    title: "Handle migration posture PM-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PM-001"]
+    requiredSkills: ["schema-versioning"]
+    requiredEvidence: ["EV005"]
+  - id: T006
+    title: "Refresh generated view impact GV-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["GV-001", "PD-001"]
+    requiredSkills: ["deterministic-json"]
+    requiredEvidence: ["EV006"]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 002-game-render-scene-adapter."

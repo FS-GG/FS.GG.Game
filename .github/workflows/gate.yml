@@ -7,9 +7,11 @@ name: gate
 # runs the whole (headless) Expecto suite so PRs get a real signal.
 #
 # FS.GG.Game.Core is BCL-only + its tests pull only public nuget.org packages (Expecto/FsCheck/
-# Microsoft.NET.Test.Sdk/YoloDev + FSharp.Core), so this gate needs NO org-feed credential today.
-# When FS.GG.Game.Render lands (P4) it will consume FS.GG.UI.Scene from the org GitHub Packages
-# feed — add `packages: read` + the feed source then.
+# Microsoft.NET.Test.Sdk/YoloDev + FSharp.Core), so this gate needs NO org-feed credential.
+# P4 update (ADR-0022): FS.GG.Game.Render consumes FS.GG.UI.Scene @0.1.64-preview.1 — which is
+# DUAL-PUBLISHED to nuget.org (ADR-0012/0013), so it restores from the public feed with no
+# `packages: read` credential and no extra source. FSharp.Core stays the only package pinned to the
+# SDK library-packs hash in the committed lockfiles (CI parity; see the 0.1.70 landing note / P2).
 on:
   push:
     branches: [main]
