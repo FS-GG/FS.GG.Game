@@ -1,0 +1,17 @@
+# Light governance overlay for FS.GG.Game (ADR-0022 §10 decision #4).
+# governance-descriptor@1 (ProjectFacts). Advisory: governance only INSPECTS — it is never a
+# build dependency, and its CI job (governance.yml) is non-blocking. FS.GG.Game is the first
+# FS-GG framework repo to dogfood governance on its own code (plan §5.1). Adapted from the
+# reference gate set (FS.GG.Governance samples/sdd-reference-gate-set/.fsgg) to FS.GG.Game's
+# real shape: FS.GG.Game.slnx (not <App>.sln) + stock dotnet (no build.fsx/FAKE), so the
+# `evidence` domain is dropped.
+schemaVersion: 1
+id: fs-gg-game
+governedRoot: .
+domains:
+  - build
+  - test
+packageSurfaces:
+  - src
+policyRef: .fsgg/policy.yml
+capabilitiesRef: .fsgg/capabilities.yml

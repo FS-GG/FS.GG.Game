@@ -1,0 +1,19 @@
+# governance-tooling@1. The concrete commands the checks (capabilities.yml) resolve to —
+# FS.GG.Game's real stock-dotnet build/test over the slnx (no build.fsx/FAKE, so no
+# build-evidence command). Mirrors gate.yml's build/test.
+schemaVersion: 1
+commands:
+  - id: dotnet-build
+    command: "dotnet build FS.GG.Game.slnx"
+    timeout: 600
+    environment: local-or-ci
+  - id: dotnet-test
+    command: "dotnet test FS.GG.Game.slnx"
+    timeout: 900
+    environment: ci
+environmentClasses:
+  - local
+  - ci
+externalTools:
+  - tool: dotnet
+    minVersion: "10.0.0"

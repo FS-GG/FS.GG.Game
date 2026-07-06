@@ -1,0 +1,48 @@
+name: governance
+
+# ADVISORY governance dogfood for FS.GG.Game (ADR-0022 §10 decision #4; plan §5.1). FS.GG.Game
+# is the first FS-GG framework repo to run governance on its OWN code. This is INTENTIONALLY
+# non-blocking: governance only INSPECTS, it is never a build dependency and never gates the
+# merge — the real merge gate stays `gate.yml` (locked restore + build + test + surface drift).
+# `fsgg-governance route --mode gate` reads the .fsgg/ overlay (light profile) and prints an
+# advisory verdict; `continue-on-error` guarantees a red verdict can never block a PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: governance-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  govern:
+    name: Advisory governance (fsgg-governance route, non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Belt-and-braces with the step-level continue-on-error: this job never fails the check run.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      # FS.GG.Governance.Cli is dual-published to nuget.org (ADR-0012/0013), so no org-feed
+      # credential is needed. Advisory tool; not pinned in the org-managed .config/dotnet-tools.json.
+      - name: Install fsgg-governance
+        run: dotnet tool install --global FS.GG.Governance.Cli --prerelease
+
+      - name: Advisory governance verdict (never blocks)
+        continue-on-error: true
+        run: |
+          echo "Advisory only — governance inspects, it never gates the merge (gate.yml is the merge gate)."
+          fsgg-governance route --mode gate
