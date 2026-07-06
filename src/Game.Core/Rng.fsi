@@ -27,5 +27,10 @@ module Rng =
     val nextInt: lo: int -> hi: int -> rng: Rng -> struct (int * Rng)
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Draw a boolean and the advanced generator from the high bit of one step — a fair, deterministic
+    /// coin flip without a modulus. Pure: the input generator is unchanged.
+    val nextBool: rng: Rng -> struct (bool * Rng)
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Derive two independent generators from the current state, for splitting into sub-streams.
     val split: rng: Rng -> struct (Rng * Rng)
