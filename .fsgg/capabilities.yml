@@ -1,0 +1,37 @@
+# governance-capabilities@2. Maps FS.GG.Game paths to capability domains + declares the
+# governed surface + the checks. Advisory (light profile default) — block-on-ship maturity
+# only bites on the `release` profile, never on `light`.
+schemaVersion: 2
+domains:
+  - build
+  - test
+pathMap:
+  - glob: "src/**"
+    capability: build
+  - glob: "*.slnx"
+    capability: build
+  - glob: "tests/**"
+    capability: test
+surfaces:
+  - id: public-api
+    kind: package
+    paths: ["src/**/*.fsi"]
+    owner: platform
+    maturity: block-on-ship
+checks:
+  - id: build
+    domain: build
+    command: dotnet-build
+    owner: platform
+    cost: medium
+    environment: local-or-ci
+    maturity: block-on-ship
+    tier: restoreBuild
+  - id: test
+    domain: test
+    command: dotnet-test
+    owner: platform
+    cost: high
+    environment: ci
+    maturity: block-on-ship
+    tier: focusedTests

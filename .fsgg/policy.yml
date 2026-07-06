@@ -1,0 +1,15 @@
+# governance-policy@1. `light` is the default profile — advisory posture (governance inspects,
+# never blocks the build). The stricter profiles exist for an opt-in run; the repo's real merge
+# gate stays gate.yml (locked restore + build + test + surface-baseline drift).
+schemaVersion: 1
+defaultProfile: light
+profiles:
+  - light
+  - standard
+  - strict
+  - release
+branchPolicy:
+  pattern: "main"
+  requirePr: true
+reviewBudget:
+  maxReviews: 3
