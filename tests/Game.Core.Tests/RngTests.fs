@@ -16,6 +16,18 @@ let private drawSeq n (start: Rng) =
         rng <- next
         v ]
 
+// Draw `n` bools by threading the generator; returns the boolean list.
+let private drawBools n (start: Rng) =
+    let mutable rng = start
+    [ for _ in 1..n ->
+        let struct (b, next) = Rng.nextBool rng
+        rng <- next
+        b ]
+
+// The committed first-8 nextBool sequence for seed 42 — the deterministic-replay golden.
+let private committedBools42 =
+    [ false; false; false; false; true; false; true; false ]
+
 [<Tests>]
 let tests =
     testList "Game.Core Rng SplitMix64 (US2, FR-006..FR-008)" [
@@ -80,5 +92,29 @@ let tests =
             let struct (l, r) = Rng.split (Rng.ofSeed 123UL)
             Expect.notEqual (drawSeq 24 l) (drawSeq 24 r) "the two sub-streams diverge"
             Expect.notEqual l.State r.State "the two states differ"
+        }
+
+        // Feature 001 (SDD dogfood, ADR-0022 P3): nextBool — a deterministic fair coin.
+        test "nextBool from a fixed seed matches a committed boolean sequence" {
+            Expect.equal (drawBools 8 (Rng.ofSeed 42UL)) committedBools42 "fixed seed ⇒ fixed boolean sequence"
+        }
+
+        test "nextBool is pure: drawing twice from the same state yields the same bit" {
+            let r0 = Rng.ofSeed 7UL
+            let struct (a, _) = Rng.nextBool r0
+            let struct (b, _) = Rng.nextBool r0
+            Expect.equal a b "same state ⇒ same draw (no mutation)"
+        }
+
+        test "nextBool threads state — the advanced generator continues the stream" {
+            let struct (_, r1) = Rng.nextBool (Rng.ofSeed 9UL)
+            let struct (_, r1') = Rng.nextBool (Rng.ofSeed 9UL)
+            Expect.equal r1.State r1'.State "the advanced state is itself deterministic"
+            Expect.notEqual r1.State (Rng.ofSeed 9UL).State "a draw advances the generator"
+        }
+
+        test "nextBool is not stuck on a constant — both values appear" {
+            let bs = drawBools 64 (Rng.ofSeed 0UL)
+            Expect.isTrue (List.contains true bs && List.contains false bs) "a fair coin yields both faces"
         }
     ]

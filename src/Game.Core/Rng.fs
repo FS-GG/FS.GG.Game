@@ -39,6 +39,12 @@ module Rng =
             let span = uint64 (int64 hi - int64 lo + 1L)
             struct (lo + int (bits % span), next)
 
+    // High bit of one mixed draw — a fair coin flip with no modulus bias. The bit 63 of a
+    // well-distributed 64-bit output is uniform, so `true`/`false` are equiprobable and deterministic.
+    let nextBool (rng: Rng) : struct (bool * Rng) =
+        let struct (bits, next) = nextU64 rng
+        struct (bits >>> 63 = 1UL, next)
+
     // Two independent generators: the left continues the stream, the right is seeded from a mixed draw.
     let split (rng: Rng) : struct (Rng * Rng) =
         let struct (branch, next) = nextU64 rng

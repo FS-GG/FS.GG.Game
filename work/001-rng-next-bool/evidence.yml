@@ -1,0 +1,90 @@
+schemaVersion: 1
+workId: 001-rng-next-bool
+stage: evidence
+status: evidenceReady
+sourceSpec: work/001-rng-next-bool/spec.md
+sourceClarifications: work/001-rng-next-bool/clarifications.md
+sourceChecklist: work/001-rng-next-bool/checklist.md
+sourcePlan: work/001-rng-next-bool/plan.md
+sourceTasks: work/001-rng-next-bool/tasks.yml
+sourceAnalysis: readiness/001-rng-next-bool/analysis.json
+evidence:
+  # T001 — implement FR-001 (nextBool: deterministic fair coin, threaded state).
+  - id: EV001
+    kind: implementation
+    subject:
+      type: task
+      id: T001
+    requirementRefs: [FR-001]
+    taskRefs: [T001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Rng.fsi, src/Game.Core/Rng.fs]
+    result: pass
+    synthetic: false
+  # T002 — implement plan decision PD-001 (high-bit draw over one nextUInt64 step, no modulus).
+  - id: EV002
+    kind: implementation
+    subject:
+      type: task
+      id: T002
+    requirementRefs: [FR-001]
+    planDecisionRefs: [PD-001]
+    taskRefs: [T002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Rng.fs]
+    result: pass
+    synthetic: false
+  # T003 — contract surface PC-001 (nextBool added to the committed .fsi; type-level baseline
+  # unchanged — a new module member adds no exported type).
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    planDecisionRefs: [PD-001]
+    taskRefs: [T003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Rng.fsi, readiness/surface-baselines/FS.GG.Game.Core.txt]
+    result: pass
+    synthetic: false
+  # T004 — verification evidence VO-001: the Expecto suite passes, incl. the committed
+  # nextBool boolean-sequence golden, purity, state-threading, and fairness cases.
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    obligationRefs: [EV004]
+    artifacts: [tests/Game.Core.Tests/RngTests.fs]
+    result: pass
+    synthetic: false
+    notes: ["Game.Core.Tests: 75/75 pass (Expecto)."]
+  # T005 — migration posture PM-001: additive, in-place API addition; no schema/migration.
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Rng.fsi]
+    result: pass
+    synthetic: false
+    notes: ["Additive public function; no schema version change and no migration required."]
+  # T006 — generated-view impact GV-001: Game.Core is a pure BCL-only sim core with no
+  # generated views; the addition emits none.
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    planDecisionRefs: [PD-001]
+    taskRefs: [T006]
+    obligationRefs: [EV006]
+    artifacts: [tests/Game.Core.Tests/RngTests.fs]
+    result: pass
+    synthetic: false
+    notes: ["No generated views in FS.GG.Game.Core; nothing to regenerate."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
