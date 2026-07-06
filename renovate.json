@@ -1,6 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
-  ]
+    "github>FS-GG/.github"
+  ],
+  "description": "Extends the org-shared FS-GG preset (github>FS-GG/.github), which provides config:recommended + dependency dashboard + semantic commits, the FS.GG.UI coherent-set grouping, the -preview channel (respectLatest:false / ignoreUnstable:false), and the shared custom managers. Unlike FS.GG.SDD/Governance/Templates this repo needs NO nuget.pkg.github.com hostRules: FS.GG.Game restores every dependency from public nuget.org — FS.GG.UI.Scene is dual-published there (ADR-0012/0013), and the rest (FSharp.Core, Expecto/FsCheck/Microsoft.NET.Test.Sdk/YoloDev) are public. So Renovate tracks FS.GG.UI.Scene preview bumps for FS.GG.Game.Render off nuget.org anonymously."
 }
