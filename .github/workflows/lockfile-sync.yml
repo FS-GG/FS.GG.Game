@@ -1,0 +1,30 @@
+# Renovate lockfile-sync — thin caller for the shared reusable workflow (FS-GG/.github#145).
+#
+# Regenerates the committed packages.lock.json on renovate/* PRs so the locked-restore gate
+# (gate.yml — ADR-0006) goes green without a human running `dotnet restore --force-evaluate` by
+# hand. Renovate edits the central <PackageVersion> without running restore, so a referenced-package
+# bump would otherwise fail with NU1004.
+#
+# Requires the FS-GG dispatch App secrets (FSGG_DISPATCH_APP_ID / _PRIVATE_KEY) and the App to have
+# access to this repo (org-admin: add FS.GG.Game to the fs-gg-cross-repo-dispatch installation).
+#
+# All mechanics + rationale (App-token push that re-triggers the gate, renovate/*-same-repo gating,
+# self-limiting second pass) live in the reusable workflow:
+#   FS-GG/.github .github/workflows/lockfile-sync.yml
+name: lockfile-sync
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read   # the App token inside the reusable workflow performs the git write
+
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/lockfile-sync.yml@main
+    with:
+      restore-target: FS.GG.Game.slnx
+    secrets:
+      app-id:          ${{ secrets.FSGG_DISPATCH_APP_ID }}
+      app-private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}

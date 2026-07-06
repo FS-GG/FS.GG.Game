@@ -1,0 +1,141 @@
+name: gate
+
+# Per-PR deterministic gate for FS.GG.Game (ADR-0022 / P2). Primary purpose (parity with the
+# sibling repos, FS-GG/.github#7 / ADR-0006): restore in --locked-mode against the committed
+# packages.lock.json so any dependency-graph drift, or a silently substituted version (NU1603) /
+# out-of-range version (NU1608), FAILS the build instead of resolving quietly. It also builds and
+# runs the whole (headless) Expecto suite so PRs get a real signal.
+#
+# FS.GG.Game.Core is BCL-only + its tests pull only public nuget.org packages (Expecto/FsCheck/
+# Microsoft.NET.Test.Sdk/YoloDev + FSharp.Core), so this gate needs NO org-feed credential today.
+# When FS.GG.Game.Render lands (P4) it will consume FS.GG.UI.Scene from the org GitHub Packages
+# feed — add `packages: read` + the feed source then.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Deterministic gate (locked restore + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          # Warm the NuGet restore from the committed lockfiles. A lockfile change misses the cache
+          # and re-restores; --locked-mode still validates the graph.
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      # Locked restore is the single enforcement point. RestoreLockedMode is set in the org-shared
+      # Directory.Build.props when GITHUB_ACTIONS=true and a lockfile exists; --locked-mode here
+      # forces it explicitly and gives one clear place to point at the regenerate command.
+      - name: Restore (locked)
+        run: |
+          set -euo pipefail
+          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
+            echo "::error::locked restore failed — the resolved graph does not match the committed packages.lock.json (or a version was substituted, NU1603). If this is an intentional dependency change, run: dotnet restore FS.GG.Game.slnx --force-evaluate  and commit the updated packages.lock.json files."
+            exit 1
+          fi
+
+      # --no-restore: restore already happened above (exactly once). NU1603/NU1608 are promoted to
+      # errors in the org-shared Directory.Build.props; FS/warnings-as-errors in local.props.
+      - name: Build (net10.0)
+        run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
+
+  # Separate job so a test failure is a distinct signal, not serialized behind the build gate. The
+  # whole suite is headless (zero Skia / zero Scene) — the P2 exit invariant (ADR-0022).
+  full-test-suite:
+    name: Full test suite (dotnet test, headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Restore (locked)
+        run: |
+          set -euo pipefail
+          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
+            echo "::error::locked restore failed — see the gate job's message to regenerate the lockfiles."
+            exit 1
+          fi
+
+      - name: Test (full suite)
+        run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
+
+  # Surface-baseline drift gate (Principle II: "visibility lives in .fsi"). Regenerates the public
+  # surface baseline from the built assembly and fails on any uncommitted drift — the guard that a
+  # public-API change is a deliberate, reviewed baseline update (and, for a packable, a SemVer bump).
+  surface-baseline-drift:
+    name: Surface baseline drift (readiness/surface-baselines)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Restore + build (Debug — the generator reflects over the built assembly)
+        run: dotnet build FS.GG.Game.slnx -c Debug
+
+      - name: Regenerate baselines
+        run: dotnet fsi scripts/refresh-surface-baselines.fsx
+
+      - name: Fail on uncommitted drift
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- readiness/surface-baselines; then
+            echo "::error::public surface changed but readiness/surface-baselines/*.txt was not updated. If this is an intentional API change, run: dotnet fsi scripts/refresh-surface-baselines.fsx  and commit the result (and bump the package SemVer if it is a break)."
+            exit 1
+          fi
+
+  # Sync-not-fork drift gate (shared-build-config contract, ADR-0006). The three managed build-config
+  # files (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json) must stay
+  # byte-identical to the org source of truth in FS-GG/.github dist/dotnet/. A hand-edit to a managed
+  # file (or an un-re-synced org baseline bump) fails this job. Separate job = distinct signal.
+  build-config-drift:
+    name: Build-config drift check (shared-build-config)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v7
+
+      - name: Checkout org build config (FS-GG/.github)
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: main
+          path: _org-build
+
+      - name: Drift check (managed files == source of truth)
+        run: _org-build/scripts/sync-build-config.sh --check "$GITHUB_WORKSPACE"
