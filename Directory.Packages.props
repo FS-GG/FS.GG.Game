@@ -1,0 +1,41 @@
+<Project>
+
+  <!-- ════════════════════════════════════════════════════════════════════════════
+       FS-GG ORG-SHARED CENTRAL PACKAGE MANAGEMENT BASELINE
+       Source of truth: FS-GG/.github → dist/dotnet/Directory.Packages.props
+       Distributed by scripts/sync-build-config.sh. DO NOT EDIT in a consumer repo.
+       Repo-specific PackageVersion items go in Directory.Packages.local.props,
+       imported at the end. A package pinned here MUST NOT be re-declared locally
+       (CPM raises NU1506 on a duplicate PackageVersion).
+       Contract: shared-build-config (registry/dependencies.yml).
+       ════════════════════════════════════════════════════════════════════════════ -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- Org-wide baseline: versions every FS-GG repo MUST agree on. This is the cross-repo
+       coherence point — one place that pins the runtime/language floor shared by all repos.
+       FSharp.Core 10.1.301 is currently the common pin in Rendering, SDD, and Governance;
+       centralising it here keeps the F# core in lockstep across the org. Adopting repos
+       remove their local FSharp.Core PackageVersion (see docs/build/README.md). -->
+  <ItemGroup Label="org-baseline">
+    <PackageVersion Include="FSharp.Core" Version="10.1.301" />
+  </ItemGroup>
+
+  <!-- api-breaking-change-gate (H3 / .github#20, epic #16 Pillar 5). Centrally pins the public-API
+       analyzer used by the OPT-IN breaking-change gate in Directory.Build.props. Declaring the
+       version here is non-breaking: a PackageVersion with no matching PackageReference does NOT
+       enter the restore graph or packages.lock.json, so this sync alone cannot fail a consumer's
+       locked restore. The analyzer enters the graph only in a repo that turns the gate on
+       (FsggApiGate), which regenerates that repo's lockfile as its adoption step. Package Validation
+       (the SDK-integrated ApiCompat) needs no package reference. -->
+  <ItemGroup Label="api-breaking-change-gate">
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
+  </ItemGroup>
+
+  <!-- Repo-specific package versions. -->
+  <Import Project="Directory.Packages.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Packages.local.props')" />
+
+</Project>

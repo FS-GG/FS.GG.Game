@@ -1,0 +1,17 @@
+<Project>
+  <!-- Repo-owned CPM PackageVersion items for FS.GG.Game. Imported LAST by the canonical
+       Directory.Packages.props (org-shared, synced from FS-GG/.github). The canonical file owns
+       ManagePackageVersionsCentrally + CentralPackageTransitivePinningEnabled and the org baseline
+       (FSharp.Core 10.1.301) — a package pinned there MUST NOT be re-declared here (CPM raises a
+       duplicate-PackageVersion error). ADR-0022 / P2.
+
+       Game.Core is BCL-only: it takes NO runtime PackageReference beyond the org-baseline
+       FSharp.Core. The versions below are TEST-ONLY (the headless Expecto suite) and are not
+       shipped in any package. Pins match FS.GG.Rendering's test stack. -->
+  <ItemGroup Label="Test-only">
+    <PackageVersion Include="Expecto" Version="10.2.3" />
+    <PackageVersion Include="FsCheck" Version="3.3.3" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.15.6" />
+  </ItemGroup>
+</Project>

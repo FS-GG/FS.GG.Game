@@ -1,0 +1,47 @@
+<Project>
+
+  <!-- Repo-owned MSBuild overrides for FS.GG.Game. Imported LAST by the canonical
+       Directory.Build.props (org-shared, synced from FS-GG/.github). Everything specific to this
+       repo lives here; the canonical file owns Determinism, CPM enablement + transitive pinning, and
+       the whole lockfile-restore-enforcement block. Mirrors FS.GG.Rendering's local props so the
+       new bottom-layer component shares the org house style (ADR-0022 / P2). -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- APPEND-form: the canonical Directory.Build.props sets WarningsAsErrors to include
+         NU1603;NU1608 BEFORE importing this file. Appending here preserves those canonical
+         NU promotions; an absolute assignment would silently disable silent-substitution
+         enforcement. -->
+    <WarningsAsErrors>$(WarningsAsErrors);FS0025;FS0026;FS0052;FS0064</WarningsAsErrors>
+    <!-- Principle II: visibility lives in .fsi, not in .fs. FS0078 would warn on `private`/
+         `internal` on a top-level binding in a file that has a companion .fsi. Promote to error. -->
+    <WarningsAsErrors>$(WarningsAsErrors);FS0078</WarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Package">
+    <Version>0.1.0-preview.1</Version>
+    <Authors>FS.GG Contributors</Authors>
+    <Company>FS.GG Contributors</Company>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/FS-GG/FS.GG.Game</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/FS-GG/FS.GG.Game.git</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageReadmeFile Condition="Exists('$(MSBuildProjectDirectory)/README.md')">README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <!-- FSharp.Core resolves its version from the org baseline in the canonical
+       Directory.Packages.props (CPM); this version-less reference just adds the package. -->
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)/README.md')">
+    <None Include="$(MSBuildProjectDirectory)/README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Game.Core/FS.GG.Game.Core.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Game.Core.Tests/Game.Core.Tests.fsproj" />
+  </Folder>
+</Solution>

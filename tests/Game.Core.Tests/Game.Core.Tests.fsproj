@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <!-- Headless Expecto suite over the moved primitives. Zero Skia / zero Scene: proves the
+       BCL-only sim core builds and tests without the render stack (ADR-0022 / P2 exit). Ported
+       verbatim from FS.GG.Rendering tests/Scene.Tests + tests/Canvas.Tests (only the namespace
+       opens change: FS.GG.UI.Scene/FS.GG.UI.Canvas → FS.GG.Game.Core). -->
+  <ItemGroup>
+    <Compile Include="GeometryTests.fs" />
+    <Compile Include="RngTests.fs" />
+    <Compile Include="FixedStepTests.fs" />
+    <Compile Include="PathfindingTests.fs" />
+    <Compile Include="SpatialGridTests.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Game.Core\FS.GG.Game.Core.fsproj" />
+    <PackageReference Include="Expecto" />
+    <PackageReference Include="FsCheck" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="YoloDev.Expecto.TestSdk" />
+  </ItemGroup>
+
+</Project>

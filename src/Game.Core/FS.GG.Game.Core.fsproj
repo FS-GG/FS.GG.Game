@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <IsPackable>true</IsPackable>
+    <PackageId>FS.GG.Game.Core</PackageId>
+    <AssemblyName>FS.GG.Game.Core</AssemblyName>
+    <Title>FS.GG.Game.Core</Title>
+    <Description>BCL-only deterministic simulation core for FS.GG.Game — seeded RNG, fixed-timestep drain, grid pathfinding, spatial partitioning, and AABB collision geometry. Depends on nothing but FSharp.Core (the platform's new bottom layer). Extracted from FS.GG.UI.Canvas / FS.GG.UI.Scene per ADR-0022.</Description>
+    <PackageTags>fsharp;game;simulation;deterministic;pathfinding;rng;collision;fixed-timestep</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Game.Core.Tests" />
+  </ItemGroup>
+
+  <!-- BCL-only sim vocabulary. No Scene/Skia dependency — headlessly testable, reaches up to
+       nothing (ADR-0022 §2). Compile order: Primitives (Point/Rect) before Geometry before
+       SpatialGrid; Rng/FixedStep/Pathfinding are independent. -->
+  <ItemGroup>
+    <Compile Include="Primitives.fsi" />
+    <Compile Include="Primitives.fs" />
+    <Compile Include="Geometry.fsi" />
+    <Compile Include="Geometry.fs" />
+    <Compile Include="Rng.fsi" />
+    <Compile Include="Rng.fs" />
+    <Compile Include="FixedStep.fsi" />
+    <Compile Include="FixedStep.fs" />
+    <Compile Include="Pathfinding.fsi" />
+    <Compile Include="Pathfinding.fs" />
+    <Compile Include="SpatialGrid.fsi" />
+    <Compile Include="SpatialGrid.fs" />
+  </ItemGroup>
+
+</Project>
