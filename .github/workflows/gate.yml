@@ -141,3 +141,30 @@ jobs:
 
       - name: Drift check (managed files == source of truth)
         run: _org-build/scripts/sync-build-config.sh --check "$GITHUB_WORKSPACE"
+
+  # Producer skill-manifest drift gate (ADR-0014 / ADR-0022 P4). template/skill-manifest/
+  # skill-manifest.json is the contract the .github org registry (registry/skills.yml) reconciles the
+  # four migrated game-skill rows from — "registry = manifest = bytes". The generator recomputes each
+  # SKILL.md digest; this fails if the committed manifest drifts from the skill bodies (or the
+  # generator), the guard that keeps the registry's owner:fs-gg-game rows honest. No build needed —
+  # the generator only reads the SKILL.md files.
+  skill-manifest-drift:
+    name: Skill-manifest drift (template/skill-manifest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Fail on manifest drift
+        run: |
+          set -euo pipefail
+          if ! dotnet fsi scripts/generate-skill-manifest.fsx --check; then
+            echo "::error::template/skill-manifest/skill-manifest.json is stale vs the SKILL.md bodies/generator. Run: dotnet fsi scripts/generate-skill-manifest.fsx  and commit the result. If a skill body changed, the .github registry/skills.yml sha256 must be reconciled too (registry = manifest = bytes)."
+            exit 1
+          fi
