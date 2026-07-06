@@ -1,0 +1,183 @@
+schemaVersion: 1
+workId: 003-game-product-skill-home
+stage: evidence
+status: evidenceReady
+sourceSpec: work/003-game-product-skill-home/spec.md
+sourceClarifications: work/003-game-product-skill-home/clarifications.md
+sourceChecklist: work/003-game-product-skill-home/checklist.md
+sourcePlan: work/003-game-product-skill-home/plan.md
+sourceTasks: work/003-game-product-skill-home/tasks.yml
+sourceAnalysis: readiness/003-game-product-skill-home/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/003-game-product-skill-home/analysis.json
+    digest: 646a4275e4ed2926078fd60f7e58f5f6b8636ec1a1a4e72d5ff00ce58bf11ae2
+    schemaVersion: 1
+  - label: checklist
+    path: work/003-game-product-skill-home/checklist.md
+    digest: 6312527371ef831f07a2f1433d42579a512edbd81e0945ebec2c61480cb34c6e
+    schemaVersion: 1
+  - label: clarifications
+    path: work/003-game-product-skill-home/clarifications.md
+    digest: 4f4caedb2c0292099d13b728d1789943f79be9fda92cc818b2695df2bb48e089
+    schemaVersion: 1
+  - label: plan
+    path: work/003-game-product-skill-home/plan.md
+    digest: 326886781aa5e3b51ba98a75f45d2d9d08195ad4ad31b4843cc578f5ee038c02
+    schemaVersion: 1
+  - label: spec
+    path: work/003-game-product-skill-home/spec.md
+    digest: c01688f6f67e0307594b11d188a717dff87e37df6a7a377a0325aea922031edc
+    schemaVersion: 1
+  - label: tasks
+    path: work/003-game-product-skill-home/tasks.yml
+    digest: e31ea918cdb0a52a52c5bc2d91768daf60221fd9be0a2ff0c93306130fc91c21
+    schemaVersion: 1
+evidence:
+  # T001 — implement FR-001: the four byte-identical SKILL.md copies + the producer manifest + its
+  # generator (the manifest lists exactly the four skills with body-equal sha256s).
+  - id: EV001
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T001"
+    taskRefs: ["T001"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV001"]
+    artifacts: [template/product-skills/fs-gg-game-core/SKILL.md, template/product-skills/fs-gg-audio/SKILL.md, template/product-skills/fs-gg-persistence/SKILL.md, template/product-skills/fs-gg-model-swap/SKILL.md, template/skill-manifest/skill-manifest.json, scripts/generate-skill-manifest.fsx]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["4 skills; sha256 byte-equal to sha256sum of each SKILL.md (16fd32b7/64cbe6ef/af107dec/a48df195); materializes-when 'profile in [game, sample-pack]' (ADR-0017 canonical grammar)."]
+  # T002 — implement plan decision PD-001: byte-identical MOVE (copy) — the bodies equal Rendering's
+  # frozen copies, so the .github registry can migrate ownership without a sha256 change (the two
+  # drifted digests game-core/model-swap are corrected at the registry in the paired reconcile).
+  - id: EV002
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T002"
+    taskRefs: ["T002"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV002"]
+    artifacts: [template/product-skills/fs-gg-game-core/SKILL.md, template/README.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["Copied verbatim from FS.GG.Rendering/template/product-skills/<id>/; Rendering keeps its frozen copies (two-copies cost, ADR-0022 §6). No Rendering change."]
+  # T003 — contract surface PC-001: the producer manifest is the cross-repo contract the org registry
+  # (registry/skills.yml) reconciles the owner:fs-gg-game rows from — registry = manifest = bytes.
+  - id: EV003
+    kind: verification
+    subject:
+      type: "task"
+      id: "T003"
+    taskRefs: ["T003"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV003"]
+    artifacts: [template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["schema v1, same shape as Rendering's producer manifest (id/scope/sha256/resolvablePath/materializes-when/supplied-by). Paired .github PR reconciles skills.yml from this manifest AFTER it lands on main (producer-then-registry)."]
+  # T004 — verification obligation VO-001: the generator --check exits 0 on the committed manifest and
+  # is wired as a CI gate; digests independently recomputed from the SKILL.md bodies.
+  - id: EV004
+    kind: verification
+    subject:
+      type: "task"
+      id: "T004"
+    taskRefs: ["T004"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV004"]
+    artifacts: [scripts/generate-skill-manifest.fsx, .github/workflows/gate.yml]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["`dotnet fsi scripts/generate-skill-manifest.fsx --check` -> up to date (4 skills); new gate.yml job 'Skill-manifest drift' fails on drift."]
+  # T005 — migration posture PM-001: a byte-identical ownership migration; no schema/data migration.
+  # Rendering's copies stay frozen (tracked two-copies cost); registry contract flip is the paired PR.
+  - id: EV005
+    kind: verification
+    subject:
+      type: "task"
+      id: "T005"
+    taskRefs: ["T005"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV005"]
+    artifacts: [template/README.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["No schema/data migration; ownership migration only. Fragments + dotnet-new template package + provider deferred to P6 (ADR-0022 §2.1)."]
+  # T006 — generated-view impact GV-001: the manifest is the generated view; regenerated, committed,
+  # and drift-guarded by the CI gate.
+  - id: EV006
+    kind: verification
+    subject:
+      type: "task"
+      id: "T006"
+    taskRefs: ["T006"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV006"]
+    artifacts: [template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["Regenerated via scripts/generate-skill-manifest.fsx and committed; drift-guarded in gate.yml."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

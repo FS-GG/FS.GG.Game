@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "skills": [
+    {
+      "id": "fs-gg-audio",
+      "scope": "product",
+      "sha256": "64cbe6efbfb75af430906832e918d1bb07279a6ffbcb7f3096eafb2b0998803c",
+      "resolvablePath": ".agents/skills/fs-gg-audio/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-audio/"
+    },
+    {
+      "id": "fs-gg-game-core",
+      "scope": "product",
+      "sha256": "16fd32b71ecb0f43937158a9b359654af9ecc28f7793b5489e42ea7ba4a76169",
+      "resolvablePath": ".agents/skills/fs-gg-game-core/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-game-core/"
+    },
+    {
+      "id": "fs-gg-model-swap",
+      "scope": "product",
+      "sha256": "a48df195559c4f8e6499246e85261aca30182c1138eb9374df292dd4b9ec61d5",
+      "resolvablePath": ".agents/skills/fs-gg-model-swap/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-model-swap/"
+    },
+    {
+      "id": "fs-gg-persistence",
+      "scope": "product",
+      "sha256": "af107dec4e0a3464bb39d2dadd3101872bdf47351945151854d52f17234d1619",
+      "resolvablePath": ".agents/skills/fs-gg-persistence/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-persistence/"
+    }
+  ]
+}
