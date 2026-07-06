@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Game.Core/FS.GG.Game.Core.fsproj" />
+    <Project Path="src/Game.Render/FS.GG.Game.Render.fsproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Game.Core.Tests/Game.Core.Tests.fsproj" />
+    <Project Path="tests/Game.Render.Tests/Game.Render.Tests.fsproj" />
   </Folder>
 </Solution>

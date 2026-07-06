@@ -8,6 +8,15 @@
        Game.Core is BCL-only: it takes NO runtime PackageReference beyond the org-baseline
        FSharp.Core. The versions below are TEST-ONLY (the headless Expecto suite) and are not
        shipped in any package. Pins match FS.GG.Rendering's test stack. -->
+  <!-- Runtime — the render edge (ADR-0022 §2 / P4). FS.GG.Game.Render consumes FS.GG.UI.Scene
+       (the Skia-free bottom of the render stack; FSharp.Core-only). Dual-published to nuget.org
+       (ADR-0012/0013), so no org-feed credential is needed to restore it. Pinned to the coherent-set
+       framework version 0.1.64-preview.1. This is the ONLY shipped PackageReference beyond the
+       org-baseline FSharp.Core; Game.Core stays BCL-only (reaches up to nothing). -->
+  <ItemGroup Label="Runtime — render edge">
+    <PackageVersion Include="FS.GG.UI.Scene" Version="0.1.64-preview.1" />
+  </ItemGroup>
+
   <ItemGroup Label="Test-only">
     <PackageVersion Include="Expecto" Version="10.2.3" />
     <PackageVersion Include="FsCheck" Version="3.3.3" />

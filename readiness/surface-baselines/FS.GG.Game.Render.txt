@@ -1,0 +1,1 @@
+FS.GG.Game.Render.Adapter

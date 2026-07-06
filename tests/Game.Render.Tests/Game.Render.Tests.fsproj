@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <!-- Headless Expecto suite over the Scene adapter. Pulls FS.GG.UI.Scene transitively via the
+       Game.Render project reference (Skia-free), so it still runs with zero Skia — the adapter is a
+       pure sim->Scene projection (ADR-0022 §2 / P4). -->
+  <ItemGroup>
+    <Compile Include="AdapterTests.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Game.Render\FS.GG.Game.Render.fsproj" />
+    <PackageReference Include="Expecto" />
+    <PackageReference Include="FsCheck" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="YoloDev.Expecto.TestSdk" />
+  </ItemGroup>
+
+</Project>

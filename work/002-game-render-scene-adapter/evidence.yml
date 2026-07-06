@@ -1,0 +1,182 @@
+schemaVersion: 1
+workId: 002-game-render-scene-adapter
+stage: evidence
+status: evidenceReady
+sourceSpec: work/002-game-render-scene-adapter/spec.md
+sourceClarifications: work/002-game-render-scene-adapter/clarifications.md
+sourceChecklist: work/002-game-render-scene-adapter/checklist.md
+sourcePlan: work/002-game-render-scene-adapter/plan.md
+sourceTasks: work/002-game-render-scene-adapter/tasks.yml
+sourceAnalysis: readiness/002-game-render-scene-adapter/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/002-game-render-scene-adapter/analysis.json
+    digest: 3e362d6ec1bdcdbbba06aced17ebddf84cce39908b316a85fb3fd7666832e7df
+    schemaVersion: 1
+  - label: checklist
+    path: work/002-game-render-scene-adapter/checklist.md
+    digest: 8712e13ea951cdefda50d83bef260a992ea869f4dc1ea6cfdc0d1d6bdbc827c0
+    schemaVersion: 1
+  - label: clarifications
+    path: work/002-game-render-scene-adapter/clarifications.md
+    digest: 848883a310bda3cc34f87b90b37b07b7894617eb98b6f3ee64d2302121cf913c
+    schemaVersion: 1
+  - label: plan
+    path: work/002-game-render-scene-adapter/plan.md
+    digest: dae0bfdc93fbbc6bc2b3aa153f64800b89231d8e236f9900dc1c286fa0d4f1a4
+    schemaVersion: 1
+  - label: spec
+    path: work/002-game-render-scene-adapter/spec.md
+    digest: 70db63c27332bfe4248c232c47e7405f80822c2f54df221ddecab8233ee32c5b
+    schemaVersion: 1
+  - label: tasks
+    path: work/002-game-render-scene-adapter/tasks.yml
+    digest: 9ecd9d14e3bd778ea03390eb1eec32ced3e7d92886b1bcd40a2487c963c78998
+    schemaVersion: 1
+evidence:
+  # T001 — implement FR-001: the Adapter projections (point/rect identity, cellRect/cellCentre
+  # integer->float seam, drawPath route->polyline, drawCells/drawRect/drawPoints) in the .fsi + .fs.
+  - id: EV001
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T001"
+    taskRefs: ["T001"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV001"]
+    artifacts: [src/Game.Render/Adapter.fsi, src/Game.Render/Adapter.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["Pure, total, deterministic sim->Scene projection; Skia-free (headless)."]
+  # T002 — implement plan decision PD-001: the render edge itself — a new packable FS.GG.Game.Render
+  # that reaches UP to FS.GG.UI.Scene (Game.Core -> Scene dependency edge, ADR-0022 §2).
+  - id: EV002
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T002"
+    taskRefs: ["T002"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV002"]
+    artifacts: [src/Game.Render/FS.GG.Game.Render.fsproj, Directory.Packages.local.props, FS.GG.Game.slnx]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["FS.GG.UI.Scene 0.1.64-preview.1 consumed from nuget.org (no org-feed credential); FSharp.Core lockfile hash pinned to the SDK library-packs value (CI parity)."]
+  # T003 — contract surface PC-001: the .fsi is the sole public surface; the committed baseline
+  # gains exactly one exported type (FS.GG.Game.Render.Adapter).
+  - id: EV003
+    kind: verification
+    subject:
+      type: "task"
+      id: "T003"
+    taskRefs: ["T003"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV003"]
+    artifacts: [src/Game.Render/Adapter.fsi, readiness/surface-baselines/FS.GG.Game.Render.txt, scripts/refresh-surface-baselines.fsx]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["New baseline committed (1 public type: FS.GG.Game.Render.Adapter); surface-baseline generator extended to the new package."]
+  # T004 — verification obligation VO-001: the headless Expecto suite passes, including identity,
+  # the integer->float seam, drawPath (empty/polyline/real-A*), order preservation, and determinism.
+  - id: EV004
+    kind: verification
+    subject:
+      type: "task"
+      id: "T004"
+    taskRefs: ["T004"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV004"]
+    artifacts: [tests/Game.Render.Tests/AdapterTests.fs, tests/Game.Render.Tests/Game.Render.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["Game.Render.Tests: 12/12 pass; whole solution stays headless (Game.Core.Tests 75/75, zero Skia)."]
+  # T005 — migration posture PM-001: a brand-new packable + one new dependency edge; no schema or
+  # data migration. Game.Core stays BCL-only (the adapter, not the core, takes the Scene dependency).
+  - id: EV005
+    kind: verification
+    subject:
+      type: "task"
+      id: "T005"
+    taskRefs: ["T005"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV005"]
+    artifacts: [src/Game.Render/FS.GG.Game.Render.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["New package + Game.Render -> FS.GG.UI.Scene edge; no schema/data migration. Registry contracts:/edge rows finalize at publish (P5, ADR-0007)."]
+  # T006 — generated-view impact GV-001: the surface baseline is the only generated view; it is
+  # regenerated and committed. No other generated artifact is affected.
+  - id: EV006
+    kind: verification
+    subject:
+      type: "task"
+      id: "T006"
+    taskRefs: ["T006"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV006"]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Render.txt]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: null
+    owner: null
+    scope: null
+    laterLifecycleVisibility: null
+    notes: ["Surface baseline regenerated via scripts/refresh-surface-baselines.fsx and committed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
