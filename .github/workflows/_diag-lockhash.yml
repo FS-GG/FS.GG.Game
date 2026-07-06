@@ -1,0 +1,33 @@
+name: _diag-lockhash
+# THROWAWAY diagnostic (ADR-0022 P2 CI fix) — delete after use. Regenerates the lockfile on the
+# runner and prints the FSharp.Core content hash CI actually records, to end local/CI hash guessing.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - name: dotnet + SDK info
+        run: |
+          dotnet --version
+          echo "--- SDK FSharp library-packs ---"
+          ls /usr/share/dotnet/sdk/*/FSharp/library-packs/ 2>/dev/null || true
+      - name: Force-evaluate restore + print FSharp.Core hash
+        run: |
+          set -euo pipefail
+          rm -f src/Game.Core/packages.lock.json tests/Game.Core.Tests/packages.lock.json
+          dotnet restore FS.GG.Game.slnx --force-evaluate
+          echo "===== CI-recorded FSharp.Core block ====="
+          grep -A4 '"FSharp.Core"' src/Game.Core/packages.lock.json || true
+      - name: Also show the extracted package's on-disk hash
+        run: |
+          cat ~/.nuget/packages/fsharp.core/10.1.301/.nupkg.metadata 2>/dev/null || echo "not extracted to global packages"
