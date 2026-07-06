@@ -1,0 +1,7 @@
+schemaVersion: 1
+project:
+  id: fs.gg.game
+  defaultWorkRoot: work
+sdd:
+  config: .fsgg/sdd.yml
+  agents: .fsgg/agents.yml
