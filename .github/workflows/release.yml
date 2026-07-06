@@ -1,0 +1,159 @@
+name: release
+
+# Release-only publish for FS.GG.Game (ADR-0022 / P5). Tag-triggered; NEVER a required check and
+# NEVER on push/PR (mirrors the sibling repos' release cadence). Publishes the coherent set
+# FS.GG.Game.Core + FS.GG.Game.Render to the org GitHub Packages feed (nuget.pkg.github.com/FS-GG),
+# then dual-publishes the BYTE-IDENTICAL set to public nuget.org via Trusted Publishing / OIDC
+# (ADR-0012 §1–§5 / ADR-0013 — no stored key). Gated on a full headless build+test first: a set is
+# published only after `verify` is green (publish-before-flip, FR-007).
+#
+# First release is 0.1.0-preview.1 (this repo has never published). Both packages share ONE version
+# (the repo-wide <Version> in Directory.Build.local.props); they move as a coherent set. Game.Render
+# depends on Game.Core@same-version + FS.GG.UI.Scene (itself dual-published, ADR-0012/0013).
+on:
+  release:
+    types: [published]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to pack+publish (e.g. 0.1.0-preview.1). Required to actually push on a manual run; omit for a pack-only dry run."
+        type: string
+        required: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Release-only gate: re-run the deterministic headless build+test at the tagged commit (gate.yml
+  # runs on push/PR to main, not on tags). publish-packages `needs:` this — a red suite SKIPS the
+  # push, which is the safety net, not a nuisance.
+  verify:
+    name: Verify (locked restore + headless build + test)
+    runs-on: ubuntu-latest
+    # Restrict to the canonical repo: fork tags/dispatch never run this (no fork secret exposure).
+    if: github.repository == 'FS-GG/FS.GG.Game'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore (locked)
+        run: |
+          set -euo pipefail
+          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
+            echo "::error::locked restore failed — the resolved graph does not match the committed packages.lock.json. If intentional, run: dotnet restore FS.GG.Game.slnx --force-evaluate  and commit the lockfiles."
+            exit 1
+          fi
+      - name: Build (net10.0, Debug)
+        run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
+      - name: Test (full headless suite)
+        run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
+
+  publish-packages:
+    name: Publish FS.GG.Game.* (org feed + nuget.org, release-only)
+    runs-on: ubuntu-latest
+    if: github.repository == 'FS-GG/FS.GG.Game'
+    needs: [verify]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write   # ADR-0013: mint the GitHub OIDC token for nuget.org Trusted Publishing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version from the release tag
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ github.event_name }}" in
+            release)           raw="${{ github.event.release.tag_name }}" ;;
+            push)              raw="${GITHUB_REF_NAME}" ;;
+            workflow_dispatch) raw="${{ inputs.version }}" ;;
+            *)                 raw="" ;;
+          esac
+          ver="${raw#v}"   # v0.1.0-preview.1 -> 0.1.0-preview.1
+          if [[ -z "$ver" ]]; then
+            echo "::notice::No version (manual run without input) — pack-only dry run, no push."
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            ver="0.0.0-dryrun.${GITHUB_RUN_ID}"
+          else
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Release version: $ver"
+
+      # The tag is the release trigger; Directory.Build.local.props <Version> is the version-of-truth
+      # the packages actually carry. They MUST agree, else the tag advertises a version the packed
+      # bytes don't match. Fail loud on a mismatch (bump the props in the same release PR).
+      - name: Guard — tag version == repo version-of-truth
+        if: steps.ver.outputs.push == 'true'
+        shell: bash
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          truth="$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.local.props)"
+          [[ -n "$truth" ]] || { echo "::error::<Version> not found in Directory.Build.local.props"; exit 1; }
+          if [[ "$truth" != "$VER" ]]; then
+            echo "::error::tag version ($VER) != Directory.Build.local.props <Version> ($truth). Bump the version-of-truth to match the tag in the release PR."
+            exit 1
+          fi
+          echo "Version-of-truth matches the tag: $VER"
+
+      # Pack the coherent set. Only FS.GG.Game.Core + FS.GG.Game.Render are IsPackable=true (the two
+      # test projects are IsPackable=false), so packing the whole slnx yields exactly those two
+      # packages, both at $VER — and Game.Render's ProjectReference to Game.Core is emitted as a
+      # package dependency at the same $VER (coherent set).
+      - name: Pack FS.GG.Game.* (coherent set @ $VER)
+        shell: bash
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          dotnet restore FS.GG.Game.slnx
+          dotnet pack FS.GG.Game.slnx -c Release -p:Version="$VER" -o artifacts/packages
+          echo "Packed:"; ls -1 artifacts/packages/*.nupkg
+
+      - name: Push coherent set to nuget.pkg.github.com/FS-GG
+        if: steps.ver.outputs.push == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet nuget push "artifacts/packages/*.nupkg" \
+            --source https://nuget.pkg.github.com/FS-GG/index.json \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --skip-duplicate
+          echo "Published FS.GG.Game.* ${{ steps.ver.outputs.version }} to the org feed."
+
+      # Dual-publish the BYTE-IDENTICAL set to public nuget.org (ADR-0012 §1–§5) via Trusted Publishing
+      # / OIDC (ADR-0013 — no stored key). Runs AFTER the org-feed push (gated ordering, ADR-0012 §4):
+      # if that step fails the job stops before this one. NuGet/login mints a single-use key from the
+      # org's Trusted Publishing policy for THIS repo (Repository FS.GG.Game, Workflow File release.yml);
+      # until that policy exists it 401s and fails the release loud. Same artifacts — no re-pack (§3).
+      - name: NuGet login (OIDC → short-lived nuget.org key)
+        if: steps.ver.outputs.push == 'true'
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      - name: Push coherent set to nuget.org (public)
+        if: steps.ver.outputs.push == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet nuget push "artifacts/packages/*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --skip-duplicate
+          echo "Published FS.GG.Game.* ${{ steps.ver.outputs.version }} to nuget.org."
