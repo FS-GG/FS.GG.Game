@@ -56,6 +56,58 @@ module Geometry =
         else
             None
 
+    // Narrow-phase circle–circle contact. Squared distance keeps the boolean test sqrt-free; the
+    // single sqrt (correctly-rounded IEEE, cross-platform deterministic) builds the manifold only on
+    // a hit. Coincident centres (d = 0, DEC-002) default the normal to (1, 0). A NaN or non-positive
+    // radius fails the strict `<` (NaN comparisons are false), yielding None without throwing.
+    let circleContact (a: Circle) (b: Circle) : Contact option =
+        let dx = b.Center.X - a.Center.X
+        let dy = b.Center.Y - a.Center.Y
+        let r = a.Radius + b.Radius
+        let d2 = dx * dx + dy * dy
+        if a.Radius > 0.0 && b.Radius > 0.0 && d2 < r * r then
+            let d = sqrt d2
+            if d > 0.0 then Some { Normal = { X = dx / d; Y = dy / d }; Depth = r - d }
+            else Some { Normal = { X = 1.0; Y = 0.0 }; Depth = r }
+        else
+            None
+
+    // Narrow-phase circle–AABB contact. Clamp the centre to the box; squared distance from the centre
+    // to that clamp vs radius² is the sqrt-free overlap test (a zero distance means the centre is
+    // inside). Centre-outside: the normal points from the circle toward the box (so −Normal×Depth
+    // separates, as in aabbContact). Centre-inside: fall back to the least-penetration face, tie-
+    // breaking equal penetration toward X with a +bias (DEC-003, identical to aabbContact). A NaN or
+    // non-positive radius yields None: the radius guard catches non-positive/NaN radius, and a NaN
+    // centre makes d2 NaN so the strict `<` fails.
+    let circleAabbContact (c: Circle) (box: Rect) : Contact option =
+        if not (c.Radius > 0.0) then
+            None
+        else
+            let minX, minY = box.X, box.Y
+            let maxX, maxY = box.X + box.Width, box.Y + box.Height
+            let cx, cy = c.Center.X, c.Center.Y
+            let clampedX = max minX (min maxX cx)
+            let clampedY = max minY (min maxY cy)
+            let dx = cx - clampedX
+            let dy = cy - clampedY
+            let d2 = dx * dx + dy * dy
+            if d2 < c.Radius * c.Radius then
+                if d2 > 0.0 then
+                    // Centre outside the box: normal points circle → box (opposite the clamp offset).
+                    let d = sqrt d2
+                    Some { Normal = { X = -dx / d; Y = -dy / d }; Depth = c.Radius - d }
+                else
+                    // Centre inside the box: least-penetration face. `esc` is the outward escape sign
+                    // per axis (strict `<` gives the +bias on a tie); the normal is its opposite.
+                    let pl, pr = cx - minX, maxX - cx
+                    let pb, pt = cy - minY, maxY - cy
+                    let penX, escX = if pl < pr then pl, -1.0 else pr, 1.0
+                    let penY, escY = if pb < pt then pb, -1.0 else pt, 1.0
+                    if penX <= penY then Some { Normal = { X = -escX; Y = 0.0 }; Depth = penX + c.Radius }
+                    else Some { Normal = { X = 0.0; Y = -escY }; Depth = penY + c.Radius }
+            else
+                None
+
     // Swept AABB via Minkowski expansion: grow `target` by `moving`'s extents so `moving` collapses to
     // its min-corner point, then clip the motion segment (point → point+velocity) against the expanded
     // box with the Liang–Barsky slab method. A start/end that overlaps `target` puts the corresponding

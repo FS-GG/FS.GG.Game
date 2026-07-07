@@ -1,0 +1,456 @@
+schemaVersion: 1
+workId: 004-collision-circle-manifolds
+stage: evidence
+status: evidenceReady
+sourceSpec: work/004-collision-circle-manifolds/spec.md
+sourceClarifications: work/004-collision-circle-manifolds/clarifications.md
+sourceChecklist: work/004-collision-circle-manifolds/checklist.md
+sourcePlan: work/004-collision-circle-manifolds/plan.md
+sourceTasks: work/004-collision-circle-manifolds/tasks.yml
+sourceAnalysis: readiness/004-collision-circle-manifolds/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/004-collision-circle-manifolds/analysis.json
+    digest: 96001dbbe88e1c6945d781d8e8e64246eba77624b41b2750aa43f8160d3f307b
+    schemaVersion: 1
+  - label: checklist
+    path: work/004-collision-circle-manifolds/checklist.md
+    digest: b50f59bf4e605692d52696b727c000a4a65b0bbe70894f61b6f2db44998cf9f8
+    schemaVersion: 1
+  - label: clarifications
+    path: work/004-collision-circle-manifolds/clarifications.md
+    digest: 3a99ff55817aff3904f864a8ea830fb24d377d80661725008c0c8a37ccfdbf18
+    schemaVersion: 1
+  - label: plan
+    path: work/004-collision-circle-manifolds/plan.md
+    digest: e36d766a4705c145460363283f5810255573253d64c60b709b71e28a8b690aa9
+    schemaVersion: 1
+  - label: spec
+    path: work/004-collision-circle-manifolds/spec.md
+    digest: 19b0c711e26401b431eb1812b90f8c3baba2a8fc01f4caa48c6ff4bd90781e8f
+    schemaVersion: 1
+  - label: tasks
+    path: work/004-collision-circle-manifolds/tasks.yml
+    digest: 8467ca09d2a017854d979e6e96058dab2f5ef185c1c5b42181cf8e37350deb50
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T001"
+    taskRefs: ["T001"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV001"]
+    artifacts: ["src/Game.Core/Geometry.fs", "src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fs", "src/Game.Core/Primitives.fsi", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["circleContact: Some iff center distance < radius sum (strict, squared test); None on touch/gap. FsCheck 'isSome agrees with squared-distance overlap' (>=500) + goldens pass."]
+  - id: EV002
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T002"
+    taskRefs: ["T002"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: ["AC-002"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV002"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Unit Normal from a toward b, Depth = (rA+rB) - centerDistance via one IEEE sqrt. FsCheck 'positive depth and a unit normal' + golden 'shallow overlap on X' (normal +x, depth 1)."]
+  - id: EV003
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T003"
+    taskRefs: ["T003"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: ["AC-003"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV003"]
+    artifacts: ["src/Game.Core/Geometry.fs", "src/Game.Core/Geometry.fsi", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["circleAabbContact: clamp center to box, squared distance vs radius^2 (strict). FsCheck 'isSome agrees with clamp-distance overlap' (>=500) + goldens pass."]
+  - id: EV004
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T004"
+    taskRefs: ["T004"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: ["AC-004"]
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV004"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Center-inside fallback: least-penetration face; equal-penetration tie-break to X with +bias (DEC-003, same as aabbContact). Goldens 'centre at box centre' (normal -x, depth 7) and 'near left face' (normal +x, depth 3)."]
+  - id: EV005
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T005"
+    taskRefs: ["T005"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: ["AC-005"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV005"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Pure and total: a NaN coordinate or non-positive radius yields None (strict '<' fails on NaN; radius guard on circleAabbContact). Golden test 'NaN / non-positive radius return None, never throw'."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: "task"
+      id: "T006"
+    taskRefs: ["T006"]
+    requirementRefs: ["FR-006"]
+    acceptanceScenarioRefs: ["AC-006"]
+    clarificationDecisionRefs: ["DEC-002", "DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV006"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Byte-deterministic: squared comparisons + fixed tie-breaks (DEC-002 coincident centers (1,0); DEC-003 X/+bias). 'determinism golden (circle manifolds)' set (8 cases) is covered by the gate.yml zero-match guard filter (matched 14 goldens total, aabb+circle)."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: "task"
+      id: "T007"
+    taskRefs: ["T007"]
+    requirementRefs: ["FR-007"]
+    acceptanceScenarioRefs: ["AC-007"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV007"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["MTV validity: translating the first shape by -Normal*Depth removes the positive-area overlap. FsCheck 'MTV separates the pair within tolerance' (1e-6) for both circleContact and circleAabbContact."]
+  - id: EV008
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T008"
+    taskRefs: ["T008"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-001"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV008"]
+    artifacts: ["src/Game.Core/Geometry.fs", "src/Game.Core/Primitives.fs", "src/Game.Core/Primitives.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-001: added Circle type (DEC-001) and circleContact with the squared-distance strict overlap test."]
+  - id: EV009
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T009"
+    taskRefs: ["T009"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-002"]
+    obligationRefs: ["EV009"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-002: single IEEE sqrt manifold; coincident-centers default normal (1,0) (DEC-002)."]
+  - id: EV010
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T010"
+    taskRefs: ["T010"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-003"]
+    obligationRefs: ["EV010"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-003: clamp-and-squared-distance overlap for circleAabbContact."]
+  - id: EV011
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T011"
+    taskRefs: ["T011"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-004"]
+    obligationRefs: ["EV011"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-004: center-inside least-penetration face fallback with the DEC-003 tie-break."]
+  - id: EV012
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T012"
+    taskRefs: ["T012"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-005"]
+    obligationRefs: ["EV012"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-005: totality guards (NaN / non-positive radius yield None)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: "task"
+      id: "T013"
+    taskRefs: ["T013"]
+    requirementRefs: ["FR-006"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-006"]
+    obligationRefs: ["EV013"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-006: determinism via squared tests + fixed tie-breaks; goldens named 'determinism golden' for the gate filter."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: "task"
+      id: "T014"
+    taskRefs: ["T014"]
+    requirementRefs: ["FR-007"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-007"]
+    obligationRefs: ["EV014"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-007: MTV-separates property test for both functions (tolerance 1e-6)."]
+  - id: EV015
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T015"
+    taskRefs: ["T015"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-001"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001", "PD-003"]
+    obligationRefs: ["EV015"]
+    artifacts: ["readiness/surface-baselines/FS.GG.Game.Core.txt", "src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-001: Tier-1 surface additions (Circle type + circleContact/circleAabbContact) declared in .fsi; surface baseline regenerated (+FS.GG.Game.Core.Circle). .fsi, baseline, and tests land together; surface-baseline-drift gate stays green."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: "task"
+      id: "T016"
+    taskRefs: ["T016"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-006"]
+    obligationRefs: ["EV016"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-002: circle goldens named 'determinism golden (circle manifolds)' so the existing gate.yml determinism filter covers them (14 goldens matched) with no workflow change."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: "task"
+      id: "T017"
+    taskRefs: ["T017"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV017"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["VO-001: dotnet build clean under warnings-as-errors (0 warnings); dotnet test 101 passed / 0 failed; filtered 'determinism golden' subset 14 passed; the invariants fail before and pass after."]
+  - id: EV018
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T018"
+    taskRefs: ["T018"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV018"]
+    artifacts: ["src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PM-001: no migration required — purely additive Tier-1 surface (new type + two functions), no signature change to existing members, no schema change."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: "task"
+      id: "T019"
+    taskRefs: ["T019"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV019"]
+    artifacts: ["readiness/004-collision-circle-manifolds/analysis.json"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["GV-001: readiness views refreshed by the lifecycle commands (charter through evidence); analysis.json current against the authored sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
