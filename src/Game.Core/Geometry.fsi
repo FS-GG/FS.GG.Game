@@ -81,6 +81,28 @@ module Geometry =
     val segmentCircleHit: p0: Point -> p1: Point -> c: Circle -> RayHit option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Build a convex polygon for an oriented bounding box: the four corners of the box centered on
+    /// `center` with the given `halfExtents`, rotated by `rotation` radians (counter-clockwise
+    /// positive), emitted in CCW winding order. At `rotation = 0` the corners are the axis-aligned box,
+    /// so an `obbPolygon` collides through `polygonContact` consistently with `aabbContact`. The result
+    /// satisfies the convex/CCW input convention of `ConvexPolygon` by construction.
+    val obbPolygon: center: Point -> halfExtents: Point -> rotation: float -> ConvexPolygon
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Narrow-phase convex-polygon contact manifold via the Separating Axis Theorem (SAT). Returns
+    /// `Some contact` exactly when the two convex polygons overlap on positive area (every candidate
+    /// axis shows a positive projection overlap) and `None` when any axis separates them — a gap or a
+    /// touch (zero overlap), matching the strict-edge convention of `aabbContact`. The candidate axes
+    /// are the outward edge normals of both polygons (a's in vertex order, then b's), deduplicated so
+    /// antiparallel/duplicate directions collapse to one. `Contact.Depth` is the minimum projection
+    /// overlap (the minimum translation vector magnitude) and `Contact.Normal` is that axis re-oriented
+    /// from `a` toward `b` by the centroid delta, so translating `a` by `−Normal × Depth` separates the
+    /// pair. An equal-minimum overlap on more than one axis resolves to the first in the a-then-b
+    /// generation order (byte-deterministic). Pure and total: a polygon with fewer than 3 vertices, a
+    /// zero-area polygon, or any NaN coordinate yields `None` without throwing.
+    val polygonContact: a: ConvexPolygon -> b: ConvexPolygon -> Contact option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// True when the swept path of `moving` displaced by `velocity` overlaps `target` anywhere along
     /// the sweep — detects a fast projectile that would tunnel through a thin `target` within one
     /// step. A superset of `intersects` at both sweep endpoints.

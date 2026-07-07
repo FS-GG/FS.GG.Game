@@ -1,0 +1,216 @@
+schemaVersion: 1
+work:
+  id: 005b-collision-sat-obb
+  title: "005b Collision Sat Obb"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/005b-collision-sat-obb/spec.md
+  sourceClarifications: work/005b-collision-sat-obb/clarifications.md
+  sourceChecklist: work/005b-collision-sat-obb/checklist.md
+  sourcePlan: work/005b-collision-sat-obb/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/005b-collision-sat-obb/spec.md
+    digest: 5a16d00b732ceb7eb578cf98183c18095ee2cc4ee3f0f56666f1facee4ac8c43
+    schemaVersion: 1
+  - label: clarifications
+    path: work/005b-collision-sat-obb/clarifications.md
+    digest: c046a498cda29b72035cab2adeef68d29b6181be112537472cea9a71634e573c
+    schemaVersion: 1
+  - label: checklist
+    path: work/005b-collision-sat-obb/checklist.md
+    digest: 6fc7fc61cffb8d76e5902daa503fcf163327ffc28de3d90322818b18dde0d236
+    schemaVersion: 1
+  - label: plan
+    path: work/005b-collision-sat-obb/plan.md
+    digest: 3bd50ef1384a149da2bdcc7bf42ab3fbe023b0e767be51caa7997686fcf388c0
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: "Implement requirement FR-001"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-001"]
+    decisions: []
+    sourceIds: ["AC-001", "FR-001"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV001"]
+  - id: T002
+    title: "Implement requirement FR-002"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-002"]
+    decisions: []
+    sourceIds: ["AC-002", "FR-002"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV002"]
+  - id: T003
+    title: "Implement requirement FR-003"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-003"]
+    decisions: []
+    sourceIds: ["AC-003", "FR-003"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV003"]
+  - id: T004
+    title: "Implement requirement FR-004"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-004"]
+    decisions: []
+    sourceIds: ["AC-004", "FR-004"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV004"]
+  - id: T005
+    title: "Implement requirement FR-005"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-005"]
+    decisions: []
+    sourceIds: ["AC-005", "FR-005"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV005"]
+  - id: T006
+    title: "Implement requirement FR-006"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-006"]
+    decisions: []
+    sourceIds: ["AC-006", "FR-006"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV006"]
+  - id: T007
+    title: "Implement plan decision PD-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-001", "FR-001", "PD-001"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV007"]
+  - id: T008
+    title: "Implement plan decision PD-002"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-002", "DEC-002", "FR-002", "PD-002"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV008"]
+  - id: T009
+    title: "Implement plan decision PD-003"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-003", "DEC-004", "FR-003", "PD-003"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV009"]
+  - id: T010
+    title: "Implement plan decision PD-004"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-004", "FR-004", "PD-004"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV010"]
+  - id: T011
+    title: "Implement plan decision PD-005"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-005", "FR-005", "PD-005"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV011"]
+  - id: T012
+    title: "Implement plan decision PD-006"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-006", "DEC-003", "FR-006", "PD-006"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV012"]
+  - id: T013
+    title: "Update contract surface PC-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: ["DEC-001"]
+    sourceIds: ["DEC-001", "PC-001", "PD-001", "PD-003"]
+    requiredSkills: ["fsharp"]
+    requiredEvidence: ["EV013"]
+  - id: T014
+    title: "Update contract surface PC-002"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-002", "PD-006"]
+    requiredSkills: ["fsharp"]
+    requiredEvidence: ["EV014"]
+  - id: T015
+    title: "Record verification evidence VO-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PD-001", "VO-001"]
+    requiredSkills: ["automated-tests", "readiness-evidence"]
+    requiredEvidence: ["EV015"]
+  - id: T016
+    title: "Handle migration posture PM-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PM-001"]
+    requiredSkills: ["schema-versioning"]
+    requiredEvidence: ["EV016"]
+  - id: T017
+    title: "Refresh generated view impact GV-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["GV-001", "PD-001"]
+    requiredSkills: ["deterministic-json"]
+    requiredEvidence: ["EV017"]
+  - id: T018
+    title: "Refresh generated view impact GV-002"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["GV-002", "PC-001"]
+    requiredSkills: ["deterministic-json"]
+    requiredEvidence: ["EV018"]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 005b-collision-sat-obb."

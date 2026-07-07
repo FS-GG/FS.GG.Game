@@ -39,3 +39,12 @@ type Circle = { Center: Point; Radius: float }
 /// the outward unit surface normal there. A *query value*, not a penetration manifold; produced by
 /// `Geometry.segmentAabbHit` / `segmentCircleHit`. Structural equality makes it golden-testable.
 type RayHit = { T: float; Point: Point; Normal: Point }
+
+/// Public contract type exposed by the FS.GG.Game.Core package.
+/// A convex polygon in continuous simulation space — a ring of `Vertices`. Convention (an input
+/// assumption, not a runtime-enforced invariant): the vertices are convex and CCW-wound. It is the
+/// arbitrary-convex counterpart of `Rect`/`Circle` for narrow-phase collision, consumed by
+/// `Geometry.polygonContact`; build the oriented-bounding-box case with `Geometry.obbPolygon`. A
+/// degenerate ring (fewer than 3 vertices, zero area, or a NaN coordinate) is a no-contact input —
+/// `polygonContact` returns `None` rather than throwing. Structural equality makes it golden-testable.
+type ConvexPolygon = { Vertices: Point[] }

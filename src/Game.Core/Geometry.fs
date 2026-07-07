@@ -161,6 +161,109 @@ module Geometry =
         else
             None
 
+    // Oriented bounding box as a convex polygon: the four box corners rotated CCW about `center`.
+    // Local corners in CCW order (-hx,-hy),(hx,-hy),(hx,hy),(-hx,hy); the rotation R(θ) = [[c,-s],[s,c]]
+    // is applied to each then translated by `center`. At θ = 0 (cos 0 = 1, sin 0 = 0 exactly) these are
+    // the axis-aligned box corners, so two obbPolygons agree with aabbContact (DEC-004). CCW winding
+    // satisfies polygonContact's outward-normal convention by construction.
+    let obbPolygon (center: Point) (halfExtents: Point) (rotation: float) : ConvexPolygon =
+        let c = cos rotation
+        let s = sin rotation
+        let hx, hy = halfExtents.X, halfExtents.Y
+        let corner lx ly : Point =
+            { X = center.X + lx * c - ly * s
+              Y = center.Y + lx * s + ly * c }
+        { Vertices = [| corner -hx -hy; corner hx -hy; corner hx hy; corner -hx hy |] }
+
+    // Narrow-phase convex-polygon contact via the Separating Axis Theorem. Candidate axes are the
+    // outward edge normals of both polygons — a's in vertex order (edge = v[i+1]-v[i]; CCW outward =
+    // (dy, -dx)), then b's — normalized, with zero-length edges skipped and antiparallel/duplicate
+    // directions deduped to a canonical half-plane (FR-005), preserving generation order. On each axis
+    // both polygons project to intervals [aMn,aMx],[bMn,bMx]. The signed exit distances are d1 = aMx -
+    // bMn (push a toward -n) and d2 = bMx - aMn (push a toward +n); the pair overlaps on this axis iff
+    // both are > 0. Any axis with `not (d1 > 0 && d2 > 0)` (a gap, a touch, or a NaN interval) separates
+    // ⇒ None (strict edges, matching aabbContact). The axis penetration is min(d1, d2) — this carries
+    // the full-containment correction: when one interval nests inside the other the naive
+    // min(aMx,bMx)-max(aMn,bMn) would understate the depth, but min(d1,d2) is the true distance to push
+    // the nested shape out either end. The least penetration over all axes is the MTV; its normal is
+    // oriented along the nearer exit so `-Normal*Depth` separates (the a→b least-penetration direction).
+    // An equal minimum on two axes keeps the first in generation order (DEC-003), for byte-determinism.
+    // Totality: `< 3` vertices, any non-finite coordinate, or a zero-area polygon yields None without
+    // throwing (the min/max projection loop would otherwise silently skip a NaN vertex, so
+    // non-finiteness is an explicit guard rather than relying on comparison NaN-poisoning).
+    let polygonContact (a: ConvexPolygon) (b: ConvexPolygon) : Contact option =
+        let va, vb = a.Vertices, b.Vertices
+        let isFinite (x: float) = not (System.Double.IsNaN x) && not (System.Double.IsInfinity x)
+        let allFinite (v: Point[]) = v |> Array.forall (fun p -> isFinite p.X && isFinite p.Y)
+        // Shoelace area magnitude; zero for a collinear/degenerate ring.
+        let area (v: Point[]) =
+            let mutable acc = 0.0
+            for i in 0 .. v.Length - 1 do
+                let p = v.[i]
+                let q = v.[(i + 1) % v.Length]
+                acc <- acc + (p.X * q.Y - q.X * p.Y)
+            abs acc / 2.0
+        if va.Length < 3 || vb.Length < 3 then None
+        elif not (allFinite va && allFinite vb) then None
+        elif area va <= 0.0 || area vb <= 0.0 then None
+        else
+            // Unit outward edge normals, degenerate edges dropped.
+            let edgeNormals (v: Point[]) : Point list =
+                [ for i in 0 .. v.Length - 1 do
+                      let p = v.[i]
+                      let q = v.[(i + 1) % v.Length]
+                      let ex, ey = q.X - p.X, q.Y - p.Y
+                      let len = sqrt (ex * ex + ey * ey)
+                      if len > 0.0 then
+                          yield ({ X = ey / len; Y = -ex / len }: Point) ]
+            // Fold antiparallel/duplicate axes onto one representative, keeping first-seen (generation
+            // order) so the tie-break is stable. The stored orientation is irrelevant to the overlap
+            // magnitude (projection is symmetric under axis negation); a→b orientation is set later.
+            let axes =
+                (edgeNormals va @ edgeNormals vb)
+                |> List.fold (fun (acc: Point list) (n: Point) ->
+                    let dup =
+                        acc
+                        |> List.exists (fun (m: Point) ->
+                            (abs (m.X - n.X) < 1e-9 && abs (m.Y - n.Y) < 1e-9)
+                            || (abs (m.X + n.X) < 1e-9 && abs (m.Y + n.Y) < 1e-9))
+                    if dup then acc else acc @ [ n ])
+                    []
+            let project (v: Point[]) (n: Point) =
+                let mutable mn = System.Double.PositiveInfinity
+                let mutable mx = System.Double.NegativeInfinity
+                for pt in v do
+                    let d = pt.X * n.X + pt.Y * n.Y
+                    if d < mn then mn <- d
+                    if d > mx then mx <- d
+                mn, mx
+            // Scan for the least penetration; a non-overlapping axis short-circuits to separated. Each
+            // axis contributes (pen, normal) where `normal` is oriented so -normal*pen separates (the
+            // nearer exit). `>= best` keeps the FIRST axis on an exact tie (generation order, DEC-003).
+            let mutable best: (float * Point) option = None
+            let mutable separated = false
+            for n in axes do
+                if not separated then
+                    let aMn, aMx = project va n
+                    let bMn, bMx = project vb n
+                    let d1 = aMx - bMn // push a toward -n to exit
+                    let d2 = bMx - aMn // push a toward +n to exit
+                    if not (d1 > 0.0 && d2 > 0.0) then
+                        separated <- true
+                    else
+                        let pen, normal =
+                            if d1 <= d2 then d1, n
+                            else d2, { X = -n.X; Y = -n.Y }
+                        match best with
+                        | Some(bp, _) when pen >= bp -> ()
+                        | _ -> best <- Some(pen, normal)
+            if separated then
+                None
+            else
+                match best with
+                | None -> None
+                | Some(depth, normal) -> Some { Normal = normal; Depth = depth }
+
     // Swept AABB via Minkowski expansion: grow `target` by `moving`'s extents so `moving` collapses to
     // its min-corner point, then clip the motion segment (point → point+velocity) against the expanded
     // box with the Liang–Barsky slab method. A start/end that overlaps `target` puts the corresponding
