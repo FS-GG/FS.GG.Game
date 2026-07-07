@@ -33,6 +33,16 @@ module Geometry =
     val ofCenter: center: Point -> width: float -> height: float -> Rect
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Narrow-phase AABB contact manifold. Returns `Some contact` exactly when `intersects a b`
+    /// (positive-area overlap, strict edges) and `None` on touch or gap — so `(aabbContact a b)
+    /// |> Option.isSome` agrees with `intersects a b` for all inputs. The `Contact.Normal` points
+    /// from `a` toward `b` along the minimum-penetration axis and `Contact.Depth` is that
+    /// penetration (the minimum translation vector). Pure and total (NaN-safe). Deterministic
+    /// tie-breaks, fixed for byte-identical output: equal penetration on both axes resolves to the
+    /// X axis; a zero centre-delta on the chosen axis resolves to the +axis direction.
+    val aabbContact: a: Rect -> b: Rect -> Contact option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// True when the swept path of `moving` displaced by `velocity` overlaps `target` anywhere along
     /// the sweep — detects a fast projectile that would tunnel through a thin `target` within one
     /// step. A superset of `intersects` at both sweep endpoints.

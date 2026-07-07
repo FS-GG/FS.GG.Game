@@ -35,6 +35,27 @@ module Geometry =
           Width = width
           Height = height }
 
+    // Narrow-phase AABB contact (SAT specialised to two axes). Centre/half-extent form yields the
+    // minimum-translation vector directly: overlap depths px,py = (haX+hbX)-|dx|, (haY+hbY)-|dy| over
+    // the centre delta a→b. A non-positive depth on either axis means no positive-area overlap, so
+    // `isSome` agrees with `intersects` (strict edges). The smaller positive depth is the MTV. Tie-
+    // breaks are fixed for byte-determinism (the corpus's ordering-nondeterminism enemy): px = py ⇒
+    // X axis; a zero centre-delta on the chosen axis ⇒ +direction. NaN-safe: a NaN depth fails the
+    // `> 0.0` guards, giving None without throwing.
+    let aabbContact (a: Rect) (b: Rect) : Contact option =
+        let haX, haY = a.Width / 2.0, a.Height / 2.0
+        let hbX, hbY = b.Width / 2.0, b.Height / 2.0
+        let dx = (b.X + hbX) - (a.X + haX)
+        let dy = (b.Y + hbY) - (a.Y + haY)
+        let px = (haX + hbX) - abs dx
+        let py = (haY + hbY) - abs dy
+        if px > 0.0 && py > 0.0 then
+            let sign v = if v < 0.0 then -1.0 else 1.0 // +bias on exact zero — the documented tie-break
+            if px <= py then Some { Normal = { X = sign dx; Y = 0.0 }; Depth = px }
+            else Some { Normal = { X = 0.0; Y = sign dy }; Depth = py }
+        else
+            None
+
     // Swept AABB via Minkowski expansion: grow `target` by `moving`'s extents so `moving` collapses to
     // its min-corner point, then clip the motion segment (point → point+velocity) against the expanded
     // box with the Liang–Barsky slab method. A start/end that overlaps `target` puts the corresponding
