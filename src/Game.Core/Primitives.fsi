@@ -25,3 +25,10 @@ type Rect =
 /// values" rule): resolution/response is a separate layer that consumes a `Contact`, never a thing
 /// this core produces. Structural equality makes it a deterministic golden-testable value.
 type Contact = { Normal: Point; Depth: float }
+
+/// Public contract type exposed by the FS.GG.Game.Core package.
+/// A circle in continuous simulation space — a centre `Point` and a `Radius`. The circular
+/// counterpart of `Rect` for narrow-phase collision; consumed by `Geometry.circleContact` /
+/// `circleAabbContact`. A non-positive or NaN radius is a no-contact input (the detection functions
+/// return `None` rather than throwing).
+type Circle = { Center: Point; Radius: float }

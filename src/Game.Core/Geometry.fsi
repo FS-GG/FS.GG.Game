@@ -43,6 +43,27 @@ module Geometry =
     val aabbContact: a: Rect -> b: Rect -> Contact option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Narrow-phase circle–circle contact manifold. Returns `Some contact` exactly when the two
+    /// circles overlap on positive area (centre distance strictly less than the radius sum) and
+    /// `None` on touch or gap. `Normal` is the unit vector from `a`'s centre toward `b`'s, and
+    /// `Depth = (a.Radius + b.Radius) − centreDistance`. The overlap test uses squared distance; the
+    /// sole `sqrt` (a correctly-rounded, cross-platform-deterministic IEEE op) builds the manifold on
+    /// a hit. Pure and total: a NaN or non-positive radius yields `None`. Coincident centres are the
+    /// documented degenerate — `Normal = (1, 0)`, `Depth = a.Radius + b.Radius`.
+    val circleContact: a: Circle -> b: Circle -> Contact option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Narrow-phase circle–AABB contact manifold. Returns `Some contact` exactly when the circle
+    /// overlaps the box on positive area, computed by clamping the circle centre to the box and
+    /// comparing squared distance to squared radius; `None` otherwise. As with `aabbContact`,
+    /// `Normal` points from the circle toward the box and the separating translation of the circle is
+    /// `−Normal × Depth`. When the centre lies inside the box, the box encloses the circle, so
+    /// `−Normal` is the outward normal of the least-penetration face (equal-penetration tie-break:
+    /// X axis, +bias — identical to `aabbContact`) and `Depth` is that penetration plus the radius.
+    /// Pure and total (a NaN or non-positive radius yields `None`).
+    val circleAabbContact: c: Circle -> box: Rect -> Contact option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// True when the swept path of `moving` displaced by `velocity` overlaps `target` anywhere along
     /// the sweep — detects a fast projectile that would tunnel through a thin `target` within one
     /// step. A superset of `intersects` at both sweep endpoints.

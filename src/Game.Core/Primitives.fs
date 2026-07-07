@@ -9,3 +9,5 @@ type Rect =
       Height: float }
 
 type Contact = { Normal: Point; Depth: float }
+
+type Circle = { Center: Point; Radius: float }

@@ -210,4 +210,112 @@ let tests =
                 }
             ]
         ]
+
+        // Circle collision-detection capsule (004) — circle–circle and circle–AABB manifolds, the
+        // same Contact shape and constraint-face discipline as aabbContact. Detection only.
+        testList "circleContact / circleAabbContact (narrow-phase)" [
+
+            let circ x y rad : Circle = { Center = { X = x; Y = y }; Radius = rad }
+            // Two ints -> a circle with a positive radius, bounded so overlaps actually happen.
+            let circleOf (a: int) (b: int) (rr: int) : Circle =
+                { Center = { X = float (a % 50); Y = float (b % 50) }; Radius = float (1 + abs (rr % 20)) }
+            let isUnit (n: Point) = abs (sqrt (n.X * n.X + n.Y * n.Y) - 1.0) < 1e-9
+
+            testCase "circleContact isSome agrees with squared-distance overlap (FsCheck ≥500)" <| fun () ->
+                let prop a b ra c d rb =
+                    let x = circleOf a b ra
+                    let y = circleOf c d rb
+                    let dx = y.Center.X - x.Center.X
+                    let dy = y.Center.Y - x.Center.Y
+                    let rr = x.Radius + y.Radius
+                    let overlap = dx * dx + dy * dy < rr * rr
+                    (Geometry.circleContact x y |> Option.isSome) = overlap
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "circleContact manifold has positive depth and a unit normal (FsCheck ≥500)" <| fun () ->
+                let prop a b ra c d rb =
+                    match Geometry.circleContact (circleOf a b ra) (circleOf c d rb) with
+                    | Some k -> k.Depth > 0.0 && isUnit k.Normal
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "circleContact MTV separates the pair within tolerance (FsCheck ≥500)" <| fun () ->
+                let prop a b ra c d rb =
+                    let x = circleOf a b ra
+                    let y = circleOf c d rb
+                    match Geometry.circleContact x y with
+                    | Some k ->
+                        let x' = { x with Center = { X = x.Center.X - k.Normal.X * k.Depth; Y = x.Center.Y - k.Normal.Y * k.Depth } }
+                        match Geometry.circleContact x' y with
+                        | Some k2 -> k2.Depth < 1e-6
+                        | None -> true
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "circleAabbContact isSome agrees with clamp-distance overlap (FsCheck ≥500)" <| fun () ->
+                let prop a b ra e f g h =
+                    let c = circleOf a b ra
+                    let box = rectOf e f g h
+                    let clampedX = max box.X (min (box.X + box.Width) c.Center.X)
+                    let clampedY = max box.Y (min (box.Y + box.Height) c.Center.Y)
+                    let dx = c.Center.X - clampedX
+                    let dy = c.Center.Y - clampedY
+                    let overlap = dx * dx + dy * dy < c.Radius * c.Radius
+                    (Geometry.circleAabbContact c box |> Option.isSome) = overlap
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "circleAabbContact MTV separates within tolerance (FsCheck ≥500)" <| fun () ->
+                let prop a b ra e f g h =
+                    let c = circleOf a b ra
+                    let box = rectOf e f g h
+                    match Geometry.circleAabbContact c box with
+                    | Some k ->
+                        let c' = { c with Center = { X = c.Center.X - k.Normal.X * k.Depth; Y = c.Center.Y - k.Normal.Y * k.Depth } }
+                        match Geometry.circleAabbContact c' box with
+                        | Some k2 -> k2.Depth < 1e-6
+                        | None -> true
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            test "NaN / non-positive radius return None, never throw (total)" {
+                Expect.isNone (Geometry.circleContact (circ nan 0. 2.) (circ 0. 0. 2.)) "NaN centre ⇒ None"
+                Expect.isNone (Geometry.circleContact (circ 0. 0. 0.) (circ 0. 0. 2.)) "zero radius ⇒ None"
+                Expect.isNone (Geometry.circleAabbContact (circ nan 0. 2.) (r 0. 0. 10. 10.)) "NaN centre ⇒ None"
+                Expect.isNone (Geometry.circleAabbContact (circ 5. 5. 0.) (r 0. 0. 10. 10.)) "zero radius ⇒ None"
+            }
+
+            // Determinism golden — fixed inputs, exact expected manifolds (byte-identical). Named
+            // "determinism golden" so the gate.yml zero-match guard's determinism filter covers them.
+            testList "determinism golden (circle manifolds)" [
+                test "circle-circle shallow overlap on X" {
+                    Expect.equal (Geometry.circleContact (circ 0. 0. 3.) (circ 4. 0. 2.))
+                        (Some { Normal = p 1. 0.; Depth = 1. }) "normal +x, depth (5-4)=1"
+                }
+                test "circle-circle coincident centres use the fixed fallback normal" {
+                    Expect.equal (Geometry.circleContact (circ 2. 2. 3.) (circ 2. 2. 1.))
+                        (Some { Normal = p 1. 0.; Depth = 4. }) "coincident ⇒ (1,0), depth rA+rB"
+                }
+                test "circle-circle touching is not a contact (strict)" {
+                    Expect.isNone (Geometry.circleContact (circ 0. 0. 2.) (circ 4. 0. 2.)) "d = rA+rB ⇒ None"
+                }
+                test "circle-circle disjoint is not a contact" {
+                    Expect.isNone (Geometry.circleContact (circ 0. 0. 1.) (circ 5. 0. 1.)) "gap ⇒ None"
+                }
+                test "circle-AABB centre outside: normal points circle to box" {
+                    Expect.equal (Geometry.circleAabbContact (circ 13. 5. 4.) (r 0. 0. 10. 10.))
+                        (Some { Normal = p -1. 0.; Depth = 1. }) "right of box ⇒ normal -x, depth (4-3)=1"
+                }
+                test "circle-AABB centre at box centre: least-penetration X face, +bias" {
+                    Expect.equal (Geometry.circleAabbContact (circ 5. 5. 2.) (r 0. 0. 10. 10.))
+                        (Some { Normal = p -1. 0.; Depth = 7. }) "tie ⇒ X axis, depth pen(5)+r(2)"
+                }
+                test "circle-AABB centre near left face: escape left, normal inward" {
+                    Expect.equal (Geometry.circleAabbContact (circ 1. 5. 2.) (r 0. 0. 10. 10.))
+                        (Some { Normal = p 1. 0.; Depth = 3. }) "nearest left face ⇒ normal +x, depth pen(1)+r(2)"
+                }
+                test "circle-AABB gap is not a contact" {
+                    Expect.isNone (Geometry.circleAabbContact (circ 20. 20. 2.) (r 0. 0. 10. 10.)) "far ⇒ None"
+                }
+            ]
+        ]
     ]
