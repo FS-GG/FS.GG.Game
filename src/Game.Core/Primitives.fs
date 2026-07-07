@@ -11,3 +11,5 @@ type Rect =
 type Contact = { Normal: Point; Depth: float }
 
 type Circle = { Center: Point; Radius: float }
+
+type RayHit = { T: float; Point: Point; Normal: Point }

@@ -108,6 +108,59 @@ module Geometry =
             else
                 None
 
+    // Segment-vs-AABB cast (slab method). Returns the first entry crossing INTO the box from outside
+    // with t in [0,1] (DEC-002: an origin inside, or the box behind the segment, gives None). The
+    // entered face is the axis whose near-t was the max; its normal is the outward unit axis (opposite
+    // the segment direction on that axis). A corner entry (equal per-axis near-t) resolves to the X
+    // face (DEC-003). NaN or zero-length segment: the comparisons fail, yielding None.
+    let segmentAabbHit (p0: Point) (p1: Point) (box: Rect) : RayHit option =
+        let dx, dy = p1.X - p0.X, p1.Y - p0.Y
+        let minX, maxX = box.X, box.X + box.Width
+        let minY, maxY = box.Y, box.Y + box.Height
+        // Per-axis slab -> (tNear, tFar) option; None when parallel and outside the slab.
+        let slab p d lo hi : (float * float) option =
+            if d = 0.0 then
+                if p < lo || p > hi then None
+                else Some(System.Double.NegativeInfinity, System.Double.PositiveInfinity)
+            else
+                let t1 = (lo - p) / d
+                let t2 = (hi - p) / d
+                Some(min t1 t2, max t1 t2)
+        match slab p0.X dx minX maxX, slab p0.Y dy minY maxY with
+        | Some(nx, fx), Some(ny, fy) ->
+            let tEnter = max nx ny
+            let tExit = min fx fy
+            if tEnter <= tExit && tEnter >= 0.0 && tEnter <= 1.0 then
+                // The entering axis is the one with the larger near-t; a tie resolves to X (DEC-003).
+                let normal =
+                    if nx >= ny then { X = (if dx > 0.0 then -1.0 else 1.0); Y = 0.0 }
+                    else { X = 0.0; Y = (if dy > 0.0 then -1.0 else 1.0) }
+                Some { T = tEnter; Point = { X = p0.X + dx * tEnter; Y = p0.Y + dy * tEnter }; Normal = normal }
+            else
+                None
+        | _ -> None
+
+    // Segment-vs-circle cast (ray–circle quadratic on d = p1 - p0, f = p0 - center). The near root
+    // t = (-b - sqrt disc) / 2a is the entry; returned only when t in [0,1] (DEC-002: origin inside
+    // gives a negative near root => None). Guards a > 0 (non-degenerate segment), radius > 0, and
+    // disc >= 0; any NaN fails these, yielding None. The single sqrt is a correctly-rounded IEEE op.
+    let segmentCircleHit (p0: Point) (p1: Point) (c: Circle) : RayHit option =
+        let dx, dy = p1.X - p0.X, p1.Y - p0.Y
+        let fx, fy = p0.X - c.Center.X, p0.Y - c.Center.Y
+        let a = dx * dx + dy * dy
+        let b = 2.0 * (fx * dx + fy * dy)
+        let cc = fx * fx + fy * fy - c.Radius * c.Radius
+        let disc = b * b - 4.0 * a * cc
+        if a > 0.0 && c.Radius > 0.0 && disc >= 0.0 then
+            let t = (-b - sqrt disc) / (2.0 * a)
+            if t >= 0.0 && t <= 1.0 then
+                let px, py = p0.X + dx * t, p0.Y + dy * t
+                Some { T = t; Point = { X = px; Y = py }; Normal = { X = (px - c.Center.X) / c.Radius; Y = (py - c.Center.Y) / c.Radius } }
+            else
+                None
+        else
+            None
+
     // Swept AABB via Minkowski expansion: grow `target` by `moving`'s extents so `moving` collapses to
     // its min-corner point, then clip the motion segment (point → point+velocity) against the expanded
     // box with the Liang–Barsky slab method. A start/end that overlaps `target` puts the corresponding
