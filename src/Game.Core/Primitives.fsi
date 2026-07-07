@@ -16,3 +16,12 @@ type Rect =
       Y: float
       Width: float
       Height: float }
+
+/// Public contract type exposed by the FS.GG.Game.Core package.
+/// A collision manifold — the minimum translation that separates two overlapping shapes. `Normal`
+/// is a unit axis vector (one of (±1,0)/(0,±1)) pointing from the first shape toward the second
+/// along the axis of least penetration; `Depth` is the positive penetration distance along it.
+/// This is a *detection-only value* (the game-logic corpus's "detection returns manifests as
+/// values" rule): resolution/response is a separate layer that consumes a `Contact`, never a thing
+/// this core produces. Structural equality makes it a deterministic golden-testable value.
+type Contact = { Normal: Point; Depth: float }

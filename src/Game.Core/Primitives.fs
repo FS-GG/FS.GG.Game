@@ -7,3 +7,5 @@ type Rect =
       Y: float
       Width: float
       Height: float }
+
+type Contact = { Normal: Point; Depth: float }

@@ -121,4 +121,93 @@ let tests =
                         true
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
         ]
+
+        // Collision-detection capsule — the narrow-phase manifold `aabbContact`. Detection only:
+        // resolution/response is a separate layer (corpus rule). These tests ARE the "constraint
+        // face" — the invariants a byte-deterministic collision core must satisfy.
+        testList "aabbContact (narrow-phase manifold)" [
+
+            let isUnitAxis (n: Point) =
+                (abs n.X = 1.0 && n.Y = 0.0) || (n.X = 0.0 && abs n.Y = 1.0)
+
+            testCase "isSome agrees with intersects, always (FsCheck ≥500)" <| fun () ->
+                let prop a b c d e f g h =
+                    let x = rectOf a b c d
+                    let y = rectOf e f g h
+                    (Geometry.aabbContact x y |> Option.isSome) = Geometry.intersects x y
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "a contact has positive depth and a unit-axis normal (FsCheck ≥500)" <| fun () ->
+                let prop a b c d e f g h =
+                    match Geometry.aabbContact (rectOf a b c d) (rectOf e f g h) with
+                    | Some contact -> contact.Depth > 0.0 && isUnitAxis contact.Normal
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "penetration depth is symmetric in the operands (FsCheck ≥500)" <| fun () ->
+                let prop a b c d e f g h =
+                    let x = rectOf a b c d
+                    let y = rectOf e f g h
+                    match Geometry.aabbContact x y, Geometry.aabbContact y x with
+                    | Some cx, Some cy -> cx.Depth = cy.Depth
+                    | None, None -> true
+                    | _ -> false // isSome is symmetric (intersects is), so mixed Some/None is a bug
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "translating by the MTV separates the pair (FsCheck ≥500)" <| fun () ->
+                // The manifold's core promise: pushing `x` out along -Normal*Depth removes the
+                // positive-area overlap. Integer-derived coords keep the arithmetic exact.
+                let prop a b c d e f g h =
+                    let x = rectOf a b c d
+                    let y = rectOf e f g h
+                    match Geometry.aabbContact x y with
+                    | Some c ->
+                        let pushed =
+                            { x with
+                                X = x.X - c.Normal.X * c.Depth
+                                Y = x.Y - c.Normal.Y * c.Depth }
+                        not (Geometry.intersects pushed y)
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            test "normal is anti-symmetric: contact a→b negates contact b→a" {
+                let a = r 0. 0. 10. 10.
+                let b = r 8. 0. 10. 10.
+                Expect.equal (Geometry.aabbContact a b) (Some { Normal = p 1. 0.; Depth = 2. }) "a→b points +x"
+                Expect.equal (Geometry.aabbContact b a) (Some { Normal = p -1. 0.; Depth = 2. }) "b→a points -x, same depth"
+            }
+
+            test "NaN coordinates return None, never throw (total)" {
+                Expect.isNone (Geometry.aabbContact (r nan 0. 10. 10.) (r 0. 0. 10. 10.)) "NaN ⇒ None, total"
+            }
+
+            // Determinism golden — fixed inputs, exact expected manifolds. Same output on every run
+            // and platform (byte-identical structural equality). This is the `determinism-golden`
+            // check the capsule binds in capabilities.yml.
+            testList "determinism golden (byte-identical manifolds)" [
+                test "least-penetration axis is X (shallow horizontal overlap)" {
+                    Expect.equal (Geometry.aabbContact (r 0. 0. 10. 10.) (r 8. 0. 10. 10.))
+                        (Some { Normal = p 1. 0.; Depth = 2. }) "X axis, +x, depth 2"
+                }
+                test "least-penetration axis is Y (shallow vertical overlap)" {
+                    Expect.equal (Geometry.aabbContact (r 0. 0. 10. 10.) (r 0. 8. 10. 10.))
+                        (Some { Normal = p 0. 1.; Depth = 2. }) "Y axis, +y, depth 2"
+                }
+                test "negative centre-delta flips the normal" {
+                    Expect.equal (Geometry.aabbContact (r 0. 0. 10. 10.) (r -8. 0. 10. 10.))
+                        (Some { Normal = p -1. 0.; Depth = 2. }) "X axis, -x, depth 2"
+                }
+                test "equal penetration on both axes breaks toward X (documented tie-break)" {
+                    Expect.equal (Geometry.aabbContact (r 0. 0. 10. 10.) (r 8. 8. 10. 10.))
+                        (Some { Normal = p 1. 0.; Depth = 2. }) "px = py ⇒ X axis"
+                }
+                test "disjoint rectangles have no contact" {
+                    Expect.isNone (Geometry.aabbContact (r 0. 0. 10. 10.) (r 20. 20. 5. 5.)) "gap ⇒ None"
+                }
+                test "full containment still yields a deterministic MTV" {
+                    Expect.equal (Geometry.aabbContact (r 0. 0. 10. 10.) (r 3. 3. 2. 2.))
+                        (Some { Normal = p -1. 0.; Depth = 5. }) "inner box: X axis tie-break, depth 5"
+                }
+            ]
+        ]
     ]
