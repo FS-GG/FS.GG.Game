@@ -23,3 +23,13 @@ request surface stayed in `FS.GG.UI.Canvas`, so its `Canvas.Audio` references re
 The corresponding **TestSpecs** stay in `FS-GG/.github` (cross-repo tests reference them there).
 The StarCraft2 unit-symbology design stays in `.github` too — it designs the `fs-gg-symbology`
 skill, which is owned by FS.GG.Rendering, not FS.GG.Game.
+
+## Cross-cutting design (authored here, post-extraction)
+
+Not part of the relocated 2026-07-05 corpus above — these define the *kind of thing* the corpus
+content ships as, and its build plan. Both are pre-ADR, pointed at org-level **ADR-0023**.
+
+| Design | Concern |
+|---|---|
+| [Capability-capsule product type](2026-07-07-capability-capsule-product-type.md) | names/formalizes the artifact FS.GG.Game ships to an agent + SDD consumer — three faces (rationale/contract/constraint), tiering, schema |
+| [Game-capsule contents & architectures](2026-07-07-game-capsule-contents-and-architectures.md) | the build plan — capability × architecture matrix, the four sim strategies, per-fit samples, governance checks |
