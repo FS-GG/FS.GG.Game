@@ -318,4 +318,78 @@ let tests =
                 }
             ]
         ]
+
+        // Raycast capsule (005) — segment-cast queries returning a RayHit (t, point, normal).
+        // Entry-from-outside semantics; queries only.
+        testList "segmentAabbHit / segmentCircleHit (raycast)" [
+
+            let circR x y rad : Circle = { Center = { X = x; Y = y }; Radius = rad }
+            let isUnit (n: Point) = abs (sqrt (n.X * n.X + n.Y * n.Y) - 1.0) < 1e-9
+
+            testCase "segmentAabbHit: t in [0,1], point on the box boundary, unit-axis normal (FsCheck ≥500)" <| fun () ->
+                let prop a b c d e f g h =
+                    let p0 = { X = float (a % 50); Y = float (b % 50) }
+                    let p1 = { X = float (c % 50); Y = float (d % 50) }
+                    let box = rectOf e f g h
+                    match Geometry.segmentAabbHit p0 p1 box with
+                    | Some hit ->
+                        let onEdge =
+                            abs (hit.Point.X - box.X) < 1e-9 || abs (hit.Point.X - (box.X + box.Width)) < 1e-9
+                            || abs (hit.Point.Y - box.Y) < 1e-9 || abs (hit.Point.Y - (box.Y + box.Height)) < 1e-9
+                        let unitAxis = (abs hit.Normal.X = 1.0 && hit.Normal.Y = 0.0) || (hit.Normal.X = 0.0 && abs hit.Normal.Y = 1.0)
+                        hit.T >= 0.0 && hit.T <= 1.0 && onEdge && unitAxis
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "segmentCircleHit: t in [0,1], point on the circle, unit normal (FsCheck ≥500)" <| fun () ->
+                let prop a b c d cx cy rr =
+                    let p0 = { X = float (a % 50); Y = float (b % 50) }
+                    let p1 = { X = float (c % 50); Y = float (d % 50) }
+                    let circle = circR (float (cx % 50)) (float (cy % 50)) (float (1 + abs (rr % 20)))
+                    match Geometry.segmentCircleHit p0 p1 circle with
+                    | Some hit ->
+                        let ex = hit.Point.X - circle.Center.X
+                        let ey = hit.Point.Y - circle.Center.Y
+                        let dist = sqrt (ex * ex + ey * ey)
+                        hit.T >= 0.0 && hit.T <= 1.0 && abs (dist - circle.Radius) < 1e-6 && isUnit hit.Normal
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            test "NaN / zero-length / non-positive radius return None, never throw (total)" {
+                Expect.isNone (Geometry.segmentAabbHit (p nan 0.) (p 5. 5.) (r 0. 0. 10. 10.)) "NaN origin ⇒ None"
+                Expect.isNone (Geometry.segmentAabbHit (p 5. 5.) (p 5. 5.) (r 0. 0. 10. 10.)) "zero-length inside ⇒ None"
+                Expect.isNone (Geometry.segmentCircleHit (p nan 0.) (p 5. 0.) (circR 0. 0. 2.)) "NaN origin ⇒ None"
+                Expect.isNone (Geometry.segmentCircleHit (p 0. 0.) (p 0. 0.) (circR 0. 0. 2.)) "zero-length ⇒ None"
+                Expect.isNone (Geometry.segmentCircleHit (p -5. 0.) (p 5. 0.) (circR 0. 0. 0.)) "non-positive radius ⇒ None"
+            }
+
+            // Determinism golden — fixed inputs, exact expected hits (byte-identical). Named
+            // "determinism golden" so the gate.yml zero-match guard's determinism filter covers them.
+            testList "determinism golden (raycast)" [
+                test "segment enters an AABB through the left face" {
+                    Expect.equal (Geometry.segmentAabbHit (p -5. 5.) (p 5. 5.) (r 0. 0. 10. 10.))
+                        (Some { T = 0.5; Point = p 0. 5.; Normal = p -1. 0. }) "enter left ⇒ t 0.5, point (0,5), normal -x"
+                }
+                test "segment entering an AABB at a corner resolves to the X face (tie-break)" {
+                    Expect.equal (Geometry.segmentAabbHit (p -5. -5.) (p 5. 5.) (r 0. 0. 10. 10.))
+                        (Some { T = 0.5; Point = p 0. 0.; Normal = p -1. 0. }) "corner ⇒ X face, t 0.5"
+                }
+                test "segment starting inside the AABB has no entry" {
+                    Expect.isNone (Geometry.segmentAabbHit (p 5. 5.) (p 20. 5.) (r 0. 0. 10. 10.)) "origin inside ⇒ None"
+                }
+                test "segment missing the AABB" {
+                    Expect.isNone (Geometry.segmentAabbHit (p -5. 20.) (p 5. 20.) (r 0. 0. 10. 10.)) "above box ⇒ None"
+                }
+                test "segment enters a circle at the near root" {
+                    Expect.equal (Geometry.segmentCircleHit (p -4. 0.) (p 4. 0.) (circR 0. 0. 2.))
+                        (Some { T = 0.25; Point = p -2. 0.; Normal = p -1. 0. }) "near root ⇒ t 0.25, point (-2,0), normal -x"
+                }
+                test "segment starting inside the circle has no entry" {
+                    Expect.isNone (Geometry.segmentCircleHit (p 0. 0.) (p 10. 0.) (circR 0. 0. 2.)) "origin at centre ⇒ None"
+                }
+                test "segment missing the circle" {
+                    Expect.isNone (Geometry.segmentCircleHit (p -5. 5.) (p 5. 5.) (circR 0. 0. 2.)) "line y=5 misses r=2 ⇒ None"
+                }
+            ]
+        ]
     ]

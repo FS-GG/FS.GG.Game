@@ -1,0 +1,412 @@
+schemaVersion: 1
+workId: 005-collision-raycast
+stage: evidence
+status: evidenceReady
+sourceSpec: work/005-collision-raycast/spec.md
+sourceClarifications: work/005-collision-raycast/clarifications.md
+sourceChecklist: work/005-collision-raycast/checklist.md
+sourcePlan: work/005-collision-raycast/plan.md
+sourceTasks: work/005-collision-raycast/tasks.yml
+sourceAnalysis: readiness/005-collision-raycast/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/005-collision-raycast/analysis.json
+    digest: 05c214a2f621e8a728ca35c7b142e6fc8fcd2ade51ed481ad888d1edef332e8b
+    schemaVersion: 1
+  - label: checklist
+    path: work/005-collision-raycast/checklist.md
+    digest: b44a0ffe398f354537e9bd98ce57692e49eab8a3ac2a6e75a061b133d9624601
+    schemaVersion: 1
+  - label: clarifications
+    path: work/005-collision-raycast/clarifications.md
+    digest: c3fcada85c40eb0413eab3d3c9b2a9b299ef460f3526bb78b86f4ee1b5e5a25e
+    schemaVersion: 1
+  - label: plan
+    path: work/005-collision-raycast/plan.md
+    digest: 379f53d0900691808dc33cfd7f7b31a7b78356db620f4025babc253ff72bff54
+    schemaVersion: 1
+  - label: spec
+    path: work/005-collision-raycast/spec.md
+    digest: 96179c7938e9a15906f3b12ca43b4aa3aa4603c84d4bfe480f4f937ba77e1e5a
+    schemaVersion: 1
+  - label: tasks
+    path: work/005-collision-raycast/tasks.yml
+    digest: 0bbf8b89493c4f77190990df74889f43e254f771c974e69e577f4d555d3134d0
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T001"
+    taskRefs: ["T001"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: ["DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV001"]
+    artifacts: ["src/Game.Core/Geometry.fs", "src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fs", "src/Game.Core/Primitives.fsi", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["segmentAabbHit (slab): Some iff tEnter in [0,1] and tEnter<=tExit (entry from outside, DEC-002); None on miss / origin-inside. FsCheck property + goldens ('left face', 'origin inside', 'miss')."]
+  - id: EV002
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T002"
+    taskRefs: ["T002"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: ["AC-002"]
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV002"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Hit carries T=tEnter, Point=p0+d*T on the box boundary, Normal=outward unit axis of the entered face; corner tie -> X (DEC-003). FsCheck 'point on boundary + unit-axis normal' + goldens 'left face' and 'corner tie-break'."]
+  - id: EV003
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T003"
+    taskRefs: ["T003"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: ["AC-003"]
+    clarificationDecisionRefs: ["DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV003"]
+    artifacts: ["src/Game.Core/Geometry.fs", "src/Game.Core/Geometry.fsi", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["segmentCircleHit (quadratic): Some iff near root in [0,1]; None on disc<0, degenerate segment, or origin-inside (negative near root, DEC-002). FsCheck property + goldens 'near root', 'origin inside', 'miss'."]
+  - id: EV004
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T004"
+    taskRefs: ["T004"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: ["AC-004"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV004"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Hit carries T=near root, Point on the circle, Normal=(Point-Center)/Radius (unit). FsCheck 'point on circle within 1e-6, unit normal' + golden 'near root' (t 0.25, point (-2,0), normal -x)."]
+  - id: EV005
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T005"
+    taskRefs: ["T005"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: ["AC-005"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV005"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Pure and total: zero-length segment (a=0 / tEnter=-inf), NaN operand, or non-positive radius yields None without throwing. Golden test 'NaN / zero-length / non-positive radius return None'."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: "task"
+      id: "T006"
+    taskRefs: ["T006"]
+    requirementRefs: ["FR-006"]
+    acceptanceScenarioRefs: ["AC-006"]
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV006"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Byte-deterministic: IEEE slab divisions + one quadratic sqrt; the only ambiguity (AABB corner entry) is fixed to X (DEC-003). 'determinism golden (raycast)' set (7 cases) covered by the gate.yml guard filter (21 goldens total)."]
+  - id: EV007
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T007"
+    taskRefs: ["T007"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV007"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-001: slab method with parallel-axis branch; entry-from-outside gate (DEC-002)."]
+  - id: EV008
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T008"
+    taskRefs: ["T008"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-002"]
+    obligationRefs: ["EV008"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-002: entered-face normal (max near-t axis, opposite d); corner tie -> X (DEC-003)."]
+  - id: EV009
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T009"
+    taskRefs: ["T009"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-003"]
+    obligationRefs: ["EV009"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-003: ray-circle quadratic with a>0 / radius>0 / disc>=0 guards; near root in [0,1] (DEC-002)."]
+  - id: EV010
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T010"
+    taskRefs: ["T010"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-004"]
+    obligationRefs: ["EV010"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-004: circle hit normal (Point-Center)/Radius, unit by construction."]
+  - id: EV011
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T011"
+    taskRefs: ["T011"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-005"]
+    obligationRefs: ["EV011"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-005: totality guards (zero-length / NaN / non-positive radius -> None)."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: "task"
+      id: "T012"
+    taskRefs: ["T012"]
+    requirementRefs: ["FR-006"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-006"]
+    obligationRefs: ["EV012"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-006: determinism via IEEE ops + the X corner tie-break; goldens named 'determinism golden'."]
+  - id: EV013
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T013"
+    taskRefs: ["T013"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-001"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001", "PD-003"]
+    obligationRefs: ["EV013"]
+    artifacts: ["readiness/surface-baselines/FS.GG.Game.Core.txt", "src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-001: Tier-1 surface additions (RayHit type (DEC-001) + segmentAabbHit/segmentCircleHit) declared in .fsi; baseline regenerated (+FS.GG.Game.Core.RayHit); surface-baseline-drift gate stays green."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: "task"
+      id: "T014"
+    taskRefs: ["T014"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-006"]
+    obligationRefs: ["EV014"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-002: raycast goldens named 'determinism golden (raycast)' so the existing gate.yml determinism filter covers them (21 goldens matched) with no workflow change."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: "task"
+      id: "T015"
+    taskRefs: ["T015"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV015"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["VO-001: dotnet build clean under warnings-as-errors (0 warnings); dotnet test 111 passed / 0 failed; filtered 'determinism golden' subset 21 passed; invariants fail before, pass after."]
+  - id: EV016
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T016"
+    taskRefs: ["T016"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV016"]
+    artifacts: ["src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PM-001: no migration required — purely additive Tier-1 surface (RayHit + two functions), no change to existing signatures, no schema change."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: "task"
+      id: "T017"
+    taskRefs: ["T017"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV017"]
+    artifacts: ["readiness/005-collision-raycast/analysis.json"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["GV-001: readiness views refreshed by the lifecycle commands (charter through evidence); analysis.json current against the authored sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

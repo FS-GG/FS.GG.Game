@@ -32,3 +32,10 @@ type Contact = { Normal: Point; Depth: float }
 /// `circleAabbContact`. A non-positive or NaN radius is a no-contact input (the detection functions
 /// return `None` rather than throwing).
 type Circle = { Center: Point; Radius: float }
+
+/// Public contract type exposed by the FS.GG.Game.Core package.
+/// The result of a segment-cast query — `T` is the parameter along the segment (`p0 + (p1 − p0)·T`,
+/// in `[0,1]`) at the first forward surface crossing, `Point` is that hit position, and `Normal` is
+/// the outward unit surface normal there. A *query value*, not a penetration manifold; produced by
+/// `Geometry.segmentAabbHit` / `segmentCircleHit`. Structural equality makes it golden-testable.
+type RayHit = { T: float; Point: Point; Normal: Point }

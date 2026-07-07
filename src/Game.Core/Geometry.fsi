@@ -64,6 +64,23 @@ module Geometry =
     val circleAabbContact: c: Circle -> box: Rect -> Contact option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Segment-cast against an AABB by the slab method. Returns `Some hit` at the first crossing INTO
+    /// the box from outside with parameter `T ∈ [0,1]`, and `None` on a miss, a segment starting
+    /// inside the box, or a box behind the segment. `Point = p0 + (p1 − p0)·T` lies on the box
+    /// boundary and `Normal` is the outward unit axis of the entered face. A corner entry (equal
+    /// per-axis entry parameter) resolves to the X face. Pure and total: a zero-length segment or any
+    /// NaN operand yields `None`.
+    val segmentAabbHit: p0: Point -> p1: Point -> box: Rect -> RayHit option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Segment-cast against a circle via the ray–circle quadratic. Returns `Some hit` at the near root
+    /// when it lies in `[0,1]` (the segment enters the circle from outside), and `None` on a miss
+    /// (negative discriminant), a degenerate segment, a non-positive radius, or an origin inside the
+    /// circle. `Point = p0 + (p1 − p0)·T` lies on the circle and `Normal = (Point − Center) / Radius`
+    /// is unit length. Pure and total (NaN or non-positive radius yields `None`).
+    val segmentCircleHit: p0: Point -> p1: Point -> c: Circle -> RayHit option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// True when the swept path of `moving` displaced by `velocity` overlaps `target` anywhere along
     /// the sweep — detects a fast projectile that would tunnel through a thin `target` within one
     /// step. A superset of `intersects` at both sweep endpoints.
