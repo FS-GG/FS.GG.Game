@@ -1,0 +1,390 @@
+schemaVersion: 1
+workId: 006-collision-resolution-layer
+stage: evidence
+status: evidenceReady
+sourceSpec: work/006-collision-resolution-layer/spec.md
+sourceClarifications: work/006-collision-resolution-layer/clarifications.md
+sourceChecklist: work/006-collision-resolution-layer/checklist.md
+sourcePlan: work/006-collision-resolution-layer/plan.md
+sourceTasks: work/006-collision-resolution-layer/tasks.yml
+sourceAnalysis: readiness/006-collision-resolution-layer/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/006-collision-resolution-layer/analysis.json
+    digest: 5531b31b921b50546c260743a336707ce2941fd7342d6fd31e838a278b5011b8
+    schemaVersion: 1
+  - label: checklist
+    path: work/006-collision-resolution-layer/checklist.md
+    digest: fa7b52fd98ac4dd8dfff29000536ce536aaafce7804f57a7b1a03f03c546b55e
+    schemaVersion: 1
+  - label: clarifications
+    path: work/006-collision-resolution-layer/clarifications.md
+    digest: 6005e816e6db9900e7330b01815ea57564f4b2a6812edc00cac18c79cb654bdd
+    schemaVersion: 1
+  - label: plan
+    path: work/006-collision-resolution-layer/plan.md
+    digest: e320882e014a37cb72328d36bca7829d1bd052c460101f59ddc84a0edcabf2ff
+    schemaVersion: 1
+  - label: spec
+    path: work/006-collision-resolution-layer/spec.md
+    digest: 7d8b37f72039fe325e4b89c2b2ea358e9336b8f3f9868287c28f0f0fc7794e28
+    schemaVersion: 1
+  - label: tasks
+    path: work/006-collision-resolution-layer/tasks.yml
+    digest: cc9e7afda0fd17b68fbc559a5594af42f3f4324ee56f9aba60de79da6a27e14d
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T001"
+    taskRefs: ["T001"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV001"]
+    artifacts: ["src/Game.Core/Resolution.fs", "src/Game.Core/Resolution.fsi", "tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["pushOut position contact = position - Normal*Depth (DEC-003); zero Depth => identity. FsCheck 'pushing a body out by its aabbContact manifold removes the overlap' (>=500) + golden 'pushOut separates along +x by the depth'."]
+  - id: EV002
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T002"
+    taskRefs: ["T002"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: ["AC-002"]
+    clarificationDecisionRefs: ["DEC-001", "DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV002"]
+    artifacts: ["src/Game.Core/Resolution.fs", "src/Game.Core/Resolution.fsi", "tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["slide velocity normal = velocity - (velocity.normal)*normal, normal assumed unit (DEC-001), unconditional (DEC-002). FsCheck 'result has zero normal component and preserves the tangential' (>=500) + goldens 'slide against a vertical wall/floor'."]
+  - id: EV003
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T003"
+    taskRefs: ["T003"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: ["AC-003"]
+    clarificationDecisionRefs: ["DEC-004"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV003"]
+    artifacts: ["src/Game.Core/Resolution.fs", "src/Game.Core/Resolution.fsi", "tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["knockback start step distance blocked: tail-recursive walk, tests each next cell, stops in the last free cell before a blocker (DEC-004). FsCheck 'never lands on a blocked cell and never exceeds distance' (>=500) + golden 'knockback stops in the last free cell before a wall'."]
+  - id: EV004
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T004"
+    taskRefs: ["T004"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: ["AC-004"]
+    clarificationDecisionRefs: ["DEC-004"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV004"]
+    artifacts: ["src/Game.Core/Resolution.fs", "tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Pure and total: pushOut/slide are pure arithmetic (NaN flows through, no throw); knockback returns start on distance<=0 or an immediately-blocked first next-cell (DEC-004). Goldens 'NaN position/velocity flows through', 'distance <= 0 returns the start', 'an immediately-blocked first step returns the start'."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: "task"
+      id: "T005"
+    taskRefs: ["T005"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: ["AC-005"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV005"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Byte-deterministic: IEEE arithmetic for pushOut/slide + a fixed-order integer walk for knockback. 'determinism golden (resolution transforms)' set (5 cases) covered by the gate.yml guard filter (31 goldens total: aabb+circle+raycast+SAT+resolution)."]
+  - id: EV006
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T006"
+    taskRefs: ["T006"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV006"]
+    artifacts: ["src/Game.Core/Resolution.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-001: pushOut = position - Normal*Depth componentwise (DEC-003)."]
+  - id: EV007
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T007"
+    taskRefs: ["T007"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-001", "DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-002"]
+    obligationRefs: ["EV007"]
+    artifacts: ["src/Game.Core/Resolution.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-002: slide = v - (v.n)*n; dot computed once, no normalization (n unit, DEC-001), unconditional (DEC-002)."]
+  - id: EV008
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T008"
+    taskRefs: ["T008"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-004"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-003"]
+    obligationRefs: ["EV008"]
+    artifacts: ["src/Game.Core/Resolution.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-003: knockback tail-recursive walk `walk current remaining` — remaining<=0 => current; else test next, stop or recurse (DEC-004)."]
+  - id: EV009
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T009"
+    taskRefs: ["T009"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-004"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-004"]
+    obligationRefs: ["EV009"]
+    artifacts: ["src/Game.Core/Resolution.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-004: totality — arithmetic NaN-safety for pushOut/slide; knockback base case returns start on distance<=0 / immediate block (DEC-004); the blocked predicate is the only effect surface."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: "task"
+      id: "T010"
+    taskRefs: ["T010"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-005"]
+    obligationRefs: ["EV010"]
+    artifacts: ["tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-005: determinism via IEEE ops + a fixed-order walk; goldens named 'determinism golden (resolution transforms)'."]
+  - id: EV011
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T011"
+    taskRefs: ["T011"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001", "PD-002", "PD-003"]
+    obligationRefs: ["EV011"]
+    artifacts: ["readiness/surface-baselines/FS.GG.Game.Core.txt", "src/Game.Core/FS.GG.Game.Core.fsproj", "src/Game.Core/Resolution.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-001: Tier-1 surface addition — a new Resolution module (pushOut/slide/knockback) declared in Resolution.fsi and added to the .fsproj compile order after Pathfinding/SpatialGrid; baseline regenerated (+FS.GG.Game.Core.Resolution); surface-baseline-drift gate stays green."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: "task"
+      id: "T012"
+    taskRefs: ["T012"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-005"]
+    obligationRefs: ["EV012"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-002: resolution goldens named 'determinism golden (resolution transforms)' so the existing gate.yml determinism filter covers them (31 goldens matched) with no workflow change."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: "task"
+      id: "T013"
+    taskRefs: ["T013"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV013"]
+    artifacts: ["tests/Game.Core.Tests/ResolutionTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["VO-001: dotnet build clean (0 warnings); dotnet test 135 core passed / 0 failed; filtered 'determinism golden' subset 31 passed; the pushOut-separates / slide-zeroes-normal / knockback-never-blocked invariants pass."]
+  - id: EV014
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T014"
+    taskRefs: ["T014"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV014"]
+    artifacts: ["src/Game.Core/Resolution.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PM-001: no migration required — purely additive Tier-1 surface (a new Resolution module, no new types, reuses Contact/Point/Cell), no change to existing signatures, no schema change."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: "task"
+      id: "T015"
+    taskRefs: ["T015"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV015"]
+    artifacts: ["readiness/006-collision-resolution-layer/analysis.json"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["GV-001: readiness views refreshed by the lifecycle commands (charter through evidence); analysis.json current against the authored sources."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: "task"
+      id: "T016"
+    taskRefs: ["T016"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV016"]
+    artifacts: ["readiness/surface-baselines/FS.GG.Game.Core.txt"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["GV-002: surface baseline regenerated via scripts/refresh-surface-baselines.fsx; FS.GG.Game.Core.txt gains exactly Resolution (16 public types); the surface-baseline-drift gate stays green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

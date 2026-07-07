@@ -1,0 +1,196 @@
+schemaVersion: 1
+work:
+  id: 006-collision-resolution-layer
+  title: "Collision Resolution Layer"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/006-collision-resolution-layer/spec.md
+  sourceClarifications: work/006-collision-resolution-layer/clarifications.md
+  sourceChecklist: work/006-collision-resolution-layer/checklist.md
+  sourcePlan: work/006-collision-resolution-layer/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/006-collision-resolution-layer/spec.md
+    digest: 7d8b37f72039fe325e4b89c2b2ea358e9336b8f3f9868287c28f0f0fc7794e28
+    schemaVersion: 1
+  - label: clarifications
+    path: work/006-collision-resolution-layer/clarifications.md
+    digest: 6005e816e6db9900e7330b01815ea57564f4b2a6812edc00cac18c79cb654bdd
+    schemaVersion: 1
+  - label: checklist
+    path: work/006-collision-resolution-layer/checklist.md
+    digest: fa7b52fd98ac4dd8dfff29000536ce536aaafce7804f57a7b1a03f03c546b55e
+    schemaVersion: 1
+  - label: plan
+    path: work/006-collision-resolution-layer/plan.md
+    digest: e320882e014a37cb72328d36bca7829d1bd052c460101f59ddc84a0edcabf2ff
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: "Implement requirement FR-001"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-001"]
+    decisions: []
+    sourceIds: ["AC-001", "FR-001"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV001"]
+  - id: T002
+    title: "Implement requirement FR-002"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-002"]
+    decisions: []
+    sourceIds: ["AC-002", "FR-002"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV002"]
+  - id: T003
+    title: "Implement requirement FR-003"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-003"]
+    decisions: []
+    sourceIds: ["AC-003", "FR-003"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV003"]
+  - id: T004
+    title: "Implement requirement FR-004"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-004"]
+    decisions: []
+    sourceIds: ["AC-004", "FR-004"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV004"]
+  - id: T005
+    title: "Implement requirement FR-005"
+    status: pending
+    owner: "sdd"
+    dependencies: []
+    requirements: ["FR-005"]
+    decisions: []
+    sourceIds: ["AC-005", "FR-005"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV005"]
+  - id: T006
+    title: "Implement plan decision PD-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-001", "DEC-003", "FR-001", "PD-001"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV006"]
+  - id: T007
+    title: "Implement plan decision PD-002"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-002", "DEC-001", "DEC-002", "FR-002", "PD-002"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV007"]
+  - id: T008
+    title: "Implement plan decision PD-003"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-003", "DEC-004", "FR-003", "PD-003"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV008"]
+  - id: T009
+    title: "Implement plan decision PD-004"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-004", "DEC-004", "FR-004", "PD-004"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV009"]
+  - id: T010
+    title: "Implement plan decision PD-005"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["AC-005", "FR-005", "PD-005"]
+    requiredSkills: ["fsharp", "speckit-implement"]
+    requiredEvidence: ["EV010"]
+  - id: T011
+    title: "Update contract surface PC-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PD-001", "PD-002", "PD-003"]
+    requiredSkills: ["fsharp"]
+    requiredEvidence: ["EV011"]
+  - id: T012
+    title: "Update contract surface PC-002"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-002", "PD-005"]
+    requiredSkills: ["fsharp"]
+    requiredEvidence: ["EV012"]
+  - id: T013
+    title: "Record verification evidence VO-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PD-001", "VO-001"]
+    requiredSkills: ["automated-tests", "readiness-evidence"]
+    requiredEvidence: ["EV013"]
+  - id: T014
+    title: "Handle migration posture PM-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["PC-001", "PM-001"]
+    requiredSkills: ["schema-versioning"]
+    requiredEvidence: ["EV014"]
+  - id: T015
+    title: "Refresh generated view impact GV-001"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["GV-001", "PD-001"]
+    requiredSkills: ["deterministic-json"]
+    requiredEvidence: ["EV015"]
+  - id: T016
+    title: "Refresh generated view impact GV-002"
+    status: pending
+    owner: "sdd"
+    dependencies: ["T001"]
+    requirements: []
+    decisions: []
+    sourceIds: ["GV-002", "PC-001"]
+    requiredSkills: ["deterministic-json"]
+    requiredEvidence: ["EV016"]
+acceptedDeferrals: []
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 006-collision-resolution-layer."

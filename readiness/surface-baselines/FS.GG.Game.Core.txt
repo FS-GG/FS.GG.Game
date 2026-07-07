@@ -10,6 +10,7 @@ FS.GG.Game.Core.Pathfinding
 FS.GG.Game.Core.Point
 FS.GG.Game.Core.RayHit
 FS.GG.Game.Core.Rect
+FS.GG.Game.Core.Resolution
 FS.GG.Game.Core.Rng
 FS.GG.Game.Core.SpatialGrid
 FS.GG.Game.Core.SpatialGrid`1
