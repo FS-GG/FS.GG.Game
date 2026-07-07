@@ -88,6 +88,58 @@ jobs:
       - name: Test (full suite)
         run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
 
+  # Determinism & property invariants — a DISTINCT signal for the capsule "constraint face" (the
+  # game-logic corpus's determinism-as-a-tested-property rule; see
+  # docs/reports/2026-07-07-game-capsule-contents-and-architectures.md §5). These invariants also
+  # run inside the full suite above; this job surfaces them as their own red/green check AND — via
+  # the zero-match guard — fails LOUDLY if the golden/property tests are ever renamed or removed. A
+  # silent filter miss would otherwise pass green, which is exactly the "governance theater" the
+  # capsule design rejects. Not org-managed; gate.yml is repo-local.
+  determinism-invariants:
+    name: Determinism & property invariants (constraint face)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+
+      - name: Restore (locked)
+        run: |
+          set -euo pipefail
+          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
+            echo "::error::locked restore failed — see the gate job's message to regenerate the lockfiles."
+            exit 1
+          fi
+
+      - name: Build (net10.0)
+        run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
+
+      # Each filtered subset must report Failed:0 AND Passed:>=1. The Passed:[1-9] clause is the
+      # zero-match guard: `dotnet test` exits 0 on a filter that matches nothing, so without this a
+      # renamed/removed constraint-face test would go green. `determinism golden` is checked as its
+      # own subset so the goldens specifically cannot vanish while other manifold tests remain.
+      - name: Invariants (determinism goldens + manifold properties, zero-match guarded)
+        run: |
+          set -uo pipefail
+          run_filtered() {
+            local filter="$1" label="$2" out
+            out=$(dotnet test FS.GG.Game.slnx -c Debug --no-build --no-restore --filter "$filter" 2>&1) || true
+            echo "$out"
+            if ! echo "$out" | grep -qE 'Failed:[[:space:]]+0,[[:space:]]+Passed:[[:space:]]+[1-9]'; then
+              echo "::error::${label}: invariant tests failed OR the filter '${filter}' matched 0 tests (silent drift — the constraint-face tests were renamed or removed). Fix the tests or update the filter."
+              exit 1
+            fi
+          }
+          run_filtered "FullyQualifiedName~determinism golden" "determinism-golden"
+          run_filtered "FullyQualifiedName~aabbContact" "collision-manifold-invariants"
+
   # Surface-baseline drift gate (Principle II: "visibility lives in .fsi"). Regenerates the public
   # surface baseline from the built assembly and fails on any uncommitted drift — the guard that a
   # public-API change is a deliberate, reviewed baseline update (and, for a packable, a SemVer bump).
