@@ -392,4 +392,99 @@ let tests =
                 }
             ]
         ]
+
+        // SAT/OBB convex-polygon capsule (005b) — polygonContact narrow-phase manifolds over a new
+        // ConvexPolygon primitive built via obbPolygon. Same Contact shape and constraint-face
+        // discipline as aabbContact: detection only, MTV as (Normal, Depth), byte-deterministic.
+        testList "obbPolygon / polygonContact (SAT convex)" [
+
+            let obb cx cy hx hy = Geometry.obbPolygon (p cx cy) (p hx hy) 0.0
+            let isUnit (n: Point) = abs (sqrt (n.X * n.X + n.Y * n.Y) - 1.0) < 1e-9
+            // A rotation-0 OBB from ints (positive half-extents) + the aabbContact Rect it equals.
+            let obbOf (a: int) (b: int) (c: int) (d: int) : ConvexPolygon * Rect =
+                let cx, cy = float (a % 50), float (b % 50)
+                let hx, hy = float (1 + abs (c % 20)), float (1 + abs (d % 20))
+                Geometry.obbPolygon (p cx cy) (p hx hy) 0.0,
+                { X = cx - hx; Y = cy - hy; Width = 2.0 * hx; Height = 2.0 * hy }
+            // A possibly-rotated OBB from ints — for the axis-independent MTV/normal invariants.
+            let rotObbOf (a: int) (b: int) (c: int) (d: int) (e: int) : ConvexPolygon =
+                Geometry.obbPolygon
+                    (p (float (a % 50)) (float (b % 50)))
+                    (p (float (1 + abs (c % 20))) (float (1 + abs (d % 20))))
+                    (float (e % 13) * 0.5)
+
+            testCase "isSome agrees with aabbContact for rotation-0 OBBs (FsCheck ≥500)" <| fun () ->
+                // Two axis-aligned OBBs collide exactly when their source rects overlap (strict edges).
+                let prop a b c d e f g h =
+                    let pa, ra = obbOf a b c d
+                    let pb, rb = obbOf e f g h
+                    (Geometry.polygonContact pa pb |> Option.isSome) = (Geometry.aabbContact ra rb |> Option.isSome)
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "a contact has positive depth and a unit normal (FsCheck ≥500)" <| fun () ->
+                let prop a b c d e f g h i j =
+                    match Geometry.polygonContact (rotObbOf a b c d e) (rotObbOf f g h i j) with
+                    | Some k -> k.Depth > 0.0 && isUnit k.Normal
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "translating by the MTV separates the pair within tolerance (FsCheck ≥500)" <| fun () ->
+                // The manifold's promise: pushing `a` by -Normal*Depth removes the overlap (SAT + MTV).
+                let prop a b c d e f g h i j =
+                    let x = rotObbOf a b c d e
+                    let y = rotObbOf f g h i j
+                    match Geometry.polygonContact x y with
+                    | Some k ->
+                        let x' = { Vertices = x.Vertices |> Array.map (fun v -> { X = v.X - k.Normal.X * k.Depth; Y = v.Y - k.Normal.Y * k.Depth }) }
+                        match Geometry.polygonContact x' y with
+                        | Some k2 -> k2.Depth < 1e-6
+                        | None -> true
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            test "obbPolygon at rotation 0 is the axis-aligned box, CCW (FR-003)" {
+                Expect.equal (Geometry.obbPolygon (p 0. 0.) (p 1. 1.) 0.0)
+                    { Vertices = [| p -1. -1.; p 1. -1.; p 1. 1.; p -1. 1. |] } "CCW corners of the unit box"
+            }
+
+            test "two rotated OBBs that overlap produce a contact" {
+                // A unit square at the origin and a 45°-rotated square centred at (2,0) whose left vertex
+                // reaches x≈0.586 < 1 — they overlap, so detection returns a manifold.
+                let diamond = Geometry.obbPolygon (p 2. 0.) (p 1. 1.) (System.Math.PI / 4.0)
+                Expect.isTrue (Geometry.polygonContact (obb 0. 0. 1. 1.) diamond |> Option.isSome) "rotated overlap ⇒ Some"
+            }
+
+            test "degenerate inputs return None, never throw (total)" {
+                Expect.isNone (Geometry.polygonContact { Vertices = [| p 0. 0.; p 1. 0. |] } (obb 0. 0. 1. 1.)) "<3 vertices ⇒ None"
+                Expect.isNone (Geometry.polygonContact { Vertices = [| p nan 0.; p 1. 0.; p 0. 1. |] } (obb 0. 0. 1. 1.)) "NaN coordinate ⇒ None"
+                Expect.isNone (Geometry.polygonContact { Vertices = [| p 0. 0.; p 1. 0.; p 2. 0. |] } (obb 0. 0. 1. 1.)) "collinear/zero-area ⇒ None"
+            }
+
+            // Determinism golden — fixed inputs, exact expected manifolds (byte-identical). Named
+            // "determinism golden" so the gate.yml zero-match guard's determinism filter covers them.
+            testList "determinism golden (SAT convex manifolds)" [
+                test "shallow X overlap ⇒ least-overlap axis X, normal a→b +x" {
+                    Expect.equal (Geometry.polygonContact (obb 0. 0. 1. 1.) (obb 1.5 0. 1. 1.))
+                        (Some { Normal = p 1. 0.; Depth = 0.5 }) "X axis, +x, depth 0.5"
+                }
+                test "equal X/Y overlap ⇒ first axis in generation order (a edge0 = Y face)" {
+                    // The convex tie-break follows the a-then-b edge-normal generation order (edge0 is the
+                    // bottom face ⇒ Y axis), distinct from aabbContact's X-bias but equally deterministic.
+                    Expect.equal (Geometry.polygonContact (obb 0. 0. 1. 1.) (obb 1.5 1.5 1. 1.))
+                        (Some { Normal = p 0. 1.; Depth = 0.5 }) "tie ⇒ Y axis (generation order), +y, depth 0.5"
+                }
+                test "touching squares are not a contact (strict edges)" {
+                    Expect.isNone (Geometry.polygonContact (obb 0. 0. 1. 1.) (obb 2. 0. 1. 1.)) "shared edge ⇒ zero overlap ⇒ None"
+                }
+                test "disjoint squares are not a contact" {
+                    Expect.isNone (Geometry.polygonContact (obb 0. 0. 1. 1.) (obb 5. 0. 1. 1.)) "gap ⇒ None"
+                }
+                test "full containment yields the true exit depth (containment correction)" {
+                    // b is nested inside a on both axes; the naive overlap would report b's half-height
+                    // (1), but the real MTV pushes b out the top: depth = 5 - 2.5 = 2.5 along +y.
+                    Expect.equal (Geometry.polygonContact (obb 0. 0. 5. 5.) (obb 0. 3. 1. 0.5))
+                        (Some { Normal = p 0. 1.; Depth = 2.5 }) "contained box escapes +y, depth 2.5"
+                }
+            ]
+        ]
     ]

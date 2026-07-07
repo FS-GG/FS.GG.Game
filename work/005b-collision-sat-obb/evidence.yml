@@ -1,0 +1,434 @@
+schemaVersion: 1
+workId: 005b-collision-sat-obb
+stage: evidence
+status: evidenceReady
+sourceSpec: work/005b-collision-sat-obb/spec.md
+sourceClarifications: work/005b-collision-sat-obb/clarifications.md
+sourceChecklist: work/005b-collision-sat-obb/checklist.md
+sourcePlan: work/005b-collision-sat-obb/plan.md
+sourceTasks: work/005b-collision-sat-obb/tasks.yml
+sourceAnalysis: readiness/005b-collision-sat-obb/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/005b-collision-sat-obb/analysis.json
+    digest: ed6a30165a767824a822a0bd772b2ef8a00973305375a68a2d6ddcb5cd463dda
+    schemaVersion: 1
+  - label: checklist
+    path: work/005b-collision-sat-obb/checklist.md
+    digest: 6fc7fc61cffb8d76e5902daa503fcf163327ffc28de3d90322818b18dde0d236
+    schemaVersion: 1
+  - label: clarifications
+    path: work/005b-collision-sat-obb/clarifications.md
+    digest: c046a498cda29b72035cab2adeef68d29b6181be112537472cea9a71634e573c
+    schemaVersion: 1
+  - label: plan
+    path: work/005b-collision-sat-obb/plan.md
+    digest: 3bd50ef1384a149da2bdcc7bf42ab3fbe023b0e767be51caa7997686fcf388c0
+    schemaVersion: 1
+  - label: spec
+    path: work/005b-collision-sat-obb/spec.md
+    digest: 5a16d00b732ceb7eb578cf98183c18095ee2cc4ee3f0f56666f1facee4ac8c43
+    schemaVersion: 1
+  - label: tasks
+    path: work/005b-collision-sat-obb/tasks.yml
+    digest: 35b82c6bc38362b360aaf01c2f10e91371ed5681c7d098407a9134255ebd4797
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T001"
+    taskRefs: ["T001"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: ["AC-001"]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV001"]
+    artifacts: ["src/Game.Core/Geometry.fs", "src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fs", "src/Game.Core/Primitives.fsi", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["polygonContact (SAT): Some iff every candidate axis overlaps (d1>0 && d2>0); None on any separating axis (gap/touch). FsCheck 'isSome agrees with aabbContact for rotation-0 OBBs' (>=500) + goldens 'touching' and 'disjoint'."]
+  - id: EV002
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T002"
+    taskRefs: ["T002"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: ["AC-002"]
+    clarificationDecisionRefs: ["DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV002"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["MTV: Depth = min over axes of min(d1,d2) (full-containment correction), Normal oriented toward the nearer exit (a->b least-penetration, DEC-002). FsCheck 'positive depth + unit normal' and 'translating by the MTV separates within tolerance' (>=500) + golden 'full containment true exit depth' (depth 2.5)."]
+  - id: EV003
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T003"
+    taskRefs: ["T003"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: ["AC-003"]
+    clarificationDecisionRefs: ["DEC-004"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV003"]
+    artifacts: ["src/Game.Core/Geometry.fs", "src/Game.Core/Geometry.fsi", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["obbPolygon: 4 CCW corners center + R(rotation)*(±hx,±hy); rotation CCW-positive radians (DEC-004). Golden 'obbPolygon at rotation 0 is the axis-aligned box, CCW' + 'two rotated OBBs that overlap produce a contact'."]
+  - id: EV004
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T004"
+    taskRefs: ["T004"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: ["AC-004"]
+    clarificationDecisionRefs: ["DEC-001"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV004"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Pure and total: <3 vertices, any non-finite coordinate (explicit allFinite guard), or a zero-area (shoelace) polygon yields None without throwing. Golden 'degenerate inputs return None, never throw' (<3 verts / NaN / collinear)."]
+  - id: EV005
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T005"
+    taskRefs: ["T005"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: ["AC-005"]
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV005"]
+    artifacts: ["src/Game.Core/Geometry.fs", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Candidate axes deduped: antiparallel/duplicate edge normals collapse to one before projection (List.fold with parallel/antiparallel test), preserving generation order. Exercised by two axis-aligned OBBs (8 edge normals -> 2 distinct axes) across the FsCheck oracle and the goldens."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: "task"
+      id: "T006"
+    taskRefs: ["T006"]
+    requirementRefs: ["FR-006"]
+    acceptanceScenarioRefs: ["AC-006"]
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV006"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["Byte-deterministic: IEEE dot products + per-axis sqrt; the only choice (equal minimum penetration on two axes) fixed to the first in a-then-b generation order (DEC-003). Golden 'equal X/Y overlap => first axis in generation order (a edge0 = Y face)'. 'determinism golden (SAT convex manifolds)' set covered by the gate.yml guard filter."]
+  - id: EV007
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T007"
+    taskRefs: ["T007"]
+    requirementRefs: ["FR-001"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV007"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-001: SAT over deduped candidate axes; project both polygons, Some iff every axis overlaps; strict-edge convention matches intersects/aabbContact."]
+  - id: EV008
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T008"
+    taskRefs: ["T008"]
+    requirementRefs: ["FR-002"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-002"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-002"]
+    obligationRefs: ["EV008"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-002: per-axis exit distances d1=maxA-minB, d2=maxB-minA; penetration min(d1,d2) (containment correction); normal toward the nearer exit (DEC-002)."]
+  - id: EV009
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T009"
+    taskRefs: ["T009"]
+    requirementRefs: ["FR-003"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-004"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-003"]
+    obligationRefs: ["EV009"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-003: obbPolygon rotation matrix applied to CCW local corners then translated by center; rotation 0 => axis-aligned box (DEC-004)."]
+  - id: EV010
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T010"
+    taskRefs: ["T010"]
+    requirementRefs: ["FR-004"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-004"]
+    obligationRefs: ["EV010"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-004: totality guards — length<3, allFinite (non-finite => None), shoelace area<=0 (zero-area => None) — short-circuit before the SAT scan."]
+  - id: EV011
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T011"
+    taskRefs: ["T011"]
+    requirementRefs: ["FR-005"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-005"]
+    obligationRefs: ["EV011"]
+    artifacts: ["src/Game.Core/Geometry.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-005: axis dedup via a fold that drops parallel/antiparallel duplicates within 1e-9, preserving first-seen generation order."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: "task"
+      id: "T012"
+    taskRefs: ["T012"]
+    requirementRefs: ["FR-006"]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-003"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-006"]
+    obligationRefs: ["EV012"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PD-006: determinism via IEEE ops + the generation-order tie-break (`pen >= best` keeps first); goldens named 'determinism golden (SAT convex manifolds)'."]
+  - id: EV013
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T013"
+    taskRefs: ["T013"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: ["DEC-001"]
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001", "PD-003"]
+    obligationRefs: ["EV013"]
+    artifacts: ["readiness/surface-baselines/FS.GG.Game.Core.txt", "src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-001: Tier-1 surface additions (ConvexPolygon type (DEC-001) + obbPolygon/polygonContact functions) declared in .fsi; baseline regenerated (+FS.GG.Game.Core.ConvexPolygon); surface-baseline-drift gate stays green."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: "task"
+      id: "T014"
+    taskRefs: ["T014"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-006"]
+    obligationRefs: ["EV014"]
+    artifacts: [".github/workflows/gate.yml", "tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PC-002: SAT goldens named 'determinism golden (SAT convex manifolds)' so the existing gate.yml determinism filter covers them (26 goldens matched: aabb+circle+raycast+SAT) with no workflow change."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: "task"
+      id: "T015"
+    taskRefs: ["T015"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV015"]
+    artifacts: ["tests/Game.Core.Tests/GeometryTests.fs"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["VO-001: dotnet build clean (0 warnings); dotnet test 122 core passed / 0 failed; filtered 'determinism golden' subset 26 passed; the MTV-separation property fails before the containment correction and passes after."]
+  - id: EV016
+    kind: implementation
+    subject:
+      type: "task"
+      id: "T016"
+    taskRefs: ["T016"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV016"]
+    artifacts: ["src/Game.Core/Geometry.fsi", "src/Game.Core/Primitives.fsi"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["PM-001: no migration required — purely additive Tier-1 surface (ConvexPolygon + two functions), no change to existing signatures, no schema change."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: "task"
+      id: "T017"
+    taskRefs: ["T017"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: ["PD-001"]
+    obligationRefs: ["EV017"]
+    artifacts: ["readiness/005b-collision-sat-obb/analysis.json"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["GV-001: readiness views refreshed by the lifecycle commands (charter through evidence); analysis.json current against the authored sources."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: "task"
+      id: "T018"
+    taskRefs: ["T018"]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: ["EV018"]
+    artifacts: ["readiness/surface-baselines/FS.GG.Game.Core.txt"]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    syntheticDisclosure: null
+    rationale: "null"
+    owner: "null"
+    scope: "null"
+    laterLifecycleVisibility: "null"
+    notes: ["GV-002: surface baseline regenerated via scripts/refresh-surface-baselines.fsx; FS.GG.Game.Core.txt gains exactly ConvexPolygon (15 public types); the surface-baseline-drift gate stays green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
