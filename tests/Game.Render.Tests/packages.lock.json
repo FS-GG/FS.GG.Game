@@ -139,16 +139,16 @@
       "fs.gg.game.render": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Core": "[0.1.0-preview.1, )",
-          "FS.GG.UI.Scene": "[0.1.64-preview.1, )",
+          "FS.GG.Game.Core": "[0.2.0, )",
+          "FS.GG.UI.Scene": "[0.4.0, )",
           "FSharp.Core": "[10.1.301, )"
         }
       },
       "FS.GG.UI.Scene": {
         "type": "CentralTransitive",
-        "requested": "[0.1.64-preview.1, )",
-        "resolved": "0.1.64-preview.1",
-        "contentHash": "lbT8FStoo9Mt24s3+uTlw3trdUInXOz0HrwXtErULkmicvdV8XwYg+GxOFxMTQN/5ABxKqox7MJDol5sd7Lk8g==",
+        "requested": "[0.4.0, )",
+        "resolved": "0.4.0",
+        "contentHash": "0AUdHHYQw4p/AOLeGJM/bzfgZG83iT38lyKAcAG/e2cilf2145uuFxiAoc78+riEu/HxKNMtsYprUzCrLQY8JQ==",
         "dependencies": {
           "FSharp.Core": "10.1.301"
         }
