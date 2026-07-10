@@ -236,10 +236,96 @@ let tests =
                             ((aim.X - target.X) * v.X + (aim.Y - target.Y) * v.Y) / vSq
 
                         let want = speed * t
-                        let scale = max 1.0 (max (abs flight) (abs want))
+
+                        // The tolerance tracks the magnitudes the subtraction CANCELS, not the size of
+                        // the result (#89). `flight` is a difference of coordinates, and `t` is recovered
+                        // from a difference of coordinates: at |shooter| ~ 1e6 both are ground down to a
+                        // granularity set by the OPERANDS, while `flight` and `want` themselves can be
+                        // ~1. Deriving `scale` from the result alone therefore demands an accuracy the
+                        // inputs no longer carry — `shooter = (-1e6, 0.163...)`, `v = (-1e6, 0)`,
+                        // `speed = 1` misses a 1e-5 absolute bound by 1.46e-5 while `intercept` is right
+                        // to 2.7e-11 RELATIVE, which is the conditioning floor of a near-double root
+                        // whose inputs are already rounded doubles. (Exact-rational check in #89: the
+                        // error grows linearly with coordinate magnitude, 7.7e-15 at 1e2 -> 2.7e-11 at
+                        // 1e6, and Kahan's FMA discriminant only buys ~8x of that. The solve is as
+                        // accurate as the inputs allow; the bound was wrong.)
+                        let scale =
+                            [ 1.0
+                              abs flight
+                              abs want
+                              abs shooter.X
+                              abs shooter.Y
+                              abs target.X
+                              abs target.Y
+                              abs (v.X * t)
+                              abs (v.Y * t) ]
+                            |> List.max
+
+                        // 1e-5 is kept from the original bound. Over 300 seeds x 500 draws of this exact
+                        // generator the worst observed |flight - want| / scale is 1.2e-7, so 1e-5 carries
+                        // ~82x of headroom -- while a solve that is actually WRONG lands at a ratio of
+                        // ~1 (an `aIsZero` misfire returns an aim for an interception that does not
+                        // exist), five orders clear of this bound. Loose enough not to flake, tight
+                        // enough to still be load-bearing.
                         t >= -1e-6 && abs (flight - want) <= 1e-5 * scale
 
-            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+            // FsCheck draws a fresh seed per run unless told otherwise, so an intermittently false
+            // property is a coin flip in CI rather than a red build — 8 of 300 seeds (2.7%) falsify the
+            // OLD bound above, which is the "one run in a dozen" #89 reports. Seed it, so that a pass and
+            // a failure are alike reproducible.
+            //
+            // Pick the seed on evidence, not on taste. Most seeds draw 500 cases without ever reaching
+            // the near-cancellation, so seeding on one of those would freeze the suite green and quietly
+            // stop testing the bound. Seed 39 draws exactly one case that falsifies the result-derived
+            // scale and none that falsify the operand-derived one, so `scale` stays load-bearing: revert
+            // it to `max 1.0 (max (abs flight) (abs want))` and this test goes red on the next run.
+            Check.One(
+                Config.QuickThrowOnFailure
+                    .WithMaxTest(500)
+                    .WithReplay(Some { Rnd = Rnd 39UL; Size = None }),
+                prop
+            )
+
+        // The shrunk counterexample from #89, pinned as a seed-independent regression: `flight` and
+        // `want` are both ~1 while the coordinates that produce them are ~1e6, so a tolerance derived
+        // from the result misses by 1.46e-5 against a 1e-5 bound. Survives any future reseeding above.
+        testCase "the #89 counterexample: a unit-length flight between 1e6-magnitude operands" <| fun () ->
+            let shooter = p -1.0e6 0.1631481419
+            let target = p 0.0 1.0
+            let v = p -1.0e6 0.0
+            let speed = 1.0
+
+            match Ballistics.intercept shooter speed target v with
+            | ValueNone -> failtest "the round is not outrun here — an interception exists"
+            | ValueSome aim ->
+                let vSq = v.X * v.X + v.Y * v.Y
+                let t = ((aim.X - target.X) * v.X + (aim.Y - target.Y) * v.Y) / vSq
+                let flight = sqrt ((aim.X - shooter.X) ** 2.0 + (aim.Y - shooter.Y) ** 2.0)
+                let want = speed * t
+
+                // Guard the premise: if `t` ever stopped being ~1 the bound below would hold vacuously
+                // for the wrong reason, exactly as an empty-ring regression passes `List.forall`.
+                Expect.isTrue (t > 0.999 && t < 1.0) (sprintf "t is the near-unit root, got %.17g" t)
+                Expect.isGreaterThan (abs shooter.X) 1.0e5 "the operands really are 1e6-magnitude"
+
+                // The claim, against the operand-scaled bound. |v.X * t| ~ 1e6 dominates `scale`.
+                let scale = List.max [ 1.0; abs flight; abs want; abs shooter.X; abs (v.X * t) ]
+                Expect.isLessThanOrEqual
+                    (abs (flight - want))
+                    (1e-5 * scale)
+                    "|aim - shooter| = speed * t, to the accuracy the 1e6 operands can carry"
+
+                // ...and the bound is not vacuous: the two scales really do disagree by ~1e6 here, which
+                // is the whole of #89. Asserted structurally rather than as "the old bound still fails",
+                // because a future SHARPENING of the solve (a compensated discriminant, say — see #97)
+                // would shrink the residual under the old bound and turn that phrasing red for a FIX.
+                let resultScale = max 1.0 (max (abs flight) (abs want))
+                Expect.isLessThan resultScale 2.0 "the RESULT is unit-scale — that is the trap"
+
+                Expect.isGreaterThan
+                    (scale / resultScale)
+                    1.0e5
+                    "the OPERANDS are ~1e6x the result, so a result-derived tolerance under-bounds them"
 
         test "a denormal target velocity is still solved, and the aim stays finite" {
             // |v|^2 underflows to 0.0, but v itself is not zero. The solve must not divide by it.
