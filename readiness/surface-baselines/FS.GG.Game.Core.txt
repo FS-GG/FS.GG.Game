@@ -16,6 +16,7 @@ FS.GG.Game.Core.LineMode
 FS.GG.Game.Core.LineMode+Tags
 FS.GG.Game.Core.Loop
 FS.GG.Game.Core.Los
+FS.GG.Game.Core.Manifold
 FS.GG.Game.Core.Neighbourhood
 FS.GG.Game.Core.Neighbourhood+Tags
 FS.GG.Game.Core.Pathfinding

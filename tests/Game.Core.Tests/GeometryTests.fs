@@ -488,6 +488,286 @@ let tests =
             ]
         ]
 
+        // Manifold / polygonManifold (045) — the impulse counterpart of polygonContact. SAT gives the
+        // axis and the depth; contact POINTS need reference-face selection plus Sutherland–Hodgman
+        // clipping of the incident face. Additive: `Contact` and `polygonContact` are untouched, and
+        // the manifold reuses their SAT scan, so Normal/Depth agree bit for bit and isSome agrees for
+        // all inputs. Same strict edges, same detection-only discipline, same byte-determinism.
+        testList "polygonManifold (contact points, pair ids, feature ids)" [
+
+            let obb cx cy hx hy = Geometry.obbPolygon (p cx cy) (p hx hy) 0.0
+            let isUnit (n: Point) = abs (sqrt (n.X * n.X + n.Y * n.Y) - 1.0) < 1e-9
+            // A rotation-0 OBB from ints (positive half-extents) + the aabbContact Rect it equals.
+            let obbOf (a: int) (b: int) (c: int) (d: int) : ConvexPolygon * Rect =
+                let cx, cy = float (a % 50), float (b % 50)
+                let hx, hy = float (1 + abs (c % 20)), float (1 + abs (d % 20))
+                Geometry.obbPolygon (p cx cy) (p hx hy) 0.0,
+                { X = cx - hx; Y = cy - hy; Width = 2.0 * hx; Height = 2.0 * hy }
+            // A possibly-rotated OBB from ints — for the axis-independent point/normal invariants.
+            let rotObbOf (a: int) (b: int) (c: int) (d: int) (e: int) : ConvexPolygon =
+                Geometry.obbPolygon
+                    (p (float (a % 50)) (float (b % 50)))
+                    (p (float (1 + abs (c % 20))) (float (1 + abs (d % 20))))
+                    (float (e % 13) * 0.5)
+            // Distance from `q` to the nearest point of the polygon's boundary (min over its edges).
+            let distToBoundary (poly: ConvexPolygon) (q: Point) =
+                let v = poly.Vertices
+                let mutable best = System.Double.PositiveInfinity
+                for i in 0 .. v.Length - 1 do
+                    let s = v.[i]
+                    let e = v.[(i + 1) % v.Length]
+                    let ex, ey = e.X - s.X, e.Y - s.Y
+                    let len2 = ex * ex + ey * ey
+                    // Clamp the projection parameter to the segment, then measure to that closest point.
+                    let t = if len2 > 0.0 then max 0.0 (min 1.0 (((q.X - s.X) * ex + (q.Y - s.Y) * ey) / len2)) else 0.0
+                    let cx, cy = s.X + ex * t, s.Y + ey * t
+                    let d = sqrt ((q.X - cx) * (q.X - cx) + (q.Y - cy) * (q.Y - cy))
+                    if d < best then best <- d
+                best
+
+            testCase "isSome agrees with polygonContact for all inputs (FsCheck ≥500)" <| fun () ->
+                let prop a b c d e f g h i j =
+                    let x, y = rotObbOf a b c d e, rotObbOf f g h i j
+                    let viaManifold = Geometry.polygonManifold x y |> ValueOption.isSome
+                    let viaContact = Geometry.polygonContact x y |> Option.isSome
+                    viaManifold = viaContact
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "Normal and Depth agree with polygonContact bit for bit (FsCheck ≥500)" <| fun () ->
+                // Both read the same SAT scan, so this is exact equality, not a tolerance.
+                let prop a b c d e f g h i j =
+                    let x, y = rotObbOf a b c d e, rotObbOf f g h i j
+                    match Geometry.polygonManifold x y, Geometry.polygonContact x y with
+                    | ValueSome m, Some k -> m.Normal = k.Normal && m.Depth = k.Depth
+                    | ValueNone, None -> true
+                    | _ -> false
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "rotation-0 OBBs: Normal and Depth agree with aabbContact (FsCheck ≥500)" <| fun () ->
+                // The DEC-004 cross-check one level up from polygonContact's isSome agreement. Guarded off
+                // the tie-breaks the two functions deliberately resolve differently: an equal penetration
+                // on both axes (polygonContact keeps generation order, aabbContact biases X), and a zero
+                // centre-delta on the chosen axis (aabbContact's +bias vs the a-edge-0 normal's −y).
+                let prop a b c d e f g h =
+                    let pa, ra = obbOf a b c d
+                    let pb, rb = obbOf e f g h
+                    let dx = (rb.X + rb.Width / 2.0) - (ra.X + ra.Width / 2.0)
+                    let dy = (rb.Y + rb.Height / 2.0) - (ra.Y + ra.Height / 2.0)
+                    let px = (ra.Width + rb.Width) / 2.0 - abs dx
+                    let py = (ra.Height + rb.Height) / 2.0 - abs dy
+                    if px = py || dx = 0.0 || dy = 0.0 then
+                        true
+                    else
+                        match Geometry.polygonManifold pa pb, Geometry.aabbContact ra rb with
+                        | ValueSome m, Some k -> m.Normal = k.Normal && m.Depth = k.Depth
+                        | ValueNone, None -> true
+                        | _ -> false
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "contact points lie on the boundary of both shapes within tolerance (FsCheck ≥500)" <| fun () ->
+                // The manifold's promise. Every point sits exactly on the boundary of the incident
+                // polygon (it is a point of its clipped face), and no deeper than `Depth` inside the
+                // reference one — so it is within `Depth` of that boundary too. The caller cannot see
+                // which polygon was incident, so assert the symmetric form: one distance is ~0, and both
+                // are within `Depth`. That is what "the pair met here, to within the penetration" means.
+                let prop a b c d e f g h i j =
+                    let x, y = rotObbOf a b c d e, rotObbOf f g h i j
+                    match Geometry.polygonManifold x y with
+                    | ValueNone -> true
+                    | ValueSome m ->
+                        m.Points
+                        |> Array.forall (fun q ->
+                            let da, db = distToBoundary x q, distToBoundary y q
+                            min da db <= 1e-6 && max da db <= m.Depth + 1e-6)
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "shape invariants: A<B, 1-2 points, PointCount=Points.Length, unit normal (FsCheck ≥500)" <| fun () ->
+                let prop a b c d e f g h i j =
+                    match Geometry.polygonManifold (rotObbOf a b c d e) (rotObbOf f g h i j) with
+                    | ValueNone -> true
+                    | ValueSome m ->
+                        m.A < m.B
+                        && m.PointCount = m.Points.Length
+                        && m.PointCount >= 1
+                        && m.PointCount <= 2
+                        && m.Depth > 0.0
+                        && isUnit m.Normal
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "the manifold is a pure function of the pair (FsCheck ≥500)" <| fun () ->
+                // The literal warm-start invariant: a pair that has not moved yields the identical
+                // manifold on the next tick, so `(A, B, FeatureId)` keys into the same cache slot.
+                let prop a b c d e f g h i j =
+                    let x, y = rotObbOf a b c d e, rotObbOf f g h i j
+                    Geometry.polygonManifold x y = Geometry.polygonManifold x y
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "the whole manifold rides an exact common translation (FsCheck ≥500)" <| fun () ->
+                // The stronger form, on the pairs whose arithmetic is exact: translating both polygons by
+                // a common integer delta moves the contact points by that delta and changes nothing else —
+                // the feature id, the point count, the normal, and the depth all hold. Every input to the
+                // feature id (vertex order, the two argmax face scans) is translation-invariant by
+                // construction; here integer coordinates make it so in floating point too.
+                //
+                // Rotated pairs are deliberately excluded, and not because the id is unstable: under
+                // rotation the SAT scan's own axis choice is ULP-sensitive when two axes' penetrations
+                // tie, so a translation can flip the CONTACT — normal, points and all — to the opposite
+                // face. `polygonContact.Normal` flips with it, from the same `satScan` line. That is the
+                // tie-break sensitivity the suite already documents, not a property of contact points.
+                let prop a b c d e f g h (tx: int) (ty: int) =
+                    let x, _ = obbOf a b c d
+                    let y, _ = obbOf e f g h
+                    let dx, dy = float (tx % 100), float (ty % 100)
+                    let shift (poly: ConvexPolygon) =
+                        { Vertices = poly.Vertices |> Array.map (fun v -> p (v.X + dx) (v.Y + dy)) }
+                    match Geometry.polygonManifold x y, Geometry.polygonManifold (shift x) (shift y) with
+                    | ValueSome m, ValueSome m' ->
+                        m.FeatureId = m'.FeatureId
+                        && m.PointCount = m'.PointCount
+                        && m.Normal = m'.Normal
+                        && m.Depth = m'.Depth
+                        && (m.Points |> Array.map (fun q -> p (q.X + dx) (q.Y + dy))) = m'.Points
+                    | ValueNone, ValueNone -> true
+                    | _ -> false
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            // Every property above rides on OBBs, and an OBB cannot see the failure this one can: a box's
+            // faces are axis-aligned and antiparallel in pairs, so the reference face is always exactly
+            // the SAT axis and the incident face always the box face pointing back at it. On a triangle
+            // or a pentagon neither holds. These generate genuine strictly-convex CCW rings — via a
+            // monotone-chain hull, verified vertex-by-vertex, so a self-intersecting "hull" cannot sneak
+            // in and manufacture a false failure — and are where the reference-face query earns its keep.
+            testCase "arbitrary convex rings: points on the boundary of both shapes (FsCheck ≥500)" <| fun () ->
+                // Andrew's monotone chain; the `<= 0.0` pop drops collinear points, so the ring is strict.
+                let hull (pts: Point[]) : Point[] =
+                    let ps = pts |> Array.distinctBy (fun q -> q.X, q.Y) |> Array.sortBy (fun q -> q.X, q.Y)
+                    if ps.Length < 3 then
+                        [||]
+                    else
+                        let cross (o: Point) (u: Point) (w: Point) =
+                            (u.X - o.X) * (w.Y - o.Y) - (u.Y - o.Y) * (w.X - o.X)
+                        let half (src: Point[]) =
+                            let st = ResizeArray<Point>()
+                            for q in src do
+                                while st.Count >= 2 && cross st.[st.Count - 2] st.[st.Count - 1] q <= 0.0 do
+                                    st.RemoveAt(st.Count - 1)
+                                st.Add q
+                            st.RemoveAt(st.Count - 1)
+                            st
+                        Seq.append (half ps) (half (Array.rev ps)) |> Seq.toArray
+                // Every vertex strictly left of every directed edge ⇒ strictly convex, CCW, and simple.
+                let strictlyConvexCcw (v: Point[]) =
+                    v.Length >= 3
+                    && Seq.init v.Length (fun i ->
+                        let s, e = v.[i], v.[(i + 1) % v.Length]
+                        Seq.init v.Length (fun j ->
+                            j = i
+                            || j = (i + 1) % v.Length
+                            || (e.X - s.X) * (v.[j].Y - s.Y) - (e.Y - s.Y) * (v.[j].X - s.X) > 1e-9)
+                        |> Seq.forall id)
+                       |> Seq.forall id
+                let distToBoundary (poly: ConvexPolygon) (q: Point) =
+                    let v = poly.Vertices
+                    Seq.init v.Length (fun i ->
+                        let s, e = v.[i], v.[(i + 1) % v.Length]
+                        let ex, ey = e.X - s.X, e.Y - s.Y
+                        let t = max 0.0 (min 1.0 (((q.X - s.X) * ex + (q.Y - s.Y) * ey) / (ex * ex + ey * ey)))
+                        let cx, cy = s.X + ex * t, s.Y + ey * t
+                        sqrt ((q.X - cx) * (q.X - cx) + (q.Y - cy) * (q.Y - cy)))
+                    |> Seq.min
+                let prop (seeds: int[]) (tx: int) (ty: int) =
+                    // Build one hull from the seeds, and a second from the same seeds shifted, so both
+                    // rings are non-degenerate and the pair usually overlaps.
+                    let pt (i: int) = p (float (i % 17) * 0.37) (float ((i / 17) % 17) * 0.41)
+                    if seeds.Length < 6 then
+                        true
+                    else
+                        let ha = hull (seeds |> Array.map pt)
+                        let dx, dy = float (tx % 5) * 0.3, float (ty % 5) * 0.3
+                        let hb = hull (seeds |> Array.rev |> Array.map (fun i -> let q = pt (i + 3) in p (q.X + dx) (q.Y + dy)))
+                        if not (strictlyConvexCcw ha && strictlyConvexCcw hb) then
+                            true
+                        else
+                            let a, b = { Vertices = ha }, { Vertices = hb }
+                            match Geometry.polygonManifold a b with
+                            | ValueNone -> true
+                            | ValueSome m ->
+                                m.PointCount >= 1
+                                && m.Points
+                                   |> Array.forall (fun q ->
+                                       let da, db = distToBoundary a q, distToBoundary b q
+                                       min da db <= 1e-6 && max da db <= m.Depth + 1e-6)
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            test "degenerate inputs return ValueNone, never throw (total)" {
+                Expect.isTrue
+                    (Geometry.polygonManifold { Vertices = [| p 0. 0.; p 1. 0. |] } (obb 0. 0. 1. 1.) |> ValueOption.isNone)
+                    "<3 vertices ⇒ ValueNone"
+                Expect.isTrue
+                    (Geometry.polygonManifold { Vertices = [| p nan 0.; p 1. 0.; p 0. 1. |] } (obb 0. 0. 1. 1.) |> ValueOption.isNone)
+                    "NaN coordinate ⇒ ValueNone"
+                Expect.isTrue
+                    (Geometry.polygonManifold { Vertices = [| p 0. 0.; p 1. 0.; p 2. 0. |] } (obb 0. 0. 1. 1.) |> ValueOption.isNone)
+                    "collinear/zero-area ⇒ ValueNone"
+            }
+
+            // Determinism golden — fixed inputs, exact expected manifolds (byte-identical). Named
+            // "determinism golden" so the gate.yml zero-match guard's determinism filter covers them.
+            testList "determinism golden (contact points and feature ids)" [
+                test "face-on-face ⇒ two points on the shared face, feature id (refEdge 1, incEdge 3)" {
+                    // The unit square at the origin, overlapped 0.5 from the right. a's right face (edge 1)
+                    // is the reference — it is the axis itself — and b's left face (edge 3) is the incident
+                    // one. The incident face survives both side clips whole: its endpoints ARE the contact.
+                    Expect.equal (Geometry.polygonManifold (obb 0. 0. 1. 1.) (obb 1.5 0. 1. 1.))
+                        (ValueSome
+                            { A = 0
+                              B = 1
+                              Normal = p 1. 0.
+                              Depth = 0.5
+                              Points = [| p 0.5 1.; p 0.5 -1. |]
+                              PointCount = 2
+                              FeatureId = (1 <<< 15) ||| 3 })
+                        "two points, +x normal, depth 0.5, refEdge 1 / incEdge 3"
+                }
+                test "vertex-into-face ⇒ one point, the poking vertex" {
+                    // A 45°-rotated square centred at (2,0): its left vertex reaches x = 2 − √2 ≈ 0.586 and
+                    // pokes into the unit square's right face. Only one clip survivor is behind that face,
+                    // so the manifold carries a single contact point — the vertex itself.
+                    let diamond = Geometry.obbPolygon (p 2. 0.) (p 1. 1.) (System.Math.PI / 4.0)
+                    match Geometry.polygonManifold (obb 0. 0. 1. 1.) diamond with
+                    | ValueNone -> failtest "rotated overlap ⇒ ValueSome"
+                    | ValueSome m ->
+                        Expect.equal m.PointCount 1 "a vertex poking into a face is one contact"
+                        Expect.floatClose Accuracy.high m.Points.[0].X (2.0 - sqrt 2.0) "the diamond's left vertex, x"
+                        Expect.floatClose Accuracy.high m.Points.[0].Y 0.0 "the diamond's left vertex, y"
+                        Expect.floatClose Accuracy.high m.Depth (sqrt 2.0 - 1.0) "penetration past x = 1"
+                        Expect.equal m.Normal (p 1. 0.) "+x, a → b"
+                        Expect.equal m.FeatureId ((1 <<< 15) ||| 2) "a's right face (1), the diamond's upper-left face (2)"
+                }
+                test "the reference face flips to b when only b has a face on the axis" {
+                    // Swap the previous pair: the diamond is now `a`, the square `b`. The least-penetration
+                    // axis is the square's right face, and the diamond has no face parallel to it, so `b`
+                    // is the reference polygon and the flip bit (30) is set. Note that swapping the two
+                    // *boxes* of the previous golden would NOT flip: a's left face is antiparallel to b's
+                    // right one, the alignment ties at 1.0, and a tie keeps `a` as the reference.
+                    let diamond = Geometry.obbPolygon (p 2. 0.) (p 1. 1.) (System.Math.PI / 4.0)
+                    match Geometry.polygonManifold diamond (obb 0. 0. 1. 1.) with
+                    | ValueNone -> failtest "rotated overlap ⇒ ValueSome"
+                    | ValueSome m ->
+                        Expect.equal m.FeatureId ((1 <<< 30) ||| (1 <<< 15) ||| 2) "flip bit, refEdge 1 (b), incEdge 2 (a)"
+                        Expect.equal m.Normal (p -1. 0.) "−x, a → b"
+                        Expect.equal m.PointCount 1 "the same single vertex contact, seen from the other side"
+                        Expect.floatClose Accuracy.high m.Points.[0].X (2.0 - sqrt 2.0) "the diamond's left vertex, x"
+                        Expect.floatClose Accuracy.high m.Depth (sqrt 2.0 - 1.0) "penetration past x = 1"
+                }
+                test "touching squares are not a contact (strict edges)" {
+                    Expect.isTrue
+                        (Geometry.polygonManifold (obb 0. 0. 1. 1.) (obb 2. 0. 1. 1.) |> ValueOption.isNone)
+                        "shared edge ⇒ zero overlap ⇒ ValueNone"
+                }
+            ]
+        ]
+
         // Segment-vs-convex-polygon cast (031) — the raycast counterpart of polygonContact. Entry-from-
         // outside semantics, strict edges, and the entered edge's outward normal as the struck face.
         testList "segmentPolygonHit (segment vs convex polygon)" [
