@@ -60,6 +60,71 @@ module Visibility =
         else
             Some({ X = a.X + t0 * dx; Y = a.Y + t0 * dy }, { X = a.X + t1 * dx; Y = a.Y + t1 * dy })
 
+    // Half the difference `p - q`, computed as `p/2 - q/2` so that two opposite-signed extremes cannot
+    // overflow on the way (`MaxValue - (-MaxValue)` is infinite; `MaxValue/2 - (-MaxValue/2)` is not).
+    // Halving by `ScaleB` is exact for every normal operand, so this loses nothing the solve depends on.
+    let inline private halfDiff (p: float) (q: float) =
+        System.Math.ScaleB(p, -1) - System.Math.ScaleB(q, -1)
+
+    // Split a finite vector into a mantissa whose larger component lies in `[1, 2)` and the power-of-two
+    // exponent that restores it: `v = 2^k * v'`. `ScaleB` shifts the exponent field without touching the
+    // mantissa, so the split is EXACT — no rounding is introduced, which is what keeps the byte-determinism
+    // contract intact. A zero (or, defensively, a non-finite) vector is passed through with `k = 0`.
+    let inline private normalise (vx: float) (vy: float) =
+        let m = max (abs vx) (abs vy)
+
+        if m = 0.0 || not (System.Double.IsFinite m) then
+            struct (vx, vy, 0)
+        else
+            let k = System.Math.ILogB m
+            struct (System.Math.ScaleB(vx, -k), System.Math.ScaleB(vy, -k), k)
+
+    // The overflow-free re-solve, reached only when the direct parametrisation saturated (§ `raySegment`).
+    //
+    // Both parameters are ratios of cross products over the same denominator:
+    //     t = (W × E) / (dir × E)        u = (W × dir) / (dir × E)
+    // Every operand appears exactly once in a numerator and once in a denominator, so scaling any vector by
+    // a power of two rescales both and cancels out of the quotient. Normalising all three into `[1, 2)`
+    // bounds each cross product by 8 — it cannot overflow — and the exponents are then reapplied to the
+    // quotients with `ScaleB`, again exactly. Nothing here rounds, so a replay stays byte-identical.
+    //
+    // `W` is anchored at whichever endpoint is NEARER `origin`, with `E` running from it to the far one.
+    // Normalising alone would make the solve finite; anchoring is what makes it *accurate*, because a far
+    // anchor forces `W`'s short component down into the subnormals when the long one is scaled to `[1, 2)`.
+    // `u` is measured from that anchor, and `[0, 1]` describes the same point set from either end, so no
+    // `u' = 1 - u` remapping is needed — and `u` is internal to the on-segment test, never returned.
+    let private raySegmentRescaled (origin: Point) (dir: Point) (seg: Segment) : (Point * float) option =
+        let nearer, farther =
+            let reach (p: Point) =
+                max (abs (halfDiff p.X origin.X)) (abs (halfDiff p.Y origin.Y))
+
+            if reach seg.A <= reach seg.B then seg.A, seg.B else seg.B, seg.A
+
+        let struct (wx, wy, a) = normalise (halfDiff nearer.X origin.X) (halfDiff nearer.Y origin.Y)
+        let struct (dx, dy, b) = normalise dir.X dir.Y
+        let struct (ex, ey, c) = normalise (halfDiff farther.X nearer.X) (halfDiff farther.Y nearer.Y)
+
+        let denom = dx * ey - dy * ex
+
+        if denom = 0.0 then
+            None // parallel, or a zero-length segment — the same verdict the direct solve reaches
+        else
+            // `W` and `E` were each built from a HALVED difference, so restoring them costs one extra
+            // power of two apiece: `W = 2^(a+1) * w`, `E = 2^(c+1) * e`, `dir = 2^b * d`. Substituting into
+            // the two ratios, `E`'s exponent cancels out of `t` entirely and `dir`'s out of `u`.
+            let t = System.Math.ScaleB((wx * ey - wy * ex) / denom, (a + 1) - b)
+            let u = System.Math.ScaleB((wx * dy - wy * dx) / denom, (a + 1) - (c + 1))
+
+            // A true `t` can still be unrepresentable (an origin genuinely `MaxValue` away from the hit),
+            // and `origin + t * dir` can overflow even for finite `t`. Both degrade to `None`, as before.
+            if not (System.Double.IsFinite t && System.Double.IsFinite u) then
+                None
+            elif t >= 0.0 && u >= 0.0 && u <= 1.0 then
+                let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
+                if isFinitePoint hit then Some(hit, t) else None
+            else
+                None
+
     let raySegment (origin: Point) (dir: Point) (seg: Segment) : (Point * float) option =
         if not (isFinitePoint origin && isFinitePoint dir && isFiniteSeg seg) then
             None
@@ -78,33 +143,31 @@ module Visibility =
                 let u = (wx * dir.Y - wy * dir.X) / denom // (W × dir) / (dir × segDir)
 
                 // Finite operands do not imply a finite result. A cross product of two finite vectors
-                // overflows once the magnitudes multiply past `Double.MaxValue`, and it can overflow in
-                // the numerator while `denom` stays finite — then `t` is ±infinity, `u` is an ordinary
-                // number in `[0, 1]`, and the `t >= 0.0` test below happily admits it. The hit point is
-                // then `origin + infinity * dir`: infinite, and NaN in any axis where `dir` is zero,
-                // because `infinity * 0.0 = NaN`. That NaN is what escaped into the returned polygon.
+                // overflows once the magnitudes multiply past `Double.MaxValue`, and what overflows is the
+                // *parametrisation*, not the answer: `W` is anchored at `seg.A`, so a far `seg.A` inflates
+                // `wx`/`wy` even when the crossing itself is nearby. Two distinct saturations follow, and
+                // neither is detectable from `t` and `u` alone:
                 //
-                // What overflows is the *parametrisation*, not the answer. `W` is anchored at `seg.A`, so a
-                // far `seg.A` inflates `wx`/`wy` even when the crossing itself is nearby: for
-                // `origin = (-3.937, 0)`, `dir = (0.937, 0)`, `seg = (0, MaxValue) -> (0, 0)` the hit is
-                // `(0, 0)` at `t = 4.201` — both ordinary doubles — yet `wx * ey` saturates. So this guard
-                // DOES discard representable hits; it trades a NaN vertex for a missing one. Both are
-                // wrong, and the missing one is the containable wrong: it degrades this ring rather than
-                // poisoning every arithmetic consumer downstream of it.
+                //   * The NUMERATOR overflows while `denom` stays finite ⇒ `t` is ±infinity. #56 caught
+                //     this one, because the constructed point `origin + infinity * dir` is infinite (and
+                //     NaN wherever `dir` is zero, since `infinity * 0.0 = NaN`) — a NaN vertex in the ring.
+                //   * The DENOMINATOR overflows ⇒ `t` and `u` come back as ORDINARY numbers near zero,
+                //     because `finite / infinity = 0`. Nothing downstream looks wrong: `raySegment` reports
+                //     a hit at the origin with `t = 0`, silently, for a crossing that is elsewhere.
                 //
-                // Overflow needs the *product* to cross `Double.MaxValue`, not either factor: a segment
-                // endpoint at 1e300 still resolves here, because `wx` stays small. A coordinate past
-                // ~1e154 is necessary (two of them overflow) but nowhere near sufficient, so no world
-                // geometry reaches this regime. The honest fix is to anchor `W` at whichever endpoint is
-                // nearer `origin`, keeping the numerator finite and returning the true `t` — but that is
-                // a change to the solve, not a guard on it, so #59 tracks it and this stays the minimal
-                // fix for the totality break.
+                // So finiteness of `denom` is part of the precondition, not a consequence of it. When any of
+                // the three saturates, re-solve with the operands rescaled by exact powers of two, which
+                // recovers the true `t` for every intersection that is itself representable (#59).
                 //
-                // Reject on `t`/`u`, and again on the constructed point (a finite `t` and a finite `dir`
-                // can still overflow their product).
-                if not (System.Double.IsFinite t && System.Double.IsFinite u) then
-                    None
+                // The direct solve below is left bit-for-bit as it was, and is still what every ordinary
+                // input takes: the rescaled path is a fallback, not a replacement, so no currently-computable
+                // result moves by even an ulp and the golden replays stay byte-identical.
+                if
+                    not (System.Double.IsFinite denom && System.Double.IsFinite t && System.Double.IsFinite u)
+                then
+                    raySegmentRescaled origin dir seg
                 elif t >= 0.0 && u >= 0.0 && u <= 1.0 then
+                    // A finite `t` and a finite `dir` can still overflow their product.
                     let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
                     if isFinitePoint hit then Some(hit, t) else None
                 else
