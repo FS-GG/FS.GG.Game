@@ -366,6 +366,100 @@ let tests =
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 
+        // #97: intercept returned a phantom ValueSome for a target that OUTRUNS the round, whenever
+        // `speed` and `|v|` were both sub-unit. `a = |v|^2 - speed^2` is a difference of squared
+        // speeds; the old guard scaled its zero-test by `max 1.0 (speed*speed)`, which pins to 1.0
+        // when both speeds are < 1 and degrades the test to the ABSOLUTE `|a| <= 1e-9`. Here
+        // a = |v|^2 = 2.4e-11 is declared zero, the LINEAR branch solves `b*t + c = 0` (the wrong
+        // equation), and an interception is invented for a target ~47,782x faster than the round.
+        // The quadratic branch has disc = b^2 - 4ac = 96 - 481 < 0 and correctly returns ValueNone.
+        // A seed-independent regression: the exact shipped repro from #97, reproduced against the
+        // Release binary at commit 93aa640.
+        testCase "the #97 phantom: a sub-unit outrunning target has no interception, not a linear-branch fiction" <| fun () ->
+            let shooter = p 1.0e6 2.86122e-07
+            let target = p -1.0e6 -1.0e6
+            let v = p 0.0 4.90607e-06 // |v| = 4.9e-6
+            let speed = 1.02677e-10 // the target is ~47,782x faster than the round
+
+            // Guard the premise: this really is the outrun regime the .fsi answers with ValueNone,
+            // AND both speeds are sub-unit -- the band the old `max 1.0` floor mis-scaled. If either
+            // stopped holding, a ValueNone below would pass for the wrong reason.
+            let vMag = sqrt (v.X * v.X + v.Y * v.Y)
+            Expect.isGreaterThan vMag speed "|v| > speed: the target outruns the round"
+            Expect.isLessThan vMag 1.0 "|v| is sub-unit"
+            Expect.isLessThan speed 1.0 "speed is sub-unit -- the regime the old max-1.0 floor pinned"
+
+            Expect.equal
+                (Ballistics.intercept shooter speed target v)
+                ValueNone
+                "no non-negative root exists: |target + v*t - shooter| = speed*t is never met"
+
+        // The forward direction the suite never asserted at these magnitudes: a returned ValueSome
+        // must be a REAL interception. The old brute-force property asserts only the CONVERSE
+        // (ValueNone => no root), which is exactly why #97 escaped -- nothing checked that a
+        // ValueSome satisfies the defining equation. FsCheck's default float generator has
+        // essentially no mass in 1e-8..1e-3, so #97's sub-unit outrun regime is unreachable by an
+        // unclamped draw; `subUnit` places speed and |v| into (1e-10, 1] deliberately, log-uniform.
+        testCase "a returned interception satisfies |aim - shooter| = speed * t at sub-unit speeds (#97, FsCheck >=500)"
+        <| fun () ->
+            // A raw float -> a magnitude in (1e-10, 1], on a log scale. The fractional part of an
+            // arbitrary finite float is a serviceable uniform in [0,1) without depending on the
+            // generator's (absent) small-magnitude mass; a non-finite draw degrades to a mid value.
+            let subUnit (raw: float) =
+                let f = if System.Double.IsFinite raw then abs raw else 0.5
+                let frac = f - floor f
+                10.0 ** (-10.0 * frac)
+
+            let prop (tx: float) (ty: float) (ang: float) (vMagR: float) (spR: float) =
+                let shooter = p 0.0 0.0
+                let target = p (clamp tx % 100.0) (clamp ty % 100.0)
+                let speed = subUnit spR
+                let vMag = subUnit vMagR
+                // A finite direction for v (magnitude carried by `vMag`); cos/sin are total and finite.
+                let a = if System.Double.IsFinite ang then ang else 0.0
+                let v = p (vMag * cos a) (vMag * sin a)
+
+                match Ballistics.intercept shooter speed target v with
+                | ValueNone -> true
+                | ValueSome aim ->
+                    let vSq = v.X * v.X + v.Y * v.Y
+                    let flight = sqrt ((aim.X - shooter.X) ** 2.0 + (aim.Y - shooter.Y) ** 2.0)
+
+                    if vSq = 0.0 then
+                        aim = target
+                    else
+                        // Recover t from aim = target + v*t, then check |aim - shooter| = speed*t.
+                        let t = ((aim.X - target.X) * v.X + (aim.Y - target.Y) * v.Y) / vSq
+                        let want = speed * t
+
+                        // Operand-scaled bound (the #89 lesson): the tolerance tracks the magnitudes
+                        // the subtractions cancel, not the size of the tiny result. A phantom aim
+                        // from the misfiring linear branch lands at a residual ratio of ~1, five
+                        // orders past this bound.
+                        let scale =
+                            [ 1.0
+                              abs flight
+                              abs want
+                              abs target.X
+                              abs target.Y
+                              abs (v.X * t)
+                              abs (v.Y * t) ]
+                            |> List.max
+
+                        t >= -1e-6 && abs (flight - want) <= 1e-5 * scale
+
+            // Seeded on evidence, and mutation-tested: under the OLD `max 1.0 (speed*speed)` guard
+            // this seed draws sub-unit outrunning targets that the linear branch answers with a
+            // phantom ValueSome, so reverting the fix turns this test RED. Most seeds reach the
+            // misfire (~15% of draws trigger it), but pinning one keeps a pass and a failure alike
+            // reproducible rather than a CI coin-flip.
+            Check.One(
+                Config.QuickThrowOnFailure
+                    .WithMaxTest(500)
+                    .WithReplay(Some { Rnd = Rnd 39UL; Size = None }),
+                prop
+            )
+
         // -----------------------------------------------------------------------------------------
         // splash — falloff curves and order independence.
         // -----------------------------------------------------------------------------------------
