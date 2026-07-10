@@ -58,11 +58,18 @@ let repoPath (rel: string) =
 // `fs-gg-ai` (FS.GG.Game#42) is, like fs-gg-ballistics, NOT a migration: the org registry carried 38
 // skills and none of them was AI, so it has no FS.GG.Rendering counterpart to stay byte-identical with.
 // It originates here because it sits above the spatial substrate this repo owns.
+//
+// `fs-gg-effects` (FS.GG.Game#70) is the same: no FS.GG.Rendering counterpart. It is the mitigation
+// half of the damage story whose region half `fs-gg-ballistics` owns. NOTE that the same change
+// deprecated `Resolution.knockback` in favour of `Resolution.push`, so `fs-gg-collision`'s body — one
+// of the P6 rewrites, already divergent from Rendering's frozen `--profile game` copy — changed too.
+// Both the new row and that changed digest must be reconciled into .github's registry/skills.yml.
 let catalog =
     [ "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-effects", "template/product-skills/fs-gg-effects/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]"

@@ -28,10 +28,18 @@
     {
       "id": "fs-gg-collision",
       "scope": "product",
-      "sha256": "eb97b0c66f56c2ce12e5db23b94fee4ff7898e8bb54bf32891fe55b91c591646",
+      "sha256": "8bd79af6dfe1a0f8abbc57cf6d0a3a81bb5a0bbe6aa3e6f36f82a2e770e9b57f",
       "resolvablePath": ".agents/skills/fs-gg-collision/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-collision/"
+    },
+    {
+      "id": "fs-gg-effects",
+      "scope": "product",
+      "sha256": "7350a3cc40e253d207e024ad16821f19850ea025a38238b036e825228f074837",
+      "resolvablePath": ".agents/skills/fs-gg-effects/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-effects/"
     },
     {
       "id": "fs-gg-game-core",

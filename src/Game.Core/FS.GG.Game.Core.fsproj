@@ -64,6 +64,12 @@
          Los/Fov/Visibility either: policy stays with the game. -->
     <Compile Include="Ai.fsi" />
     <Compile Include="Ai.fs" />
+    <!-- Mitigation layer: what a hit becomes at the target. Generic in both the target and the damage
+         kind, so it reaches up to NOTHING — not even Primitives — and could compile anywhere in this
+         list. It sits last because it is the top of the damage story: a region operator (Ballistics
+         splash, SpatialGrid.queryRadius) decides who is hit, and Effects decides for how much. -->
+    <Compile Include="Effects.fsi" />
+    <Compile Include="Effects.fs" />
   </ItemGroup>
 
 </Project>

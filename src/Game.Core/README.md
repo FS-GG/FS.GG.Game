@@ -13,7 +13,7 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the two det
 ### Collision — detection, then response
 
 - **`Geometry`** — the detection surface: overlap and containment for AABB, circle, and convex polygon (`intersects`/`contains`/`aabbContact`/`circleContact`/`polygonContact`/`obbPolygon`), swept tests (`sweptIntersects`), and segment casts (`segmentAabbHit`/`segmentCircleHit`/`segmentPolygonHit`/…). It returns manifests as values and never resolves them.
-- **`Resolution`** — the response layer that consumes a detection `Contact` and produces transforms (`pushOut`/`slide`/`knockback`). Deliberately separate from detection; it never re-detects.
+- **`Resolution`** — the response layer that consumes a detection `Contact` and produces transforms (`pushOut`/`slide`/`push`; `knockback` is a deprecated shim over `push`). Deliberately separate from detection; it never re-detects.
 - **`SpatialGrid`** — uniform spatial partitioning for the broad phase (`build`/`query`/`queryRadius`).
 
 ### The grid
