@@ -36,7 +36,7 @@
     {
       "id": "fs-gg-effects",
       "scope": "product",
-      "sha256": "7350a3cc40e253d207e024ad16821f19850ea025a38238b036e825228f074837",
+      "sha256": "d9e94aa57bbdd0dcfef3a603860d1bde1ba1646536670c3d7c76cc7ea2aaa193",
       "resolvablePath": ".agents/skills/fs-gg-effects/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-effects/"
