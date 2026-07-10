@@ -538,9 +538,14 @@ let tests =
                             (float (i % 13) * 0.5)
                     match Geometry.segmentPolygonHit p0 p1 poly with
                     | Some hit ->
+                        // The point sits on the entered edge's line, but only to within the corner
+                        // tolerance: at a corner entry T is the true max while the normal is the first
+                        // tied edge's, so the point may lie up to cornerTie × |segment| off that edge.
+                        let segLen = sqrt ((p1.X - p0.X) ** 2.0 + (p1.Y - p0.Y) ** 2.0)
                         let onSomeEdgeLine =
                             poly.Vertices
-                            |> Array.exists (fun v -> abs ((hit.Point.X - v.X) * hit.Normal.X + (hit.Point.Y - v.Y) * hit.Normal.Y) < 1e-9)
+                            |> Array.exists (fun v ->
+                                abs ((hit.Point.X - v.X) * hit.Normal.X + (hit.Point.Y - v.Y) * hit.Normal.Y) < 1e-9 * (1.0 + segLen))
                         let inward = (p1.X - p0.X) * hit.Normal.X + (p1.Y - p0.Y) * hit.Normal.Y < 0.0
                         hit.T >= 0.0 && hit.T <= 1.0 && isUnit hit.Normal && onSomeEdgeLine && inward
                     | None -> true
@@ -549,6 +554,13 @@ let tests =
             testCase "the entry parameter is invariant under rotating the whole scene (FsCheck ≥500)" <| fun () ->
                 // Rotating p0, p1 and the polygon about the origin by θ maps the rotation-0 OBB to
                 // `obbPolygon (R θ centre) h θ`, so the cast is a rigid motion and T must not move.
+                //
+                // `isSome` is NOT invariant, and cannot be: strict edges sit a graze (a chord through a
+                // single vertex) and a segment endpoint on the boundary exactly on the `<`, and a rotation
+                // perturbs either by an ULP, to whichever side. That is inherent to a strict test on a
+                // measure-zero configuration — polygonContact's strict edges are no different. So a flip is
+                // allowed only when the surviving hit is one of those two knife-edges, which the hit itself
+                // identifies: its point is a vertex (the graze), or its T is at a segment endpoint.
                 let prop a b c d e f g h i =
                     let p0 = p (float (a % 50)) (float (b % 50))
                     let p1 = p (float (c % 50)) (float (d % 50))
@@ -557,14 +569,17 @@ let tests =
                     let theta = float (i % 13) * 0.5
                     let co, si = cos theta, sin theta
                     let rot (q: Point) : Point = { X = q.X * co - q.Y * si; Y = q.X * si + q.Y * co }
-                    let flat = Geometry.segmentPolygonHit p0 p1 (Geometry.obbPolygon centre half 0.0)
-                    let spun = Geometry.segmentPolygonHit (rot p0) (rot p1) (Geometry.obbPolygon (rot centre) half theta)
-                    match flat, spun with
+                    let flatPoly = Geometry.obbPolygon centre half 0.0
+                    let spunPoly = Geometry.obbPolygon (rot centre) half theta
+                    let atVertex (poly: ConvexPolygon) (q: Point) =
+                        poly.Vertices |> Array.exists (fun v -> abs (v.X - q.X) < 1e-9 && abs (v.Y - q.Y) < 1e-9)
+                    let atEndpoint (t: float) = t < 1e-9 || t > 1.0 - 1e-9
+                    match Geometry.segmentPolygonHit p0 p1 flatPoly,
+                          Geometry.segmentPolygonHit (rot p0) (rot p1) spunPoly with
                     | Some x, Some y -> abs (x.T - y.T) < 1e-9
                     | None, None -> true
-                    // A hit within a rounding of the boundary may fall either side of the strict test.
-                    | Some x, None
-                    | None, Some x -> x.T < 1e-9 || x.T > 1.0 - 1e-9
+                    | Some x, None -> atVertex flatPoly x.Point || atEndpoint x.T
+                    | None, Some y -> atVertex spunPoly y.Point || atEndpoint y.T
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 
             test "degenerate inputs return None, never throw (total)" {
@@ -633,6 +648,25 @@ let tests =
                     // slab test calls the same graze a hit — the sole documented divergence.
                     Expect.isNone (Geometry.segmentPolygonHit (p -5. 5.) (p 5. -5.) box10) "corner graze ⇒ None"
                     Expect.isSome (Geometry.segmentAabbHit (p -5. 5.) (p 5. -5.) (r 0. 0. 10. 10.)) "…where the AABB cast reports a hit"
+                }
+                test "a graze is a knife-edge: rotating the scene can turn it into a hit" {
+                    // FsCheck found this. The segment passes exactly through the corner (2,-4) of the
+                    // rotation-0 box, so the chord is a point and strict edges reject it. Rotated by 0.5
+                    // rad the same coincidence survives only to an ULP, and the cast enters. T is invariant
+                    // (1/3); isSome is not, and no strict test can make it so — the configuration is
+                    // measure-zero. Documented here so the asymmetry is a decision, not a surprise.
+                    let p0, p1 = p 3. -3., p 0. -6.
+                    let theta = 0.5
+                    let co, si = cos theta, sin theta
+                    let rot (q: Point) : Point = { X = q.X * co - q.Y * si; Y = q.X * si + q.Y * co }
+                    Expect.isNone (Geometry.segmentPolygonHit p0 p1 (Geometry.obbPolygon (p 0. -2.) (p 2. 2.) 0.0))
+                        "the flat cast clips the corner (2,-4) exactly ⇒ graze ⇒ None"
+                    match Geometry.segmentPolygonHit (rot p0) (rot p1) (Geometry.obbPolygon (rot (p 0. -2.)) (p 2. 2.) theta) with
+                    | Some hit ->
+                        Expect.floatClose Accuracy.high hit.T (1.0 / 3.0) "the rotated cast enters at the same T"
+                        Expect.floatClose Accuracy.high hit.Point.X (rot (p 2. -4.)).X "…at the rotated corner"
+                        Expect.floatClose Accuracy.high hit.Point.Y (rot (p 2. -4.)).Y "…at the rotated corner"
+                    | None -> failtest "expected the rotated graze to fall on the hit side"
                 }
                 test "segment starting inside the polygon has no entry" {
                     Expect.isNone (Geometry.segmentPolygonHit (p 5. 5.) (p 20. 5.) box10) "origin inside ⇒ None"
