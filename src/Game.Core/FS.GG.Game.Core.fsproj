@@ -21,6 +21,10 @@
   <ItemGroup>
     <Compile Include="Primitives.fsi" />
     <Compile Include="Primitives.fs" />
+    <!-- Abstract input-command vocabulary (policy, epic Rendering#330). Device-free intents as pure
+         data; reaches up to nothing, so it may sit anywhere — here, early, beside the other vocab. -->
+    <Compile Include="InputCommand.fsi" />
+    <Compile Include="InputCommand.fs" />
     <Compile Include="Geometry.fsi" />
     <Compile Include="Geometry.fs" />
     <Compile Include="Rng.fsi" />

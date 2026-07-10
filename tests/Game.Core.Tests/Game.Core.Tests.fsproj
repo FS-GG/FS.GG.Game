@@ -11,6 +11,7 @@
        verbatim from FS.GG.Rendering tests/Scene.Tests + tests/Canvas.Tests (only the namespace
        opens change: FS.GG.UI.Scene/FS.GG.UI.Canvas → FS.GG.Game.Core). -->
   <ItemGroup>
+    <Compile Include="InputCommandTests.fs" />
     <Compile Include="GeometryTests.fs" />
     <Compile Include="RngTests.fs" />
     <Compile Include="FixedStepTests.fs" />
