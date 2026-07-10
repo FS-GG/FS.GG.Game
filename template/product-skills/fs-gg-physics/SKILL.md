@@ -86,9 +86,11 @@ which of those your product is, you want arcade.
 ## Public Contract
 
 > **Availability.** `Physics` is the opt-in heavy layer of `FS.GG.Game.Core`, landing across the
-> `fs-gg-physics` slices. `Loop`, `FixedStep`, `Geometry`, `SpatialGrid` and `Resolution` — everything
-> the doctrine above rests on — ship today. Check the package surface before you write against `Physics`;
-> the doctrine and the arcade guidance apply regardless of whether you use it.
+> `fs-gg-physics` slices. Everything the doctrine above rests on ships today: `Loop`, `FixedStep`,
+> `Geometry` (including `polygonManifold`), `SpatialGrid`, `Resolution`, and the `Manifold` /
+> `ConvexPolygon` primitives. The `World`, `Config` and `Transform` types below arrive with `Physics`
+> itself. Check the package surface before you write against it — the doctrine and the arcade guidance
+> apply either way.
 
 ```fsharp
 open FS.GG.Game.Core
@@ -121,7 +123,7 @@ module Physics =
     /// Sorted, deduped candidate pairs over the `SpatialGrid` broad phase. `(a, b)` with `a < b`.
     val pairs       : World -> struct (int * int)[]
 
-    /// Narrow phase with contact points — the missing half of `Geometry.polygonContact`.
+    /// Narrow phase for a body pair, over `Geometry.polygonManifold`. Not a second implementation.
     val manifold    : World -> a: int -> b: int -> Manifold voption
 
     /// Presentation only. Shortest-arc on rotation. Never feeds `step`.
@@ -153,8 +155,9 @@ solver divides by nothing. A `Static` body is `invMass = 0.0`, not `mass = infin
 
 ## Interpolation belongs to the engine
 
-`Loop.alpha` hands you a number in `[0, 1)`. Do not hand-roll the lerp that consumes it — two things go
-wrong, and both have already gone wrong in this org.
+`Loop.alpha` hands you a number in `[0, 1]` — never `NaN`, never outside the interval, for any `dt` and
+any hand-built `StepState`. Do not hand-roll the lerp that consumes it: two things go wrong, and both
+have already gone wrong in this org.
 
 - **Lerp presentation state only.** A `World` separates body state (position, rotation — safe to
   interpolate) from the solver cache (accumulated impulses, sleep counters — meaningless to
@@ -182,8 +185,11 @@ that. Break one and the failure surfaces as a desync days later, not as a test f
 - **Restitution needs a velocity threshold.** Restitution applies only when `|v·n| > BounceThreshold`.
   Without it a resting box jitters forever, the sleep counter never fires, and the scene never settles —
   a determinism bug and a performance bug wearing the same coat.
-- **Guard every divide and `sqrt`.** Prefer squared distances. A single unguarded `NaN` propagates into
-  the accumulator and silently freezes the loop; nothing throws, and the world simply stops.
+- **Guard every divide and `sqrt`.** Prefer squared distances. `Loop`/`FixedStep` already keep a
+  non-finite frame time out of the accumulator, so a `NaN` cannot wedge the loop — which is exactly why
+  this one is dangerous. It does not stop anything. It enters a body's position or velocity, nothing
+  throws, and it spreads through every contact that body touches until the whole scene is `NaN`.
+  `checksum` is what catches it.
 - **Checksum every tick.** `Physics.checksum` is a stable hash of position, velocity, rotation and
   angular velocity — body state only, never the solver cache. Compare it across a replayed input stream:
   it is the desync tripwire, and it is how you find the divergence on the tick it happened.
@@ -213,8 +219,8 @@ Steady-state allocation per step is **zero**, once warm. `step` mutates its arra
 pure at the boundary; constitution §IV sanctions exactly that, *"where they are clearer or measurably
 necessary; say so in a short comment."*
 
-Two worlds that present identically may hold different solver caches. `checksum` hashes body state only,
-so it stays the right equality for golden tests; structural equality over the whole `World` is not.
+Two worlds that present identically may hold different solver caches — which is why `checksum` hashes
+body state only, and why it, not the `World`, is what a golden test compares.
 
 ## Common pitfalls
 
@@ -232,7 +238,7 @@ so it stays the right equality for golden tests; structural equality over the wh
 - **Restitution with no velocity threshold.** The resting box jitters forever, never sleeps, and the
   scene costs O(n) when it should cost nothing.
 - **`mass = infinity` for a static body.** The solver stores inverses: `invMass = 0.0`. Infinity divides
-  into `NaN` and freezes the loop.
+  into `NaN`, which then spreads through the body and every contact it takes part in — silently.
 - **An unstable `FeatureId`.** Warm starting seeds the wrong contact and stacks shake. Derive it from the
   reference and incident edge indices, and keep it stable across ticks.
 - **Reaching for impulse when arcade would do.** Restitution, momentum transfer and stacking justify it.
@@ -292,4 +298,4 @@ community sources. If your product uses Spec Kit, record findings and resolving 
 - F#/.NET docs: https://learn.microsoft.com/en-us/dotnet/fsharp/
 - Fixed-timestep loop background: https://gafferongames.com/post/fix_your_timestep/
 - Sequential impulses and warm starting (Catto, GDC): https://box2d.org/files/ErinCatto_SequentialImpulses_GDC2006.pdf
-- Speculative contacts: https://www.wildbunny.co.uk/blog/2011/03/25/speculative-contacts-an-continuous-collision-engine-approach-part-1/
+- Continuous collision, including speculative contacts (Catto, GDC): https://box2d.org/files/ErinCatto_ContinuousCollision_GDC2013.pdf
