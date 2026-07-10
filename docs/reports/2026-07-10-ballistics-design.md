@@ -150,8 +150,16 @@ Pure, total, no wall-clock read, no shared mutable state, no floating-point tie-
 Totality is inherited from the rest of `Game.Core` and tested at each edge: a non-finite `dt` moves
 the round nowhere (the tick is still consumed) rather than poisoning `Position`; a round whose state
 is already non-finite is `Expired`, so a `NaN` never escapes into the world; and a `cast` that reports
-a hit with a non-finite `T`, a `T` outside `[0,1]`, or a non-finite point is treated as a **miss** —
-the module's totality does not depend on the caller being well-behaved.
+a hit with a non-finite `T`, a `T` outside `[0,1]`, or a non-finite point **or normal** is treated as a
+**miss** — the module's totality does not depend on the caller being well-behaved. (The normal matters
+as much as the point: a caller that reflects a velocity about a `NaN` normal poisons the world just as
+thoroughly.)
+
+`intercept`'s two zero-tolerances are each scaled by the magnitude of the term they guard: `a` is a
+squared speed, `b` is `2·|d|·|v|` — a length times a speed. Scaling `b` by `c` (a squared *length*)
+is dimensionally wrong and silently swallows a real closing rate at long range: a target `1e6` away
+closing at `2e-4` yields `|b| = 200` against a `c`-derived tolerance of `1e3`, and a perfectly real
+interception is reported impossible.
 
 ## 6. What this deliberately does not do
 

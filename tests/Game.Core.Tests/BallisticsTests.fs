@@ -136,6 +136,14 @@ let tests =
             match Ballistics.step nanPoint 1.0 (round (p 0.0 0.0) (p 1.0 0.0) 2) with
             | Flew _ -> ()
             | other -> failtestf "expected a NaN hit point to be rejected, got %A" other
+
+            // A NaN NORMAL is just as poisonous: the caller reflects velocity about it.
+            let nanNormal =
+                fun (_: Point) (_: Point) -> Some { T = 0.5; Point = p 0.5 0.0; Normal = p nan nan }
+
+            match Ballistics.step nanNormal 1.0 (round (p 0.0 0.0) (p 1.0 0.0) 2) with
+            | Flew _ -> ()
+            | other -> failtestf "expected a NaN hit normal to be rejected, got %A" other
         }
 
         // -----------------------------------------------------------------------------------------
@@ -160,6 +168,17 @@ let tests =
             match Ballistics.intercept (p 0.0 0.0) 1.0 (p 10.0 0.0) (p -1.0 0.0) with
             | ValueSome aim -> Expect.floatClose Accuracy.medium aim.X 5.0 "met halfway at t=5"
             | ValueNone -> failtest "the linear branch must solve, not divide by zero"
+        }
+
+        test "a distant target closing slowly is still intercepted — the b-tolerance is a speed*length" {
+            // Equal speeds (the linear branch). |d| = 1e6, closing rate 2e-4 => |b| = 200. Scaling the
+            // zero-test by c = |d|^2 = 1e12 would call that "no closing rate" and report ValueNone.
+            let vx = -1.0e-4
+            let v = p vx (sqrt (1.0 - vx * vx)) // |v| = 1.0 exactly, so a = 0
+
+            match Ballistics.intercept (p 0.0 0.0) 1.0 (p 1.0e6 0.0) v with
+            | ValueSome _ -> ()
+            | ValueNone -> failtest "a real (if distant) interception was reported impossible"
         }
 
         test "an outrunning target has no interception — ValueNone, not NaN" {

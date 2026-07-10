@@ -45,8 +45,16 @@ module Ballistics =
             else
                 match cast p0 p1 with
                 // A hostile or buggy `cast` cannot inject a NaN: an out-of-range or non-finite hit
-                // is a miss, not a hit at a garbage point.
-                | Some hit when isFinite hit.T && hit.T >= 0.0 && hit.T <= 1.0 && finitePoint hit.Point ->
+                // is a miss, not a hit at a garbage point. The NORMAL is checked too — a caller that
+                // reflects velocity about a NaN normal poisons the world just as thoroughly as one
+                // that reads a NaN impact point.
+                | Some hit when
+                    isFinite hit.T
+                    && hit.T >= 0.0
+                    && hit.T <= 1.0
+                    && finitePoint hit.Point
+                    && finitePoint hit.Normal
+                    ->
                     Struck hit
                 | _ ->
                     Flew
@@ -71,9 +79,14 @@ module Ballistics =
             let c = dx * dx + dy * dy
 
             // Scaled tolerances: an absolute epsilon would be meaningless at speed ~1e3 (a ~ 1e6).
-            // Pure arithmetic on the inputs, so the branch taken is itself deterministic.
+            // Each is scaled by the magnitude of the term it guards -- `a` is a squared SPEED, and
+            // `b` is 2*|d|*|v|, a length times a speed. Scaling `b` by `c` (a squared LENGTH) would
+            // be dimensionally wrong and, at long range, would swallow a real closing rate: a target
+            // 1e6 away closing at 2e-4 gives |b| = 200 against a `c`-derived tolerance of 1e3, and
+            // the interception would be reported as impossible. Pure arithmetic on the inputs, so
+            // the branch taken is itself deterministic.
             let aIsZero = abs a <= 1e-9 * max 1.0 (speed * speed)
-            let bIsZero = abs b <= 1e-9 * max 1.0 c
+            let bIsZero = abs b <= 1e-9 * max 1.0 (sqrt c * speed)
 
             let t =
                 if aIsZero then

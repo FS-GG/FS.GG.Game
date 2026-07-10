@@ -53,7 +53,9 @@ module Ballistics =
     /// non-positive `dt` advances the round zero distance (the tick is still consumed) rather than
     /// poisoning `Position` with a NaN; a projectile whose `Position` or `Velocity` is already
     /// non-finite is `Expired`, so a NaN can never escape into the world; and a `cast` that reports a
-    /// hit with a non-finite `T`, a `T` outside `[0,1]`, or a non-finite `Point` is treated as a MISS.
+    /// hit with a non-finite `T`, a `T` outside `[0,1]`, or a non-finite `Point` or `Normal` is
+    /// treated as a MISS — reflecting a velocity about a NaN normal poisons a world just as
+    /// thoroughly as reading a NaN impact point.
     val step: cast: (Point -> Point -> RayHit option) -> dt: float -> projectile: Projectile -> ProjectileStep
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
