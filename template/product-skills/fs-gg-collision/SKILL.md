@@ -23,7 +23,8 @@ you compose framework functions in your own `update`:
 - `docs/api-surface/Game.Core/Geometry.fsi` — the narrow-phase detectors `aabbContact`, `circleContact`,
   `circleAabbContact`, `polygonContact` (each a `Contact option`), plus `obbPolygon`, `sweptIntersects`,
   `intersects`, `contains`, `containsPoint`, `center`, `ofCenter`.
-- `docs/api-surface/Game.Core/Resolution.fsi` — the response layer `pushOut`, `slide`, `knockback`.
+- `docs/api-surface/Game.Core/Resolution.fsi` — the response layer `pushOut`, `slide`, `push` (and the
+  deprecated `knockback`), plus the `CellStep` / `PushStop` / `Push` types `push` reports through.
 - `docs/api-surface/Game.Core/SpatialGrid.fsi` — the broad-phase `build` / `query` / `queryRadius`.
 - `docs/api-surface/Game.Core/Primitives.fsi` — the `Point`/`Rect`/`Circle`/`ConvexPolygon` shapes and
   the `Contact = { Normal: Point; Depth: float }` manifold every detector produces.
@@ -115,9 +116,11 @@ splash membership exactly (no rim `sqrt` to disagree by one ulp).
   contact returns `position` unchanged; for anti-jitter slop, pass a `Contact` with reduced `Depth`.
 - `Resolution.slide velocity normal` — kinematic wall-slide: strip the component of `velocity` along the
   (unit) `contact.Normal`, keep the tangential part. No internal normalization to fold a `sqrt` into.
-- `Resolution.knockback start step distance blocked` — discrete **tile** knockback over integer
-  `Cell = { Col; Row }` (from `Pathfinding`): step from `start` up to `distance` times, stopping in the
-  last free cell before the first `blocked` one. Tile displacement, not continuous.
+- `Resolution.push start step distance classify` — discrete **tile** displacement over integer
+  `Cell = { Col; Row }` (from `Pathfinding`): step from `start` up to `distance` times, asking
+  `classify` what each next cell does. Returns the cells `Entered`, the `Final` cell, and — the reason
+  it exists — an `Outcome` saying *why* the walk ended. Tile displacement, not continuous.
+- `Resolution.knockback start step distance blocked` — **deprecated**; see below.
 
 ```fsharp
 open FS.GG.Game.Core
@@ -127,9 +130,41 @@ let slideAlong (box: Rect) (vel: Point) (contact: Contact) =
     Geometry.ofCenter (Resolution.pushOut (Geometry.center box) contact) box.Width box.Height,
     Resolution.slide vel contact.Normal
 
-// Discrete tile knockback: three cells east, stopping in the last free cell before the first wall.
-let knocked = Resolution.knockback { Col = 2; Row = 5 } { Col = 1; Row = 0 } 3 (fun c -> c.Col >= 6)
+// Discrete tile push: three cells east. `classify` is the only coupling to your world.
+let shove =
+    Resolution.push { Col = 2; Row = 5 } { Col = 1; Row = 0 } 3 (fun c ->
+        if c.Col >= 6 then Resolution.Block           // a wall: stop BEFORE it
+        elif isWater c then Resolution.Stop           // water: ENTER it and stop there
+        else Resolution.Enter)                        // ground (or lava): enter and keep going
+
+match shove.Outcome with
+| Resolution.Completed -> moveTo shove.Final
+| Resolution.Stopped cell -> drown (moveTo cell)               // it is IN the water
+| Resolution.Blocked obstacle -> collide (moveTo shove.Final) obstacle
 ```
+
+### `Resolution.knockback` is deprecated — use `push`
+
+`knockback` takes a binary `blocked: Cell -> bool`, and a `bool` has two answers where terrain has
+three. It can say *stop before this cell* and *walk through this cell*; it cannot say **enter this cell
+and stop there** — which is exactly what water, a chasm, and a pit are. Mark water `blocked` and a unit
+shoved at the lake halts on dry land and lives; mark it passable and it walks out the far side. It also
+discards *why* the walk stopped and *which cells were crossed*, so a per-cell hazard tick (lava) has
+nothing to fold over.
+
+It survives only as an exact shim — `(push start step distance …).Final` — so that the `game-sim-core`
+surface change stayed additive. It will be removed at the next major. Migrate:
+
+```fsharp
+// before
+let landed = Resolution.knockback start step distance blocked
+// after
+let landed =
+    (Resolution.push start step distance (fun c -> if blocked c then Resolution.Block else Resolution.Enter)).Final
+```
+
+Damage from the push — the collision hit, the lava tick, the drowning — belongs to [[fs-gg-effects]],
+which folds it over `Entered` and matches on `Outcome`.
 
 **Impulse physics is explicitly out of scope.** Mass, restitution, and friction are a separate, heavier
 layer this core does not model — `Resolution.fsi` says so outright. `slide` stops and grazes, it does not
@@ -190,10 +225,12 @@ community sources. If your product uses Spec Kit, record findings and resolving 
 ## Related
 
 - [[fs-gg-game-core]] — the fixed-step loop, spatial queries, and pathfinding (source of the `Cell`
-  `Resolution.knockback` displaces over) that drive each collision pass.
+  `Resolution.push` displaces over) that drive each collision pass.
 - [[fs-gg-ballistics]] — fires the projectiles whose hit you resolve here; owns the swept segment casts.
+- [[fs-gg-effects]] — turns a resolved hit or push into a number: the damage pipeline, status effects,
+  and the `Outcome`/`Entered` a `Resolution.push` reports.
 - [[fs-gg-visibility]] — the sibling per-frame geometry pass, over the same `Point`/`Segment` vocabulary.
-- [[fs-gg-grids]] — the grid vocabulary `Resolution.knockback` steps a body across.
+- [[fs-gg-grids]] — the grid vocabulary `Resolution.push` steps a body across.
 - [[fs-gg-rendering:fs-gg-scene]] — owns the render `Rect`/`Point`; draws the resolved world.
 - [[fs-gg-rendering:fs-gg-skiaviewer]] — drives the fixed-step loop from the host window.
 
