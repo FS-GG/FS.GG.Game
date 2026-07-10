@@ -508,6 +508,9 @@ let tests =
                 // is strict edges — a segment that clips a single corner is a hit for the `<=` slab test
                 // and a graze (not a hit) for the polygon's `<`. Normals are NOT compared: a corner ENTRY
                 // ties, and the two resolve the tie differently (first edge in vertex order vs the X face).
+                // Integer coordinates keep `cx - hx + 2*hx` and `cx + hx` the same double, so the Rect and
+                // the polygon are the SAME box here; on fractional extents they need not be, and a segment
+                // endpoint on the boundary can then land inside one shape and on the other.
                 let prop a b c d e f g h =
                     let p0 = p (float (a % 50)) (float (b % 50))
                     let p1 = p (float (c % 50)) (float (d % 50))
@@ -596,6 +599,34 @@ let tests =
                         (Some { T = 0.5; Point = p 0. 0.; Normal = p 0. -1. }) "corner ⇒ bottom edge, t 0.5"
                     Expect.equal (Geometry.segmentAabbHit (p -5. -5.) (p 5. 5.) (r 0. 0. 10. 10.))
                         (Some { T = 0.5; Point = p 0. 0.; Normal = p -1. 0. }) "…where the AABB cast ties to the X face"
+                }
+                test "corner tie-break holds on a rotated ring, where the parameters tie only to an ULP" {
+                    // The two edges meeting at (-1,-4) are entered at the same parameter in exact
+                    // arithmetic, but each t is computed through its own normalisation: edge 1 yields
+                    // 0.33333333333333326 and edge 2 yields 0.33333333333333331. Vertex order — not the
+                    // larger float — must pick the struck face, so the normal is edge 1's (-1,-2)/√5 and
+                    // not edge 2's (0,-1). Guards the tie-break against rounding noise on a general ring.
+                    let ring: ConvexPolygon = { Vertices = [| p -4. -2.; p -3. -3.; p -1. -4.; p 2. -4.; p -1. 3. |] }
+                    match Geometry.segmentPolygonHit (p 0. -5.) (p -3. -2.) ring with
+                    | Some hit ->
+                        Expect.floatClose Accuracy.high hit.T (1.0 / 3.0) "enters at the shared vertex"
+                        Expect.floatClose Accuracy.high hit.Point.X -1.0 "point is the shared vertex"
+                        Expect.floatClose Accuracy.high hit.Point.Y -4.0 "point is the shared vertex"
+                        Expect.floatClose Accuracy.high hit.Normal.X (-1.0 / sqrt 5.0) "edge 1's normal, not edge 2's"
+                        Expect.floatClose Accuracy.high hit.Normal.Y (-2.0 / sqrt 5.0) "edge 1's normal, not edge 2's"
+                    | None -> failtest "expected a corner entry on the rotated ring"
+                }
+                test "a segment collinear with an edge is a hit (its chord has positive length)" {
+                    // Running along the bottom edge's line, entering through the left edge at t = 0.25.
+                    // The bottom edge is parallel and constrains nothing; strict edges reject a zero-length
+                    // chord, not a boundary-hugging one. segmentAabbHit agrees exactly here.
+                    Expect.equal (Geometry.segmentPolygonHit (p -5. 0.) (p 15. 0.) box10)
+                        (Some { T = 0.25; Point = p 0. 0.; Normal = p -1. 0. }) "along the bottom edge ⇒ enter left, t 0.25"
+                    Expect.equal (Geometry.segmentAabbHit (p -5. 0.) (p 15. 0.) (r 0. 0. 10. 10.))
+                        (Some { T = 0.25; Point = p 0. 0.; Normal = p -1. 0. }) "…and the AABB cast agrees exactly"
+                    // Starting ON the boundary and staying on it never enters: no edge is crossed inward.
+                    Expect.isNone (Geometry.segmentPolygonHit (p 2. 0.) (p 8. 0.) box10) "starts on the edge ⇒ None"
+                    Expect.isNone (Geometry.segmentAabbHit (p 2. 0.) (p 8. 0.) (r 0. 0. 10. 10.)) "…as does the AABB cast"
                 }
                 test "a segment grazing one corner is not a hit (strict edges)" {
                     // Touches (0,0) and leaves; zero-length chord ⇒ no entered edge. The AABB cast's `<=`

@@ -108,14 +108,20 @@ module Geometry =
     /// outside with parameter `T ∈ [0,1]`, and `None` on a miss, a segment starting inside, or a polygon
     /// behind the segment. `Point = p0 + (p1 − p0)·T` lies on the polygon boundary and `Normal` is the
     /// outward unit normal of the ENTERED edge — the value that identifies which face was struck.
-    /// Strict edges, matching `aabbContact`/`polygonContact`: a graze that merely touches the boundary
-    /// without traversing the interior (necessarily at a vertex) is NOT a hit. This is the sole
-    /// divergence from `segmentAabbHit`, which reports a clipped corner as a hit; otherwise, for a
-    /// `rotation = 0` `obbPolygon`, `segmentPolygonHit` agrees with `segmentAabbHit` on `T` and `Point`.
-    /// A corner ENTRY (several edges sharing the maximal entry parameter) resolves to the FIRST such edge
-    /// in vertex order — deterministic, and distinct from `segmentAabbHit`'s X-face tie-break, exactly as
-    /// `polygonContact`'s tie normal is distinct from `aabbContact`'s. Pure and total: fewer than 3
-    /// vertices, a zero-area polygon, a zero-length segment, or any NaN coordinate yields `None`.
+    /// Strict edges, matching `aabbContact`/`polygonContact`: where a zero-AREA overlap is not a contact,
+    /// a zero-LENGTH chord is not a hit — so a graze that clips a single vertex is NOT a hit. A segment
+    /// collinear with an edge IS a hit (its chord has positive length), reporting the edge it crossed to
+    /// reach the boundary. The clipped vertex is the sole divergence in the RULE from `segmentAabbHit`,
+    /// which reports that graze as a hit; otherwise, for a `rotation = 0` `obbPolygon`, `segmentPolygonHit`
+    /// agrees with `segmentAabbHit` on `T` and `Point`. (A segment endpoint lying exactly on the boundary
+    /// can still flip either way between the two, because a `Rect` edge `X + Width` and the corresponding
+    /// corner `centre + halfExtent` need not be the same double — the two shapes differ, not the two
+    /// rules.) A corner ENTRY (adjacent edges sharing the maximal entry
+    /// parameter, to within a `1e-9` tolerance on the dimensionless `T` that keeps the choice out of the
+    /// hands of floating-point rounding) resolves to the FIRST such edge in vertex order — deterministic,
+    /// and distinct from `segmentAabbHit`'s X-face tie-break, exactly as `polygonContact`'s tie normal is
+    /// distinct from `aabbContact`'s. Pure and total: fewer than 3 vertices, a zero-area polygon, a
+    /// zero-length segment, or any NaN coordinate yields `None`.
     val segmentPolygonHit: p0: Point -> p1: Point -> poly: ConvexPolygon -> RayHit option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.

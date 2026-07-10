@@ -273,21 +273,33 @@ module Geometry =
     // (dist > 0). The greatest entry parameter is the crossing into the polygon and the edge that
     // produced it is the ENTERED edge, whose outward normal is the armour zone the caller reads.
     //
-    // Strict edges, as in aabbContact/polygonContact: a hit needs tEnter < tExit, so a graze that only
-    // touches the boundary (tEnter = tExit, necessarily at a vertex) is not a hit. This is the one place
-    // segmentPolygonHit is stricter than segmentAabbHit, whose `<=` reports a clipped corner as a hit.
+    // Strict edges, as in aabbContact/polygonContact — where a zero-AREA overlap is not a contact, here a
+    // zero-LENGTH chord is not a hit: tEnter < tExit is required. The chord degenerates to a point only
+    // where two edge lines meet, so what this rejects is precisely a segment clipping a vertex. It does
+    // NOT reject a segment collinear with an edge: that edge is parallel (it constrains nothing) and the
+    // chord along it has positive length, so the cast reports the edge it crossed to reach the boundary —
+    // which is what segmentAabbHit does too, and the two agree there. The clipped vertex is the only place
+    // the RULE is stricter than segmentAabbHit's, whose `<=` slab test calls that graze a hit. (Separately,
+    // a segment endpoint lying exactly on the boundary can flip either way between the two, because a Rect
+    // edge `X + Width` and the corresponding obbPolygon corner `centre + halfExtent` are not the same
+    // double: 4.2 + 1.6 <> 5.0 + 0.8. That is the two shapes disagreeing, not the two rules.)
+    //
     // An origin inside gives every entry a negative parameter (tEnter < 0 ⇒ None, DEC-002), as does a
     // polygon behind the segment. A corner ENTRY — several edges sharing the maximal entry parameter —
-    // keeps the FIRST in vertex order (the strict `>` update), as polygonContact keeps the first axis in
-    // generation order (DEC-003); segmentAabbHit's corner tie-break is the X face, so the two agree on
-    // T and Point there but not on Normal, exactly as their contact counterparts agree on isSome but not
-    // on the tie normal. Zero-length edges contribute no half-plane and are skipped.
+    // keeps the FIRST in vertex order, as polygonContact keeps the first axis in generation order
+    // (DEC-003); segmentAabbHit's corner tie-break is the X face, so the two agree on T and Point there
+    // but not on Normal, exactly as their contact counterparts agree on isSome but not on the tie normal.
+    // Zero-length edges contribute no half-plane and are skipped.
     //
     // Totality: fewer than 3 vertices, a zero-area ring, or any non-finite coordinate on the segment or
     // the ring yields None (an explicit guard, as in polygonContact, rather than relying on the
     // comparisons' NaN-poisoning). A zero-length segment yields None wherever it sits.
     let segmentPolygonHit (p0: Point) (p1: Point) (poly: ConvexPolygon) : RayHit option =
         let v = poly.Vertices
+        // Entry parameters within this of the maximum are one corner entry, not a later edge. `t` is the
+        // dimensionless segment parameter, so the bound is scale-free; 1e-9 matches the tolerance
+        // polygonContact folds duplicate axes with.
+        let cornerTie = 1e-9
         let isFinite (x: float) = not (System.Double.IsNaN x) && not (System.Double.IsInfinity x)
         // Shoelace area magnitude; zero for a collinear/degenerate ring.
         let area (v: Point[]) =
@@ -323,10 +335,18 @@ module Geometry =
                         else
                             let t = -dist / denom
                             if denom < 0.0 then
-                                // Entering. `>` (not `>=`) keeps the first edge in vertex order on a tie.
+                                // Entering. `tEnter` always takes the true max, so the reported point is
+                                // never short of the boundary. The struck face, though, is the FIRST edge
+                                // in vertex order among those entered at that parameter — and at a corner
+                                // entry the two adjacent edges' parameters, equal in exact arithmetic, are
+                                // each computed through their own normalisation and so differ by an ULP or
+                                // two. A bare `>` would let that rounding noise pick the armour zone (it
+                                // does, for ~10% of corner entries on a rotated ring), so the normal moves
+                                // only on an increase that clears `cornerTie`. On an axis-aligned ring the
+                                // normals are exactly 0/±1, the parameters tie exactly, and this is a no-op.
                                 if t > tEnter then
+                                    if t - tEnter > cornerTie then normal <- n
                                     tEnter <- t
-                                    normal <- n
                             elif t < tExit then
                                 tExit <- t
             if separated || not (tEnter < tExit) || tEnter < 0.0 || tEnter > 1.0 then
