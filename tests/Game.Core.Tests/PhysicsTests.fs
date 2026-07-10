@@ -1313,3 +1313,148 @@ let sleepAndWarmStartTests =
               let run () = Physics.checksum (advance 600 (stack stepConfig 4))
               Expect.equal (run ()) (run ()) "two runs of a settling stack agree"
           } ]
+
+// =====================================================================================================
+// Speculative contacts — fixed-cost CCD (#77)
+// =====================================================================================================
+//
+// The slice's two claims, each asserted through the only public keyhole (`manifold` — there is still no
+// position getter, `interpolate` being #78):
+//
+//   * NO TUNNELING — a fast small circle fired at a thin static wall is stopped AT the wall, at any `dt`.
+//     Observed with a BACKSTOP body well beyond the wall: a circle that tunnels reaches it and reports a
+//     contact; a circle the wall stops never does. The wall contact is asserted alongside, so "never
+//     reached the backstop" cannot pass for the wrong reason — a circle that merely fell short of both.
+//
+//   * INERT WHEN NOTHING IS SPECULATIVE — the #75/#76 golden checksums, whose scenes carry no fast mover,
+//     are unchanged to the bit; and a fast mover is stopped only by what lies in its PATH, never by a wall
+//     off to the side. Speculation that fired on an ordinary gravity scene, or on an obstacle not in the
+//     way, would move a golden checksum or stop a body it must not touch.
+//
+// Velocity is imparted the ONE way this surface allows — by GRAVITY, since `addBody` seeds every body at
+// rest and nothing else sets a velocity. A large `Gravity` flings a body from rest, so it is the
+// projectile launcher these scenes use: horizontal to fire sideways at a wall, steeply vertical to drop
+// hard onto a thin floor. The launched speed rises without bound, so within a few dozen ticks the mover
+// crosses many times its own radius per step — squarely the regime a discrete-only broad phase tunnels.
+
+[<Tests>]
+let speculativeContactTests =
+    testList
+        "Game.Core Physics speculative contacts / CCD (#77)"
+        [
+
+          test "a fast circle fired at a thin wall is stopped at it, not through it — at any dt" {
+              // Bodies: 0 = thin wall at x = 5, 1 = backstop at x = 8, 2 = a small circle flung from the
+              // origin by horizontal gravity. By the time it reaches the wall it moves far more than its own
+              // radius per step, so a discrete-only engine would have it above the wall one tick and past it
+              // the next, touching neither. Three `dt`s, because a larger step is a longer un-swept jump and
+              // so a harder case — the claim is "at any dt the fixed step uses".
+              for dt in [ 1.0 / 30.0; 1.0 / 60.0; 1.0 / 120.0 ] do
+                  let cfg = { stepConfig with Gravity = p 300.0 0.0 }
+
+                  let w0 =
+                      let w = Physics.empty cfg
+                      let struct (_, w) = Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 5.0 0.0) w
+                      let struct (_, w) = Physics.addBody Physics.Static (box 0.5 5.0) (material 0.0 0.0) (p 8.0 0.0) w
+                      let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
+                      w
+
+                  let mutable w = w0
+                  let mutable hitWall = false
+                  let mutable hitBackstop = false
+
+                  for _ in 1..400 do
+                      w <- Physics.step w dt
+                      if (Physics.manifold w 0 2).IsSome then hitWall <- true
+                      if (Physics.manifold w 1 2).IsSome then hitBackstop <- true
+
+                  Expect.isTrue hitWall (sprintf "dt = %f: the circle is caught at the thin wall" dt)
+                  Expect.isFalse hitBackstop (sprintf "dt = %f: and never tunnels through to the backstop beyond it" dt)
+          }
+
+          test "a circle dropped hard onto a thin floor lands on it instead of falling through" {
+              // The canonical tunnel, vertically: a small fast body and a floor thinner than one step's
+              // fall. Discrete-only, the body is above the floor one tick and below it the next and never
+              // contacts it. A catch-floor well below turns "fell through" into an observable — a contact
+              // with body 1 that CCD must never let happen.
+              let cfg = { stepConfig with Gravity = p 0.0 -1500.0 }
+
+              let w0 =
+                  let w = Physics.empty cfg
+                  let struct (_, w) = Physics.addBody Physics.Static (box 5.0 0.01) (material 0.0 0.0) (p 0.0 0.0) w
+                  let struct (_, w) = Physics.addBody Physics.Static (box 5.0 0.5) (material 0.0 0.0) (p 0.0 -10.0) w
+                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.02) (material 0.0 0.0) (p 0.0 6.0) w
+                  w
+
+              let mutable w = w0
+              let mutable onFloor = false
+              let mutable belowFloor = false
+
+              for _ in 1..400 do
+                  w <- Physics.step w tick
+                  if (Physics.manifold w 0 2).IsSome then onFloor <- true
+                  if (Physics.manifold w 1 2).IsSome then belowFloor <- true
+
+              Expect.isTrue onFloor "the circle is caught on the thin floor"
+              Expect.isFalse belowFloor "and never reaches the catch-floor below it"
+          }
+
+          test "a fast mover is stopped by what lies in its path, and ignores a wall off to the side" {
+              // The inert half, in motion: the speculative broad phase must not stop a mover with an
+              // obstacle it never sweeps over. The off-axis wall at y = 10 is nowhere near the path along
+              // y = 0, so it must never report a contact, while the backstop that IS in the path catches
+              // the mover. A speculative pass that queried too wide would stop the mover early, on the wall
+              // it passes clear of.
+              let cfg = { stepConfig with Gravity = p 300.0 0.0 }
+
+              let w0 =
+                  let w = Physics.empty cfg
+                  let struct (_, w) = Physics.addBody Physics.Static (box 0.5 0.5) (material 0.0 0.0) (p 4.0 10.0) w
+                  let struct (_, w) = Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 8.0 0.0) w
+                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
+                  w
+
+              let mutable w = w0
+              let mutable hitOffPath = false
+              let mutable hitBackstop = false
+
+              for _ in 1..400 do
+                  w <- Physics.step w tick
+                  if (Physics.manifold w 0 2).IsSome then hitOffPath <- true
+                  if (Physics.manifold w 1 2).IsSome then hitBackstop <- true
+
+              Expect.isFalse hitOffPath "the off-path wall never stops the mover"
+              Expect.isTrue hitBackstop "and the mover is caught by the backstop that is in its path"
+          }
+
+          test "the golden checksums are unchanged: speculation is inert when nothing is fast" {
+              // The scenes of #75/#76 carry no fast mover — a box or circle dropped from y = 5 reaches the
+              // floor at well under a radius per step — so the speculative pass must produce nothing and
+              // leave every bit of their state where #75/#76 recorded it. If the fast-mover threshold ever
+              // fired on ordinary falling gravity, all three of these move; that they do not is the
+              // bit-for-bit form of "inert when nothing is speculative".
+              let boxOnFloor = advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+              let circleOnFloor = advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+              Expect.equal (Physics.checksum (Physics.empty stepConfig)) 12161962213042174405UL "empty world, unchanged since #75"
+              Expect.equal (Physics.checksum boxOnFloor) 9427473436406466390UL "the box checksum is untouched by CCD"
+              Expect.equal (Physics.checksum circleOnFloor) 12544979940497693507UL "the circle checksum is untouched by CCD"
+          }
+
+          test "a scene with speculative contacts replays bit-identically" {
+              // CCD adds a broad phase, a narrow phase and cache entries, all cross-tick-adjacent state and
+              // so all places a replay can diverge. The speculative pass is built to be as deterministic as
+              // the discrete one: a sorted union, a fixed sentinel feature id, no hash-order dependence.
+              let run () =
+                  let cfg = { stepConfig with Gravity = p 300.0 0.0 }
+
+                  let w0 =
+                      let w = Physics.empty cfg
+                      let struct (_, w) = Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 5.0 0.0) w
+                      let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
+                      w
+
+                  Physics.checksum (advance 300 w0)
+
+              Expect.equal (run ()) (run ()) "two runs of the same fast shot agree to the bit"
+          } ]
