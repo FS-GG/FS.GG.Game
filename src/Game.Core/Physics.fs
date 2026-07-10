@@ -291,6 +291,15 @@ module Physics =
                 let invI = if finite i && i > 0.0 then 1.0 / i else 0.0
                 struct (invM, invI)
 
+    // The smallest half-extent of a shape's LOCAL box — the thinnest cross-section it presents, and so the
+    // furthest it may move in one step before it could skip clean past a contact between this step's start
+    // and end. Rotation-invariant for the thinness that matters: a box is `min(hx, hy)` thick however it is
+    // turned. `ValueNone` for a degenerate shape, which cannot tunnel because it collides with nothing.
+    let private minHalfExtent (shape: Shape) : float voption =
+        match localBounds shape with
+        | ValueNone -> ValueNone
+        | ValueSome(struct (loX, loY, hiX, hiY)) -> ValueSome(min ((hiX - loX) * 0.5) ((hiY - loY) * 0.5))
+
     let empty (config: Config) : World =
         { Config = config
           Kinds = [||]
@@ -397,6 +406,13 @@ module Physics =
     // contract asks, and it is what #76's warm-start cache will key on.
     let private featureCircleCircle = -1
     let private featureCirclePoly (face: int) = -2 - face
+
+    // The speculative-contact sentinel. A speculative contact (fixed-cost CCD, generated inside `step` for a
+    // fast mover about to tunnel) has no touching FEATURE — the pair has not met yet — so it keys the
+    // warm-start cache under one reserved id, disjoint from every discrete id: `polygonManifold`'s are
+    // non-negative, the circle cases' are `-1` and `<= -2`, and `Int32.MinValue` is none of these. A pair
+    // holds at most one speculative point, so the pair key `(A, B)` already separates one pair's from another's.
+    let private featureSpeculative = System.Int32.MinValue
 
     // Body `i` as a world-space polygon: its shape rotated by `Rot` about its origin, then translated to
     // `Pos`. Only ever called for a body whose shape is `SBox`/`SPoly` and which `collidable` accepted.
@@ -746,7 +762,174 @@ module Physics =
                     | ValueSome m -> found.Add m
                     | ValueNone -> ()
 
-            let manifolds = found.ToArray()
+            // 3a. Speculative contacts — fixed-cost CCD. A body that moves more than its own thinnest
+            //     cross-section in one step can pass clean through a thin wall between this step's position
+            //     and the next, and the discrete broad phase — which reads only the two endpoint positions
+            //     — never sees the crossing. Rather than SUBSTEP (which multiplies cost and, worse, changes
+            //     `dt`, so a recorded input stream re-simulated at a different step count diverges — R6),
+            //     generate a contact for the impending impact and let the solver refuse to let the pair
+            //     close through it. `dt` never changes; the cost is one segment cast per fast mover per
+            //     candidate, paid ONLY when a fast mover exists.
+            //
+            //     Gated wholly on `hasFast`, and INERT when no body is fast: a scene with no fast-movers
+            //     stages exactly the discrete manifolds and steps BYTE-IDENTICALLY to one built before this
+            //     slice, so #75/#76's golden checksums do not move. A fast mover with nothing in its path
+            //     adds nothing either — free flight is untouched.
+            //
+            //     Scope: the mover is a CIRCLE — the projectile shape (a bullet, a ball). A fast *polygon*
+            //     mover is not swept: linear polygon CCD is a heavier follow-up, and continuous *rotational*
+            //     CCD is fenced out by #46's out-list. The target may be any collidable shape.
+
+            // A speculative contact between fast circle mover `m` (radius `rm`) and target `t`, or
+            // `ValueNone` when the mover's swept centre does not reach the target this step, or the two
+            // already touch. `Depth` is carried NEGATIVE — the magnitude of the gap the pair has yet to
+            // close — which the staging loop reads to bias the solver toward closing exactly that gap and no
+            // more, so the mover stops AT the surface rather than through it. The public `manifold` never
+            // produces this; the negative-`Depth` encoding lives only inside `step`.
+            let speculativeContact (m: int) (t: int) (rm: float) : Manifold voption =
+                let c0 = pos.[m]
+                // Cast along the RELATIVE motion, so a target moving out of the way is not struck and one
+                // moving in is. For a static target (the wall the acceptance names) this is the mover's own
+                // displacement.
+                let c1 = vadd c0 (vscale dt (vsub vel.[m] vel.[t]))
+
+                let hit =
+                    match world.Shapes.[t] with
+                    // The circle target is inflated by the mover's radius (a Minkowski sum), so the cast of
+                    // the mover's CENTRE reports where the two SURFACES meet.
+                    | SCircle rt -> Geometry.segmentCircleHit c0 c1 { Center = pos.[t]; Radius = rm + rt }
+                    | _ -> Geometry.segmentPolygonHit c0 c1 (worldPolygon working t)
+
+                match hit with
+                | None -> ValueNone
+                | Some h ->
+                    // `h.Normal` is the target's outward unit normal at the impact face — it runs t -> m.
+                    let nOut = h.Normal
+                    // Perpendicular distance from the mover's centre to the impact plane, NOW. For a polygon
+                    // the cast was against the bare face, so the mover's own radius is still to subtract; for
+                    // the circle the cast already inflated the target by `rm`, so this is the surface gap.
+                    let faceGap = vdot nOut (vsub c0 h.Point)
+
+                    let s =
+                        match world.Shapes.[t] with
+                        | SCircle _ -> faceGap
+                        | _ -> faceGap - rm
+
+                    // A NaN gap is no contact. Otherwise the gap clamps to zero at or past the surface: a
+                    // ZERO-gap speculative contact biases the solver to hold the pair AT the surface (vn ->
+                    // 0) rather than let it drive through. That is what stops a mover fast enough to reach
+                    // the wall THIS tick from punching through on the NEXT — the tick where it has just
+                    // touched, so the discrete phase still reads no contact (a touch is not a contact) and
+                    // would otherwise leave the approach unclamped. The discrete phase takes over the moment
+                    // real penetration exists.
+                    if System.Double.IsNaN s then
+                        ValueNone
+                    else
+                        let gap = max s 0.0
+                        // Contact point on the mover's surface facing the target, in the CURRENT frame, so
+                        // its lever arm on the mover is the true `rm` rather than the swept distance.
+                        let point = vsub c0 (vscale rm nOut)
+                        let a = min m t
+                        let b = max m t
+                        // Orient the normal a -> b, the convention the solver shares with every discrete
+                        // manifold. `nOut` runs t -> m, so it already IS a -> b when the mover is the higher
+                        // index, and flips when it is the lower.
+                        let normal = if m > t then nOut else vscale -1.0 nOut
+
+                        ValueSome
+                            { A = a
+                              B = b
+                              Normal = normal
+                              Depth = -gap
+                              Points = [| point |]
+                              PointCount = 1
+                              FeatureId = featureSpeculative }
+
+            let fast = Array.zeroCreate<bool> n
+            let mutable hasFast = false
+
+            for i in 0 .. n - 1 do
+                // A sleeping body does not move, and a `Static` one never does; only a mover can tunnel.
+                if world.Kinds.[i] <> Static && not asleep.[i] then
+                    match minHalfExtent world.Shapes.[i] with
+                    | ValueSome ext ->
+                        let dx = dt * vel.[i].X
+                        let dy = dt * vel.[i].Y
+                        // Squared magnitudes, and `>` not `>=`: a body moving EXACTLY its own thinness is
+                        // still caught by the discrete phase next tick, and NaN fails `>`, so a body whose
+                        // velocity has gone non-finite is never treated as fast. A body at rest never is,
+                        // which is what keeps a settled scene inert.
+                        if dx * dx + dy * dy > ext * ext then
+                            fast.[i] <- true
+                            hasFast <- true
+                    | ValueNone -> ()
+
+            let speculative =
+                if not hasFast then
+                    [||]
+                else
+                    // Rebuilt here rather than shared with `pairs`: the speculative pass runs only when a
+                    // fast mover exists, which is rare, and threading the broad phase's grid out of `pairs`
+                    // is #94's cross-tick-`World` change, not this slice's.
+                    let boxes = Array.init n (aabbOf working)
+
+                    let grid =
+                        SpatialGrid.buildBounds
+                            cfg.BroadPhaseCellSize
+                            (seq {
+                                for i in 0 .. n - 1 do
+                                    match boxes.[i] with
+                                    | ValueSome b -> yield b, i
+                                    | ValueNone -> ()
+                            })
+
+                    let acc = ResizeArray<Manifold>()
+                    let seen = System.Collections.Generic.HashSet<struct (int * int)>()
+
+                    for m in 0 .. n - 1 do
+                        if fast.[m] then
+                            match world.Shapes.[m], boxes.[m] with
+                            | SCircle rm, ValueSome bm ->
+                                // The query region is the mover's box swept along its OWN displacement this
+                                // step. Targets sit at their current positions, so growing the box by the
+                                // mover's motion covers everything it could pass through.
+                                let d = vscale dt vel.[m]
+
+                                let swept =
+                                    { X = min bm.X (bm.X + d.X)
+                                      Y = min bm.Y (bm.Y + d.Y)
+                                      Width = bm.Width + abs d.X
+                                      Height = bm.Height + abs d.Y }
+
+                                for t in SpatialGrid.queryBounds swept grid do
+                                    // One speculative contact per unordered pair — both bodies may be fast
+                                    // and query each other — and only where `collidable` and the discrete
+                                    // narrow phase found NO contact: an overlapping pair is the discrete
+                                    // solver's, and a pair can never be both at once.
+                                    if t <> m then
+                                        let a = min m t
+                                        let b = max m t
+
+                                        if
+                                            seen.Add(struct (a, b))
+                                            && collidable working t
+                                            && (manifold working a b).IsNone
+                                        then
+                                            match speculativeContact m t rm with
+                                            | ValueSome sm -> acc.Add sm
+                                            | ValueNone -> ()
+                            | _ -> ()
+
+                    acc.ToArray()
+
+            // Discrete manifolds first, then the speculative ones; the sort below canonicalises the union by
+            // `(A, B, FeatureId)`, so their append order does not matter. When nothing is speculative this is
+            // exactly `found.ToArray()` — same array of values the pre-CCD step produced.
+            let manifolds =
+                if speculative.Length = 0 then
+                    found.ToArray()
+                else
+                    Array.append (found.ToArray()) speculative
 
             // Sort by `(A, B, FeatureId)` before solving (R6). The broad phase already emits pairs
             // ascending and deduped, and there is one manifold per pair, so this sort is a no-op today —
@@ -858,7 +1041,19 @@ module Physics =
                     // met?", and last tick's impulse is not part of that question.
                     let vrel = vsub (pointVel b rB) (pointVel a rA)
                     let vn = vdot vrel nrm
-                    let bias = if -vn > bounceThreshold then -e * vn else 0.0
+
+                    // A speculative contact carries a NEGATIVE `Depth`: the gap `-Depth` the pair has yet to
+                    // close. Its bias is `Depth/dt`, a negative target normal velocity — the fastest the pair
+                    // may approach and still only just touch this step. The accumulated-impulse clamp below
+                    // then does nothing while they separate or close slowly (a negative `jn` on a zero
+                    // accumulator), and pushes back only when they would overshoot the surface, which is what
+                    // stops the tunnel. Restitution is DEFERRED to the tick they actually meet, where the
+                    // discrete contact applies it: a bounce off a surface not yet reached is unphysical. A
+                    // discrete contact (`Depth >= 0`) keeps the restitution bias unchanged.
+                    let bias =
+                        if m.Depth < 0.0 then m.Depth / dt
+                        elif -vn > bounceThreshold then -e * vn
+                        else 0.0
 
                     // Warm start. Seed this contact with the impulse the SAME contact accumulated last
                     // tick, found by advancing the cursor to its key. A contact that is new this tick — a
