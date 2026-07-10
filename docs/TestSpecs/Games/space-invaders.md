@@ -460,7 +460,7 @@ persist (§13, beside the existing high score). `OpenStats`/`CloseStats` switch 
 Stats scope` state; the render is a no-op on physics.
 
 ## 10. Audio
-Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Audio ships in v1 via the **`fs-gg-audio`** capability (`open FS.GG.Audio.Core`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
 model change and never touches an audio device. A record-only interpreter
 (`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
