@@ -19,6 +19,7 @@
     <Compile Include="FovTests.fs" />
     <Compile Include="SpatialGridTests.fs" />
     <Compile Include="ResolutionTests.fs" />
+    <Compile Include="VisibilityTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
