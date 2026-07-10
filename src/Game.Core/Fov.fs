@@ -115,9 +115,7 @@ module Fov =
                     walk (minColOf depth start) start ValueNone acc
 
             // The origin is visible unconditionally — you occupy the cell you stand in, opaque or not.
-            let mutable acc = Set.singleton origin
-
-            for quadrant in 0..3 do
-                acc <- scanRow quadrant 1 { Num = -1; Den = 1 } { Num = 1; Den = 1 } acc
-
-            acc
+            [ 0..3 ]
+            |> List.fold
+                (fun acc quadrant -> scanRow quadrant 1 { Num = -1; Den = 1 } { Num = 1; Den = 1 } acc)
+                (Set.singleton origin)

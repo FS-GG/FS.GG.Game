@@ -31,6 +31,13 @@ let private sqDist (a: Cell) (b: Cell) =
     let dr = a.Row - b.Row
     dc * dc + dr * dr
 
+/// Each unordered pair {a, b} with a <> b, exactly once. `aSeesB = bSeesA` is invariant under
+/// swapping the operands, so checking both orderings would only re-evaluate the same boolean.
+let rec private unorderedPairs (cells: Cell list) =
+    match cells with
+    | [] -> []
+    | a :: rest -> [ for b in rest -> (a, b) ] @ unorderedPairs rest
+
 /// Every cell of the closed disc of `radius` about `origin`.
 let private disc (radius: int) =
     seq {
@@ -101,28 +108,34 @@ let tests =
         testList "symmetry — the property that distinguishes shadowcasting from a ray per cell" [
             testCase "transparent a sees transparent b ⇔ b sees a (FsCheck ≥200 random maps)" <| fun () ->
                 let prop (blockedRaw: (int * int) list) =
-                    let blocked = blockedRaw |> List.map (fun (c, r) -> ((abs c) % 7), ((abs r) % 7)) |> Set.ofList
+                    // Truncated so at most 20 of the 49 cells are blocked. Without a cap, a long enough
+                    // generated list can cover every cell, leaving no floors — and a `forall` over no
+                    // pairs passes vacuously, silently gutting the one property this module turns on.
+                    let blocked =
+                        blockedRaw
+                        |> List.truncate 20
+                        |> List.map (fun (c, r) -> ((abs c) % 7), ((abs r) % 7))
+                        |> Set.ofList
+
                     let terrain = gridTransparent 7 7 blocked
                     let radius = 4
 
-                    let cells =
+                    let floors =
                         [ for col in 0..6 do
                               for row in 0..6 -> { Col = col; Row = row } ]
+                        |> List.filter terrain
 
-                    let floors = cells |> List.filter terrain
-                    // Cache one field of view per floor cell, then check every ordered pair.
+                    // Cache one field of view per floor cell, then check each unordered pair once.
                     let views = floors |> List.map (fun c -> c, Fov.fov terrain c radius) |> Map.ofList
 
-                    floors
-                    |> List.forall (fun a ->
-                        floors
-                        |> List.forall (fun b ->
-                            if sqDist a b > radius * radius then
-                                true // the guarantee is stated within radius
-                            else
-                                let aSeesB = views.[a] |> Set.contains b
-                                let bSeesA = views.[b] |> Set.contains a
-                                aSeesB = bSeesA))
+                    unorderedPairs floors
+                    |> List.forall (fun (a, b) ->
+                        if sqDist a b > radius * radius then
+                            true // the guarantee is stated within radius
+                        else
+                            let aSeesB = views.[a] |> Set.contains b
+                            let bSeesA = views.[b] |> Set.contains a
+                            aSeesB = bSeesA)
 
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 200, prop)
 
@@ -139,14 +152,13 @@ let tests =
                 let views = floors |> List.map (fun c -> c, Fov.fov terrain c radius) |> Map.ofList
 
                 let asymmetric =
-                    [ for a in floors do
-                          for b in floors do
-                              if sqDist a b <= radius * radius then
-                                  let aSeesB = views.[a] |> Set.contains b
-                                  let bSeesA = views.[b] |> Set.contains a
-                                  if aSeesB <> bSeesA then yield (a, b) ]
+                    unorderedPairs floors
+                    |> List.filter (fun (a, b) ->
+                        sqDist a b <= radius * radius
+                        && (views.[a] |> Set.contains b) <> (views.[b] |> Set.contains a))
 
-                Expect.isEmpty asymmetric "no ordered floor pair may disagree about seeing the other"
+                Expect.isNonEmpty floors "guard: the pillar field must actually leave floors to compare"
+                Expect.isEmpty asymmetric "no floor pair may disagree about seeing the other"
             }
         ]
 
@@ -156,8 +168,7 @@ let tests =
                 // only correct answer is the 5x5 block exactly — every wall seen (expansive), nothing
                 // past it (no diagonal leakage).
                 let inRoom (c: Cell) = abs c.Col <= 1 && abs c.Row <= 1
-                let terrain (c: Cell) = inRoom c
-                let seen = Fov.fov terrain origin 5
+                let seen = Fov.fov inRoom origin 5
 
                 let block =
                     seq {
@@ -186,11 +197,29 @@ let tests =
             }
 
             test "opacity is consulted, walkability is not — this module never sees a 'wall' flag" {
-                // A transparent-but-unwalkable chasm must not block sight.
+                // The two bits are independent, so a terrain that inverts them separates the module's
+                // real behaviour from a "wall" flag: a chasm is transparent but unwalkable, a secret
+                // door is opaque but walkable. Sight must cross the chasm and stop at the door.
                 let chasm = { Col = 2; Row = 0 }
-                let seen = Fov.fov openField origin 5
-                Expect.isTrue (seen |> Set.contains chasm) "a chasm is transparent"
-                Expect.isTrue (seen |> Set.contains { Col = 4; Row = 0 }) "and you see straight over it"
+                let secretDoor = { Col = 0; Row = 2 }
+                let isWalkable (c: Cell) = c <> chasm
+                let isTransparent (c: Cell) = c <> secretDoor
+                let seen = Fov.fov isTransparent origin 5
+
+                Expect.isFalse (isWalkable chasm) "guard: the chasm is the unwalkable one"
+                Expect.isTrue (isWalkable secretDoor) "guard: the door is the walkable one"
+
+                Expect.isTrue (seen |> Set.contains chasm) "the chasm is transparent ⇒ visible"
+
+                Expect.isTrue
+                    (seen |> Set.contains { Col = 4; Row = 0 })
+                    "and sight crosses it, unwalkable though it is — a 'wall' flag would have stopped here"
+
+                Expect.isTrue (seen |> Set.contains secretDoor) "the door's near face is visible (expansive wall)"
+
+                Expect.isFalse
+                    (seen |> Set.contains { Col = 0; Row = 3 })
+                    "but the door blocks sight beyond, walkable though it is"
             }
         ]
 

@@ -16,7 +16,8 @@
 
   <!-- BCL-only sim vocabulary. No Scene/Skia dependency — headlessly testable, reaches up to
        nothing (ADR-0022 §2). Compile order: Primitives (Point/Rect) before Geometry before
-       SpatialGrid; Rng/FixedStep/Pathfinding are independent. -->
+       SpatialGrid; Fov after Pathfinding (it consumes Cell, which Pathfinding declares);
+       Rng/FixedStep/Pathfinding are independent. -->
   <ItemGroup>
     <Compile Include="Primitives.fsi" />
     <Compile Include="Primitives.fs" />
