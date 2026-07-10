@@ -1,8 +1,11 @@
+FS.GG.Game.Core.AgentId
+FS.GG.Game.Core.Ai
 FS.GG.Game.Core.Ballistics
 FS.GG.Game.Core.Cell
 FS.GG.Game.Core.Circle
 FS.GG.Game.Core.Contact
 FS.GG.Game.Core.ConvexPolygon
+FS.GG.Game.Core.Difficulty
 FS.GG.Game.Core.FixedStep
 FS.GG.Game.Core.Fov
 FS.GG.Game.Core.Geometry
@@ -30,9 +33,11 @@ FS.GG.Game.Core.RayHit
 FS.GG.Game.Core.Rect
 FS.GG.Game.Core.Resolution
 FS.GG.Game.Core.Rng
+FS.GG.Game.Core.Sighting`1
 FS.GG.Game.Core.SpatialGrid
 FS.GG.Game.Core.SpatialGrid`1
 FS.GG.Game.Core.StepState`1
+FS.GG.Game.Core.TeamView`1
 FS.GG.Game.Core.Visibility
 FS.GG.Game.Core.Visibility+Segment
 FS.GG.Game.Core.Visibility+Settings
