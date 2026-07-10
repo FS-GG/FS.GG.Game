@@ -6,7 +6,7 @@
     <PackageId>FS.GG.Game.Render</PackageId>
     <AssemblyName>FS.GG.Game.Render</AssemblyName>
     <Title>FS.GG.Game.Render</Title>
-    <Description>Pure Scene adapter for FS.GG.Game — projects FS.GG.Game.Core simulation primitives (Point/Rect/Cell and pathfinding routes) onto FS.GG.UI.Scene drawables at the render edge. Reaches UP to FS.GG.UI.Scene; no Skia, deterministic. Per ADR-0022 §2.</Description>
+    <Description>Pure Scene adapter and input policy for FS.GG.Game — projects FS.GG.Game.Core simulation primitives (Point/Rect/Cell and pathfinding routes) onto FS.GG.UI.Scene drawables at the render edge, and ships the default command→key keymap binding the Game.Core command vocabulary onto FS.GG.UI.KeyboardInput's keymap mechanism. Reaches UP to FS.GG.UI.*; no Skia, deterministic. Per ADR-0022 §2.</Description>
     <PackageTags>fsharp;game;simulation;rendering;scene;adapter</PackageTags>
   </PropertyGroup>
 
@@ -15,16 +15,21 @@
   </ItemGroup>
 
   <!-- The render edge (ADR-0022 §2): Game.Core reaches up to nothing; this adapter is the one
-       place that reaches UP to FS.GG.UI.Scene (consumed from nuget.org / the org feed, @0.1.64,
-       FSharp.Core-only, Skia-free). Establishes the Game.Render -> FS.GG.UI.Scene dependency edge. -->
+       place that reaches UP to FS.GG.UI.* (consumed from nuget.org / the org feed, @0.4.0,
+       FSharp.Core-only, Skia-free). Establishes the Game.Render -> FS.GG.UI.Scene edge, and — for
+       the default keymap (Game#109) — the Game.Render -> FS.GG.UI.KeyboardInput edge. DefaultKeymap
+       depends on FS.GG.UI.KeyboardInput and Game.Core's Command vocabulary, so it compiles after Adapter. -->
   <ItemGroup>
     <Compile Include="Adapter.fsi" />
     <Compile Include="Adapter.fs" />
+    <Compile Include="DefaultKeymap.fsi" />
+    <Compile Include="DefaultKeymap.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Game.Core\FS.GG.Game.Core.fsproj" />
     <PackageReference Include="FS.GG.UI.Scene" />
+    <PackageReference Include="FS.GG.UI.KeyboardInput" />
   </ItemGroup>
 
 </Project>

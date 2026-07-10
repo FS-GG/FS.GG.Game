@@ -2,11 +2,22 @@
   "version": 2,
   "dependencies": {
     "net10.0": {
+      "FS.GG.UI.KeyboardInput": {
+        "type": "Direct",
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "E1qlk2yE6IJVD1OUKIelWVfiz4OtHARpsnCRKsnixA1xgZCXnp8DsieLD7EIJe82OIQ/2ia1T6UU0QbgEk3jFg==",
+        "dependencies": {
+          "FS.GG.UI.Scene": "0.5.0",
+          "FSharp.Core": "10.1.301",
+          "YamlDotNet": "18.1.0"
+        }
+      },
       "FS.GG.UI.Scene": {
         "type": "Direct",
-        "requested": "[0.4.0, )",
-        "resolved": "0.4.0",
-        "contentHash": "0AUdHHYQw4p/AOLeGJM/bzfgZG83iT38lyKAcAG/e2cilf2145uuFxiAoc78+riEu/HxKNMtsYprUzCrLQY8JQ==",
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "kRjMNLKoXOoJquf1nViBLGXFoBMmT6ylZmrCtLmSuYS+DdPUzQ7G6lu6ZBSugCsy+5/aPzP5iku98P1Yxxju2Q==",
         "dependencies": {
           "FSharp.Core": "10.1.301"
         }
@@ -16,6 +27,11 @@
         "requested": "[10.1.301, )",
         "resolved": "10.1.301",
         "contentHash": "FwQFuqOA1+qQnFl6Vqg6piS83ZRuKJqXJQxOM52M5tNarT2XQ/pMvw8fOOlnhcOYvdZyje2PJ8rK/J64ZI729Q=="
+      },
+      "YamlDotNet": {
+        "type": "Transitive",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       },
       "fs.gg.game.core": {
         "type": "Project",
