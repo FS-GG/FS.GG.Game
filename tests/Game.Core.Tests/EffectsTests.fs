@@ -206,20 +206,6 @@ let tests =
 
         testList "gatedBy (damage source is an axis, and it is load-bearing)" [
 
-            test "cover reduces a declared attack" {
-                let crawler = { baseUnit with Cover = 2.0 }
-                let p = [ Effects.gatedBy [ Declared ] cover; Effects.floorAt 0.0 ]
-                Expect.equal (Effects.pipeline p crawler (hit Physical Declared 1.0) |> final) 0.0 "max(0, 1 − 2) — the Crawler survives the Ram"
-            }
-
-            test "cover does NOT reduce collision or environmental damage" {
-                let crawler = { baseUnit with Cover = 2.0 }
-                let p = [ Effects.gatedBy [ Declared ] cover; Effects.floorAt 0.0 ]
-
-                Expect.equal (Effects.pipeline p crawler (hit Physical Collision 1.0) |> final) 1.0 "shoved into a wall — cover is irrelevant"
-                Expect.equal (Effects.pipeline p crawler (hit Physical Environmental 3.0) |> final) 3.0 "standing in lava — cover is irrelevant"
-            }
-
             // §3.6's trap, pinned as a regression. "Elemental sources ignore armor" LOOKS like a
             // `Source` rule because Poison's DoT ticks really are `Periodic`. Spell it that way and a
             // Frost bolt — a `Declared` attack — still gets armor subtracted from it, and only Poison
@@ -254,8 +240,9 @@ let tests =
                       Effects.floorAt 0.0 ]
 
                 Expect.equal (Effects.pipeline tbt crawler (hit Physical Declared 3.0) |> final) 0.0 "3 − 2 cover − 1 armored"
+                Expect.equal (Effects.pipeline tbt crawler (hit Physical Declared 1.0) |> final) 0.0 "AC#3 — max(0, 1 − 2) lets the Crawler survive the Ram"
                 Expect.equal (Effects.pipeline tbt crawler (hit Physical Collision 1.0) |> final) 1.0 "shoved into a wall: neither applies"
-                Expect.equal (Effects.pipeline tbt crawler (hit Physical Environmental 3.0) |> final) 3.0 "lava: neither applies"
+                Expect.equal (Effects.pipeline tbt crawler (hit Physical Environmental 3.0) |> final) 3.0 "standing in lava: neither applies"
             }
 
             test "a gated stage keeps the inner stage's name, fired or not, so traces are comparable" {
@@ -308,19 +295,57 @@ let tests =
 
         testList "applyAll (the AoE application)" [
 
-            testCase "applyAll is invariant under permutation of its target list (FsCheck >=500)"
+            // #43's permutation-invariance criterion, stated so that it can actually FAIL.
+            //
+            // Asserting `List.rev (applyAll (List.rev ts)) = applyAll ts` proves nothing: reversal is
+            // symmetric on both sides, so it is a theorem about `List.map` and holds for any positional
+            // implementation, including one that folds cross-target state. The content of the claim is
+            // that a target's trace depends on THAT TARGET and its multiplier alone — so compute each
+            // target's trace in company, and again in isolation, and demand they agree.
+            testCase "a target's trace is independent of the other targets in the list (FsCheck >=500)"
             <| fun () ->
                 let prop (armors: int list) (seed: int) =
                     let targets =
-                        armors |> List.mapi (fun i a -> { baseUnit with Armor = float (abs a % 20) }, 0.25 + float ((i + abs seed) % 4) * 0.25)
+                        armors
+                        |> List.mapi (fun i a -> { baseUnit with Armor = float (abs a % 20) }, 0.25 + float ((i + abs seed) % 4) * 0.25)
 
                     let damage = hit Physical Declared 30.0
-                    let straight = Effects.applyAll towerDefense damage targets
-                    let reversed = Effects.applyAll towerDefense damage (List.rev targets)
 
-                    // Same multiset of (target, trace) pairs — only the ORDER of the result follows
-                    // the order of the input.
-                    List.rev reversed = straight
+                    let inCompany = Effects.applyAll towerDefense damage targets |> List.map snd
+
+                    let inIsolation =
+                        targets |> List.map (fun t -> Effects.applyAll towerDefense damage [ t ] |> List.head |> snd)
+
+                    inCompany = inIsolation
+
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "permuting the targets permutes the results, and changes nothing else (FsCheck >=500)"
+            <| fun () ->
+                let prop (armors: int list) (rot: int) =
+                    let targets =
+                        armors |> List.mapi (fun i a -> { baseUnit with Armor = float (abs a % 20) }, 0.25 + float (i % 4) * 0.25)
+
+                    let damage = hit Physical Declared 30.0
+
+                    match targets with
+                    | [] -> true
+                    | _ ->
+                        // An asymmetric permutation: rotate left by k. `List.map f` commutes with it,
+                        // but so would a reversal — what makes this bite is comparing the MULTISET too.
+                        let k = abs rot % List.length targets
+                        let rotated = List.skip k targets @ List.take k targets
+
+                        let straight = Effects.applyAll towerDefense damage targets
+                        let permuted = Effects.applyAll towerDefense damage rotated
+
+                        let rotatedBack = List.skip (List.length permuted - k) permuted @ List.take (List.length permuted - k) permuted
+
+                        // Compare the multiset by sorting on the WHOLE element. `sortBy (fun t ->
+                        // t.Final)` would not do: it is stable, so two distinct targets that happen to
+                        // take the same damage (armor 0 at ×0.25, and armor 15 at ×0.75, both 7.5) keep
+                        // their input order and the rotation flips it.
+                        rotatedBack = straight && List.sort permuted = List.sort straight
 
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 

@@ -137,6 +137,11 @@ module Effects =
     ///
     /// Halting at `> 1.0` as well as at `1.0` is deliberate: a resistance above one would otherwise
     /// multiply by a negative number and *heal* the target.
+    ///
+    /// The other end is **not** guarded: a resistance below `0.0` multiplies by more than one and
+    /// amplifies the hit. That is a coherent reading of "negative resistance is vulnerability", so it is
+    /// permitted — but it means `resistOf` is trusted to stay in `[0, 1]`, and a sign error in a stat
+    /// fold reads as a damage bonus rather than as an error. Amplification has its own stage.
     val resist: resistOf: ('T -> 'K -> float) -> Stage<'T, 'K>
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
@@ -210,6 +215,11 @@ module Effects =
     ///
     /// Order is preserved: `Stacks` appends, and every other policy yields at most one instance. So the
     /// result is a deterministic function of the application order the caller chose.
+    ///
+    /// `Refresh`, `Strongest`, and `Once` reconcile against the **head** of `actives` and return at most
+    /// one instance, so handing them a list that already holds several — by switching an effect's policy
+    /// away from `Stacks` while instances are live — discards all but the first. Re-key or drain the list
+    /// when a policy changes.
     val applyEffect: policy: Policy<'E> -> incoming: Active<'E> -> actives: Active<'E> list -> Active<'E> list
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
