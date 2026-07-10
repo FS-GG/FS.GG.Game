@@ -28,6 +28,9 @@
     <Compile Include="FixedStep.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
+    <!-- Sight layer: consumes Cell (Pathfinding) and the same `Cell -> bool` predicate shape. -->
+    <Compile Include="Los.fsi" />
+    <Compile Include="Los.fs" />
     <Compile Include="SpatialGrid.fsi" />
     <Compile Include="SpatialGrid.fs" />
     <!-- Response layer: consumes Contact (Primitives) + Cell (Pathfinding); separate from detection. -->
