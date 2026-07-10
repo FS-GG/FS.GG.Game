@@ -57,3 +57,66 @@ module Pathfinding =
         start: Cell ->
         goal: Cell ->
             Cell list option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Multi-source Dijkstra **from the goals outward** — the "Dijkstra map" / integration field. For
+    /// every reachable cell it stores the cheapest cost of travelling from that cell to the *nearest*
+    /// goal; each goal itself maps to `0`. There is deliberately **no early exit**: when many agents
+    /// share a destination, build one field and let each agent roll downhill (see `flowField`) rather
+    /// than running `astar` per agent.
+    ///
+    /// `cost c` is the cost to **enter** cell `c`, and `cost c <= 0` means **impassable** — so
+    /// `fun c -> cost c > 0` is exactly the `isWalkable` predicate `astar`/`bfs` take, and one terrain
+    /// function drives all of them. A move onto `c` costs `baseStep * cost c`, where `baseStep` is the
+    /// same integer 10 (orthogonal) / 14 (diagonal) `astar` uses. Hence with `cost = fun _ -> 1` the
+    /// value at any cell equals `astar`'s path cost from that cell to the goal.
+    ///
+    /// Deterministic: integer costs and a total `(distance, Col, Row)` frontier order, so the field is
+    /// bit-identical across runs and platforms (no `Map`/`Set` iteration-order or float tie-break
+    /// leakage). Total on degenerate input: an empty `goals` list, a `goals` list whose every entry is
+    /// impassable, or `maxVisited <= 0` all yield an empty field; impassable goals are skipped, not
+    /// thrown. The walk is bounded by `maxVisited` (cells settled) so an unbounded cell space
+    /// terminates, and only **settled** cells are returned — a `maxVisited` cut-off yields a partial
+    /// field whose values are all final, never unfinalised tentative ones. Costs accumulate in `int64`
+    /// internally; a cell whose cost would exceed `Int32.MaxValue` is treated as unreachable rather
+    /// than overflowing.
+    ///
+    /// A **flee field** is this function composed, not a separate primitive: scale a `distanceField` by
+    /// a negative coefficient (≈ `-1.2`) and re-relax, then roll downhill. The coefficient is a tuning
+    /// constant — game policy, not navigation — so it lives in the caller, not here.
+    val distanceField:
+        neighbourhood: Neighbourhood ->
+        maxVisited: int ->
+        cost: (Cell -> int) ->
+        goals: Cell list ->
+            Map<Cell, int>
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// The negative gradient of a `distanceField`: maps each cell to its strictly-lowest-valued
+    /// neighbour — the next step for an agent rolling downhill toward a goal. Membership in `field` is
+    /// the walkability predicate, so the same no-corner-cutting rule applies under `EightWay` (a
+    /// diagonal step is offered only when both shared orthogonal neighbours are also in `field`).
+    ///
+    /// A cell with no strictly-lower neighbour is a **sink** — a goal, or a local minimum — and is
+    /// simply **absent** from the result, so `Map.tryFind` returning `None` is how an agent learns it
+    /// has arrived (or is stuck). The step is always a `Cell`, never a float vector: integer logic,
+    /// float presentation. Deterministic — ties among equally-low neighbours break on `(value, Col,
+    /// Row)`. Total: an empty `field` yields an empty map.
+    val flowField: neighbourhood: Neighbourhood -> field: Map<Cell, int> -> Map<Cell, Cell>
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Dijkstra **forward** from `start`, capped at a movement-point `budget`: every cell reachable for
+    /// a total entry cost of at most `budget`, mapped to that cost. `start` itself maps to `0` (its own
+    /// cost is not charged — you are already standing on it). This is the turn-based-tactics move range
+    /// ("costSoFar <= moveRange").
+    ///
+    /// Same `cost` convention as `distanceField` (`cost c` is the cost to enter `c`; `cost c <= 0` is
+    /// impassable), same integer 10/14 `baseStep`, and the same determinism guarantee. Note the
+    /// direction differs: `reachableWithin` charges the cell being stepped **onto** as it walks away
+    /// from `start`, whereas `distanceField` walks goal-ward; with a non-uniform `cost` the two
+    /// therefore disagree on values while agreeing on which cells are reachable.
+    ///
+    /// No `maxVisited` bound is needed: every edge weight is at least 10, so `budget` alone terminates
+    /// the search. Total: a negative `budget`, or an impassable `start`, yields an empty map.
+    val reachableWithin:
+        neighbourhood: Neighbourhood -> cost: (Cell -> int) -> budget: int -> start: Cell -> Map<Cell, int>
