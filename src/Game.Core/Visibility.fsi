@@ -62,11 +62,35 @@ module Visibility =
     /// from the hit) still degrades to `None` rather than to a non-finite value — a missing hit degrades
     /// one ring, where a NaN one poisons every consumer downstream of it.
     ///
-    /// This is a guarantee about **overflow**, not about precision. `t` is a ratio of cross products, and
-    /// a cross product of near-parallel operands cancels: where `origin` is nearly collinear with the
-    /// segment, or the coordinates span many orders of magnitude, the ordinary path can return a `t` whose
-    /// relative error far exceeds an ulp. That error is inherent to the parametrisation and is not what
-    /// the rescaled fallback addresses.
+    /// This is a guarantee about **overflow**, not about precision. `t = (W × E) / (dir × E)`, with
+    /// `W = seg.A - origin` and `E = seg.B - seg.A`, and it loses accuracy in two independent ways that
+    /// are easy to conflate:
+    ///
+    /// * **The denominator, on a grazing ray.** `dir × E` cancels as the angle `θ` between the ray and the
+    ///   segment closes, so the relative error of `t` grows like `u / sin θ` for machine epsilon `u`. This
+    ///   is the ordinary conditioning of a line-line intersection — inherent to the parametrisation, and
+    ///   not a defect. It is *sharp*: at `sin θ ≈ 1e-14` the relative error is percent-scale. No fixed
+    ///   error bound can hold across grazing rays, and none is claimed; what holds is the law itself.
+    ///
+    /// * **The numerator, on a wide dynamic range.** Forming `W` rounds `seg.A.X - origin.X` to a double,
+    ///   so once `origin` and `seg.A` differ by enough orders of magnitude the smaller operand is
+    ///   discarded *before any cross product exists*, and `W × E` then cancels away the bits that
+    ///   survived. Anchoring cannot recover what the subtraction already dropped — which is why the
+    ///   rescaled fallback above, which fixes overflow, is not a precision fix and is not claimed as one.
+    ///   Absolute magnitude is not the trigger; the *ratio* is. Coordinates log-uniform across ~14 orders
+    ///   of magnitude (`1e-8` … `1e6`) already leave ~2% of returned hits with a relative error above
+    ///   `1e-12`, against an exact `BigInteger` oracle (every finite double is a dyadic rational, so the
+    ///   whole solve re-runs exactly). Fourteen orders, not the two hundred one might guess.
+    ///
+    /// **What is promised.** Over coordinates drawn *linearly* from a bounded world — `|coord| <= 1e6`,
+    /// which is what world geometry produces — and away from grazing incidence, the relative error of `t`
+    /// stays below `1e-12`. On a grazing ray, `relErr(t) * sin θ` stays at machine epsilon (measured
+    /// `1.5e-16`), which is the best a `float` parametrisation can do. Outside that world — a caller
+    /// synthesising coordinates spanning many orders of magnitude — `t` is best-effort and its low bits
+    /// are not meaningful; it can be returned as `0.0` for a crossing that is arbitrarily far away, with
+    /// `denom`, `t` and `u` all finite, so no guard inside the solve can flag it.
+    ///
+    /// `VisibilityTests` pins all three against the exact oracle.
     val raySegment: origin: Point -> dir: Point -> seg: Segment -> (Point * float) option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
