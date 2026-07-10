@@ -31,6 +31,9 @@
     <!-- Sight layer: consumes Cell (Pathfinding) and the same `Cell -> bool` predicate shape. -->
     <Compile Include="Los.fsi" />
     <Compile Include="Los.fs" />
+    <!-- Field of view: consumes Cell (Pathfinding), opacity-only. Independent of Los and SpatialGrid. -->
+    <Compile Include="Fov.fsi" />
+    <Compile Include="Fov.fs" />
     <Compile Include="SpatialGrid.fsi" />
     <Compile Include="SpatialGrid.fs" />
     <!-- Response layer: consumes Contact (Primitives) + Cell (Pathfinding); separate from detection. -->
