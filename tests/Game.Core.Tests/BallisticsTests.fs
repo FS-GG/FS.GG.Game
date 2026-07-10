@@ -190,37 +190,67 @@ let tests =
                 Expect.equal (Ballistics.intercept (p 0.0 0.0) bad (p 3.0 0.0) (p 0.0 0.0)) ValueNone (sprintf "speed=%f" bad)
         }
 
-        testCase "intercept never returns NaN, and every solution satisfies the defining equation (FsCheck >=500)"
+        // Two DISTINCT claims, deliberately not fused into one property. Totality holds for arbitrary
+        // input (that is what `ValueNone` is for); the defining equation is only *checkable* where the
+        // check itself is numerically meaningful. Fusing them makes the harness, not the module, the
+        // thing under test — a denormal `v` such as (0, 4.94e-324) has a `|v|^2` that underflows to
+        // exactly 0.0, so any t recovered from `aim = target + v*t` is a fiction.
+
+        testCase "intercept never returns a non-finite point, on unclamped input (FsCheck >=500)"
         <| fun () ->
+            // Deliberately NOT clamped: NaN, infinity, and denormal inputs are exactly the cases the
+            // .fsi promises to answer with ValueNone rather than a poisoned Point.
+            let prop (sx: float) (sy: float) (tx: float) (ty: float) (vx: float) (vy: float) (speed: float) =
+                match Ballistics.intercept (p sx sy) speed (p tx ty) (p vx vy) with
+                | ValueNone -> true
+                | ValueSome aim -> System.Double.IsFinite aim.X && System.Double.IsFinite aim.Y
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+        testCase "every interception satisfies |aim - shooter| = speed * t (FsCheck >=500)"
+        <| fun () ->
+            // Velocities are either exactly zero or bounded away from the denormal floor, so that the
+            // t recovered below is real arithmetic rather than a division by an underflowed |v|^2.
+            let sane (v: float) =
+                let c = clamp v
+                if abs c < 1.0e-6 then 0.0 else c
+
             let prop (sx: float) (sy: float) (tx: float) (ty: float) (vx: float) (vy: float) (spRaw: float) =
                 let shooter = p (clamp sx) (clamp sy)
                 let target = p (clamp tx) (clamp ty)
-                let v = p (clamp vx) (clamp vy)
+                let v = p (sane vx) (sane vy)
                 let speed = abs (clamp spRaw)
 
                 match Ballistics.intercept shooter speed target v with
                 | ValueNone -> true
                 | ValueSome aim ->
-                    // Never a NaN — the whole point of the ValueNone contract.
-                    if not (System.Double.IsFinite aim.X && System.Double.IsFinite aim.Y) then
-                        false
+                    let vSq = v.X * v.X + v.Y * v.Y
+                    let flight = sqrt ((aim.X - shooter.X) ** 2.0 + (aim.Y - shooter.Y) ** 2.0)
+
+                    if vSq = 0.0 then
+                        // A stationary target pins t nowhere — aim = target is the whole claim.
+                        aim = target
                     else
-                        let vSq = v.X * v.X + v.Y * v.Y
-                        let flight = sqrt ((aim.X - shooter.X) ** 2.0 + (aim.Y - shooter.Y) ** 2.0)
+                        // Recover t from aim = target + v*t, then check |aim - shooter| = speed*t.
+                        let t =
+                            ((aim.X - target.X) * v.X + (aim.Y - target.Y) * v.Y) / vSq
 
-                        if vSq = 0.0 then
-                            // A stationary target pins t nowhere — aim = target is the whole claim.
-                            aim = target
-                        else
-                            // Recover t from aim = target + v*t, then check |aim - shooter| = speed*t.
-                            let t =
-                                ((aim.X - target.X) * v.X + (aim.Y - target.Y) * v.Y) / vSq
-
-                            let want = speed * t
-                            let scale = max 1.0 (max (abs flight) (abs want))
-                            t >= -1e-6 && abs (flight - want) <= 1e-5 * scale
+                        let want = speed * t
+                        let scale = max 1.0 (max (abs flight) (abs want))
+                        t >= -1e-6 && abs (flight - want) <= 1e-5 * scale
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+        test "a denormal target velocity is still solved, and the aim stays finite" {
+            // |v|^2 underflows to 0.0, but v itself is not zero. The solve must not divide by it.
+            let v = p 0.0 System.Double.Epsilon
+
+            match Ballistics.intercept (p 0.0 0.0) 1.0 (p 10.0 0.0) v with
+            | ValueSome aim ->
+                Expect.isTrue (System.Double.IsFinite aim.X && System.Double.IsFinite aim.Y) "finite aim"
+                Expect.floatClose Accuracy.high aim.X 10.0 "essentially the stationary answer"
+            | ValueNone -> failtest "a target drifting at one ulp per second is still reachable"
+        }
 
         testCase "when intercept says ValueNone, a brute-force sampler finds no interception either"
         <| fun () ->
