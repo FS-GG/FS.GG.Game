@@ -41,10 +41,12 @@ let repoPath (rel: string) =
     Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar))
 
 // The product-scope catalog: id -> (canonical SKILL.md source, ADR-0017 canonical materializes-when).
-// The four game product skills migrated from FS.GG.Rendering (ADR-0022 P4); all four gate on the
-// simulation profiles. supplied-by is derived from the source path (dirname + "/").
+// Four game product skills migrated from FS.GG.Rendering (ADR-0022 P4), plus fs-gg-ballistics, which
+// is NOT a migration: it originates here and has no FS.GG.Rendering counterpart to stay byte-identical
+// with. All gate on the simulation profiles. supplied-by is derived from the source path (dirname + "/").
 let catalog =
     [ "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]" ]

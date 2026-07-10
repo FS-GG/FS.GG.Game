@@ -44,6 +44,11 @@
     <!-- Response layer: consumes Contact (Primitives) + Cell (Pathfinding); separate from detection. -->
     <Compile Include="Resolution.fsi" />
     <Compile Include="Resolution.fs" />
+    <!-- Ballistics: swept projectile advance + lead solve + splash. After SpatialGrid (splash queries
+         it) and after Primitives (RayHit). Takes its occluder cast as a caller-supplied function, so
+         it does not depend on Geometry. -->
+    <Compile Include="Ballistics.fsi" />
+    <Compile Include="Ballistics.fs" />
     <!-- Continuous-space sight. Depends on Primitives (Point/Rect) only; independent of the grid modules. -->
     <Compile Include="Visibility.fsi" />
     <Compile Include="Visibility.fs" />

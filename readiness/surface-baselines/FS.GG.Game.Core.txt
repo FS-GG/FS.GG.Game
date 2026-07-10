@@ -1,3 +1,4 @@
+FS.GG.Game.Core.Ballistics
 FS.GG.Game.Core.Cell
 FS.GG.Game.Core.Circle
 FS.GG.Game.Core.Contact
@@ -18,6 +19,11 @@ FS.GG.Game.Core.Neighbourhood
 FS.GG.Game.Core.Neighbourhood+Tags
 FS.GG.Game.Core.Pathfinding
 FS.GG.Game.Core.Point
+FS.GG.Game.Core.Projectile
+FS.GG.Game.Core.ProjectileStep
+FS.GG.Game.Core.ProjectileStep+Flew
+FS.GG.Game.Core.ProjectileStep+Struck
+FS.GG.Game.Core.ProjectileStep+Tags
 FS.GG.Game.Core.RayHit
 FS.GG.Game.Core.Rect
 FS.GG.Game.Core.Resolution
