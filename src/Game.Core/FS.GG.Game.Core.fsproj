@@ -36,6 +36,9 @@
     <!-- Response layer: consumes Contact (Primitives) + Cell (Pathfinding); separate from detection. -->
     <Compile Include="Resolution.fsi" />
     <Compile Include="Resolution.fs" />
+    <!-- Continuous-space sight. Depends on Primitives (Point/Rect) only; independent of the grid modules. -->
+    <Compile Include="Visibility.fsi" />
+    <Compile Include="Visibility.fs" />
   </ItemGroup>
 
 </Project>
