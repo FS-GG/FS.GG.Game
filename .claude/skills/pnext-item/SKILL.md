@@ -153,12 +153,22 @@ gh project item-add <board> --owner FS-GG --url <issue-url>
 scripts/fsgg-coord set-field <new> 'Repo Scope' <target-short-id>
 scripts/fsgg-coord set-field <new> Phase '<the target repo's phase>'
 scripts/fsgg-coord set-field <new> Status Backlog
+
+# 3. If the finding belongs under an epic, LINK it as a sub-issue — NOW, not at close-out.
+scripts/fsgg-coord child FS-GG/<repo>#<parent> FS-GG/<target>#<new>
 ```
 
 `Repo Scope` decides the `Phase`, not the subject matter — a `game` item is `P6 Game` even when it
 happens to do geometry. Always name the contract/registry id and cross-reference the item you were
 working (`FS-GG/<repo>#<n>`), because the finding's value is mostly its context, and you are the
 only one who has it.
+
+If the finding is a child of an epic, the `child` step is not optional. `done --flip` rolls an epic
+up from its **native sub-issue graph and nothing else** — a checklist line in the epic body or a
+`child of #<parent>` mention is invisible to it, so an epic can stamp Done while an open child of it
+is still in flight (this is exactly what #322 did). Only `scripts/fsgg-coord child` creates the edge
+the roll-up reads, so run it the moment you file the child, not at close-out. It is idempotent:
+re-running it during a close-out pass is free.
 
 **If the finding blocks your item**, say so on the board rather than working around it silently:
 
