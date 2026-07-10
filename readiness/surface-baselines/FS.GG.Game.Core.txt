@@ -3,6 +3,8 @@ FS.GG.Game.Core.Ai
 FS.GG.Game.Core.Ballistics
 FS.GG.Game.Core.Cell
 FS.GG.Game.Core.Circle
+FS.GG.Game.Core.Command
+FS.GG.Game.Core.Command+Tags
 FS.GG.Game.Core.Contact
 FS.GG.Game.Core.ConvexPolygon
 FS.GG.Game.Core.DamageTrace
