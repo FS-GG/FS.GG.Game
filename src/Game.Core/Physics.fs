@@ -41,8 +41,20 @@ module Physics =
     // in `addBody` rather than recomputed per step. Zero inverse mass IS the encoding of "infinite mass",
     // so `Static` and `Kinematic` need no branch in the solver: they simply absorb every impulse.
     //
-    // There is deliberately no solver cache. Warm starting is #76, and `checksum` hashes body state only
-    // (R3) — with no cache field, a cache value cannot leak into the hash even by accident.
+    // #76 adds the two pieces of CROSS-TICK state the performance slice needs, and nothing else:
+    //
+    //   * `Asleep`/`SleepCounter` — the sleeping lever. The counter is an `int` count of consecutive ticks
+    //     under threshold, never an accumulation of elapsed float seconds (R6): a float accumulator decides
+    //     differently on two machines, and the whole point of the counter is that it does not.
+    //
+    //   * `Cache*` — the warm-start lever: last tick's accumulated normal and tangent impulse per contact
+    //     point, keyed by `(A, B, FeatureId, point)`. Held as six parallel arrays, kept STRICTLY ASCENDING
+    //     by that key, because the solver stages its contact points in exactly that order — so seeding this
+    //     tick from last tick's cache is a linear two-cursor merge, with no dictionary to iterate (R6: a
+    //     hash order is not a determinism guarantee) and no sort to pay for.
+    //
+    // Neither reaches `checksum`, which hashes body state only (R3). That is a property of `checksum`, not
+    // an accident of the layout — see its comment.
     type World =
         { Config: Config
           Kinds: BodyKind[]
@@ -53,7 +65,15 @@ module Physics =
           Rot: float[]
           AngVel: float[]
           InvMass: float[]
-          InvInertia: float[] }
+          InvInertia: float[]
+          Asleep: bool[]
+          SleepCounter: int[]
+          CacheA: int[]
+          CacheB: int[]
+          CacheFeature: int[]
+          CachePoint: int[]
+          CacheN: float[]
+          CacheT: float[] }
 
     let private finite (v: float) =
         not (System.Double.IsNaN v) && not (System.Double.IsInfinity v)
@@ -281,7 +301,15 @@ module Physics =
           Rot = [||]
           AngVel = [||]
           InvMass = [||]
-          InvInertia = [||] }
+          InvInertia = [||]
+          Asleep = [||]
+          SleepCounter = [||]
+          CacheA = [||]
+          CacheB = [||]
+          CacheFeature = [||]
+          CachePoint = [||]
+          CacheN = [||]
+          CacheT = [||] }
 
     let addBody
         (kind: BodyKind)
@@ -306,8 +334,17 @@ module Physics =
                 Rot = Array.append world.Rot [| 0.0 |]
                 AngVel = Array.append world.AngVel [| 0.0 |]
                 InvMass = Array.append world.InvMass [| invMass |]
-                InvInertia = Array.append world.InvInertia [| invInertia |] }
+                InvInertia = Array.append world.InvInertia [| invInertia |]
+                // A body enters AWAKE, however still the world around it. It has never been under the sleep
+                // threshold for a single tick, so its counter starts at zero, and a body dropped into a
+                // settled scene falls rather than joining the freeze.
+                Asleep = Array.append world.Asleep [| false |]
+                SleepCounter = Array.append world.SleepCounter [| 0 |] }
 
+        // The warm-start cache is carried across UNCHANGED. Its keys are body indices, and `addBody` only
+        // ever appends — every existing index still names the body it named — so no entry is invalidated by
+        // a body arriving. Clearing it here would cold-start every contact in the world on the tick a
+        // bullet spawns, which is exactly the tick that can least afford it.
         struct (index, grown)
 
     let pairs (world: World) : struct (int * int)[] =
@@ -552,6 +589,23 @@ module Physics =
 
     let private clampLow (x: float) = if not (x > 0.0) then 0.0 else x
 
+    // Strict lexicographic `<` on a warm-start cache key. The key is `(A, B, FeatureId, point)`: the pair,
+    // the contacting feature pair, and which of the manifold's (up to two) points this is.
+    let inline private keyLess
+        (a1: int)
+        (b1: int)
+        (f1: int)
+        (p1: int)
+        (a2: int)
+        (b2: int)
+        (f2: int)
+        (p2: int)
+        =
+        if a1 <> a2 then a1 < a2
+        elif b1 <> b2 then b1 < b2
+        elif f1 <> f2 then f1 < f2
+        else p1 < p2
+
     let step (world: World) (dt: float) : World =
         let n = world.Pos.Length
         let cfg = world.Config
@@ -578,24 +632,119 @@ module Physics =
             let invMass = world.InvMass
             let invInertia = world.InvInertia
 
-            // 1. Integrate velocity. Semi-implicit Euler: velocity first, position last, so the solve in
+            let asleep = Array.copy world.Asleep
+            let sleepCounter = Array.copy world.SleepCounter
+
+            // 1. Broad phase, then the wake pass — BEFORE gravity, so a body woken this tick also falls
+            //    this tick rather than hanging weightless for one frame. The reorder is free and it is
+            //    sound: `pairs` and `manifold` read `Pos`/`Rot`/`Shapes`/`Kinds` and never a velocity, so
+            //    integrating velocity first or last cannot move a single contact.
+            let pairList = pairs working
+            let pairCount = pairList.Length
+
+            // "At rest" — the SAME predicate the sleep counter increments on, read here off the velocities
+            // this step opens with, which are the ones that drove that counter last step. Defining it once
+            // and using it twice is what keeps "moving enough to wake a neighbour" and "moving enough to
+            // stay awake" from drifting apart. NaN fails both `<`, so a body whose velocity has gone
+            // non-finite is never at rest — it moves, chaotically, and wakes what it touches.
+            let inline atRest (i: int) =
+                vdot vel.[i] vel.[i] < cfg.SleepLinearSq && abs angVel.[i] < cfg.SleepAngular
+
+            // `mover` is a snapshot taken BEFORE anything wakes: a body that is awake, not static, and
+            // ACTUALLY MOVING this tick.
+            //
+            // The last clause is load-bearing, and "awake" alone is the bug it exists to prevent. Two
+            // dynamic bodies resting on one another are each awake while their sleep counters climb, and
+            // counters that reach `SleepTicks` a tick apart would then have each body wake the other the
+            // instant it dozed off — forever. A stack of two might sleep, by the luck of both counters
+            // filling on the same tick; a stack of three never would. Box2D escapes this by sleeping a
+            // solver ISLAND as a unit, and §4 puts islands out of scope, so the escape here is to ask the
+            // stronger and more honest question: is the neighbour *moving*, not merely *awake*?
+            //
+            // The price is that a wake propagates only through bodies that visibly move. A sleeper that
+            // takes a load without shifting does not pass the disturbance on to the one beneath it — which
+            // is the right reading of "at rest", and cheap, because it is already supported.
+            //
+            // Freezing the snapshot is what makes waking order-INDEPENDENT: otherwise a body woken by an
+            // early pair would wake its own neighbour later in the same sweep, and how far a wake travelled
+            // through a stack would depend on the order `pairs` happened to emit. Instead a wake advances
+            // at most one body per tick, through any pair order, on any machine.
+            //
+            // Only a `Dynamic` body ever sleeps, so `asleep.[i]` already implies `Kinds.[i] = Dynamic`.
+            let mover =
+                Array.init n (fun i -> not asleep.[i] && world.Kinds.[i] <> Static && not (atRest i))
+
+            // The narrow phase is computed ONCE per pair here, and reused by the solver below.
+            //
+            // A pair with no mover is skipped outright — neither body can have moved since last tick, so
+            // its contact cannot have changed and nothing is left for the solver to do. That skip is the
+            // whole O(n) → O(0) claim of sleeping: a settled scene narrow-phases nothing. (The broad phase
+            // still runs; culling that needs solver islands, which §4 puts out of scope.)
+            let staged = Array.create pairCount ValueNone
+            let computed = Array.zeroCreate<bool> pairCount
+
+            for k in 0 .. pairCount - 1 do
+                let struct (a, b) = pairList.[k]
+
+                if mover.[a] || mover.[b] then
+                    let m = manifold working a b
+                    staged.[k] <- m
+                    computed.[k] <- true
+
+                    // A sleeper in contact with something that can move must wake: it is about to be leant
+                    // on. A `Static` body is not a mover and so never wakes anything — a floor does not
+                    // disturb the box that settled on it, which is the entire point of the lever.
+                    match m with
+                    | ValueSome _ ->
+                        if asleep.[a] && mover.[b] then
+                            asleep.[a] <- false
+                            sleepCounter.[a] <- 0
+
+                        if asleep.[b] && mover.[a] then
+                            asleep.[b] <- false
+                            sleepCounter.[b] <- 0
+                    | ValueNone -> ()
+
+            // 2. Integrate velocity. Semi-implicit Euler: velocity first, position last, so the solve in
             //    between sees the velocity the contact must actually cancel. A zero inverse mass is a
-            //    `Static` or `Kinematic` body, which gravity does not touch.
+            //    `Static` or `Kinematic` body, which gravity does not touch; a sleeping body is not
+            //    integrated at all, which is the other half of what "stops integrating" means.
             let g = cfg.Gravity
 
             if finitePoint g then
                 for i in 0 .. n - 1 do
-                    if invMass.[i] > 0.0 then
+                    if not asleep.[i] && invMass.[i] > 0.0 then
                         vel.[i] <- vadd vel.[i] (vscale dt g)
 
-            // 2. Broad phase once, then narrow phase, on the post-gravity world.
-            let pairList = pairs working
-            let found = ResizeArray<Manifold>()
+            // A sleeping body is IMMOVABLE for the duration of this step — infinite mass, exactly as a
+            // `Static` body has. It must be: `step` does not integrate it, so an impulse that changed its
+            // velocity would be silently discarded, and the pair would resolve as though one side had
+            // absorbed momentum that never went anywhere. Zero inverse mass is already this module's
+            // encoding of "unmoved by any impulse", so sleeping needs no branch anywhere in the solver —
+            // only these two arrays, which are what the solver divides by from here on.
+            let effInvMass = Array.init n (fun i -> if asleep.[i] then 0.0 else invMass.[i])
+            let effInvInertia = Array.init n (fun i -> if asleep.[i] then 0.0 else invInertia.[i])
 
-            for struct (a, b) in pairList do
-                match manifold working a b with
-                | ValueSome m -> found.Add m
-                | ValueNone -> ()
+            // 3. Gather the manifolds the solver must see. A pair needs solving exactly when it has an
+            //    awake `Dynamic` member — anything else has no finite mass to move. A pair skipped above
+            //    can qualify here, because one of its bodies may have just been woken through a different
+            //    pair; that one is narrow-phased now.
+            let inline solverRelevant (a: int) (b: int) =
+                (not asleep.[a] && world.Kinds.[a] = Dynamic)
+                || (not asleep.[b] && world.Kinds.[b] = Dynamic)
+
+            let found = ResizeArray<Manifold>()
+            let solvePairs = ResizeArray<struct (int * int)>()
+
+            for k in 0 .. pairCount - 1 do
+                let struct (a, b) = pairList.[k]
+
+                if solverRelevant a b then
+                    solvePairs.Add(struct (a, b))
+
+                    match (if computed.[k] then staged.[k] else manifold working a b) with
+                    | ValueSome m -> found.Add m
+                    | ValueNone -> ()
 
             let manifolds = found.ToArray()
 
@@ -614,6 +763,10 @@ module Physics =
 
             let cA = Array.zeroCreate<int> count
             let cB = Array.zeroCreate<int> count
+            // The other two thirds of the warm-start key. Staged alongside the contact rather than
+            // recovered later, because these six arrays ARE next tick's cache — see the write-back.
+            let cF = Array.zeroCreate<int> count
+            let cP = Array.zeroCreate<int> count
             let cRA = Array.zeroCreate<Point> count
             let cRB = Array.zeroCreate<Point> count
             let cN = Array.zeroCreate<Point> count
@@ -633,6 +786,17 @@ module Physics =
             // negative threshold degrades to zero — every approach then bounces, which is the old,
             // jittery behaviour, but never a NaN.
             let bounceThreshold = clampLow cfg.BounceThreshold
+
+            // The warm-start cursor. `oldA/oldB/...` are last tick's cache, strictly ascending by
+            // `(A, B, FeatureId, point)`; the contacts staged below are generated in that same order, since
+            // `manifolds` was just sorted by `(A, B, FeatureId)` and a manifold's points ascend. Two sorted
+            // sequences and one forward-only cursor is therefore a linear merge — the cursor never rewinds,
+            // so seeding the whole world costs O(contacts + cache) and not one hash lookup.
+            let oldA = world.CacheA
+            let oldB = world.CacheB
+            let oldF = world.CacheFeature
+            let oldP = world.CachePoint
+            let mutable cursor = 0
 
             let mutable k = 0
 
@@ -665,13 +829,19 @@ module Physics =
                     let rnB = vcross rB nrm
 
                     let kN =
-                        invMass.[a] + invMass.[b] + invInertia.[a] * rnA * rnA + invInertia.[b] * rnB * rnB
+                        effInvMass.[a]
+                        + effInvMass.[b]
+                        + effInvInertia.[a] * rnA * rnA
+                        + effInvInertia.[b] * rnB * rnB
 
                     let rtA = vcross rA tan
                     let rtB = vcross rB tan
 
                     let kT =
-                        invMass.[a] + invMass.[b] + invInertia.[a] * rtA * rtA + invInertia.[b] * rtB * rtB
+                        effInvMass.[a]
+                        + effInvMass.[b]
+                        + effInvInertia.[a] * rtA * rtA
+                        + effInvInertia.[b] * rtB * rtB
 
                     // Two static bodies never reach here (`solvable`), but a contact between a dynamic body
                     // and itself along the normal CAN have zero effective mass at a degenerate lever arm.
@@ -682,12 +852,37 @@ module Physics =
 
                     // Approach speed along the normal, measured ONCE, before any impulse. `Normal` runs
                     // a → b, so an approaching pair has `vn < 0`.
+                    // Approach speed along the normal, measured ONCE, before any impulse — and in
+                    // particular before the warm-start seed below, which is applied in a separate pass for
+                    // exactly this reason. Restitution must answer "how fast were they closing when they
+                    // met?", and last tick's impulse is not part of that question.
                     let vrel = vsub (pointVel b rB) (pointVel a rA)
                     let vn = vdot vrel nrm
                     let bias = if -vn > bounceThreshold then -e * vn else 0.0
 
+                    // Warm start. Seed this contact with the impulse the SAME contact accumulated last
+                    // tick, found by advancing the cursor to its key. A contact that is new this tick — a
+                    // fresh pair, or the same pair meeting on a different feature — finds no entry and
+                    // starts cold at zero, which is precisely the pre-#76 behaviour.
+                    while cursor < oldA.Length
+                          && keyLess oldA.[cursor] oldB.[cursor] oldF.[cursor] oldP.[cursor] a b m.FeatureId pi do
+                        cursor <- cursor + 1
+
+                    if
+                        cursor < oldA.Length
+                        && oldA.[cursor] = a
+                        && oldB.[cursor] = b
+                        && oldF.[cursor] = m.FeatureId
+                        && oldP.[cursor] = pi
+                    then
+                        cAccN.[k] <- world.CacheN.[cursor]
+                        cAccT.[k] <- world.CacheT.[cursor]
+                        cursor <- cursor + 1
+
                     cA.[k] <- a
                     cB.[k] <- b
+                    cF.[k] <- m.FeatureId
+                    cP.[k] <- pi
                     cRA.[k] <- rA
                     cRB.[k] <- rB
                     cN.[k] <- nrm
@@ -699,13 +894,31 @@ module Physics =
                     k <- k + 1
 
             let inline applyImpulse (i: int) (j: int) (rI: Point) (rJ: Point) (imp: Point) =
-                vel.[i] <- vsub vel.[i] (vscale invMass.[i] imp)
-                angVel.[i] <- angVel.[i] - invInertia.[i] * vcross rI imp
-                vel.[j] <- vadd vel.[j] (vscale invMass.[j] imp)
-                angVel.[j] <- angVel.[j] + invInertia.[j] * vcross rJ imp
+                vel.[i] <- vsub vel.[i] (vscale effInvMass.[i] imp)
+                angVel.[i] <- angVel.[i] - effInvInertia.[i] * vcross rI imp
+                vel.[j] <- vadd vel.[j] (vscale effInvMass.[j] imp)
+                angVel.[j] <- angVel.[j] + effInvInertia.[j] * vcross rJ imp
 
-            // 4. Velocity solve. FIXED iterations — never "until converged", because a float convergence
+            // 4. Apply the seeded impulses, as a pass of its OWN. Two reasons it cannot be folded into the
+            //    staging loop above: every contact's `bias` must be read off the pre-seed velocities (a
+            //    contact staged late would otherwise see the seeds of contacts staged early), and the
+            //    solver's first iteration must open on a world where every seed is already in place — that
+            //    is what "warm" means.
+            //
+            //    Seeding an all-zero contact is skipped rather than applied. It is not merely an
+            //    optimisation: `vscale 0.0 n` can carry a signed zero into `vel`, and the guard is what
+            //    makes a first-touch contact BIT-identical to the cold solver rather than merely equal.
+            for c in 0 .. count - 1 do
+                if cAccN.[c] <> 0.0 || cAccT.[c] <> 0.0 then
+                    let imp = vadd (vscale cAccN.[c] cN.[c]) (vscale cAccT.[c] cT.[c])
+                    applyImpulse cA.[c] cB.[c] cRA.[c] cRB.[c] imp
+
+            // 5. Velocity solve. FIXED iterations — never "until converged", because a float convergence
             //    tolerance decides differently on two machines and that is a replay divergence (R6).
+            //
+            //    The accumulators start at the seeded values, not at zero, so the clamps below (`accN >= 0`
+            //    and the friction cone) act on the impulse the contact has applied ACROSS ticks. That is
+            //    the whole trick: iteration 1 already stands where last tick's iteration 8 finished.
             for _ in 1 .. max 0 cfg.VelocityIterations do
                 for c in 0 .. count - 1 do
                     let a = cA.[c]
@@ -734,14 +947,15 @@ module Physics =
                     cAccT.[c] <- accT
                     applyImpulse a b rA rB (vscale djt cT.[c])
 
-            // 5. Integrate position. A `Static` body never moves; a `Kinematic` one carries its own
-            //    velocity through contacts unchanged, which is what makes it kinematic.
+            // 6. Integrate position. A `Static` body never moves; a `Kinematic` one carries its own
+            //    velocity through contacts unchanged, which is what makes it kinematic; a sleeping one is
+            //    not integrated, which is what makes it free.
             for i in 0 .. n - 1 do
-                if world.Kinds.[i] <> Static then
+                if world.Kinds.[i] <> Static && not asleep.[i] then
                     pos.[i] <- vadd pos.[i] (vscale dt vel.[i])
                     rot.[i] <- rot.[i] + dt * angVel.[i]
 
-            // 6. Positional correction. The velocity solve removes approach velocity but not the overlap
+            // 7. Positional correction. The velocity solve removes approach velocity but not the overlap
             //    already present, and left alone that overlap accumulates into a sinking stack.
             //
             //    `Slop` leaves a sliver of penetration uncorrected — correcting to exactly zero makes
@@ -750,28 +964,72 @@ module Physics =
             //
             //    The manifold is RECOMPUTED each iteration rather than reusing the staged depth: reusing
             //    it applies the same correction `PositionIterations` times and overshoots by that factor.
-            //    Recomputing is `PositionIterations` narrow-phase passes over the pair list — the naive,
-            //    obviously-correct cost. This is the slice that is allowed to be naive; #76 is the one
-            //    that is allowed to be fast.
+            //
+            //    Only `solvePairs` are corrected, and against the EFFECTIVE inverse masses: a sleeping body
+            //    must not be nudged out of a penetration it is not awake to feel, and its awake partner
+            //    must therefore take the whole correction, exactly as it would against a static floor.
             let slop = clampLow cfg.Slop
             let percent = clamp01 cfg.Correction
 
             if percent > 0.0 then
                 for _ in 1 .. max 0 cfg.PositionIterations do
-                    for struct (a, b) in pairList do
+                    for struct (a, b) in solvePairs do
                         match manifold working a b with
                         | ValueNone -> ()
                         | ValueSome m ->
-                            let sum = invMass.[a] + invMass.[b]
+                            let sum = effInvMass.[a] + effInvMass.[b]
 
                             if sum > 0.0 then
                                 let corr = max (m.Depth - slop) 0.0 / sum * percent
 
                                 if corr > 0.0 then
-                                    pos.[a] <- vsub pos.[a] (vscale (corr * invMass.[a]) m.Normal)
-                                    pos.[b] <- vadd pos.[b] (vscale (corr * invMass.[b]) m.Normal)
+                                    pos.[a] <- vsub pos.[a] (vscale (corr * effInvMass.[a]) m.Normal)
+                                    pos.[b] <- vadd pos.[b] (vscale (corr * effInvMass.[b]) m.Normal)
 
-            working
+            // 8. Sleep. A `Dynamic` body that has held BOTH speeds under threshold for `SleepTicks`
+            //    CONSECUTIVE ticks stops. The counter is an `int` and the comparison exact (R6); one tick
+            //    above threshold resets it to zero, so "consecutive" is meant literally.
+            //
+            //    A non-positive `SleepTicks` disables the lever outright — a body cannot be at rest for
+            //    zero consecutive ticks, and reading it as "sleep immediately" would freeze every scene on
+            //    its first slow tick. A non-positive `SleepLinearSq` or `SleepAngular` disables it too, but
+            //    needs no code: `atRest` is false for every body, because no squared speed is below zero.
+            //    NaN fails every `<` for the same reason, so a body whose velocity has gone non-finite
+            //    never sleeps — it stays awake, visibly wrong, rather than freezing its own bug in place.
+            //
+            //    Velocity is ZEROED on falling asleep. A sleeping body is not integrated, so whatever
+            //    sliver of velocity it held would be neither spent nor visible — and would spring back into
+            //    the world on the tick it woke, seconds later, from nowhere.
+            if cfg.SleepTicks > 0 then
+                for i in 0 .. n - 1 do
+                    if world.Kinds.[i] = Dynamic && not asleep.[i] then
+                        if atRest i then
+                            sleepCounter.[i] <- sleepCounter.[i] + 1
+
+                            if sleepCounter.[i] >= cfg.SleepTicks then
+                                asleep.[i] <- true
+                                vel.[i] <- { X = 0.0; Y = 0.0 }
+                                angVel.[i] <- 0.0
+                        else
+                            sleepCounter.[i] <- 0
+
+            // 9. Publish the cache. The staged arrays ARE the cache — same keys, same order, and `cAccN`
+            //    and `cAccT` now hold what the solver finished with. They are handed over rather than
+            //    copied because nothing else holds a reference to them: they were allocated inside this
+            //    step, and `World` is opaque, so they cannot be aliased by a caller.
+            //
+            //    A pair the solver never saw (both asleep, or asleep against static) contributes no entry,
+            //    so its impulses are forgotten and it cold-starts on the tick it wakes. That is the right
+            //    trade: it was, by construction, at rest.
+            { working with
+                Asleep = asleep
+                SleepCounter = sleepCounter
+                CacheA = cA
+                CacheB = cB
+                CacheFeature = cF
+                CachePoint = cP
+                CacheN = cAccN
+                CacheT = cAccT }
 
     // ---------------------------------------------------------------------------------------------
     // The desync tripwire

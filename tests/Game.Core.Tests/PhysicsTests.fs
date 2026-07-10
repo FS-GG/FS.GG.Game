@@ -399,11 +399,13 @@ let tests =
 //
 // **What is deliberately NOT asserted: that a resting box holds `AngVel = 0`.** It does not, quite. A
 // sequential-impulse solver run for a FIXED 8 iterations leaves a small residual angular velocity, biased
-// by the order in which it visits the two contact points; a box at rest for 5000 ticks rotates about
-// 0.46°. That residual is a convergence artifact, not a modelling error, and the test
-// `the resting tilt is a convergence residual` below pins it as one by showing it vanish (to 4e-16) as
-// the iteration count rises. Warm starting (#76) is what removes it at 8 iterations. Asserting zero here
-// would be asserting a falsehood.
+// by the order in which it visits the two contact points. That residual is a convergence artifact, not a
+// modelling error, and the test `the resting tilt is a convergence residual` below pins it as one by
+// showing it vanish as the iteration count rises. Asserting zero here would be asserting a falsehood.
+//
+// #76 shrank that residual by ~300x at 8 iterations (warm starting) and then stopped the box moving at all
+// (sleeping). Both are measured in the `#76` list further down; the tests in THIS list are written to keep
+// observing the solver rather than the levers, so those that care run with sleeping switched off.
 
 let private material r f : Physics.Material = { Restitution = r; Friction = f }
 
@@ -420,6 +422,10 @@ let private stepConfig: Physics.Config =
       SleepAngular = 0.01
       SleepTicks = 60
       BroadPhaseCellSize = 4.0 }
+
+/// `stepConfig` with the sleeping lever switched off, so a scene can be watched for as long as it takes
+/// without freezing partway. A non-positive `SleepTicks` is the documented off switch (#76).
+let private noSleep: Physics.Config = { stepConfig with SleepTicks = 0 }
 
 let private tick = 1.0 / 60.0
 
@@ -443,6 +449,17 @@ let private dropped (cfg: Physics.Config) (shape: Physics.Shape) (m: Physics.Mat
     w
 
 let private restingContact (w: Physics.World) = Physics.manifold w 0 1
+
+/// How far a settled box is off level, read as the height difference between the two points of its
+/// face-on-face contact with the floor. Zero is a level rest; the value is the residual a fixed-iteration
+/// Gauss-Seidel solver leaves behind, and it is the sharpest thing this module's public surface can see
+/// about solver convergence. Both the `#75` residual test and the `#76` warm-start tests measure it.
+let private tiltAfter (cfg: Physics.Config) iterations =
+    let cfg = { cfg with VelocityIterations = iterations }
+
+    match restingContact (advance 2000 (dropped cfg (box 0.5 0.5) (material 0.0 0.5) 2.0)) with
+    | ValueSome m when m.PointCount = 2 -> abs (m.Points.[0].Y - m.Points.[1].Y)
+    | _ -> failtest "the box did not come to a two-point rest"
 
 /// True once the body has touched the floor and then left it again — the only externally visible
 /// signature of a bounce, given that velocity is not readable.
@@ -698,15 +715,11 @@ let stepTests =
               // velocity at a fixed 8 iterations; it is Gauss-Seidel not yet converged, so it must shrink
               // toward zero as iterations rise. If this ever fails, the solver has a real torque bug and
               // no iteration count will save it.
-              let tiltAfter iterations =
-                  let cfg = { stepConfig with VelocityIterations = iterations }
-
-                  match restingContact (advance 2000 (dropped cfg (box 0.5 0.5) (material 0.0 0.5) 2.0)) with
-                  | ValueSome m when m.PointCount = 2 -> abs (m.Points.[0].Y - m.Points.[1].Y)
-                  | _ -> failtest "the box did not come to a two-point rest"
-
-              let coarse = tiltAfter 8
-              let fine = tiltAfter 64
+              //
+              // Sleeping is OFF here. With it on the box stops after ~112 ticks and this measures the pose
+              // it happened to freeze in — which is a fact about the sleep threshold, not about the solver.
+              let coarse = tiltAfter noSleep 8
+              let fine = tiltAfter noSleep 64
 
               Expect.isLessThan fine coarse "more iterations converge closer to a level rest"
               Expect.isLessThan fine 1e-9 "and 64 iterations reach a level rest to within float noise"
@@ -921,18 +934,382 @@ let stepTests =
           }
 
           test "the checksum is stable across the process, not just the run" {
-              // Golden values. These are the numbers slices 6-8 must not move for a scene that never
-              // sleeps. If warm starting or CCD changes them, that is a deliberate decision to record —
-              // not a test to quietly re-baseline.
+              // Golden values. They are FNV-1a over the IEEE-754 bits of Pos/Vel/Rot/AngVel, so they are
+              // reproducible on any runtime that agrees on IEEE-754 double arithmetic — which is what
+              // `.NET` guarantees on a fixed compiler and ISA. A cross-platform lockstep guarantee needs
+              // fixed-point, and is a later ADR'd decision (design §6).
               //
-              // They are FNV-1a over the IEEE-754 bits of Pos/Vel/Rot/AngVel, so they are reproducible on
-              // any runtime that agrees on IEEE-754 double arithmetic — which is what `.NET` guarantees on
-              // a fixed compiler and ISA. A cross-platform lockstep guarantee needs fixed-point, and is a
-              // later ADR'd decision (design §6).
+              // #76 MOVED `boxOnFloor`, and this is the deliberate record of it that the slice owed. The
+              // old value was 12790444109480856124UL. Both of the slice's levers move it, independently:
+              //
+              //   warm starting alone (sleeping off)  -> 1048092559667977464UL
+              //   warm starting and sleeping together -> the value asserted below
+              //
+              // The two values below did NOT move, and that is the interesting half. `empty` proves the
+              // eight new `World` fields — two sleep arrays, six cache arrays — stay out of the hash (R3).
+              // `circleOnFloor` proves something sharper: a circle on a floor is a ONE-point contact that
+              // the solver converges exactly, so its rest is a true fixed point. Seeding a fixed point with
+              // its own impulse returns it unchanged, and freezing a body that was not moving changes
+              // nothing. Both levers are therefore exact no-ops on a converged rest — bit-for-bit, at 240
+              // ticks and at 600.
+              //
+              // `boxOnFloor` moves precisely because its rest is NOT converged: it is the two-point contact
+              // whose residual tilt the `#75` test above pins, and #76 both shrinks that residual and stops
+              // the box before it can creep. A scene that had genuinely settled would not have noticed.
               let boxOnFloor = advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
               let circleOnFloor = advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
 
               Expect.equal (Physics.checksum (Physics.empty stepConfig)) 12161962213042174405UL "empty world"
-              Expect.equal (Physics.checksum boxOnFloor) 12790444109480856124UL "a box at rest after 240 ticks"
+              Expect.equal (Physics.checksum boxOnFloor) 9427473436406466390UL "a box asleep after 240 ticks"
               Expect.equal (Physics.checksum circleOnFloor) 12544979940497693507UL "a circle at rest after 240 ticks"
+          } ]
+
+// =====================================================================================================
+// Warm starting and sleeping — the performance slice (#76)
+// =====================================================================================================
+//
+// Two levers, neither of which is supposed to change what the engine MEANS. They are measured through the
+// same two keyholes the `#75` list uses — `manifold` and `checksum` — because #76 adds no public surface:
+// `World` gained a sleep flag, a tick counter and a warm-start cache, and all three are hidden by the
+// `.fsi`, unhashed by `checksum`, and observable only through what the simulation does.
+//
+//   * **Sleeping** is observed as a `checksum` that STOPS MOVING. That is a stronger reading than an
+//     `isAsleep` accessor would give: it says the body stopped integrating, which is the thing sleeping is
+//     for. Its converse matters as much — a scene with the lever off must never freeze — so every
+//     freeze assertion below is paired with a no-freeze control.
+//
+//   * **Warm starting** is observed as CONVERGENCE. Seeding a contact with last tick's impulse cannot be
+//     seen directly, but a solver that starts warm settles a box level in fewer iterations than one that
+//     starts cold, and that gap is measurable. The cold numbers below were measured on the #75 build, the
+//     last commit before the cache existed, and are quoted as constants because that build is gone.
+//
+// A silent-failure note, since the mechanism invites one. Warm starting is a linear merge of two sorted
+// key sequences: last tick's cache and this tick's staged contacts. If those orders ever disagree, the
+// merge finds no match, every contact starts cold, and the engine stays CORRECT while quietly losing the
+// whole slice. Nothing throws. `warm starting beats the cold solver at a quarter of the iterations` is the
+// tripwire for exactly that, and it is why the assertion is against an absolute cold constant rather than
+// against "some improvement".
+
+/// The residual tilt the #75 build — cold, no cache — left at a given velocity-iteration count, measured
+/// by `tiltAfter` on the same scene before warm starting existed. Quoted, not computed: the build that
+/// produced them cannot be linked alongside the one that must beat them.
+let private coldTiltAt4 = 0.0095000108992362442
+let private coldTiltAt10 = 0.00072038225065007566
+
+/// True when a world has stopped changing: one more tick leaves every body's `Pos`/`Vel`/`Rot`/`AngVel`
+/// bit-identical. For a body under gravity this can only mean it has stopped integrating.
+let private frozen (w: Physics.World) =
+    Physics.checksum (Physics.step w tick) = Physics.checksum w
+
+/// `n` unit boxes stacked on the static floor, each dropped 0.02 above the one below so the stack settles
+/// rather than starting in a contact. Body 0 is the floor; bodies 1..n rise from it.
+let private stack (cfg: Physics.Config) (n: int) =
+    let w = Physics.empty cfg
+    let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+    let mutable acc = w
+
+    for i in 0 .. n - 1 do
+        let struct (_, grown) =
+            Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 (1.5 + float i * 1.02)) acc
+
+        acc <- grown
+
+    acc
+
+/// The first tick on which `w` stops changing, or `-1` if it never does within `limit`.
+let private freezeTick (limit: int) (w0: Physics.World) =
+    let mutable w = w0
+    let mutable t = 0
+    let mutable found = -1
+
+    while found < 0 && t < limit do
+        let next = Physics.step w tick
+        t <- t + 1
+        if Physics.checksum next = Physics.checksum w then found <- t
+        w <- next
+
+    found
+
+[<Tests>]
+let sleepAndWarmStartTests =
+    testList
+        "Game.Core Physics warm starting and sleeping (#76)"
+        [
+
+          // -----------------------------------------------------------------------------------------
+          // Sleeping: a settled scene stops integrating
+          // -----------------------------------------------------------------------------------------
+
+          test "a box that comes to rest eventually stops integrating, and stays stopped" {
+              let w = advance 200 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+
+              Expect.isTrue (frozen w) "the box has fallen asleep"
+
+              // Not merely "asleep this tick": a static floor is not a mover and must never wake it, so the
+              // freeze has to survive an arbitrary wait. 5000 ticks is 83 seconds of game time.
+              Expect.equal
+                  (Physics.checksum (advance 5000 w))
+                  (Physics.checksum w)
+                  "and nothing wakes it, however long the scene is left running"
+          }
+
+          test "the same box never stops when the lever is off" {
+              // The control for every freeze assertion above and below. Without it, a bug that froze the
+              // world for the wrong reason — a solver that zeroed velocity, say — would read as a pass.
+              let w = advance 200 (dropped noSleep (box 0.5 0.5) (material 0.0 0.5) 5.0)
+              Expect.isFalse (frozen w) "with SleepTicks = 0 the box keeps creeping on its convergence residual"
+          }
+
+          test "each of the three thresholds disables sleeping on its own" {
+              // `SleepTicks <= 0` is handled in code; the other two need none, because no squared speed is
+              // below zero and NaN fails every `<`. All three are asserted, because "needs no code" is
+              // exactly the claim that rots.
+              let settled (cfg: Physics.Config) =
+                  frozen (advance 400 (dropped cfg (box 0.5 0.5) (material 0.0 0.5) 5.0))
+
+              Expect.isFalse (settled { stepConfig with SleepTicks = 0 }) "SleepTicks = 0 disables sleeping"
+              Expect.isFalse (settled { stepConfig with SleepTicks = -1 }) "a negative SleepTicks disables it too"
+              Expect.isFalse (settled { stepConfig with SleepLinearSq = 0.0 }) "SleepLinearSq = 0 disables sleeping"
+              Expect.isFalse (settled { stepConfig with SleepAngular = 0.0 }) "SleepAngular = 0 disables sleeping"
+              Expect.isTrue (settled stepConfig) "and the default tuning does sleep"
+          }
+
+          test "the sleep counter wants CONSECUTIVE ticks, not a total" {
+              // A bouncy ball passes below the linear sleep threshold at the top of every arc, where its
+              // velocity turns over. A counter that ACCUMULATED those ticks would reach `SleepTicks` and
+              // freeze the ball in mid-air. A counter that demands them in a row never does.
+              //
+              // The horizon is chosen so the test can actually falsify that: it must run long enough for
+              // MORE THAN `SleepTicks` apexes to have gone by, or a cumulative counter would not have
+              // fired either and the assertion would prove nothing. At 1200 ticks there are only ~25.
+              // So the apex count is asserted too — the test checks its own premise rather than trusting a
+              // tick number to stay meaningful.
+              let mutable w = dropped stepConfig (Physics.SCircle 0.5) (material 0.9 0.0) 5.0
+              let mutable inContact = false
+              let mutable apexes = 0
+
+              for _ in 1..4000 do
+                  w <- Physics.step w tick
+                  let touching = (restingContact w).IsSome
+                  if touching && not inContact then apexes <- apexes + 1
+                  inContact <- touching
+
+              Expect.isGreaterThan
+                  apexes
+                  stepConfig.SleepTicks
+                  "the ball left and re-met the floor more often than a cumulative counter would have needed"
+
+              Expect.isFalse (frozen w) "yet it never slept, because it was never still for SleepTicks in a row"
+          }
+
+          test "a body in free fall never sleeps" {
+              // Nothing to rest on, and gravity means the speed threshold is crossed upward, never down.
+              let w = Physics.empty stepConfig
+              let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.0) (p 0.0 0.0) w
+
+              Expect.isFalse (frozen (advance 400 w)) "a falling body is not a resting one"
+          }
+
+          // -----------------------------------------------------------------------------------------
+          // Sleeping: a stack, which is where the lever is worth having — and where it is easy to get wrong
+          // -----------------------------------------------------------------------------------------
+
+          test "a stack of any height settles and sleeps, together" {
+              // The regression that matters, and it guards TWO invariants that have no cheaper observable.
+              //
+              // 1. Waking keys on whether a neighbour is MOVING, not on whether it is awake. Keyed on
+              //    "awake", two stacked bodies whose sleep counters filled a tick apart would wake each
+              //    other forever. A stack of two might still sleep, by the luck of both counters filling on
+              //    the same tick; a stack of THREE never would. Hence the sweep over heights — `n = 1` and
+              //    `n = 2` pass under the bug.
+              //
+              // 2. A sleeping body is immovable (zero effective inverse mass), not merely un-integrated.
+              //    A sleeper that kept its real mass would absorb impulses it never spends, so the awake
+              //    body resting on it would never have its gravity fully cancelled, would never come to
+              //    rest, and would never sleep. That is a cumulative effect with no single-tick signature:
+              //    a body woken this tick starts at zero velocity, so the one tick it leans on a still-
+              //    sleeping neighbour carries no impulse worth measuring. This test is where it shows.
+              for n in 1..5 do
+                  let t = freezeTick 1200 (stack stepConfig n)
+                  Expect.isGreaterThan t 0 (sprintf "a stack of %d comes to a complete stop" n)
+
+                  // The control: the same stack with the lever off never stops in that window. Without it,
+                  // a stack that merely converged to a bit-stable pose would pass the freeze above for the
+                  // wrong reason — the assertion would be about the solver, not about sleeping.
+                  Expect.equal
+                      (freezeTick 1200 (stack noSleep n))
+                      -1
+                      (sprintf "and a stack of %d with sleeping off keeps creeping" n)
+          }
+
+          test "more solver iterations reach sleep sooner, never later" {
+              // A monotonicity check, and the second half of the mutual-waking regression: under the
+              // "awake wakes the sleeper" bug this sequence was not merely slow but UNORDERED, because
+              // whether a stack ever slept turned on counters aligning rather than on convergence.
+              let ticks = [ 4; 8; 16; 32 ] |> List.map (fun it -> freezeTick 1200 (stack { stepConfig with VelocityIterations = it } 4))
+
+              Expect.allEqual (ticks |> List.map (fun t -> t > 0)) true "every iteration count reaches sleep"
+              Expect.isTrue (ticks = List.sortDescending ticks) (sprintf "sleep arrives no later as iterations rise: %A" ticks)
+          }
+
+          test "relaxing a sleep threshold never delays sleep" {
+              // The other monotonicity. Under the mutual-waking bug, relaxing BOTH thresholds made a stack
+              // that had slept stop sleeping — bodies dozed off out of step and woke one another. A
+              // threshold is a permission; loosening it cannot take sleep away.
+              let baseline = freezeTick 1200 (stack stepConfig 4)
+              let looserAngular = freezeTick 1200 (stack { stepConfig with SleepAngular = 0.1 } 4)
+              let looserBoth = freezeTick 1200 (stack { stepConfig with SleepAngular = 0.1; SleepLinearSq = 1.0 } 4)
+
+              Expect.isGreaterThan baseline 0 "the baseline stack sleeps at all"
+              Expect.isLessThanOrEqual looserAngular baseline "a looser angular threshold sleeps no later"
+              Expect.isLessThanOrEqual looserBoth looserAngular "and loosening both sleeps no later still"
+          }
+
+          test "a settled stack holds its shape rather than sinking into itself" {
+              // Sleeping must not be a way to hide a sinking stack: freezing a scene mid-penetration would
+              // pass every `frozen` assertion above. Every contact must be resting at the slop.
+              let w = advance 1200 (stack stepConfig 4)
+              Expect.isTrue (frozen w) "the stack is asleep"
+
+              let mutable contacts = 0
+
+              for a in 0..4 do
+                  for b in a + 1 .. 4 do
+                      match Physics.manifold w a b with
+                      | ValueSome m ->
+                          contacts <- contacts + 1
+                          Expect.isLessThan m.Depth (stepConfig.Slop + 1e-4) "no contact is penetrating past the slop"
+                      | ValueNone -> ()
+
+              // floor-1, 1-2, 2-3, 3-4: a chain, and nothing skipping a link.
+              Expect.equal contacts 4 "the stack is intact: four contacts, each between neighbours"
+          }
+
+          // -----------------------------------------------------------------------------------------
+          // Waking
+          // -----------------------------------------------------------------------------------------
+
+          test "a falling body wakes the sleeper it lands on, and the scene re-sleeps" {
+              let settled =
+                  let w = Physics.empty stepConfig
+                  let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+                  let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 1.5) w
+                  advance 200 w
+
+              Expect.isTrue (frozen settled) "the first box is asleep before anything is dropped on it"
+
+              // `addBody` must not disturb the sleeper by itself — only the falling body may.
+              let struct (_, disturbed) =
+                  Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 4.0) settled
+
+              let landed = advance 120 disturbed
+
+              match Physics.manifold landed 1 2 with
+              | ValueSome m -> Expect.isLessThan m.Depth (stepConfig.Slop + 1e-4) "the dropped box rests ON the sleeper"
+              | ValueNone -> failtest "the dropped box never reached the sleeper"
+
+              // It did not tunnel through into the floor, which is what a body treated as absent would let it do.
+              Expect.isTrue (Physics.manifold landed 0 2).IsNone "and never touches the floor through it"
+
+              Expect.isTrue (frozen (advance 600 disturbed)) "and the disturbed pair settles back to sleep"
+          }
+
+          test "adding a body does not itself wake a settled scene" {
+              // The warm-start cache is keyed on body indices and `addBody` only ever appends, so no entry
+              // is invalidated and no sleeper need be disturbed. A body added far away must change nothing.
+              let settled = advance 200 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+              let before = Physics.checksum settled
+
+              let struct (_, grown) =
+                  Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.5) (p 40.0 40.0) settled
+
+              // The far body falls; the sleeper does not stir. Their state is hashed together, so compare
+              // the sleeper through the contact it holds with the floor instead.
+              match restingContact settled, restingContact (Physics.step grown tick) with
+              | ValueSome a, ValueSome b ->
+                  Expect.equal b.Depth a.Depth "the sleeper's penetration is untouched by a body added across the world"
+              | _ -> failtest "the box left the floor"
+
+              Expect.equal (Physics.checksum settled) before "and `addBody` did not step the world"
+          }
+
+          // -----------------------------------------------------------------------------------------
+          // Warm starting
+          // -----------------------------------------------------------------------------------------
+
+          test "warm starting beats the cold solver at a quarter of the iterations" {
+              // The design's own claim: "a warm-started 4-iteration solver beats a cold 10-iteration one on
+              // stacks." Asserted against the #75 build's measured residual, because a warm build cannot
+              // produce a cold number to compare itself against.
+              //
+              // This is also the tripwire for a silently-broken cache: if the merge stops finding last
+              // tick's impulses, every contact starts cold and `warm4` regresses to `coldTiltAt4`, which is
+              // 48x the number asserted here. Nothing else in the suite would notice.
+              let warm4 = tiltAfter noSleep 4
+
+              Expect.isLessThan warm4 coldTiltAt10 "4 warm iterations settle the box flatter than 10 cold ones"
+              Expect.isLessThan (warm4 * 10.0) coldTiltAt4 "and beat 4 cold iterations by more than an order of magnitude"
+          }
+
+          test "warm starting still converges toward a level rest as iterations rise" {
+              // Warm starting is a convergence accelerator, not a different answer: the sequence must remain
+              // monotone in the iteration count, and must still reach a level rest. If seeding ever pushed
+              // the solver somewhere the cold one would not go, this is where it would show.
+              let tilts = [ 4; 8; 16 ] |> List.map (tiltAfter noSleep)
+
+              Expect.isTrue (tilts = List.sortDescending tilts) (sprintf "more iterations, flatter rest: %A" tilts)
+              Expect.isLessThan (tiltAfter noSleep 64) 1e-12 "and 64 warm iterations reach a level rest"
+          }
+
+          test "warm starting and sleeping are exact no-ops on a converged rest" {
+              // A circle on a floor is a one-point contact the solver converges exactly, so its rest is a
+              // fixed point: seeding it with its own impulse returns it unchanged, and freezing a body that
+              // has stopped moving changes nothing. Bit-for-bit, with each lever alone and with both.
+              //
+              // This is the honest form of the slice's acceptance criterion. A scene that has genuinely
+              // settled does not notice #76; `boxOnFloor` moves only because its rest never converged.
+              let circle cfg = advance 240 (dropped cfg (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+              Expect.equal
+                  (Physics.checksum (circle noSleep))
+                  12544979940497693507UL
+                  "warm starting alone leaves the #75 checksum bit-identical"
+
+              Expect.equal
+                  (Physics.checksum (circle stepConfig))
+                  (Physics.checksum (circle noSleep))
+                  "and sleeping on top of it changes nothing either"
+
+              Expect.equal
+                  (Physics.checksum (advance 600 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)))
+                  (Physics.checksum (advance 600 (dropped noSleep (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)))
+                  "still true at 600 ticks, long after the sleeping one has frozen"
+          }
+
+          test "the checksum sees neither the sleep flag nor the warm-start cache (R3)" {
+              // Two worlds that differ in solver state BY CONSTRUCTION — one has sleeping enabled and has
+              // fallen asleep, dropping its cache; the other has the lever off and holds a live one — and
+              // whose presentation is then shown to agree independently of the hash, through `manifold`.
+              // Only then does an equal checksum say something: that neither the flag, the counter, nor the
+              // cache reaches it. That is the property which lets a replay tripwire survive an optimisation.
+              let asleep = advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+              let awake = advance 240 (dropped noSleep (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+              match restingContact asleep, restingContact awake with
+              | ValueSome a, ValueSome b ->
+                  Expect.equal b.Depth a.Depth "the two worlds present the same pose"
+                  Expect.equal b.Normal a.Normal "...down to the contact normal"
+              | _ -> failtest "the circle left the floor"
+
+              Expect.equal (Physics.checksum asleep) (Physics.checksum awake) "so they must hash alike"
+
+              // And the eight fields `World` gained carry no weight in the hash of an empty world.
+              Expect.equal (Physics.checksum (Physics.empty stepConfig)) 12161962213042174405UL "empty world, unchanged since #75"
+          }
+
+          test "a warm world replays bit-identically" {
+              // The cache is cross-tick state, and cross-tick state is where a replay diverges. It is held
+              // as sorted parallel arrays and merged linearly precisely so that no hash order can leak in.
+              let run () = Physics.checksum (advance 600 (stack stepConfig 4))
+              Expect.equal (run ()) (run ()) "two runs of a settling stack agree"
           } ]
