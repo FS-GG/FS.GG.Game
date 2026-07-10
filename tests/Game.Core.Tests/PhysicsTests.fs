@@ -1577,3 +1577,117 @@ let interpolateTests =
               Expect.floatClose Accuracy.high (Physics.lerpAngleShortest 1.0 2.0 0.25) 1.25 "a quarter of the way"
               Expect.floatClose Accuracy.high (Physics.lerpAngleShortest -0.4 0.4 0.5) 0.0 "straddling 0 goes through 0"
           } ]
+
+// ---------------------------------------------------------------------------------------------------
+// The world-build path and the carried broad phase (#94). Two changes with one common evidence bar:
+// they must not move a single bit of what the simulation produces.
+//
+//   * `addBodies` is the O(N) batch build path. The load-bearing claim is EQUIVALENCE: a world built by
+//     one `addBodies` and a world built by folding `addBody` over the same bodies are the same world —
+//     same indices, same `pairs`, same `checksum`, and the same `checksum` after a shared replay. Anything
+//     less would make the fast path a different engine, which is the one thing a perf change must not be.
+//
+//   * The broad-phase grid now lives ON the `World`, rebuilt by `step` from the poses it integrates. The
+//     risk that buys is a STALE grid — one keyed on last tick's poses — so the direct test is that a
+//     stepped world's `pairs` reflects where its bodies ARE, not where they started.
+let private buildQuads (bodies: (Physics.BodyKind * Physics.Shape * Point) list) =
+    bodies |> List.map (fun (k, s, pos) -> k, s, noMaterial, pos)
+
+[<Tests>]
+let worldBuildTests =
+    testList
+        "Game.Core Physics world build and carried broad phase (#94)"
+        [ test "addBodies builds the same world as folding addBody — indices, pairs, checksum, and a replay all agree" {
+              let prop (raw: (float * float * float * int * int) list) =
+                  // The oracle here is `addBody` itself, folded; cap the batch where a fold stays cheap.
+                  let quads = raw |> List.truncate 20 |> List.map bodyOf |> buildQuads
+
+                  let folded =
+                      quads
+                      |> List.fold
+                          (fun w (k, s, m, pos) ->
+                              let struct (_, w') = Physics.addBody k s m pos w
+                              w')
+                          (Physics.empty stepConfig)
+
+                  let struct (idxBatch, batched) = Physics.addBodies quads (Physics.empty stepConfig)
+
+                  // Indices are dense and ascending from 0 on a fresh world, exactly as N `addBody` calls assign.
+                  let sameIndices = Array.toList idxBatch = [ 0 .. List.length quads - 1 ]
+                  let samePairs = Physics.pairs folded = Physics.pairs batched
+                  let sameChecksum = Physics.checksum folded = Physics.checksum batched
+                  // ...and the two remain identical under the one thing that reads all the derived state: `step`.
+                  let sameAfterReplay = Physics.checksum (advance 30 folded) = Physics.checksum (advance 30 batched)
+
+                  sameIndices && samePairs && sameChecksum && sameAfterReplay
+
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+          }
+
+          test "addBodies assigns dense ascending indices from the world's current body count" {
+              // Two bodies already in the world (indices 0 and 1); the batch must continue from 2.
+              let w0 =
+                  worldOf
+                      8.0
+                      [ Physics.Static, box 5.0 1.0, p 0.0 0.0
+                        Physics.Dynamic, Physics.SCircle 1.0, p 0.0 3.0 ]
+
+              let struct (idx, _) =
+                  Physics.addBodies
+                      [ Physics.Dynamic, Physics.SCircle 0.5, noMaterial, p 2.0 3.0
+                        Physics.Dynamic, Physics.SCircle 0.5, noMaterial, p 4.0 3.0 ]
+                      w0
+
+              Expect.equal (Array.toList idx) [ 2; 3 ] "the batch continues the world's index sequence, it does not restart it"
+          }
+
+          test "an empty batch is the identity — no indices, and a bit-for-bit unchanged world" {
+              let w =
+                  worldOf
+                      8.0
+                      [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                        Physics.Static, box 20.0 1.0, p 0.0 -1.5 ]
+
+              let struct (idx, w') = Physics.addBodies [] w
+
+              Expect.isEmpty idx "nothing added, no indices"
+              Expect.equal (Physics.checksum w') (Physics.checksum w) "the world's body state is unchanged"
+              Expect.equal (Physics.pairs w') (Physics.pairs w) "and the broad phase it carries is unchanged"
+          }
+
+          test "a degenerate body in a batch still takes its index, so later bodies do not shift" {
+              // Body 1 has radius 0 — a no-collision input — but it is still indexed, exactly as the single
+              // `addBody` path indexes it, so body 2 keeps index 2 rather than sliding to 1.
+              let struct (idx, w) =
+                  Physics.addBodies
+                      [ Physics.Dynamic, Physics.SCircle 1.0, noMaterial, p 0.0 0.0
+                        Physics.Dynamic, Physics.SCircle 0.0, noMaterial, p 0.0 0.0
+                        Physics.Dynamic, Physics.SCircle 1.0, noMaterial, p 0.5 0.0 ]
+                      (Physics.empty (config 8.0))
+
+              Expect.equal (Array.toList idx) [ 0; 1; 2 ] "every body is indexed, degenerate or not"
+              Expect.equal (pairList w) [ (0, 2) ] "the zero-radius body pairs with nothing; 0 and 2 still overlap and pair"
+          }
+
+          test "the broad phase a stepped world carries reflects the poses step integrated, not its opening ones" {
+              // A circle starts far ABOVE the floor, their AABBs disjoint, so the OPENING broad phase reports
+              // no pair. It then falls. If `step` refreshes the grid it hands on, `pairs` reports the contact
+              // once the circle nears the floor; if `step` left a grid keyed on the opening poses, the pair
+              // would never appear however far the circle fell. Two bodies, so `pairs` is `[]` or `[(0,1)]`.
+              let w0 =
+                  let w = Physics.empty stepConfig
+                  let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.0) (p 0.0 0.0) w
+                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.0) (p 0.0 20.0) w
+                  w
+
+              Expect.isEmpty (pairList w0) "far apart at rest, the opening broad phase sees no pair"
+
+              let mutable w = w0
+              let mutable sawPair = false
+
+              for _ in 1..120 do
+                  w <- Physics.step w tick
+                  if pairList w = [ (0, 1) ] then sawPair <- true
+
+              Expect.isTrue sawPair "as the circle nears the floor, the carried broad phase reports the contact — the grid moved with the bodies"
+          } ]

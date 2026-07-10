@@ -99,12 +99,15 @@ module Physics =
     /// Immutable at the boundary — every function here takes a `World` and returns a value — so a `World`
     /// is safe to hold inside a `Model`, and safe as the `'world` of `Loop.StepState`.
     ///
-    /// Besides body state a `World` carries the solver's **cross-tick state**: which bodies are asleep, how
-    /// long each has been still, and the impulse each contact accumulated last tick (the warm-start cache).
-    /// None of it is presentation, none of it reaches `checksum`, and none of it is meaningful to
-    /// interpolate. **Two worlds equal in presentation may differ in solver state** — a world that has just
-    /// woken holds no cache, and one that settled through a different history holds a different one — so
-    /// compare worlds with `checksum`, never structurally.
+    /// Besides body state a `World` carries **cross-tick derived state**: which bodies are asleep, how long
+    /// each has been still, the impulse each contact accumulated last tick (the warm-start cache), and the
+    /// broad-phase index — each body's world-space bounds and the grid that buckets them, kept current with
+    /// the bodies so `pairs` reads it rather than rebuilding one per call. None of it is presentation, none
+    /// of it reaches `checksum`, and none of it is meaningful to interpolate. **Two worlds equal in
+    /// presentation may differ in this state** — a world that has just woken holds no cache, one that settled
+    /// through a different history holds a different one, and a world built by `addBodies` reaches the same
+    /// pose as one built by `addBody` through different arrays — so compare worlds with `checksum`, never
+    /// structurally.
     type World
 
     /// Public contract type exposed by the FS.GG.Game.Core package.
@@ -128,9 +131,26 @@ module Physics =
     /// collides with nothing — see `Shape`.
     ///
     /// Cost is O(body count): the world's arrays are copied. This is the *build* path, not the step path
-    /// — `Physics.step` is the one that must not allocate.
+    /// — `Physics.step` is the one that must not allocate. Adding many bodies at once is O(N²) this way, a
+    /// copy per body; reach for `addBodies` when a caller has a batch, which copies once.
     val addBody:
         kind: BodyKind -> shape: Shape -> material: Material -> position: Point -> world: World -> struct (int * World)
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Append a *batch* of bodies in one pass and return `struct(indices, world')`, where `indices.[k]` is
+    /// the identity of the `k`-th body of `bodies` — dense and ascending from the world's previous body
+    /// count, exactly the indices the same bodies added one at a time through `addBody` would receive.
+    ///
+    /// This is the build path for a scene: it copies each of the world's arrays **once for the whole batch**
+    /// and rebuilds the broad-phase index once, so loading an N-body world is O(N), where N separate
+    /// `addBody` calls are O(N²) — a full copy per body. `addBodies bodies` and folding `addBody` over the
+    /// same `bodies` produce worlds with identical `checksum`s and identical `pairs`.
+    ///
+    /// Every guarantee `addBody` makes holds: it is an append that returns a new value and never mutates
+    /// `world`, so the input world is untouched and safe to keep, indices are stable, and each body enters at
+    /// rest, unrotated and awake. A degenerate `shape` or non-finite `position` is still accepted, indexed,
+    /// and collides with nothing. An empty `bodies` returns `struct([||], world)` — the world unchanged.
+    val addBodies: bodies: seq<BodyKind * Shape * Material * Point> -> world: World -> struct (int[] * World)
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// The broad phase: every candidate pair, as `struct(a, b)` with `a < b`, **sorted ascending by
