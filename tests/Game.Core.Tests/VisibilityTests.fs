@@ -42,7 +42,9 @@ let private spanningBound: Rect =
 module private Oracle =
     open System.Numerics
 
-    /// `d * 2^1074`, exact for any finite `d`.
+    /// `d * 2^1074`, exact for any finite `d`. Undefined for infinity/NaN (`expBits = 2047`), which
+    /// would take the normal branch and yield a large finite integer for a value that is not a number.
+    /// Every caller feeds it a `t` that `raySegment` has already proved finite, or a literal coordinate.
     let scaled (d: float) : BigInteger =
         let bits = System.BitConverter.DoubleToInt64Bits d
         let sign = if bits < 0L then BigInteger.MinusOne else BigInteger.One
@@ -60,6 +62,10 @@ module private Oracle =
     /// `|a| / |b|` as a double. Divides as `BigInteger` FIRST: these numerators run to hundreds of
     /// digits, `float` of one is `+infinity`, and `infinity / infinity` is a `NaN` that compares
     /// false against every tolerance — i.e. a differential that silently passes.
+    ///
+    /// Carries a resolution floor: the `<<< 64` gives 64 fractional bits, so a true ratio below
+    /// `2^-64` (~5.4e-20) truncates to `0.0`. Far under every tolerance asserted here; a test that
+    /// ever tightens past ~1e-19 must widen the shift or it will measure nothing.
     let private ratio (a: BigInteger) (b: BigInteger) : float =
         if a.IsZero then
             0.0
@@ -75,11 +81,15 @@ module private Oracle =
         let den = scaled dir.X * ey - scaled dir.Y * ex
         if den.IsZero then None else Some(wx * ey - wy * ex, den)
 
-    // `t*den - num`, scaled by `2^1074` so it stays an integer. Both `|t - exact|*|den|*2^1074`.
+    /// `|t - tExact| * |den| * 2^1074` — an integer, so the comparison never rounds. The two callers
+    /// below recover a relative or an absolute error by choosing what to divide it by.
     let private residual (t: float) (num: BigInteger) (den: BigInteger) =
         BigInteger.Abs(scaled t * den - (num <<< 1074))
 
-    /// `|t - tExact| / |tExact|`. An exact `t` of zero admits only an exact `0.0` back.
+    /// `|t - tExact| / |tExact|`. An exact `t` of zero admits only an exact `0.0` back — any other
+    /// answer is infinitely wrong in relative terms, and `infinity` is the honest report. (Reaching it
+    /// needs `origin` exactly on the segment's infinite line, i.e. an exactly-vanishing 2x2 integer
+    /// determinant, which random coordinates do not produce.)
     let relErr (t: float) (num: BigInteger, den: BigInteger) =
         let r = residual t num den
 
@@ -92,27 +102,82 @@ module private Oracle =
     let absErr (t: float) (num: BigInteger, den: BigInteger) =
         ratio (residual t num den) (BigInteger.Abs den <<< 1074)
 
-/// A deterministic stream of `n` coordinate quadruples, linear-uniform in `[-s, s]` — a bounded world,
-/// not the log-uniform spread that manufactures the degenerate configurations `raySegment` disclaims.
-/// Uses `Rng` (byte-deterministic by its own contract) so this differential can never flake.
+/// Deterministic sample streams for the differentials. All driven by `Rng`, which is byte-deterministic
+/// by its own contract, so these can never flake — and lazily, so a 20k-sample run allocates nothing.
+
+/// A bounded world: coordinates linear-uniform in `[-s, s]`, generic configurations.
 let private worldSamples (s: float) (n: int) =
-    let coord rng =
-        let struct (f, rng') = Rng.nextFloat rng
-        struct ((f * 2.0 - 1.0) * s, rng')
+    seq {
+        let mutable rng = Rng.ofSeed 20260710UL
 
-    let mutable rng = Rng.ofSeed 20260710UL
+        let draw () =
+            let struct (f, rng') = Rng.nextFloat rng
+            rng <- rng'
+            (f * 2.0 - 1.0) * s
 
-    [ for _ in 1..n do
-          let struct (ox, r1) = coord rng
-          let struct (oy, r2) = coord r1
-          let struct (ax, r3) = coord r2
-          let struct (ay, r4) = coord r3
-          let struct (bx, r5) = coord r4
-          let struct (by, r6) = coord r5
-          let struct (dx, r7) = coord r6
-          let struct (dy, r8) = coord r7
-          rng <- r8
-          yield pt ox oy, pt dx dy, seg (pt ax ay) (pt bx by) ]
+        for _ in 1..n do
+            let ox, oy = draw (), draw ()
+            let ax, ay = draw (), draw ()
+            let bx, by = draw (), draw ()
+            let dx, dy = draw (), draw ()
+            yield pt ox oy, pt dx dy, seg (pt ax ay) (pt bx by)
+    }
+
+/// GRAZING rays: `dir` leans `sinTheta` off the wall's tangent, and `origin` sits `sinTheta * tHit` off
+/// its line, so the crossing lands at `t = tHit` and the solve's denominator `dir × E` is order
+/// `sinTheta * |E|` — i.e. it cancels away `-log10 sinTheta` digits. This, not a ray aimed at an
+/// endpoint, is what makes `t` ill-conditioned: aiming at an endpoint merely drives `u` to zero while
+/// leaving `t ≈ 1`, which is perfectly conditioned. `sinTheta` spans `1e-2` (a mild graze) down to
+/// `1e-14` (a razor one), and is yielded so a test can check the error against the conditioning it implies.
+let private grazingSamples (s: float) (n: int) =
+    seq {
+        let mutable rng = Rng.ofSeed 20260710UL
+
+        let draw () =
+            let struct (f, rng') = Rng.nextFloat rng
+            rng <- rng'
+            f
+
+        for _ in 1..n do
+            let ax, ay = (draw () * 2.0 - 1.0) * s, (draw () * 2.0 - 1.0) * s
+            let bx, by = (draw () * 2.0 - 1.0) * s, (draw () * 2.0 - 1.0) * s
+            let ex, ey = bx - ax, by - ay
+            let len = sqrt (ex * ex + ey * ey)
+            let sinTheta = System.Math.Pow(10.0, -2.0 - 12.0 * draw ())
+            let alongWall = draw () * 0.9 + 0.05 // land strictly inside the wall
+            let back = draw () * 0.5 // start behind the landing point
+
+            if len > 0.0 then
+                let tx, ty = ex / len, ey / len // unit tangent
+                let nx, ny = -ty, tx // unit normal
+                let a = -back * len
+                let tHit = alongWall * len - a
+
+                if tHit > 0.0 then
+                    let origin = pt (ax + a * tx - sinTheta * tHit * nx) (ay + a * ty - sinTheta * tHit * ny)
+                    let dir = pt (tx + sinTheta * nx) (ty + sinTheta * ny)
+                    yield origin, dir, seg (pt ax ay) (pt bx by), sinTheta
+    }
+
+/// The regime the `.fsi` disclaims: coordinates log-uniform across ~14 orders of magnitude
+/// (`1e-8` … `1e6`), which is what manufactures the wide dynamic range between `origin` and the
+/// segment endpoints. A different seed from `worldSamples`, so the two differentials are independent.
+let private wideRangeSamples (n: int) =
+    seq {
+        let mutable rng = Rng.ofSeed 20260711UL
+
+        let draw () =
+            let struct (f, rng') = Rng.nextFloat rng
+            rng <- rng'
+            f
+
+        let coord () =
+            let e = draw () * 14.0 - 8.0
+            (draw () * 2.0 - 1.0) * System.Math.Pow(10.0, e)
+
+        for _ in 1..n do
+            yield pt (coord ()) (coord ()), pt (coord ()) (coord ()), seg (pt (coord ()) (coord ())) (pt (coord ()) (coord ()))
+    }
 
 [<Tests>]
 let tests =
@@ -355,12 +420,19 @@ let tests =
         // ordinary double that is simply wrong — `raySegment` reports a hit at `t = 0` for a crossing
         // that is elsewhere — and no self-consistency check can see that. Only an exact oracle can.
         //
-        // The cause is not the cross products: it is that `W = seg.A - origin` is *rounded before they
-        // are formed*, so when `origin` and `seg.A` differ by enough orders of magnitude the smaller
-        // operand is discarded outright. Anchoring at the nearer endpoint (the rescaled fallback) cannot
-        // recover a bit the subtraction already dropped — measured, it repairs fewer than half of these.
-        // Hence the `.fsi` scopes its precision claim to a bounded world rather than promising past it.
-        // These two tests are that scope, made executable.
+        // `t = (W × E) / (dir × E)` degrades in two independent ways, and conflating them is the trap:
+        //
+        //   * the DENOMINATOR `dir × E` cancels as the ray/wall angle closes. This is the textbook
+        //     conditioning of a line-line intersection — relative error grows like `u / sin θ` — and it
+        //     is inherent to the parametrisation, not a defect. It is pinned below as a LAW, not a bound.
+        //   * the NUMERATOR `W × E` cancels when `origin` and `seg.A` span many orders of magnitude,
+        //     because `W = seg.A - origin` rounds the smaller operand away *before* the cross product
+        //     exists. Anchoring at the nearer endpoint (the rescaled fallback) cannot recover a bit the
+        //     subtraction already dropped — measured, it repairs fewer than half of these. This is #64.
+        //
+        // The `.fsi` therefore promises accuracy over a bounded world of generic configurations, states
+        // the conditioning law for grazing rays, and disclaims wide dynamic range. These tests are those
+        // three statements, made executable.
 
         testCase "raySegment's t is accurate to 1e-12 over a bounded world" <| fun () ->
             let mutable checked' = 0
@@ -385,38 +457,68 @@ let tests =
                 1.0e-12
                 $"relative error of t against the exact BigInteger solve, over {checked'} hits"
 
-        // The adversarial case this module generates on *every* sweep ray: `dir` aimed at a wall endpoint,
-        // hence near-collinear with the wall, which is exactly when `W × E` cancels. Here `t`'s relative
-        // error does cross 1e-12 (a handful per 100k) — so the promise is stated where it is meaningful,
-        // on the hit point, in units of the segment it landed on.
-        testCase "a sweep ray aimed at a wall endpoint lands within 1e-9 of a segment length" <| fun () ->
+        // A grazing ray is where `t` is genuinely ill-conditioned: `dir × E` cancels away `-log10 sinθ`
+        // digits, so NO bound of the form "relative error < c" can hold — at `sinθ = 1e-14` the error is
+        // percent-scale, and that is arithmetic, not a bug. What *can* be pinned, and what a regression
+        // would break, is the LAW: `relErr ≈ u_machine / sinθ`, i.e. `relErr * sinθ` stays at machine
+        // epsilon. Measured max is 1.52e-16 (~0.7 * 2^-52); the bound below leaves ~6x headroom.
+        //
+        // Pinning the law rather than a number is what keeps this test honest. A `1e-9` bound on the hit
+        // point, say, would pass here only because the sampler never grazed — the mistake this test
+        // replaces, which reported `t ≈ 1` for all 10,096 of its "adversarial" hits.
+        testCase "a grazing ray degrades exactly as its conditioning predicts, and no worse" <| fun () ->
             let mutable checked' = 0
             let mutable worst = 0.0
+            let mutable degenerate = 0
 
-            for origin, _, s in worldSamples 1.0e4 20_000 do
-                // aim at `seg.A`, with a sub-ulp angular jitter so the ray never exactly hits the vertex
-                let jitter = 1.0e-13 * 1.0e4
-                let dir = pt (s.A.X - origin.X + jitter) (s.A.Y - origin.Y)
-                let segLen = sqrt (sqLenPt (pt (s.B.X - s.A.X) (s.B.Y - s.A.Y)))
-
+            for origin, dir, s, sinTheta in grazingSamples 1.0e4 20_000 do
                 match Visibility.raySegment origin dir s with
                 | None -> ()
-                | Some(_, t) when segLen > 0.0 ->
+                | Some(_, t) ->
+                    match Oracle.tExact origin dir s with
+                    | None -> ()
+                    | Some exact ->
+                        let r = Oracle.relErr t exact
+                        // `relErr` is `infinity` only for an exactly-collinear origin, which this
+                        // generator never constructs. Count rather than silently skip.
+                        if System.Double.IsFinite r then
+                            checked' <- checked' + 1
+                            worst <- max worst (r * sinTheta)
+                        else
+                            degenerate <- degenerate + 1
+
+            Expect.isGreaterThan checked' 10_000 "the generator must actually produce grazing hits"
+            Expect.equal degenerate 0 "no sample should be exactly collinear"
+
+            Expect.isLessThan
+                worst
+                1.0e-15
+                $"relErr * sinTheta (the conditioning law) over {checked'} grazing rays"
+
+        // The regime the `.fsi` disclaims, measured rather than asserted. The claim it makes — that this
+        // starts biting at ~14 orders of magnitude, not the ~200 that #64 assumed — is exactly the claim
+        // that redirected that issue, so it gets a harness rather than a footnote. Both bounds matter: the
+        // lower one fails if the defect ever gets fixed (delete this test and the caveat together), the
+        // upper one fails if it ever gets meaningfully worse.
+        testCase "outside the bounded world ~2% of hits carry a relative error above 1e-12" <| fun () ->
+            let mutable checked' = 0
+            let mutable degraded = 0
+
+            for origin, dir, s in wideRangeSamples 20_000 do
+                match Visibility.raySegment origin dir s with
+                | None -> ()
+                | Some(_, t) ->
                     match Oracle.tExact origin dir s with
                     | None -> ()
                     | Some exact ->
                         checked' <- checked' + 1
-                        // |Δt| is in units of `dir`; scale to world units, then to segment lengths.
-                        let positional = Oracle.absErr t exact * sqrt (sqLenPt dir)
-                        worst <- max worst (positional / segLen)
-                | Some _ -> ()
+                        if Oracle.relErr t exact > 1.0e-12 then degraded <- degraded + 1
 
             Expect.isGreaterThan checked' 1_000 "the sampler must actually produce hits to measure"
+            let rate = float degraded / float checked'
 
-            Expect.isLessThan
-                worst
-                1.0e-9
-                $"hit-point error in segment lengths, over {checked'} near-collinear sweep rays"
+            Expect.isGreaterThan rate 0.01 $"degraded fraction ({degraded}/{checked'}) — 14 orders suffice"
+            Expect.isLessThan rate 0.05 $"degraded fraction ({degraded}/{checked'}) — and has not worsened"
 
         // Guards the guard. An oracle that returns `NaN` — `float` of a several-hundred-digit numerator is
         // `+infinity`, and `infinity / infinity` is `NaN` — makes every `isLessThan` above pass on inputs it
