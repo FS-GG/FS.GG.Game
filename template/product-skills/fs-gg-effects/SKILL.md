@@ -60,8 +60,9 @@ let pipeline =
       Effects.subtract (fun u k -> if isElemental k then 0.0 else u.Armor)
       Effects.floorAt 1.0 ]                                       // never runs after a Halt
 
-let trace = Effects.pipeline pipeline spectre { Kind = Frost; Source = Declared; Base = 5.0 }
+let trace = Effects.pipeline pipeline spectre { Kind = Frost; Source = Source.Declared; Base = 5.0 }
 
+trace.Seed               // 5.0 — the amount the pipeline started from (damage.Base under pipeline)
 trace.Final              // 0.0 — not 1.0
 trace.Halted             // ValueSome "resist"  <- suppress the rider Slow
 trace.Steps              // [ "amplify", 5.0; "resist", 0.0 ] — armor and floorAt never ran
@@ -142,15 +143,17 @@ let targets = region |> List.filter (fun (_, m) -> m > 0.0)
 The corpus writes "damage type" for both. They are orthogonal, and only `Source` is built in:
 
 - **`Kind`** — Physical / Frost / Electric. Generic in `'K`; `Game.Core` never learns what Frost is.
-- **`Source`** — `Declared | Collision | Environmental | Periodic`. *Why* the damage is being dealt.
+- **`Source`** — `Source.Declared | Source.Collision | Source.Environmental | Source.Periodic`. *Why* the
+  damage is being dealt. (`Source` is `[<RequireQualifiedAccess>]`, so always spell the case: a bare
+  `Declared` no longer resolves through `open FS.GG.Game.Core`.)
 
 **Cover and `Armored` are `Source` rules.** They reduce *declared attacks* and nothing else: a unit
 shoved into a wall is not being attacked, and neither is one standing in lava. `gatedBy` says so, and
 the collision `1` and the lava `3` then run the same pipeline and are reduced by neither.
 
 ```fsharp
-let cover = Effects.gatedBy [ Declared ] (Effects.subtract (fun u _ -> coverOf u.Tile))
-let armored = Effects.gatedBy [ Declared ] (Effects.subtract (fun u _ -> u.ArmoredReduction))
+let cover = Effects.gatedBy [ Source.Declared ] (Effects.subtract (fun u _ -> coverOf u.Tile))
+let armored = Effects.gatedBy [ Source.Declared ] (Effects.subtract (fun u _ -> u.ArmoredReduction))
 ```
 
 ⚠️ **Armor-bypass is a `Kind` rule, and this is the trap.** A spec that says "*elemental* sources
@@ -164,7 +167,7 @@ stage still subtracts armor from them and **only Poison ever gets its bypass**. 
 let armor = Effects.subtract (fun u k -> if isElemental k then 0.0 else u.Armor)
 
 // WRONG — a Declared Frost bolt is still armored.
-let armor = Effects.gatedBy [ Declared; Collision ] (Effects.subtract (fun u _ -> u.Armor))
+let armor = Effects.gatedBy [ Source.Declared; Source.Collision ] (Effects.subtract (fun u _ -> u.Armor))
 ```
 
 So a whole tower-defense is one ungated list — a Cannon shell and a Frost bolt walk the same four
@@ -184,7 +187,7 @@ Four policies cover the corpus. Naming them is the whole contribution; there is 
 | Policy | Meaning | Typical |
 |---|---|---|
 | `Refresh` | one instance; reapplying sets ticks to `max(old, new)` | Stun |
-| `Strongest magnitude` | one instance; a **stronger-or-equal** application replaces it and refreshes; a weaker one changes nothing | Slow |
+| `Strongest magnitude` | one instance; a **stronger-or-equal** application replaces it and sets ticks to `max(old, new)`; a weaker one changes nothing | Slow |
 | `Stacks cap` | independent, additive instances, appended while `count < cap`; at the cap, a **no-op** | Poison |
 | `Once` | the first application wins; every later one is a no-op | a one-shot brand |
 
@@ -196,11 +199,15 @@ let slows = Effects.applyEffect slowPolicy { Effect = frost; TicksRemaining = 90
 ```
 
 The `>=` in `Strongest` is load-bearing: it is what lets a **second tower of the same type** re-up a
-slow it cannot out-strengthen. Change it to `>` and your second Frost tower does nothing.
+slow it cannot out-strengthen. Change it to `>` and your second Frost tower does nothing. That re-up
+sets the remaining ticks to `max(old, new)` (`Refresh`'s rule, for `Refresh`'s reason: a refresh may
+extend but never cut short) — take the incoming duration wholesale instead and a short application of
+equal magnitude erases most of a long slow already running, invisible until two sources of one effect
+differ in duration.
 
 Two decisions your spec probably leaves blank, which you must make explicitly:
 
-- **What policy does `Vulnerable` have?** (Reasonable default: `Strongest (fun e -> e.Bonus)`.)
+- **What policy does `Vulnerable` have?** (Reasonable default: `Effects.Strongest (fun e -> e.Bonus)`.)
 - **What happens to an existing stack's duration when one is applied against the cap?** (`Stacks` is a
   no-op at the cap — it does not refresh the newest, nor evict the oldest.)
 
@@ -291,12 +298,21 @@ let grid = SpatialGrid.build 32.0 [ for e in enemies -> e.Pos, e ]
 let region = Ballistics.splash blast 42.0 (Ballistics.linearFalloff 0.5) (fun e -> e.Pos) grid
 
 // Pipeline: FOR HOW MUCH. applyAll SEEDS each target at Base * multiplier.
-let dealt = Effects.applyAll pipeline { Kind = Physical; Source = Declared; Base = 30.0 } region
+let dealt = Effects.applyAll pipeline { Kind = Physical; Source = Source.Declared; Base = 30.0 } region
 
 for enemy, trace in dealt do
     applyDamage enemy trace.Final
     if trace.Halted = ValueNone then applyRider enemy
 ```
+
+`trace.Seed` records where each target's pipeline began — `Base × multiplier` under `applyAll`, `Base`
+under `pipeline` — so the audit can separate what *transport* removed from what *mitigation* did. A
+30-damage blast that traces `Steps = [ "subtract", 9.0 ]` says nothing about whether falloff ate 21 or
+armor did; `Seed = 15.0` settles it (transport took 15, armor took 6). It is an **amount, not a
+provenance**: a ×0.5 blast of 30 and a ×1.0 blast of 15 both seed at `15.0` and trace identically,
+because after seeding they *are* the same hit. Recovering the multiplier needs the hit it came from —
+it is `Seed / damage.Base`, and `damage` is the caller's. (Non-finite seeds degrade to `0.0`, like
+every other amount here.)
 
 Any `world -> ('T * float) list` is a region operator. A Tesla chain's scalar is `chainFalloff^k` in the
 **jump index**, not the distance — which a `falloff: float -> float` curve could never express, and
@@ -322,8 +338,9 @@ a uniform `fun _ -> 1.0` and an **empty** pipeline.
 - **Ignoring `trace.Halted`.** The damage is right and the rider `Slow` still lands on the immune target.
 - **Subtracting armor before scaling.** Falloff starts protecting the target from its own armor.
 - **Applying `Vulnerable` after armor.** Your anti-armor upgrade stops being one.
-- **Spelling "elemental ignores armor" as `gatedBy [Periodic]`.** It looks right because poison ticks
-  are `Periodic`, but a Frost bolt is a `Declared` attack and stays armored. Key the bypass on `Kind`,
+- **Spelling "elemental ignores armor" as `gatedBy [Source.Periodic]`.** It looks right because poison
+  ticks are `Source.Periodic`, but a Frost bolt is a `Source.Declared` attack and stays armored. Key the
+  bypass on `Kind`,
   inside `subtract`'s closure. Gate on the axis the rule is actually about.
 - **Hardcoding `floorAt 1.0` in a shared helper.** One constant, and a tactics acceptance criterion
   inverts. It is a game parameter.
@@ -334,7 +351,7 @@ a uniform `fun _ -> 1.0` and an **empty** pipeline.
 - **Assuming `Stacks` refreshes at the cap.** It is a no-op. Decide, and write it in the spec.
 - **Using `>` in `Strongest`.** A second tower of the same type stops re-upping its slow.
 - **`Resolution.knockback` for water.** It cannot express *enter and stop*. Use `push` with `Stop`.
-- **Reducing collision or environmental damage by cover.** Gate the stage with `gatedBy [ Declared ]`.
+- **Reducing collision or environmental damage by cover.** Gate the stage with `gatedBy [ Source.Declared ]`.
 
 ## Build Commands
 
