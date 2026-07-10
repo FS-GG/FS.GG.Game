@@ -99,9 +99,14 @@ module Pathfinding =
     ///
     /// A cell with no strictly-lower neighbour is a **sink** — a goal, or a local minimum — and is
     /// simply **absent** from the result, so `Map.tryFind` returning `None` is how an agent learns it
-    /// has arrived (or is stuck). The step is always a `Cell`, never a float vector: integer logic,
-    /// float presentation. Deterministic — ties among equally-low neighbours break on `(value, Col,
-    /// Row)`. Total: an empty `field` yields an empty map.
+    /// has arrived (or is stuck). Only a **strictly** lower neighbour is downhill: on a plateau, or
+    /// between two adjacent goals, an `<=` rule would emit arrows that cycle. The step is always a
+    /// `Cell`, never a float vector: integer logic, float presentation. Deterministic — ties among
+    /// equally-low neighbours break on `(value, Col, Row)`. Total: an empty `field` yields an empty map.
+    ///
+    /// **Pass the same `neighbourhood` that built `field`.** It cannot be checked here, and it is not a
+    /// free choice: widening a `FourWay` field to `EightWay` offers diagonal steps whose 14-cost was
+    /// never priced into the field, so the agent rolls down a route the field never costed.
     val flowField: neighbourhood: Neighbourhood -> field: Map<Cell, int> -> Map<Cell, Cell>
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
@@ -113,10 +118,20 @@ module Pathfinding =
     /// Same `cost` convention as `distanceField` (`cost c` is the cost to enter `c`; `cost c <= 0` is
     /// impassable), same integer 10/14 `baseStep`, and the same determinism guarantee. Note the
     /// direction differs: `reachableWithin` charges the cell being stepped **onto** as it walks away
-    /// from `start`, whereas `distanceField` walks goal-ward; with a non-uniform `cost` the two
-    /// therefore disagree on values while agreeing on which cells are reachable.
+    /// from `start`, whereas `distanceField` walks goal-ward. Under a **uniform** cost the two agree
+    /// cell-for-cell (`reachableWithin` equals the `distanceField` from `start` filtered by `budget`);
+    /// under a **non-uniform** cost they disagree on the values, and `reachableWithin` is always a
+    /// **subset** of the field — it is pruned by `budget`, which the field is not.
     ///
-    /// No `maxVisited` bound is needed: every edge weight is at least 10, so `budget` alone terminates
-    /// the search. Total: a negative `budget`, or an impassable `start`, yields an empty map.
+    /// `budget` prunes but does not bound: because the framework holds no map, an unbounded `cost`
+    /// predicate admits a reachable set that grows quadratically in `budget`. So the walk is bounded by
+    /// `maxVisited` (cells settled), exactly as in `astar`/`bfs`/`distanceField`, and only settled cells
+    /// are returned. Total: `maxVisited <= 0`, a negative `budget`, or an impassable `start` all yield
+    /// an empty map.
     val reachableWithin:
-        neighbourhood: Neighbourhood -> cost: (Cell -> int) -> budget: int -> start: Cell -> Map<Cell, int>
+        neighbourhood: Neighbourhood ->
+        maxVisited: int ->
+        cost: (Cell -> int) ->
+        budget: int ->
+        start: Cell ->
+            Map<Cell, int>

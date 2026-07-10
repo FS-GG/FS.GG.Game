@@ -190,12 +190,13 @@ module Pathfinding =
     // deterministic, so the settle order (hence the field) is bit-identical across runs/platforms.
     // Exactly one open entry exists per cell: a relaxation removes the stale entry before re-adding.
     //
-    // `stepWeight current n baseStep` decides the direction convention, which is the ONE thing that
-    // differs between the reverse (`distanceField`) and forward (`reachableWithin`) walks.
+    // `stepWeight currentCost n baseStep` decides the direction convention, which is the ONE thing
+    // that differs between the reverse (`distanceField`) and forward (`reachableWithin`) walks.
+    // `currentCost` is the popped cell's cost, evaluated once per pop rather than once per neighbour.
     let private dijkstra
         (neighbourhood: Neighbourhood)
         (cost: Cell -> int)
-        (stepWeight: Cell -> Cell -> int -> int64)
+        (stepWeight: int -> Cell -> int -> int64)
         (admit: int64 -> bool)
         (maxVisited: int)
         (seeds: Cell list)
@@ -216,12 +217,14 @@ module Pathfinding =
                 let openSet = Set.remove (d, col, row) openSet
                 // Popped with the minimum key and all weights > 0 => `d` is final for `current`.
                 let settled = Map.add current (int d) settled
+                // `cost` is arbitrary caller code; evaluate it once per pop, not once per neighbour.
+                let currentCost = cost current
 
                 let (openSet, tentative) =
                     neighbours neighbourhood isWalkable current
                     |> List.fold
                         (fun (os, tent) (struct (n, baseStep)) ->
-                            let candidate = d + stepWeight current n baseStep
+                            let candidate = d + stepWeight currentCost n baseStep
 
                             if candidate > int64 System.Int32.MaxValue || not (admit candidate) then
                                 (os, tent)
@@ -259,11 +262,12 @@ module Pathfinding =
         : Map<Cell, int> =
         // Reverse walk: expanding goal-ward cell `current` to `n` means the AGENT steps n -> current,
         // i.e. it enters `current`. So the weight is `baseStep * cost current`.
-        let stepWeight (current: Cell) (_n: Cell) (baseStep: int) = int64 baseStep * int64 (cost current)
+        let stepWeight (currentCost: int) (_n: Cell) (baseStep: int) = int64 baseStep * int64 currentCost
         dijkstra neighbourhood cost stepWeight (fun _ -> true) maxVisited goals
 
     let reachableWithin
         (neighbourhood: Neighbourhood)
+        (maxVisited: int)
         (cost: Cell -> int)
         (budget: int)
         (start: Cell)
@@ -272,10 +276,12 @@ module Pathfinding =
             Map.empty
         else
             // Forward walk: the agent steps current -> n, entering `n`. Weight is `baseStep * cost n`.
-            let stepWeight (_current: Cell) (n: Cell) (baseStep: int) = int64 baseStep * int64 (cost n)
-            // Every edge weight is positive, so the budget alone bounds the search: no `maxVisited`.
+            let stepWeight (_currentCost: int) (n: Cell) (baseStep: int) = int64 baseStep * int64 (cost n)
+            // `budget` prunes, but it does NOT bound: over an unbounded `cost` predicate the reachable
+            // set grows quadratically in `budget`, so `maxVisited` is what makes the walk terminate —
+            // the same bound, for the same reason, as `astar`/`bfs`/`distanceField`.
             let admit (candidate: int64) = candidate <= int64 budget
-            dijkstra neighbourhood cost stepWeight admit System.Int32.MaxValue [ start ]
+            dijkstra neighbourhood cost stepWeight admit maxVisited [ start ]
 
     let flowField (neighbourhood: Neighbourhood) (field: Map<Cell, int>) : Map<Cell, Cell> =
         // Membership in the field IS walkability here, so the no-corner-cutting rule still applies:

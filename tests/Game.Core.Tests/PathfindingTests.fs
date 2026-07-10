@@ -293,7 +293,7 @@ let tests =
 
         test "reachableWithin is the move range, start inclusive and free" {
             let cost = gridCost 5 1 Set.empty Set.empty
-            let range = Pathfinding.reachableWithin FourWay cost 20 { Col = 0; Row = 0 }
+            let range = Pathfinding.reachableWithin FourWay 5000 cost 20 { Col = 0; Row = 0 }
             Expect.equal
                 range
                 (Map.ofList [ { Col = 0; Row = 0 }, 0; { Col = 1; Row = 0 }, 10; { Col = 2; Row = 0 }, 20 ])
@@ -303,7 +303,7 @@ let tests =
         test "reachableWithin charges the cell stepped onto (the forward direction)" {
             // Mud at (1,0): entering it costs 3×10. distanceField, walking goal-ward, prices it 10.
             let cost = gridCost 3 1 Set.empty (Set.ofList [ (1, 0) ])
-            let range = Pathfinding.reachableWithin FourWay cost 100 { Col = 0; Row = 0 }
+            let range = Pathfinding.reachableWithin FourWay 5000 cost 100 { Col = 0; Row = 0 }
             Expect.equal (Map.tryFind { Col = 1; Row = 0 } range) (Some 30) "stepping onto mud costs 3×10"
             Expect.equal (Map.tryFind { Col = 2; Row = 0 } range) (Some 40) "then 10 onto clear ground"
             let field = Pathfinding.distanceField FourWay 1000 cost [ { Col = 0; Row = 0 } ]
@@ -311,11 +311,22 @@ let tests =
             Expect.equal (range |> Map.toList |> List.map fst) (field |> Map.toList |> List.map fst) "...but agree on which cells are reachable"
         }
 
-        test "reachableWithin totality: a negative budget or an impassable start yields an empty map" {
+        test "reachableWithin totality: a negative budget, an impassable start, or maxVisited <= 0" {
             let cost = gridCost 4 4 (Set.ofList [ (0, 0) ]) Set.empty
-            Expect.equal (Pathfinding.reachableWithin FourWay cost -1 { Col = 1; Row = 1 }) Map.empty "negative budget"
-            Expect.equal (Pathfinding.reachableWithin FourWay cost 100 { Col = 0; Row = 0 }) Map.empty "impassable start"
-            Expect.equal (Pathfinding.reachableWithin FourWay cost 0 { Col = 1; Row = 1 }) (Map.ofList [ { Col = 1; Row = 1 }, 0 ]) "zero budget ⇒ stand still"
+            Expect.equal (Pathfinding.reachableWithin FourWay 5000 cost -1 { Col = 1; Row = 1 }) Map.empty "negative budget"
+            Expect.equal (Pathfinding.reachableWithin FourWay 5000 cost 100 { Col = 0; Row = 0 }) Map.empty "impassable start"
+            Expect.equal (Pathfinding.reachableWithin FourWay 0 cost 100 { Col = 1; Row = 1 }) Map.empty "zero maxVisited"
+            Expect.equal (Pathfinding.reachableWithin FourWay -1 cost 100 { Col = 1; Row = 1 }) Map.empty "negative maxVisited"
+            Expect.equal (Pathfinding.reachableWithin FourWay 5000 cost 0 { Col = 1; Row = 1 }) (Map.ofList [ { Col = 1; Row = 1 }, 0 ]) "zero budget ⇒ stand still"
+        }
+
+        test "reachableWithin terminates on an unbounded cost predicate (maxVisited, not budget, bounds it)" {
+            // The framework holds no map, so `fun _ -> 1` is a legal terrain: every cell is walkable.
+            // A budget of 100000 admits ~2e8 cells; only `maxVisited` keeps this from exhausting memory.
+            let range = Pathfinding.reachableWithin FourWay 200 (fun _ -> 1) 100_000 { Col = 0; Row = 0 }
+            Expect.equal (Map.count range) 200 "exactly maxVisited cells are settled"
+            Expect.equal (Map.tryFind { Col = 0; Row = 0 } range) (Some 0) "the start is settled first, and costs nothing"
+            Expect.all (range |> Map.toList |> List.map snd) (fun v -> v >= 0 && v <= 100_000) "every settled value is within budget"
         }
 
         testCase "distanceField agrees with astar's path cost for every reachable cell (FsCheck)" <| fun () ->
@@ -372,7 +383,7 @@ let tests =
                 if cost start <= 0 then
                     true
                 else
-                    let range = Pathfinding.reachableWithin EightWay cost budget start
+                    let range = Pathfinding.reachableWithin EightWay 5000 cost budget start
                     let field = Pathfinding.distanceField EightWay 5000 cost [ start ]
                     range = (field |> Map.filter (fun _ v -> v <= budget))
 
@@ -389,7 +400,7 @@ let tests =
                 if cost start <= 0 then
                     true
                 else
-                    let range = Pathfinding.reachableWithin EightWay cost budget start
+                    let range = Pathfinding.reachableWithin EightWay 5000 cost budget start
                     let field = Pathfinding.distanceField EightWay 5000 cost [ start ]
                     range |> Map.forall (fun c _ -> Map.containsKey c field)
 
