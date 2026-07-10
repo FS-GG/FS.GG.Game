@@ -41,6 +41,7 @@ FS.GG.Game.Core.Physics+Shape+SBox
 FS.GG.Game.Core.Physics+Shape+SCircle
 FS.GG.Game.Core.Physics+Shape+SPoly
 FS.GG.Game.Core.Physics+Shape+Tags
+FS.GG.Game.Core.Physics+Transform
 FS.GG.Game.Core.Physics+World
 FS.GG.Game.Core.Point
 FS.GG.Game.Core.Projectile

@@ -75,6 +75,9 @@ module Physics =
           CacheN: float[]
           CacheT: float[] }
 
+    // The presentation projection of a body — `Pos` and `Rot`, nothing else. Public via the `.fsi`.
+    type Transform = { Position: Point; Rotation: float }
+
     let private finite (v: float) =
         not (System.Double.IsNaN v) && not (System.Double.IsInfinity v)
 
@@ -1225,6 +1228,56 @@ module Physics =
                 CachePoint = cP
                 CacheN = cAccN
                 CacheT = cAccT }
+
+    // ---------------------------------------------------------------------------------------------
+    // Presentation interpolation
+    // ---------------------------------------------------------------------------------------------
+
+    // Shortest-arc angular blend, factored out so the one rule everyone forgets can be asserted directly
+    // (it is `internal`, reached through InternalsVisibleTo, not part of the public surface). `Math.Round`
+    // (nearest, ties-to-even) folds the raw delta into (-pi, pi], so blending previous = +3.13 to
+    // current = -3.13 crosses +pi rather than unwinding the long way through 0. Endpoints are exact: `t = 0`
+    // returns `a0`, and `t = 1` is special-cased to `a1` so a wrapped pair still lands bit-for-bit on
+    // `current`'s angle rather than a full turn off it.
+    let internal lerpAngleShortest (a0: float) (a1: float) (t: float) : float =
+        if t <= 0.0 then a0
+        elif t >= 1.0 then a1
+        else
+            let twoPi = 2.0 * System.Math.PI
+            let delta = a1 - a0
+            let shortest = delta - twoPi * System.Math.Round(delta / twoPi)
+            a0 + shortest * t
+
+    let interpolate (alpha: float) (previous: World) (current: World) : Transform[] =
+        // `alpha` is Loop.alpha's blend factor and is read HERE, at the presentation boundary, and nowhere
+        // near `step`. Clamp to [0, 1]: a non-finite or out-of-range alpha must neither throw nor
+        // extrapolate past an endpoint. (NaN loses every comparison, so guard it explicitly, else it would
+        // fall through to the raw value.)
+        let a =
+            if System.Double.IsNaN alpha then 0.0
+            else max 0.0 (min 1.0 alpha)
+
+        // Linear blend with exact endpoints, so `interpolate 0 = previous` and `interpolate 1 = current`
+        // hold with no float drift from `v0 + (v1 - v0) * 1.0`.
+        let lerp (v0: float) (v1: float) =
+            if a <= 0.0 then v0
+            elif a >= 1.0 then v1
+            else v0 + (v1 - v0) * a
+
+        // One Transform per body of `current`, in index order — the set a renderer draws. A body present in
+        // `current` but not `previous` (added since the previous buffer was taken) has no prior pose to
+        // blend from, so it is shown at its current transform.
+        let prior = previous.Pos.Length
+
+        Array.init current.Pos.Length (fun i ->
+            if i < prior then
+                { Position =
+                    { X = lerp previous.Pos.[i].X current.Pos.[i].X
+                      Y = lerp previous.Pos.[i].Y current.Pos.[i].Y }
+                  Rotation = lerpAngleShortest previous.Rot.[i] current.Rot.[i] a }
+            else
+                { Position = current.Pos.[i]
+                  Rotation = current.Rot.[i] })
 
     // ---------------------------------------------------------------------------------------------
     // The desync tripwire

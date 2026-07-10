@@ -3,8 +3,8 @@ namespace FS.GG.Game.Core
 /// Public contract module exposed by the FS.GG.Game.Core package.
 /// The mini rigid-body engine: a world of bodies, a broad phase, a narrow phase, and a semi-implicit
 /// Euler step with a sequential-impulse contact solver, warm started, over bodies that fall asleep once
-/// they settle. `interpolate` (presentation-only) and speculative CCD are the pieces of the design's
-/// surface still to come.
+/// they settle. Fast bodies are swept by speculative contacts, and `interpolate` blends the double
+/// buffer into presentation-only poses on the shortest arc.
 ///
 /// **Mass is derived, not given.** Neither `Material` nor `addBody` carries one: a body's mass is the
 /// area of its `Shape` at unit density, and its rotational inertia is taken about its origin, which is
@@ -106,6 +106,13 @@ module Physics =
     /// woken holds no cache, and one that settled through a different history holds a different one — so
     /// compare worlds with `checksum`, never structurally.
     type World
+
+    /// Public contract type exposed by the FS.GG.Game.Core package.
+    /// The presentation pose of one body: where to draw it (`Position` — the body origin `Pos` means) and
+    /// how it is turned (`Rotation`, radians). It is the projection a renderer consumes, deliberately NOT a
+    /// `World`: it carries no velocity, no inverse mass, and none of the sleep or warm-start cache — none
+    /// of which is drawn or blended. `interpolate` produces an array of these, one per body.
+    type Transform = { Position: Point; Rotation: float }
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// A world with no bodies, carrying `config` for its lifetime.
@@ -223,6 +230,36 @@ module Physics =
     /// A `Static` body never moves; a `Kinematic` body moves under its own velocity and is unmoved by
     /// impulses. Never throws.
     val step: world: World -> dt: float -> World
+
+    /// The shortest-arc angular blend underneath `interpolate`, exposed `internal` (not public surface) so
+    /// the load-bearing wrap rule can be tested directly, since a `World`'s `Rot` cannot be set through the
+    /// opaque public API. `t = 0` returns `a0`, `t = 1` returns `a1`; between, it turns the short way.
+    val internal lerpAngleShortest: a0: float -> a1: float -> t: float -> float
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Blend the two double-buffered worlds `Loop.advance` keeps — `previous` and `current` — into the
+    /// poses to draw this frame, at `Loop.alpha`'s fraction `alpha`. Returns one `Transform` per body of
+    /// `current`, in index order.
+    ///
+    /// **Presentation only.** Only `Pos` and `Rot` interpolate — the state a renderer shows. Velocity and
+    /// the solver's cross-tick cache (accumulated impulses, sleep counters) are NOT blended: blending a
+    /// warm-start cache is meaningless, and two worlds equal in pose may hold different caches. This is the
+    /// same projection `checksum` takes (body state, never cache), for the same reason.
+    ///
+    /// **Shortest arc.** `Rotation` interpolates the short way around the circle. A body turning through
+    /// `π` — `previous ≈ +3.13`, `current ≈ -3.13` — crosses `+π`; it does not unwind the long way through
+    /// `0`. The naive `a0 + (a1 - a0)·alpha` gets this wrong and spins a turret backwards at 60 fps.
+    ///
+    /// **Exact endpoints.** `interpolate 0.0 previous current` is `previous`'s poses and
+    /// `interpolate 1.0 previous current` is `current`'s, bit-for-bit — even across the shortest-arc wrap,
+    /// where the blended angle at `alpha = 1` would otherwise land a full turn off `current`'s.
+    ///
+    /// `alpha` is read here, at the presentation boundary, and **never reaches `step`** — feeding it back
+    /// into the simulation is the cardinal double-buffer sin. It is clamped to `[0, 1]`, so a non-finite or
+    /// out-of-range `alpha` neither throws nor extrapolates past an endpoint. A body in `current` but not
+    /// `previous` — one added since the previous buffer was taken — has no prior pose and is returned at
+    /// its `current` transform. Total: never throws.
+    val interpolate: alpha: float -> previous: World -> current: World -> Transform[]
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// A stable 64-bit hash of every body's `Pos`, `Vel`, `Rot` and `AngVel` — the desync tripwire.
