@@ -2,8 +2,9 @@ namespace FS.GG.Game.Core
 
 /// Public contract module exposed by the FS.GG.Game.Core package.
 /// The mini rigid-body engine: a world of bodies, a broad phase, a narrow phase, and a semi-implicit
-/// Euler step with a sequential-impulse contact solver. `interpolate` (presentation-only) is the one
-/// piece of the design's surface still to come; warm starting, sleeping and CCD are later slices.
+/// Euler step with a sequential-impulse contact solver, warm started, over bodies that fall asleep once
+/// they settle. `interpolate` (presentation-only) and speculative CCD are the pieces of the design's
+/// surface still to come.
 ///
 /// **Mass is derived, not given.** Neither `Material` nor `addBody` carries one: a body's mass is the
 /// area of its `Shape` at unit density, and its rotational inertia is taken about its origin, which is
@@ -58,10 +59,14 @@ module Physics =
     /// convergence tolerance is a replay divergence. `SleepTicks` is an `int` count of consecutive ticks,
     /// never an accumulation of elapsed seconds, for the same reason.
     ///
-    /// Only `BroadPhaseCellSize` is read by this slice; the rest are the contract the solver slices fill.
+    /// **Sleeping has three independent off switches**, and any one of them disables it: a non-positive
+    /// `SleepTicks` (a body cannot be at rest for zero consecutive ticks), a non-positive `SleepLinearSq`,
+    /// or a non-positive `SleepAngular` (no squared speed and no magnitude is below zero). Warm starting
+    /// has none — it changes how fast the solver converges, not what it converges to, and is always on.
     type Config =
         { Gravity: Point
-          /// Fixed velocity-solver iterations per step. 8 is the usual answer.
+          /// Fixed velocity-solver iterations per step. 8 is the usual answer. Warm starting buys roughly
+          /// an order of magnitude here: 4 warm iterations settle a box flatter than 10 cold ones.
           VelocityIterations: int
           /// Fixed position-correction iterations per step. 3 is the usual answer.
           PositionIterations: int
@@ -72,8 +77,14 @@ module Physics =
           /// Restitution applies only where `|v·n|` exceeds this; below it `e = 0`, or a resting box
           /// jitters forever and never sleeps.
           BounceThreshold: float
+          /// A body is a candidate for sleep while its SQUARED linear speed is strictly below this.
+          /// Non-positive disables sleeping.
           SleepLinearSq: float
+          /// ...and while its angular speed magnitude is strictly below this. Non-positive disables
+          /// sleeping. Both must hold on the same tick for the counter to advance.
           SleepAngular: float
+          /// Consecutive ticks — not cumulative — a body must spend under both thresholds before it
+          /// sleeps. Non-positive disables sleeping. 60 is a second at the usual step rate.
           SleepTicks: int
           /// Cell size handed to the `SpatialGrid` broad phase. A non-positive or non-finite value
           /// degrades to a single bucket — slower, never wrong (`SpatialGrid.build`'s own contract).
@@ -87,6 +98,13 @@ module Physics =
     ///
     /// Immutable at the boundary — every function here takes a `World` and returns a value — so a `World`
     /// is safe to hold inside a `Model`, and safe as the `'world` of `Loop.StepState`.
+    ///
+    /// Besides body state a `World` carries the solver's **cross-tick state**: which bodies are asleep, how
+    /// long each has been still, and the impulse each contact accumulated last tick (the warm-start cache).
+    /// None of it is presentation, none of it reaches `checksum`, and none of it is meaningful to
+    /// interpolate. **Two worlds equal in presentation may differ in solver state** — a world that has just
+    /// woken holds no cache, and one that settled through a different history holds a different one — so
+    /// compare worlds with `checksum`, never structurally.
     type World
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
@@ -146,9 +164,11 @@ module Physics =
     /// says the same. This agrees with `pairs`, so a pair that the broad phase refuses can never have had
     /// a contact to lose.
     ///
-    /// `FeatureId` identifies the contacting features and is stable across ticks for an unmoving pair —
-    /// the warm-start cache key #76 will use. **Opaque: compare it, do not decode it.** Its values are
-    /// disjoint from `polygonManifold`'s for the circle cases, which have no face pair to name.
+    /// `FeatureId` identifies the contacting features and is stable across ticks for an unmoving pair. It
+    /// is two thirds of the key `step`'s warm-start cache is built on — an unstable one would seed a
+    /// contact with an impulse belonging to a different one, and stacks would shake. **Opaque: compare it,
+    /// do not decode it.** Its values are disjoint from `polygonManifold`'s for the circle cases, which
+    /// have no face pair to name.
     ///
     /// Pure, total and deterministic. An out-of-range or equal index, a degenerate shape, a non-finite
     /// position or rotation, and two exactly coincident circle centres (no direction exists along which to
@@ -161,9 +181,30 @@ module Physics =
     /// `Loop.advance dt Physics.step frameTime state` typechecks with no adapter. Reads `dt` and the
     /// world, and nothing else — never a clock, never `alpha`.
     ///
-    /// One step is: integrate velocity under gravity (semi-implicit Euler); broad phase; narrow phase;
-    /// solve contact velocities with a sequential-impulse solver over a **fixed** `VelocityIterations`;
-    /// integrate position; then correct penetration over a fixed `PositionIterations`.
+    /// One step is: broad phase; narrow phase; wake what a moving body touches; integrate velocity under
+    /// gravity (semi-implicit Euler); seed each contact with the impulse it accumulated last tick; solve
+    /// contact velocities with a sequential-impulse solver over a **fixed** `VelocityIterations`; integrate
+    /// position; correct penetration over a fixed `PositionIterations`; then put to sleep whatever has
+    /// stopped moving.
+    ///
+    /// **Warm starting.** Each contact point is seeded with the normal and tangent impulse the same contact
+    /// — same bodies, same `FeatureId`, same point — accumulated last tick. It is a convergence
+    /// accelerator: it does not change what the solver converges *to*, only how fast, so a scene that had
+    /// genuinely settled is unaffected bit-for-bit, while one still converging settles sooner. A contact
+    /// that is new this tick starts cold, exactly as though the cache did not exist.
+    ///
+    /// **Sleeping.** A `Dynamic` body that holds both `SleepLinearSq` and `SleepAngular` for `SleepTicks`
+    /// CONSECUTIVE ticks stops: its velocity is zeroed, it is no longer integrated, and pairs in which no
+    /// body is awake are not even narrow-phased — a settled scene costs the broad phase and nothing else.
+    /// A sleeping body is **immovable, not absent**: it has infinite mass for as long as it sleeps, exactly
+    /// as a `Static` body does, and things pile up on it rather than through it.
+    ///
+    /// A sleeper wakes when a body that is **actually moving** touches it. Merely being awake is not
+    /// enough, or two bodies resting on one another would wake each other forever; and a `Static` body
+    /// never moves, so a floor never disturbs what has settled on it. The consequence to know: a wake
+    /// travels at most one body per tick, and only through bodies that visibly move — a sleeper that takes
+    /// a load without shifting does not pass it on. Waking a whole pile at once needs solver islands, which
+    /// this engine does not have.
     ///
     /// Friction is a tangent impulse clamped to the Coulomb cone `|jt| <= μ·jn`, with `μ` the geometric
     /// mean of the two materials'. Restitution applies only where the approach speed exceeds
@@ -188,9 +229,9 @@ module Physics =
     /// Compare it across a replayed input stream, or against a golden value in a test, to catch the tick
     /// on which two runs diverged.
     ///
-    /// **Body state only.** No solver state, no cache, no contact — those are derived each step, and a
-    /// checksum over them would move whenever an optimisation changed how they are stored, reporting a
-    /// desync that is not one.
+    /// **Body state only.** No solver state, no cache, no sleep flag, no contact — those are derived each
+    /// step, and a checksum over them would move whenever an optimisation changed how they are stored,
+    /// reporting a desync that is not one. A world asleep and a world awake in the same pose hash alike.
     ///
     /// Stable across runs, processes and runtimes: it is FNV-1a over the IEEE-754 bits, not
     /// `GetHashCode`. `-0.0` hashes as `0.0` (they compare equal, so they must hash equal), and every NaN
