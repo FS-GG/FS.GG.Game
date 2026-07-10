@@ -11,6 +11,7 @@
        pure sim->Scene projection (ADR-0022 §2 / P4). -->
   <ItemGroup>
     <Compile Include="AdapterTests.fs" />
+    <Compile Include="DefaultKeymapTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

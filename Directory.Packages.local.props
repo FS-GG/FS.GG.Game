@@ -9,16 +9,20 @@
        FSharp.Core. The versions below are TEST-ONLY (the headless Expecto suite) and are not
        shipped in any package. Pins match FS.GG.Rendering's test stack. -->
   <!-- Runtime — the render edge (ADR-0022 §2 / P4). FS.GG.Game.Render consumes FS.GG.UI.Scene
-       (the Skia-free bottom of the render stack; FSharp.Core-only). Dual-published to nuget.org
-       (ADR-0012/0013), so no org-feed credential is needed to restore it. Pinned to the coherent-set
-       framework version 0.4.0. This is the ONLY shipped PackageReference beyond the
-       org-baseline FSharp.Core; Game.Core stays BCL-only (reaches up to nothing).
+       (the Skia-free bottom of the render stack; FSharp.Core-only) and — for the default keymap
+       (Game#109, edge registered in FS-GG/.github#365) — FS.GG.UI.KeyboardInput, Rendering's
+       command-id-agnostic keymap mechanism (Rendering#331). Both are dual-published to nuget.org
+       (ADR-0012/0013), so no org-feed credential is needed to restore them. These are the ONLY
+       shipped PackageReferences beyond the org-baseline FSharp.Core; Game.Core stays BCL-only
+       (reaches up to nothing).
 
-       This pin MUST be a stable version. FS.GG.Game.Render is itself packed stable, and NU5104
-       forbids a stable package from taking a prerelease dependency — a `-preview` pin here fails
-       the release at pack, before any push. -->
+       Both pins MUST be a stable version, and stay on the coherent set (currently 0.5.0 — the release
+       that first carries the KeyboardInput `Keymap` type, FS-GG/FS.GG.Rendering#343). FS.GG.Game.Render
+       is itself packed stable, and NU5104 forbids a stable package from taking a prerelease dependency
+       — a `-preview` pin here fails the release at pack, before any push. -->
   <ItemGroup Label="Runtime — render edge">
-    <PackageVersion Include="FS.GG.UI.Scene" Version="0.4.0" />
+    <PackageVersion Include="FS.GG.UI.Scene" Version="0.5.0" />
+    <PackageVersion Include="FS.GG.UI.KeyboardInput" Version="0.5.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test-only">

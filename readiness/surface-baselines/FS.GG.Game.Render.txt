@@ -1,1 +1,2 @@
 FS.GG.Game.Render.Adapter
+FS.GG.Game.Render.DefaultKeymap
