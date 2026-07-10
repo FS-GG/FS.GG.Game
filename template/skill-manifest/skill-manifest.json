@@ -2,6 +2,14 @@
   "schemaVersion": 1,
   "skills": [
     {
+      "id": "fs-gg-ai",
+      "scope": "product",
+      "sha256": "612033dce3082b76d861efcb5c15a32fbb56ee98b176c3a8d251587a5298062f",
+      "resolvablePath": ".agents/skills/fs-gg-ai/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-ai/"
+    },
+    {
       "id": "fs-gg-audio",
       "scope": "product",
       "sha256": "a2941b2f97b268c7609fda020e5775ca5a75acdaf561f528b8a001f6ec971f7c",

@@ -54,8 +54,13 @@ let repoPath (rel: string) =
 // against the .fsi, so their digests deliberately differ from the frozen copies FS.GG.Rendering still
 // ships from `--profile game` (the two-copies cost, ADR-0022 §6 / the `game-starter-two-copies`
 // registry row, which is `coherent: false` precisely to hold divergence like this).
+//
+// `fs-gg-ai` (FS.GG.Game#42) is, like fs-gg-ballistics, NOT a migration: the org registry carried 38
+// skills and none of them was AI, so it has no FS.GG.Rendering counterpart to stay byte-identical with.
+// It originates here because it sits above the spatial substrate this repo owns.
 let catalog =
-    [ "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [game, sample-pack]"
+    [ "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]"

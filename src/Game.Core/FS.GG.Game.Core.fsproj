@@ -58,6 +58,12 @@
     <!-- Continuous-space sight. Depends on Primitives (Point/Rect) only; independent of the grid modules. -->
     <Compile Include="Visibility.fsi" />
     <Compile Include="Visibility.fs" />
+    <!-- Decision layer: the vocabulary the AI reads the fog through. Last, because it sits ABOVE the
+         spatial substrate — it consumes Point (Primitives), Cell/Neighbourhood (Pathfinding) and Rng,
+         and nothing here consumes it. Its LOS is a caller-supplied oracle, so it does not depend on
+         Los/Fov/Visibility either: policy stays with the game. -->
+    <Compile Include="Ai.fsi" />
+    <Compile Include="Ai.fs" />
   </ItemGroup>
 
 </Project>
