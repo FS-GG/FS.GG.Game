@@ -140,9 +140,50 @@ let tests =
             let b = Visibility.polygon (settings spanningRadius) spanningSource walls
             Expect.equal a b "byte-identical ring across calls"
 
+        // --- overflow in the parametric cross products (#53) ----------------------------------------
+
+        // `raySegment`'s operands are all finite here, and the intersection it is asked for is real and
+        // nearby — the ray runs along y = 0 and strikes the segment's (0, 0) endpoint. But the numerator
+        // `wx * ey` = 3.937 * -MaxValue overflows to -infinity while `denom` = 0.937 * -MaxValue stays
+        // finite, so `t` came out +infinity, `u` came out 1.0, and the old `t >= 0.0` guard admitted it.
+        // The point was then `origin + infinity * dir` = (infinity, infinity * 0.0) = (infinity, NaN).
+        testCase "raySegment returns None rather than a non-finite hit when the cross product overflows"
+        <| fun () ->
+            let origin = pt -3.937126736 0.0
+            let dir = pt 0.937126736 0.0
+            let far = seg (pt 0.0 System.Double.MaxValue) (pt 0.0 0.0)
+
+            match Visibility.raySegment origin dir far with
+            | None -> ()
+            | Some(p, t) ->
+                Expect.isTrue (isFinitePt p) $"raySegment returned a non-finite hit point ({p.X}, {p.Y})"
+                Expect.isTrue (System.Double.IsFinite t) $"raySegment returned a non-finite t ({t})"
+
+        // The shrunk counterexample from #53, pinned as a seed-independent regression: this exact input
+        // put (infinity, NaN), (infinity, infinity) and (infinity, -infinity) into `Vertices`. A radius of
+        // `Double.MaxValue` is what drags an occluder endpoint far enough out to overflow the sweep's rays.
+        testCase "polygon emits no non-finite vertex for the #53 counterexample" <| fun () ->
+            let walls =
+                [ seg (pt -3.0 0.0) (pt 0.0 0.0)
+                  seg (pt 0.0 System.Double.MaxValue) (pt -0.0 -0.0) ]
+
+            let poly = Visibility.polygon (settings System.Double.MaxValue) (pt -3.937126736 0.0) walls
+
+            Expect.isTrue
+                (poly.Vertices |> List.forall isFinitePt)
+                "every vertex of the #53 counterexample is finite"
+
         // Totality is a claim about *arbitrary* input, so this property deliberately does NOT clamp:
         // NaN and infinite coordinates, sources, and radii are exactly the cases the `.fsi` promises to
         // degrade rather than throw on. Clamping them away here would test nothing.
+        testCase "raySegment never returns a non-finite hit, on unclamped input (FsCheck)" <| fun () ->
+            let prop (ox: float) (oy: float) (dx: float) (dy: float) (ax: float) (ay: float) (bx: float) (by: float) =
+                match Visibility.raySegment (pt ox oy) (pt dx dy) (seg (pt ax ay) (pt bx by)) with
+                | None -> true
+                | Some(p, t) -> isFinitePt p && System.Double.IsFinite t
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
         testCase "polygon never throws and never emits a NaN vertex, on unclamped input (FsCheck)" <| fun () ->
             let prop (coords: (float * float * float * float) list) (sx: float) (sy: float) (r: float) =
                 let walls =

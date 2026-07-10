@@ -77,8 +77,22 @@ module Visibility =
                 let t = (wx * ey - wy * ex) / denom // (W × segDir) / (dir × segDir)
                 let u = (wx * dir.Y - wy * dir.X) / denom // (W × dir) / (dir × segDir)
 
-                if t >= 0.0 && u >= 0.0 && u <= 1.0 then
-                    Some({ X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }, t)
+                // Finite operands do not imply a finite result. A cross product of two finite vectors
+                // overflows once the magnitudes multiply past `Double.MaxValue`, and it can overflow in
+                // the numerator while `denom` stays finite — then `t` is ±infinity, `u` is an ordinary
+                // number in `[0, 1]`, and the `t >= 0.0` test below happily admits it. The hit point is
+                // then `origin + infinity * dir`: infinite, and NaN in any axis where `dir` is zero,
+                // because `infinity * 0.0 = NaN`. That NaN is what escaped into the returned polygon.
+                //
+                // Reject on `t`/`u`, and again on the constructed point (a finite `t` and a finite `dir`
+                // can still overflow their product). Only coordinates beyond ~1e154 can trigger this —
+                // their product is what crosses `Double.MaxValue` — so no representable world geometry
+                // loses a hit to this guard; it fires only where the answer was never representable.
+                if not (System.Double.IsFinite t && System.Double.IsFinite u) then
+                    None
+                elif t >= 0.0 && u >= 0.0 && u <= 1.0 then
+                    let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
+                    if isFinitePoint hit then Some(hit, t) else None
                 else
                     None
 

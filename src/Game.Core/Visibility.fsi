@@ -50,6 +50,12 @@ module Visibility =
     /// segment), points away from it, misses it, or any operand is non-finite. Sqrt-free (parametric):
     /// `t` is in units of `dir`, not world distance, so `dir` of length 1 makes it a true distance.
     /// Total — never throws, never returns a NaN coordinate.
+    ///
+    /// Also `None` when the hit is real but **not representable**: finite operands whose magnitudes
+    /// multiply past `Double.MaxValue` overflow the parametric cross products, yielding an infinite `t`
+    /// (and an infinite-or-NaN point) for an intersection that exists. This needs a coordinate beyond
+    /// ~1e154, so it is unreachable from world geometry; the contract is that such a hit is dropped
+    /// rather than returned as a non-finite value.
     val raySegment: origin: Point -> dir: Point -> seg: Segment -> (Point * float) option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
