@@ -15,3 +15,12 @@ type Circle = { Center: Point; Radius: float }
 type RayHit = { T: float; Point: Point; Normal: Point }
 
 type ConvexPolygon = { Vertices: Point[] }
+
+type Manifold =
+    { A: int
+      B: int
+      Normal: Point
+      Depth: float
+      Points: Point[]
+      PointCount: int
+      FeatureId: int }

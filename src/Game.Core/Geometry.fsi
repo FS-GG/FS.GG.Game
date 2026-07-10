@@ -103,6 +103,46 @@ module Geometry =
     val polygonContact: a: ConvexPolygon -> b: ConvexPolygon -> Contact option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Narrow-phase convex-polygon contact POINTS — what `polygonContact` cannot give you. SAT returns
+    /// a separating axis and a depth; the points where the pair actually touches need reference-face
+    /// selection plus Sutherland–Hodgman clipping of the incident face. An angular impulse needs them
+    /// (the lever arms from each centre of mass), and so does most-overlap-first stacking.
+    ///
+    /// Additive: `Contact` and `polygonContact` are unchanged, and `Resolution` still consumes them.
+    ///
+    /// `Normal` and `Depth` come from the same SAT scan `polygonContact` uses, so for all inputs
+    /// `polygonManifold a b |> ValueOption.isSome` agrees with `polygonContact a b |> Option.isSome`
+    /// (same strict-edge convention: a touch is not a contact), and on a hit the two agree bit for bit
+    /// on `Normal` and `Depth` — including the a-then-b generation-order tie-break, and so including
+    /// its documented divergence from `aabbContact`'s X-bias on an exactly-equal penetration.
+    /// `A`/`B` are the argument positions `0`/`1` (so `A < B`); `Normal` points from `a` toward `b`.
+    ///
+    /// The *reference face* is whichever face of `a` or `b` the other polygon penetrates least — a
+    /// directed face query, so it is always a real face and its penetration is exactly `Depth`. The
+    /// *incident face* is the face of the other polygon most anti-parallel to it. Clipping the incident
+    /// face to the reference face's side planes yields the contact.
+    ///
+    /// `Points` holds `PointCount` ∈ {1, 2} contact points — 2 for a face-on-face contact, 1 when a
+    /// vertex pokes into a face. Each lies exactly on the boundary of the *incident* polygon (it is a
+    /// point of its clipped face) and at signed distance within `[−Depth, 0]` of the *reference*
+    /// polygon's contacting face, hence within `Depth` of that polygon's boundary too: the pair met
+    /// there, to within the penetration the manifold reports. Points that clip to the same position
+    /// collapse to one.
+    ///
+    /// `FeatureId` identifies which pair of faces produced the contact and is stable across ticks for
+    /// an unmoving pair — the warm-start cache key (see `Manifold`). Opaque: compare, do not decode.
+    ///
+    /// Deterministic tie-breaks, fixed for byte-identical output, all of them the same first-wins rule
+    /// `polygonContact` applies to its axis scan: an exact tie in penetration between a face of `a` and
+    /// one of `b` (parallel faces — two axis-aligned boxes, say) makes `a`'s the reference; within one
+    /// polygon, an exact tie between faces resolves to the first in vertex order; and the incident face
+    /// is tie-broken the same way.
+    ///
+    /// Pure and total: a polygon with fewer than 3 vertices, a zero-area polygon, or any NaN
+    /// coordinate yields `ValueNone` without throwing, exactly as `polygonContact` yields `None`.
+    val polygonManifold: a: ConvexPolygon -> b: ConvexPolygon -> Manifold voption
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Segment-cast against a convex polygon by half-plane clipping (the slab method with one half-plane
     /// per edge instead of one per axis). Returns `Some hit` at the first crossing INTO the polygon from
     /// outside with parameter `T ∈ [0,1]`, and `None` on a miss, a segment starting inside, or a polygon
