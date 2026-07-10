@@ -147,8 +147,10 @@ let tests =
         // `wx * ey` = 3.937 * -MaxValue overflows to -infinity while `denom` = 0.937 * -MaxValue stays
         // finite, so `t` came out +infinity, `u` came out 1.0, and the old `t >= 0.0` guard admitted it.
         // The point was then `origin + infinity * dir` = (infinity, infinity * 0.0) = (infinity, NaN).
-        testCase "raySegment returns None rather than a non-finite hit when the cross product overflows"
-        <| fun () ->
+        // Asserts the *contract* (no non-finite hit), not the current implementation (which returns None).
+        // A future overflow-free solve would return the true hit `(0, 0)` at `t = 4.201` and must still
+        // pass this, so `Expect.isNone` would be the wrong assertion to pin here.
+        testCase "raySegment never yields a non-finite hit when the cross product overflows" <| fun () ->
             let origin = pt -3.937126736 0.0
             let dir = pt 0.937126736 0.0
             let far = seg (pt 0.0 System.Double.MaxValue) (pt 0.0 0.0)
@@ -159,6 +161,16 @@ let tests =
                 Expect.isTrue (isFinitePt p) $"raySegment returned a non-finite hit point ({p.X}, {p.Y})"
                 Expect.isTrue (System.Double.IsFinite t) $"raySegment returned a non-finite t ({t})"
 
+        // The same geometry with a representable far endpoint resolves normally — proof that the guard
+        // above is scoped to the overflow regime and has not blinded `raySegment` to this configuration.
+        testCase "raySegment still finds the crossing when the far endpoint is representable" <| fun () ->
+            let hit = Visibility.raySegment (pt -3.937126736 0.0) (pt 0.937126736 0.0) (seg (pt 0.0 1.0e6) (pt 0.0 0.0))
+
+            Expect.isSome hit "a segment ending at 1e6 still occludes"
+            let p, t = Option.get hit
+            Expect.isTrue (isFinitePt p) "hit point is finite"
+            Expect.floatClose Accuracy.high t 4.201274582 "parametric distance to the crossing"
+
         // The shrunk counterexample from #53, pinned as a seed-independent regression: this exact input
         // put (infinity, NaN), (infinity, infinity) and (infinity, -infinity) into `Vertices`. A radius of
         // `Double.MaxValue` is what drags an occluder endpoint far enough out to overflow the sweep's rays.
@@ -168,6 +180,10 @@ let tests =
                   seg (pt 0.0 System.Double.MaxValue) (pt -0.0 -0.0) ]
 
             let poly = Visibility.polygon (settings System.Double.MaxValue) (pt -3.937126736 0.0) walls
+
+            // Non-empty first: `List.forall` is vacuously true on an empty ring, so without this the
+            // regression would keep passing if a later guard started dropping every hit.
+            Expect.isNonEmpty poly.Vertices "the #53 counterexample still produces a ring"
 
             Expect.isTrue
                 (poly.Vertices |> List.forall isFinitePt)

@@ -84,10 +84,24 @@ module Visibility =
                 // then `origin + infinity * dir`: infinite, and NaN in any axis where `dir` is zero,
                 // because `infinity * 0.0 = NaN`. That NaN is what escaped into the returned polygon.
                 //
+                // What overflows is the *parametrisation*, not the answer. `W` is anchored at `seg.A`, so a
+                // far `seg.A` inflates `wx`/`wy` even when the crossing itself is nearby: for
+                // `origin = (-3.937, 0)`, `dir = (0.937, 0)`, `seg = (0, MaxValue) -> (0, 0)` the hit is
+                // `(0, 0)` at `t = 4.201` — both ordinary doubles — yet `wx * ey` saturates. So this guard
+                // DOES discard representable hits; it trades a NaN vertex for a missing one. Both are
+                // wrong, and the missing one is the containable wrong: it degrades this ring rather than
+                // poisoning every arithmetic consumer downstream of it.
+                //
+                // Overflow needs the *product* to cross `Double.MaxValue`, not either factor: a segment
+                // endpoint at 1e300 still resolves here, because `wx` stays small. A coordinate past
+                // ~1e154 is necessary (two of them overflow) but nowhere near sufficient, so no world
+                // geometry reaches this regime. The honest fix is to anchor `W` at whichever endpoint is
+                // nearer `origin`, keeping the numerator finite and returning the true `t` — but that is
+                // a change to the solve, not a guard on it, so #59 tracks it and this stays the minimal
+                // fix for the totality break.
+                //
                 // Reject on `t`/`u`, and again on the constructed point (a finite `t` and a finite `dir`
-                // can still overflow their product). Only coordinates beyond ~1e154 can trigger this —
-                // their product is what crosses `Double.MaxValue` — so no representable world geometry
-                // loses a hit to this guard; it fires only where the answer was never representable.
+                // can still overflow their product).
                 if not (System.Double.IsFinite t && System.Double.IsFinite u) then
                     None
                 elif t >= 0.0 && u >= 0.0 && u <= 1.0 then
