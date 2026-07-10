@@ -27,6 +27,11 @@ The signatures you consume are bundled with this product:
   grid `Pathfinding` (A*/BFS over a walkability predicate) and the uniform `SpatialGrid` for range/splash
   queries. Also `FS.GG.Game.Core`, same profiles — reuse these instead of hand-rolling BFS/A* or bucketing.
 
+The rest of the simulation substrate ships in the same package, each with a skill that teaches it:
+`Resolution` ([[fs-gg-collision]]), `Grids` ([[fs-gg-grids]]), `Los` ([[fs-gg-line-drawing]]), `Visibility`
+and `Fov` ([[fs-gg-visibility]]), and `Ballistics` ([[fs-gg-ballistics]]). Reach for those before writing
+your own — they are the authoritative implementations, not starting points to copy.
+
 Every draw returns a `struct` tuple `(value, nextState)` — deconstruct with `let struct(v, next) = …`.
 All helpers are **total**: degenerate inputs return a documented value, they never throw.
 
@@ -129,9 +134,10 @@ let forkStream (model: Model) : Rng * Model =
 ## Collision
 
 Collision detection **and** response now have a dedicated skill — see **[[fs-gg-collision]]**. It covers
-narrow-phase (`Geometry` box/swept overlap on the shared `Rect`/`Point`), broad-phase over `SpatialGrid`,
-and the game-opinionated response layer shipped as adaptable `Collision.fs` source you own. Reach for it
-instead of hand-rolling AABB or a duplicate bounds record.
+narrow-phase (`Geometry` box/circle/polygon contacts and segment casts on the shared `Rect`/`Point`),
+broad-phase over `SpatialGrid`, and the `Resolution` response layer — which `FS.GG.Game.Core` keeps
+deliberately separate from detection. Reach for it instead of hand-rolling AABB or a duplicate bounds
+record.
 
 ## Culling
 
@@ -320,12 +326,16 @@ community sources. If your product uses Spec Kit, record findings and resolving 
 
 ## Related
 
-- [[fs-gg-collision]] — detect and resolve collisions (broad-phase + narrow-phase + response); owns the
-  adaptable `Collision.fs` helper.
-- [[fs-gg-scene]] — build the `Scene` the simulated world renders into; owns the shared `Rect`/`Point`.
-- [[fs-gg-skiaviewer]] — drive the fixed-step loop from the host window.
-- [[fs-gg-layout]] — compute the gameplay region (the visible `Rect`) entities are culled against.
-- [[fs-gg-keyboard-input]] — map input to the `Msg` values your `update` steps the world with.
+- [[fs-gg-collision]] — detect and resolve collisions: the `Geometry` narrow phase, a `SpatialGrid` broad
+  phase, and the `Resolution` response layer kept deliberately separate from detection.
+- [[fs-gg-grids]] — the grid's geometry *vocabulary*: faces, edges, vertices, and the pixel↔cell map.
+- [[fs-gg-line-drawing]] — `Los`: the Bresenham/supercover cell walk and discrete grid line-of-sight.
+- [[fs-gg-visibility]] — `Visibility`'s continuous angular-sweep polygon and `Fov`'s symmetric shadowcasting.
+- [[fs-gg-ballistics]] — swept projectile advance, lead solves, and splash over the same `Geometry` casts.
+- [[fs-gg-rendering:fs-gg-scene]] — build the `Scene` the simulated world renders into.
+- [[fs-gg-rendering:fs-gg-skiaviewer]] — drive the fixed-step loop from the host window.
+- [[fs-gg-rendering:fs-gg-layout]] — compute the gameplay region (the visible `Rect`) entities are culled against.
+- [[fs-gg-rendering:fs-gg-keyboard-input]] — map input to the `Msg` values your `update` steps the world with.
 
 ## Sources / links
 

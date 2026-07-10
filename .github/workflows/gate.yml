@@ -194,9 +194,9 @@ jobs:
       - name: Drift check (managed files == source of truth)
         run: _org-build/scripts/sync-build-config.sh --check "$GITHUB_WORKSPACE"
 
-  # Producer skill-manifest drift gate (ADR-0014 / ADR-0022 P4). template/skill-manifest/
+  # Producer skill-manifest drift gate (ADR-0014 / ADR-0022 P4+P6). template/skill-manifest/
   # skill-manifest.json is the contract the .github org registry (registry/skills.yml) reconciles the
-  # four migrated game-skill rows from — "registry = manifest = bytes". The generator recomputes each
+  # nine owner:fs-gg-game skill rows from — "registry = manifest = bytes". The generator recomputes each
   # SKILL.md digest; this fails if the committed manifest drifts from the skill bodies (or the
   # generator), the guard that keeps the registry's owner:fs-gg-game rows honest. No build needed —
   # the generator only reads the SKILL.md files.
@@ -220,3 +220,19 @@ jobs:
             echo "::error::template/skill-manifest/skill-manifest.json is stale vs the SKILL.md bodies/generator. Run: dotnet fsi scripts/generate-skill-manifest.fsx  and commit the result. If a skill body changed, the .github registry/skills.yml sha256 must be reconciled too (registry = manifest = bytes)."
             exit 1
           fi
+
+  # Dangling skill-reference gate (FS.GG.Game#35). A `[[wiki-ref]]` in a published SKILL.md promises the
+  # reader a skill that resolves. Before #35, 21 refs across all 5 skills pointed at skills this repo does
+  # not publish (`fs-gg-scene`, `fs-gg-skiaviewer`, …, all owner:fs-gg-rendering), and each newly authored
+  # skill inherited the defect. A ref must now either name a skill published here or carry its publishing
+  # repo's registry owner id — `[[fs-gg-rendering:fs-gg-scene]]`. Pure text scan; no build, no .NET.
+  skill-refs:
+    name: Dangling skill refs (template/product-skills)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Fail on a dangling or unqualified [[ref]]
+        run: scripts/check-skill-refs.sh
