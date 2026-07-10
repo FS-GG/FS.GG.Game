@@ -33,7 +33,15 @@ module FixedStep =
             // interval can never wrap the count negative.
             let stepsF = floor (total / interval)
             let steps = if stepsF >= 2147483647.0 then 2147483647 else int stepsF
-            struct (steps, total - float steps * interval)
+            let rem = total - float steps * interval
+            // `total / interval` can round UP across an integer when `total` sits one ulp below an exact
+            // multiple, so `floor` yields that multiple and the remainder comes out a few ulps negative
+            // — e.g. drain 0.06801315413399607 0.17690726351475394 0.027132198887234261 = -2.78e-17.
+            // Small, but it breaks the documented `0 <= newAccumulator` and hands a negative accumulator
+            // to the next frame. Clamp with an explicit comparison, not `max 0.0 rem`: F#'s generic
+            // `max` PROPAGATES NaN (`max 0.0 nan = nan`), which is exactly the poison this module exists
+            // to keep out of the loop.
+            struct (steps, (if rem > 0.0 then rem else 0.0))
 
     let drain (interval: float) (frameTime: float) (accumulator: float) : struct (int * float) =
         drainWith defaultMaxFrameTime interval frameTime accumulator

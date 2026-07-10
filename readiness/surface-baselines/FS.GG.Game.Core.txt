@@ -14,6 +14,7 @@ FS.GG.Game.Core.Grids+GridSpec
 FS.GG.Game.Core.Grids+Vertex
 FS.GG.Game.Core.LineMode
 FS.GG.Game.Core.LineMode+Tags
+FS.GG.Game.Core.Loop
 FS.GG.Game.Core.Los
 FS.GG.Game.Core.Neighbourhood
 FS.GG.Game.Core.Neighbourhood+Tags
@@ -30,6 +31,7 @@ FS.GG.Game.Core.Resolution
 FS.GG.Game.Core.Rng
 FS.GG.Game.Core.SpatialGrid
 FS.GG.Game.Core.SpatialGrid`1
+FS.GG.Game.Core.StepState`1
 FS.GG.Game.Core.Visibility
 FS.GG.Game.Core.Visibility+Segment
 FS.GG.Game.Core.Visibility+Settings

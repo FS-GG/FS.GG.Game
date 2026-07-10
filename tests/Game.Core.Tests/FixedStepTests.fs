@@ -83,9 +83,11 @@ let tests =
                 let struct (steps, newAcc) = FixedStep.drain interval frameTime acc
                 let clamped = min FixedStep.defaultMaxFrameTime (max 0.0 frameTime)
                 let expected = (acc + clamped) - float steps * interval
+                // `newAcc >= 0.0` exactly, not `>= -1e-9`: the old tolerance was hiding a real few-ulp
+                // negative remainder at exact-multiple boundaries, now clamped in `drainWith`.
                 steps >= 0
                 && abs (newAcc - expected) < 1e-9
-                && newAcc >= -1e-9
+                && newAcc >= 0.0
                 && newAcc < interval + 1e-9
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
 
@@ -111,6 +113,23 @@ let tests =
                 Expect.equal (FixedStep.drainWith -0.05 0.0625 1.0 0.0) (struct (0, 0.0)) "negative clamp ⇒ no time admitted"
                 Expect.equal (FixedStep.drainWith nan 0.0625 5.0 0.0) (struct (0, 0.0)) "NaN clamp ⇒ no time admitted, no poison"
             }
+            test "a remainder that rounds negative at an exact-multiple boundary is clamped to zero" {
+                // `total / interval` rounds UP across an integer when `total` sits one ulp below an exact
+                // multiple; `floor` then yields that multiple and `total - steps*interval` comes out a few
+                // ulps NEGATIVE. Witnesses found by search over drain's real signature, then confirmed
+                // against the built assembly. Unclamped these return ~-2.8e-17.
+                let witnesses =
+                    [ 0.06801315413399607, 0.17690726351475394, 0.027132198887234261
+                      0.033992989322934299, 0.094482411257251542, 0.0074965567115513453
+                      0.071430879530998817, 0.14492674059592309, 0.06936589799707335 ]
+
+                for (interval, frameTime, acc) in witnesses do
+                    let struct (steps, rem) = FixedStep.drain interval frameTime acc
+                    Expect.equal steps 3 $"drain {interval} {frameTime} {acc} runs three whole steps"
+                    Expect.isTrue (rem >= 0.0) $"drain {interval} {frameTime} {acc} ⇒ rem {rem} must not be negative"
+                    Expect.isTrue (rem < interval) $"...and still below the interval"
+            }
+
             test "a pathologically tiny interval caps steps at Int32.MaxValue instead of wrapping negative" {
                 let struct (steps, _) = FixedStep.drain 1e-10 0.25 0.0 // true count ~2.5e9 > Int32.MaxValue
                 Expect.equal steps System.Int32.MaxValue "step count saturates, never wraps negative"
