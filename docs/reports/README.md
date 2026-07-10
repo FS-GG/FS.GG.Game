@@ -33,3 +33,24 @@ content ships as, and its build plan. Both are pre-ADR, pointed at org-level **A
 |---|---|
 | [Capability-capsule product type](2026-07-07-capability-capsule-product-type.md) | names/formalizes the artifact FS.GG.Game ships to an agent + SDD consumer — three faces (rationale/contract/constraint), tiering, schema |
 | [Game-capsule contents & architectures](2026-07-07-game-capsule-contents-and-architectures.md) | the build plan — capability × architecture matrix, the four sim strategies, per-fit samples, governance checks |
+
+## Game-logic design, continued (authored here)
+
+Deepens the 2026-07-05 corpus rather than restating it. These are the designs for the skill layer that
+sits *above* the spatial substrate — epic [#39](https://github.com/FS-GG/FS.GG.Game/issues/39).
+
+| Design | Primitive(s) / surface |
+|---|---|
+| [Ballistics](2026-07-10-ballistics-design.md) | swept projectile advance, the lead/intercept quadratic and its degenerate cases, splash with a caller-chosen falloff curve → `FS.GG.Game.Core.Ballistics`. Carries the **a fast round is a segment, never a point** rule (§2) |
+| [The AI decision layer](2026-07-10-ai-decision-layer-design.md) | the decision layer nobody owned → `FS.GG.Game.Core.Ai` (tier 1, additive: 5 new exported types) |
+| [Effects — the damage pipeline](2026-07-10-effects-damage-pipeline-design.md) | the ordered, named damage pipeline, status stacking policies, and tick-count durations → `FS.GG.Game.Core.Effects`. Carries the **`Effects` never queries space** conclusion (§3.1) and the recorded `Resolution.knockback` decision (§5) |
+| [Mini physics engine](2026-07-10-game-logic-mini-physics-engine-design.md) | cashes in the collision design's **P3 / §6.2 impulse layer** — bodies, sequential-impulse solver, speculative CCD, sleeping, warm starting → `FS.GG.Game.Core.Physics`. Carries the **double-step-buffer-is-the-default** doctrine (§2.3) and the `Loop`/`FixedStep` duplication finding (§2.1–2.2) |
+
+## Product design (authored here)
+
+A design for a *game*, not a library — it consumes the game-logic corpus above rather than defining it,
+and names the Core gaps it needs closed first.
+
+| Design | Concern |
+|---|---|
+| [Mini Tanks — top-down 2-D armored combat](2026-07-10-mini-tanks-product-design.md) | five vehicles, hull/turret split, directional armor & penetration pipeline, breakable terrain, LOS/FOV/spotting, layered AI. Written against three Core gaps — `Geometry.segmentPolygonHit` (#52) and the `Los` (#32) / `Fov` (#33) modules — all of which have since landed |
