@@ -81,7 +81,10 @@ module Physics =
         | SPoly polygon ->
             let v = polygon.Vertices
 
-            if v.Length < 3 || not (v |> Array.forall finitePoint) || ringArea v <= 0.0 then
+            // `not (area > 0.0)` rather than `area <= 0.0`: a ring whose shoelace terms overflow and
+            // cancel has a NaN area, and NaN fails BOTH comparisons. Only the negated form rejects it —
+            // which is what `Geometry.wellFormed` does, and the parity claimed above is the point.
+            if v.Length < 3 || not (v |> Array.forall finitePoint) || not (ringArea v > 0.0) then
                 ValueNone
             else
                 let mutable loX, loY = v.[0].X, v.[0].Y
@@ -156,6 +159,9 @@ module Physics =
         //
         // The query is a superset; `Geometry.intersects` below is the exact filter. Hence no false
         // negatives (the dilation) and no false positives (the filter).
+        //
+        // `max` returns its first argument when the second is NaN, so `reach` cannot become NaN. It CAN
+        // become infinite, for a body whose extent overflows — see `candidatesFor`.
         let mutable reach = 0.0
 
         for i in 0 .. n - 1 do
@@ -170,15 +176,29 @@ module Physics =
 
         // Non-collidable bodies never enter the grid, so they can never be a candidate. Ascending index
         // order is insertion order, which `SpatialGrid.query` preserves — that is what makes the result
-        // sorted below without a sort.
+        // sorted below without a sort. `collidable` is the same ascending list, and the fallback below
+        // relies on that.
+        let collidable = [ for i in 0 .. n - 1 do if boxes.[i].IsSome then yield i ]
+
         let grid =
-            SpatialGrid.build
-                world.Config.BroadPhaseCellSize
-                (seq {
-                    for i in 0 .. n - 1 do
-                        if boxes.[i].IsSome then
-                            yield world.Pos.[i], i
-                })
+            SpatialGrid.build world.Config.BroadPhaseCellSize (collidable |> Seq.map (fun i -> world.Pos.[i], i))
+
+        // A dilated region is only usable while its bounds stay finite. Once `reach` (or a body's own
+        // extent) overflows, `region.X = -infinity` and `region.X + region.Width = NaN`, and every
+        // `containsPoint` test against NaN is false — so the query would return NOTHING and the whole
+        // world would silently lose its pairs, rather than merely losing acceleration. Fall back to the
+        // exact scan over every collidable body, which is what `SpatialGrid` itself does for a
+        // non-finite query box. Slower, never wrong, and still ascending.
+        let candidatesFor (region: Rect) =
+            if
+                finite region.X
+                && finite region.Y
+                && finite (region.X + region.Width)
+                && finite (region.Y + region.Height)
+            then
+                SpatialGrid.query region grid
+            else
+                collidable
 
         let acc = ResizeArray<struct (int * int)>()
 
@@ -193,9 +213,9 @@ module Physics =
                       Height = bi.Height + 2.0 * reach }
 
                 // `j > i` emits each unordered pair exactly once, in the canonical `a < b` order, so no
-                // dedup pass is needed; and because i ascends in the outer loop while the query yields j
-                // ascending, `acc` comes out sorted lexicographically by `(a, b)`.
-                for j in SpatialGrid.query region grid do
+                // dedup pass is needed; and because i ascends in the outer loop while the candidates come
+                // back ascending, `acc` comes out sorted lexicographically by `(a, b)`.
+                for j in candidatesFor region do
                     if j > i then
                         match boxes.[j] with
                         | ValueSome bj when solvable world.Kinds.[i] world.Kinds.[j] && Geometry.intersects bi bj ->

@@ -119,7 +119,8 @@ module Physics =
     /// The result is therefore *exact over AABBs* — no false positives and no false negatives, the same
     /// promise `SpatialGrid.query` makes — rather than the loose superset a broad phase is normally
     /// allowed. Narrowing further (are the *shapes*, rather than their boxes, in contact?) is the narrow
-    /// phase's job.
+    /// phase's job. Exactness holds at **any** magnitude: a body whose extent is too large to bound
+    /// costs the whole world its spatial acceleration, never its pairs.
     ///
     /// Pure, total and deterministic: identical bodies added in an identical order yield an identical
     /// array. Never throws.

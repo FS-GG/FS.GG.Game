@@ -16,6 +16,12 @@ module Game.Core.Tests.PhysicsTests
 //
 // The strict-edge convention is asserted against `Geometry.intersects` directly, so the two can never
 // drift apart silently.
+//
+// Two honest limits of the oracle, since it is the load-bearing assertion. It shares `Geometry.intersects`
+// with the implementation, so the EDGE CONVENTION is checked by the dedicated example above and not by the
+// property; and `bodyOf` bounds generated extents, so the property never reaches the overflow regime the
+// `at any magnitude` tests below cover by hand. The oracle proves the grid, the dilation, the dedup and
+// the ordering — which is what it is there for.
 
 open System
 open Expecto
@@ -280,6 +286,44 @@ let tests =
                       (pairList (worldOf cellSize bodies))
                       (oraclePairs bodies)
                       (sprintf "cellSize %f is an acceleration choice, never a correctness one" cellSize)
+          }
+
+          test "one body with an unboundable extent costs acceleration, never pairs" {
+              // Bodies 0 and 1 plainly overlap and one is Dynamic. Body 2's half-extents overflow its box
+              // width to +infinity, which drives the global `reach` to +infinity, which makes every
+              // dilated region's upper bound `-infinity + infinity = NaN`. Every `containsPoint` test
+              // against NaN is false, so a query-only broad phase silently returns NO pairs at all — the
+              // whole world loses collision because of one body it has nothing to do with.
+              let sane =
+                  [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                    Physics.Dynamic, Physics.SCircle 1.0, p 0.5 0.0 ]
+
+              Expect.equal (pairList (worldOf 8.0 sane)) [ 0, 1 ] "the pair every later assertion depends on"
+
+              let withHuge = sane @ [ Physics.Static, box 1e308 1e308, p 0.0 0.0 ]
+
+              // Body 2 is Static and genuinely contains both, so it pairs with each of them.
+              Expect.equal
+                  (pairList (worldOf 8.0 withHuge))
+                  [ 0, 1; 0, 2; 1, 2 ]
+                  "the exact scan still finds every pair when the region cannot be bounded"
+          }
+
+          test "a polygon whose shoelace overflows to NaN is refused, exactly as Geometry refuses it" {
+              // The shoelace terms of this ring overflow to ±infinity and cancel, so its area is NaN.
+              // `NaN <= 0.0` and `NaN > 0.0` are BOTH false, so only the negated guard rejects it. If
+              // Physics keeps the body while Geometry drops it, `pairs` emits a pair whose narrow phase
+              // can never produce a contact.
+              let ring: ConvexPolygon =
+                  { Vertices = [| p 1e200 1e200; p -1e200 1e200; p -1e200 -1e200 |] }
+
+              Expect.isNone (Geometry.polygonContact ring ring) "Geometry refuses a NaN-area ring"
+
+              let w =
+                  worldOf 8.0 [ Physics.Dynamic, Physics.SPoly ring, p 0.0 0.0
+                                Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0 ]
+
+              Expect.equal (pairList w) [] "and so must Physics — the two guards agree on NaN or neither is safe"
           }
 
           test "pairs is exact against a brute-force oracle, and strictly ascending" {
