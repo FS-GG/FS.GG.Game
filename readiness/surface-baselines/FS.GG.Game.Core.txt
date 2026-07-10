@@ -31,6 +31,17 @@ FS.GG.Game.Core.Manifold
 FS.GG.Game.Core.Neighbourhood
 FS.GG.Game.Core.Neighbourhood+Tags
 FS.GG.Game.Core.Pathfinding
+FS.GG.Game.Core.Physics
+FS.GG.Game.Core.Physics+BodyKind
+FS.GG.Game.Core.Physics+BodyKind+Tags
+FS.GG.Game.Core.Physics+Config
+FS.GG.Game.Core.Physics+Material
+FS.GG.Game.Core.Physics+Shape
+FS.GG.Game.Core.Physics+Shape+SBox
+FS.GG.Game.Core.Physics+Shape+SCircle
+FS.GG.Game.Core.Physics+Shape+SPoly
+FS.GG.Game.Core.Physics+Shape+Tags
+FS.GG.Game.Core.Physics+World
 FS.GG.Game.Core.Point
 FS.GG.Game.Core.Projectile
 FS.GG.Game.Core.ProjectileStep
