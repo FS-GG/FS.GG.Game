@@ -55,12 +55,18 @@ module Visibility =
     /// parametric cross products, even when the intersection they describe is itself an ordinary pair of
     /// doubles. Such a hit is recovered, not dropped: the solve falls back to re-deriving `t` with the
     /// operands rescaled by exact powers of two, which cancel out of the ratio, and anchored at the
-    /// segment endpoint nearer `origin`. Whenever the true intersection is representable, it is returned.
-    /// Rescaling introduces no rounding of its own, and the ordinary path is bit-for-bit unchanged, so
-    /// this is safe to call from a replayed simulation step. A `t` that is *genuinely* unrepresentable
-    /// (an `origin` a `Double.MaxValue` away from the hit) still degrades to `None` rather than to a
-    /// non-finite value — a missing hit degrades one ring, where a NaN one poisons every consumer
-    /// downstream of it.
+    /// segment endpoint nearer `origin`. Whenever the parametrisation **saturates** and the true
+    /// intersection is representable, that intersection is returned. Rescaling introduces no rounding of
+    /// its own, and the ordinary path is bit-for-bit unchanged, so this is safe to call from a replayed
+    /// simulation step. A `t` that is *genuinely* unrepresentable (an `origin` a `Double.MaxValue` away
+    /// from the hit) still degrades to `None` rather than to a non-finite value — a missing hit degrades
+    /// one ring, where a NaN one poisons every consumer downstream of it.
+    ///
+    /// This is a guarantee about **overflow**, not about precision. `t` is a ratio of cross products, and
+    /// a cross product of near-parallel operands cancels: where `origin` is nearly collinear with the
+    /// segment, or the coordinates span many orders of magnitude, the ordinary path can return a `t` whose
+    /// relative error far exceeds an ulp. That error is inherent to the parametrisation and is not what
+    /// the rescaled fallback addresses.
     val raySegment: origin: Point -> dir: Point -> seg: Segment -> (Point * float) option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.

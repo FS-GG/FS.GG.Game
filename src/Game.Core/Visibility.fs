@@ -62,14 +62,23 @@ module Visibility =
 
     // Half the difference `p - q`, computed as `p/2 - q/2` so that two opposite-signed extremes cannot
     // overflow on the way (`MaxValue - (-MaxValue)` is infinite; `MaxValue/2 - (-MaxValue/2)` is not).
-    // Halving by `ScaleB` is exact for every normal operand, so this loses nothing the solve depends on.
+    // Halving by `ScaleB` decrements the exponent field, so it is exact for a normal operand. It rounds
+    // for a SUBNORMAL one, whose exponent is already at the floor (`ScaleB(5e-324, -1) = 0`) — reachable
+    // only when a coordinate is itself subnormal, i.e. ~1e-308 away from the magnitudes that make the
+    // caller overflow in the first place, so the residual sits far below the terms it is subtracted from.
     let inline private halfDiff (p: float) (q: float) =
         System.Math.ScaleB(p, -1) - System.Math.ScaleB(q, -1)
 
     // Split a finite vector into a mantissa whose larger component lies in `[1, 2)` and the power-of-two
     // exponent that restores it: `v = 2^k * v'`. `ScaleB` shifts the exponent field without touching the
-    // mantissa, so the split is EXACT — no rounding is introduced, which is what keeps the byte-determinism
-    // contract intact. A zero (or, defensively, a non-finite) vector is passed through with `k = 0`.
+    // mantissa, so no rounding is introduced — which is what keeps the byte-determinism contract intact.
+    //
+    // Exact, with one caveat the caller relies on being harmless: when the two components' exponents differ
+    // by more than the subnormal range, scaling the larger into `[1, 2)` underflows the smaller to zero
+    // (`normalise 1e300 1e-30` = `(1.49, 0)`). The lost term is then bounded by ~1e-323 against cross-product
+    // terms of order 1, so it cannot move the quotient; but `v = 2^k * v'` holds only to that tolerance, and
+    // anything that comes to depend on the split being bit-exact must re-derive this.
+    // A zero (or, defensively, a non-finite) vector is passed through with `k = 0`.
     let inline private normalise (vx: float) (vy: float) =
         let m = max (abs vx) (abs vy)
 
@@ -78,6 +87,17 @@ module Visibility =
         else
             let k = System.Math.ILogB m
             struct (System.Math.ScaleB(vx, -k), System.Math.ScaleB(vy, -k), k)
+
+    // The shared verdict, once a solve has produced its `t` and `u`: the hit lies ahead of the origin
+    // (`t >= 0`) and inside the segment (`u` in `[0, 1]`). Both solves below end here, so the strict/inclusive
+    // conventions cannot drift apart between them. The hit point is re-checked because a finite `t` and a
+    // finite `dir` can still overflow their product.
+    let inline private accept (origin: Point) (dir: Point) (t: float) (u: float) : (Point * float) option =
+        if t >= 0.0 && u >= 0.0 && u <= 1.0 then
+            let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
+            if isFinitePoint hit then Some(hit, t) else None
+        else
+            None
 
     // The overflow-free re-solve, reached only when the direct parametrisation saturated (§ `raySegment`).
     //
@@ -115,15 +135,12 @@ module Visibility =
             let t = System.Math.ScaleB((wx * ey - wy * ex) / denom, (a + 1) - b)
             let u = System.Math.ScaleB((wx * dy - wy * dx) / denom, (a + 1) - (c + 1))
 
-            // A true `t` can still be unrepresentable (an origin genuinely `MaxValue` away from the hit),
-            // and `origin + t * dir` can overflow even for finite `t`. Both degrade to `None`, as before.
+            // A true `t` can still be unrepresentable (an origin genuinely `MaxValue` away from the hit).
+            // That degrades to `None`, as before — the rescale recovers precision, not range.
             if not (System.Double.IsFinite t && System.Double.IsFinite u) then
                 None
-            elif t >= 0.0 && u >= 0.0 && u <= 1.0 then
-                let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
-                if isFinitePoint hit then Some(hit, t) else None
             else
-                None
+                accept origin dir t u
 
     let raySegment (origin: Point) (dir: Point) (seg: Segment) : (Point * float) option =
         if not (isFinitePoint origin && isFinitePoint dir && isFiniteSeg seg) then
@@ -166,12 +183,8 @@ module Visibility =
                     not (System.Double.IsFinite denom && System.Double.IsFinite t && System.Double.IsFinite u)
                 then
                     raySegmentRescaled origin dir seg
-                elif t >= 0.0 && u >= 0.0 && u <= 1.0 then
-                    // A finite `t` and a finite `dir` can still overflow their product.
-                    let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
-                    if isFinitePoint hit then Some(hit, t) else None
                 else
-                    None
+                    accept origin dir t u
 
     let isVisible (source: Point) (target: Point) (segments: Segment list) : bool =
         let dir = { X = target.X - source.X; Y = target.Y - source.Y }

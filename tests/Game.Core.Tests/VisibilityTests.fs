@@ -207,20 +207,20 @@ let tests =
             Expect.floatClose Accuracy.high p.X 0.0 "hit lies on the wall at x = 0"
             Expect.equal p.Y 0.0 "the ray runs along y = 0"
 
-        // Stronger than the literal above, and the real contract: pushing an occluder's far endpoint out to
-        // `MaxValue` moves neither the crossing nor `t`, so the answer must be BYTE-identical to the same
-        // geometry with a representable endpoint. This is the equality #59 says the 1e6 control already had.
-        testCase "raySegment: extending the far endpoint to MaxValue does not move the hit" <| fun () ->
+        // The far endpoint's magnitude is not part of the answer: the crossing is pinned by the near endpoint
+        // and the ray. Each scale is checked against the TRUE `t`, never against another scale's output —
+        // the direct and rescaled solves round independently, so cross-path byte-equality is not an invariant
+        // (see the property below), and pinning one path to the other's ulps would red on an innocent change.
+        testCase "raySegment: the far endpoint's magnitude does not move the hit" <| fun () ->
             let origin = pt -3.937126736 0.0
             let dir = pt 0.937126736 0.0
+            let trueT = 3.937126736 / 0.937126736
 
-            let representable =
-                Visibility.raySegment origin dir (seg (pt 0.0 1.0e6) (pt 0.0 0.0))
-
-            let overflowing =
-                Visibility.raySegment origin dir (seg (pt 0.0 System.Double.MaxValue) (pt 0.0 0.0))
-
-            Expect.equal overflowing representable "the far endpoint's magnitude is not part of the answer"
+            for farY in [ 1.0e6; 1.0e150; 1.0e300; System.Double.MaxValue ] do
+                let hit = Visibility.raySegment origin dir (seg (pt 0.0 farY) (pt 0.0 0.0))
+                let p, t = Expect.wantSome hit $"a wall ending at {farY} still occludes"
+                Expect.floatClose Accuracy.veryHigh t trueT $"parametric distance, far endpoint at {farY}"
+                Expect.floatClose Accuracy.high p.X 0.0 $"hit lies on the wall, far endpoint at {farY}"
 
         // The denominator saturates instead of the numerator, and this one the #56 guard cannot see: with
         // `dir × E` = 2 * MaxValue = infinity, `t` and `u` come back as `finite / infinity` = 0.0 — ordinary
@@ -245,6 +245,28 @@ let tests =
 
             let _, t = Expect.wantSome (Visibility.raySegment origin dir wall) "an unbounded wall still occludes"
             Expect.equal t (3.937126736 / 0.937126736) "the true parametric distance, to the last bit"
+
+        // The `.fsi` promises the rescaled solve is replay-safe ("rescaling introduces no rounding of its
+        // own"). Every other determinism test in this list uses order-1e3 fixtures, which take the direct
+        // path exclusively — so without this one, swapping `ILogB`/`ScaleB` for a rounding normaliser (a
+        // divide by the max component, say) would leave the whole suite green. Exercises both the ring and
+        // the raw solve on inputs that can only reach the fallback.
+        testCase "the rescaled solve is deterministic for identical input" <| fun () ->
+            let origin = pt -3.937126736 0.0
+            let dir = pt 0.937126736 0.0
+            let far = seg (pt 0.0 System.Double.MaxValue) (pt 0.0 0.0)
+
+            Expect.equal
+                (Visibility.raySegment origin dir far)
+                (Visibility.raySegment origin dir far)
+                "byte-identical hit across calls, on the overflow path"
+
+            let walls =
+                [ seg (pt -3.0 0.0) (pt 0.0 0.0)
+                  seg (pt 0.0 System.Double.MaxValue) (pt -0.0 -0.0) ]
+
+            let ring () = Visibility.polygon (settings System.Double.MaxValue) origin walls
+            Expect.equal (ring ()) (ring ()) "byte-identical ring across calls, on the overflow path"
 
         // Acceptance criterion: "for any finite input where the true intersection is representable,
         // raySegment returns it rather than None." Metamorphic, because a closed form for the true hit is
