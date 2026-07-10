@@ -64,14 +64,19 @@ module Visibility =
     val isVisible: source: Point -> target: Point -> segments: Segment list -> bool
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
-    /// The full visibility polygon by angular sweep: cull to the occluders touching the sight bound,
-    /// cast a ray at every occluder endpoint (and one either side of it, to slip past corners), keep the
-    /// nearest hit per ray, and order the hits into a closed CCW ring.
+    /// The full visibility polygon by angular sweep: clip the occluders to the sight bound, cast a ray at
+    /// every clipped endpoint (and one either side of it, to slip past corners), keep the nearest hit per
+    /// ray, and order the hits into a closed ring.
     ///
-    /// The cull keeps every segment that **intersects** the sight bound, not merely those with an
-    /// endpoint inside it, so a wall spanning clean across the bound with both ends outside still
-    /// occludes. That is the common case, not the corner case: walls are routinely longer than a view
-    /// radius. A cull that dropped it would let the viewpoint see straight through the wall.
+    /// Occluders are **clipped**, not merely kept. Keeping every segment that *intersects* the bound is
+    /// what makes a wall spanning clean across it — both ends outside — still occlude; that is the common
+    /// case, not the corner case, since walls are routinely longer than a view radius, and a cull that
+    /// dropped such a wall would let the viewpoint see straight through it. But the sweep aims its rays
+    /// at occluder endpoints, so a wall kept at full length contributes no aim point where it crosses the
+    /// bound, and the ring cuts the corner between wall and bound edge. Trimming each occluder to the
+    /// bound supplies exactly those two aim points. Rays terminate on the bound regardless, so clipping
+    /// cannot change which rays an occluder blocks. An occluder grazing a bound corner clips to zero
+    /// length and is dropped — it occludes nothing.
     ///
     /// Pure, deterministic, and total: non-finite or zero-length occluders are discarded (they can never
     /// occlude), a non-positive or non-finite `Settings.Radius` falls back to `1.0`, and a non-finite

@@ -46,6 +46,19 @@ let tests =
             let maxY = poly.Vertices |> List.map (fun v -> v.Y) |> List.max
             Expect.isLessThanOrEqual maxY 1e-9 "no vertex lies beyond the spanning wall"
 
+        // Occluding is necessary but not sufficient: the ring must also turn at the two points where the
+        // wall crosses the sight bound. The sweep aims rays at occluder endpoints, and this wall's own
+        // endpoints are 950 units outside the bound — so unless it is CLIPPED to the bound, nothing aims
+        // at (±50, 0), the ring cuts the corner, and the visible region loses a triangle on each side.
+        testCase "spanning chord occludes: the ring turns at the wall's bound crossings" <| fun () ->
+            let poly = Visibility.polygon (settings spanningRadius) spanningSource [ spanningWall ]
+
+            let has (x, y) =
+                poly.Vertices |> List.exists (fun v -> abs (v.X - x) < 1e-6 && abs (v.Y - y) < 1e-6)
+
+            Expect.isTrue (has (spanningRadius, 0.0)) "vertex where the wall leaves the bound (right)"
+            Expect.isTrue (has (-spanningRadius, 0.0)) "vertex where the wall leaves the bound (left)"
+
         testCase "spanning chord occludes: a target past the wall is not visible" <| fun () ->
             Expect.isFalse (Visibility.isVisible spanningSource (pt 0.0 40.0) [ spanningWall ]) "blocked by the wall"
             Expect.isTrue (Visibility.isVisible spanningSource (pt 0.0 -40.0) [ spanningWall ]) "clear below the wall"
@@ -127,14 +140,26 @@ let tests =
             let b = Visibility.polygon (settings spanningRadius) spanningSource walls
             Expect.equal a b "byte-identical ring across calls"
 
-        testCase "polygon never throws and never emits a NaN vertex (FsCheck)" <| fun () ->
+        // Totality is a claim about *arbitrary* input, so this property deliberately does NOT clamp:
+        // NaN and infinite coordinates, sources, and radii are exactly the cases the `.fsi` promises to
+        // degrade rather than throw on. Clamping them away here would test nothing.
+        testCase "polygon never throws and never emits a NaN vertex, on unclamped input (FsCheck)" <| fun () ->
             let prop (coords: (float * float * float * float) list) (sx: float) (sy: float) (r: float) =
                 let walls =
-                    coords
-                    |> List.map (fun (ax, ay, bx, by) -> seg (pt (clamp ax) (clamp ay)) (pt (clamp bx) (clamp by)))
+                    coords |> List.map (fun (ax, ay, bx, by) -> seg (pt ax ay) (pt bx by))
 
-                let poly = Visibility.polygon (settings (clamp r)) (pt (clamp sx) (clamp sy)) walls
+                let poly = Visibility.polygon (settings r) (pt sx sy) walls
                 poly.Vertices |> List.forall isFinitePt
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+        testCase "isVisible never throws, on unclamped input (FsCheck)" <| fun () ->
+            let prop (coords: (float * float * float * float) list) (sx: float) (sy: float) (tx: float) (ty: float) =
+                let walls =
+                    coords |> List.map (fun (ax, ay, bx, by) -> seg (pt ax ay) (pt bx by))
+
+                Visibility.isVisible (pt sx sy) (pt tx ty) walls |> ignore
+                true
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 

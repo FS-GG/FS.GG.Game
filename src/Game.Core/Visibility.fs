@@ -21,21 +21,24 @@ module Visibility =
 
     let private sqLen (v: Point) = v.X * v.X + v.Y * v.Y
 
-    // True when the segment `a`→`b` touches `rect` anywhere: an endpoint inside it, a chord crossing
-    // clean through with both ends outside, or an edge graze. Liang–Barsky slab clip of the parametric
-    // segment against the four half-planes — sqrt-free and transcendental-free, so it is exact and
-    // deterministic. Edge contact counts as a touch (inclusive, matching `Geometry.containsPoint`).
+    // The portion of the segment `a`→`b` lying inside `rect`, or `None` when it misses entirely. A
+    // Liang–Barsky slab clip of the parametric segment against the four half-planes — sqrt-free and
+    // transcendental-free, so it is exact and deterministic. Edge contact counts as a touch (inclusive,
+    // matching `Geometry.containsPoint`), which can clip to a zero-length graze; the caller drops those.
     //
-    // This is the cull predicate, and it must never report a false negative: a dropped occluder is a
-    // wall the viewpoint sees straight through.
-    let private segmentHitsRect (rect: Rect) (a: Point) (b: Point) : bool =
+    // This both culls and trims, and it must never report a false negative: a dropped occluder is a wall
+    // the viewpoint sees straight through. Trimming matters as much as culling — the sweep aims its rays
+    // at occluder endpoints, so an occluder has to END where it leaves the sight bound. A wall left at
+    // full length whose endpoints lie far outside the bound contributes no aim point where it crosses
+    // the bound, and the ring then cuts the corner between the wall and the bound edge.
+    let private clipSegmentToRect (rect: Rect) (a: Point) (b: Point) : (Point * Point) option =
         let dx = b.X - a.X
         let dy = b.Y - a.Y
 
         // Narrow the surviving parameter window `[t0, t1]` by one half-plane `p * t <= q`. A `p` of zero
         // means the segment runs parallel to that slab, so it survives only where it already lies inside
         // it (`q >= 0`); an empty window `(1, 0)` is absorbing, so a rejected segment stays rejected.
-        // Struct tuples, so culling a wall list allocates nothing.
+        // Struct tuples, so clipping a wall list allocates nothing.
         let inline clip (p: float) (q: float) (struct (t0, t1)) =
             if p = 0.0 then
                 if q < 0.0 then struct (1.0, 0.0) else struct (t0, t1)
@@ -51,7 +54,11 @@ module Visibility =
             |> clip dy (rect.Y + rect.Height - a.Y)
 
         let struct (t0, t1) = window
-        t0 <= t1
+
+        if t0 > t1 then
+            None
+        else
+            Some({ X = a.X + t0 * dx; Y = a.Y + t0 * dy }, { X = a.X + t1 * dx; Y = a.Y + t1 * dy })
 
     let raySegment (origin: Point) (dir: Point) (seg: Segment) : (Point * float) option =
         if not (isFinitePoint origin && isFinitePoint dir && isFiniteSeg seg) then
@@ -157,17 +164,27 @@ module Visibility =
             segments
             |> List.filter (fun s -> isFiniteSeg s && sqLen { X = s.B.X - s.A.X; Y = s.B.Y - s.A.Y } > 0.0)
 
-        // Cull to the occluders that actually touch the sight bound box, by an exact segment-vs-box test.
-        // NOT a `SpatialGrid` bucket: the grid indexes *points*, so bucketing a segment by its endpoints
-        // drops a wall that spans the box with both ends outside it — the viewpoint then sees straight
-        // through it. Long walls are the common case, not the corner case, so this test is exact.
+        // Clip the occluders to the sight bound box, by an exact segment-vs-box test. NOT a `SpatialGrid`
+        // bucket: the grid indexes *points*, so bucketing a segment by its endpoints drops a wall that
+        // spans the box with both ends outside it — the viewpoint then sees straight through it. Long
+        // walls are the common case, not the corner case, so this test is exact.
+        //
+        // Clipping, rather than merely keeping, is what puts an aim point where a spanning wall crosses
+        // the bound. Rays never travel beyond the bound anyway (they terminate on its edges), so trimming
+        // an occluder to it cannot change which rays it blocks. A wall that only grazes a corner clips to
+        // zero length and is dropped — it occludes nothing.
         let boundRect =
             { X = source.X - radius
               Y = source.Y - radius
               Width = 2.0 * radius
               Height = 2.0 * radius }
 
-        let culled = real |> List.filter (fun s -> segmentHitsRect boundRect s.A s.B)
+        let culled =
+            real
+            |> List.choose (fun s ->
+                clipSegmentToRect boundRect s.A s.B
+                |> Option.map (fun (a, b) -> { A = a; B = b })
+                |> Option.filter (fun s -> sqLen { X = s.B.X - s.A.X; Y = s.B.Y - s.A.Y } > 0.0))
 
         let bEdges, bCorners = boundEdges source radius
         let allSegs = culled @ bEdges
