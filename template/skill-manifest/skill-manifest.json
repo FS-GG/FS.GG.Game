@@ -82,6 +82,14 @@
       "supplied-by": "template/product-skills/fs-gg-persistence/"
     },
     {
+      "id": "fs-gg-physics",
+      "scope": "product",
+      "sha256": "0cf5520802d4493821230c076954d0bbdde1cdd7b27c4eb48e3a0160fa2003b5",
+      "resolvablePath": ".agents/skills/fs-gg-physics/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-physics/"
+    },
+    {
       "id": "fs-gg-visibility",
       "scope": "product",
       "sha256": "08b1dfcd16ffa2059d09c3856ad2b6ddc858cb97c6a4267a490678d33c5fa085",

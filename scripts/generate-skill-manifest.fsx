@@ -64,6 +64,13 @@ let repoPath (rel: string) =
 // deprecated `Resolution.knockback` in favour of `Resolution.push`, so `fs-gg-collision`'s body — one
 // of the P6 rewrites, already divergent from Rendering's frozen `--profile game` copy — changed too.
 // Both the new row and that changed digest must be reconciled into .github's registry/skills.yml.
+//
+// `fs-gg-physics` (FS.GG.Game#79) likewise originates here — it teaches the `Loop` double step buffer
+// this repo owns and the opt-in `Physics` impulse layer built on it, so there is no frozen
+// FS.GG.Rendering copy to diverge from. Adding it takes the owner:fs-gg-game row count to 12, which the
+// .github registry/skills.yml must gain as a NEW row; that reconcile is a cross-repo follow-up
+// (registry = manifest = bytes), deliberately outside this repo's touch-set. It is the second such row
+// pending, after fs-gg-effects above — see FS-GG/.github#330 and #328.
 let catalog =
     [ "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [game, sample-pack]"
@@ -75,6 +82,7 @@ let catalog =
       "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-physics", "template/product-skills/fs-gg-physics/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-visibility", "template/product-skills/fs-gg-visibility/SKILL.md", "profile in [game, sample-pack]" ]
 
 /// Provider source directory (trailing slash) that holds the canonical SKILL.md — supplied-by.
