@@ -1,8 +1,14 @@
 namespace FS.GG.Game.Core
 
 /// Public contract module exposed by the FS.GG.Game.Core package.
-/// The mini rigid-body engine. This slice ships the world and its **broad phase** only; the narrow
-/// phase, the solver, interpolation and the checksum arrive with `Physics.step`.
+/// The mini rigid-body engine: a world of bodies, a broad phase, a narrow phase, and a semi-implicit
+/// Euler step with a sequential-impulse contact solver. `interpolate` (presentation-only) is the one
+/// piece of the design's surface still to come; warm starting, sleeping and CCD are later slices.
+///
+/// **Mass is derived, not given.** Neither `Material` nor `addBody` carries one: a body's mass is the
+/// area of its `Shape` at unit density, and its rotational inertia is taken about its origin, which is
+/// therefore its centre of mass. `Static` and `Kinematic` bodies have infinite mass (zero inverse mass)
+/// and are unmoved by any impulse.
 ///
 /// Arcade resolution stays the first-class default: `Resolution.pushOut`/`slide`/`knockback` remain what
 /// most games use, and `Physics` is opt-in. Neither module knows the other.
@@ -111,7 +117,8 @@ module Physics =
     ///
     /// - **at least one body is `Dynamic`** — no other pair can ever resolve, so emitting it would only
     ///   buy a narrow-phase call that cannot produce motion;
-    /// - **both bodies are collidable** — neither shape is degenerate nor position non-finite (`Shape`);
+    /// - **both bodies are collidable** — no degenerate shape, no non-finite position, and no non-finite
+    ///   rotation (`Shape`);
     /// - **their world-space AABBs overlap on positive area**, decided by `Geometry.intersects` and so
     ///   inheriting its **strict-edge convention: two boxes that merely touch are not a pair.** That
     ///   agrees with the narrow phase, which likewise reports no contact on a touch.
@@ -125,3 +132,68 @@ module Physics =
     /// Pure, total and deterministic: identical bodies added in an identical order yield an identical
     /// array. Never throws.
     val pairs: world: World -> struct (int * int)[]
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// The narrow phase: the contact between bodies `a` and `b`, or `ValueNone` if they do not touch.
+    ///
+    /// `A` and `B` are `a` and `b` — the body indices, not `polygonManifold`'s `0`/`1` — and `Normal` is
+    /// the unit vector pointing from `a` toward `b`, whichever order they are given in. `Depth` is the
+    /// penetration along it, and `Points` holds `PointCount` contact points: up to 2 for a polygon pair
+    /// (a face-on-face contact), always 1 where a circle is involved.
+    ///
+    /// The **strict-edge convention** is `Geometry`'s throughout: a touch is not a contact. Two circles
+    /// contact when `d < ra + rb`, never at `d = ra + rb`; polygon pairs defer to `polygonManifold`, which
+    /// says the same. This agrees with `pairs`, so a pair that the broad phase refuses can never have had
+    /// a contact to lose.
+    ///
+    /// `FeatureId` identifies the contacting features and is stable across ticks for an unmoving pair —
+    /// the warm-start cache key #76 will use. **Opaque: compare it, do not decode it.** Its values are
+    /// disjoint from `polygonManifold`'s for the circle cases, which have no face pair to name.
+    ///
+    /// Pure, total and deterministic. An out-of-range or equal index, a degenerate shape, a non-finite
+    /// position or rotation, and two exactly coincident circle centres (no direction exists along which to
+    /// separate them) all yield `ValueNone` rather than throwing or inventing a normal.
+    val manifold: world: World -> a: int -> b: int -> Manifold voption
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Advance the world by `dt`. **This is `Loop.advance`'s `integrate`**: the signature is exactly
+    /// `'world -> float -> 'world` because `Config` is baked into the `World` at `empty`, so
+    /// `Loop.advance dt Physics.step frameTime state` typechecks with no adapter. Reads `dt` and the
+    /// world, and nothing else — never a clock, never `alpha`.
+    ///
+    /// One step is: integrate velocity under gravity (semi-implicit Euler); broad phase; narrow phase;
+    /// solve contact velocities with a sequential-impulse solver over a **fixed** `VelocityIterations`;
+    /// integrate position; then correct penetration over a fixed `PositionIterations`.
+    ///
+    /// Friction is a tangent impulse clamped to the Coulomb cone `|jt| <= μ·jn`, with `μ` the geometric
+    /// mean of the two materials'. Restitution applies only where the approach speed exceeds
+    /// `BounceThreshold`; below it `e = 0`, or a resting box jitters forever.
+    ///
+    /// A contact's coefficients combine from BOTH materials: restitution as the **maximum** of the two
+    /// (a floor is normally `0`, and taking the minimum would make every ball dead on every floor), and
+    /// friction as the geometric mean `sqrt(μa·μb)` (so one frictionless body slides on anything).
+    ///
+    /// **Determinism.** Manifolds are sorted by `(A, B, FeatureId)` before solving. Iteration counts are
+    /// fixed `int`s — the solver never iterates until converged, because a float convergence tolerance
+    /// decides differently on two machines. Every divide and `sqrt` is guarded. Identical worlds stepped
+    /// by identical `dt` sequences produce identical worlds, and so identical `checksum`s.
+    ///
+    /// Total: a non-finite or non-positive `dt` returns the world unchanged, as does an empty world.
+    /// A `Static` body never moves; a `Kinematic` body moves under its own velocity and is unmoved by
+    /// impulses. Never throws.
+    val step: world: World -> dt: float -> World
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// A stable 64-bit hash of every body's `Pos`, `Vel`, `Rot` and `AngVel` — the desync tripwire.
+    /// Compare it across a replayed input stream, or against a golden value in a test, to catch the tick
+    /// on which two runs diverged.
+    ///
+    /// **Body state only.** No solver state, no cache, no contact — those are derived each step, and a
+    /// checksum over them would move whenever an optimisation changed how they are stored, reporting a
+    /// desync that is not one.
+    ///
+    /// Stable across runs, processes and runtimes: it is FNV-1a over the IEEE-754 bits, not
+    /// `GetHashCode`. `-0.0` hashes as `0.0` (they compare equal, so they must hash equal), and every NaN
+    /// hashes alike. Float arithmetic is byte-deterministic on a fixed compiler and ISA; a cross-platform
+    /// lockstep guarantee needs fixed-point, which is a later, ADR'd decision.
+    val checksum: world: World -> uint64
