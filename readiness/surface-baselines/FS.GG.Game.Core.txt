@@ -5,6 +5,12 @@ FS.GG.Game.Core.ConvexPolygon
 FS.GG.Game.Core.FixedStep
 FS.GG.Game.Core.Fov
 FS.GG.Game.Core.Geometry
+FS.GG.Game.Core.Grids
+FS.GG.Game.Core.Grids+Edge
+FS.GG.Game.Core.Grids+EdgeOrientation
+FS.GG.Game.Core.Grids+EdgeOrientation+Tags
+FS.GG.Game.Core.Grids+GridSpec
+FS.GG.Game.Core.Grids+Vertex
 FS.GG.Game.Core.LineMode
 FS.GG.Game.Core.LineMode+Tags
 FS.GG.Game.Core.Los
