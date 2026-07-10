@@ -487,4 +487,245 @@ let tests =
                 }
             ]
         ]
+
+        // Segment-vs-convex-polygon cast (031) — the raycast counterpart of polygonContact. Entry-from-
+        // outside semantics, strict edges, and the entered edge's outward normal as the struck face.
+        testList "segmentPolygonHit (segment vs convex polygon)" [
+
+            let isUnit (n: Point) = abs (sqrt (n.X * n.X + n.Y * n.Y) - 1.0) < 1e-9
+            // The rotation-0 OBB over (0,0,10,10) — the box every raycast golden above casts at.
+            let box10 = Geometry.obbPolygon (p 5. 5.) (p 5. 5.) 0.0
+            // A rotation-0 OBB from ints (positive half-extents) + the segmentAabbHit Rect it equals.
+            let obbOf (a: int) (b: int) (c: int) (d: int) : ConvexPolygon * Rect =
+                let cx, cy = float (a % 50), float (b % 50)
+                let hx, hy = float (1 + abs (c % 20)), float (1 + abs (d % 20))
+                Geometry.obbPolygon (p cx cy) (p hx hy) 0.0,
+                { X = cx - hx; Y = cy - hy; Width = 2.0 * hx; Height = 2.0 * hy }
+
+            testCase "agrees with segmentAabbHit on rotation-0 OBBs, but for the corner graze (FsCheck ≥500)" <| fun () ->
+                // The cross-check DEC-004 already imposes on polygonContact/aabbContact, one level up: a
+                // rotation-0 obbPolygon casts exactly like its source Rect. The one documented divergence
+                // is strict edges — a segment that clips a single corner is a hit for the `<=` slab test
+                // and a graze (not a hit) for the polygon's `<`. Normals are NOT compared: a corner ENTRY
+                // ties, and the two resolve the tie differently (first edge in vertex order vs the X face).
+                // Integer coordinates keep `cx - hx + 2*hx` and `cx + hx` the same double, so the Rect and
+                // the polygon are the SAME box here; on fractional extents they need not be, and a segment
+                // endpoint on the boundary can then land inside one shape and on the other.
+                let prop a b c d e f g h =
+                    let p0 = p (float (a % 50)) (float (b % 50))
+                    let p1 = p (float (c % 50)) (float (d % 50))
+                    let poly, box = obbOf e f g h
+                    let isCorner (q: Point) =
+                        (abs (q.X - box.X) < 1e-9 || abs (q.X - (box.X + box.Width)) < 1e-9)
+                        && (abs (q.Y - box.Y) < 1e-9 || abs (q.Y - (box.Y + box.Height)) < 1e-9)
+                    let key (o: RayHit option) = o |> Option.map (fun x -> x.T, x.Point)
+                    match Geometry.segmentPolygonHit p0 p1 poly, Geometry.segmentAabbHit p0 p1 box with
+                    | ph, ah when key ph = key ah -> true
+                    | None, Some ah -> isCorner ah.Point
+                    | _ -> false
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "a hit has t in [0,1], a point on the boundary, and an inward-facing unit normal (FsCheck ≥500)" <| fun () ->
+                // `Normal` is the outward unit normal of the entered edge, so the hit point lies on that
+                // edge's line ((point - vertex)·n = 0) and the segment runs against it (direction·n < 0).
+                let prop a b c d e f g h i =
+                    let p0 = p (float (a % 50)) (float (b % 50))
+                    let p1 = p (float (c % 50)) (float (d % 50))
+                    let poly =
+                        Geometry.obbPolygon
+                            (p (float (e % 50)) (float (f % 50)))
+                            (p (float (1 + abs (g % 20))) (float (1 + abs (h % 20))))
+                            (float (i % 13) * 0.5)
+                    match Geometry.segmentPolygonHit p0 p1 poly with
+                    | Some hit ->
+                        // The point sits on the entered edge's line, but only to within the corner
+                        // tolerance: at a corner entry T is the true max while the normal is the first
+                        // tied edge's, so the point may lie up to cornerTie × |segment| off that edge.
+                        let segLen = sqrt ((p1.X - p0.X) ** 2.0 + (p1.Y - p0.Y) ** 2.0)
+                        let onSomeEdgeLine =
+                            poly.Vertices
+                            |> Array.exists (fun v ->
+                                abs ((hit.Point.X - v.X) * hit.Normal.X + (hit.Point.Y - v.Y) * hit.Normal.Y) < 1e-9 * (1.0 + segLen))
+                        let inward = (p1.X - p0.X) * hit.Normal.X + (p1.Y - p0.Y) * hit.Normal.Y < 0.0
+                        hit.T >= 0.0 && hit.T <= 1.0 && isUnit hit.Normal && onSomeEdgeLine && inward
+                    | None -> true
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            testCase "a transversal entry parameter is invariant under rotating the whole scene (FsCheck ≥500)" <| fun () ->
+                // Rotating p0, p1 and the polygon about the origin by θ maps the rotation-0 OBB to
+                // `obbPolygon (R θ centre) h θ`, so the cast is a rigid motion and T must not move.
+                //
+                // The precondition — p0 strictly outside and p1 strictly inside, both by a margin — is not
+                // decoration. Without it the claim is FALSE, and not merely by a rounding: a segment lying
+                // along an edge enters at a corner with its chord running down the boundary, and rotation
+                // nudges it off that edge line to one side or the other, so the entry jumps between the
+                // corner and the far endpoint. A graze (chord = a single point) flips `isSome` the same
+                // way. Both are measure-zero knife-edges on the strict `<` that no strict test can smooth,
+                // and both are pinned as goldens below. The margin excludes them: a robustly-inside p1
+                // forces a chord of positive length, a robustly-outside p0 a real crossing. Over the whole
+                // integer domain this leaves 320,580 eligible cases, every one a hit in both frames with
+                // max |ΔT| = 8.9e-16 — so `1e-9` is slack, not a fudge.
+                let signedDist (poly: ConvexPolygon) (q: Point) =
+                    // Greatest outward signed distance over the edges: < 0 inside every edge, > 0 outside one.
+                    poly.Vertices
+                    |> Array.mapi (fun k v ->
+                        let w = poly.Vertices.[(k + 1) % poly.Vertices.Length]
+                        let ex, ey = w.X - v.X, w.Y - v.Y
+                        let len = sqrt (ex * ex + ey * ey)
+                        (q.X - v.X) * (ey / len) + (q.Y - v.Y) * (-ex / len))
+                    |> Array.max
+                let prop a b c d e f g h i =
+                    let p0 = p (float (a % 50)) (float (b % 50))
+                    let p1 = p (float (c % 50)) (float (d % 50))
+                    let centre = p (float (e % 50)) (float (f % 50))
+                    let half = p (float (1 + abs (g % 20))) (float (1 + abs (h % 20)))
+                    let theta = float (i % 13) * 0.5
+                    let co, si = cos theta, sin theta
+                    let rot (q: Point) : Point = { X = q.X * co - q.Y * si; Y = q.X * si + q.Y * co }
+                    let flatPoly = Geometry.obbPolygon centre half 0.0
+                    let spunPoly = Geometry.obbPolygon (rot centre) half theta
+                    if not (signedDist flatPoly p0 > 1e-3 && signedDist flatPoly p1 < -1e-3) then
+                        true // not a clean transversal cast — the knife-edges are the goldens' business
+                    else
+                        match Geometry.segmentPolygonHit p0 p1 flatPoly,
+                              Geometry.segmentPolygonHit (rot p0) (rot p1) spunPoly with
+                        | Some x, Some y -> abs (x.T - y.T) < 1e-9
+                        | _ -> false // outside-to-inside must hit, in both frames
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+            test "degenerate inputs return None, never throw (total)" {
+                let tri: ConvexPolygon = { Vertices = [| p 0. 0.; p 4. 0.; p 0. 4. |] }
+                Expect.isNone (Geometry.segmentPolygonHit (p 2. -2.) (p 2. 2.) { Vertices = [| p 0. 0.; p 1. 0. |] }) "<3 vertices ⇒ None"
+                Expect.isNone (Geometry.segmentPolygonHit (p 2. -2.) (p 2. 2.) { Vertices = [| p 0. 0.; p 1. 0.; p 2. 0. |] }) "collinear/zero-area ⇒ None"
+                Expect.isNone (Geometry.segmentPolygonHit (p 2. -2.) (p 2. 2.) { Vertices = [| p nan 0.; p 4. 0.; p 0. 4. |] }) "NaN vertex ⇒ None"
+                Expect.isNone (Geometry.segmentPolygonHit (p nan -2.) (p 2. 2.) tri) "NaN origin ⇒ None"
+                Expect.isNone (Geometry.segmentPolygonHit (p 2. -2.) (p 2. -2.) tri) "zero-length outside ⇒ None"
+                Expect.isNone (Geometry.segmentPolygonHit (p 1. 1.) (p 1. 1.) tri) "zero-length inside ⇒ None"
+            }
+
+            // Determinism golden — fixed inputs, exact expected hits (byte-identical). Named
+            // "determinism golden" so the gate.yml zero-match guard's determinism filter covers them.
+            testList "determinism golden (polygon raycast)" [
+                test "segment enters a rotation-0 OBB through the left edge" {
+                    Expect.equal (Geometry.segmentPolygonHit (p -5. 5.) (p 5. 5.) box10)
+                        (Some { T = 0.5; Point = p 0. 5.; Normal = p -1. 0. }) "enter left ⇒ t 0.5, point (0,5), normal -x"
+                }
+                test "segment enters an arbitrary convex polygon through the edge it crosses" {
+                    // A CCW right triangle; the cast crosses the bottom edge at its midpoint and leaves
+                    // through the hypotenuse at t = 1. The normal is the bottom edge's outward -y.
+                    let tri: ConvexPolygon = { Vertices = [| p 0. 0.; p 4. 0.; p 0. 4. |] }
+                    Expect.equal (Geometry.segmentPolygonHit (p 2. -2.) (p 2. 2.) tri)
+                        (Some { T = 0.5; Point = p 2. 0.; Normal = p 0. -1. }) "enter bottom ⇒ t 0.5, point (2,0), normal -y"
+                }
+                test "segment entering at a corner resolves to the first edge in vertex order (tie-break)" {
+                    // Both the bottom (vertex order 0) and left (order 3) edges are entered at t = 0.5;
+                    // the first wins. segmentAabbHit ties to the X face here, so the normals differ — the
+                    // same principled divergence polygonContact has from aabbContact on a tie.
+                    Expect.equal (Geometry.segmentPolygonHit (p -5. -5.) (p 5. 5.) box10)
+                        (Some { T = 0.5; Point = p 0. 0.; Normal = p 0. -1. }) "corner ⇒ bottom edge, t 0.5"
+                    Expect.equal (Geometry.segmentAabbHit (p -5. -5.) (p 5. 5.) (r 0. 0. 10. 10.))
+                        (Some { T = 0.5; Point = p 0. 0.; Normal = p -1. 0. }) "…where the AABB cast ties to the X face"
+                }
+                test "corner tie-break holds on a rotated ring, where the parameters tie only to an ULP" {
+                    // The two edges meeting at (-1,-4) are entered at the same parameter in exact
+                    // arithmetic, but each t is computed through its own normalisation: edge 1 yields
+                    // 0.33333333333333326 and edge 2 yields 0.33333333333333331. Vertex order — not the
+                    // larger float — must pick the struck face, so the normal is edge 1's (-1,-2)/√5 and
+                    // not edge 2's (0,-1). Guards the tie-break against rounding noise on a general ring.
+                    let ring: ConvexPolygon = { Vertices = [| p -4. -2.; p -3. -3.; p -1. -4.; p 2. -4.; p -1. 3. |] }
+                    match Geometry.segmentPolygonHit (p 0. -5.) (p -3. -2.) ring with
+                    | Some hit ->
+                        Expect.floatClose Accuracy.high hit.T (1.0 / 3.0) "enters at the shared vertex"
+                        Expect.floatClose Accuracy.high hit.Point.X -1.0 "point is the shared vertex"
+                        Expect.floatClose Accuracy.high hit.Point.Y -4.0 "point is the shared vertex"
+                        Expect.floatClose Accuracy.high hit.Normal.X (-1.0 / sqrt 5.0) "edge 1's normal, not edge 2's"
+                        Expect.floatClose Accuracy.high hit.Normal.Y (-2.0 / sqrt 5.0) "edge 1's normal, not edge 2's"
+                    | None -> failtest "expected a corner entry on the rotated ring"
+                }
+                test "a segment collinear with an edge is a hit (its chord has positive length)" {
+                    // Running along the bottom edge's line, entering through the left edge at t = 0.25.
+                    // The bottom edge is parallel and constrains nothing; strict edges reject a zero-length
+                    // chord, not a boundary-hugging one. segmentAabbHit agrees exactly here.
+                    Expect.equal (Geometry.segmentPolygonHit (p -5. 0.) (p 15. 0.) box10)
+                        (Some { T = 0.25; Point = p 0. 0.; Normal = p -1. 0. }) "along the bottom edge ⇒ enter left, t 0.25"
+                    Expect.equal (Geometry.segmentAabbHit (p -5. 0.) (p 15. 0.) (r 0. 0. 10. 10.))
+                        (Some { T = 0.25; Point = p 0. 0.; Normal = p -1. 0. }) "…and the AABB cast agrees exactly"
+                    // Starting ON the boundary and staying on it never enters: no edge is crossed inward.
+                    Expect.isNone (Geometry.segmentPolygonHit (p 2. 0.) (p 8. 0.) box10) "starts on the edge ⇒ None"
+                    Expect.isNone (Geometry.segmentAabbHit (p 2. 0.) (p 8. 0.) (r 0. 0. 10. 10.)) "…as does the AABB cast"
+                }
+                test "a segment grazing one corner is not a hit (strict edges)" {
+                    // Touches (0,0) and leaves; zero-length chord ⇒ no entered edge. The AABB cast's `<=`
+                    // slab test calls the same graze a hit — the sole documented divergence.
+                    Expect.isNone (Geometry.segmentPolygonHit (p -5. 5.) (p 5. -5.) box10) "corner graze ⇒ None"
+                    Expect.isSome (Geometry.segmentAabbHit (p -5. 5.) (p 5. -5.) (r 0. 0. 10. 10.)) "…where the AABB cast reports a hit"
+                }
+                test "a graze is a knife-edge: rotating the scene can turn it into a hit" {
+                    // FsCheck found this. The segment passes exactly through the corner (2,-4) of the
+                    // rotation-0 box, so the chord is a point and strict edges reject it. Rotated by 0.5
+                    // rad the same coincidence survives only to an ULP, and the cast enters. T is invariant
+                    // (1/3); isSome is not, and no strict test can make it so — the configuration is
+                    // measure-zero. Documented here so the asymmetry is a decision, not a surprise.
+                    let p0, p1 = p 3. -3., p 0. -6.
+                    let theta = 0.5
+                    let co, si = cos theta, sin theta
+                    let rot (q: Point) : Point = { X = q.X * co - q.Y * si; Y = q.X * si + q.Y * co }
+                    Expect.isNone (Geometry.segmentPolygonHit p0 p1 (Geometry.obbPolygon (p 0. -2.) (p 2. 2.) 0.0))
+                        "the flat cast clips the corner (2,-4) exactly ⇒ graze ⇒ None"
+                    match Geometry.segmentPolygonHit (rot p0) (rot p1) (Geometry.obbPolygon (rot (p 0. -2.)) (p 2. 2.) theta) with
+                    | Some hit ->
+                        Expect.floatClose Accuracy.high hit.T (1.0 / 3.0) "the rotated cast enters at the same T"
+                        Expect.floatClose Accuracy.high hit.Point.X (rot (p 2. -4.)).X "…at the rotated corner"
+                        Expect.floatClose Accuracy.high hit.Point.Y (rot (p 2. -4.)).Y "…at the rotated corner"
+                    | None -> failtest "expected the rotated graze to fall on the hit side"
+                }
+                test "a boundary-tangent segment is a knife-edge: rotating the scene moves T" {
+                    // FsCheck found this too, and it is the sharper of the two. The segment x = 1 lies
+                    // exactly along the right edge of the box [-9,1]x[-1,1]: it enters at the corner
+                    // (1,-1) and its chord runs down the boundary, so T = 2/3. Rotated by 2 rad the
+                    // segment falls a rounding to the outside of that edge line and only touches at its
+                    // own endpoint, T = 1. So T is invariant for TRANSVERSAL casts, not for tangent ones —
+                    // the rotation property is preconditioned on p0 outside and p1 inside for this reason.
+                    let p0, p1 = p 1. -3., p 1. 0.
+                    let centre, half = p -4. 0., p 5. 1.
+                    let theta = 2.0
+                    let co, si = cos theta, sin theta
+                    let rot (q: Point) : Point = { X = q.X * co - q.Y * si; Y = q.X * si + q.Y * co }
+                    match Geometry.segmentPolygonHit p0 p1 (Geometry.obbPolygon centre half 0.0) with
+                    | Some hit ->
+                        Expect.equal hit.T (2.0 / 3.0) "flat: enters at the corner it reaches along the edge line"
+                        Expect.equal hit.Point (p 1. -1.) "flat: the corner"
+                        Expect.equal hit.Normal (p 0. -1.) "flat: the bottom edge it crossed to reach the boundary"
+                    | None -> failtest "expected the tangent flat cast to enter at the corner"
+                    match Geometry.segmentPolygonHit (rot p0) (rot p1) (Geometry.obbPolygon (rot centre) half theta) with
+                    | Some hit -> Expect.floatClose Accuracy.high hit.T 1.0 "rotated: nudged outside, touches only at its endpoint"
+                    | None -> failtest "expected the tangent rotated cast to touch at its endpoint"
+                }
+                test "segment starting inside the polygon has no entry" {
+                    Expect.isNone (Geometry.segmentPolygonHit (p 5. 5.) (p 20. 5.) box10) "origin inside ⇒ None"
+                }
+                test "segment missing the polygon" {
+                    Expect.isNone (Geometry.segmentPolygonHit (p -5. 20.) (p 5. 20.) box10) "above the box ⇒ None"
+                }
+                test "polygon behind the segment is not a hit" {
+                    Expect.isNone (Geometry.segmentPolygonHit (p -20. 5.) (p -15. 5.) box10) "box beyond p1 ⇒ None"
+                }
+                test "segment enters a rotated OBB through the rotated edge it crosses" {
+                    // A 45°-rotated unit square at the origin is the diamond with vertices (0,∓√2),(±√2,0).
+                    // Casting along y = x from the lower left crosses the lower-left edge (the line
+                    // x + y = -√2) at its midpoint, so the struck face carries the outward normal
+                    // (−1,−1)/√2 — a rotated armour zone the AABB cast cannot express.
+                    let diamond = Geometry.obbPolygon (p 0. 0.) (p 1. 1.) (System.Math.PI / 4.0)
+                    match Geometry.segmentPolygonHit (p -3. -3.) (p 3. 3.) diamond with
+                    | Some hit ->
+                        Expect.floatClose Accuracy.high hit.T ((3.0 - sqrt 0.5) / 6.0) "enters at x = -1/√2"
+                        Expect.floatClose Accuracy.high hit.Point.X (-(sqrt 0.5)) "point on the lower-left edge"
+                        Expect.floatClose Accuracy.high hit.Point.Y (-(sqrt 0.5)) "point on the lower-left edge"
+                        Expect.isTrue (isUnit hit.Normal) "unit normal"
+                        Expect.floatClose Accuracy.high hit.Normal.X (-(sqrt 0.5)) "outward normal x = -1/√2"
+                        Expect.floatClose Accuracy.high hit.Normal.Y (-(sqrt 0.5)) "outward normal y = -1/√2"
+                    | None -> failtest "expected a hit on the rotated diamond"
+                }
+            ]
+        ]
     ]
