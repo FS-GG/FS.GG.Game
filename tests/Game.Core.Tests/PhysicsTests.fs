@@ -1458,3 +1458,122 @@ let speculativeContactTests =
 
               Expect.equal (run ()) (run ()) "two runs of the same fast shot agree to the bit"
           } ]
+
+// -------------------------------------------------------------------------------------------------
+// Presentation interpolation (#78)
+//
+// Two rules and their totality. POSITION is testable end-to-end through the public API — `addBody`
+// places a body exactly, so `prev` and `curr` can be built at chosen points and the blend read back
+// off `interpolate`. ROTATION cannot: `Rot` is only ever moved by `step`, and `World` is opaque, so no
+// public call sets a body to +3.13 rad. The shortest-arc rule is therefore asserted against the
+// `internal` `lerpAngleShortest` it is factored into (reached via InternalsVisibleTo) — the +3.13 to
+// -3.13 crossing, the exact endpoints, and that a sub-pi step still matches a naive lerp.
+// -------------------------------------------------------------------------------------------------
+
+/// A world of dynamic unit circles at the given origins, in order — so body `i`'s presentation position
+/// is exactly `positions.[i]` and its rotation is `0.0` (nothing has stepped).
+let private posWorld (positions: Point list) : Physics.World =
+    positions
+    |> List.map (fun pt -> Physics.Dynamic, Physics.SCircle 0.5, pt)
+    |> worldOf 4.0
+
+[<Tests>]
+let interpolateTests =
+    testList
+        "Game.Core Physics presentation interpolation (#78)"
+        [
+
+          // -----------------------------------------------------------------------------------------
+          // Exact endpoints, over positions built through the public API
+          // -----------------------------------------------------------------------------------------
+
+          test "interpolate 0.0 is previous's transforms; interpolate 1.0 is current's" {
+              let prev = posWorld [ p 0.0 0.0; p 10.0 -4.0 ]
+              let curr = posWorld [ p 2.0 6.0; p 12.0 -1.0 ]
+
+              let at0 = Physics.interpolate 0.0 prev curr
+              let at1 = Physics.interpolate 1.0 prev curr
+
+              Expect.equal (at0 |> Array.map (fun t -> t.Position)) [| p 0.0 0.0; p 10.0 -4.0 |] "alpha 0 is previous"
+              Expect.equal (at1 |> Array.map (fun t -> t.Position)) [| p 2.0 6.0; p 12.0 -1.0 |] "alpha 1 is current"
+          }
+
+          test "the blend is linear at the midpoint, one transform per current body in index order" {
+              let prev = posWorld [ p 0.0 0.0; p -2.0 8.0 ]
+              let curr = posWorld [ p 4.0 2.0; p 2.0 -8.0 ]
+
+              let mid = Physics.interpolate 0.5 prev curr
+
+              Expect.equal mid.Length 2 "one transform per body"
+              Expect.floatClose Accuracy.high mid.[0].Position.X 2.0 "body 0 x halfway"
+              Expect.floatClose Accuracy.high mid.[0].Position.Y 1.0 "body 0 y halfway"
+              Expect.floatClose Accuracy.high mid.[1].Position.X 0.0 "body 1 x halfway"
+              Expect.floatClose Accuracy.high mid.[1].Position.Y 0.0 "body 1 y halfway"
+          }
+
+          // -----------------------------------------------------------------------------------------
+          // Totality: the clamp, and a body that only current has
+          // -----------------------------------------------------------------------------------------
+
+          test "alpha is clamped to [0,1] — out of range and non-finite never extrapolate or throw" {
+              let prev = posWorld [ p 0.0 0.0 ]
+              let curr = posWorld [ p 10.0 0.0 ]
+
+              let x alpha = (Physics.interpolate alpha prev curr).[0].Position.X
+
+              Expect.equal (x -1.0) 0.0 "alpha below 0 clamps to previous"
+              Expect.equal (x 2.0) 10.0 "alpha above 1 clamps to current"
+              Expect.equal (x infinity) 10.0 "+infinity clamps to current"
+              Expect.equal (x -infinity) 0.0 "-infinity clamps to previous"
+              Expect.equal (x nan) 0.0 "NaN, which loses every comparison, resolves to previous not garbage"
+          }
+
+          test "a body present in current but not previous is shown at its current transform" {
+              // The double buffer can gain a body between the two frames (a spawn). It has no prior pose to
+              // blend from, so it must appear where it is now — at every alpha, not just alpha 1.
+              let prev = posWorld [ p 0.0 0.0 ]
+              let curr = posWorld [ p 4.0 0.0; p 9.0 -3.0 ]
+
+              let mid = Physics.interpolate 0.5 prev curr
+
+              Expect.equal mid.Length 2 "the result covers current's bodies, not previous's"
+              Expect.floatClose Accuracy.high mid.[0].Position.X 2.0 "the shared body still blends"
+              Expect.equal mid.[1].Position (p 9.0 -3.0) "the new body is at its current position, unblended"
+          }
+
+          test "interpolate reads only presentation state — an empty world yields no transforms, never throws" {
+              let empty = Physics.empty stepConfig
+              Expect.equal (Physics.interpolate 0.5 empty empty) [||] "no bodies, no transforms"
+          }
+
+          // -----------------------------------------------------------------------------------------
+          // Shortest arc — asserted on the internal blend, since Rot cannot be set through the public API
+          // -----------------------------------------------------------------------------------------
+
+          test "rotation takes the short way: +3.13 to -3.13 crosses +pi, not 0" {
+              // The delta is -6.26 rad the long way, but +0.023 rad across +pi. A naive lerp spins a turret
+              // most of the way round the circle at 60 fps; the shortest arc nudges it a hair past pi.
+              let mid = Physics.lerpAngleShortest 3.13 -3.13 0.5
+
+              Expect.floatClose Accuracy.medium mid System.Math.PI "the midpoint sits on +pi"
+              Expect.isTrue (mid > 3.13) "it moved UP toward +pi, it did not unwind down through 0"
+          }
+
+          test "the short way is symmetric: -3.13 to +3.13 crosses -pi" {
+              let mid = Physics.lerpAngleShortest -3.13 3.13 0.5
+              Expect.floatClose Accuracy.medium mid -System.Math.PI "the midpoint sits on -pi"
+              Expect.isTrue (mid < -3.13) "it moved DOWN toward -pi"
+          }
+
+          test "endpoints are exact, even where the short arc wraps a full turn off the naive value" {
+              // t=0 is a0 and t=1 is a1 bit-for-bit. The wrap case is the one that needs the special-case:
+              // a0 + shortestDelta at t=1 would be +3.153, a full 2pi shy of current's -3.13.
+              Expect.equal (Physics.lerpAngleShortest 3.13 -3.13 0.0) 3.13 "t=0 is exactly a0"
+              Expect.equal (Physics.lerpAngleShortest 3.13 -3.13 1.0) -3.13 "t=1 is exactly a1, not a turn off it"
+          }
+
+          test "a sub-pi step matches a naive lerp — the short way IS the direct way when no wrap is needed" {
+              Expect.floatClose Accuracy.high (Physics.lerpAngleShortest 0.0 1.0 0.5) 0.5 "half of a 1 rad turn"
+              Expect.floatClose Accuracy.high (Physics.lerpAngleShortest 1.0 2.0 0.25) 1.25 "a quarter of the way"
+              Expect.floatClose Accuracy.high (Physics.lerpAngleShortest -0.4 0.4 0.5) 0.0 "straddling 0 goes through 0"
+          } ]
