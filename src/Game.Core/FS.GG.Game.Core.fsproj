@@ -16,7 +16,7 @@
 
   <!-- BCL-only sim vocabulary. No Scene/Skia dependency — headlessly testable, reaches up to
        nothing (ADR-0022 §2). Compile order: Primitives (Point/Rect) before Geometry before
-       SpatialGrid; Fov after Pathfinding (it consumes Cell, which Pathfinding declares);
+       SpatialGrid; Grids/Fov after Pathfinding (they consume Cell, which Pathfinding declares);
        Rng/FixedStep/Pathfinding are independent. -->
   <ItemGroup>
     <Compile Include="Primitives.fsi" />
@@ -29,6 +29,10 @@
     <Compile Include="FixedStep.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
+    <!-- Grid parts: consumes Cell (Pathfinding) for faces and Point/Rect (Primitives) for the pixel
+         map. Names the edges/vertices between faces, which Pathfinding/Fov/Los cannot. -->
+    <Compile Include="Grids.fsi" />
+    <Compile Include="Grids.fs" />
     <!-- Sight layer: consumes Cell (Pathfinding) and the same `Cell -> bool` predicate shape. -->
     <Compile Include="Los.fsi" />
     <Compile Include="Los.fs" />

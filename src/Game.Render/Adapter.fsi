@@ -27,10 +27,20 @@ module Adapter =
     /// The continuous Scene rectangle a discrete tile `Cell` occupies at `cellSize` —
     /// `(Col*cellSize, Row*cellSize, cellSize, cellSize)`. The integer-logic → float-presentation
     /// seam: whole-tile sim indices become continuous render coordinates here and only here.
+    ///
+    /// Delegates to `FS.GG.Game.Core.Grids.cellRect` at origin `(0, 0)` rather than reimplementing the
+    /// arithmetic, so the sim's grid map and the render edge's cannot drift apart. It therefore
+    /// inherits `Grids`' totality: a non-finite or non-positive `cellSize` falls back to `1.0` instead
+    /// of emitting a NaN or inverted `Rect` for the Scene to draw.
     val cellRect: cellSize: float -> cell: FS.GG.Game.Core.Cell -> FS.GG.UI.Scene.Rect
 
     /// The continuous centre of a tile `Cell` at `cellSize` — `((Col+0.5)*cellSize,
     /// (Row+0.5)*cellSize)`. Used to route a path through tile centres.
+    ///
+    /// Delegates to `FS.GG.Game.Core.Grids.cellCenter` (same function, sim spelling) at origin
+    /// `(0, 0)`; same drift-proofing and same `cellSize` fallback as `cellRect`. The name keeps the
+    /// render stack's `centre` spelling — renaming a published contract would be breaking, and the
+    /// seam is exactly where the two spellings are allowed to meet.
     val cellCentre: cellSize: float -> cell: FS.GG.Game.Core.Cell -> FS.GG.UI.Scene.Point
 
     /// Draw a simulation rectangle as a filled Scene rectangle.

@@ -15,6 +15,7 @@
     <Compile Include="RngTests.fs" />
     <Compile Include="FixedStepTests.fs" />
     <Compile Include="PathfindingTests.fs" />
+    <Compile Include="GridsTests.fs" />
     <Compile Include="LosTests.fs" />
     <Compile Include="FovTests.fs" />
     <Compile Include="SpatialGridTests.fs" />

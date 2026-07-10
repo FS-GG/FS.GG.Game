@@ -42,6 +42,35 @@ let tests =
             Expect.equal (FS.GG.Game.Render.Adapter.cellCentre 16.0 (cell 2 3)) expected "((Col+0.5)*size, (Row+0.5)*size)"
         }
 
+        // The seam delegates to FS.GG.Game.Core.Grids rather than reimplementing the arithmetic, so the
+        // sim's grid map and the render edge's cannot drift. These pin the delegation, not merely the
+        // result: they are the tests that would go red if someone re-inlined the formula here.
+
+        test "cellRect agrees with Grids.cellRect at origin (0,0) — the duplication is collapsed" {
+            let spec: Grids.GridSpec = { CellSize = 16.0; Origin = simPoint 0.0 0.0 }
+            let expected = FS.GG.Game.Render.Adapter.rect (Grids.cellRect spec (cell 2 3))
+            Expect.equal (FS.GG.Game.Render.Adapter.cellRect 16.0 (cell 2 3)) expected "delegates to Grids"
+        }
+
+        test "cellCentre agrees with Grids.cellCenter at origin (0,0) — one function, two spellings" {
+            let spec: Grids.GridSpec = { CellSize = 16.0; Origin = simPoint 0.0 0.0 }
+            let expected = FS.GG.Game.Render.Adapter.point (Grids.cellCenter spec (cell 2 3))
+            Expect.equal (FS.GG.Game.Render.Adapter.cellCentre 16.0 (cell 2 3)) expected "delegates to Grids"
+        }
+
+        test "a degenerate cellSize degrades to 1.0 rather than drawing a NaN or inverted Rect" {
+            // Inherited from Grids' totality guard. Before delegation these emitted NaN / negative
+            // extents straight into the Scene.
+            for bad in [ nan; infinity; -infinity; 0.0; -8.0 ] do
+                let r = FS.GG.Game.Render.Adapter.cellRect bad (cell 2 3)
+                Expect.equal r.Width 1.0 $"cellSize {bad} falls back to 1.0"
+                Expect.equal r.Height 1.0 $"cellSize {bad} falls back to 1.0"
+                Expect.isTrue (System.Double.IsFinite r.X && System.Double.IsFinite r.Y) "no NaN reaches the Scene"
+
+                let c = FS.GG.Game.Render.Adapter.cellCentre bad (cell 2 3)
+                Expect.isTrue (System.Double.IsFinite c.X && System.Double.IsFinite c.Y) "no NaN reaches the Scene"
+        }
+
         test "drawRect emits the same filled rectangle as the Scene constructor" {
             let r = simRect 5.0 6.0 7.0 8.0
             let expected = Scene.filledRectangle (FS.GG.Game.Render.Adapter.rect r) fill

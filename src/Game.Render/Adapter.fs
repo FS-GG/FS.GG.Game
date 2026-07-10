@@ -17,15 +17,21 @@ module Adapter =
           Width = r.Width
           Height = r.Height }
 
+    /// Hoisted so `specOf` allocates nothing: `GridSpec` is a struct, but `Point` is a reference
+    /// record, and `cellRect`/`cellCentre` run once per tile per frame under `drawCells`/`drawPath`.
+    let private simOrigin: FS.GG.Game.Core.Point = { X = 0.0; Y = 0.0 }
+
+    /// The sim-side grid policy this adapter projects: an origin-anchored grid of square cells. The
+    /// render edge exposes `cellSize` alone rather than a whole `GridSpec` because a Scene is drawn in
+    /// its own coordinate space — a non-zero origin is a Scene transform, not a grid property.
+    let private specOf (cellSize: float) : FS.GG.Game.Core.Grids.GridSpec =
+        { CellSize = cellSize; Origin = simOrigin }
+
     let cellRect (cellSize: float) (cell: FS.GG.Game.Core.Cell) : Rect =
-        { X = float cell.Col * cellSize
-          Y = float cell.Row * cellSize
-          Width = cellSize
-          Height = cellSize }
+        rect (FS.GG.Game.Core.Grids.cellRect (specOf cellSize) cell)
 
     let cellCentre (cellSize: float) (cell: FS.GG.Game.Core.Cell) : Point =
-        { X = (float cell.Col + 0.5) * cellSize
-          Y = (float cell.Row + 0.5) * cellSize }
+        point (FS.GG.Game.Core.Grids.cellCenter (specOf cellSize) cell)
 
     let drawRect (fill: Color) (r: FS.GG.Game.Core.Rect) : Scene =
         Scene.filledRectangle (rect r) fill
