@@ -208,15 +208,34 @@ let tests =
 
         // ---- Monotonicity (design §7) -------------------------------------------------------------
 
-        test "adding a wall can only flip visibility true -> false, never the reverse" {
+        test "a single wall blocks exactly when it lies on the traced interior" {
+            // Stated as an equivalence, not as `before || not after`: with `before` already asserted
+            // true, that implication is a tautology and passes even if a wall CREATES sight.
             let a = cell -2 -1
             let b = cell 2 2
+
             for mode in [ Thin; Supercover ] do
-                let before = Los.lineOfSightBy mode (transparentExcept Set.empty) a b
-                Expect.isTrue before "an empty map is clear"
+                Expect.isTrue (Los.lineOfSightBy mode (transparentExcept Set.empty) a b) "an empty map is clear"
+                // `a <= b`, so the canonical walk `lineOfSightBy` traces is exactly `trace mode a b`.
+                let onPath = interior a b (Los.trace mode a b)
+                Expect.isNonEmpty (Set.toList onPath) $"{mode}: the fixture must have an interior to block"
+
                 for w in smallGrid do
                     let after = Los.lineOfSightBy mode (transparentExcept (Set.ofList [ (w.Col, w.Row) ])) a b
-                    Expect.isTrue (before || not after) $"{mode}: adding {w} may not create sight"
+                    Expect.equal after (not (onPath.Contains w)) $"{mode}: wall at {w} blocks iff it is on the path"
+        }
+
+        test "adding walls never creates sight where there was none (monotonicity)" {
+            // `before` is genuinely false here, so the implication has content.
+            let a = cell 0 0
+            let b = cell 4 0
+            for mode in [ Thin; Supercover ] do
+                let before = Los.lineOfSightBy mode (transparentExcept (Set.ofList [ (2, 0) ])) a b
+                Expect.isFalse before "the wall at (2,0) blocks a straight horizontal line"
+                for w in smallGrid do
+                    let walls = Set.ofList [ (2, 0); (w.Col, w.Row) ]
+                    let after = Los.lineOfSightBy mode (transparentExcept walls) a b
+                    Expect.isFalse after $"{mode}: adding {w} may not restore sight"
         }
 
         // ---- Totality across the `int` coordinate domain (integer-only, no wrap, no throw) ---------
