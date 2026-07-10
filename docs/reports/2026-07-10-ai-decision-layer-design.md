@@ -221,11 +221,9 @@ after ADR-0022. It lands on top of [#35](https://github.com/FS-GG/FS.GG.Game/iss
 convention, so every `[[ref]]` in its body either resolves locally or names its publishing repo, and
 `scripts/check-skill-refs.sh` holds that.
 
-Consumers: the mini-tanks product design (`docs/reports/2026-07-10-mini-tanks-product-design.md`) §8 —
-the five layers — and §8.1, the `TeamView` fairness rule. This module is the vocabulary that design
-assumed existed. **That report was still uncommitted when this landed**, so the path above may not yet
-resolve; #42's acceptance names it as the consumer, and it is the source of the layer cadences in §3.6
-and the knob vector in §3.2.
+Consumers: [the mini-tanks product design](2026-07-10-mini-tanks-product-design.md) §8 (the five layers)
+and §8.1 (the `TeamView` fairness rule) — this module is the vocabulary that design assumed existed, and
+the source of the layer cadences in §3.6 and the knob vector in §3.2.
 
 ## 8. Follow-ups
 
