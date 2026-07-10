@@ -551,16 +551,29 @@ let tests =
                     | None -> true
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 
-            testCase "the entry parameter is invariant under rotating the whole scene (FsCheck ≥500)" <| fun () ->
+            testCase "a transversal entry parameter is invariant under rotating the whole scene (FsCheck ≥500)" <| fun () ->
                 // Rotating p0, p1 and the polygon about the origin by θ maps the rotation-0 OBB to
                 // `obbPolygon (R θ centre) h θ`, so the cast is a rigid motion and T must not move.
                 //
-                // `isSome` is NOT invariant, and cannot be: strict edges sit a graze (a chord through a
-                // single vertex) and a segment endpoint on the boundary exactly on the `<`, and a rotation
-                // perturbs either by an ULP, to whichever side. That is inherent to a strict test on a
-                // measure-zero configuration — polygonContact's strict edges are no different. So a flip is
-                // allowed only when the surviving hit is one of those two knife-edges, which the hit itself
-                // identifies: its point is a vertex (the graze), or its T is at a segment endpoint.
+                // The precondition — p0 strictly outside and p1 strictly inside, both by a margin — is not
+                // decoration. Without it the claim is FALSE, and not merely by a rounding: a segment lying
+                // along an edge enters at a corner with its chord running down the boundary, and rotation
+                // nudges it off that edge line to one side or the other, so the entry jumps between the
+                // corner and the far endpoint. A graze (chord = a single point) flips `isSome` the same
+                // way. Both are measure-zero knife-edges on the strict `<` that no strict test can smooth,
+                // and both are pinned as goldens below. The margin excludes them: a robustly-inside p1
+                // forces a chord of positive length, a robustly-outside p0 a real crossing. Over the whole
+                // integer domain this leaves 320,580 eligible cases, every one a hit in both frames with
+                // max |ΔT| = 8.9e-16 — so `1e-9` is slack, not a fudge.
+                let signedDist (poly: ConvexPolygon) (q: Point) =
+                    // Greatest outward signed distance over the edges: < 0 inside every edge, > 0 outside one.
+                    poly.Vertices
+                    |> Array.mapi (fun k v ->
+                        let w = poly.Vertices.[(k + 1) % poly.Vertices.Length]
+                        let ex, ey = w.X - v.X, w.Y - v.Y
+                        let len = sqrt (ex * ex + ey * ey)
+                        (q.X - v.X) * (ey / len) + (q.Y - v.Y) * (-ex / len))
+                    |> Array.max
                 let prop a b c d e f g h i =
                     let p0 = p (float (a % 50)) (float (b % 50))
                     let p1 = p (float (c % 50)) (float (d % 50))
@@ -571,15 +584,13 @@ let tests =
                     let rot (q: Point) : Point = { X = q.X * co - q.Y * si; Y = q.X * si + q.Y * co }
                     let flatPoly = Geometry.obbPolygon centre half 0.0
                     let spunPoly = Geometry.obbPolygon (rot centre) half theta
-                    let atVertex (poly: ConvexPolygon) (q: Point) =
-                        poly.Vertices |> Array.exists (fun v -> abs (v.X - q.X) < 1e-9 && abs (v.Y - q.Y) < 1e-9)
-                    let atEndpoint (t: float) = t < 1e-9 || t > 1.0 - 1e-9
-                    match Geometry.segmentPolygonHit p0 p1 flatPoly,
-                          Geometry.segmentPolygonHit (rot p0) (rot p1) spunPoly with
-                    | Some x, Some y -> abs (x.T - y.T) < 1e-9
-                    | None, None -> true
-                    | Some x, None -> atVertex flatPoly x.Point || atEndpoint x.T
-                    | None, Some y -> atVertex spunPoly y.Point || atEndpoint y.T
+                    if not (signedDist flatPoly p0 > 1e-3 && signedDist flatPoly p1 < -1e-3) then
+                        true // not a clean transversal cast — the knife-edges are the goldens' business
+                    else
+                        match Geometry.segmentPolygonHit p0 p1 flatPoly,
+                              Geometry.segmentPolygonHit (rot p0) (rot p1) spunPoly with
+                        | Some x, Some y -> abs (x.T - y.T) < 1e-9
+                        | _ -> false // outside-to-inside must hit, in both frames
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 
             test "degenerate inputs return None, never throw (total)" {
@@ -667,6 +678,28 @@ let tests =
                         Expect.floatClose Accuracy.high hit.Point.X (rot (p 2. -4.)).X "…at the rotated corner"
                         Expect.floatClose Accuracy.high hit.Point.Y (rot (p 2. -4.)).Y "…at the rotated corner"
                     | None -> failtest "expected the rotated graze to fall on the hit side"
+                }
+                test "a boundary-tangent segment is a knife-edge: rotating the scene moves T" {
+                    // FsCheck found this too, and it is the sharper of the two. The segment x = 1 lies
+                    // exactly along the right edge of the box [-9,1]x[-1,1]: it enters at the corner
+                    // (1,-1) and its chord runs down the boundary, so T = 2/3. Rotated by 2 rad the
+                    // segment falls a rounding to the outside of that edge line and only touches at its
+                    // own endpoint, T = 1. So T is invariant for TRANSVERSAL casts, not for tangent ones —
+                    // the rotation property is preconditioned on p0 outside and p1 inside for this reason.
+                    let p0, p1 = p 1. -3., p 1. 0.
+                    let centre, half = p -4. 0., p 5. 1.
+                    let theta = 2.0
+                    let co, si = cos theta, sin theta
+                    let rot (q: Point) : Point = { X = q.X * co - q.Y * si; Y = q.X * si + q.Y * co }
+                    match Geometry.segmentPolygonHit p0 p1 (Geometry.obbPolygon centre half 0.0) with
+                    | Some hit ->
+                        Expect.equal hit.T (2.0 / 3.0) "flat: enters at the corner it reaches along the edge line"
+                        Expect.equal hit.Point (p 1. -1.) "flat: the corner"
+                        Expect.equal hit.Normal (p 0. -1.) "flat: the bottom edge it crossed to reach the boundary"
+                    | None -> failtest "expected the tangent flat cast to enter at the corner"
+                    match Geometry.segmentPolygonHit (rot p0) (rot p1) (Geometry.obbPolygon (rot centre) half theta) with
+                    | Some hit -> Expect.floatClose Accuracy.high hit.T 1.0 "rotated: nudged outside, touches only at its endpoint"
+                    | None -> failtest "expected the tangent rotated cast to touch at its endpoint"
                 }
                 test "segment starting inside the polygon has no entry" {
                     Expect.isNone (Geometry.segmentPolygonHit (p 5. 5.) (p 20. 5.) box10) "origin inside ⇒ None"
