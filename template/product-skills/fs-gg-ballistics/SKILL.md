@@ -223,7 +223,7 @@ community sources. If your product uses Spec Kit, record findings and resolving 
 - [[fs-gg-game-core]] — the fixed step the round advances on, the `SpatialGrid` `splash` queries, and the
   seeded `Rng` for spread/scatter.
 - [[fs-gg-collision]] — resolve the *response* once `step` reports a `Struck`.
-- [[fs-gg-scene]] — draw the tracer, the muzzle flash, and the blast circle.
+- [[fs-gg-rendering:fs-gg-scene]] — draw the tracer, the muzzle flash, and the blast circle.
 
 ## Sources / links
 

@@ -44,12 +44,26 @@ let repoPath (rel: string) =
 // Four game product skills migrated from FS.GG.Rendering (ADR-0022 P4), plus fs-gg-ballistics, which
 // is NOT a migration: it originates here and has no FS.GG.Rendering counterpart to stay byte-identical
 // with. All gate on the simulation profiles. supplied-by is derived from the source path (dirname + "/").
+//
+// The ADR-0022 P6 second wave (FS.GG.Game#35) adds four more — fs-gg-collision / fs-gg-grids /
+// fs-gg-line-drawing / fs-gg-visibility. These are the skills whose backing code #32/#33/#34/#38 pulled
+// down into FS.GG.Game.Core (Los/Fov/Visibility/Grids/Resolution), so the guidance follows the
+// implementation. Unlike the P4 four they did NOT move byte-identically: Rendering's bodies teach a
+// product-owned `Collision.fs`/`Visibility.fs`/`Grids.fs`/`LineDrawing.fs` fragment, whereas the
+// authoritative implementation here is a package module with a different surface. They were rewritten
+// against the .fsi, so their digests deliberately differ from the frozen copies FS.GG.Rendering still
+// ships from `--profile game` (the two-copies cost, ADR-0022 §6 / the `game-starter-two-copies`
+// registry row, which is `coherent: false` precisely to hold divergence like this).
 let catalog =
     [ "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]" ]
+      "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-visibility", "template/product-skills/fs-gg-visibility/SKILL.md", "profile in [game, sample-pack]" ]
 
 /// Provider source directory (trailing slash) that holds the canonical SKILL.md — supplied-by.
 let suppliedByOf (source: string) : string =
