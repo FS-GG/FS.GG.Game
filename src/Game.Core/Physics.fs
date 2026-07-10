@@ -53,8 +53,14 @@ module Physics =
     //     tick from last tick's cache is a linear two-cursor merge, with no dictionary to iterate (R6: a
     //     hash order is not a determinism guarantee) and no sort to pay for.
     //
-    // Neither reaches `checksum`, which hashes body state only (R3). That is a property of `checksum`, not
-    // an accident of the layout — see its comment.
+    // #94 adds a third piece: `Boxes`/`Grid`, the BROAD-PHASE INDEX. Each body's world-space AABB and the
+    // grid that buckets the collidable ones — a pure function of body pose and shape, kept current with the
+    // bodies by `empty`/`addBody`/`addBodies` and rebuilt by `step` from the poses it integrates. Carrying it
+    // is what lets `pairs` READ the grid instead of rebuilding one per call, and lets a single `step` share
+    // one grid between its discrete broad phase and its speculative CCD sweep, rather than build it twice.
+    //
+    // None of the three reaches `checksum`, which hashes body state only (R3). That is a property of
+    // `checksum`, not an accident of the layout — see its comment.
     type World =
         { Config: Config
           Kinds: BodyKind[]
@@ -73,7 +79,12 @@ module Physics =
           CacheFeature: int[]
           CachePoint: int[]
           CacheN: float[]
-          CacheT: float[] }
+          CacheT: float[]
+          // The broad-phase index (#94). Derived cross-tick state, like the cache: never presentation, never
+          // hashed, and — because a body ADDED and one that MOVED can reach the same pose by different arrays
+          // — never compared. `Boxes.[i]` is `ValueNone` exactly where body `i` collides with nothing.
+          Boxes: Rect voption[]
+          Grid: SpatialGrid<int> }
 
     // The presentation projection of a body — `Pos` and `Rot`, nothing else. Public via the `.fsi`.
     type Transform = { Position: Point; Rotation: float }
@@ -203,14 +214,16 @@ module Physics =
 
                     ValueSome(struct (rloX, rloY, rhiX, rhiY))
 
-    // World-space AABB of body `i`, or `ValueNone` when it collides with nothing.
-    let private aabbOf (world: World) (i: int) : Rect voption =
-        let p = world.Pos.[i]
+    // World-space AABB of body `i`, or `ValueNone` when it collides with nothing. Reads the SoA arrays
+    // directly rather than a whole `World`, so `broadPhase` can bound every body while the `World` that will
+    // carry them — and its `Boxes`/`Grid` — is still being built.
+    let private aabbAt (pos: Point[]) (shapes: Shape[]) (rot: float[]) (i: int) : Rect voption =
+        let p = pos.[i]
 
         if not (finitePoint p) then
             ValueNone
         else
-            match rotatedBounds world.Shapes.[i] world.Rot.[i] with
+            match rotatedBounds shapes.[i] rot.[i] with
             | ValueNone -> ValueNone
             | ValueSome(struct (loX, loY, hiX, hiY)) ->
                 ValueSome
@@ -303,7 +316,45 @@ module Physics =
         | ValueNone -> ValueNone
         | ValueSome(struct (loX, loY, hiX, hiY)) -> ValueSome(min ((hiX - loX) * 0.5) ((hiY - loY) * 0.5))
 
+    // The broad-phase index for a set of bodies: each body's world-space AABB (`ValueNone` where the body
+    // collides with nothing), and the `SpatialGrid` that buckets the collidable ones under every cell their
+    // box touches. Both are a pure function of pose and shape — `Pos`, `Rot`, `Shapes`, and the cell size —
+    // which is what lets a `World` carry them as cross-tick state and refresh them only when a body is added
+    // or moves.
+    //
+    // The grid is seeded in ASCENDING body index, an order `SpatialGrid.queryBounds` preserves — the reason
+    // `pairs` comes out sorted without a sort. Non-collidable bodies never enter it. Because the box query
+    // needs no dilation (a body's own box is a sufficient region: two boxes that overlap share a point, that
+    // point lies in a cell, and both bodies are filed under it), one huge floor no longer widens every other
+    // body's query to the whole world.
+    //
+    // Building the index HERE, from the same inputs and in the same order the per-call build used, keeps it
+    // byte-identical to the grid `pairs` and the CCD sweep used to build for themselves — so every pair set,
+    // every speculative contact, and every golden checksum is unchanged.
+    let private broadPhase
+        (config: Config)
+        (pos: Point[])
+        (shapes: Shape[])
+        (rot: float[])
+        : Rect voption[] * SpatialGrid<int> =
+        let n = pos.Length
+        let boxes = Array.init n (aabbAt pos shapes rot)
+
+        let grid =
+            SpatialGrid.buildBounds
+                config.BroadPhaseCellSize
+                (seq {
+                    for i in 0 .. n - 1 do
+                        match boxes.[i] with
+                        | ValueSome b -> yield b, i
+                        | ValueNone -> ()
+                })
+
+        boxes, grid
+
     let empty (config: Config) : World =
+        let boxes, grid = broadPhase config [||] [||] [||]
+
         { Config = config
           Kinds = [||]
           Shapes = [||]
@@ -321,7 +372,76 @@ module Physics =
           CacheFeature = [||]
           CachePoint = [||]
           CacheN = [||]
-          CacheT = [||] }
+          CacheT = [||]
+          Boxes = boxes
+          Grid = grid }
+
+    // Append a BATCH of bodies in one pass, returning `struct(indices, world')` where `indices.[k]` is the
+    // identity of `bodies.[k]` — dense and ascending from the world's previous body count, exactly the
+    // indices the same bodies added one at a time would receive. This is the build path a scene loader
+    // wants: it copies each SoA array and rebuilds the broad-phase index ONCE for the whole batch, so
+    // building an N-body world is O(N), where N separate `addBody` calls are O(N²) — a copy per body.
+    //
+    // Every guarantee `addBody` makes is preserved, because this is still an append that returns a new value
+    // and never mutates the input world: purity, persistence (the input world is untouched and safe to keep),
+    // and stable ascending indices. A body enters at rest, unrotated and awake, however still the scene it
+    // joins — so a body dropped into a settled world falls rather than joining the freeze.
+    let addBodies (bodies: seq<BodyKind * Shape * Material * Point>) (world: World) : struct (int[] * World) =
+        let batch = Array.ofSeq bodies
+
+        if batch.Length = 0 then
+            // Adding nothing is the identity, broad-phase index included: no pose changed, so the world's
+            // grid is already current for its bodies and is carried through untouched.
+            struct ([||], world)
+        else
+            let baseIndex = world.Pos.Length
+            let k = batch.Length
+            let kinds = batch |> Array.map (fun (kind, _, _, _) -> kind)
+            let shapes = batch |> Array.map (fun (_, shape, _, _) -> shape)
+            let materials = batch |> Array.map (fun (_, _, material, _) -> material)
+            let positions = batch |> Array.map (fun (_, _, _, position) -> position)
+
+            let invMass = Array.zeroCreate k
+            let invInertia = Array.zeroCreate k
+
+            for i in 0 .. k - 1 do
+                let struct (im, ii) = inverseProps kinds.[i] shapes.[i]
+                invMass.[i] <- im
+                invInertia.[i] <- ii
+
+            let kinds' = Array.append world.Kinds kinds
+            let shapes' = Array.append world.Shapes shapes
+            // Rot is `0.0` for every world these functions can build — `step` is the only thing that turns a
+            // body — so `vrot`'s fast path is always taken. `pos'`/`shapes'`/`rot'` are named because the
+            // broad-phase rebuild below reads exactly them.
+            let rot' = Array.append world.Rot (Array.zeroCreate k)
+            let pos' = Array.append world.Pos positions
+
+            // Rebuild the broad-phase index ONCE, for the whole grown set. This single O(N) is what a batch
+            // buys over N `addBody` calls, each of which rebuilt it — and is why `addBody` build was O(N²).
+            let boxes, grid = broadPhase world.Config pos' shapes' rot'
+
+            let grown =
+                { world with
+                    Kinds = kinds'
+                    Shapes = shapes'
+                    Materials = Array.append world.Materials materials
+                    Pos = pos'
+                    Vel = Array.append world.Vel (Array.create k { X = 0.0; Y = 0.0 })
+                    Rot = rot'
+                    AngVel = Array.append world.AngVel (Array.zeroCreate k)
+                    InvMass = Array.append world.InvMass invMass
+                    InvInertia = Array.append world.InvInertia invInertia
+                    Asleep = Array.append world.Asleep (Array.zeroCreate k)
+                    SleepCounter = Array.append world.SleepCounter (Array.zeroCreate k)
+                    // The warm-start cache is carried across UNCHANGED. Its keys are body indices, and this
+                    // only ever appends — every existing index still names the body it named — so no entry is
+                    // invalidated by a body arriving. Clearing it would cold-start every contact in the world
+                    // on the tick a body spawns, which is exactly the tick that can least afford it.
+                    Boxes = boxes
+                    Grid = grid }
+
+            struct (Array.init k (fun i -> baseIndex + i), grown)
 
     let addBody
         (kind: BodyKind)
@@ -330,56 +450,21 @@ module Physics =
         (position: Point)
         (world: World)
         : struct (int * World) =
-        let index = world.Pos.Length
-        let struct (invMass, invInertia) = inverseProps kind shape
-
-        let grown =
-            { world with
-                Kinds = Array.append world.Kinds [| kind |]
-                Shapes = Array.append world.Shapes [| shape |]
-                Materials = Array.append world.Materials [| material |]
-                Pos = Array.append world.Pos [| position |]
-                // A body enters at rest and unrotated. Nothing on this surface can impart an initial
-                // velocity or orientation — `step` is the only thing that moves a body — so `Rot = 0.0`
-                // for every world `addBody` can build, and `vrot`'s fast path is always taken.
-                Vel = Array.append world.Vel [| { X = 0.0; Y = 0.0 } |]
-                Rot = Array.append world.Rot [| 0.0 |]
-                AngVel = Array.append world.AngVel [| 0.0 |]
-                InvMass = Array.append world.InvMass [| invMass |]
-                InvInertia = Array.append world.InvInertia [| invInertia |]
-                // A body enters AWAKE, however still the world around it. It has never been under the sleep
-                // threshold for a single tick, so its counter starts at zero, and a body dropped into a
-                // settled scene falls rather than joining the freeze.
-                Asleep = Array.append world.Asleep [| false |]
-                SleepCounter = Array.append world.SleepCounter [| 0 |] }
-
-        // The warm-start cache is carried across UNCHANGED. Its keys are body indices, and `addBody` only
-        // ever appends — every existing index still names the body it named — so no entry is invalidated by
-        // a body arriving. Clearing it here would cold-start every contact in the world on the tick a
-        // bullet spawns, which is exactly the tick that can least afford it.
-        struct (index, grown)
+        // The single-body build path, defined through the batch one so the two can never drift. Its cost is
+        // O(body count) — one array copy — exactly as the `.fsi` documents; reach for `addBodies` when many
+        // bodies arrive at once and that per-body copy would square.
+        let struct (indices, grown) = addBodies [ (kind, shape, material, position) ] world
+        struct (indices.[0], grown)
 
     let pairs (world: World) : struct (int * int)[] =
         let n = world.Pos.Length
-        let boxes = Array.init n (aabbOf world)
 
-        // The grid buckets each body under every cell its AABB touches (`SpatialGrid.buildBounds`), so a
-        // body's own box is a sufficient query region: two boxes that overlap share a point, that point
-        // lies in some cell, and both bodies are filed under it. No dilation, and therefore no global
-        // constant — one 500-unit floor no longer widens every other body's query to the whole world.
-        //
-        // Non-collidable bodies never enter the grid, so they can never be a candidate. Ascending index
-        // order is insertion order, which `SpatialGrid.queryBounds` preserves — that is what makes the
-        // result sorted below without a sort.
-        let grid =
-            SpatialGrid.buildBounds
-                world.Config.BroadPhaseCellSize
-                (seq {
-                    for i in 0 .. n - 1 do
-                        match boxes.[i] with
-                        | ValueSome b -> yield b, i
-                        | ValueNone -> ()
-                })
+        // Read the broad-phase index off the `World` rather than rebuild a grid per call: `Boxes`/`Grid` are
+        // cross-tick state kept current by `empty`/`addBody`/`addBodies` and refreshed by `step`, and they
+        // are current for THIS world's poses by construction — nothing mutates a `World` in place, so the
+        // grid a world carries always matches the bodies it carries.
+        let boxes = world.Boxes
+        let grid = world.Grid
 
         let acc = ResizeArray<struct (int * int)>()
 
@@ -871,20 +956,13 @@ module Physics =
                 if not hasFast then
                     [||]
                 else
-                    // Rebuilt here rather than shared with `pairs`: the speculative pass runs only when a
-                    // fast mover exists, which is rare, and threading the broad phase's grid out of `pairs`
-                    // is #94's cross-tick-`World` change, not this slice's.
-                    let boxes = Array.init n (aabbOf working)
-
-                    let grid =
-                        SpatialGrid.buildBounds
-                            cfg.BroadPhaseCellSize
-                            (seq {
-                                for i in 0 .. n - 1 do
-                                    match boxes.[i] with
-                                    | ValueSome b -> yield b, i
-                                    | ValueNone -> ()
-                            })
+                    // Share the broad-phase index rather than rebuild it (#94). The CCD sweep runs on the
+                    // same OPENING poses the discrete broad phase did — position is not integrated until step
+                    // 6, below — so `working.Boxes`/`working.Grid`, carried from the incoming world whose poses
+                    // `working` opens with, are precisely the boxes and grid a rebuild here would produce. Only
+                    // the QUERY region differs — a swept box, not a body's own — and the bucketed grid is one.
+                    let boxes = working.Boxes
+                    let grid = working.Grid
 
                     let acc = ResizeArray<Manifold>()
                     let seen = System.Collections.Generic.HashSet<struct (int * int)>()
@@ -1219,6 +1297,15 @@ module Physics =
             //    A pair the solver never saw (both asleep, or asleep against static) contributes no entry,
             //    so its impulses are forgotten and it cold-starts on the tick it wakes. That is the right
             //    trade: it was, by construction, at rest.
+            //
+            // 10. Refresh the broad-phase index (#94) from the poses this step integrated and corrected, so
+            //     the world handed back carries a grid current for its OWN positions — the invariant every
+            //     `World` holds, and what lets the next `pairs`/`step` read the grid instead of rebuilding it.
+            //     `pos`/`rot` are `working`'s arrays, now final; `Shapes` never changed. Built from the same
+            //     inputs the next step's own broad phase would have used, so the pair set it feeds is
+            //     bit-identical — the grid simply moved from the start of that step to the end of this one.
+            let boxes, grid = broadPhase cfg pos world.Shapes rot
+
             { working with
                 Asleep = asleep
                 SleepCounter = sleepCounter
@@ -1227,7 +1314,9 @@ module Physics =
                 CacheFeature = cF
                 CachePoint = cP
                 CacheN = cAccN
-                CacheT = cAccT }
+                CacheT = cAccT
+                Boxes = boxes
+                Grid = grid }
 
     // ---------------------------------------------------------------------------------------------
     // Presentation interpolation
