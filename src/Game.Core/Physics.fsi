@@ -117,10 +117,10 @@ module Physics =
     ///   agrees with the narrow phase, which likewise reports no contact on a touch.
     ///
     /// The result is therefore *exact over AABBs* — no false positives and no false negatives, the same
-    /// promise `SpatialGrid.query` makes — rather than the loose superset a broad phase is normally
+    /// promise `SpatialGrid.queryBounds` makes — rather than the loose superset a broad phase is normally
     /// allowed. Narrowing further (are the *shapes*, rather than their boxes, in contact?) is the narrow
-    /// phase's job. Exactness holds at **any** magnitude: a body whose extent is too large to bound
-    /// costs the whole world its spatial acceleration, never its pairs.
+    /// phase's job. Exactness holds at **any** magnitude: a body whose extent is too large to bucket
+    /// costs **only itself** its spatial acceleration, never its pairs and never the rest of the world's.
     ///
     /// Pure, total and deterministic: identical bodies added in an identical order yield an identical
     /// array. Never throws.
