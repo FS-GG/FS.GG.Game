@@ -1,8 +1,5 @@
 namespace FS.GG.Game.Core
 
-[<Struct>]
-type Cell = { Col: int; Row: int }
-
 type Neighbourhood =
     | FourWay
     | EightWay

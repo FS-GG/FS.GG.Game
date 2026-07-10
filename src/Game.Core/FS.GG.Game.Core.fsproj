@@ -15,8 +15,9 @@
   </ItemGroup>
 
   <!-- BCL-only sim vocabulary. No Scene/Skia dependency — headlessly testable, reaches up to
-       nothing (ADR-0022 §2). Compile order: Primitives (Point/Rect) before Geometry before
-       SpatialGrid; Grids/Fov after Pathfinding (they consume Cell, which Pathfinding declares);
+       nothing (ADR-0022 §2). Compile order: Primitives (Point/Rect/Cell) before Geometry before
+       SpatialGrid; the grid layer's shared `Cell` primitive lives in Primitives, so the grid modules
+       depend only on it and not on each other's declaration order;
        Rng/FixedStep/Pathfinding are independent, and Loop sits directly on FixedStep. -->
   <ItemGroup>
     <Compile Include="Primitives.fsi" />
@@ -39,19 +40,19 @@
     <Compile Include="Loop.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
-    <!-- Grid parts: consumes Cell (Pathfinding) for faces and Point/Rect (Primitives) for the pixel
+    <!-- Grid parts: consumes Cell (Primitives) for faces and Point/Rect (Primitives) for the pixel
          map. Names the edges/vertices between faces, which Pathfinding/Fov/Los cannot. -->
     <Compile Include="Grids.fsi" />
     <Compile Include="Grids.fs" />
-    <!-- Sight layer: consumes Cell (Pathfinding) and the same `Cell -> bool` predicate shape. -->
+    <!-- Sight layer: consumes Cell (Primitives) and the same `Cell -> bool` predicate shape. -->
     <Compile Include="Los.fsi" />
     <Compile Include="Los.fs" />
-    <!-- Field of view: consumes Cell (Pathfinding), opacity-only. Independent of Los and SpatialGrid. -->
+    <!-- Field of view: consumes Cell (Primitives), opacity-only. Independent of Los and SpatialGrid. -->
     <Compile Include="Fov.fsi" />
     <Compile Include="Fov.fs" />
     <Compile Include="SpatialGrid.fsi" />
     <Compile Include="SpatialGrid.fs" />
-    <!-- Response layer: consumes Contact (Primitives) + Cell (Pathfinding); separate from detection. -->
+    <!-- Response layer: consumes Contact (Primitives) + Cell (Primitives); separate from detection. -->
     <Compile Include="Resolution.fsi" />
     <Compile Include="Resolution.fs" />
     <!-- Ballistics: swept projectile advance + lead solve + splash. After SpatialGrid (splash queries
@@ -63,7 +64,7 @@
     <Compile Include="Visibility.fsi" />
     <Compile Include="Visibility.fs" />
     <!-- Decision layer: the vocabulary the AI reads the fog through. Last, because it sits ABOVE the
-         spatial substrate — it consumes Point (Primitives), Cell/Neighbourhood (Pathfinding) and Rng,
+         spatial substrate — it consumes Point/Cell (Primitives), Neighbourhood (Pathfinding) and Rng,
          and nothing here consumes it. Its LOS is a caller-supplied oracle, so it does not depend on
          Los/Fov/Visibility either: policy stays with the game. -->
     <Compile Include="Ai.fsi" />

@@ -8,6 +8,9 @@ type Rect =
       Width: float
       Height: float }
 
+[<Struct>]
+type Cell = { Col: int; Row: int }
+
 type Contact = { Normal: Point; Depth: float }
 
 type Circle = { Center: Point; Radius: float }
