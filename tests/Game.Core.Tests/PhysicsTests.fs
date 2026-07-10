@@ -6,10 +6,11 @@ module Game.Core.Tests.PhysicsTests
 //   * exactness    — `pairs` has no false negatives (a property test against an O(n²) oracle) and no
 //                    false positives (the same oracle, the other direction). A broad phase is normally
 //                    allowed a loose superset; this one is not, and the oracle is what holds it to that.
-//   * the dilation — `SpatialGrid` buckets by a body's POSITION, so a large body whose origin sits far
-//                    outside a small body's box is invisible to a naive query. The regression test puts
-//                    the large body at the HIGHER index, because that is the only ordering in which the
-//                    `j > i` scan can miss it.
+//   * the extent   — the grid buckets a body under every cell its AABB touches (`buildBounds`), so a
+//                    large body whose ORIGIN sits far outside a small body's box is still a candidate.
+//                    The regression test puts the large body at the HIGHER index, because that is the
+//                    only ordering in which the `j > i` scan can miss it. (#84 replaced a global `reach`
+//                    dilation here; these assertions are what pinned the behaviour across that swap.)
 //   * the order    — `(a, b)` ascending, `a < b`, no duplicates. Unsorted pair order is the #1
 //                    determinism leak in a physics step, so it is asserted as a contract, not assumed
 //                    from the container.
@@ -20,8 +21,8 @@ module Game.Core.Tests.PhysicsTests
 // Two honest limits of the oracle, since it is the load-bearing assertion. It shares `Geometry.intersects`
 // with the implementation, so the EDGE CONVENTION is checked by the dedicated example above and not by the
 // property; and `bodyOf` bounds generated extents, so the property never reaches the overflow regime the
-// `at any magnitude` tests below cover by hand. The oracle proves the grid, the dilation, the dedup and
-// the ordering — which is what it is there for.
+// `at any magnitude` tests below cover by hand. The oracle proves the grid, the extent bucketing, the
+// dedup and the ordering — which is what it is there for.
 
 open System
 open Expecto
@@ -60,7 +61,8 @@ let private pairList (w: Physics.World) : (int * int) list =
 let private box hx hy = Physics.SBox(p hx hy)
 
 /// A CCW right triangle with its origin at the corner — deliberately ASYMMETRIC about that origin, which
-/// is the case a `reach` computed from a radius rather than from box corners would get wrong.
+/// is the case an extent measured as a radius about the origin, rather than from the box corners, would
+/// get wrong.
 let private triangle (size: float) =
     Physics.SPoly { Vertices = [| p 0.0 0.0; p size 0.0; p 0.0 size |] }
 
@@ -220,16 +222,17 @@ let tests =
                           (sprintf "%A vs %A: only a pair with a Dynamic member can ever resolve" ka kb)
           }
 
-          test "a large body at a HIGHER index is still found — the SpatialGrid dilation" {
+          test "a large body at a HIGHER index is still found — the grid buckets it by extent" {
               // Body 0's box is [89,91]². Body 1's box is [-100,100]², so the two overlap — but body 1's
               // ORIGIN is (0,0), nowhere near body 0's box. The scan queries body 0's region and takes
-              // j > i, so without dilating by `reach` the large body is never a candidate and the pair is
-              // silently lost. Ordering matters: swap the two and the naive query would find it anyway.
+              // j > i, so a grid that filed body 1 under its origin's cell alone would never offer it as a
+              // candidate, and the pair would be silently lost. Ordering matters: swap the two and a
+              // position-bucketed query would find it anyway.
               let w =
                   worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 90.0 90.0
                                 Physics.Dynamic, box 100.0 100.0, p 0.0 0.0 ]
 
-              Expect.equal (pairList w) [ 0, 1 ] "the dilated query must reach the large body's origin"
+              Expect.equal (pairList w) [ 0, 1 ] "body 0's own box must reach the large body's cells"
           }
 
           test "an asymmetric polygon's extent is measured from its box corners, not a radius" {
@@ -288,12 +291,13 @@ let tests =
                       (sprintf "cellSize %f is an acceleration choice, never a correctness one" cellSize)
           }
 
-          test "one body with an unboundable extent costs acceleration, never pairs" {
+          test "one body with an unboundable extent costs ITSELF acceleration, never pairs" {
               // Bodies 0 and 1 plainly overlap and one is Dynamic. Body 2's half-extents overflow its box
-              // width to +infinity, which drives the global `reach` to +infinity, which makes every
-              // dilated region's upper bound `-infinity + infinity = NaN`. Every `containsPoint` test
-              // against NaN is false, so a query-only broad phase silently returns NO pairs at all — the
-              // whole world loses collision because of one body it has nothing to do with.
+              // width to +infinity, so its AABB cannot be filed under any finite set of cells. The grid
+              // defers it — it becomes a candidate for every query and is then settled by the same exact
+              // `Geometry.intersects` filter as anything else. Bodies 0 and 1 keep their own cell queries;
+              // under the `reach` dilation this one body drove the global constant to infinity and cost
+              // the WHOLE world its acceleration.
               let sane =
                   [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
                     Physics.Dynamic, Physics.SCircle 1.0, p 0.5 0.0 ]
@@ -306,7 +310,30 @@ let tests =
               Expect.equal
                   (pairList (worldOf 8.0 withHuge))
                   [ 0, 1; 0, 2; 1, 2 ]
-                  "the exact scan still finds every pair when the region cannot be bounded"
+                  "a deferred body still finds every pair when its extent cannot be bucketed"
+          }
+
+          test "the ground-plane scene — one huge floor under N small bodies — stays exact" {
+              // The scene #84 was filed for. Under the old global `reach` dilation the 500-unit floor
+              // widened EVERY body's query to span the world, so the broad phase degenerated to a scan
+              // that was strictly worse than the naive O(n²) double loop it exists to avoid.
+              //
+              // Exactness is what a test can assert here; the cost is what the change is for. Both cell
+              // sizes are checked because they straddle the grid's per-item cell cap: at 1.0 the floor's
+              // 1000×2 box spans ~2000 cells and is deferred as unbucketable, at 16.0 it spans ~63 and is
+              // filed normally. The pairs must not care which.
+              let floor = Physics.Static, box 500.0 1.0, p 0.0 0.0
+
+              let resting =
+                  [ for i in 0..24 -> Physics.Dynamic, Physics.SCircle 0.5, p (float i * 2.0 - 24.0) 1.2 ]
+
+              let bodies = floor :: resting
+
+              for cellSize in [ 1.0; 16.0 ] do
+                  Expect.equal
+                      (pairList (worldOf cellSize bodies))
+                      (oraclePairs bodies)
+                      (sprintf "cellSize %f: the floor is a neighbour of each resting body, and of nothing else" cellSize)
           }
 
           test "a polygon whose shoelace overflows to NaN is refused, exactly as Geometry refuses it" {

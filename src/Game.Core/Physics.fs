@@ -146,59 +146,23 @@ module Physics =
         let n = world.Pos.Length
         let boxes = Array.init n (aabbOf world)
 
-        // `SpatialGrid` buckets a body by its POSITION, not by its extent, so querying body i's own AABB
-        // misses a large neighbour whose origin sits outside it. Dilate by `reach` — the furthest any
-        // body's box corner strays from its own origin, over the whole world.
+        // The grid buckets each body under every cell its AABB touches (`SpatialGrid.buildBounds`), so a
+        // body's own box is a sufficient query region: two boxes that overlap share a point, that point
+        // lies in some cell, and both bodies are filed under it. No dilation, and therefore no global
+        // constant — one 500-unit floor no longer widens every other body's query to the whole world.
         //
-        // Why that suffices. Write body j's box as `pos_j + [dlo_j, dhi_j]`. If i's and j's boxes overlap
-        // then, on each axis, `pos_j + dhi_j >= lo_i` and `pos_j + dlo_j <= hi_i`, hence
-        // `lo_i - reach <= pos_j <= hi_i + reach`, since `|dlo_j|, |dhi_j| <= reach`. So every body whose
-        // box overlaps i's has its ORIGIN inside i's box dilated by `reach`, and the (edge-inclusive)
-        // query loses none of them. `reach` is taken from box corners rather than a radius, so it is
-        // correct for a polygon whose extent about its origin is asymmetric.
-        //
-        // The query is a superset; `Geometry.intersects` below is the exact filter. Hence no false
-        // negatives (the dilation) and no false positives (the filter).
-        //
-        // `max` returns its first argument when the second is NaN, so `reach` cannot become NaN. It CAN
-        // become infinite, for a body whose extent overflows — see `candidatesFor`.
-        let mutable reach = 0.0
-
-        for i in 0 .. n - 1 do
-            match boxes.[i] with
-            | ValueSome b ->
-                let p = world.Pos.[i]
-                reach <- max reach (abs (b.X - p.X))
-                reach <- max reach (abs (b.Y - p.Y))
-                reach <- max reach (abs (b.X + b.Width - p.X))
-                reach <- max reach (abs (b.Y + b.Height - p.Y))
-            | ValueNone -> ()
-
         // Non-collidable bodies never enter the grid, so they can never be a candidate. Ascending index
-        // order is insertion order, which `SpatialGrid.query` preserves — that is what makes the result
-        // sorted below without a sort. `collidable` is the same ascending list, and the fallback below
-        // relies on that.
-        let collidable = [ for i in 0 .. n - 1 do if boxes.[i].IsSome then yield i ]
-
+        // order is insertion order, which `SpatialGrid.queryBounds` preserves — that is what makes the
+        // result sorted below without a sort.
         let grid =
-            SpatialGrid.build world.Config.BroadPhaseCellSize (collidable |> Seq.map (fun i -> world.Pos.[i], i))
-
-        // A dilated region is only usable while its bounds stay finite. Once `reach` (or a body's own
-        // extent) overflows, `region.X = -infinity` and `region.X + region.Width = NaN`, and every
-        // `containsPoint` test against NaN is false — so the query would return NOTHING and the whole
-        // world would silently lose its pairs, rather than merely losing acceleration. Fall back to the
-        // exact scan over every collidable body, which is what `SpatialGrid` itself does for a
-        // non-finite query box. Slower, never wrong, and still ascending.
-        let candidatesFor (region: Rect) =
-            if
-                finite region.X
-                && finite region.Y
-                && finite (region.X + region.Width)
-                && finite (region.Y + region.Height)
-            then
-                SpatialGrid.query region grid
-            else
-                collidable
+            SpatialGrid.buildBounds
+                world.Config.BroadPhaseCellSize
+                (seq {
+                    for i in 0 .. n - 1 do
+                        match boxes.[i] with
+                        | ValueSome b -> yield b, i
+                        | ValueNone -> ()
+                })
 
         let acc = ResizeArray<struct (int * int)>()
 
@@ -206,20 +170,14 @@ module Physics =
             match boxes.[i] with
             | ValueNone -> ()
             | ValueSome bi ->
-                let region =
-                    { X = bi.X - reach
-                      Y = bi.Y - reach
-                      Width = bi.Width + 2.0 * reach
-                      Height = bi.Height + 2.0 * reach }
-
+                // `queryBounds` filters with `Geometry.intersects` — the same strict-edge test the pair
+                // contract names — so a returned `j` already overlaps `i` and needs no re-test here.
+                //
                 // `j > i` emits each unordered pair exactly once, in the canonical `a < b` order, so no
                 // dedup pass is needed; and because i ascends in the outer loop while the candidates come
                 // back ascending, `acc` comes out sorted lexicographically by `(a, b)`.
-                for j in candidatesFor region do
-                    if j > i then
-                        match boxes.[j] with
-                        | ValueSome bj when solvable world.Kinds.[i] world.Kinds.[j] && Geometry.intersects bi bj ->
-                            acc.Add(struct (i, j))
-                        | _ -> ()
+                for j in SpatialGrid.queryBounds bi grid do
+                    if j > i && solvable world.Kinds.[i] world.Kinds.[j] then
+                        acc.Add(struct (i, j))
 
         acc.ToArray()
