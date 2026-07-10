@@ -1,5 +1,9 @@
 namespace FS.GG.Game.Core
 
+// Qualified because `Collision` is a name a physics-adjacent consumer is near-certain to define, and
+// `open FS.GG.Game.Core` would otherwise inject it (and `Declared`/`Environmental`/`Periodic`) into
+// their namespace. `Resolution` nests `CellStep`/`PushStop` for the same reason.
+[<RequireQualifiedAccess>]
 type Source =
     | Declared
     | Collision
@@ -11,6 +15,9 @@ type Damage<'K> =
       Source: Source
       Base: float }
 
+// Qualified for the same reason as `Source`, and more urgently: `Continue` and `Halt` are ordinary
+// words, and a caller writing a `Stage` is exactly the caller most likely to have their own.
+[<RequireQualifiedAccess>]
 type StageResult =
     | Continue of float
     | Halt of float
@@ -20,7 +27,8 @@ type Stage<'T, 'K> =
       Run: 'T -> Damage<'K> -> float -> StageResult }
 
 type DamageTrace =
-    { Final: float
+    { Seed: float
+      Final: float
       Halted: string voption
       Steps: (string * float) list }
 
@@ -37,25 +45,29 @@ module Effects =
     // The fold behind both `pipeline` and `applyAll`, differing only in the seed. `Steps` is built
     // reversed and flipped once at the end: the alternative is an O(n²) append per stage.
     let private run (stages: Stage<'T, 'K> list) (target: 'T) (damage: Damage<'K>) (seed: float) : DamageTrace =
+        let seed = sane seed
+
         let rec walk remaining amount steps =
             match remaining with
             | [] ->
-                { Final = amount
+                { Seed = seed
+                  Final = amount
                   Halted = ValueNone
                   Steps = List.rev steps }
             | (stage: Stage<'T, 'K>) :: rest ->
                 match stage.Run target damage amount with
-                | Continue next ->
+                | StageResult.Continue next ->
                     let next = sane next
                     walk rest next ((stage.Name, next) :: steps)
-                | Halt final ->
+                | StageResult.Halt final ->
                     let final = sane final
 
-                    { Final = final
+                    { Seed = seed
+                      Final = final
                       Halted = ValueSome stage.Name
                       Steps = List.rev ((stage.Name, final) :: steps) }
 
-        walk stages (sane seed) []
+        walk stages seed []
 
     let pipeline (stages: Stage<'T, 'K> list) (target: 'T) (damage: Damage<'K>) : DamageTrace =
         run stages target damage damage.Base
@@ -72,7 +84,7 @@ module Effects =
 
     let amplify (bonusOf: 'T -> float) : Stage<'T, 'K> =
         { Name = "amplify"
-          Run = fun target _ amount -> Continue(amount * (1.0 + bonusOf target)) }
+          Run = fun target _ amount -> StageResult.Continue(amount * (1.0 + bonusOf target)) }
 
     // `>= 1.0` rather than `= 1.0`: at exactly 1.0 a multiply would produce the zero a later `floorAt`
     // silently lifts (the bug this module exists to prevent), and above 1.0 it would multiply by a
@@ -83,11 +95,14 @@ module Effects =
           Run =
             fun target damage amount ->
                 let r = resistOf target damage.Kind
-                if r >= 1.0 then Halt 0.0 else Continue(amount * (1.0 - r)) }
+                if r >= 1.0 then
+                    StageResult.Halt 0.0
+                else
+                    StageResult.Continue(amount * (1.0 - r)) }
 
     let subtract (amountOf: 'T -> 'K -> float) : Stage<'T, 'K> =
         { Name = "subtract"
-          Run = fun target damage amount -> Continue(amount - amountOf target damage.Kind) }
+          Run = fun target damage amount -> StageResult.Continue(amount - amountOf target damage.Kind) }
 
     let floorAt (minimum: float) : Stage<'T, 'K> =
         // A non-finite floor degrades to 0.0 rather than to a `max` against NaN, which returns its
@@ -95,11 +110,16 @@ module Effects =
         let minimum = sane minimum
 
         { Name = "floorAt"
-          Run = fun _ _ amount -> Continue(max minimum amount) }
+          Run = fun _ _ amount -> StageResult.Continue(max minimum amount) }
 
     let immuneWhen (predicate: 'T -> Damage<'K> -> bool) : Stage<'T, 'K> =
         { Name = "immuneWhen"
-          Run = fun target damage amount -> if predicate target damage then Halt 0.0 else Continue amount }
+          Run =
+            fun target damage amount ->
+                if predicate target damage then
+                    StageResult.Halt 0.0
+                else
+                    StageResult.Continue amount }
 
     // Keeps `inner`'s name whether or not it fired, so a trace of a skipped stage still reads as the
     // rule it encodes ("cover", not "gatedBy") and the `Steps` list has one entry per stage regardless
@@ -111,7 +131,7 @@ module Effects =
                 if List.contains damage.Source sources then
                     inner.Run target damage amount
                 else
-                    Continue amount }
+                    StageResult.Continue amount }
 
     type Active<'E> =
         { Effect: 'E
@@ -133,10 +153,13 @@ module Effects =
 
         | Strongest _, [] -> [ incoming ]
         | Strongest magnitude, existing :: _ ->
-            // `>=`, not `>`: an equal-strength reapplication refreshes. Replacement takes the incoming
-            // duration wholesale, which is what "refreshes" means for a fixed-duration effect.
+            // `>=`, not `>`: an equal-strength reapplication refreshes. "Refreshes" means what it means
+            // under `Refresh` — `max` the ticks, so a replacement can extend but never cut short. Taking
+            // the incoming duration wholesale would let a short-variant slow of equal magnitude erase
+            // most of a long one already running.
             if magnitude incoming.Effect >= magnitude existing.Effect then
-                [ incoming ]
+                [ { incoming with
+                      TicksRemaining = max existing.TicksRemaining incoming.TicksRemaining } ]
             else
                 [ existing ]
 

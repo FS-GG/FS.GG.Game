@@ -8,6 +8,10 @@ namespace FS.GG.Game.Core
 /// scoring pays a bonus for kills that were not direct damage.
 ///
 /// Orthogonal to the damage *kind* (Physical / Frost / Electric / …), which stays generic in `'K`.
+///
+/// **Qualified.** `Collision` is a name a physics-adjacent consumer is near-certain to define — and
+/// `Physics` is one — so `open FS.GG.Game.Core` must not inject it. Write `Source.Declared`.
+[<RequireQualifiedAccess>]
 type Source =
     /// A deliberate attack by an actor. The only source cover and armor may reduce.
     | Declared
@@ -31,8 +35,12 @@ type Damage<'K> =
 /// Public contract type exposed by the FS.GG.Game.Core package.
 /// What a `Stage` did to the running amount. `Halt` stops the pipeline immediately and skips every
 /// later stage — **including the floor**, which is the entire point: a `max` at the end of a pipeline
-/// erases every zero the pipeline produced, so a full immunity that returned `Continue 0.0` would be
-/// lifted back to the floor and deal damage.
+/// erases every zero the pipeline produced, so a full immunity that returned `StageResult.Continue 0.0`
+/// would be lifted back to the floor and deal damage.
+///
+/// **Qualified**, as `Source` is, and more urgently: `Continue` and `Halt` are ordinary words, and the
+/// caller writing a `Stage` is the one most likely to have their own.
+[<RequireQualifiedAccess>]
 type StageResult =
     /// The amount, passed on to the next stage.
     | Continue of float
@@ -52,14 +60,23 @@ type Stage<'T, 'K> =
       Run: 'T -> Damage<'K> -> float -> StageResult }
 
 /// Public contract type exposed by the FS.GG.Game.Core package.
-/// The full audit of one hit against one target: every stage's output in order, the final amount, and
-/// — if the pipeline exited early — the name of the stage that stopped it.
+/// The full audit of one hit against one target: the amount the pipeline started from, every stage's
+/// output in order, the final amount, and — if the pipeline exited early — the name of the stage that
+/// stopped it.
 ///
 /// `Halted` is not diagnostic decoration. It is what the caller reads to suppress a rider status
 /// effect: a frost bolt that a fully-immune target shrugged off must not apply its `Slow`, and the
 /// only way to know that happened is that `resist` halted.
+///
+/// `Seed` is the amount the first stage was handed: `damage.Base` under `pipeline`, and
+/// `damage.Base * multiplier` under `applyAll`. It is **not** a `Step` — the transport multiplier is a
+/// seed precisely so that it cannot be reordered after `subtract` — but without it the audit omits the
+/// one input every stage is measured against. A 30-damage blast that deals 9 to a rim target traces as
+/// `Steps = [ "subtract", 9.0 ]`, and `Seed = 15.0` is what distinguishes a ×0.5 falloff from a
+/// 15-point base. Non-finite seeds degrade to `0.0`, as every other amount here does.
 type DamageTrace =
-    { Final: float
+    { Seed: float
+      Final: float
       Halted: string voption
       Steps: (string * float) list }
 
@@ -98,6 +115,8 @@ module Effects =
     /// `DamageTrace.Halted`. A non-finite `Base`, or a non-finite amount out of any stage, contributes
     /// `0.0` rather than poisoning the total — so no `DamageTrace` field is ever `NaN`.
     ///
+    /// `DamageTrace.Seed` is `damage.Base`, sanitised.
+    ///
     /// Use `applyAll` for the area case: it seeds each target's pipeline at the transport multiplier
     /// the region assigned it, which is what puts transport *before* mitigation by construction.
     val pipeline: stages: Stage<'T, 'K> list -> target: 'T -> damage: Damage<'K> -> DamageTrace
@@ -110,7 +129,8 @@ module Effects =
     /// Each target's pipeline is **seeded** at `damage.Base * multiplier`. The multiplier is the
     /// initial amount, not a `Stage` in the list, and the difference matters: a stage could be
     /// reordered after `subtract`, at which point falloff would start protecting the attacker from the
-    /// target's armor. A seed cannot be reordered.
+    /// target's armor. A seed cannot be reordered. It is reported as `DamageTrace.Seed`, so the audit
+    /// records the transport the `Steps` list cannot.
     ///
     /// Results are returned in the order `targets` was given. A non-finite multiplier seeds `0.0`.
     /// No stage can observe another target, so the result multiset is independent of that order.
@@ -169,8 +189,8 @@ module Effects =
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Run `inner` only when the hit's `Source` is one of `sources`; otherwise pass the running amount
     /// through untouched. The combinator that makes cover, armor, and damage-reduction traits mean
-    /// "against declared attacks" — `gatedBy [Declared] (subtract cover)` — and that lets a poison tick
-    /// bypass armor by being `Periodic`.
+    /// "against declared attacks" — `gatedBy [Source.Declared] (subtract cover)` — and that lets a
+    /// poison tick bypass armor by being `Source.Periodic`.
     ///
     /// The gated stage keeps `inner`'s name in the trace, whether or not it fired, so a trace of a
     /// skipped stage still reads as the rule it encodes.
@@ -196,10 +216,16 @@ module Effects =
         /// `max(old, new)`, so a reapplication can extend but never cut short. Stun.
         | Refresh
         /// One instance, the strongest. An application whose `magnitude` is greater than **or equal
-        /// to** the active one's replaces it outright, taking the incoming duration; a weaker one
-        /// changes nothing. The `>=` is load-bearing — it is what lets a second tower of the same type
-        /// re-up a slow it cannot out-strengthen. `magnitude` is oriented so that larger is stronger,
-        /// so a slow whose factor is lower when stronger passes `fun e -> 1.0 - e.Factor`.
+        /// to** the active one's replaces it and sets the remaining ticks to `max(old, new)`; a weaker
+        /// one changes nothing. The `>=` is load-bearing — it is what lets a second tower of the same
+        /// type re-up a slow it cannot out-strengthen. `magnitude` is oriented so that larger is
+        /// stronger, so a slow whose factor is lower when stronger passes `fun e -> 1.0 - e.Factor`.
+        ///
+        /// The `max` is `Refresh`'s, for `Refresh`'s reason: replacement *refreshes*, and a refresh may
+        /// extend but never cut short. Taking the incoming duration wholesale would let a short-variant
+        /// application of equal magnitude erase most of a long one already running — invisible in a
+        /// tower-defense where every slow of a tower type shares a base duration, and a live bug the
+        /// moment two sources of one effect differ in duration.
         | Strongest of magnitude: ('E -> float)
         /// Independent, additive instances, appended in application order while fewer than `cap` are
         /// active. At the cap the application is a **no-op** — it does not refresh, replace, or evict

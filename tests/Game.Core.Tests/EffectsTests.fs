@@ -81,7 +81,7 @@ let tests =
 
             test "a fully frost-immune target takes 0 from a frost bolt, not the floor of 1" {
                 let spectre = { baseUnit with FrostResist = 1.0 }
-                let trace = Effects.pipeline towerDefense spectre (hit Frost Declared 5.0)
+                let trace = Effects.pipeline towerDefense spectre (hit Frost Source.Declared 5.0)
 
                 Expect.equal trace.Final 0.0 "resist 1.0 ⇒ 0 damage, NOT the floorAt 1.0"
                 Expect.equal trace.Halted (ValueSome "resist") "the caller must be able to see WHY, to suppress the rider Slow"
@@ -89,7 +89,7 @@ let tests =
 
             test "a resistance above 1.0 halts rather than multiplying by a negative and healing" {
                 let overResistant = { baseUnit with FrostResist = 1.5 }
-                let trace = Effects.pipeline towerDefense overResistant (hit Frost Declared 10.0)
+                let trace = Effects.pipeline towerDefense overResistant (hit Frost Source.Declared 10.0)
 
                 Expect.equal trace.Final 0.0 "resist > 1.0 ⇒ 0, never a negative amount"
                 Expect.equal trace.Halted (ValueSome "resist") "halted, not multiplied"
@@ -97,7 +97,7 @@ let tests =
 
             test "a resistance of 0.999 does NOT halt — it multiplies, and the floor then applies" {
                 let almost = { baseUnit with FrostResist = 0.999 }
-                let trace = Effects.pipeline towerDefense almost (hit Frost Declared 5.0)
+                let trace = Effects.pipeline towerDefense almost (hit Frost Source.Declared 5.0)
 
                 Expect.equal trace.Final 1.0 "0.005 raised to the floor of 1.0 — the floor is for the nearly-immune"
                 Expect.equal trace.Halted ValueNone "no halt: 0.999 is a resistance, not an immunity"
@@ -113,7 +113,7 @@ let tests =
             // a game have a way to close it. Both are pinned below.
             test "a zero transport multiplier is a SEED, not a Halt — the floor still lifts it to 1" {
                 let rim = [ baseUnit, 0.0 ]
-                let dealt = Effects.applyAll towerDefense (hit Physical Declared 30.0) rim
+                let dealt = Effects.applyAll towerDefense (hit Physical Source.Declared 30.0) rim
 
                 Expect.equal (dealt |> List.map (snd >> final)) [ 1.0 ] "the documented sharp edge: a linearFalloff 0.0 rim target takes the floor"
                 Expect.equal (dealt |> List.map (snd >> fun t -> t.Halted)) [ ValueNone ] "nothing halted — which is exactly why the floor ran"
@@ -121,15 +121,15 @@ let tests =
 
             test "…and an immunity DOES halt, so the floor never runs — the difference in one place" {
                 let spectre = { baseUnit with FrostResist = 1.0 }
-                let seeded = Effects.applyAll towerDefense (hit Physical Declared 30.0) [ baseUnit, 0.0 ]
-                let halted = Effects.applyAll towerDefense (hit Frost Declared 30.0) [ spectre, 1.0 ]
+                let seeded = Effects.applyAll towerDefense (hit Physical Source.Declared 30.0) [ baseUnit, 0.0 ]
+                let halted = Effects.applyAll towerDefense (hit Frost Source.Declared 30.0) [ spectre, 1.0 ]
 
                 Expect.equal (seeded |> List.map (snd >> final)) [ 1.0 ] "zero seed ⇒ floored"
                 Expect.equal (halted |> List.map (snd >> final)) [ 0.0 ] "zero by Halt ⇒ not floored"
             }
 
             test "a game closes the rim gap in its region operator, or with immuneWhen" {
-                let damage = hit Physical Declared 30.0
+                let damage = hit Physical Source.Declared 30.0
 
                 // (a) Drop the zero-multiplier targets before the pipeline ever sees them.
                 let pruned = [ baseUnit, 0.0; baseUnit, 0.5 ] |> List.filter (fun (_, m) -> m > 0.0)
@@ -142,7 +142,7 @@ let tests =
 
             test "immuneWhen halts, and names itself, so a rider effect can be suppressed" {
                 let spectre = { baseUnit with Ghost = true }
-                let trace = Effects.pipeline [ ghost; Effects.floorAt 1.0 ] spectre (hit Physical Declared 99.0)
+                let trace = Effects.pipeline [ ghost; Effects.floorAt 1.0 ] spectre (hit Physical Source.Declared 99.0)
 
                 Expect.equal trace.Final 0.0 "categorical immunity ⇒ 0"
                 Expect.equal trace.Halted (ValueSome "immuneWhen") "named"
@@ -157,35 +157,35 @@ let tests =
 
             test "amplify multiplies by (1 + bonus)" {
                 let u = { baseUnit with Vulnerable = 0.4 }
-                Expect.equal (Effects.pipeline [ vuln ] u (hit Physical Declared 30.0) |> final) 42.0 "30 × 1.4"
+                Expect.equal (Effects.pipeline [ vuln ] u (hit Physical Source.Declared 30.0) |> final) 42.0 "30 × 1.4"
             }
 
             test "resist multiplies by (1 - r)" {
                 let u = { baseUnit with FrostResist = 0.25 }
-                Expect.equal (Effects.pipeline [ frostResist ] u (hit Frost Declared 40.0) |> final) 30.0 "40 × 0.75"
+                Expect.equal (Effects.pipeline [ frostResist ] u (hit Frost Source.Declared 40.0) |> final) 30.0 "40 × 0.75"
             }
 
             test "resist only bites the kind it is written against" {
                 let u = { baseUnit with FrostResist = 1.0 }
-                Expect.equal (Effects.pipeline [ frostResist ] u (hit Physical Declared 40.0) |> final) 40.0 "frost resist ignores a physical hit"
+                Expect.equal (Effects.pipeline [ frostResist ] u (hit Physical Source.Declared 40.0) |> final) 40.0 "frost resist ignores a physical hit"
             }
 
             test "subtract removes a flat amount, and may drive the running total negative" {
                 let u = { baseUnit with Armor = 6.0 }
-                Expect.equal (Effects.pipeline [ armor ] u (hit Physical Declared 4.0) |> final) -2.0 "floorAt decides the bottom, not subtract"
+                Expect.equal (Effects.pipeline [ armor ] u (hit Physical Source.Declared 4.0) |> final) -2.0 "floorAt decides the bottom, not subtract"
             }
 
             test "floorAt clamps up, and is the last word" {
                 let u = { baseUnit with Armor = 6.0 }
-                Expect.equal (Effects.pipeline [ armor; Effects.floorAt 1.0 ] u (hit Physical Declared 4.0) |> final) 1.0 "tower-defense floor"
-                Expect.equal (Effects.pipeline [ armor; Effects.floorAt 0.0 ] u (hit Physical Declared 4.0) |> final) 0.0 "tactics floor — a unit behind cover survives"
+                Expect.equal (Effects.pipeline [ armor; Effects.floorAt 1.0 ] u (hit Physical Source.Declared 4.0) |> final) 1.0 "tower-defense floor"
+                Expect.equal (Effects.pipeline [ armor; Effects.floorAt 0.0 ] u (hit Physical Source.Declared 4.0) |> final) 0.0 "tactics floor — a unit behind cover survives"
             }
 
             test "scale BEFORE subtract: falloff must not shield the target from its own armor" {
                 // Cannon 30, armor 6, at the rim of a linearFalloff 0.5 blast.
                 let brute = { baseUnit with Armor = 6.0 }
-                let atRim = Effects.applyAll [ armor; Effects.floorAt 1.0 ] (hit Physical Declared 30.0) [ brute, 0.5 ]
-                let atCentre = Effects.applyAll [ armor; Effects.floorAt 1.0 ] (hit Physical Declared 30.0) [ brute, 1.0 ]
+                let atRim = Effects.applyAll [ armor; Effects.floorAt 1.0 ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ]
+                let atCentre = Effects.applyAll [ armor; Effects.floorAt 1.0 ] (hit Physical Source.Declared 30.0) [ brute, 1.0 ]
 
                 Expect.equal (atRim |> List.map (snd >> final)) [ 9.0 ] "max(1, 0.5·30 − 6) = 9 — NOT 0.5·max(1, 30 − 6) = 12"
                 Expect.equal (atCentre |> List.map (snd >> final)) [ 24.0 ] "the two orders agree at the centre; they disagree by a third at the rim"
@@ -193,8 +193,8 @@ let tests =
 
             test "amplify BEFORE subtract: an anti-armor upgrade must overcome armor, not scale the leak" {
                 let brute = { baseUnit with Armor = 6.0; Vulnerable = 0.4 }
-                let chosen = Effects.pipeline [ vuln; armor; Effects.floorAt 1.0 ] brute (hit Physical Declared 30.0)
-                let rejected = Effects.pipeline [ armor; vuln; Effects.floorAt 1.0 ] brute (hit Physical Declared 30.0)
+                let chosen = Effects.pipeline [ vuln; armor; Effects.floorAt 1.0 ] brute (hit Physical Source.Declared 30.0)
+                let rejected = Effects.pipeline [ armor; vuln; Effects.floorAt 1.0 ] brute (hit Physical Source.Declared 30.0)
 
                 Expect.equal chosen.Final 36.0 "max(1, 42 − 6) — the Breaker upgrade beats armor"
                 Expect.floatClose Accuracy.high rejected.Final 33.6 "max(1, 24) × 1.4 — it merely scales what armor let through"
@@ -214,19 +214,19 @@ let tests =
                 let brute = { baseUnit with Armor = 6.0 }
 
                 let byKind = [ armorOf; Effects.floorAt 1.0 ] // correct
-                let bySource = [ Effects.gatedBy [ Declared; Collision ] armor; Effects.floorAt 1.0 ] // the trap
+                let bySource = [ Effects.gatedBy [ Source.Declared; Source.Collision ] armor; Effects.floorAt 1.0 ] // the trap
 
-                Expect.equal (Effects.pipeline byKind brute (hit Frost Declared 4.0) |> final) 4.0 "a Frost bolt ignores armor"
-                Expect.equal (Effects.pipeline bySource brute (hit Frost Declared 4.0) |> final) 1.0 "the source gate armors it — the bug"
-                Expect.equal (Effects.pipeline byKind brute (hit Physical Declared 4.0) |> final) 1.0 "a Physical 4 against armor 6 is floored"
+                Expect.equal (Effects.pipeline byKind brute (hit Frost Source.Declared 4.0) |> final) 4.0 "a Frost bolt ignores armor"
+                Expect.equal (Effects.pipeline bySource brute (hit Frost Source.Declared 4.0) |> final) 1.0 "the source gate armors it — the bug"
+                Expect.equal (Effects.pipeline byKind brute (hit Physical Source.Declared 4.0) |> final) 1.0 "a Physical 4 against armor 6 is floored"
             }
 
             test "a Periodic tick and a Declared bolt of the same elemental Kind agree — no Source gate needed" {
                 let brute = { baseUnit with Armor = 6.0 }
                 let p = [ armorOf; Effects.floorAt 1.0 ]
 
-                Expect.equal (Effects.pipeline p brute (hit Frost Periodic 4.0) |> final) 4.0 "poison tick bypasses armor"
-                Expect.equal (Effects.pipeline p brute (hit Frost Declared 4.0) |> final) 4.0 "and so does the bolt that applied it"
+                Expect.equal (Effects.pipeline p brute (hit Frost Source.Periodic 4.0) |> final) 4.0 "poison tick bypasses armor"
+                Expect.equal (Effects.pipeline p brute (hit Frost Source.Declared 4.0) |> final) 4.0 "and so does the bolt that applied it"
             }
 
             test "gatedBy is for the rules that ARE about Source: cover and Armored" {
@@ -235,22 +235,22 @@ let tests =
                 let crawler = { baseUnit with Cover = 2.0; Armor = 1.0 }
 
                 let tbt =
-                    [ Effects.gatedBy [ Declared ] cover
-                      Effects.gatedBy [ Declared ] armor
+                    [ Effects.gatedBy [ Source.Declared ] cover
+                      Effects.gatedBy [ Source.Declared ] armor
                       Effects.floorAt 0.0 ]
 
-                Expect.equal (Effects.pipeline tbt crawler (hit Physical Declared 3.0) |> final) 0.0 "3 − 2 cover − 1 armored"
-                Expect.equal (Effects.pipeline tbt crawler (hit Physical Declared 1.0) |> final) 0.0 "AC#3 — max(0, 1 − 2) lets the Crawler survive the Ram"
-                Expect.equal (Effects.pipeline tbt crawler (hit Physical Collision 1.0) |> final) 1.0 "shoved into a wall: neither applies"
-                Expect.equal (Effects.pipeline tbt crawler (hit Physical Environmental 3.0) |> final) 3.0 "standing in lava: neither applies"
+                Expect.equal (Effects.pipeline tbt crawler (hit Physical Source.Declared 3.0) |> final) 0.0 "3 − 2 cover − 1 armored"
+                Expect.equal (Effects.pipeline tbt crawler (hit Physical Source.Declared 1.0) |> final) 0.0 "AC#3 — max(0, 1 − 2) lets the Crawler survive the Ram"
+                Expect.equal (Effects.pipeline tbt crawler (hit Physical Source.Collision 1.0) |> final) 1.0 "shoved into a wall: neither applies"
+                Expect.equal (Effects.pipeline tbt crawler (hit Physical Source.Environmental 3.0) |> final) 3.0 "standing in lava: neither applies"
             }
 
             test "a gated stage keeps the inner stage's name, fired or not, so traces are comparable" {
                 let brute = { baseUnit with Armor = 6.0 }
-                let gated = Effects.gatedBy [ Declared ] armor
+                let gated = Effects.gatedBy [ Source.Declared ] armor
 
-                let fired = Effects.pipeline [ gated ] brute (hit Physical Declared 10.0)
-                let skipped = Effects.pipeline [ gated ] brute (hit Physical Periodic 10.0)
+                let fired = Effects.pipeline [ gated ] brute (hit Physical Source.Declared 10.0)
+                let skipped = Effects.pipeline [ gated ] brute (hit Physical Source.Periodic 10.0)
 
                 Expect.equal (fired.Steps |> List.map fst) [ "subtract" ] "the rule it encodes, not 'gatedBy'"
                 Expect.equal (skipped.Steps |> List.map fst) [ "subtract" ] "one entry per stage regardless of source"
@@ -265,7 +265,7 @@ let tests =
 
             test "Steps records every stage's output, in order" {
                 let brute = { baseUnit with Armor = 6.0; Vulnerable = 0.5 }
-                let trace = Effects.pipeline [ vuln; armor; Effects.floorAt 1.0 ] brute (hit Physical Declared 10.0)
+                let trace = Effects.pipeline [ vuln; armor; Effects.floorAt 1.0 ] brute (hit Physical Source.Declared 10.0)
 
                 Expect.equal trace.Steps [ "amplify", 15.0; "subtract", 9.0; "floorAt", 9.0 ] "one entry per stage, in pipeline order"
                 Expect.equal trace.Halted ValueNone "nothing halted"
@@ -274,17 +274,67 @@ let tests =
 
             test "a halt truncates Steps at the halting stage" {
                 let spectre = { baseUnit with FrostResist = 1.0; Armor = 6.0 }
-                let trace = Effects.pipeline towerDefense spectre (hit Frost Declared 20.0)
+                let trace = Effects.pipeline towerDefense spectre (hit Frost Source.Declared 20.0)
 
                 Expect.equal (trace.Steps |> List.map fst) [ "amplify"; "resist" ] "armor and floorAt never ran"
                 Expect.equal trace.Final 0.0 "and the amount is the halting stage's"
             }
 
             test "an empty pipeline is the identity — half the corpus mitigates nothing" {
-                let trace = Effects.pipeline [] baseUnit (hit Physical Declared 40.0)
+                let trace = Effects.pipeline [] baseUnit (hit Physical Source.Declared 40.0)
                 Expect.equal trace.Final 40.0 "a missile-command blast decides membership and kills"
                 Expect.isEmpty trace.Steps "no stages ran"
                 Expect.equal trace.Halted ValueNone "nothing halted"
+                Expect.equal trace.Seed 40.0 "the seed is reported even when nothing consumed it"
+            }
+
+            // The transport multiplier is the one input `Steps` cannot record, because it is a seed and
+            // not a stage. Without `Seed`, a designer asking "why did this target take 9?" cannot tell a
+            // ×0.5 falloff from a 15-point base — and the audit is the feature.
+            test "Seed records the transport multiplier that Steps cannot" {
+                let brute = { baseUnit with Armor = 6.0 }
+                let dealt = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ]
+                let trace = dealt |> List.head |> snd
+
+                Expect.equal trace.Seed 15.0 "30 × 0.5 — the amount the first stage was handed"
+                Expect.equal trace.Steps [ "subtract", 9.0 ] "and it is still not a Step"
+                Expect.equal trace.Final 9.0 "15 − 6"
+            }
+
+            test "Seed distinguishes a halved blast from a half-strength one — same Final, same Steps" {
+                let brute = { baseUnit with Armor = 6.0 }
+                let halvedBlast = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ]
+                let weakBlast = Effects.applyAll [ armor ] (hit Physical Source.Declared 15.0) [ brute, 1.0 ]
+
+                let traceOf d = d |> List.head |> snd
+
+                Expect.equal (traceOf halvedBlast).Final (traceOf weakBlast).Final "both deal 9"
+                Expect.equal (traceOf halvedBlast).Steps (traceOf weakBlast).Steps "and trace identically through the stages"
+                Expect.equal (traceOf halvedBlast).Seed (traceOf weakBlast).Seed "…and seed identically too: Seed audits the amount, not its provenance"
+            }
+
+            test "under pipeline, Seed is damage.Base" {
+                let brute = { baseUnit with Armor = 6.0; Vulnerable = 0.5 }
+                let trace = Effects.pipeline [ vuln; armor ] brute (hit Physical Source.Declared 10.0)
+
+                Expect.equal trace.Seed 10.0 "no transport multiplier ⇒ the seed is the base"
+                Expect.equal trace.Steps [ "amplify", 15.0; "subtract", 9.0 ] "amplify's 15.0 is a Step; the seed is not"
+            }
+
+            test "a halt still reports the seed it started from" {
+                let spectre = { baseUnit with FrostResist = 1.0 }
+                let trace = Effects.pipeline towerDefense spectre (hit Frost Source.Declared 20.0)
+
+                Expect.equal trace.Final 0.0 "halted at resist"
+                Expect.equal trace.Seed 20.0 "and the audit still records what it started from"
+            }
+
+            test "a non-finite seed degrades to 0.0 rather than reporting NaN" {
+                let byBase = Effects.pipeline [ armor ] baseUnit (hit Physical Source.Declared nan)
+                let byMultiplier = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ baseUnit, infinity ]
+
+                Expect.equal byBase.Seed 0.0 "a NaN Base seeds 0.0, and Seed says so"
+                Expect.equal ((byMultiplier |> List.head |> snd).Seed) 0.0 "an infinite multiplier seeds 0.0 too"
             }
         ]
 
@@ -309,7 +359,7 @@ let tests =
                         armors
                         |> List.mapi (fun i a -> { baseUnit with Armor = float (abs a % 20) }, 0.25 + float ((i + abs seed) % 4) * 0.25)
 
-                    let damage = hit Physical Declared 30.0
+                    let damage = hit Physical Source.Declared 30.0
 
                     let inCompany = Effects.applyAll towerDefense damage targets |> List.map snd
 
@@ -326,7 +376,7 @@ let tests =
                     let targets =
                         armors |> List.mapi (fun i a -> { baseUnit with Armor = float (abs a % 20) }, 0.25 + float (i % 4) * 0.25)
 
-                    let damage = hit Physical Declared 30.0
+                    let damage = hit Physical Source.Declared 30.0
 
                     match targets with
                     | [] -> true
@@ -352,21 +402,21 @@ let tests =
             test "applyAll returns results in the order the targets were given" {
                 let a = { baseUnit with Armor = 1.0 }
                 let b = { baseUnit with Armor = 2.0 }
-                let dealt = Effects.applyAll [ armor ] (hit Physical Declared 10.0) [ a, 1.0; b, 1.0 ]
+                let dealt = Effects.applyAll [ armor ] (hit Physical Source.Declared 10.0) [ a, 1.0; b, 1.0 ]
 
                 Expect.equal (dealt |> List.map (snd >> final)) [ 9.0; 8.0 ] "insertion order preserved"
             }
 
             test "applyAll SEEDS with the transport multiplier — it is not a stage in the list" {
                 let brute = { baseUnit with Armor = 6.0 }
-                let dealt = Effects.applyAll [ armor ] (hit Physical Declared 30.0) [ brute, 0.5 ]
+                let dealt = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ]
 
                 Expect.equal (dealt |> List.map (snd >> final)) [ 9.0 ] "15 − 6; the multiplier cannot be reordered after subtract"
                 Expect.equal (dealt |> List.collect (snd >> fun t -> t.Steps)) [ "subtract", 9.0 ] "the seed is not a Step"
             }
 
             test "applyAll over no targets is empty — a blast that caught nobody" {
-                Expect.isEmpty (Effects.applyAll towerDefense (hit Physical Declared 30.0) []) "no targets, no traces"
+                Expect.isEmpty (Effects.applyAll towerDefense (hit Physical Source.Declared 30.0) []) "no targets, no traces"
             }
         ]
 
@@ -385,7 +435,7 @@ let tests =
                 let region =
                     Ballistics.splash { X = 0.0; Y = 0.0 } 42.0 (Ballistics.linearFalloff 0.5) (fun _ -> { X = 0.0; Y = 0.0 }) grid
 
-                let dealt = Effects.applyAll towerDefense (hit Physical Declared 30.0) region
+                let dealt = Effects.applyAll towerDefense (hit Physical Source.Declared 30.0) region
                 Expect.equal (dealt |> List.length) 2 "both in radius"
                 Expect.equal (dealt |> List.map (snd >> final)) [ 24.0; 24.0 ] "both projected to the centre ⇒ multiplier 1.0"
             }
@@ -397,7 +447,7 @@ let tests =
                 let victims = [ baseUnit; baseUnit; baseUnit ]
                 let region = victims |> List.mapi (fun k u -> u, chainFalloff ** float k)
 
-                let dealt = Effects.applyAll [ frostResist; Effects.floorAt 1.0 ] (hit Frost Declared 100.0) region
+                let dealt = Effects.applyAll [ frostResist; Effects.floorAt 1.0 ] (hit Frost Source.Declared 100.0) region
                 Expect.equal (dealt |> List.map (snd >> final)) [ 100.0; 60.0; 36.0 ] "the k-th jump takes 0.6^k"
             }
 
@@ -405,7 +455,7 @@ let tests =
                 let grid = SpatialGrid.build 32.0 [ { X = 5.0; Y = 5.0 }, baseUnit ]
                 let region = SpatialGrid.queryRadius { X = 0.0; Y = 0.0 } 40.0 grid |> List.map (fun u -> u, 1.0)
 
-                let dealt = Effects.applyAll [] (hit Physical Declared 1.0) region
+                let dealt = Effects.applyAll [] (hit Physical Source.Declared 1.0) region
                 Expect.equal (dealt |> List.map (snd >> final)) [ 1.0 ] "any positive amount is lethal; there is nothing to mitigate"
             }
 
@@ -415,11 +465,11 @@ let tests =
                 let region = [ crawler, 1.0; armored, 1.0 ] // Chebyshev radius in cells — uniform.
 
                 let p =
-                    [ Effects.gatedBy [ Declared ] cover
-                      Effects.gatedBy [ Declared ] armor
+                    [ Effects.gatedBy [ Source.Declared ] cover
+                      Effects.gatedBy [ Source.Declared ] armor
                       Effects.floorAt 0.0 ]
 
-                let dealt = Effects.applyAll p (hit Physical Declared 1.0) region
+                let dealt = Effects.applyAll p (hit Physical Source.Declared 1.0) region
                 Expect.equal (dealt |> List.map (snd >> final)) [ 0.0; 0.0 ] "cover 2 and armor 1 both stop a Ram of 1"
             }
         ]
@@ -452,6 +502,26 @@ let tests =
                 }
                 test "a weaker application changes nothing at all" {
                     Expect.equal (Effects.applyEffect strongest (active 2 99) [ active 5 4 ]) [ active 5 4 ] "not even the duration"
+                }
+
+                // Replacement *refreshes*, and a refresh may extend but never cut short — `Refresh`'s
+                // rule, for `Refresh`'s reason. Taking the incoming duration wholesale is invisible in a
+                // tower-defense (every slow of a tower type shares a base duration) and a live bug the
+                // moment two sources of one effect differ in duration.
+                test "an equal-magnitude SHORTER reapplication does not cut the running slow short" {
+                    Expect.equal (Effects.applyEffect strongest (active 5 5) [ active 5 80 ]) [ active 5 80 ] "max(80, 5) — the 75 ticks do not evaporate"
+                }
+                test "a STRONGER but shorter application replaces the effect and keeps the longer duration" {
+                    Expect.equal (Effects.applyEffect strongest (active 8 5) [ active 5 80 ]) [ active 8 80 ] "the incoming effect wins; only the duration is reconciled"
+                }
+                test "Strongest and Refresh agree on duration — the asymmetry is gone" {
+                    let incoming, existing = active 5 5, [ active 5 80 ]
+                    let ticks = List.map (fun (a: Effects.Active<int>) -> a.TicksRemaining)
+
+                    Expect.equal
+                        (Effects.applyEffect strongest incoming existing |> ticks)
+                        (Effects.applyEffect Effects.Refresh incoming existing |> ticks)
+                        "both extend, neither shortens"
                 }
             ]
 
@@ -561,7 +631,7 @@ let tests =
 
             test "applyEffect and the pipeline are pure — the same inputs give the same outputs" {
                 let brute = { baseUnit with Armor = 6.0; Vulnerable = 0.4 }
-                let d = hit Physical Declared 30.0
+                let d = hit Physical Source.Declared 30.0
                 Expect.equal (Effects.pipeline towerDefense brute d) (Effects.pipeline towerDefense brute d) "no clock, no mutable state"
             }
         ]
@@ -577,7 +647,7 @@ let tests =
             test "a non-finite Base contributes 0.0" {
                 [ nan; infinity; -infinity ]
                 |> List.iter (fun b ->
-                    let trace = Effects.pipeline towerDefense baseUnit (hit Physical Declared b)
+                    let trace = Effects.pipeline towerDefense baseUnit (hit Physical Source.Declared b)
                     Expect.isFalse (isNan trace.Final) $"never NaN (Base = {b})"
                     Expect.equal trace.Final 1.0 $"seeded at 0.0, then raised by floorAt 1.0 (Base = {b})")
             }
@@ -585,49 +655,58 @@ let tests =
             test "a non-finite transport multiplier seeds 0.0" {
                 [ nan; infinity; -infinity ]
                 |> List.iter (fun m ->
-                    let dealt = Effects.applyAll [ armor ] (hit Physical Declared 30.0) [ baseUnit, m ]
+                    let dealt = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ baseUnit, m ]
                     Expect.equal (dealt |> List.map (snd >> final)) [ 0.0 ] $"0.0 seed, minus zero armor (multiplier = {m})")
             }
 
             test "a hostile Stage cannot inject a NaN into the trace" {
                 let hostile: Stage<Unit, Kind> =
-                    { Name = "hostile"; Run = fun _ _ _ -> Continue nan }
+                    { Name = "hostile"; Run = fun _ _ _ -> StageResult.Continue nan }
 
-                let trace = Effects.pipeline [ hostile; armor ] baseUnit (hit Physical Declared 10.0)
+                let trace = Effects.pipeline [ hostile; armor ] baseUnit (hit Physical Source.Declared 10.0)
                 Expect.isFalse (isNan trace.Final) "sanitised at the stage boundary"
                 Expect.equal trace.Steps [ "hostile", 0.0; "subtract", 0.0 ] "the NaN became 0.0 before the next stage saw it"
             }
 
             test "a hostile Stage cannot inject a NaN through a Halt either" {
                 let hostile: Stage<Unit, Kind> =
-                    { Name = "hostile"; Run = fun _ _ _ -> Halt nan }
+                    { Name = "hostile"; Run = fun _ _ _ -> StageResult.Halt nan }
 
-                let trace = Effects.pipeline [ hostile ] baseUnit (hit Physical Declared 10.0)
+                let trace = Effects.pipeline [ hostile ] baseUnit (hit Physical Source.Declared 10.0)
                 Expect.equal trace.Final 0.0 "halted amounts are sanitised too"
                 Expect.equal trace.Halted (ValueSome "hostile") "and it still names itself"
             }
 
             test "floorAt with a non-finite minimum degrades to a floor of 0.0" {
                 let u = { baseUnit with Armor = 20.0 }
-                let trace = Effects.pipeline [ armor; Effects.floorAt nan ] u (hit Physical Declared 10.0)
+                let trace = Effects.pipeline [ armor; Effects.floorAt nan ] u (hit Physical Source.Declared 10.0)
                 Expect.equal trace.Final 0.0 "not NaN, and not -10.0: the floor degraded to 0"
             }
 
             test "a NaN resistance does not halt, and does not poison" {
                 let u = { baseUnit with FrostResist = nan }
-                let trace = Effects.pipeline [ frostResist ] u (hit Frost Declared 10.0)
+                let trace = Effects.pipeline [ frostResist ] u (hit Frost Source.Declared 10.0)
                 Expect.equal trace.Final 0.0 "NaN >= 1.0 is false ⇒ multiply ⇒ NaN ⇒ sanitised to 0.0"
                 Expect.equal trace.Halted ValueNone "it is a multiply, not an immunity"
             }
 
             testCase "no pipeline over unclamped arbitrary floats ever yields a non-finite Final (FsCheck >=500)"
             <| fun () ->
-                let prop (a: float) (r: float) (s: float) (f: float) (b: float) =
+                let prop (a: float) (r: float) (s: float) (f: float) (b: float) (m: float) =
                     let u = { baseUnit with Vulnerable = a; FrostResist = r; Armor = s }
-                    let trace = Effects.pipeline [ vuln; frostResist; armor; Effects.floorAt f ] u (hit Frost Declared b)
+                    let stages = [ vuln; frostResist; armor; Effects.floorAt f ]
+                    let damage = hit Frost Source.Declared b
 
-                    System.Double.IsFinite trace.Final
-                    && trace.Steps |> List.forall (snd >> System.Double.IsFinite)
+                    // Both entry points, because they differ in exactly the field under test: `applyAll`
+                    // is the only way to seed at something other than `damage.Base`.
+                    let traces =
+                        Effects.pipeline stages u damage :: (Effects.applyAll stages damage [ u, m ] |> List.map snd)
+
+                    traces
+                    |> List.forall (fun t ->
+                        System.Double.IsFinite t.Seed
+                        && System.Double.IsFinite t.Final
+                        && t.Steps |> List.forall (snd >> System.Double.IsFinite))
 
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
         ]
