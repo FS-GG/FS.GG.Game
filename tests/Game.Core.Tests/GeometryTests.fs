@@ -497,6 +497,39 @@ let tests =
 
             let obb cx cy hx hy = Geometry.obbPolygon (p cx cy) (p hx hy) 0.0
             let isUnit (n: Point) = abs (sqrt (n.X * n.X + n.Y * n.Y) - 1.0) < 1e-9
+
+            // Contact POINTS are not translation-equivariant in IEEE-754, so they are compared to a few
+            // ULP rather than bit-for-bit; every other field of the manifold still is. See the translation
+            // property below for why, and here for where the bound comes from.
+            // 2^-52, the double's unit roundoff. NOT `System.Double.Epsilon`, which in .NET is the
+            // smallest DENORMAL (~4.9e-324) and would collapse the bound below to exact equality.
+            let machineEps = 2.220446049250313e-16
+            // A tolerance that tracks the operands' magnitude: `eps * m` is within 2x of one ULP of `m`,
+            // and the `max 1.0` keeps it meaningful as a coordinate crosses zero — where a ULP COUNT would
+            // read a 1.8e-15 drift as ~4.4e18 representable steps, so no ULP-count bound is usable here.
+            // A 400k-pair sweep over this generator's domain puts the worst observed drift at 16x; 64x is
+            // that bound with 4x of headroom, and still ~5 orders tighter than the file's usual 1e-9.
+            let near (a: float) (b: float) =
+                a = b || abs (a - b) <= 64.0 * machineEps * max 1.0 (max (abs a) (abs b))
+            let nearPoint (q: Point) (w: Point) = near q.X w.X && near q.Y w.Y
+            // Length-guarded: `Array.forall2` RAISES on a length mismatch, and a mismatch here is a
+            // failure to report, not an exception to throw.
+            let nearPoints (qs: Point[]) (ws: Point[]) =
+                qs.Length = ws.Length && Array.forall2 nearPoint qs ws
+
+            // FsCheck draws a fresh seed per run unless told otherwise, which makes an intermittently false
+            // property a coin flip in CI rather than a red build — this is how #87 reached `main` green.
+            // Seed the determinism properties, so that a pass and a failure are alike reproducible.
+            //
+            // Pick the seed on evidence, not on taste. Most seeds (7, 42, 87, 2026, ...) draw 500 cases
+            // WITHOUT ever hitting the translation drift, so seeding on one of those would freeze the suite
+            // green and quietly stop testing the tolerance below — the flake would look fixed while a
+            // regression to exact equality still passed. Seed 1 draws exactly one pair that fails
+            // exact equality and none that fail the stated tolerance, so the bound stays load-bearing.
+            // (Roughly 1 seed in 8 draws such a pair, which is the ~1-in-6 failure rate #87 reports.)
+            let seeded (seed: uint64) =
+                Config.QuickThrowOnFailure.WithReplay(Some { Rnd = Rnd seed; Size = None })
+
             // A rotation-0 OBB from ints (positive half-extents) + the aabbContact Rect it equals.
             let obbOf (a: int) (b: int) (c: int) (d: int) : ConvexPolygon * Rect =
                 let cx, cy = float (a % 50), float (b % 50)
@@ -602,12 +635,19 @@ let tests =
                     Geometry.polygonManifold x y = Geometry.polygonManifold x y
                 Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 
-            testCase "the whole manifold rides an exact common translation (FsCheck ≥500)" <| fun () ->
-                // The stronger form, on the pairs whose arithmetic is exact: translating both polygons by
-                // a common integer delta moves the contact points by that delta and changes nothing else —
-                // the feature id, the point count, the normal, and the depth all hold. Every input to the
-                // feature id (vertex order, the two argmax face scans) is translation-invariant by
-                // construction; here integer coordinates make it so in floating point too.
+            testCase "the manifold rides a common translation: ids/normal/depth exactly, points to a few ULP (FsCheck ≥500)" <| fun () ->
+                // Translating both polygons by a common integer delta changes NOTHING about the feature id,
+                // the point count, the normal or the depth — each of those is exact, and asserted as such.
+                // Every input to the feature id (vertex order, the two argmax face scans) is
+                // translation-invariant by construction, and integer coordinates keep it so in float.
+                //
+                // The contact POINTS are the one field that only holds to a few ULP, and this is a fact
+                // about the arithmetic rather than a slack assertion (#87). Sutherland–Hodgman face clipping
+                // does not SELECT an endpoint, it lerps to one: `t = d0 / (d0 - d1)`, then `q0 + (q1 - q0)*t`.
+                // `t` is a rounded quotient, and `q0 + (q1 - q0)*t` rounds differently at different
+                // magnitudes — which the translation changes. So exactness of the INPUTS buys nothing, and
+                // the clip is not translation-equivariant in IEEE-754 for integer coordinates either.
+                // A worked counterexample is pinned as the regression case below.
                 //
                 // Rotated pairs are deliberately excluded, and not because the id is unstable: under
                 // rotation the SAT scan's own axis choice is ULP-sensitive when two axes' penetrations
@@ -626,10 +666,41 @@ let tests =
                         && m.PointCount = m'.PointCount
                         && m.Normal = m'.Normal
                         && m.Depth = m'.Depth
-                        && (m.Points |> Array.map (fun q -> p (q.X + dx) (q.Y + dy))) = m'.Points
+                        && nearPoints (m.Points |> Array.map (fun q -> p (q.X + dx) (q.Y + dy))) m'.Points
                     | ValueNone, ValueNone -> true
                     | _ -> false
-                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+                Check.One((seeded 1UL).WithMaxTest 500, prop)
+
+            testCase "#87: the translated manifold keeps every exact claim, and its points to a few ULP" <| fun () ->
+                // The counterexample from #87, pinned as a deterministic regression case. The property above
+                // exercises this class of drift under its seed, but which pair it draws depends on both that
+                // seed and the generator; this case depends on neither.
+                //
+                // Here `polygonManifold` clips the box x in [3,5], y in [-50,-24] against x in [-2,14],
+                // y in [-35,-21], giving contacts at (5,-35) and (5,-24). Translated by (43,48), the second
+                // is exact and the first lands one ULP low — because (5,-24) is a VERTEX of the incident
+                // face, which the clip reproduces bit-for-bit, while (5,-35) is an INTERIOR CROSSING, where
+                // the clip lerps with a rounded `t`. That asymmetry is why snapping the clip to its
+                // endpoints (issue option 1) would not have rescued the old exact-equality assertion.
+                //
+                // The assertions state only what is true of ANY correct clip, so a future exactly
+                // translation-equivariant one (drift 0) still passes.
+                let x, _ = obbOf 56 (-28) 47 46
+                let y, _ = obbOf 54 (-37) (-20) (-12)
+                let dx, dy = 43.0, 48.0
+                let shift (poly: ConvexPolygon) =
+                    { Vertices = poly.Vertices |> Array.map (fun v -> p (v.X + dx) (v.Y + dy)) }
+                match Geometry.polygonManifold x y, Geometry.polygonManifold (shift x) (shift y) with
+                | ValueSome m, ValueSome m' ->
+                    Expect.equal m'.FeatureId m.FeatureId "feature id survives the translation exactly"
+                    Expect.equal m'.PointCount m.PointCount "point count survives the translation exactly"
+                    Expect.equal m'.Normal m.Normal "normal survives the translation exactly"
+                    Expect.equal m'.Depth m.Depth "depth survives the translation exactly"
+                    let expected = m.Points |> Array.map (fun q -> p (q.X + dx) (q.Y + dy))
+                    Expect.isTrue
+                        (nearPoints expected m'.Points)
+                        $"contact points agree to a few ULP: expected %A{expected}, got %A{m'.Points}"
+                | _ -> failtest "both manifolds should exist for this pair"
 
             // Every property above rides on OBBs, and an OBB cannot see the failure this one can: a box's
             // faces are axis-aligned and antiparallel in pairs, so the reference face is always exactly
