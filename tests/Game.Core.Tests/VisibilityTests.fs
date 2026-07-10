@@ -34,6 +34,86 @@ let private spanningBound: Rect =
       Width = 2.0 * spanningRadius
       Height = 2.0 * spanningRadius }
 
+// The yardstick for `raySegment`'s precision promise (`Visibility.fsi`, #64). Every finite double is a
+// dyadic rational, so the whole solve re-runs in `BigInteger` — scaled by `2^1074`, the smallest
+// subnormal, which clears every fraction — where nothing overflows and nothing cancels. The float solve
+// is then measured against that exact `t` rather than against itself, which is the only way to see an
+// error that is *finite and wrong* (a self-comparison sees only non-determinism).
+module private Oracle =
+    open System.Numerics
+
+    /// `d * 2^1074`, exact for any finite `d`.
+    let scaled (d: float) : BigInteger =
+        let bits = System.BitConverter.DoubleToInt64Bits d
+        let sign = if bits < 0L then BigInteger.MinusOne else BigInteger.One
+        let expBits = int ((bits >>> 52) &&& 0x7FFL)
+        let mantissa = bits &&& 0xFFFFFFFFFFFFFL
+
+        let struct (m, e) =
+            if expBits = 0 then
+                struct (mantissa, -1074) // subnormal: no implicit leading bit
+            else
+                struct (mantissa ||| 0x10000000000000L, expBits - 1075)
+
+        (sign * BigInteger(m)) <<< (e + 1074) // `e >= -1074`, so the shift is never negative
+
+    /// `|a| / |b|` as a double. Divides as `BigInteger` FIRST: these numerators run to hundreds of
+    /// digits, `float` of one is `+infinity`, and `infinity / infinity` is a `NaN` that compares
+    /// false against every tolerance — i.e. a differential that silently passes.
+    let private ratio (a: BigInteger) (b: BigInteger) : float =
+        if a.IsZero then
+            0.0
+        else
+            float ((BigInteger.Abs a <<< 64) / BigInteger.Abs b) / 1.8446744073709552e19 // 2^64
+
+    /// The exact numerator and denominator of `t`, formed from the ORIGINAL inputs — not from the
+    /// rounded `W` and `E` the float solve builds, which is precisely where its accuracy is lost.
+    /// `None` when the ray is parallel to the segment, the one case that has no `t`.
+    let tExact (o: Point) (dir: Point) (s: Visibility.Segment) : (BigInteger * BigInteger) option =
+        let wx, wy = scaled s.A.X - scaled o.X, scaled s.A.Y - scaled o.Y
+        let ex, ey = scaled s.B.X - scaled s.A.X, scaled s.B.Y - scaled s.A.Y
+        let den = scaled dir.X * ey - scaled dir.Y * ex
+        if den.IsZero then None else Some(wx * ey - wy * ex, den)
+
+    // `t*den - num`, scaled by `2^1074` so it stays an integer. Both `|t - exact|*|den|*2^1074`.
+    let private residual (t: float) (num: BigInteger) (den: BigInteger) =
+        BigInteger.Abs(scaled t * den - (num <<< 1074))
+
+    /// `|t - tExact| / |tExact|`. An exact `t` of zero admits only an exact `0.0` back.
+    let relErr (t: float) (num: BigInteger, den: BigInteger) =
+        let r = residual t num den
+
+        if num.IsZero then
+            (if r.IsZero then 0.0 else infinity)
+        else
+            ratio r (BigInteger.Abs num <<< 1074)
+
+    /// `|t - tExact|`, in units of `dir`.
+    let absErr (t: float) (num: BigInteger, den: BigInteger) =
+        ratio (residual t num den) (BigInteger.Abs den <<< 1074)
+
+/// A deterministic stream of `n` coordinate quadruples, linear-uniform in `[-s, s]` — a bounded world,
+/// not the log-uniform spread that manufactures the degenerate configurations `raySegment` disclaims.
+/// Uses `Rng` (byte-deterministic by its own contract) so this differential can never flake.
+let private worldSamples (s: float) (n: int) =
+    let coord rng =
+        let struct (f, rng') = Rng.nextFloat rng
+        struct ((f * 2.0 - 1.0) * s, rng')
+
+    let mutable rng = Rng.ofSeed 20260710UL
+
+    [ for _ in 1..n do
+          let struct (ox, r1) = coord rng
+          let struct (oy, r2) = coord r1
+          let struct (ax, r3) = coord r2
+          let struct (ay, r4) = coord r3
+          let struct (bx, r5) = coord r4
+          let struct (by, r6) = coord r5
+          let struct (dx, r7) = coord r6
+          let struct (dy, r8) = coord r7
+          rng <- r8
+          yield pt ox oy, pt dx dy, seg (pt ax ay) (pt bx by) ]
+
 [<Tests>]
 let tests =
     testList "Game.Core Visibility (continuous-space sight)" [
@@ -267,6 +347,116 @@ let tests =
 
             let ring () = Visibility.polygon (settings System.Double.MaxValue) origin walls
             Expect.equal (ring ()) (ring ()) "byte-identical ring across calls, on the overflow path"
+
+        // ---- the precision promise, against an exact oracle (#64) ---------------------------------
+        //
+        // #59/#62 made the solve overflow-free; neither made it *accurate*, and the two failures look
+        // nothing alike. An overflowed `t` is non-finite, so a guard can see it. A cancelled `t` is an
+        // ordinary double that is simply wrong — `raySegment` reports a hit at `t = 0` for a crossing
+        // that is elsewhere — and no self-consistency check can see that. Only an exact oracle can.
+        //
+        // The cause is not the cross products: it is that `W = seg.A - origin` is *rounded before they
+        // are formed*, so when `origin` and `seg.A` differ by enough orders of magnitude the smaller
+        // operand is discarded outright. Anchoring at the nearer endpoint (the rescaled fallback) cannot
+        // recover a bit the subtraction already dropped — measured, it repairs fewer than half of these.
+        // Hence the `.fsi` scopes its precision claim to a bounded world rather than promising past it.
+        // These two tests are that scope, made executable.
+
+        testCase "raySegment's t is accurate to 1e-12 over a bounded world" <| fun () ->
+            let mutable checked' = 0
+            let mutable worst = 0.0
+
+            for origin, dir, s in worldSamples 1.0e6 20_000 do
+                match Visibility.raySegment origin dir s with
+                | None -> ()
+                | Some(_, t) ->
+                    match Oracle.tExact origin dir s with
+                    | None -> ()
+                    | Some exact ->
+                        checked' <- checked' + 1
+                        worst <- max worst (Oracle.relErr t exact)
+
+            // Guards the guard: a sampler that stopped producing hits would pass a `worst = 0` assertion
+            // vacuously. ~1 in 6 random quadruples is a hit, so this floor is far below the true rate.
+            Expect.isGreaterThan checked' 1_000 "the sampler must actually produce hits to measure"
+
+            Expect.isLessThan
+                worst
+                1.0e-12
+                $"relative error of t against the exact BigInteger solve, over {checked'} hits"
+
+        // The adversarial case this module generates on *every* sweep ray: `dir` aimed at a wall endpoint,
+        // hence near-collinear with the wall, which is exactly when `W × E` cancels. Here `t`'s relative
+        // error does cross 1e-12 (a handful per 100k) — so the promise is stated where it is meaningful,
+        // on the hit point, in units of the segment it landed on.
+        testCase "a sweep ray aimed at a wall endpoint lands within 1e-9 of a segment length" <| fun () ->
+            let mutable checked' = 0
+            let mutable worst = 0.0
+
+            for origin, _, s in worldSamples 1.0e4 20_000 do
+                // aim at `seg.A`, with a sub-ulp angular jitter so the ray never exactly hits the vertex
+                let jitter = 1.0e-13 * 1.0e4
+                let dir = pt (s.A.X - origin.X + jitter) (s.A.Y - origin.Y)
+                let segLen = sqrt (sqLenPt (pt (s.B.X - s.A.X) (s.B.Y - s.A.Y)))
+
+                match Visibility.raySegment origin dir s with
+                | None -> ()
+                | Some(_, t) when segLen > 0.0 ->
+                    match Oracle.tExact origin dir s with
+                    | None -> ()
+                    | Some exact ->
+                        checked' <- checked' + 1
+                        // |Δt| is in units of `dir`; scale to world units, then to segment lengths.
+                        let positional = Oracle.absErr t exact * sqrt (sqLenPt dir)
+                        worst <- max worst (positional / segLen)
+                | Some _ -> ()
+
+            Expect.isGreaterThan checked' 1_000 "the sampler must actually produce hits to measure"
+
+            Expect.isLessThan
+                worst
+                1.0e-9
+                $"hit-point error in segment lengths, over {checked'} near-collinear sweep rays"
+
+        // Guards the guard. An oracle that returns `NaN` — `float` of a several-hundred-digit numerator is
+        // `+infinity`, and `infinity / infinity` is `NaN` — makes every `isLessThan` above pass on inputs it
+        // never actually compared. So pin the oracle against a hit whose exact `t` is an integer: it must
+        // report zero error for the true `t`, and a known relative error for a deliberately perturbed one.
+        testCase "the exact oracle reports zero error on an exact t, and sees a perturbation" <| fun () ->
+            let origin = pt 0.0 0.0
+            let dir = pt 1.0 0.0
+            let wall = seg (pt 2.0 -1.0) (pt 2.0 1.0) // crossed at (2, 0), so t = 2 exactly
+
+            let _, t = Expect.wantSome (Visibility.raySegment origin dir wall) "the ray crosses the wall"
+            Expect.equal t 2.0 "the float solve is exact here, so the oracle has a fixed point to hit"
+
+            let exact = Expect.wantSome (Oracle.tExact origin dir wall) "not parallel"
+            Expect.equal (Oracle.relErr t exact) 0.0 "zero relative error against an exactly-representable t"
+            Expect.equal (Oracle.absErr t exact) 0.0 "zero absolute error against an exactly-representable t"
+
+            // A 1e-6 relative perturbation must read back as a 1e-6 relative error, not as 0 and not as NaN.
+            let seen = Oracle.relErr (2.0 * (1.0 + 1.0e-6)) exact
+            Expect.floatClose Accuracy.high seen 1.0e-6 "the oracle measures a known perturbation"
+
+        // The `.fsi`'s disclaimer, made executable: OUTSIDE the promised regime `t` is wrong, not merely
+        // imprecise. Verbatim from #64 — `origin` at ~1e-9 against a segment endpoint at ~1e199, so forming
+        // `W = seg.A - origin` discards `origin` entirely and the numerator then cancels to nothing.
+        // `raySegment` reports a hit at `t = 0` (the origin itself) for a crossing at `t ≈ 3.07e8`, with
+        // `denom`, `t` and `u` all finite — so no guard inside the solve can see it.
+        //
+        // This test pins the LIMITATION, not a desired behaviour. An implementation that computes `t`
+        // exactly here is strictly better: delete this case, and the `.fsi` caveat with it.
+        testCase "outside the promised regime raySegment is wrong, and the oracle says so" <| fun () ->
+            let origin = pt 4.020794469e-09 0.4511871065
+            let dir = pt 0.05228096296 -23.41834131
+            let wall = seg (pt -3.292173079e+199 -9.753634222e+99) (pt 5.213872332e-09 -0.6581832746)
+
+            let hit, t = Expect.wantSome (Visibility.raySegment origin dir wall) "a hit is still reported"
+            Expect.equal t 0.0 "the cancelled numerator collapses t to zero"
+            Expect.equal hit origin "so the reported hit is the origin, not the true crossing"
+
+            let exact = Expect.wantSome (Oracle.tExact origin dir wall) "not parallel"
+            Expect.isGreaterThan (Oracle.relErr t exact) 0.5 "the oracle sees the error the solve cannot"
 
         // Acceptance criterion: "for any finite input where the true intersection is representable,
         // raySegment returns it rather than None." Metamorphic, because a closed form for the true hit is

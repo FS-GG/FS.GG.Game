@@ -62,11 +62,27 @@ module Visibility =
     /// from the hit) still degrades to `None` rather than to a non-finite value — a missing hit degrades
     /// one ring, where a NaN one poisons every consumer downstream of it.
     ///
-    /// This is a guarantee about **overflow**, not about precision. `t` is a ratio of cross products, and
-    /// a cross product of near-parallel operands cancels: where `origin` is nearly collinear with the
-    /// segment, or the coordinates span many orders of magnitude, the ordinary path can return a `t` whose
-    /// relative error far exceeds an ulp. That error is inherent to the parametrisation and is not what
-    /// the rescaled fallback addresses.
+    /// This is a guarantee about **overflow**, not about precision, and the two have different triggers.
+    /// `t = (W × E) / (dir × E)` with `W = seg.A - origin` and `E = seg.B - seg.A`. What degrades the
+    /// ordinary path is the **dynamic range between `origin` and the segment endpoints**, not the absolute
+    /// magnitude of either: forming `W` rounds `seg.A.X - origin.X` to a double, so once the two differ by
+    /// enough orders of magnitude the smaller operand is discarded *before* any cross product exists, and
+    /// the numerator then cancels away the bits that survived. Anchoring cannot recover what the
+    /// subtraction already dropped, which is why the rescaled fallback above — which fixes overflow — is
+    /// not a precision fix and is not claimed as one.
+    ///
+    /// The regime is nearer than "astronomically far apart" suggests. Sampling coordinates log-uniformly
+    /// across ~14 orders of magnitude (`1e-8` … `1e6`) already makes ~2% of returned hits carry a relative
+    /// error above `1e-12`, measured against an exact `BigInteger` oracle (every finite double is a dyadic
+    /// rational, so the whole solve re-runs exactly).
+    ///
+    /// **What is promised.** Over coordinates drawn *linearly* from a bounded world — `|coord| <= 1e6`,
+    /// which is what world geometry produces — the relative error of `t` stays below `1e-12`. Under the
+    /// adversarial case this module itself generates on every sweep ray (`dir` aimed at a wall endpoint,
+    /// so `dir` is near-collinear with the wall) the hit point lands within `1e-9` of a segment length of
+    /// the true crossing. `VisibilityTests` pins both against the exact oracle. Outside that regime — a
+    /// caller synthesising coordinates that span many orders of magnitude — `t` is returned on a
+    /// best-effort basis and its low bits are not meaningful.
     val raySegment: origin: Point -> dir: Point -> seg: Segment -> (Point * float) option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
