@@ -103,6 +103,22 @@ module Geometry =
     val polygonContact: a: ConvexPolygon -> b: ConvexPolygon -> Contact option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Segment-cast against a convex polygon by half-plane clipping (the slab method with one half-plane
+    /// per edge instead of one per axis). Returns `Some hit` at the first crossing INTO the polygon from
+    /// outside with parameter `T ∈ [0,1]`, and `None` on a miss, a segment starting inside, or a polygon
+    /// behind the segment. `Point = p0 + (p1 − p0)·T` lies on the polygon boundary and `Normal` is the
+    /// outward unit normal of the ENTERED edge — the value that identifies which face was struck.
+    /// Strict edges, matching `aabbContact`/`polygonContact`: a graze that merely touches the boundary
+    /// without traversing the interior (necessarily at a vertex) is NOT a hit. This is the sole
+    /// divergence from `segmentAabbHit`, which reports a clipped corner as a hit; otherwise, for a
+    /// `rotation = 0` `obbPolygon`, `segmentPolygonHit` agrees with `segmentAabbHit` on `T` and `Point`.
+    /// A corner ENTRY (several edges sharing the maximal entry parameter) resolves to the FIRST such edge
+    /// in vertex order — deterministic, and distinct from `segmentAabbHit`'s X-face tie-break, exactly as
+    /// `polygonContact`'s tie normal is distinct from `aabbContact`'s. Pure and total: fewer than 3
+    /// vertices, a zero-area polygon, a zero-length segment, or any NaN coordinate yields `None`.
+    val segmentPolygonHit: p0: Point -> p1: Point -> poly: ConvexPolygon -> RayHit option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// True when the swept path of `moving` displaced by `velocity` overlaps `target` anywhere along
     /// the sweep — detects a fast projectile that would tunnel through a thin `target` within one
     /// step. A superset of `intersects` at both sweep endpoints.

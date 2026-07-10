@@ -264,6 +264,76 @@ module Geometry =
                 | None -> None
                 | Some(depth, normal) -> Some { Normal = normal; Depth = depth }
 
+    // Segment-vs-convex-polygon cast: the slab method generalised from two axis slabs to one half-plane
+    // per edge. For a CCW ring the edge v[i]→v[i+1] has outward unit normal (ey, -ex)/|e| — the same
+    // normal polygonContact projects on — and a point x is inside iff (x - v[i])·n <= 0. Along the
+    // segment, f_i(t) = dist_i + t·denom_i with dist_i = (p0 - v[i])·n and denom_i = (p1 - p0)·n: a
+    // negative denom crosses INTO the half-plane (an entry at t = -dist/denom; keep the max), a positive
+    // one leaves it (keep the min), and a zero one is parallel — separating outright when p0 lies outside
+    // (dist > 0). The greatest entry parameter is the crossing into the polygon and the edge that
+    // produced it is the ENTERED edge, whose outward normal is the armour zone the caller reads.
+    //
+    // Strict edges, as in aabbContact/polygonContact: a hit needs tEnter < tExit, so a graze that only
+    // touches the boundary (tEnter = tExit, necessarily at a vertex) is not a hit. This is the one place
+    // segmentPolygonHit is stricter than segmentAabbHit, whose `<=` reports a clipped corner as a hit.
+    // An origin inside gives every entry a negative parameter (tEnter < 0 ⇒ None, DEC-002), as does a
+    // polygon behind the segment. A corner ENTRY — several edges sharing the maximal entry parameter —
+    // keeps the FIRST in vertex order (the strict `>` update), as polygonContact keeps the first axis in
+    // generation order (DEC-003); segmentAabbHit's corner tie-break is the X face, so the two agree on
+    // T and Point there but not on Normal, exactly as their contact counterparts agree on isSome but not
+    // on the tie normal. Zero-length edges contribute no half-plane and are skipped.
+    //
+    // Totality: fewer than 3 vertices, a zero-area ring, or any non-finite coordinate on the segment or
+    // the ring yields None (an explicit guard, as in polygonContact, rather than relying on the
+    // comparisons' NaN-poisoning). A zero-length segment yields None wherever it sits.
+    let segmentPolygonHit (p0: Point) (p1: Point) (poly: ConvexPolygon) : RayHit option =
+        let v = poly.Vertices
+        let isFinite (x: float) = not (System.Double.IsNaN x) && not (System.Double.IsInfinity x)
+        // Shoelace area magnitude; zero for a collinear/degenerate ring.
+        let area (v: Point[]) =
+            let mutable acc = 0.0
+            for i in 0 .. v.Length - 1 do
+                let p = v.[i]
+                let q = v.[(i + 1) % v.Length]
+                acc <- acc + (p.X * q.Y - q.X * p.Y)
+            abs acc / 2.0
+        if v.Length < 3 then None
+        elif not (isFinite p0.X && isFinite p0.Y && isFinite p1.X && isFinite p1.Y) then None
+        elif not (v |> Array.forall (fun q -> isFinite q.X && isFinite q.Y)) then None
+        elif area v <= 0.0 then None
+        else
+            let dx, dy = p1.X - p0.X, p1.Y - p0.Y
+            let mutable tEnter = System.Double.NegativeInfinity
+            let mutable tExit = System.Double.PositiveInfinity
+            let mutable normal = { X = 0.0; Y = 0.0 }
+            let mutable separated = false
+            for i in 0 .. v.Length - 1 do
+                if not separated then
+                    let a = v.[i]
+                    let b = v.[(i + 1) % v.Length]
+                    let ex, ey = b.X - a.X, b.Y - a.Y
+                    let len = sqrt (ex * ex + ey * ey)
+                    if len > 0.0 then
+                        let n: Point = { X = ey / len; Y = -ex / len }
+                        let dist = (p0.X - a.X) * n.X + (p0.Y - a.Y) * n.Y
+                        let denom = dx * n.X + dy * n.Y
+                        if denom = 0.0 then
+                            // Parallel to this edge: outside its half-plane ⇒ no crossing exists at all.
+                            if dist > 0.0 then separated <- true
+                        else
+                            let t = -dist / denom
+                            if denom < 0.0 then
+                                // Entering. `>` (not `>=`) keeps the first edge in vertex order on a tie.
+                                if t > tEnter then
+                                    tEnter <- t
+                                    normal <- n
+                            elif t < tExit then
+                                tExit <- t
+            if separated || not (tEnter < tExit) || tEnter < 0.0 || tEnter > 1.0 then
+                None
+            else
+                Some { T = tEnter; Point = { X = p0.X + dx * tEnter; Y = p0.Y + dy * tEnter }; Normal = normal }
+
     // Swept AABB via Minkowski expansion: grow `target` by `moving`'s extents so `moving` collapses to
     // its min-corner point, then clip the motion segment (point → point+velocity) against the expanded
     // box with the Liang–Barsky slab method. A start/end that overlaps `target` puts the corresponding
