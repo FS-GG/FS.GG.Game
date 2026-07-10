@@ -21,6 +21,7 @@
     <Compile Include="SpatialGridTests.fs" />
     <Compile Include="ResolutionTests.fs" />
     <Compile Include="VisibilityTests.fs" />
+    <Compile Include="BallisticsTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
