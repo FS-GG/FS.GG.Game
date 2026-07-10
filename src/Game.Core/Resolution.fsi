@@ -81,10 +81,9 @@ module Resolution =
     /// terminates for every `distance`. Operationally `Entered` accumulates one `Cell` per entered cell,
     /// so `push start step System.Int32.MaxValue (fun _ -> Enter)` exhausts memory rather than merely
     /// running long. `distance` is caller-controlled and is 1–3 in every game in the corpus, so this
-    /// module does not clamp it: a maximum push distance is a game-defining parameter, exactly as
-    /// `Effects.floorAt`'s minimum is, and a module constant would be the wrong place to decide it.
-    /// Callers that derive `distance` from content (a knockback stat, a designer's field) should bound
-    /// it where that content is authored.
+    /// module does not clamp it: a maximum push distance is a game-defining parameter, and a module
+    /// constant would be the wrong place to decide it. Callers that derive `distance` from content (a
+    /// knockback stat, a designer's field) should bound it where that content is authored.
     val push: start: Cell -> step: Cell -> distance: int -> classify: (Cell -> CellStep) -> Push
 
     /// Public contract function exposed by the FS.GG.Game.Core package.

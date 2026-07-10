@@ -64,6 +64,9 @@ let private towerDefense = [ vuln; frostResist; armorOf; Effects.floorAt 1.0 ]
 
 let private final (t: DamageTrace) = t.Final
 
+/// The trace of the single target an `applyAll` was given.
+let private traceOf (dealt: (Unit * DamageTrace) list) = dealt |> List.head |> snd
+
 let private active e ticks : Effects.Active<int> = { Effect = e; TicksRemaining = ticks }
 
 // `Strongest` orients magnitude so that larger is stronger; the effect payload here IS its magnitude.
@@ -291,26 +294,35 @@ let tests =
             // The transport multiplier is the one input `Steps` cannot record, because it is a seed and
             // not a stage. Without `Seed`, a designer asking "why did this target take 9?" cannot tell a
             // ×0.5 falloff from a 15-point base — and the audit is the feature.
-            test "Seed records the transport multiplier that Steps cannot" {
+            test "Seed records the seeded amount, which Steps cannot" {
                 let brute = { baseUnit with Armor = 6.0 }
-                let dealt = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ]
-                let trace = dealt |> List.head |> snd
+                let trace = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ] |> traceOf
 
                 Expect.equal trace.Seed 15.0 "30 × 0.5 — the amount the first stage was handed"
                 Expect.equal trace.Steps [ "subtract", 9.0 ] "and it is still not a Step"
                 Expect.equal trace.Final 9.0 "15 − 6"
             }
 
-            test "Seed distinguishes a halved blast from a half-strength one — same Final, same Steps" {
+            // What `Seed` buys is the split between transport and mitigation: 9 out of a 30-damage blast
+            // no longer reads as "armor ate 21". What it does NOT buy is provenance — after seeding, a
+            // ×0.5 blast of 30 and a ×1.0 blast of 15 *are* the same hit, and the trace says so. The
+            // multiplier is recoverable only against the `Damage` the caller built: `Seed / damage.Base`.
+            test "Seed splits transport from mitigation: 9 of 30 is not 'armor ate 21'" {
                 let brute = { baseUnit with Armor = 6.0 }
-                let halvedBlast = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ]
-                let weakBlast = Effects.applyAll [ armor ] (hit Physical Source.Declared 15.0) [ brute, 1.0 ]
+                let trace = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ] |> traceOf
 
-                let traceOf d = d |> List.head |> snd
+                Expect.equal trace.Seed 15.0 "transport took 30 → 15"
+                Expect.equal trace.Final 9.0 "and armor took 15 → 9"
+                Expect.equal (trace.Seed / 30.0) 0.5 "the multiplier, recovered against damage.Base"
+            }
 
-                Expect.equal (traceOf halvedBlast).Final (traceOf weakBlast).Final "both deal 9"
-                Expect.equal (traceOf halvedBlast).Steps (traceOf weakBlast).Steps "and trace identically through the stages"
-                Expect.equal (traceOf halvedBlast).Seed (traceOf weakBlast).Seed "…and seed identically too: Seed audits the amount, not its provenance"
+            test "Seed is an amount, not a provenance — a ×0.5 blast of 30 and a ×1.0 blast of 15 trace alike" {
+                let brute = { baseUnit with Armor = 6.0 }
+                let halvedBlast = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ brute, 0.5 ] |> traceOf
+                let weakBlast = Effects.applyAll [ armor ] (hit Physical Source.Declared 15.0) [ brute, 1.0 ] |> traceOf
+
+                Expect.equal halvedBlast weakBlast "identical in every field — after seeding they are the same hit"
+                Expect.equal halvedBlast.Seed 15.0 "so Seed alone cannot tell them apart, and the .fsi says so"
             }
 
             test "under pipeline, Seed is damage.Base" {
@@ -331,10 +343,10 @@ let tests =
 
             test "a non-finite seed degrades to 0.0 rather than reporting NaN" {
                 let byBase = Effects.pipeline [ armor ] baseUnit (hit Physical Source.Declared nan)
-                let byMultiplier = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ baseUnit, infinity ]
+                let byMultiplier = Effects.applyAll [ armor ] (hit Physical Source.Declared 30.0) [ baseUnit, infinity ] |> traceOf
 
                 Expect.equal byBase.Seed 0.0 "a NaN Base seeds 0.0, and Seed says so"
-                Expect.equal ((byMultiplier |> List.head |> snd).Seed) 0.0 "an infinite multiplier seeds 0.0 too"
+                Expect.equal byMultiplier.Seed 0.0 "an infinite multiplier seeds 0.0 too"
             }
         ]
 
@@ -690,7 +702,7 @@ let tests =
                 Expect.equal trace.Halted ValueNone "it is a multiply, not an immunity"
             }
 
-            testCase "no pipeline over unclamped arbitrary floats ever yields a non-finite Final (FsCheck >=500)"
+            testCase "no pipeline or applyAll over unclamped arbitrary floats yields a non-finite Seed, Final, or Step (FsCheck >=500)"
             <| fun () ->
                 let prop (a: float) (r: float) (s: float) (f: float) (b: float) (m: float) =
                     let u = { baseUnit with Vulnerable = a; FrostResist = r; Armor = s }

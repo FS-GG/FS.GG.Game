@@ -72,8 +72,14 @@ type Stage<'T, 'K> =
 /// `damage.Base * multiplier` under `applyAll`. It is **not** a `Step` — the transport multiplier is a
 /// seed precisely so that it cannot be reordered after `subtract` — but without it the audit omits the
 /// one input every stage is measured against. A 30-damage blast that deals 9 to a rim target traces as
-/// `Steps = [ "subtract", 9.0 ]`, and `Seed = 15.0` is what distinguishes a ×0.5 falloff from a
-/// 15-point base. Non-finite seeds degrade to `0.0`, as every other amount here does.
+/// `Steps = [ "subtract", 9.0 ]`, and nothing says whether mitigation ate 21 or transport did.
+/// `Seed = 15.0` settles it: transport took 15, armor took 6.
+///
+/// `Seed` is an **amount, not a provenance**. A ×0.5 blast of 30 and a ×1.0 blast of 15 both seed at
+/// `15.0` and trace identically, because after seeding they *are* the same hit. Recovering the
+/// multiplier needs the hit it came from — it is `Seed / damage.Base`, and `damage` is the caller's.
+///
+/// Non-finite seeds degrade to `0.0`, as every other amount here does.
 type DamageTrace =
     { Seed: float
       Final: float
@@ -129,8 +135,9 @@ module Effects =
     /// Each target's pipeline is **seeded** at `damage.Base * multiplier`. The multiplier is the
     /// initial amount, not a `Stage` in the list, and the difference matters: a stage could be
     /// reordered after `subtract`, at which point falloff would start protecting the attacker from the
-    /// target's armor. A seed cannot be reordered. It is reported as `DamageTrace.Seed`, so the audit
-    /// records the transport the `Steps` list cannot.
+    /// target's armor. A seed cannot be reordered. The seeded amount is reported as `DamageTrace.Seed`,
+    /// so the audit records where mitigation started even though transport is not a `Step`; the
+    /// multiplier itself is `Seed / damage.Base`.
     ///
     /// Results are returned in the order `targets` was given. A non-finite multiplier seeds `0.0`.
     /// No stage can observe another target, so the result multiset is independent of that order.
