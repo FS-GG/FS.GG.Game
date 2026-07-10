@@ -74,18 +74,27 @@ module Ballistics =
             let vx = targetVelocity.X
             let vy = targetVelocity.Y
 
-            let a = vx * vx + vy * vy - speed * speed
+            let vSq = vx * vx + vy * vy
+            let a = vSq - speed * speed
             let b = 2.0 * (dx * vx + dy * vy)
             let c = dx * dx + dy * dy
 
             // Scaled tolerances: an absolute epsilon would be meaningless at speed ~1e3 (a ~ 1e6).
-            // Each is scaled by the magnitude of the term it guards -- `a` is a squared SPEED, and
-            // `b` is 2*|d|*|v|, a length times a speed. Scaling `b` by `c` (a squared LENGTH) would
+            // Each is scaled by the magnitude of the term it guards. `a = |v|^2 - speed^2` is a
+            // DIFFERENCE of two squared speeds, so its natural scale is the larger operand,
+            // `max |v|^2 speed^2` -- NOT `speed^2` alone, and NOT a `max 1.0` floor. Flooring the
+            // scale above `|v|^2` degrades the zero-test to an ABSOLUTE `|a| <= 1e-9` whenever the
+            // target outpaces a sub-unit round: a perfectly ordinary `a ~= |v|^2` (e.g. 2.4e-11) is
+            // then declared zero, the LINEAR branch solves the wrong equation, and an interception
+            // is invented for a target that outruns the round (#97) -- the quadratic branch would
+            // have found `disc < 0` and returned ValueNone. `speed > 0.0` is already established, so
+            // `max |v|^2 speed^2 > 0` and no floor is needed to keep the scale strictly positive.
+            // `b = 2*|d|*|v|` is a length times a speed. Scaling `b` by `c` (a squared LENGTH) would
             // be dimensionally wrong and, at long range, would swallow a real closing rate: a target
             // 1e6 away closing at 2e-4 gives |b| = 200 against a `c`-derived tolerance of 1e3, and
             // the interception would be reported as impossible. Pure arithmetic on the inputs, so
             // the branch taken is itself deterministic.
-            let aIsZero = abs a <= 1e-9 * max 1.0 (speed * speed)
+            let aIsZero = abs a <= 1e-9 * max vSq (speed * speed)
             let bIsZero = abs b <= 1e-9 * max 1.0 (sqrt c * speed)
 
             let t =
