@@ -84,7 +84,7 @@
     {
       "id": "fs-gg-physics",
       "scope": "product",
-      "sha256": "5588fb9fe0a39231a87f0b6dbe1d6f5d821bc3308d231198ea9723bbdca7d44f",
+      "sha256": "0cf5520802d4493821230c076954d0bbdde1cdd7b27c4eb48e3a0160fa2003b5",
       "resolvablePath": ".agents/skills/fs-gg-physics/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-physics/"

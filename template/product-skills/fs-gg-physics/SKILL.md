@@ -85,43 +85,51 @@ which of those your product is, you want arcade.
 
 ## Public Contract
 
-> **Availability.** `Physics` is the opt-in heavy layer of `FS.GG.Game.Core`, landing across the
-> `fs-gg-physics` slices. Everything the doctrine above rests on ships today: `Loop`, `FixedStep`,
-> `Geometry` (including `polygonManifold`), `SpatialGrid`, `Resolution`, and the `Manifold` /
-> `ConvexPolygon` primitives. The `World`, `Config` and `Transform` types below arrive with `Physics`
-> itself. Check the package surface before you write against it — the doctrine and the arcade guidance
-> apply either way.
+> **Availability.** `Physics` is the opt-in heavy layer of `FS.GG.Game.Core`, and it lands a slice at a
+> time. Shipping today: every type below, plus `empty`, `addBody` and `pairs` — and everything the
+> doctrine itself rests on (`Loop`, `FixedStep`, `Geometry` including `polygonManifold`, `SpatialGrid`,
+> `Resolution`, and the `Manifold` / `ConvexPolygon` primitives). Still landing: `step`, `manifold`,
+> `interpolate`, `checksum`, and the `Transform` type. Check the package surface before you write against
+> those — the doctrine and the arcade guidance apply either way.
+
+`Physics` is `[<RequireQualifiedAccess>]`, and its types live **inside** the module: `Physics.Config`,
+`Physics.Static`, `Physics.SBox`.
 
 ```fsharp
 open FS.GG.Game.Core
 
-type BodyKind = Static | Kinematic | Dynamic
-type Shape    = SCircle of radius: float | SBox of halfExtents: Point | SPoly of ConvexPolygon
-type Material = { Restitution: float; Friction: float }
-
-type Config =
-    { Gravity: Point
-      VelocityIterations: int          // fixed. 8 is the usual answer.
-      PositionIterations: int          // fixed. 3.
-      Slop: float                      // allowed penetration before correction (~0.01)
-      Correction: float                // Baumgarte percent (~0.2)
-      BounceThreshold: float           // |v·n| below this ⇒ e = 0
-      SleepLinearSq: float; SleepAngular: float; SleepTicks: int
-      BroadPhaseCellSize: float }
-
-type World  // opaque: struct-of-arrays plus a solver cache. Built and read through the module.
-
 [<RequireQualifiedAccess>]
 module Physics =
-    val empty       : Config -> World
-    val addBody     : BodyKind -> Shape -> Material -> Point -> World -> struct (int * World)
+    type BodyKind = Static | Kinematic | Dynamic
+    type Shape    = SCircle of radius: float | SBox of halfExtents: Point | SPoly of polygon: ConvexPolygon
+    type Material = { Restitution: float; Friction: float }
+
+    type Config =
+        { Gravity: Point
+          VelocityIterations: int      // fixed. 8 is the usual answer.
+          PositionIterations: int      // fixed. 3.
+          Slop: float                  // allowed penetration before correction (~0.01)
+          Correction: float            // Baumgarte percent (~0.2)
+          BounceThreshold: float       // |v·n| below this ⇒ e = 0
+          SleepLinearSq: float
+          SleepAngular: float
+          SleepTicks: int
+          BroadPhaseCellSize: float }
+
+    /// Opaque: struct-of-arrays plus a solver cache. Built and read through the module.
+    type World
+
+    val empty   : config: Config -> World
+    val addBody : kind: BodyKind -> shape: Shape -> material: Material -> position: Point -> world: World -> struct (int * World)
+
+    /// Sorted, deduped candidate pairs over the `SpatialGrid` broad phase. `(a, b)` with `a < b`.
+    val pairs   : world: World -> struct (int * int)[]
+
+    // ─── still landing ───────────────────────────────────────────────────────
 
     /// THE integrate function. Fits `Loop.advance` verbatim. Pure, total, byte-deterministic.
     /// Reads `dt` and the world; never a clock, never `alpha`.
     val step        : World -> dt: float -> World
-
-    /// Sorted, deduped candidate pairs over the `SpatialGrid` broad phase. `(a, b)` with `a < b`.
-    val pairs       : World -> struct (int * int)[]
 
     /// Narrow phase for a body pair, over `Geometry.polygonManifold`. Not a second implementation.
     val manifold    : World -> a: int -> b: int -> Manifold voption
