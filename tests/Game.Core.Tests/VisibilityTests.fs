@@ -19,6 +19,8 @@ let private clamp (v: float) =
 let private isFinitePt (p: Point) =
     System.Double.IsFinite p.X && System.Double.IsFinite p.Y
 
+let private sqLenPt (p: Point) = p.X * p.X + p.Y * p.Y
+
 // The spanning-chord fixture, verbatim from the issue: one wall from (-1000, 0) to (1000, 0), a source
 // at (0, -10), radius 50. The wall crosses the sight bound clean through with BOTH endpoints far
 // outside it — the case an endpoint-bucketed broad phase drops.
@@ -188,6 +190,131 @@ let tests =
             Expect.isTrue
                 (poly.Vertices |> List.forall isFinitePt)
                 "every vertex of the #53 counterexample is finite"
+
+        // --- recovering the representable hit the overflow guard discarded (#59) --------------------
+
+        // The accuracy half of #53/#56. Same geometry as the guard regression above, but now asserting the
+        // *answer* rather than merely its finiteness: the crossing is `(0, 0)` at `t = 3.937.../0.937... =
+        // 4.201...`, ordinary doubles both, and the solve must reach it instead of saturating to `None`.
+        // Pinned against the exact quotient, not a rounded literal, because that quotient IS the true `t`.
+        testCase "raySegment recovers the representable hit when the numerator overflows" <| fun () ->
+            let origin = pt -3.937126736 0.0
+            let dir = pt 0.937126736 0.0
+            let far = seg (pt 0.0 System.Double.MaxValue) (pt 0.0 0.0)
+
+            let p, t = Expect.wantSome (Visibility.raySegment origin dir far) "the crossing is representable"
+            Expect.equal t (3.937126736 / 0.937126736) "the true parametric distance, to the last bit"
+            Expect.floatClose Accuracy.high p.X 0.0 "hit lies on the wall at x = 0"
+            Expect.equal p.Y 0.0 "the ray runs along y = 0"
+
+        // The far endpoint's magnitude is not part of the answer: the crossing is pinned by the near endpoint
+        // and the ray. Each scale is checked against the TRUE `t`, never against another scale's output —
+        // the direct and rescaled solves round independently, so cross-path byte-equality is not an invariant
+        // (see the property below), and pinning one path to the other's ulps would red on an innocent change.
+        testCase "raySegment: the far endpoint's magnitude does not move the hit" <| fun () ->
+            let origin = pt -3.937126736 0.0
+            let dir = pt 0.937126736 0.0
+            let trueT = 3.937126736 / 0.937126736
+
+            for farY in [ 1.0e6; 1.0e150; 1.0e300; System.Double.MaxValue ] do
+                let hit = Visibility.raySegment origin dir (seg (pt 0.0 farY) (pt 0.0 0.0))
+                let p, t = Expect.wantSome hit $"a wall ending at {farY} still occludes"
+                Expect.floatClose Accuracy.veryHigh t trueT $"parametric distance, far endpoint at {farY}"
+                Expect.floatClose Accuracy.high p.X 0.0 $"hit lies on the wall, far endpoint at {farY}"
+
+        // The denominator saturates instead of the numerator, and this one the #56 guard cannot see: with
+        // `dir × E` = 2 * MaxValue = infinity, `t` and `u` come back as `finite / infinity` = 0.0 — ordinary
+        // numbers that pass every finiteness check. `raySegment` reported a hit AT the origin, `t = 0`, for a
+        // crossing 5e-301 away. A silently wrong answer, where the numerator case at least announced itself
+        // as a NaN. The rescaled solve returns the true `(0, 0)`.
+        testCase "raySegment does not report a spurious t = 0 hit when the denominator overflows" <| fun () ->
+            let origin = pt -1.0e-300 0.0
+            let dir = pt 2.0 0.0 // 2 * MaxValue overflows; 1 * MaxValue would not
+            let wall = seg (pt 0.0 0.0) (pt 0.0 System.Double.MaxValue)
+
+            let p, t = Expect.wantSome (Visibility.raySegment origin dir wall) "the crossing is representable"
+            Expect.equal t (1.0e-300 / 2.0) "the true parametric distance, not the 0.0 that infinity produced"
+            Expect.equal p.X 0.0 "the hit is on the wall, not back at the origin"
+
+        // Both endpoints extreme and opposite-signed, so `E` itself overflows on subtraction
+        // (`MaxValue - (-MaxValue)` = infinity) before any cross product is formed. Previously `None`.
+        testCase "raySegment solves a wall spanning -MaxValue to +MaxValue" <| fun () ->
+            let origin = pt -3.937126736 0.0
+            let dir = pt 0.937126736 0.0
+            let wall = seg (pt 0.0 -System.Double.MaxValue) (pt 0.0 System.Double.MaxValue)
+
+            let _, t = Expect.wantSome (Visibility.raySegment origin dir wall) "an unbounded wall still occludes"
+            Expect.equal t (3.937126736 / 0.937126736) "the true parametric distance, to the last bit"
+
+        // The `.fsi` promises the rescaled solve is replay-safe ("rescaling introduces no rounding of its
+        // own"). Every other determinism test in this list uses order-1e3 fixtures, which take the direct
+        // path exclusively — so without this one, swapping `ILogB`/`ScaleB` for a rounding normaliser (a
+        // divide by the max component, say) would leave the whole suite green. Exercises both the ring and
+        // the raw solve on inputs that can only reach the fallback.
+        testCase "the rescaled solve is deterministic for identical input" <| fun () ->
+            let origin = pt -3.937126736 0.0
+            let dir = pt 0.937126736 0.0
+            let far = seg (pt 0.0 System.Double.MaxValue) (pt 0.0 0.0)
+
+            Expect.equal
+                (Visibility.raySegment origin dir far)
+                (Visibility.raySegment origin dir far)
+                "byte-identical hit across calls, on the overflow path"
+
+            let walls =
+                [ seg (pt -3.0 0.0) (pt 0.0 0.0)
+                  seg (pt 0.0 System.Double.MaxValue) (pt -0.0 -0.0) ]
+
+            let ring () = Visibility.polygon (settings System.Double.MaxValue) origin walls
+            Expect.equal (ring ()) (ring ()) "byte-identical ring across calls, on the overflow path"
+
+        // Acceptance criterion: "for any finite input where the true intersection is representable,
+        // raySegment returns it rather than None." Metamorphic, because a closed form for the true hit is
+        // exactly what is under test. Construct the crossing `h` first and aim the ray so it lands at
+        // `t = 1`, then slide the occluder's far endpoint out along its own direction by ever-larger
+        // factors. The far endpoint is not on the answer: `h` is pinned by the near endpoint and the ray,
+        // so every scale must still report it. The last two scales overflow the direct solve.
+        //
+        // The assertion is convergence on `h`, not byte-equality across scales — a longer segment changes
+        // `E`, hence the last bits of the direct solve's quotient. Byte-equality is a claim about ONE input
+        // across runs (the determinism tests), never across different inputs.
+        testCase "raySegment: extending the occluder away from the crossing does not lose it (FsCheck)" <| fun () ->
+            let prop (hx: float) (hy: float) (ox: float) (oy: float) (ex: float) (ey: float) =
+                let h = pt (clamp hx) (clamp hy) // the intended crossing
+                let o = pt (clamp ox) (clamp oy) // the ray origin
+                let dir = pt (h.X - o.X) (h.Y - o.Y) // so the crossing sits at t = 1
+
+                let e = pt (clamp ex) (clamp ey)
+                let elen = sqrt (sqLenPt e)
+                let cross = dir.X * e.Y - dir.Y * e.X
+
+                // Skip degenerate draws: a zero-length ray, and a zero-length or near-ray-parallel occluder.
+                // `cross` scales with both operands, so normalise it before calling an angle small — a grazing
+                // crossing is ill-conditioned for any solve and is not what this property is about.
+                if sqLenPt dir = 0.0 || elen = 0.0 || abs cross / (sqrt (sqLenPt dir) * elen) < 1.0e-3 then
+                    true
+                else
+                    let u = pt (e.X / elen) (e.Y / elen) // unit vector along the occluder
+                    let near = pt (h.X - u.X) (h.Y - u.Y) // one unit back from the crossing
+
+                    // `h` sits at segment parameter 1/(1 + scale), strictly interior for every scale > 0.
+                    [ 1.0; 1.0e6; 1.0e150; 1.0e300; System.Double.MaxValue ]
+                    |> List.forall (fun scale ->
+                        let far = pt (h.X + u.X * scale) (h.Y + u.Y * scale)
+
+                        // A far endpoint that itself overflows is not the input we meant to build.
+                        if not (isFinitePt far) then
+                            true
+                        else
+                            match Visibility.raySegment o dir (seg near far) with
+                            | None -> false // the representable crossing was dropped — the #59 bug
+                            | Some(p, t) ->
+                                let tol = 1.0e-6 * max 1.0 (sqrt (sqLenPt h))
+                                abs (t - 1.0) <= 1.0e-6
+                                && abs (p.X - h.X) <= tol
+                                && abs (p.Y - h.Y) <= tol)
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 
         // Totality is a claim about *arbitrary* input, so this property deliberately does NOT clamp:
         // NaN and infinite coordinates, sources, and radii are exactly the cases the `.fsi` promises to
