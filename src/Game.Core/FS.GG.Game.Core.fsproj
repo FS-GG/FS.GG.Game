@@ -17,7 +17,7 @@
   <!-- BCL-only sim vocabulary. No Scene/Skia dependency — headlessly testable, reaches up to
        nothing (ADR-0022 §2). Compile order: Primitives (Point/Rect) before Geometry before
        SpatialGrid; Grids/Fov after Pathfinding (they consume Cell, which Pathfinding declares);
-       Rng/FixedStep/Pathfinding are independent. -->
+       Rng/FixedStep/Pathfinding are independent, and Loop sits directly on FixedStep. -->
   <ItemGroup>
     <Compile Include="Primitives.fsi" />
     <Compile Include="Primitives.fs" />
@@ -27,6 +27,12 @@
     <Compile Include="Rng.fs" />
     <Compile Include="FixedStep.fsi" />
     <Compile Include="FixedStep.fs" />
+    <!-- The double step buffer, built on FixedStep.drain — hence immediately after it. Simulation,
+         not render: `Previous` is the world one tick ago, and `alpha` is pure arithmetic whose *use*
+         is rendering, exactly as the use of `drain` is. Generic in 'world, so it depends on no other
+         module here. -->
+    <Compile Include="Loop.fsi" />
+    <Compile Include="Loop.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
     <!-- Grid parts: consumes Cell (Pathfinding) for faces and Point/Rect (Primitives) for the pixel
