@@ -77,8 +77,36 @@ module Visibility =
                 let t = (wx * ey - wy * ex) / denom // (W × segDir) / (dir × segDir)
                 let u = (wx * dir.Y - wy * dir.X) / denom // (W × dir) / (dir × segDir)
 
-                if t >= 0.0 && u >= 0.0 && u <= 1.0 then
-                    Some({ X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }, t)
+                // Finite operands do not imply a finite result. A cross product of two finite vectors
+                // overflows once the magnitudes multiply past `Double.MaxValue`, and it can overflow in
+                // the numerator while `denom` stays finite — then `t` is ±infinity, `u` is an ordinary
+                // number in `[0, 1]`, and the `t >= 0.0` test below happily admits it. The hit point is
+                // then `origin + infinity * dir`: infinite, and NaN in any axis where `dir` is zero,
+                // because `infinity * 0.0 = NaN`. That NaN is what escaped into the returned polygon.
+                //
+                // What overflows is the *parametrisation*, not the answer. `W` is anchored at `seg.A`, so a
+                // far `seg.A` inflates `wx`/`wy` even when the crossing itself is nearby: for
+                // `origin = (-3.937, 0)`, `dir = (0.937, 0)`, `seg = (0, MaxValue) -> (0, 0)` the hit is
+                // `(0, 0)` at `t = 4.201` — both ordinary doubles — yet `wx * ey` saturates. So this guard
+                // DOES discard representable hits; it trades a NaN vertex for a missing one. Both are
+                // wrong, and the missing one is the containable wrong: it degrades this ring rather than
+                // poisoning every arithmetic consumer downstream of it.
+                //
+                // Overflow needs the *product* to cross `Double.MaxValue`, not either factor: a segment
+                // endpoint at 1e300 still resolves here, because `wx` stays small. A coordinate past
+                // ~1e154 is necessary (two of them overflow) but nowhere near sufficient, so no world
+                // geometry reaches this regime. The honest fix is to anchor `W` at whichever endpoint is
+                // nearer `origin`, keeping the numerator finite and returning the true `t` — but that is
+                // a change to the solve, not a guard on it, so #59 tracks it and this stays the minimal
+                // fix for the totality break.
+                //
+                // Reject on `t`/`u`, and again on the constructed point (a finite `t` and a finite `dir`
+                // can still overflow their product).
+                if not (System.Double.IsFinite t && System.Double.IsFinite u) then
+                    None
+                elif t >= 0.0 && u >= 0.0 && u <= 1.0 then
+                    let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
+                    if isFinitePoint hit then Some(hit, t) else None
                 else
                     None
 
