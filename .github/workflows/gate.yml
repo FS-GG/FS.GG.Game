@@ -203,6 +203,31 @@ jobs:
       - name: Drift check (managed files == source of truth)
         run: _org-build/scripts/sync-build-config.sh --check "$GITHUB_WORKSPACE"
 
+  # Lock-range coherence gate (FS.GG.Game#153, adopting FS-GG/.github#495; ADR-0006). The locked
+  # restore above is the enforcement point for package entries — id, version, contentHash — but it
+  # structurally NEVER reads the dependency ranges under a `"type": "Project"` entry. So a release
+  # bump that edits <Version> and regenerates no lock freezes every sibling project-reference range at
+  # the old version, and every gate in this file stays green over it. That is not hypothetical here:
+  # `release: v0.4.0` (#128) bumped Directory.Build.local.props and touched no lock, leaving
+  # tests/Game.Render.Tests/packages.lock.json recording FS.GG.Game.Core at [0.3.0, ) for a whole
+  # release cycle (#152, the data fix, now landed). Harmless at runtime — project references resolve
+  # from the project graph, not the lock — which is precisely why it survived: the cost is a poisoned
+  # lock diff, read by the one reviewer who can least afford noise, the one scrutinising a contentHash.
+  #
+  # Static: committed files only, so no SDK, no restore, no network, no feed, no NuGet auth. The check
+  # script is authored once in public FS-GG/.github and sourced from there, so the gate cannot drift
+  # per repo.
+  #
+  # min-ranges is left at its default of 1, and Game satisfies it with exactly one range
+  # (Game.Render -> Game.Core). That is the fail-closed floor: a check that inspects nothing and
+  # reports green is the defect, not the guard. If the project graph is ever restructured so that no
+  # project references another, this job will red with "fewer than the 1 this repo declares" — pass
+  # `min-ranges: 0` DELIBERATELY at that point rather than deleting the call, so that zero stays a
+  # decision somebody made rather than an omission nobody noticed.
+  lock-ranges:
+    name: Lock-range coherence (project refs track declared versions)
+    uses: FS-GG/.github/.github/workflows/lock-range-coherence.yml@main
+
   # Producer skill-manifest drift gate (ADR-0014 / ADR-0022 P4+P6). template/skill-manifest/
   # skill-manifest.json is the contract the .github org registry (registry/skills.yml) reconciles the
   # nine owner:fs-gg-game skill rows from — "registry = manifest = bytes". The generator recomputes each
