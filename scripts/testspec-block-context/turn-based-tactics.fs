@@ -1,7 +1,31 @@
 // Typecheck fixtures for the turn-based-tactics TestSpec (see scripts/typecheck-md-blocks.fsx).
 
 //#block 1
-//#skip pseudo-F#, not F#: `let tile, cost = pq.Dequeue()` destructures a PriorityQueue element as a tuple (Dequeue returns the ELEMENT, not (element, priority)), `Dictionary [ start, 0 ]` builds a Dictionary from a tuple list, and the final `Map.ofSeq` consumes KeyValuePairs. It communicates the lazy-deletion Dijkstra shape, which is what §4 is for, but it is not code a reader can copy. Making it real F# is a change to the ALGORITHM the spec states and belongs in its own item, not smuggled into a gate — filed as FS-GG/FS.GG.Game#158.
+// §4.4's reachability sketch is the document's FIRST block and stands ~180 lines AHEAD of the §5.4
+// type sketch (block 2) that declares `Tile` and `Unit` — so the cumulative opens have nothing to
+// give it and the fixture stands them up here, field-for-field as §5.4 states them, narrowed to the
+// two fields this block actually reads. Block 2 re-declares both and shadows these downstream, so
+// the document still binds to ITS OWN types everywhere after §5.4.
+//
+// `Board`, `neighbors4`, `enterCost` and `canEndOn` are named by §4.4's prose and declared as TYPES
+// nowhere in the document — they are the sketch's free vocabulary, which is exactly what a fixture
+// is for. Their signatures are the contract §4.4 states in prose: `enterCost` answers "what does it
+// cost this unit to step onto that tile, if it may at all" (None = impassable/blocked), and
+// `canEndOn` is the separate, stricter question §4.4 turns on ("path through allied units but not
+// end on them"). The BODIES are inert on purpose — this gate typechecks the block, it never runs it.
+type Tile = { Col: int; Row: int }
+type Unit = { Pos: Tile; MoveRange: int }
+
+// Opaque ON PURPOSE. The block never INSPECTS a board — it threads it straight through to
+// `enterCost`/`canEndOn` — so giving it fields here would invent a second, contradictory notion of
+// "board" and park it in front of the reader: §7's `Model` carries `Board: Map<Tile, Terrain>`, and
+// `Terrain` is not declared until block 2. A fixture may supply what the prose left unbound; it may
+// not quietly decide what the document meant.
+type Board = class end
+
+let neighbors4 (tile: Tile) : Tile seq = Seq.empty
+let enterCost (board: Board) (unit: Unit) (tile: Tile) : int option = None
+let canEndOn (board: Board) (unit: Unit) (tile: Tile) : bool = true
 
 //#block 3
 // The spec marks this "cosmetic; not authoritative" and never declares it — the animation state is

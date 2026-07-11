@@ -172,28 +172,46 @@ When a unit is selected, the game computes the set of **reachable tiles** given 
   (previewed) position, minus tiles blocked by LoS-blocking terrain for ranged
   weapons (melee range 1 ignores LoS).
 
-Pseudocode (Dijkstra reachability):
+Dijkstra reachability, with **lazy deletion** — instead of decreasing a queued entry's key
+(which `PriorityQueue` cannot do), a better route to a tile is simply enqueued again and the
+older, worse entry is discarded when it surfaces. Recognising a stale entry means comparing
+the cost it was *queued with* against the best cost known *now*, so the queue's **element** is
+the `(tile, cost)` pair and its **priority** is that same cost: `Dequeue()` returns only the
+element, so a cost left in the priority alone is a cost you can never read back.
+
+> Under the v1 cost model that guard never actually fires, and it is worth knowing why before
+> you decide to keep it: `enterCost` is a function of the tile being **entered**, so every edge
+> into a tile costs the same, and a tile's first relaxation is therefore already its cheapest.
+> It is retained because it is what keeps the shape correct the moment that stops being true —
+> a zone-of-control penalty, a per-unit terrain modifier, or a diagonal step would all make cost
+> depend on the edge rather than the destination, and then a tile *can* be improved after it is
+> queued. Drop the pair and the guard together, or not at all.
 
 ```fsharp
+open System.Collections.Generic
+
 let reachable (board: Board) (unit: Unit) : Map<Tile, int> =
     let start = unit.Pos
-    let pq = PriorityQueue()                 // (cost, tile)
-    pq.Enqueue(start, 0)
-    let best = Dictionary [ start, 0 ]
+    let pq = PriorityQueue<Tile * int, int>()     // element = (tile, cost), priority = cost
+    pq.Enqueue((start, 0), 0)
+    let best = Dictionary<Tile, int>()
+    best[start] <- 0
     while pq.Count > 0 do
         let tile, cost = pq.Dequeue()
-        if cost = best.[tile] then            // skip stale entries
+        if cost = best[tile] then                 // skip stale entries
             for nb in neighbors4 tile do
                 match enterCost board unit nb with
                 | Some step ->
                     let nc = cost + step
                     if nc <= unit.MoveRange &&
-                       (not (best.ContainsKey nb) || nc < best.[nb]) then
-                        best.[nb] <- nc
-                        pq.Enqueue(nb, nc)
-                | None -> ()                  // impassable / blocked
-    best |> Seq.filter (fun kv -> canEndOn board unit kv.Key)
-         |> Map.ofSeq
+                       (not (best.ContainsKey nb) || nc < best[nb]) then
+                        best[nb] <- nc
+                        pq.Enqueue((nb, nc), nc)
+                | None -> ()                      // impassable / blocked
+    best
+    |> Seq.filter (fun kv -> canEndOn board unit kv.Key)
+    |> Seq.map (fun kv -> kv.Key, kv.Value)       // a Dictionary yields KeyValuePairs, not tuples
+    |> Map.ofSeq
 ```
 
 ### 4.5 Attack resolution & damage
