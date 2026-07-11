@@ -163,8 +163,18 @@ type Ball =
 Do not re-declare `Vec2` with `X`/`Y`, and do not put `X`/`Y`/`Width`/`Height` labels on `Paddle`
 (hence `TopY`): those labels collide with `Scene`'s `Point`/`Rect`, and the durable
 `LayoutEvidence.fs` opens both `Scene` and your model — the clash surfaces there, in a file you must
-not touch. The paddle's fixed 18×110 size is a render-time constant: express it with
-`toRect paddleCenter 18.0 110.0` rather than `Width`/`Height` fields.
+not touch. The paddle's fixed 18×110 size is a render-time constant, so derive its rect at the scene
+boundary rather than storing `Width`/`Height` fields — the centre falls out of `Side` (x = 40 or
+1240) and `TopY` (+55):
+
+```fsharp
+let paddleRect (p: Paddle) : Rect =
+    let cx = match p.Side with Left -> 40.0 | Right -> 1240.0
+    Geometry.toRect { Vx = cx; Vy = p.TopY + 55.0 } 18.0 110.0
+```
+
+`Geometry.toRect` is qualified because this sketch abbreviates `Geometry.Vec2` rather than opening
+`Geometry`.
 
 ## 6. World / Levels / Progression
 - **Playfield:** 1280 × 720 logical px (fixed; scaled to window preserving aspect ratio,

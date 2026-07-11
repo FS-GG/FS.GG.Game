@@ -197,8 +197,9 @@ type Enemy =
 
 Positions live in the scaffold's `Geometry.Vec2` (`Vx`/`Vy`), and sizes carry `…Px` labels — never
 `X`/`Y`/`Width`/`Height`, which collide with `Scene`'s `Point`/`Rect` and blow up in the durable
-`LayoutEvidence.fs`. Cross into the scene with `toPoint`/`toRect` (e.g.
-`toRect enemy.Pos enemy.WidthPx enemy.HeightPx`).
+`LayoutEvidence.fs`. Cross into the scene with the scaffold's crossings — qualified, since these
+sketches abbreviate `Geometry.Vec2` rather than opening `Geometry`: e.g.
+`Geometry.toRect enemy.Pos enemy.WidthPx enemy.HeightPx`, `Geometry.toPoint doodle.Pos`.
 
 ## 6. World / Levels / Progression
 - **Playfield:** 720 × 1280 logical px (portrait), letter/pillarboxed to the window aspect.

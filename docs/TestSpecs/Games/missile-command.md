@@ -197,7 +197,9 @@ type Plane =
 Use the scaffold's `Geometry.Vec2` rather than re-declaring one with `X`/`Y`, and keep
 `X`/`Y`/`Width`/`Height` off your own records: those labels collide with `Scene`'s `Point`/`Rect`,
 and the durable `LayoutEvidence.fs` opens both `Scene` and your model, so the clash surfaces there —
-in a file you must not touch. Express the plane's 40×14 body with `toRect plane.Pos 40.0 14.0`.
+in a file you must not touch. Express the plane's 40×14 body with
+`Geometry.toRect plane.Pos 40.0 14.0` — qualified, since this sketch abbreviates `Geometry.Vec2`
+rather than opening `Geometry`.
 
 ## 6. World / Levels / Progression
 - Playfield **1280×720**; ground at `y = 680`.
