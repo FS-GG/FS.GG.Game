@@ -156,6 +156,10 @@
 #                                             # --warn downgrades the VERDICT, not a failure to reach
 #                                             # one: if the PR's issue cannot be resolved, it still
 #                                             # exits non-zero rather than reporting SKIP (#322).
+#                                             # --issue DECIDES the repo: --pr resolves in the issue's
+#                                             # repo, not the checkout's. A --repo that disagrees is
+#                                             # refused, never silently preferred — a verdict is only
+#                                             # ever printed when PR and issue are in ONE repo (#479).
 #
 #   <issue> is a full URL, `owner/repo#n`, or `repo#n` (owner defaults to FS-GG).
 #   A global `--worker <id>` may precede any subcommand.
@@ -3097,6 +3101,11 @@ widen_cmd() {
   rm -f "$bodyfile" "$newfile"
   printf 'widened %s → Paths: %s\n' "$sr#$sn" "$newpaths"
 
+  # Declaration time is the cheap moment to learn that editing a kit source obliges a re-digest (#469).
+  # The alternative is learning it from a red `main` after the merge, which is how this was found.
+  kit_digest_warn "$(printf '%s' "$newpaths" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')" \
+                  "the touch-set you just declared on $sr#$sn"
+
   # Re-check against everything in flight, and notify each worker we now collide with.
   local pa claims n i=0 found=0
   pa="$(paths_of "$so" "$sr" "$sn")"
@@ -3154,6 +3163,63 @@ widen_cmd() {
 # reports drift, it does not prevent it. But an undetected drift is what turns two "disjoint" items
 # into a merge conflict, so CI runs this in --warn mode and posts what it found. The declaration is
 # only worth as much as the check that reads it back.
+# ---- the kit-digest coupling (#469) --------------------------------------------------------------
+# `registry/repos.yml` pins a CONTENT DIGEST of every coordination-kit source (ADR-0019: the kit is
+# content-addressed). So editing a kit source — `scripts/fsgg-coord`, or ANY `.claude/skills/<kit>/`
+# — invalidates that digest, and `repos-registry` reds `main` until it is regenerated. The obligation
+# is invisible: it is not in the item, not in `widen`, and `verify-paths` cannot see it either, because
+# `verify-paths` only asks "did the PR stay INSIDE what you declared" — never "was your declaration
+# SUFFICIENT for what you touched". A touch-set of `scripts/fsgg-coord` alone passes, and reds main.
+# That is the #266 shape: the gate is most reassuring exactly when it is least informed.
+#
+# So: name the obligation the moment a kit source appears in a file list. Advisory, never fatal — the
+# authority is `repos-registry`, and this only stops it being a surprise. Silent where there is no
+# registry to read (a receiver repo mirrors the kit but not `registry/repos.yml`).
+kit_sources() {  # -> one kit `source:` per line, or nothing if there is no registry to read
+  local reg="${FSGG_REPOS_YML:-$(git rev-parse --show-toplevel 2>/dev/null)/registry/repos.yml}"
+  [ -f "$reg" ] || return 0
+  sed -n 's/.*[{,][[:space:]]*source:[[:space:]]*\([^,}]*\).*/\1/p' "$reg" | sed 's/[[:space:]]*$//'
+}
+
+# $1 = newline-separated file list (declared touch-set, or a PR's changed files).
+# Prints the kit sources it touches, IFF `registry/repos.yml` is absent from that same list.
+kit_digest_gap() {
+  local files="$1" src hit=""
+  printf '%s\n' "$files" | grep -qx 'registry/repos.yml' && return 0   # obligation already met
+  while IFS= read -r src; do
+    [ -n "$src" ] || continue
+    # a file IS the source (a client script) or lives UNDER it (a skill directory)
+    # Escape the regex metacharacters a path can legitimately contain. `/` is NOT one of them — escaping
+    # it makes grep warn "stray \ before /" on every kit, and a tool that cries wolf gets ignored.
+    if printf '%s\n' "$files" | grep -qE "^$(sed 's|[.[*^$]|\\&|g' <<<"$src")(/|$)"; then
+      hit="$hit$src"$'\n'
+    fi
+  done <<<"$(kit_sources)"
+  printf '%s' "$hit"
+}
+
+kit_digest_warn() {  # $1 = file list, $2 = context label
+  local gap; gap="$(kit_digest_gap "$1")"
+  [ -n "$gap" ] || return 0
+  printf '\nfsgg-coord: KIT DIGEST — %s touches a content-addressed kit source but not `registry/repos.yml`:\n' "$2" >&2
+  printf '%s' "$gap" | sed 's/^/  /' >&2
+  printf 'Its pinned sha256 is now stale, and `repos-registry` will red `main` (ADR-0019, #469). Regenerate:\n' >&2
+  printf '%s' "$gap" | sed 's|^|  scripts/repos.sh digest |' >&2
+  printf '...then commit `registry/repos.yml` — and declare it in the touch-set.\n' >&2
+
+  # A SKILL kit carries a SECOND obligation, and it is the same trap one step along: every agent-skill
+  # root holds the BYTE-IDENTICAL union (ADR-0011/0014), so editing `.claude/skills/<kit>/` without
+  # mirroring into `.agents/skills/<kit>/` reds the `roots` gate. Found by walking straight into it
+  # while fixing the digest half of this very bug — which is the argument for naming it here: ONE edit
+  # carries SEVERAL invisible obligations, and the tooling named none of them.
+  local sk; sk="$(printf '%s' "$gap" | grep '^\.claude/skills/' || true)"
+  [ -n "$sk" ] || return 0
+  printf '\nfsgg-coord: SKILL ROOTS — a skill kit must stay BYTE-IDENTICAL across every root\n' >&2
+  printf '(ADR-0011/0014), or the `roots` gate reds `main`. Mirror it:\n' >&2
+  printf '%s' "$sk" | sed 's|^\(\.claude/skills/.*\)$|  cp -r \1/. .agents/skills/|' >&2
+  return 0
+}
+
 verify_paths_cmd() {
   local pr="" repo="" issue="" warn=""
   while [ $# -gt 0 ]; do
@@ -3168,10 +3234,34 @@ verify_paths_cmd() {
   done
   [ -n "$pr" ] || die "verify-paths: --pr N required."
   case "$pr" in *[!0-9]*) die "verify-paths: --pr must be a number." ;; esac
-  [ -n "$repo" ] || repo="$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)"
-  [ -n "$repo" ] || die "verify-paths: --repo owner/repo required (not inside a GitHub checkout)."
-  local o="${repo%%/*}" r="${repo#*/}"
-  [ "$o" = "$r" ] && { o="$OWNER"; r="$repo"; }
+
+  # WHICH REPO IS THE PR IN? `--pr` used to resolve against the repo you were STANDING IN while
+  # `--issue` carried a repo of its own — so a PR in one repo was diffed against a touch-set in
+  # another, and a confident FSGG-PATHS verdict was printed on a subject nobody had looked at
+  # (.github#479). The `--issue` ref already NAMES the repo; the answer was in the arguments.
+  # Precedence: an explicit --repo, else the issue's repo, else the checkout. The checkout is a
+  # fallback, never evidence that overrides a ref the caller spelled out.
+  local io="" ir="" o="" r=""
+  if [ -n "$issue" ]; then
+    parse_ref "$issue"; io="$R_OWNER"; ir="$R_REPO"   # read R_* IMMEDIATELY (#389)
+    issue="$io/$ir#$R_NUM"          # canonical, so the verdict names the repo it actually checked
+  fi
+  if [ -z "$repo" ] && [ -z "$issue" ]; then
+    repo="$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || true)"
+    [ -n "$repo" ] || die "verify-paths: --repo owner/repo required (not inside a GitHub checkout)."
+  fi
+  if [ -n "$repo" ]; then
+    case "$repo" in */*) o="${repo%%/*}" ;; *) o="$OWNER" ;; esac
+    r="$(resolve_repo "$repo")"     # a registry short-id (`audio`) resolves like it does everywhere else
+  else
+    o="$io"; r="$ir"
+  fi
+  # A disagreement is an ERROR, not a preference. Silently preferring one of the two is exactly how a
+  # PR in repo A earned a verdict from repo B's touch-set. Compare case-insensitively — GitHub repo
+  # names are, and `--repo fs.gg.audio` agreeing with `FS.GG.Audio#42` must not read as a conflict.
+  if [ -n "$issue" ] && { [ "${o,,}" != "${io,,}" ] || [ "${r,,}" != "${ir,,}" ]; }; then
+    die "verify-paths: --repo names $o/$r but --issue names $io/$ir — a PR in one repo cannot be verified against a touch-set in another. The touch-set was NOT checked."
+  fi
 
   # Which issue does this PR implement? Explicit wins; else the `item/<n>-…` branch ADR-0021 mandates;
   # else the PR's own closing reference. Refusing to guess is better than checking the wrong touch-set.
@@ -3205,6 +3295,18 @@ verify_paths_cmd() {
     [ -n "$warn" ] && { printf 'FSGG-PATHS SKIP — cannot tell which issue PR #%s implements (branch is not item/<n>-…, and it closes no issue).\n' "$pr"; return 0; }
     die "verify-paths: cannot tell which issue PR #$pr implements (branch is not item/<n>-…, and it closes no issue). Pass --issue."
   fi
+  # The boundary again, from the other side. GitHub lets a PR close an issue in ANOTHER repo, so the
+  # closing-reference fallback can hand back a ref that walks straight back across the line the
+  # explicit check above just refused to cross (.github#479). The caller did nothing wrong here — this
+  # is not an error, it is simply nothing we can check — but it is emphatically NOT a verdict: repo B's
+  # touch-set says nothing about repo A's files. Re-check the DERIVED ref, not just the explicit one.
+  parse_ref "$issue"; local xo="$R_OWNER" xr="$R_REPO" xn="$R_NUM"   # read R_* IMMEDIATELY (#389)
+  if [ "${xo,,}" != "${o,,}" ] || [ "${xr,,}" != "${r,,}" ]; then
+    local xmsg="PR #$pr is in $o/$r but closes $xo/$xr#$xn, in another repo — a touch-set declared there says nothing about the files changed here, so there is nothing to verify against."
+    [ -n "$warn" ] && { printf 'FSGG-PATHS SKIP — %s\n' "$xmsg"; return 0; }
+    echo "verify-paths: $xmsg" >&2
+    return 2
+  fi
 
   local declared; declared="$(paths_for_ref "$issue")"
   if [ -z "$declared" ]; then
@@ -3237,6 +3339,11 @@ verify_paths_cmd() {
     done
     [ -n "$covered" ] || drift="$drift$f"$'\n'
   done <<<"$changed"
+
+  # The kit-digest obligation is checked against what the PR CHANGED, not against what it declared —
+  # a PR that edits a kit source and never re-digests reds `main` whether or not it drifted, so an
+  # `OK` verdict must not imply it is safe to merge (#469).
+  kit_digest_warn "$changed" "PR #$pr"
 
   if [ -z "$drift" ]; then
     printf 'FSGG-PATHS OK — PR #%s stays inside the touch-set declared by %s.\n' "$pr" "$issue"
