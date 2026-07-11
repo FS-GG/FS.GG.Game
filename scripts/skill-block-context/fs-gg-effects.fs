@@ -98,12 +98,15 @@ let collide (u: Unit) (_obstacle: Cell) = u
 //#skip the same before/after migration contrast as fs-gg-collision block 4: it binds `let landed` TWICE (removed `Resolution.knockback`, then the `Resolution.push` replacement) — a duplicate definition in one module by design.
 
 //#block 12
-// Region operator + pipeline: splash decides WHO, the pipeline decides FOR HOW MUCH. `Pos` is the
-// sim `Point` (the grid buckets by `Point`), matching the block's own `SpatialGrid.build`.
+//#rec
+// Region operator + pipeline: splash decides WHO, the pipeline decides FOR HOW MUCH. As in
+// fs-gg-ballistics block 5, the block declares its OWN `Enemy` (storing a `Geometry.Vec2`) and its
+// own `simPoint` crossing, so the fixture binds free VALUES only and forward-references the block's
+// type via //#rec. Redeclaring `Enemy` here would collide with the block's and mean the gate
+// typechecked the fixture's world rather than the skill's.
 type Kind = Frost | Physical
-type Enemy = { Pos: Point; Hp: int }
 let enemies : Enemy list = []
-let blast : Point = { X = 100.0; Y = 100.0 }
+let blast : Geometry.Vec2 = { Vx = 100.0; Vy = 100.0 }
 let pipeline : Stage<Enemy, Kind> list = []
 let applyDamage (_e: Enemy) (_amount: float) = ()
 let applyRider (_e: Enemy) = ()

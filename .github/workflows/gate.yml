@@ -285,22 +285,6 @@ jobs:
       - name: Build FS.GG.Game.Core (the assembly the skills are typechecked against)
         run: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug --no-restore
 
-      - name: DEBUG dump generated project
-        run: |
-          set -uo pipefail
-          dotnet fsi scripts/typecheck-skill-blocks.fsx --keep > /tmp/harness.log 2>&1 || true
-          D=$(grep -oE '/tmp/fsgg-skill-typecheck-[a-f0-9]+' /tmp/harness.log | head -1)
-          echo "=== generated dir: $D ==="
-          ls -la "$D"
-          echo "=== SkillBlocks.fsproj ==="
-          cat "$D/SkillBlocks.fsproj"
-          echo "=== module declarations of every generated file ==="
-          head -1 "$D"/*.fs
-          echo "=== fs_gg_ballistics_5.fs ==="
-          cat -n "$D/fs_gg_ballistics_5.fs"
-          echo "=== what the compiler actually got (Compile items) ==="
-          dotnet msbuild "$D/SkillBlocks.fsproj" -getItem:Compile 2>&1 | head -60
-
       - name: Typecheck every ```fsharp block in the published skills
         run: |
           set -euo pipefail
