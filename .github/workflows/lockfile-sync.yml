@@ -19,6 +19,10 @@ on:
 
 permissions:
   contents: read   # the App token inside the reusable workflow performs the git write
+  packages: read   # required ceiling for the reusable workflow's declared packages:read
+                   # (org NuGet-feed auth, FS-GG/.github#148/#149) — a reusable workflow
+                   # cannot request a permission the caller didn't grant, so omitting this
+                   # fails the whole workflow at startup (startup_failure).
 
 jobs:
   sync:
