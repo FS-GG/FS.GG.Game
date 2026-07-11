@@ -200,6 +200,10 @@ and PlatformKind =
 
 type Vehicle =
     { Row: int; LeftX: float; Vx: float; WidthPx: float; Kind: VehicleKind }
+and VehicleKind =
+    | Car                       // 56×48; the fast lane (row 8) is a Car at a higher Vx, not a kind
+    | Truck                     // 120×48
+    | Bulldozer                 // 72×48
 ```
 
 ## 6. World / Levels / Progression

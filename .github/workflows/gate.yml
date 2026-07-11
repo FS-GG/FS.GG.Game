@@ -237,27 +237,41 @@ jobs:
       - name: Fail on a dangling or unqualified [[ref]]
         run: scripts/check-skill-refs.sh
 
-  # Skill-block typecheck gate (FS.GG.Game#141). The three gates above validate everything about a
-  # published SKILL.md EXCEPT its code: refs resolve, digests match, cross-references resolve — and the
-  # `fsharp` blocks, the part a reader actually copies into their product, were only ever READ. A skill
-  # could ship an example that does not compile and every check stayed green. That is the silent-no-op
-  # shape (FS-GG/.github#416) one level up: a gate reporting success over a subject it never examined.
-  # The same defect was found four times BY HAND (#129, #132, and #140, which found two more by grepping)
-  # and zero times by CI.
+  # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
+  # three gates above validate everything about a published document EXCEPT its code: refs resolve,
+  # digests match, cross-references resolve — and the `fsharp` blocks, the part a reader actually
+  # copies into their product, were only ever READ. A document could ship an example that does not
+  # compile and every check stayed green. That is the silent-no-op shape (FS-GG/.github#416) one level
+  # up: a gate reporting success over a subject it never examined. The same defect was found five
+  # times BY HAND (#129, #132, #140 ×2, #144) and zero times by CI.
   #
-  # This job compiles every block against the REAL built FS.GG.Game.Core and reports a type error against
-  # the SKILL.md line the reader would copy from. Blocks are sketches, so a fixture in
-  # scripts/skill-block-context/<skill>.fs supplies the free values; see the header of
-  # scripts/typecheck-skill-blocks.fsx for the two mechanisms (`module rec` + `#line` directives).
+  # This job compiles every block in BOTH corpora against the REAL built FS.GG.Game.Core and reports a
+  # type error against the markdown line the reader would copy from:
   #
-  # The harness is fail-closed on ITSELF — no SKILL.md files, no blocks, a parsed-block count that
-  # disagrees with an independent fence count, or a missing FS.GG.Game.Core build are all hard failures,
-  # because the one thing this job must never do is go green over code it never compiled. Blocks it
-  # cannot reach (the fs-gg-audio / fs-gg-persistence bodies teach packages this repo does not reference)
-  # are SKIPPED with a written reason and re-printed as a warning on every run, so they stay visible
-  # instead of quietly counting as covered.
-  skill-block-typecheck:
-    name: Skill fsharp blocks typecheck (template/product-skills)
+  #   skills     template/product-skills/**/SKILL.md            — independent examples
+  #   testspecs  docs/TestSpecs/Games/*.md + TestSpecTutorial.md — a CUMULATIVE model per document
+  #
+  # Blocks are sketches, so a fixture in scripts/<corpus>-block-context/<doc>.fs supplies the free
+  # values; see the header of scripts/typecheck-md-blocks.fsx for the mechanisms (`module rec`,
+  # `#line` directives, and — for the TestSpecs, whose `Model` block references types declared three
+  # blocks earlier — cumulative opens).
+  #
+  # It ALSO enforces the label rule, and that is not decoration: a document that declares its own
+  # `type Vec2 = { X: float; Y: float }` and uses it consistently TYPECHECKS PERFECTLY, so the
+  # compiler alone would let #144 be reintroduced verbatim and stay green (verified). X/Y/Width/Height
+  # are the labels of Scene's Point/Rect AND of the sim Point/Rect, so reusing them makes a bare
+  # record literal resolve against the wrong one — a LABEL bug, not a type error. It is checked as
+  # itself, textually, over every block including the skipped ones.
+  #
+  # The harness is fail-closed on ITSELF — no source files, no blocks, a parsed-block count that
+  # disagrees with an independent fence count, or a missing FS.GG.Game.Core build are all hard
+  # failures, because the one thing this job must never do is go green over code it never compiled.
+  # Blocks it cannot reach (the fs-gg-audio / fs-gg-persistence bodies teach packages this repo does
+  # not reference; pong's `Geometry.toRect` needs a scene edge the scaffold deliberately refuses to
+  # fake) are SKIPPED with a written reason and re-printed as a warning on every run, so they stay
+  # visible instead of quietly counting as covered.
+  md-block-typecheck:
+    name: Markdown fsharp blocks typecheck (skills + TestSpecs)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -282,13 +296,13 @@ jobs:
       # The blocks are typechecked against the BUILT assembly, exactly as a product consumer binds to the
       # package — not against the source, and never against a stub. The harness refuses to run if this
       # step did not produce FS.GG.Game.Core.dll.
-      - name: Build FS.GG.Game.Core (the assembly the skills are typechecked against)
+      - name: Build FS.GG.Game.Core (the assembly the blocks are typechecked against)
         run: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug --no-restore
 
-      - name: Typecheck every ```fsharp block in the published skills
+      - name: Typecheck every ```fsharp block in the skills and the TestSpecs
         run: |
           set -euo pipefail
-          if ! dotnet fsi scripts/typecheck-skill-blocks.fsx; then
-            echo "::error::a \`\`\`fsharp block in a published SKILL.md does not typecheck against FS.GG.Game.Core. Readers copy these blocks verbatim into their product, so a block that cannot compile is a defect in the skill, not in this gate. Reproduce locally with: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug && dotnet fsi scripts/typecheck-skill-blocks.fsx"
+          if ! dotnet fsi scripts/typecheck-md-blocks.fsx; then
+            echo "::error::a \`\`\`fsharp block in a published SKILL.md or TestSpec does not typecheck against FS.GG.Game.Core (or breaks the X/Y/Width/Height label rule). Readers copy these blocks verbatim into their product, so a block that cannot compile is a defect in the document, not in this gate. Reproduce locally with: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug && dotnet fsi scripts/typecheck-md-blocks.fsx"
             exit 1
           fi

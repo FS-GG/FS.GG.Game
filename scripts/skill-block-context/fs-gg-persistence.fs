@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-persistence (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-persistence (see scripts/typecheck-md-blocks.fsx).
 //
 // Both blocks teach `FS.GG.UI.Canvas` (`Persistence.save`, `SaveSlot`, `PersistenceEffect`) — a
 // FS.GG.Rendering package this repo does not reference (it pins FS.GG.UI.Scene and

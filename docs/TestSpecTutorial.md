@@ -452,14 +452,16 @@ open Expecto
 let ballPhysics =
     testList "ball physics" [
         test "ball reflects off the top wall" {
+            // Vx/Vy, not X/Y: positions live in the scaffold's collision-safe Geometry.Vec2. An
+            // X/Y-labelled record collides with Scene's Point/Rect — see §5 of any TestSpec.
             let model =
                 { initial with
-                    Ball = { Pos = { X = 640.0; Y = 8.0 }
-                             Vel = { X = 300.0; Y = -300.0 } } }
+                    Ball = { Pos = { Vx = 640.0; Vy = 8.0 }
+                             Vel = { Vx = 300.0; Vy = -300.0 } } }
             let stepped = update (Tick (1.0 / 60.0)) model
-            Expect.isGreaterThan stepped.Ball.Vel.Y 0.0
+            Expect.isGreaterThan stepped.Ball.Vel.Vy 0.0
                 "vertical velocity is inverted"
-            Expect.isGreaterThanOrEqual stepped.Ball.Pos.Y 0.0
+            Expect.isGreaterThanOrEqual stepped.Ball.Pos.Vy 0.0
                 "ball stayed inside the playfield"
         }
     ]

@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-collision (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-collision (see scripts/typecheck-md-blocks.fsx).
 // Block 2 (the broad-phase resolve pass) is self-contained.
 
 //#block 1

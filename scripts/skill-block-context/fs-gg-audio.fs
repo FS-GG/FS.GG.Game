@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-audio (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-audio (see scripts/typecheck-md-blocks.fsx).
 //
 // EVERY block in this skill is skipped, and not because the blocks are unimportant — because this
 // gate cannot reach them. They teach `FS.GG.Audio.Core` / `FS.GG.Audio.Host`, packages FS.GG.Game

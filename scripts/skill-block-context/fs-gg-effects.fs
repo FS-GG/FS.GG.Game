@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-effects (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-effects (see scripts/typecheck-md-blocks.fsx).
 //
 // The recurring world here is a damage `Kind`, a `Unit` target with the stats the stages read, and
 // a `pipeline` of stages over the two. Each block is its own module, so the same names are

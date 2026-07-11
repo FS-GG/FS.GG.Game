@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-ai (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-ai (see scripts/typecheck-md-blocks.fsx).
 
 //#block 1
 //#skip an .fsi SIGNATURE listing (the skill's Public Contract section: `val view: ...`, `type TeamView<'T>` with no definition). It is not implementation code and cannot be compiled as an .fs — the surface it declares is already gated, byte-for-byte, by the surface-baseline-drift job.

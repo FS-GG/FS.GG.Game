@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-visibility (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-visibility (see scripts/typecheck-md-blocks.fsx).
 // Blocks 1 and 2 (the angular-sweep polygon and the isVisible oracle) are self-contained.
 
 //#block 3

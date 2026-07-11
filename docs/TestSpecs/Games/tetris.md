@@ -165,8 +165,9 @@ type Piece =
       Rotation : Rotation
       LockResets : int }                       // 0..15
 
-/// 4 occupied grid cells for a piece at its current pos+rotation
-val cellsOf : Piece -> (int * int) list
+// The occupied cells are DERIVED from Kind + Pos + Rotation, never stored:
+//   cellsOf : Piece -> (int * int) list
+// returns the 4 grid cells the piece covers at its current pos + rotation.
 ```
 
 ### 5.3 Board / Well

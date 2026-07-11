@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-grids (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-grids (see scripts/typecheck-md-blocks.fsx).
 //
 // The skill's four blocks read as one running example — block 2 uses block 1's `c`, block 4 uses
 // block 3's `corners`. Each block compiles as its own module (a reader can land on any section),
