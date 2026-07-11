@@ -20,7 +20,7 @@
     {
       "id": "fs-gg-ballistics",
       "scope": "product",
-      "sha256": "44a1c7ae115d3a5ad01e2909ee0c6d183ddb542af48b305bf905ee89592bd7ba",
+      "sha256": "01620e43423d429c1332de30e3d69358c2bf5e2f8fa4fb92d8c7d67ea3de2f77",
       "resolvablePath": ".agents/skills/fs-gg-ballistics/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-ballistics/"
@@ -36,7 +36,7 @@
     {
       "id": "fs-gg-effects",
       "scope": "product",
-      "sha256": "d9e94aa57bbdd0dcfef3a603860d1bde1ba1646536670c3d7c76cc7ea2aaa193",
+      "sha256": "8f4b369b19904223d51a2ab338445c90f249f4ce93aa615a89da8cd7330d180b",
       "resolvablePath": ".agents/skills/fs-gg-effects/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-effects/"
