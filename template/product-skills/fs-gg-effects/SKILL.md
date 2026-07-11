@@ -292,10 +292,18 @@ The two halves are independent, and that is the point — half the corpus uses o
 ```fsharp
 open FS.GG.Game.Core
 
-let grid = SpatialGrid.build 32.0 [ for e in enemies -> e.Pos, e ]
+// Positions are stored in the collision-safe `Vec2`, per fs-gg-game-core's storage rule — so the grid,
+// the blast centre, and `splash`'s position projection all need the crossing. `: Point` is load-bearing,
+// not decoration: `splash` takes `centre: Point` and `position: 'T -> Point`.
+type Enemy = { Pos: Geometry.Vec2; Hp: int }
+
+let simPoint (v: Geometry.Vec2) : Point = { X = v.Vx; Y = v.Vy }
+
+let grid = SpatialGrid.build 32.0 [ for e in enemies -> simPoint e.Pos, e ]
 
 // Region operator: WHO, and with what transport multiplier.
-let region = Ballistics.splash blast 42.0 (Ballistics.linearFalloff 0.5) (fun e -> e.Pos) grid
+let region =
+    Ballistics.splash (simPoint blast) 42.0 (Ballistics.linearFalloff 0.5) (fun e -> simPoint e.Pos) grid
 
 // Pipeline: FOR HOW MUCH. applyAll SEEDS each target at Base * multiplier.
 let dealt = Effects.applyAll pipeline { Kind = Physical; Source = Source.Declared; Base = 30.0 } region

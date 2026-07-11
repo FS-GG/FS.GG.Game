@@ -126,9 +126,11 @@ Asteroids inherits `1.0×` the ship's velocity into the bullet, a twin-stick rog
 `Projectile.Velocity`, so you decide and write it down.
 
 ```fsharp
+// Mind the two label sets: `ship.Vel` is *model* state, so it is a `Vec2` (`Vx`/`Vy`), while `aim` came
+// from `intercept` and `Projectile.Velocity` is a `Point` (`X`/`Y`). Read with one, construct the other.
 let inheritance = 0.25                                        // <- name it in the spec, not in a literal
-let muzzleVel = { X = ship.Vel.X * inheritance + aim.X * shotSpeed
-                  Y = ship.Vel.Y * inheritance + aim.Y * shotSpeed }
+let muzzleVel = { X = ship.Vel.Vx * inheritance + aim.X * shotSpeed
+                  Y = ship.Vel.Vy * inheritance + aim.Y * shotSpeed }
 ```
 
 ## Splash — the falloff curve is a balance lever
@@ -139,10 +141,18 @@ multiplier. `falloff` receives the **normalised** distance `d ∈ [0,1]`.
 ```fsharp
 open FS.GG.Game.Core
 
-let grid = SpatialGrid.build 32.0 [ for e in enemies -> e.Pos, e ]
+// Positions are stored in the collision-safe `Vec2`, per fs-gg-game-core's storage rule — so the grid,
+// the blast centre, and `splash`'s position projection all need the crossing. `: Point` is load-bearing,
+// not decoration: `splash` takes `centre: Point` and `position: 'T -> Point`.
+type Enemy = { Pos: Geometry.Vec2; Hp: int }
+
+let simPoint (v: Geometry.Vec2) : Point = { X = v.Vx; Y = v.Vy }
+
+let grid = SpatialGrid.build 32.0 [ for e in enemies -> simPoint e.Pos, e ]
 
 // "centre 100%, linear falloff to 50% at the edge" — the tower-defense spec's curve.
-let hits = Ballistics.splash blast 48.0 (Ballistics.linearFalloff 0.5) (fun e -> e.Pos) grid
+let hits =
+    Ballistics.splash (simPoint blast) 48.0 (Ballistics.linearFalloff 0.5) (fun e -> simPoint e.Pos) grid
 
 let damaged = [ for enemy, mult in hits -> { enemy with Hp = enemy.Hp - int (float baseDamage * mult) } ]
 ```
