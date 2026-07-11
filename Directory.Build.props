@@ -23,6 +23,48 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
+  <!-- lock-hash determinism (ADR-0032, .github#473/#471): FSharp.Core resolves from ONE source, so a
+       regenerated packages.lock.json is byte-identical on any machine.
+
+       THE DEFECT. The F# SDK injects its OWN bundled copy of FSharp.Core as a restore source:
+       Microsoft.FSharp.NetSdk.targets appends $(_FSharpCoreLibraryPacksFolder) —
+       …/sdk/<ver>/FSharp/library-packs — to RestoreAdditionalProjectSources, and pins
+       FSCorePackageVersion to exactly the version this org references (10.1.301). That copy is a
+       DIFFERENT .nupkg than nuget.org serves at the same id+version (3,051,664 B vs 3,066,660 B).
+       Nothing was ever re-published and no feed lied — there have always been two packages. A lock
+       file's `contentHash` is therefore a function of WHICH SOURCE served the package, and a local
+       folder source BEATS nuget.org when both are offered. So CI (no packageSourceMapping) resolved
+       library-packs and committed `FwQFuqOA…`, while a dev box whose mapping does not admit
+       library-packs resolved nuget.org and produced `excLf2zM…`. Same id, same version, two hashes,
+       and whichever machine ran the restore last won the `git diff`.
+
+       WHY IT HAS TO BE FIXED HERE, in MSBuild. The injection arrives via
+       RestoreAdditionalProjectSources, NOT as a configured NuGet source, so none of the usual
+       hermeticity levers touch it: `<clear/>` in nuget.config does not remove it, a fresh
+       NUGET_PACKAGES does not bypass it, and clearing the NuGet http-cache does not either. A
+       perfectly COLD restore still resolves the SDK's copy — cold is not hermetic (ADR-0031 §1 still
+       stands on its own merits; it just never closed this hole).
+       (Note for editors: XML comments cannot contain a double hyphen, so CLI flags are named without
+       their leading dashes throughout this comment.)
+
+       THE FIX. DisableImplicitLibraryPacksFolder is the SDK's own opt-out and it guards the
+       injection itself, so the folder is REMOVED from the source list rather than deprioritised —
+       with it set, a restore that can reach no other source fails NU1100 instead of quietly falling
+       back to the SDK copy. FSharp.Core then comes from nuget.org (also the signed copy) everywhere,
+       and `contentHash` becomes a function of (id, version) alone — no longer of the SDK patch level,
+       which matters because global.json says rollForward: latestFeature, so the next SDK to bundle a
+       different FSharp.Core would otherwise silently re-hash every lock file in the org.
+
+       ADOPTING THIS IS A ONE-TIME RE-PIN, AND THE ORDER IS LOAD-BEARING. Syncing this file flips the
+       source a repo restores from, so its committed `FwQFuqOA…` becomes `excLf2zM…`. Regenerate the
+       lock in the SAME PR that syncs this file (a cold `dotnet restore` with force-evaluate). Do NOT
+       re-pin a repo ahead of the sync: a lock re-pinned to nuget.org's hash, met by a CI that still
+       resolves library-packs, fails locked restore on a CORRECT lock file — which is precisely what
+       blocked #429's repair for a day (ADR-0032 §3). -->
+  <PropertyGroup Label="lock-hash determinism">
+    <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
+  </PropertyGroup>
+
   <PropertyGroup Label="lockfile-restore-enforcement">
     <!-- Commit packages.lock.json and restore in locked mode in CI so any dependency-graph
          drift (a stale or silently substituted FS.GG.UI.* version, or any transitive bump)

@@ -10,8 +10,17 @@ name: gate
 # Microsoft.NET.Test.Sdk/YoloDev + FSharp.Core), so this gate needs NO org-feed credential.
 # P4 update (ADR-0022): FS.GG.Game.Render consumes FS.GG.UI.Scene @0.1.64-preview.1 — which is
 # DUAL-PUBLISHED to nuget.org (ADR-0012/0013), so it restores from the public feed with no
-# `packages: read` credential and no extra source. FSharp.Core stays the only package pinned to the
-# SDK library-packs hash in the committed lockfiles (CI parity; see the 0.1.70 landing note / P2).
+# `packages: read` credential and no extra source.
+#
+# FSharp.Core (ADR-0032, superseding the old library-packs pin): the committed lockfiles record the
+# NUGET.ORG contentHash, not the SDK's. The F# SDK injects sdk/<ver>/FSharp/library-packs into
+# RestoreAdditionalProjectSources, and its FSharp.Core .nupkg differs from nuget.org's at the same
+# id+version — so contentHash used to depend on WHICH SOURCE served it (CI resolved library-packs; a
+# dev box with packageSourceMapping resolved nuget.org, and got NU1403 against the committed lock).
+# DisableImplicitLibraryPacksFolder in the org-shared Directory.Build.props removes that folder from
+# the source list, so FSharp.Core resolves from nuget.org everywhere and the hash is a function of
+# (id, version) alone. If a lock hash ever mismatches here, regenerate it cold with force-evaluate —
+# do NOT re-pin the lock to the SDK's library-packs hash: that is the reverted fix (ADR-0032 §3).
 on:
   push:
     branches: [main]
