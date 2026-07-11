@@ -275,10 +275,19 @@ jobs:
   # The harness is fail-closed on ITSELF — no source files, no blocks, a parsed-block count that
   # disagrees with an independent fence count, or a missing FS.GG.Game.Core build are all hard
   # failures, because the one thing this job must never do is go green over code it never compiled.
-  # Blocks it cannot reach (the fs-gg-audio / fs-gg-persistence bodies teach packages this repo does
-  # not reference; pong's `Geometry.toRect` needs a scene edge the scaffold deliberately refuses to
-  # fake) are SKIPPED with a written reason and re-printed as a warning on every run, so they stay
-  # visible instead of quietly counting as covered.
+  # Blocks it cannot reach (pong's `Geometry.toRect` needs a scene edge the scaffold deliberately
+  # refuses to fake; a handful of blocks are .fsi signature listings or elide their body with `...`)
+  # are SKIPPED with a written reason and re-printed as a warning on every run, so they stay visible
+  # instead of quietly counting as covered.
+  #
+  # A skill may teach a package this repo does not consume — fs-gg-audio binds FS.GG.Audio.*,
+  # fs-gg-persistence binds FS.GG.UI.Canvas. Those blocks were unreachable, and so invisible to this
+  # job, until #150: the skills corpus now declares them in `PackageRefs`, the generated project
+  # takes a real PackageReference, and the block is typechecked against the assembly the READER
+  # restores rather than a stub. Versions come from the gate-only group in
+  # Directory.Packages.local.props (the harness reads the central pin and refuses to invent one), and
+  # NO product project references any of them. This step therefore restores those packages from
+  # nuget.org — all are dual-published, so no org-feed credential.
   md-block-typecheck:
     name: Markdown fsharp blocks typecheck (skills + TestSpecs)
     runs-on: ubuntu-latest

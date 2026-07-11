@@ -1,28 +1,73 @@
 // Typecheck fixtures for fs-gg-audio (see scripts/typecheck-md-blocks.fsx).
 //
-// EVERY block in this skill is skipped, and not because the blocks are unimportant — because this
-// gate cannot reach them. They teach `FS.GG.Audio.Core` / `FS.GG.Audio.Host`, packages FS.GG.Game
-// does not reference at all (it builds FS.GG.Game.Core and pins FS.GG.UI.Scene /
-// FS.GG.UI.KeyboardInput; see Directory.Packages.local.props). There is nothing here to compile
-// them against, and inventing a stand-in Audio surface would mean typechecking the skills against
-// a fiction — the exact failure mode this gate exists to end.
+// All five blocks USED to be skipped, and not because they were unimportant — because the gate
+// could not reach them. They teach `FS.GG.Audio.Core` / `FS.GG.Audio.Host`, packages FS.GG.Game
+// does not consume, so there was nothing here to compile them against: published skills, copied by
+// readers, gated by nothing (FS.GG.Game#150).
 //
-// So this skill's five blocks are in the same state fs-gg-game-core's were before #141: published,
-// copied by readers, and gated by nothing. That is a real, open hole and it is filed as such (see
-// the PR for FS-GG/FS.GG.Game#141) rather than papered over. The fix is to reference the audio
-// package here — or, more likely, to run this same harness in the repo that OWNS it.
-
-//#block 1
-//#skip teaches FS.GG.Audio.Core (`Audio.playSfx`, `SoundId`, `AudioEffect`) — a package this repo does not reference, so there is nothing to typecheck it against. See this file's header: an unreachable subject, not an excused one.
+// They are reachable now, and against the REAL packages — the same assemblies the reader restores.
+// The skills corpus declares them in `PackageRefs` (scripts/typecheck-md-blocks.fsx) and their
+// versions come from the gate-only group in Directory.Packages.local.props; no product project
+// references any of them. Standing up a stand-in Audio surface was never an option: a skill
+// typechecked against a fiction is worse than one that is not typechecked at all, because the green
+// tick stops anyone looking.
+//
+// Blocks 1 and 3 are self-contained — they open FS.GG.Audio.Core themselves and bind their own
+// values, so they need no section here.
 
 //#block 2
-//#skip teaches FS.GG.Audio.Core (`Audio.setBusVolume`, `Audio.duck`, `Audio.playSfx3D`) — package not referenced by this repo.
-
-//#block 3
-//#skip teaches FS.GG.Audio.Core (`Audio.interpret` / AudioEvidence) — package not referenced by this repo.
+// The bus/ducking section. The block is a bare sequence of calls with NO `open` of its own (it
+// continues the previous section's context in the prose), so the open is supplied here. `Music` is
+// `Bus.Music`, unqualified — which is what the reader types, and it resolves only because `Bus` is
+// not RequireQualifiedAccess. If Audio ever qualifies it, this block stops compiling and the prose
+// is wrong: that is the gate working.
+open FS.GG.Audio.Core
 
 //#block 4
-//#skip teaches FS.GG.Audio.Host (`OpenAlBackend.create`, `Viewer.runAppWithAudio`) — package not referenced by this repo.
+// The host seam: a real device, wired into the viewer's audio sink.
+//
+// `AudioCues` is the PRODUCT's generated cue table, not a package — the same kind of reconstruction
+// _scaffold.fs does for `Geometry.Vec2`, and the only thing in this block that is not real published
+// surface. Its `resolver` is a genuine `FS.GG.Audio.Host.AssetResolver`, so the block is still
+// typechecked against the real `OpenAlBackend.create` signature; only the cue bytes are ours, and
+// returning `None` is honest because the resolver's RESULT is not what the block teaches.
+open FS.GG.UI.SkiaViewer
+open FS.GG.Audio.Core
+
+type Model = { Tick: int }
+type Msg = Advance
+
+module AudioCues =
+    let resolver : AssetResolver =
+        { ResolveSound = fun (_: SoundId) -> None
+          ResolveTrack = fun (_: TrackId) -> None }
+
+// `viewerOptions` and `generatedHost` are the reader's own, and the block never LOOKS at either — it
+// passes them straight into `Viewer.runAppWithAudio`, whose real signature is the whole subject of
+// the block. So they are bound type-true and value-empty: `Unchecked.defaultof` asserts nothing about
+// the value and everything about the type, which is the half that has to be right. Fabricating a
+// plausible ViewerOptions/GeneratedAppHost record instead would put fields in this fixture that the
+// skill does not teach, and would then fail the gate every time Rendering added one — a false alarm
+// on a doc that never changed.
+let viewerOptions : ViewerOptions = Unchecked.defaultof<_>
+let generatedHost : GeneratedAppHost<Model, Msg> = Unchecked.defaultof<_>
 
 //#block 5
-//#skip teaches FS.GG.Audio.Core + the generated host (`GeneratedAppHost.dispatchKey`) — neither is referenced by this repo.
+// The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
+// sound WITHOUT a device. `dispatchKey` returns `(model * ViewerEffect list)` and `audioRequests`
+// narrows that to the `AudioEffect list` the block interprets — the `|> snd` and the two module
+// names are the point of the block, and all of it is real SkiaViewer surface.
+//
+// The `open` order is load-bearing: `Audio` exists in BOTH FS.GG.Audio.Core (`interpret`) and
+// FS.GG.Audio.Host (`play`), and F# MERGES same-named modules across opens. The block says
+// `Audio.interpret`, so Core must be in scope — it is, and Host is not opened here at all.
+open FS.GG.UI.KeyboardInput
+open FS.GG.UI.SkiaViewer
+open FS.GG.Audio.Core
+
+type KeyModel = { Score: int }
+type KeyMsg = Fire
+
+let host : GeneratedAppHost<KeyModel, KeyMsg> = Unchecked.defaultof<_>
+let keyEvent : ViewerKeyEvent = Unchecked.defaultof<_>
+let model : KeyModel = { Score = 0 }

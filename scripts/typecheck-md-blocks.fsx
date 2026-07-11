@@ -179,7 +179,25 @@ let corpora =
         FixtureDir = "scripts/skill-block-context"
         Preludes = [ scaffold ]
         AmbientOpens = [ "FS.GG.Game.Core"; "FsGg.SkillCheck.Scaffold" ]
-        PackageRefs = []
+        // The packages the SKILLS teach and this repo does not consume (FS.GG.Game#150). fs-gg-audio
+        // binds FS.GG.Audio.Core/Host; fs-gg-persistence binds FS.GG.UI.Canvas; and audio's host
+        // blocks reach into the viewer that DRIVES the audio — `Viewer.runAppWithAudio` and
+        // `GeneratedAppHost.dispatchKey`/`audioRequests` are FS.GG.UI.SkiaViewer, `ViewerKeyEvent` is
+        // FS.GG.UI.KeyboardInput. Without these, all seven of those blocks were UNREACHABLE: the gate
+        // had nothing to compile them against and skipped them, so published code that readers copy
+        // verbatim was gated by nothing — the silent-no-op shape (.github#416) reproduced inside the
+        // harness built to end it.
+        //
+        // They are compiled against the REAL published assemblies, exactly as a reader restores them.
+        // A stand-in Audio/Canvas surface was the alternative and is strictly worse: a skill
+        // typechecked against a fiction still shows a green tick, and the tick is what stops anyone
+        // looking. Same reasoning as the testspecs corpus's Expecto below.
+        //
+        // No PRODUCT project references any of these — see the gate-only group in
+        // Directory.Packages.local.props, which is where `pinnedVersion` reads their versions from.
+        PackageRefs =
+            [ "FS.GG.Audio.Core"; "FS.GG.Audio.Host"
+              "FS.GG.UI.Canvas"; "FS.GG.UI.SkiaViewer"; "FS.GG.UI.KeyboardInput" ]
         Cumulative = false
         ModuleNs = "FsGg.SkillCheck.Generated" }
 
@@ -284,6 +302,27 @@ type Fixture =
     | Context of recursive: bool * text: string   // F# text prepended to the block, in its module
     | Skipped of reason: string                   // printed on every run, never silent
 
+let blockDirective = Regex(@"^//#block\s+(\d+)\s*$")
+let skipDirective = Regex(@"^//#skip\s+(.+)$")
+let recDirective = Regex(@"^//#rec\s*$")
+
+/// Every `//#…` line must BE a directive the harness understands. A mistyped or half-written one —
+/// a bare `//#skip` with the reason left off, a `//#bloc 3` — otherwise parses as an ordinary F#
+/// comment and is swallowed into the block's fixture text, and the damage lands nowhere near the
+/// mistake: the bare `//#skip` silently loses its skip and the block gets COMPILED, which is the
+/// opposite of what its author asked for, with no diagnostic anywhere. A directive that is ignored
+/// in silence is the same silent-no-op this whole harness exists to kill, so it fails here, at the
+/// line the mistake is on.
+let validateDirectives (corpus: Corpus) (doc: string) (lines: string[]) =
+    lines
+    |> Array.iteri (fun i line ->
+        if line.StartsWith "//#"
+           && not (blockDirective.IsMatch line || skipDirective.IsMatch line || recDirective.IsMatch line) then
+            let text = line.Trim()
+            fail $"{corpus.FixtureDir}/{doc}.fs line {i + 1} is not a directive this harness \
+                   understands: {text}. Expected `//#block <n>`, `//#skip <reason>`, or `//#rec`. A \
+                   directive that is silently ignored fails as somebody ELSE's bug — refusing.")
+
 let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) : Map<int, Fixture> =
     let path = repoPath $"{corpus.FixtureDir}/{doc}.fs"
     if not (File.Exists path) then Map.empty
@@ -292,8 +331,10 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) : Map<int, 
         let acc = System.Collections.Generic.Dictionary<int, ResizeArray<string>>()
         let skips = System.Collections.Generic.Dictionary<int, string>()
         let recs = System.Collections.Generic.HashSet<int>()
-        for line in File.ReadAllLines path do
-            let m = Regex.Match(line, @"^//#block\s+(\d+)\s*$")
+        let lines = File.ReadAllLines path
+        validateDirectives corpus doc lines
+        for line in lines do
+            let m = blockDirective.Match line
             if m.Success then
                 let n = int m.Groups[1].Value
                 // A second section for the same block would silently REPLACE the first, dropping
@@ -308,9 +349,9 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) : Map<int, 
                 match current with
                 | None -> ()    // file header, before the first //#block — ignored
                 | Some n ->
-                    let s = Regex.Match(line, @"^//#skip\s+(.+)$")
+                    let s = skipDirective.Match line
                     if s.Success then skips[n] <- s.Groups[1].Value.Trim()
-                    elif Regex.IsMatch(line, @"^//#rec\s*$") then recs.Add n |> ignore
+                    elif recDirective.IsMatch line then recs.Add n |> ignore
                     else acc[n].Add line
         let fixtures =
             acc
@@ -665,6 +706,12 @@ let checkCorpus (corpus: Corpus) : int =
          an author fixing a corpus-wide mistake sees a partial list, fixes it, and is met by a fresh
          batch from the documents fsc never got to. Ask for the whole picture in one run. -->
     <OtherFlags>$(OtherFlags) --maxerrors:2000</OtherFlags>
+    <!-- Keeping the repo's Directory.Build.props out (above) also drops the org's restore-safety
+         promotions with it, and a corpus with PackageRefs is where they matter MOST: a package the
+         feed cannot serve at the pinned version would otherwise be silently SUBSTITUTED (NU1603) or
+         downgraded (NU1605), and the gate would typecheck the block against a surface no reader will
+         ever restore — green, and lying. Promote them back. -->
+    <WarningsAsErrors>$(WarningsAsErrors);NU1603;NU1605;NU1608</WarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
