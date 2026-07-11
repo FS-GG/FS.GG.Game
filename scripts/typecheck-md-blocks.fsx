@@ -195,9 +195,15 @@ let corpora =
         //
         // No PRODUCT project references any of these — see the gate-only group in
         // Directory.Packages.local.props, which is where `pinnedVersion` reads their versions from.
+        //
+        // FS.GG.UI.Scene is declared EXPLICITLY even though Canvas/SkiaViewer already drag it in
+        // transitively: _scaffold.fs binds `Scene.Point`/`Rect` directly now (#165), and a direct
+        // dependency carried only as somebody else's transitive one breaks the day that somebody
+        // else drops it.
         PackageRefs =
             [ "FS.GG.Audio.Core"; "FS.GG.Audio.Host"
-              "FS.GG.UI.Canvas"; "FS.GG.UI.SkiaViewer"; "FS.GG.UI.KeyboardInput" ]
+              "FS.GG.UI.Canvas"; "FS.GG.UI.SkiaViewer"; "FS.GG.UI.KeyboardInput"
+              "FS.GG.UI.Scene" ]
         Cumulative = false
         ModuleNs = "FsGg.SkillCheck.Generated" }
 
@@ -223,7 +229,11 @@ let corpora =
         // That is a REAL package the scaffolded product's test project references, so the block is
         // compiled against the real thing rather than skipped or faked — the alternative would leave
         // the one block that teaches readers how to write their assertions ungated.
-        PackageRefs = [ "Expecto" ]
+        //
+        // FS.GG.UI.Scene, because the shared `_scaffold.fs` prelude binds `Scene.Point`/`Rect` for
+        // its `toPoint`/`toRect` edge (#165). This corpus never had Scene on its graph — #150 put it
+        // on the SKILLS corpus only — so without this the prelude would not compile here at all.
+        PackageRefs = [ "Expecto"; "FS.GG.UI.Scene" ]
         Cumulative = true
         ModuleNs = "FsGg.DocCheck.Generated" } ]
 

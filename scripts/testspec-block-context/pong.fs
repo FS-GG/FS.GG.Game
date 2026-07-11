@@ -1,7 +1,21 @@
 // Typecheck fixtures for the pong TestSpec (see scripts/typecheck-md-blocks.fsx).
 
 //#block 2
-//#skip reaches for `Geometry.toRect` — the Vec2 -> Scene.Rect crossing that skill-block-context/_scaffold.fs DELIBERATELY does not reconstruct (see its header: a `toRect` returning the SIM `Rect` would be a lie of exactly the shape this gate exists to catch). The block is not wrong; it is unreachable until the scaffold's scene edge is something this repo can compile against. It is the ONLY block in the corpus that exercises that crossing, so this skip is the gate's one blind spot — printed on every run, deliberately.
+// The `Vec2 -> Scene.Rect` crossing — the one block in this corpus that exercises it. It was SKIPPED
+// until #165, because `_scaffold.fs` did not reconstruct `Geometry.toRect`; it does now, against the
+// REAL `FS.GG.UI.Scene.Rect`. This is the gate's former blind spot, and it is now compiled.
+//
+// The `open` is the whole fixture, and it is load-bearing. The block annotates `paddleRect` as
+// `: Rect` UNQUALIFIED, and `FS.GG.Game.Core.Rect` (ambient, from the sim) and `FS.GG.UI.Scene.Rect`
+// are structurally identical — so without this, `Rect` binds to the SIM rect and the block fails
+// against a `toRect` that correctly returns the SCENE one. A fixture's text is emitted AFTER the
+// corpus's ambient opens, so this one shadows them, which reproduces the reader's render layer:
+// there, the file that builds a scene has opened `FS.GG.UI.Scene`, and `Rect` means Scene's.
+//
+// Note what is NOT done here: the sim `Rect` is not swapped out corpus-wide, and `toRect` is not
+// re-pointed at the sim type. Either would make the #129/#132/#140 crossing typecheck by fiat, which
+// is the defect this gate exists to catch.
+open FS.GG.UI.Scene
 
 //#block 5
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
