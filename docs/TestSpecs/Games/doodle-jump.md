@@ -168,6 +168,12 @@ All platforms are **96 × 22 px** unless noted. Spawned above the camera as the 
 The doodle is created once at run start.
 
 ```fsharp
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
+
 type PlatformKind =
     | Static
     | Moving of vx: float * patrolMinX: float * patrolMaxX: float
@@ -177,18 +183,23 @@ type PlatformKind =
 type Platform =
     { Id: int
       Kind: PlatformKind
-      X: float            // left edge, world space
-      Y: float            // worldY of top surface (up = negative)
-      Width: float        // default 96
+      Pos: Vec2           // Vx = left edge; Vy = worldY of top surface (up = negative)
+      WidthPx: float      // default 96
       Broken: bool
       BreakTimer: float } // seconds remaining in Breaking state
 
 type PickupKind = Jetpack
-type Pickup = { Id: int; Kind: PickupKind; X: float; Y: float; Taken: bool }
+type Pickup = { Id: int; Kind: PickupKind; Pos: Vec2; Taken: bool }
 
 type Enemy =
-    { Id: int; X: float; Y: float; Width: float; Height: float; DriftVx: float; Alive: bool }
+    { Id: int; Pos: Vec2; WidthPx: float; HeightPx: float; DriftVx: float; Alive: bool }
 ```
+
+Positions live in the scaffold's `Geometry.Vec2` (`Vx`/`Vy`), and sizes carry `…Px` labels — never
+`X`/`Y`/`Width`/`Height`, which collide with `Scene`'s `Point`/`Rect` and blow up in the durable
+`LayoutEvidence.fs`. Cross into the scene with the scaffold's crossings — qualified, since these
+sketches abbreviate `Geometry.Vec2` rather than opening `Geometry`: e.g.
+`Geometry.toRect enemy.Pos enemy.WidthPx enemy.HeightPx`, `Geometry.toPoint doodle.Pos`.
 
 ## 6. World / Levels / Progression
 - **Playfield:** 720 × 1280 logical px (portrait), letter/pillarboxed to the window aspect.
@@ -206,13 +217,19 @@ type Enemy =
 ## 7. State Model (Elmish/MVU)
 
 ```fsharp
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
+
 type Phase = Title | Playing | Paused | GameOver
 
 type DoodleState = Rising | Falling | Jetpack | Dead
 
 type Doodle =
-    { X: float; Y: float            // worldY, up = negative
-      Vx: float; Vy: float
+    { Pos: Vec2                     // Vy = worldY, up = negative
+      Vel: Vec2                     // px/s
       FacingRight: bool
       State: DoodleState
       JetpackTimer: float }

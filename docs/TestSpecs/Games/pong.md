@@ -127,10 +127,10 @@ is beatable:
 ## 5. Entities / Game Objects
 
 ### 5.1 Paddle
-- Properties: `Y: float` (top edge), `Side: Side` (Left | Right), fixed width 18, height 110.
+- Properties: `TopY: float` (top edge), `Side: Side` (Left | Right), fixed width 18, height 110.
 - Behavior: Left/Right human paddles driven by held keys; Right may be AI in 1P.
 - Created at match start (two paddles); never destroyed during a match. Reset to
-  center-y (Y = 305) on each serve.
+  center-y (`TopY = 305`) on each serve.
 
 ### 5.2 Ball
 - Properties: `Pos: Vec2`, `Vel: Vec2`, size 16×16.
@@ -140,21 +140,41 @@ is beatable:
 
 ### 5.3 F# type sketch
 ```fsharp
-type Side = Left | Right
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
 
-type Vec2 = { X: float; Y: float }
+type Side = Left | Right
 
 type BallState = Frozen of timer:float | Live
 
 type Paddle =
     { Side: Side
-      Y: float }            // top edge, px
+      TopY: float }         // top edge, px
 
 type Ball =
     { Pos: Vec2             // center, px
       Vel: Vec2             // px/s
       State: BallState }
 ```
+
+Do not re-declare `Vec2` with `X`/`Y`, and do not put `X`/`Y`/`Width`/`Height` labels on `Paddle`
+(hence `TopY`): those labels collide with `Scene`'s `Point`/`Rect`, and the durable
+`LayoutEvidence.fs` opens both `Scene` and your model — the clash surfaces there, in a file you must
+not touch. The paddle's fixed 18×110 size is a render-time constant, so derive its rect at the scene
+boundary rather than storing `Width`/`Height` fields — the centre falls out of `Side` (x = 40 or
+1240) and `TopY` (+55):
+
+```fsharp
+let paddleRect (p: Paddle) : Rect =
+    let cx = match p.Side with Left -> 40.0 | Right -> 1240.0
+    Geometry.toRect { Vx = cx; Vy = p.TopY + 55.0 } 18.0 110.0
+```
+
+`Geometry.toRect` is qualified because this sketch abbreviates `Geometry.Vec2` rather than opening
+`Geometry`.
 
 ## 6. World / Levels / Progression
 - **Playfield:** 1280 × 720 logical px (fixed; scaled to window preserving aspect ratio,

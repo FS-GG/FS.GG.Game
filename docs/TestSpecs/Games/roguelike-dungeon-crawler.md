@@ -284,6 +284,12 @@ cost for room population (§4.8).
 ### 5.1 Player
 
 ```fsharp
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
+
 type Player =
   { Pos: Vec2; Vel: Vec2
     Facing: Vec2          // last aim direction

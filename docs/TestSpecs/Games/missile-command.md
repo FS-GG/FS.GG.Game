@@ -160,7 +160,11 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
 
 F#-flavored sketch:
 ```fsharp
-type Vec2 = { X: float; Y: float }
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
 
 type CityState = Alive | Rubble
 type BatteryState = Online | Destroyed
@@ -189,6 +193,13 @@ type Blast = { Center: Vec2; Radius: float; Phase: BlastPhase; HoldLeft: float }
 type Plane =
     { Id: int; Pos: Vec2; Vel: Vec2; DropTimer: float; Dir: int }
 ```
+
+Use the scaffold's `Geometry.Vec2` rather than re-declaring one with `X`/`Y`, and keep
+`X`/`Y`/`Width`/`Height` off your own records: those labels collide with `Scene`'s `Point`/`Rect`,
+and the durable `LayoutEvidence.fs` opens both `Scene` and your model, so the clash surfaces there —
+in a file you must not touch. Express the plane's 40×14 body with
+`Geometry.toRect plane.Pos 40.0 14.0` — qualified, since this sketch abbreviates `Geometry.Vec2`
+rather than opening `Geometry`.
 
 ## 6. World / Levels / Progression
 - Playfield **1280×720**; ground at `y = 680`.
@@ -258,8 +269,8 @@ type Msg =
 ### update (key cases)
 - `Tick dt` (Playing): advance `Now += dt`; integrate counter-missiles (move toward
   target, detonate→spawn Blast on arrival); advance blasts (grow/hold/shrink phases);
-  integrate incoming (move; MIRV split when `Head.Y ≥ SplitAtY`; smart-bomb dodge
-  check; on `Head.Y ≥ 680` impact target → destroy city/battery); integrate planes
+  integrate incoming (move; MIRV split when `Head.Vy ≥ SplitAtY`; smart-bomb dodge
+  check; on `Head.Vy ≥ 680` impact target → destroy city/battery); integrate planes
   (move; drop bombs on `DropTimer`); **collision pass**: for each incoming/plane within
   any blast radius → remove + add score; run spawner (`SpawnTimer`, `ToSpawn`); detect
   **wave clear** (`ToSpawn=0 && Incoming=[] && Counters in-flight resolved`) → `WaveBonus`;
@@ -556,7 +567,7 @@ All tunables live in a single `Config` record so balance is data-driven and test
 
 1. **Aim follows mouse.** *Given* the game is Playing, *when* the mouse moves to
    (500, 300), *then* `Crosshair = (500, 300)`; *when* it moves to (700, 700), *then*
-   `Crosshair.Y` is clamped to ≤ 660.
+   `Crosshair.Vy` is clamped to ≤ 660.
 
 2. **Auto-select fires nearest battery with ammo.** *Given* all three batteries have
    ammo and the crosshair X is 300, *when* `Fire` is issued, *then* a CounterMissile
