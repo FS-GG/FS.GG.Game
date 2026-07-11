@@ -275,6 +275,12 @@ the chosen branch). Costs are upgrade-only (not cumulative shown). Stats are *re
 
 F# sketch:
 ```fsharp
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
+
 type TowerKind = Arrow | Cannon | Frost | Tesla
 type Branch = NoBranch | A | B
 type TargetingMode = First | Last | Strongest | Closest

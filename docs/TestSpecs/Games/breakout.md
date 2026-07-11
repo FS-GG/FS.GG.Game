@@ -173,6 +173,12 @@ allowed to stack on screen, but a hard cap of **3 falling capsules** prevents cl
 
 F#-flavored sketch:
 ```fsharp
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
+
 type Color = Yellow | Orange | Green | Red | Silver | Gold
 
 type Brick =
@@ -240,9 +246,11 @@ type Phase =
     | LevelClear of sinceMs: float
     | GameOver
 
+// NOT X/Width — those labels collide with Scene's Point/Rect (see §5 sketch). The widen power-up
+// makes the paddle's width real model state, so it stays a field; only the label changes.
 type Paddle =
-    { X: float                   // left edge
-      Width: float               // 104 or 168
+    { LeftX: float               // left edge
+      WidthPx: float             // 104 or 168
       Vx: float                  // last-frame velocity (for english)
       StickyCharges: int         // >0 => catch mode
       LaserUntilMs: float option

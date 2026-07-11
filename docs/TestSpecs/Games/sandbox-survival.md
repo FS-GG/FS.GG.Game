@@ -350,7 +350,12 @@ type Tile = { Type: TileType }   // 1 byte type tag in practice; packed in array
 
 type StationKind = Workbench | Furnace | Anvil | Cookpot | Loom
 
-type Vec2 = { X: float32; Y: float32 }
+// Collision-safe labels (Vx/Vy), matching the scaffold's Geometry.Vec2. This world is float32
+// throughout (see Hp/Hunger below), so it declares its own rather than abbreviating the scaffold's,
+// whose Vec2 is float; convert at the scene boundary. What must NOT change is the labels —
+// X/Y/Width/Height collide with Scene's Point/Rect and mis-resolve bare record literals in the
+// durable LayoutEvidence.fs.
+type Vec2 = { Vx: float32; Vy: float32 }
 
 type Player =
     { Pos: Vec2; Vel: Vec2; Facing: Facing
@@ -369,7 +374,7 @@ type TimeState = { DayTime: float32; Day: int }   // DayTime in [0,1)
 
 type World =
     { Seed: int
-      Width: int; Height: int
+      WidthTiles: int; HeightTiles: int      // NOT Width/Height — those labels collide with Scene.Rect
       Chunks: System.Collections.Generic.Dictionary<int*int, Chunk> // mutable cache
       Chests: Map<int, ItemStack option []>
       LoadedKeys: Set<int*int> }

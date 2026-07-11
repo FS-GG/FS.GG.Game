@@ -208,6 +208,12 @@ Enemy AI types (referenced above):
 
 ### 5.4 F#-flavored type sketch
 ```fsharp
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
+
 type AbilityId = DoubleJump | Dash | WallClimb | Grapple | Bolt
 
 type EnemyKind = Crawler | Lunger | Floater | Slinger | Sentinel | SporePod | Wraith
@@ -286,7 +292,8 @@ type Player =
       JumpHeld: bool }
 
 type Room =
-    { Id: RoomId; Tiles: TileLayer; Width: int; Height: int
+    { Id: RoomId; Tiles: TileLayer
+      WidthTiles: int; HeightTiles: int   // NOT Width/Height — those collide with Scene.Rect
       Doors: Door list; SpawnTable: EnemySpawn list
       GrappleNodes: Vec2 list; Hazards: Hazard list }
 
@@ -697,7 +704,7 @@ All scenarios run the deterministic fixed-step sim (seed fixed). "frame" = 1/60 
 1. **Run acceleration reaches cap.**
    GIVEN the player is idle and grounded on flat ground,
    WHEN the player holds Right for 12 frames (0.2 s),
-   THEN `Player.Vel.X` equals **240 px/s** (±1) and does not exceed it.
+   THEN `Player.Vel.Vx` equals **240 px/s** (±1) and does not exceed it.
 
 2. **Variable jump height — tap vs hold.**
    GIVEN the player is grounded,
@@ -709,13 +716,13 @@ All scenarios run the deterministic fixed-step sim (seed fixed). "frame" = 1/60 
 3. **Coyote time allows a late jump.**
    GIVEN the player walks off a ledge and is now airborne,
    WHEN the player presses Jump within **6 frames** of leaving the ledge,
-   THEN a full ground jump executes (`Vel.Y == -620`);
+   THEN a full ground jump executes (`Vel.Vy == -620`);
    AND WHEN the press is on frame **7**, THEN no jump occurs.
 
 4. **Jump buffering triggers on landing.**
    GIVEN the player is falling toward ground,
    WHEN Jump is pressed **5 frames** before the landing frame,
-   THEN on the landing frame the player jumps automatically (`Vel.Y == -620`).
+   THEN on the landing frame the player jumps automatically (`Vel.Vy == -620`).
 
 5. **Ability gate blocks then unlocks.**
    GIVEN the player lacks **Dash** and a room edge is `Locked(Dash)` across a 140 px pit,
@@ -744,7 +751,7 @@ All scenarios run the deterministic fixed-step sim (seed fixed). "frame" = 1/60 
 9. **Pogo bounce and air-dash refresh.**
    GIVEN the player is airborne above a Spore Pod with air-dash already used,
    WHEN the player performs a Down-melee that connects,
-   THEN `Player.Vel.Y == -520` (bounce) AND `AirDashAvailable == true`.
+   THEN `Player.Vel.Vy == -520` (bounce) AND `AirDashAvailable == true`.
 
 10. **Save / load round-trip.**
     GIVEN the player interacts with a Save Vein with Embers=1240, MaxHp=70, Dash owned,
@@ -767,7 +774,7 @@ All scenarios run the deterministic fixed-step sim (seed fixed). "frame" = 1/60 
 13. **Camera room-lock clamp.**
     GIVEN a room smaller than the viewport,
     WHEN the player moves to the room's left edge,
-    THEN `Camera.Pos.X` does not go below the room's min bound (no out-of-room void
+    THEN `Camera.Pos.Vx` does not go below the room's min bound (no out-of-room void
     shown).
 
 14. **Fixed-timestep determinism.**

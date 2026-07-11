@@ -150,15 +150,22 @@ convention). Positions/velocities are in logical px and px/s. The simulation run
 F# type sketch:
 ```fsharp
 type Bird =
-    { Y: float
+    { CenterY: float
       Vy: float
-      RotationDeg: float }   // X is the constant birdX = 320.0
+      RotationDeg: float }   // horizontal position is the constant birdX = 320.0
 
 type PipePair =
-    { X: float               // left edge, moves left over time
+    { LeftX: float           // left edge, moves left over time
       GapCenterY: float
       Scored: bool }
 ```
+
+Both entities are constrained to one axis, so they carry scalars rather than a `Vec2` — but the
+labels still may **not** be `X`/`Y`/`Width`/`Height`. Those collide with `Scene`'s `Point`/`Rect`,
+and because the durable `LayoutEvidence.fs` opens both `Scene` and your model, a bare `{ X = …; Y = … }`
+literal there mis-resolves to *your* record. Anything genuinely 2-D (were pipes to move in both axes)
+belongs in the scaffold's collision-safe `Geometry.Vec2` (`Vx`/`Vy`); express the pipe/bird bounds
+with `toRect`, never `Width`/`Height` fields.
 
 ## 6. World / Levels / Progression
 - **Playfield:** `1280 × 720` logical px. Origin top-left, +Y down. The view scales this

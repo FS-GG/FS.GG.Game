@@ -125,8 +125,8 @@ bullets, asteroids, UFO, and particles.
 let wrap (v: float) (size: float) =
     let m = v % size
     if m < 0.0 then m + size else m
-pos.X <- wrap pos.X W
-pos.Y <- wrap pos.Y H
+// Pos is the scaffold's collision-safe Geometry.Vec2 — the labels are Vx/Vy, never X/Y
+let wrapPos (p: Vec2) : Vec2 = { Vx = wrap p.Vx W; Vy = wrap p.Vy H }
 ```
 
 **Wrap-aware distance** (shortest toroidal delta) used for all collision checks and the
@@ -171,6 +171,12 @@ F#-flavored sketches; final field names may differ.
 
 ### 5.1 Ship
 ```fsharp
+open FS.GG.Game.Core
+// Positions/velocities live in the scaffold's collision-safe Geometry.Vec2 ({ Vx; Vy }, from
+// src/<ProductDir>/Vec2.fs) — NEVER a record you label X/Y/Width/Height, which collide with
+// Scene's Point/Rect. This is a type ABBREVIATION: it adds no labels, so nothing can collide.
+type Vec2 = Geometry.Vec2
+
 type Ship =
   { Pos: Vec2
     Vel: Vec2
@@ -555,13 +561,13 @@ Verifiable Given/When/Then. `dt` steps are `1/60 s` unless noted.
 1. **Thrust accelerates along heading.**
    Given a stationary ship at heading 0 (pointing +x) at `(640, 360)`,
    When Thrust is held for 60 ticks (1.0 s),
-   Then `Vel.X` is positive and `≈ 220 * 1.0` reduced by cumulative drag (within ±15%),
-   `Vel.Y ≈ 0`, and the ship has moved right (`Pos.X > 640`).
+   Then `Vel.Vx` is positive and `≈ 220 * 1.0` reduced by cumulative drag (within ±15%),
+   `Vel.Vy ≈ 0`, and the ship has moved right (`Pos.Vx > 640`).
 
 2. **Drag decays velocity, never reverses it.**
    Given a ship moving at `(300, 0)` px/s with no input,
    When 120 ticks elapse,
-   Then `0 < Vel.X < 300` (monotonically decreasing) and `Vel.Y = 0`.
+   Then `0 < Vel.Vx < 300` (monotonically decreasing) and `Vel.Vy = 0`.
 
 3. **Max speed clamp.**
    Given thrust held continuously for 10 s,
@@ -574,11 +580,11 @@ Verifiable Given/When/Then. `dt` steps are `1/60 s` unless noted.
 5. **Screen wrap (position).**
    Given the ship at `(1279, 360)` with `Vel = (120, 0)`,
    When 1 tick elapses,
-   Then `Pos.X` is `≈ 1` (wrapped), not `≈ 1281`.
+   Then `Pos.Vx` is `≈ 1` (wrapped), not `≈ 1281`.
 
 6. **Bullet inherits momentum and expires.**
    Given a ship at heading 0 with `Vel = (100, 0)` that fires,
-   Then a Player bullet exists with `Vel.X ≈ 800` (700 + 100); And after 1.1 s
+   Then a Player bullet exists with `Vel.Vx ≈ 800` (700 + 100); And after 1.1 s
    (66 ticks) that bullet no longer exists.
 
 7. **Fire cooldown & cap.**

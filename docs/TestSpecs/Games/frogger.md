@@ -188,15 +188,18 @@ type FrogState =
 
 type DivePhase = TUp | TSinking | TDown | TRising
 
+// NOT X — that label collides with Scene's Point/Rect and mis-resolves bare record literals in the
+// durable LayoutEvidence.fs. These entities ride a discrete Row, so a scalar is honest; the label is
+// the thing that must change. Sizes stay `…Px`, never Width/Height.
 type Platform =
-    { Id: int; Row: int; X: float; Vx: float; LengthPx: float
+    { Id: int; Row: int; LeftX: float; Vx: float; LengthPx: float
       Kind: PlatformKind }
 and PlatformKind =
     | Log
     | Turtles of count: int * canDive: bool * phase: DivePhase * phaseTimer: float
 
 type Vehicle =
-    { Row: int; X: float; Vx: float; WidthPx: float; Kind: VehicleKind }
+    { Row: int; LeftX: float; Vx: float; WidthPx: float; Kind: VehicleKind }
 ```
 
 ## 6. World / Levels / Progression
