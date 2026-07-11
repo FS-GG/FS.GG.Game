@@ -85,12 +85,9 @@ which of those your product is, you want arcade.
 
 ## Public Contract
 
-> **Availability.** `Physics` is the opt-in heavy layer of `FS.GG.Game.Core`, and it lands a slice at a
-> time. Shipping today: every type below, plus `empty`, `addBody` and `pairs` — and everything the
-> doctrine itself rests on (`Loop`, `FixedStep`, `Geometry` including `polygonManifold`, `SpatialGrid`,
-> `Resolution`, and the `Manifold` / `ConvexPolygon` primitives). Still landing: `step`, `manifold`,
-> `interpolate`, `checksum`, and the `Transform` type. Check the package surface before you write against
-> those — the doctrine and the arcade guidance apply either way.
+> **Availability.** `Physics` is the opt-in heavy layer of `FS.GG.Game.Core`, and the surface below
+> ships today, in full. It rests on `Loop`, `FixedStep`, `Geometry` (including `polygonManifold`),
+> `SpatialGrid`, `Resolution`, and the `Manifold` / `ConvexPolygon` primitives, which ship too.
 
 `Physics` is `[<RequireQualifiedAccess>]`, and its types live **inside** the module: `Physics.Config`,
 `Physics.Static`, `Physics.SBox`.
@@ -119,26 +116,29 @@ module Physics =
     /// Opaque: struct-of-arrays plus a solver cache. Built and read through the module.
     type World
 
-    val empty   : config: Config -> World
-    val addBody : kind: BodyKind -> shape: Shape -> material: Material -> position: Point -> world: World -> struct (int * World)
+    /// The presentation pose of one body — what a renderer draws. Deliberately NOT a `World`: no
+    /// velocity, no inverse mass, no sleep or warm-start cache. `interpolate` returns one per body.
+    type Transform = { Position: Point; Rotation: float }
+
+    val empty       : config: Config -> World
+    val addBody     : kind: BodyKind -> shape: Shape -> material: Material -> position: Point -> world: World -> struct (int * World)
+    val addBodies   : bodies: seq<BodyKind * Shape * Material * Point> -> world: World -> struct (int[] * World)
 
     /// Sorted, deduped candidate pairs over the `SpatialGrid` broad phase. `(a, b)` with `a < b`.
-    val pairs   : world: World -> struct (int * int)[]
-
-    // ─── still landing ───────────────────────────────────────────────────────
+    val pairs       : world: World -> struct (int * int)[]
 
     /// THE integrate function. Fits `Loop.advance` verbatim. Pure, total, byte-deterministic.
     /// Reads `dt` and the world; never a clock, never `alpha`.
-    val step        : World -> dt: float -> World
+    val step        : world: World -> dt: float -> World
 
     /// Narrow phase for a body pair, over `Geometry.polygonManifold`. Not a second implementation.
-    val manifold    : World -> a: int -> b: int -> Manifold voption
+    val manifold    : world: World -> a: int -> b: int -> Manifold voption
 
     /// Presentation only. Shortest-arc on rotation. Never feeds `step`.
     val interpolate : alpha: float -> previous: World -> current: World -> Transform[]
 
     /// The desync tripwire.
-    val checksum    : World -> uint64
+    val checksum    : world: World -> uint64
 ```
 
 `Config` is baked into the `World` at `empty`, so `step : World -> float -> World` is *exactly* the
