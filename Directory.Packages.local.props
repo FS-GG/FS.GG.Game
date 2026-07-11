@@ -31,4 +31,33 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.15.6" />
   </ItemGroup>
+
+  <!-- Gate-only — the packages the published SKILLS teach (FS.GG.Game#150).
+       NO PROJECT REFERENCES THESE. A `PackageVersion` declares a version; it does not take a
+       dependency, so Game.Core stays BCL-only and Game.Render still ships exactly the two runtime
+       edges pinned above (verified: adding this group leaves all four packages.lock.json untouched).
+       The only consumer is the throwaway project that scripts/typecheck-md-blocks.fsx generates:
+       `fs-gg-audio` teaches FS.GG.Audio.*, `fs-gg-persistence` teaches FS.GG.UI.Canvas, and audio's
+       host blocks reach into the viewer that drives it (FS.GG.UI.SkiaViewer). Before #150 those
+       blocks had nothing to compile against and the gate SKIPPED all seven — published code, copied
+       by readers, gated by nothing.
+
+       The versions live HERE rather than in the harness because that is the rule the harness already
+       enforces (`pinnedVersion`): it reads the central pin and REFUSES to invent a version, since a
+       second copy of a version is a drift bug with a delay fuse.
+
+       FS.GG.UI.Canvas / FS.GG.UI.SkiaViewer are the same FS.GG.Rendering release train as the render
+       edge above and MUST move with it — both depend on FS.GG.UI.Scene at their own version, so a
+       skill typechecked against a different one would be gated against a surface the reader's product
+       never restores. Keep all four Rendering pins on one version (currently 0.5.0).
+
+       FS.GG.Audio.* is its own train (Audio.Host depends on Audio.Core at the same version). Being
+       gate-only, these can never reach a packed artefact, so the NU5104 stable-only rule that binds
+       the render edge does not bind them; they are on the current stable regardless. -->
+  <ItemGroup Label="Gate-only — packages the published skills teach (no project references these)">
+    <PackageVersion Include="FS.GG.Audio.Core" Version="0.2.0" />
+    <PackageVersion Include="FS.GG.Audio.Host" Version="0.2.0" />
+    <PackageVersion Include="FS.GG.UI.Canvas" Version="0.5.0" />
+    <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.5.0" />
+  </ItemGroup>
 </Project>

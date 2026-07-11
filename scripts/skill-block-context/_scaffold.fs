@@ -19,12 +19,19 @@
 // bug class is precisely a value crossing between the two halves of that merged namespace.
 //
 // DELIBERATELY OMITTED: the real `Vec2` also ships `toPoint`/`toRect`, which cross into
-// `FS.GG.UI.Scene.Point`/`Rect` — a package this gate does not reference. They are left out rather
-// than re-pointed at `FS.GG.Game.Core.Point`/`Rect`, because a `toPoint` that returned the SIM
-// point would be a lie of exactly the shape this gate exists to catch, and it would make the
-// missing `Vec2 -> Game.Core.Point` crossing (the whole subject of the *Spatial queries* section)
-// silently typecheck. A block that reaches for `toPoint`/`toRect` fails here — correctly, and
-// loudly — until the scaffold's scene edge is available to compile against.
+// `FS.GG.UI.Scene.Point`/`Rect`. They are left out rather than re-pointed at
+// `FS.GG.Game.Core.Point`/`Rect`, because a `toPoint` that returned the SIM point would be a lie of
+// exactly the shape this gate exists to catch, and it would make the missing
+// `Vec2 -> Game.Core.Point` crossing (the whole subject of the *Spatial queries* section) silently
+// typecheck. A block that reaches for `toPoint`/`toRect` therefore fails here — correctly, and
+// loudly.
+//
+// What CHANGED (#150): the old reason for the omission was "a package this gate does not
+// reference", and that reason has now expired. Making the audio/persistence blocks reachable put
+// FS.GG.UI.Canvas and FS.GG.UI.SkiaViewer on the skills corpus's PackageRefs, and both depend on
+// FS.GG.UI.Scene — so `Scene.Point`/`Rect` are on the reference graph and CAN be compiled against.
+// Nobody has written the edge yet, which is a strictly better problem than not being able to.
+// Tracked in FS-GG/FS.GG.Game#165. Until then, omission remains the honest state.
 
 namespace FsGg.SkillCheck.Scaffold
 
