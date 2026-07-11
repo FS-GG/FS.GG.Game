@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-ballistics (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-ballistics (see scripts/typecheck-md-blocks.fsx).
 // Blocks 1, 2 and 3 are self-contained. #140 fixed the `Pos` crossing in block 5.
 
 //#block 4

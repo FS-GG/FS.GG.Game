@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-physics (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-physics (see scripts/typecheck-md-blocks.fsx).
 
 //#block 1
 //#skip an .fsi SIGNATURE listing (the skill's proposed `module Physics` surface: `val step: ...`, `type World` with no definition). Not implementation code, so it cannot be compiled as an .fs. The real surface is gated byte-for-byte by the surface-baseline-drift job instead.

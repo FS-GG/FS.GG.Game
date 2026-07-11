@@ -1,4 +1,4 @@
-// Typecheck fixtures for fs-gg-game-core (see scripts/typecheck-skill-blocks.fsx).
+// Typecheck fixtures for fs-gg-game-core (see scripts/typecheck-md-blocks.fsx).
 //
 // Each //#block N section is prepended to block N of the SKILL.md inside a `module rec`, so a
 // binding here MAY forward-reference a type the block itself declares below it (block 6's `creeps`
