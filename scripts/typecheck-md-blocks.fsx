@@ -62,6 +62,14 @@
 // Compile-item count that disagrees with the block count are all hard failures. Skips require a
 // written reason and are printed on every run.
 //
+// ...and a guard is only fail-closed if it can actually FAIL (#176). The block-count cross-check
+// above was computed with the EXTRACTOR'S OWN predicate, so the two were blind to an indented
+// ```fsharp fence in precisely the same way, always agreed, and passed over two published blocks
+// nothing ever compiled. The extractor now takes a fence at any indent (§1), and its cross-check is
+// written to a deliberately different, permissive rule so that it can disagree — see
+// `looseFencePattern`. A check that shares the bug it checks for is theatre, and it is the very shape
+// (.github#416) this harness exists to end.
+//
 // Usage:
 //   dotnet fsi scripts/typecheck-md-blocks.fsx                      # both corpora (this is the gate)
 //   dotnet fsi scripts/typecheck-md-blocks.fsx --corpus testspecs   # just one
@@ -256,11 +264,45 @@ type Block =
       SourceFile: string    // absolute path to the markdown
       Ordinal: int          // 1-based index of the block WITHIN its file — the fixture key
       StartLine: int        // 1-based markdown line of the block's FIRST CODE LINE (after the fence)
+      /// The opening fence's indent, in characters — stripped from `Code` (see `extractBlocks`).
+      /// Columns reported by the compiler and by the label lint are columns in that DEDENTED text,
+      /// so this is added back before any annotation, and a diagnostic lands ON the token it names.
+      /// Zero for a column-0 fence, which is all but two blocks in the corpora.
+      Indent: int
+      /// Lines in `Code`. Fixed at extraction, so `indentAt` can map a diagnostic's markdown line back
+      /// to its block without re-splitting every block's text on every lookup.
+      LineCount: int
       Code: string }
 
-/// Blocks are fenced with an exactly-``` ```fsharp `` opener at column 0 and a ``` closer. The
-/// corpora use no nested or indented fences — the independent fence count below would catch it if
-/// they started to — so a line scanner is honest here and a markdown parser would be ceremony.
+/// A fence opener: three-or-more backticks tagged exactly `fsharp`, at ANY indent. An indented one is
+/// not exotic — a fence inside a bullet list sits at the bullet's content column, and two published
+/// blocks do exactly that (#176). Requiring column 0 silently dropped both, and they were compiled by
+/// nothing.
+let fenceOpen = Regex(@"^(?<indent>[ \t]*)(?<ticks>`{3,})fsharp[ \t]*$")
+
+/// The closer: a bare fence of at least as many backticks as the opener. An indented block's closer is
+/// indented too, so some leeway is required — but NOT unlimited leeway, or a backtick-only line deep
+/// inside a block's code (say, within a triple-quoted string) would close it early and silently
+/// truncate the body. CommonMark's rule is the right amount: a closer may sit up to three spaces past
+/// the opener's own indent, and no further.
+let isFenceClose (indent: string) (ticks: string) (line: string) =
+    let closerIndent = line.Length - line.TrimStart([| ' '; '\t' |]).Length
+    let t = line.Trim()
+    closerIndent <= indent.Length + 3
+    && t.Length >= ticks.Length
+    && t |> Seq.forall ((=) '`')
+
+/// Strip the opening fence's indent from a body line — up to that width of leading whitespace and
+/// NEVER more, so a line indented further than the fence keeps the extra indent that carries the
+/// code's own structure. This is what CommonMark does, so it is the code the reader copies off the
+/// rendered page; it is also what puts a block's own `open` lines back at column 0, where the hoist
+/// in §3 can see them.
+let dedent (indent: string) (line: string) =
+    let mutable k = 0
+    while k < indent.Length && k < line.Length && (line[k] = ' ' || line[k] = '\t') do
+        k <- k + 1
+    line.Substring k
+
 let extractBlocks (docOf: string -> string) (sourceFile: string) : Block list =
     let doc = docOf sourceFile
     let lines = File.ReadAllLines sourceFile
@@ -268,26 +310,46 @@ let extractBlocks (docOf: string -> string) (sourceFile: string) : Block list =
     let mutable i = 0
     let mutable ordinal = 0
     while i < lines.Length do
-        if lines[i].TrimEnd() = "```fsharp" then
+        let m = fenceOpen.Match lines[i]
+        if m.Success then
+            let indent = m.Groups["indent"].Value
+            let ticks = m.Groups["ticks"].Value
             let openFence = i                       // 0-based
             let body = ResizeArray<string>()
             let mutable j = i + 1
-            while j < lines.Length && lines[j].TrimEnd() <> "```" do
-                body.Add lines[j]
+            while j < lines.Length && not (isFenceClose indent ticks lines[j]) do
+                body.Add(dedent indent lines[j])
                 j <- j + 1
             if j >= lines.Length then
-                fail $"{relative sourceFile}: unterminated ```fsharp fence opened at line {openFence + 1}."
+                fail $"{relative sourceFile}: unterminated {ticks}fsharp fence opened at line \
+                       {openFence + 1}."
             ordinal <- ordinal + 1
             blocks.Add
                 { Doc = doc
                   SourceFile = sourceFile
                   Ordinal = ordinal
                   StartLine = openFence + 2         // 1-based line of the first code line
+                  Indent = indent.Length
+                  LineCount = body.Count
                   Code = String.Join("\n", body) }
             i <- j + 1
         else
             i <- i + 1
     List.ofSeq blocks
+
+/// The extractor's cross-check, and it must NOT share the extractor's matcher — that sharing WAS the
+/// bug (#176). Both sides used to test `l.TrimEnd() = "```fsharp"`, so both were blind to an indented
+/// fence in exactly the same way and could never disagree. A cross-check that carries the bug it is
+/// checking for is not a cross-check; it is the fail-open shape (.github#416) reproduced inside the
+/// harness built to end it.
+///
+/// So this is written to a DIFFERENT rule, deliberately, and a permissive one: it is loose about
+/// everything the extractor is strict about — any indent, any fence length, a tilde fence, an
+/// info-string suffix. It therefore OVER-counts rather than under-counts, which is the only safe
+/// direction for a guard whose entire job is to notice DROPPED blocks. Should it ever count a fence
+/// the extractor legitimately ignores, the disagreement is a hard failure demanding that someone
+/// reconcile the two here — which is the point. Nothing is dropped in silence.
+let looseFencePattern = Regex(@"^[ \t]*(?:`{3,}|~{3,})[ \t]*fsharp\b", RegexOptions.Multiline)
 
 // ---------------------------------------------------------------------------------------------
 // 2. Fixtures
@@ -439,7 +501,8 @@ let lintLabels (blocks: Block list) : int =
                 violations <- violations + 1
                 let label = m.Groups["label"].Value
                 let docLine = b.StartLine + i
-                annotate "error" (relative b.SourceFile) docLine (m.Groups["label"].Index + 1)
+                // + b.Indent: the code was dedented at extraction, the markdown was not.
+                annotate "error" (relative b.SourceFile) docLine (b.Indent + m.Groups["label"].Index + 1)
                     $"forbidden record-field label '{label}'. X/Y/Width/Height are the labels of \
                       Scene's Point/Rect AND of the sim Point/Rect, so a bare record literal resolves \
                       against the wrong one (FS.GG.Game#129/#132/#140/#144). Positions and velocities \
@@ -491,16 +554,20 @@ let checkCorpus (corpus: Corpus) : int =
 
     // Independent cross-check of the extractor. A regression that silently stops SEEING blocks would
     // otherwise sail through green — the exact failure this gate exists to prevent, reproduced inside
-    // the gate itself. Count the fence-open lines the dumb way and demand agreement.
+    // the gate itself. `looseFencePattern` is deliberately NOT the extractor's matcher: see its
+    // definition in §1, and #176 for the two published blocks that were dropped while the two agreed.
     let independentFenceCount =
-        sources
-        |> Array.sumBy (fun f ->
-            File.ReadAllLines f |> Array.filter (fun l -> l.TrimEnd() = "```fsharp") |> Array.length)
+        sources |> Array.sumBy (fun f -> looseFencePattern.Matches(File.ReadAllText f).Count)
 
     if blocks.Length <> independentFenceCount then
-        fail $"[{corpus.Id}] extractor disagreement: parsed {blocks.Length} blocks but counted \
-               {independentFenceCount} ```fsharp fences. The extractor is dropping blocks — fix it \
-               before trusting this gate."
+        fail $"[{corpus.Id}] extractor disagreement: the extractor parsed {blocks.Length} block(s), but \
+               an independent, deliberately-permissive fence scan counted {independentFenceCount} \
+               fsharp fence opener(s). One of the two is wrong, and the gate is worth nothing until \
+               they agree — so reconcile them here, in the open. If the extractor parsed FEWER, it is \
+               either DROPPING published blocks that readers copy (#176 — widen it), or the scan \
+               counted a ```fsharp fence NESTED inside another fenced block, which the extractor \
+               rightly skips over and the scan does not (teach the scan to skip fenced regions). If it \
+               parsed MORE, the scan is the strict one and missed an opener the extractor found."
 
     if blocks.Length = 0 then
         fail $"[{corpus.Id}] found 0 ```fsharp blocks. Refusing to pass: a gate with no subject is a \
@@ -595,6 +662,15 @@ let checkCorpus (corpus: Corpus) : int =
     ///     required: in a recursive module F# demands every `open` come first (FS3200). Our own opens
     ///     follow: ambient first, then the document's own PREDECESSOR blocks, so a name the document
     ///     declares always shadows an ambient one of the same name rather than the reverse.
+    ///
+    ///     A block may therefore only `open` a namespace that resolves WITHOUT the ambient opens —
+    ///     they run after it. That rules out opening a module nested inside one of them, e.g. bare
+    ///     `open Geometry` (the scaffold's, inside `FsGg.SkillCheck.Scaffold`). No block does, and
+    ///     none should: `FS.GG.Game.Core` ships its own `[<RequireQualifiedAccess>]` `Geometry`, so in
+    ///     a reader's file — where both are in scope — `open Geometry` does not compile either
+    ///     (FS0892). The corpus reaches the scaffold's geometry the way a reader must, QUALIFIED, as
+    ///     `Geometry.Vec2` / `Geometry.toRect`. fs-gg-model-swap was the one block that broke that
+    ///     rule; nothing compiled it until #176, and #176 corrected the prose.
     ///
     ///   * `module rec` only when the fixture asks for it (//#rec). A recursive module is what lets a
     ///     fixture forward-reference a type the block itself declares (`creeps : Creep list`), but it
@@ -779,6 +855,19 @@ let checkCorpus (corpus: Corpus) : int =
     // author fixing the right file and hunting through prose that is already correct.
     let sourceSet = sources |> Array.map (fun f -> f.Replace(@"\", "/")) |> Set.ofArray
 
+    // The line directive re-anchors the LINE on the markdown, but the COLUMN it reports is a column in
+    // the dedented block text (see Block.Indent). Give the fence's indent back, so a diagnostic on an
+    // indented block points at the token it names instead of N columns to its left. A column-0 block —
+    // every block here but two — is unaffected.
+    let indentAt (file: string) (line: int) =
+        blocks
+        |> List.tryFind (fun b ->
+            b.SourceFile.Replace(@"\", "/") = file
+            && line >= b.StartLine
+            && line < b.StartLine + b.LineCount)
+        |> Option.map _.Indent
+        |> Option.defaultValue 0
+
     let diagnostics =
         Regex.Matches(output, @"^(?<file>[^\s(].*?)\((?<line>\d+),(?<col>\d+)\):\s*(?<lvl>error|warning)\s+(?<code>FS\d+):\s*(?<msg>.*)$",
                       RegexOptions.Multiline)
@@ -804,8 +893,9 @@ let checkCorpus (corpus: Corpus) : int =
         let normalized = file.Replace(@"\", "/")
         let shown = if Path.IsPathRooted file then relative file else file
         if sourceSet.Contains normalized then
-            annotate "error" shown line col $"{code}: {msg}"
-            printfn "  %s:%d:%d  %s: %s" shown line col code msg
+            let mdCol = col + indentAt normalized line
+            annotate "error" shown line mdCol $"{code}: {msg}"
+            printfn "  %s:%d:%d  %s: %s" shown line mdCol code msg
         else
             annotate "error" corpus.FixtureDir 1 1
                 $"fixture/prelude does not compile ({Path.GetFileName file}:{line}): {code}: {msg}"
