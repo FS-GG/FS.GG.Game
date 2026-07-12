@@ -1,7 +1,7 @@
 // Typecheck fixtures for fs-gg-ballistics (see scripts/typecheck-md-blocks.fsx).
 // Blocks 1, 2 and 3 are self-contained. #140 fixed the `Pos` crossing in block 5.
 
-//#block 4
+//#block 4 "let inheritance = 0.25                                        // <- name it in the spec, not in a literal"
 // Velocity inheritance, and the block is precisely ABOUT the two label sets: `ship.Vel` is *model*
 // state, so it is a collision-safe `Geometry.Vec2` (`Vx`/`Vy`), while `aim` came back from
 // `Ballistics.intercept` and is a sim `Point` (`X`/`Y`). Typing `Vel` as a `Point` here would make
@@ -11,7 +11,7 @@ let ship : Ship = { Vel = { Vx = 0.0; Vy = 0.0 } }
 let aim : Point = { X = 1.0; Y = 0.0 }
 let shotSpeed = 900.0
 
-//#block 5
+//#block 5 "type Enemy = { Pos: Geometry.Vec2; Hp: int }"
 //#rec
 // Splash over a SpatialGrid. The block declares its OWN `Enemy` (storing the collision-safe
 // `Geometry.Vec2`, per #140/#143) and its own `simPoint` crossing — so the fixture must NOT declare

@@ -8,7 +8,7 @@
 // binding that is wrong in a way the block cannot see (say, an `enemies` whose `Pos` is already a
 // sim `Point`) would quietly excuse the very Vec2 -> Point crossing the block exists to teach.
 
-//#block 1
+//#block 1 "let simInterval = 1.0 / 60.0"
 // The fixed-step section: `integrate` is "your game step: world -> dt -> world", and the model
 // carries a StepState. `lerpWorld` is the reader's own interpolation.
 type World = { Tick: int }
@@ -17,7 +17,7 @@ let dtSeconds = 1.0 / 144.0
 let model = {| Sim = Loop.init { Tick = 0 } |}
 let lerpWorld (_previous: World) (current: World) (_t: float) : World = current
 
-//#block 5
+//#block 5 "let grid = SpatialGrid.build 32.0 [ for e in enemies -> simPoint e.Pos, e.Id ]"
 // Spatial queries. `enemies` positions are stored in the scaffold's collision-safe Vec2 — that is
 // the whole premise of the section, and it is what forces the `simPoint` crossing the block
 // teaches. Giving `Pos` a sim `Point` here would make the block typecheck for the wrong reason.
@@ -25,7 +25,7 @@ type Enemy = { Id: int; Pos: Geometry.Vec2 }
 let enemies : Enemy list = []
 let blast : Geometry.Vec2 = { Vx = 64.0; Vy = 48.0 }
 
-//#block 6
+//#block 6 "type Creep = { Pos: Geometry.Vec2; Hp: int }"
 //#rec
 // The grid-sim recipe (the #132 defect lived here). `creeps` FORWARD-REFERENCES `Creep`, which the
 // block declares — legal because the generated unit is a `module rec`. Binding it any other way

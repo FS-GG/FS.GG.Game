@@ -7,7 +7,7 @@
 // `Difficulty` is NOT here: FS.GG.Game.Core ships it, and the block resolves to the real one — which
 // is the whole point of compiling against the built assembly rather than a reconstruction.
 
-//#block 1
+//#block 1 "type Vec2 = Geometry.Vec2"
 // --- ids ---
 type TowerId = TowerId of int
 type EnemyId = EnemyId of int
@@ -32,7 +32,7 @@ type TransientFx =
 type RngState = { Seed: uint64 }
 type RunStats = { Kills: int; Leaks: int; DamageDealt: float }
 
-//#block 7
+//#block 7 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled
@@ -40,7 +40,7 @@ type RunStats = { Kills: int; Leaks: int; DamageDealt: float }
 // reader copies, and they are what this checks.
 type MenuMsg =
 
-//#block 8
+//#block 8 "acc <- acc + realDt"
 // The fixed-step accumulator fragment (§12). The block is a BODY, lifted out of the Tick handler —
 // its free names are the handler's locals, so they are bound here. `Model` and `simStep` come from
 // the document itself (block 5 declares `Model`; the accumulator is what drives it).

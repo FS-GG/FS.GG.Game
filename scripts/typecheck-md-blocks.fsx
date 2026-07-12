@@ -352,6 +352,94 @@ let extractBlocks (docOf: string -> string) (sourceFile: string) : Block list =
 let looseFencePattern = Regex(@"^[ \t]*(?:`{3,}|~{3,})[ \t]*fsharp\b", RegexOptions.Multiline)
 
 // ---------------------------------------------------------------------------------------------
+// 1b. Anchors — what makes the positional fixture key CHECKED rather than assumed (#181)
+// ---------------------------------------------------------------------------------------------
+//
+// A fixture is keyed by ORDINAL: `//#block 3` means "the third ```fsharp block in this document". The
+// stale-fixture guard in §2 catches an ordinal that has fallen OUT OF RANGE — but that is the rare
+// edit. The common one is a block INSERTED AHEAD of an existing block, which shifts every later block
+// down by one while every ordinal stays perfectly in range. The guard cannot see it, and the fixture
+// silently re-binds to the WRONG block.
+//
+// This is not hypothetical: it happened in #176. TestSpecTutorial's Part C fixture was keyed
+// `//#block 1`; a block was un-hidden ahead of it, Part C became block 2, and `//#block 1` was still a
+// valid ordinal in a now-2-block document — so nothing fired and the fixture bound to prose it was
+// never written for. It was caught by hand (#180). Nothing in the harness would have told the next
+// author, and the failure is not even reliably loud: a fixture that merely supplies an `open` would
+// attach to the wrong block and STILL COMPILE, leaving one block silently over-provisioned and another
+// under-provisioned. That is the fail-open shape (.github#416) this harness exists to end, reproduced
+// inside the harness itself.
+//
+// So the fixture must ASSERT what it is keyed to, and the harness must PROVE the assertion:
+//
+//     //#block 3 "type Creep = { Pos: Geometry.Vec2; Hp: int }"
+//
+// The anchor is a line copied verbatim from the block. §2 requires it to identify EXACTLY ONE block in
+// the document, and requires that block to be the one the ordinal names. An insertion then fails with a
+// precise, actionable error naming both ordinals — instead of nothing at all.
+//
+// WHY NOT "the block's first code line", which is the obvious rule and the one this issue proposed?
+// Because measuring the corpus refuted it. The blocks open by convention: SIX blocks of fs-gg-game-core
+// begin `open FS.GG.Game.Core`, and ELEVEN documents have at least two blocks sharing a first line. An
+// anchor that six blocks agree on distinguishes none of them, so the fixture would re-bind across an
+// insertion and the anchor check would nod it through — a guard that cannot separate the things it is
+// guarding, which is worse than no guard at all, because the green tick is what stops anyone looking.
+//
+// WHY NOT a content digest? It is total, but it re-keys on every in-place edit of the block — so the
+// author who fixes a typo in the prose is met by a hash mismatch, and a guard that cries on correct
+// behaviour is one people learn to route around. WHY NOT the markdown line number? Any prose edit above
+// the block moves it; strictly more brittle than the ordinal it would replace.
+//
+// So: the author names ANY line of the block, and UNIQUENESS carries the guarantee. That keeps the
+// anchor readable, keeps it stable under edits elsewhere in the block, and — unlike a fixed rule —
+// never forces a PROSE edit to satisfy the harness. doodle-jump is exactly why that last part matters:
+// two of its blocks legitimately open with the same `type Vec2 = Geometry.Vec2` (the header calls that
+// out — a document may re-state Vec2 for the reader's benefit), and a rule demanding a distinct FIRST
+// line would have the harness dictating documentation. It names a deeper line instead, and nothing in
+// the prose has to move.
+
+/// Anchors are compared with runs of whitespace collapsed. The anchor is an identity claim about a LINE
+/// of the block, not an assertion about its column alignment — so re-aligning a trailing comment must
+/// not invalidate it. Without this, a purely cosmetic edit inside a block would fail the gate and demand
+/// a re-key, and a guard that cries on correct behaviour is one authors learn to route around, which
+/// costs far more than the whitespace it was pedantic about.
+let normalizeAnchor (l: string) = Regex.Replace(l.Trim(), @"\s+", " ")
+
+/// The lines of a block that a fixture may name as its anchor: non-blank, trimmed, de-duplicated, and
+/// VERBATIM (matching normalizes; suggesting does not, because a suggestion is meant to be pasted and
+/// should look like the line it came from). Comments and `open`s are eligible — a block of nothing else
+/// has no other line to offer, and it is UNIQUENESS, not substance, that makes an anchor prove a binding.
+let anchorCandidates (b: Block) =
+    b.Code.Split('\n') |> Array.map _.Trim() |> Array.filter (fun l -> l <> "") |> Array.distinct
+
+/// Does this block contain the line the fixture named?
+let blockHasAnchor (anchor: string) (b: Block) =
+    let target = normalizeAnchor anchor
+    anchorCandidates b |> Array.exists (fun l -> normalizeAnchor l = target)
+
+/// A line that says something about THIS block, as opposed to boilerplate every block shares. Used only
+/// to RANK a suggestion — never to restrict what an author may name.
+let isSubstantive (l: string) =
+    not (l.StartsWith "//") && not (Regex.IsMatch(l, @"^open\s+\S+"))
+
+/// The anchor `--list` offers for a block: the first line that occurs in NO OTHER block of the document,
+/// preferring a substantive one over an `open` or a comment. Uniqueness is judged under the SAME
+/// normalization the check uses, so a suggested anchor is always one the check will accept. `None` when
+/// the block shares every one of its lines with a sibling — an unanchorable block, which §2 reports
+/// rather than papers over.
+let suggestAnchor (docBlocks: Block list) (b: Block) : string option =
+    let elsewhere =
+        docBlocks
+        |> List.filter (fun o -> o.Ordinal <> b.Ordinal)
+        |> Seq.collect anchorCandidates
+        |> Seq.map normalizeAnchor
+        |> Set.ofSeq
+    let unique = anchorCandidates b |> Array.filter (normalizeAnchor >> elsewhere.Contains >> not)
+    match unique |> Array.tryFind isSubstantive with
+    | Some l -> Some l
+    | None -> unique |> Array.tryHead
+
+// ---------------------------------------------------------------------------------------------
 // 2. Fixtures
 // ---------------------------------------------------------------------------------------------
 //
@@ -359,12 +447,21 @@ let looseFencePattern = Regex(@"^[ \t]*(?:`{3,}|~{3,})[ \t]*fsharp\b", RegexOpti
 // never declares (`TowerId`, `DamageType`), or the `type Msg =` header that a DU-continuation
 // fragment is written below. One file per document, in <FixtureDir>/<doc>.fs, split into sections:
 //
-//     //#block 6
+//     //#block 6 "let towers : Tower list = []"
 //     let cellPx = 32.0
 //     let creeps : Creep list = []     // forward-references the block's own type — needs //#rec
 //
-//     //#block 7
+//     //#block 7 "let render model = ..."
 //     //#skip <why this block cannot be compiled>
+//
+// The quoted ANCHOR is a line copied verbatim from the block the ordinal names, and it is REQUIRED. The
+// ordinal alone is a positional key that silently re-binds when a block is inserted ahead of it (#181);
+// the anchor is what turns it into a key the harness can CHECK. Below, `loadFixtures` proves that the
+// anchor identifies exactly one block of the document AND that it is the block the ordinal names — so
+// an insertion fails with an error naming both ordinals, instead of passing in silence.
+//
+// You do not have to work the anchor out. `--list` prints a ready-to-paste `//#block N "..."` for every
+// block, already chosen to be unique within its document.
 //
 // A block with no section gets an EMPTY fixture and is compiled as-is: a self-contained block needs
 // no ceremony, and a sketch that needs bindings fails loudly with an unbound-identifier error naming
@@ -374,9 +471,26 @@ type Fixture =
     | Context of recursive: bool * text: string   // F# text prepended to the block, in its module
     | Skipped of reason: string                   // printed on every run, never silent
 
-let blockDirective = Regex(@"^//#block\s+(\d+)\s*$")
+// The anchor is greedy to the LAST quote on the line, so a block line that itself contains a string
+// literal — `let title = "Pong"` — anchors without escaping.
+let blockDirective = Regex(@"^//#block\s+(\d+)\s+""(.*)""\s*$")
 let skipDirective = Regex(@"^//#skip\s+(.+)$")
 let recDirective = Regex(@"^//#rec\s*$")
+
+/// The anchorless key that WAS the grammar until #181. Matched only to diagnose it: it is by far the
+/// most likely "not a directive" an author will write, and answering it with the generic
+/// expected-a-directive error would send them looking for a typo instead of telling them what changed.
+let anchorlessBlockDirective = Regex(@"^//#block\s+(\d+)\s*$")
+
+/// The `//#block N "<anchor>"` line an author should write for block N, ready to paste. Falls back to a
+/// placeholder for the one case that has no answer: a block sharing every line with a sibling, which
+/// nothing can anchor and which `loadFixtures` reports on its own terms.
+let suggestedDirective (docBlocks: Block list) (n: int) =
+    docBlocks
+    |> List.tryFind (fun b -> b.Ordinal = n)
+    |> Option.bind (suggestAnchor docBlocks)
+    |> Option.map (fun a -> $"//#block {n} \"{a}\"")
+    |> Option.defaultValue $"//#block {n} \"<a line copied from the block>\""
 
 /// Every `//#…` line must BE a directive the harness understands. A mistyped or half-written one —
 /// a bare `//#skip` with the reason left off, a `//#bloc 3` — otherwise parses as an ordinary F#
@@ -385,39 +499,66 @@ let recDirective = Regex(@"^//#rec\s*$")
 /// opposite of what its author asked for, with no diagnostic anywhere. A directive that is ignored
 /// in silence is the same silent-no-op this whole harness exists to kill, so it fails here, at the
 /// line the mistake is on.
-let validateDirectives (corpus: Corpus) (doc: string) (lines: string[]) =
+let validateDirectives (corpus: Corpus) (doc: string) (docBlocks: Block list) (lines: string[]) =
     lines
     |> Array.iteri (fun i line ->
         if line.StartsWith "//#"
            && not (blockDirective.IsMatch line || skipDirective.IsMatch line || recDirective.IsMatch line) then
             let text = line.Trim()
+            let anchorless = anchorlessBlockDirective.Match line
+            if anchorless.Success then
+                let n = int anchorless.Groups[1].Value
+                fail $"{corpus.FixtureDir}/{doc}.fs line {i + 1}: `{text}` is an ANCHORLESS block key. An \
+                       ordinal on its own silently re-binds to the wrong block the moment someone inserts \
+                       a block ahead of it (#181), so a fixture must also NAME a line of the block it \
+                       means. Write: {suggestedDirective docBlocks n} — or run `dotnet fsi \
+                       scripts/typecheck-md-blocks.fsx --list`, which prints the line for every block."
             fail $"{corpus.FixtureDir}/{doc}.fs line {i + 1} is not a directive this harness \
-                   understands: {text}. Expected `//#block <n>`, `//#skip <reason>`, or `//#rec`. A \
-                   directive that is silently ignored fails as somebody ELSE's bug — refusing.")
+                   understands: {text}. Expected `//#block <n> \"<anchor line>\"`, `//#skip <reason>`, or \
+                   `//#rec`. A directive that is silently ignored fails as somebody ELSE's bug — refusing.")
 
-let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) : Map<int, Fixture> =
+/// `strict` is the gate; `not strict` is --list, which must be able to READ a fixture file that the gate
+/// would reject — because --list is the tool an author reaches for to FIX one. A repair tool that
+/// refuses to run on the broken file it exists to repair is a circle, and it is how a guard ends up
+/// resented and routed around. So the parse below accepts the anchorless legacy key too, and every
+/// check that could reject it is gated on `strict`.
+let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) (strict: bool) : Map<int, Fixture> =
     let path = repoPath $"{corpus.FixtureDir}/{doc}.fs"
     if not (File.Exists path) then Map.empty
     else
+        let docBlocks = blocks |> List.filter (fun b -> b.Doc = doc)
         let mutable current = None
         let acc = System.Collections.Generic.Dictionary<int, ResizeArray<string>>()
+        let anchors = System.Collections.Generic.Dictionary<int, string>()
         let skips = System.Collections.Generic.Dictionary<int, string>()
         let recs = System.Collections.Generic.HashSet<int>()
         let lines = File.ReadAllLines path
-        validateDirectives corpus doc lines
-        for line in lines do
+        if strict then validateDirectives corpus doc docBlocks lines
+
+        /// (ordinal, anchor) — the anchor is None only for the legacy anchorless key, which `strict`
+        /// has already refused by the time we get here.
+        let parseBlockKey (line: string) =
             let m = blockDirective.Match line
-            if m.Success then
-                let n = int m.Groups[1].Value
+            if m.Success then Some(int m.Groups[1].Value, Some(m.Groups[2].Value.Trim()))
+            else
+                let legacy = anchorlessBlockDirective.Match line
+                if legacy.Success then Some(int legacy.Groups[1].Value, None) else None
+
+        for line in lines do
+            match parseBlockKey line with
+            | Some(n, anchor) ->
                 // A second section for the same block would silently REPLACE the first, dropping
                 // bindings the author wrote and then failing the block with a confusing
                 // unbound-identifier error while the binding sits right there in this file.
-                if acc.ContainsKey n then
+                // Gated on `strict` like every other rejection here: --list is the tool you reach for to
+                // REPAIR this file, so it has to survive reading it (see the note on `loadFixtures`).
+                if strict && acc.ContainsKey n then
                     fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n} twice. The second \
                            section would silently discard the first — merge them."
                 current <- Some n
+                anchor |> Option.iter (fun a -> anchors[n] <- a)
                 acc[n] <- ResizeArray()
-            else
+            | None ->
                 match current with
                 | None -> ()    // file header, before the first //#block — ignored
                 | Some n ->
@@ -435,12 +576,56 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) : Map<int, 
         // A //#block section keyed to a block that does not exist is a stale fixture — usually a
         // block was deleted or reordered. Say so; a silently-ignored fixture is a lie in a file whose
         // whole job is to be true.
-        let ordinals = blocks |> List.filter (fun b -> b.Doc = doc) |> List.map _.Ordinal |> Set.ofList
-        for KeyValue(n, _) in acc do
-            if not (ordinals.Contains n) then
-                fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n}, but {doc} has only \
-                       {ordinals.Count} ```fsharp block(s). Stale fixture — a block was deleted or \
-                       reordered; re-key the fixture."
+        //
+        // This catches only an ordinal that has fallen OUT OF RANGE. The insertion case — every ordinal
+        // still in range, every fixture now bound one block too early — is invisible here and is what
+        // the anchor check below exists for (#181). Both run: the range check gives the better message
+        // when a block is deleted off the end, and it is the cheaper of the two.
+        // Both checks below walk their sections in ORDINAL order. `fail` exits on the first problem, and
+        // a Dictionary's enumeration order is not a contract — so without the sort, a file with several
+        // mis-keyed sections could report a different one on CI than it does locally, or on a re-run. A
+        // gate whose diagnosis moves under you is a gate you stop believing.
+        let ordinals = docBlocks |> List.map _.Ordinal |> Set.ofList
+        if strict then
+            for KeyValue(n, _) in acc |> Seq.sortBy _.Key do
+                if not (ordinals.Contains n) then
+                    fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n}, but {doc} has only \
+                           {ordinals.Count} ```fsharp block(s). Stale fixture — a block was deleted or \
+                           reordered; re-key the fixture."
+
+        // THE ANCHOR CHECK (§1b). The ordinal says which block the fixture MEANS; the anchor is the
+        // fixture's own claim about what that block CONTAINS, and here that claim is proved or the gate
+        // fails. Insert a block ahead of an anchored fixture and this is what fires — where the range
+        // check above stays perfectly, uselessly silent.
+        //
+        // Note what is proved: not merely that the anchor is SOMEWHERE in block n, but that it is in
+        // block n and in NO OTHER block of the document. An anchor matching two blocks would still nod
+        // through the re-key it exists to catch, so ambiguity is a failure in its own right, not a
+        // near-miss to be resolved by picking the first match.
+        for KeyValue(n, anchor) in (if strict then anchors |> Seq.sortBy _.Key |> List.ofSeq else []) do
+            let matching = docBlocks |> List.filter (blockHasAnchor anchor)
+            match matching with
+            | [ b ] when b.Ordinal = n -> ()        // the binding is proved — this is the happy path
+            | [ b ] ->
+                fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n} anchored to `{anchor}`, but \
+                       that line is in block {b.Ordinal} of {doc} — not block {n}. A block was INSERTED \
+                       or removed ahead of it, so the ordinal no longer points where this fixture thinks \
+                       it does, and the fixture is now bound to the WRONG block (#181). Re-key it to \
+                       `//#block {b.Ordinal} \"{anchor}\"` — and check the other sections in this file, \
+                       which have almost certainly shifted by the same amount."
+            | [] ->
+                fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n} anchored to `{anchor}`, but no \
+                       block of {doc} contains that line at all. The block was edited or deleted, so this \
+                       fixture is anchored to something that no longer exists. Block {n} is now \
+                       `{suggestedDirective docBlocks n}`; `dotnet fsi scripts/typecheck-md-blocks.fsx \
+                       --list` prints the current line for every block."
+            | many ->
+                let where = many |> List.map (fun b -> string b.Ordinal) |> String.concat ", "
+                fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n} anchored to `{anchor}`, but that \
+                       line appears in {many.Length} blocks of {doc} (blocks {where}). An anchor that \
+                       matches more than one block proves nothing — it would nod through the very re-key \
+                       it is here to catch (#181). Name a line UNIQUE to block {n}, e.g. \
+                       `{suggestedDirective docBlocks n}`."
         fixtures
 
 // ---------------------------------------------------------------------------------------------
@@ -577,7 +762,7 @@ let checkCorpus (corpus: Corpus) : int =
         blocks
         |> List.map _.Doc
         |> List.distinct
-        |> List.map (fun d -> d, loadFixtures corpus blocks d)
+        |> List.map (fun d -> d, loadFixtures corpus blocks d (not listOnly))
         |> Map.ofList
 
     let fixtureFor (b: Block) = fixturesByDoc[b.Doc] |> Map.tryFind b.Ordinal
@@ -612,6 +797,13 @@ let checkCorpus (corpus: Corpus) : int =
     if listOnly then
         // --list compiles nothing and checks nothing; it must not emit errors it then reports success
         // over. The label rule runs in the CHECK path below.
+        //
+        // The `//#block N "<anchor>"` line is printed VERBATIM and paste-ready, because re-keying a
+        // fixture after inserting a block is exactly when an author needs it and exactly when they
+        // are least inclined to hand-count fences (#181). The mismatch error in `loadFixtures` points
+        // here for the same reason: a guard that tells you it is unhappy but not what to write is a
+        // guard people learn to route around.
+        let blocksOf = blocks |> List.groupBy _.Doc |> Map.ofList
         for b in blocks do
             let state =
                 match fixtureFor b with
@@ -619,6 +811,14 @@ let checkCorpus (corpus: Corpus) : int =
                 | Some(Context _) -> "compile (with fixture)"
                 | None -> "compile (self-contained)"
             printfn "  %s block %d @ %s:%d — %s" b.Doc b.Ordinal (relative b.SourceFile) b.StartLine state
+            match suggestAnchor blocksOf[b.Doc] b with
+            | Some a -> printfn "      //#block %d \"%s\"" b.Ordinal a
+            | None ->
+                // No line of this block is unique within its document, so nothing can anchor it. Say so
+                // here rather than printing a directive that `loadFixtures` would reject as ambiguous.
+                printfn "      (UNANCHORABLE — every line of this block also appears in another block of \
+                         %s. A fixture cannot be keyed to it until one of them says something the other \
+                         does not.)" b.Doc
         0
     else
 

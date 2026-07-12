@@ -8,7 +8,7 @@
 // needs no forward reference and no //#rec — the abbreviation is transparent, so the doc's
 // `Pos: Vec2` and this file's `Geometry.Vec2` are the same type.
 
-//#block 1
+//#block 1 "type Vec2 = Geometry.Vec2"
 // --- ids ---
 type RoomId = RoomId of int
 type ItemId = ItemId of int
@@ -38,7 +38,7 @@ type Settings = { Volume: float; ScreenShake: bool }
 type InputState = { MoveX: float; MoveY: float; AimX: float; AimY: float; Firing: bool }
 type TitleCmd = NewRun | Continue | OpenOptions | Quit
 
-//#block 5
+//#block 5 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled

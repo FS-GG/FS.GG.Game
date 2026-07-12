@@ -12,7 +12,7 @@
 // BLOCK 2 needs //#rec: it declares `TileType` with a `Station of StationKind` case ABOVE its
 // `StationKind` declaration, which only a recursive module accepts.
 
-//#block 1
+//#block 1 "type EntityId = int"
 // Mirrors §5.2. This world is float32 throughout (see Hp/Hunger), so it declares its OWN vector
 // rather than abbreviating the scaffold's float-based Geometry.Vec2 — but the LABELS are the thing
 // that must not change.
@@ -20,7 +20,7 @@ type Vec2 = { Vx: float32; Vy: float32 }
 type ItemId = ItemId of int
 type ItemStack = { Item: ItemId; Count: int }
 
-//#block 2
+//#block 2 "type TileType ="
 //#rec
 // A generated column of tiles, cached per (chunkX, chunkY) — §3 worldgen.
 type Chunk = { Cx: int; Cy: int; Tiles: Tile[,] }
@@ -33,7 +33,7 @@ type WorldEvent =
     | EnemyKilled of EntityId
     | PlayerHurt of float32
 
-//#block 4
+//#block 4 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled

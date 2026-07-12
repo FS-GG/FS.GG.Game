@@ -1,9 +1,9 @@
 // Typecheck fixtures for fs-gg-physics (see scripts/typecheck-md-blocks.fsx).
 
-//#block 1
+//#block 1 "[<RequireQualifiedAccess>]"
 //#skip an .fsi SIGNATURE listing (the skill's proposed `module Physics` surface: `val step: ...`, `type World` with no definition). Not implementation code, so it cannot be compiled as an .fs. The real surface is gated byte-for-byte by the surface-baseline-drift job instead.
 
-//#block 2
+//#block 2 "let simInterval = 1.0 / 60.0"
 // `Physics.step` IS the integrate function `Loop.advance` takes — that fit is the block's claim,
 // and compiling it is what checks the claim. The Model carries the StepState over Physics.World.
 let config : Physics.Config =
