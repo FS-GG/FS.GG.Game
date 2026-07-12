@@ -1,0 +1,257 @@
+FS.GG.Game.Core.Ai.aimError(System.Double, FS.GG.Game.Core.Rng) : System.ValueTuple<System.Double, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Ai.best<p>(FSharpFunc<p, System.Double>, FSharpFunc<p, System.ValueTuple<System.Int32, System.Int32>>, FSharpList<p>) : FSharpValueOption<p>
+FS.GG.Game.Core.Ai.due(System.Int32, System.Int32) : System.Boolean
+FS.GG.Game.Core.Ai.fleeField(FS.GG.Game.Core.Neighbourhood, System.Double, System.Int32, Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Double>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Double>
+FS.GG.Game.Core.Ai.ghosts<T>(TeamView<T>) : FSharpList<Sighting<T>>
+FS.GG.Game.Core.Ai.known<T>(TeamView<T>) : FSharpList<Sighting<T>>
+FS.GG.Game.Core.Ai.spotted<T>(TeamView<T>) : FSharpList<Sighting<T>>
+FS.GG.Game.Core.Ai.substream(FS.GG.Game.Core.Rng, FS.GG.Game.Core.AgentId) : FS.GG.Game.Core.Rng
+FS.GG.Game.Core.Ai.threatField(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>>, Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Core.Cell, System.Double, System.Int32>>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Double>
+FS.GG.Game.Core.Ai.tryFind<T>(FS.GG.Game.Core.AgentId, TeamView<T>) : FSharpValueOption<Sighting<T>>
+FS.GG.Game.Core.Ai.view<T>(System.Int32, System.Int32, FSharpList<Sighting<T>>) : TeamView<T>
+FS.GG.Game.Core.Ai.viewTick<T>(TeamView<T>) : System.Int32
+FS.GG.Game.Core.Ballistics.intercept(FS.GG.Game.Core.Point, System.Double, FS.GG.Game.Core.Point, FS.GG.Game.Core.Point) : Microsoft.FSharp.Core.FSharpValueOption<FS.GG.Game.Core.Point>
+FS.GG.Game.Core.Ballistics.inverseSquareFalloff(System.Double) : Microsoft.FSharp.Core.FSharpFunc<System.Double, System.Double>
+FS.GG.Game.Core.Ballistics.linearFalloff(System.Double) : Microsoft.FSharp.Core.FSharpFunc<System.Double, System.Double>
+FS.GG.Game.Core.Ballistics.splash<T>(FS.GG.Game.Core.Point, System.Double, Microsoft.FSharp.Core.FSharpFunc<System.Double, System.Double>, FSharpFunc<T, FS.GG.Game.Core.Point>, SpatialGrid<T>) : FSharpList<Tuple<T, System.Double>>
+FS.GG.Game.Core.Ballistics.step(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Point, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Point, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>>>, System.Double, FS.GG.Game.Core.Projectile) : FS.GG.Game.Core.ProjectileStep
+FS.GG.Game.Core.Cell.Col : System.Int32 [get]
+FS.GG.Game.Core.Cell.Row : System.Int32 [get]
+FS.GG.Game.Core.Cell.new(System.Int32, System.Int32)
+FS.GG.Game.Core.Circle.Center : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Circle.Radius : System.Double [get]
+FS.GG.Game.Core.Circle.new(FS.GG.Game.Core.Point, System.Double)
+FS.GG.Game.Core.Command+Tags.Fire : System.Int32
+FS.GG.Game.Core.Command+Tags.MoveEast : System.Int32
+FS.GG.Game.Core.Command+Tags.MoveNorth : System.Int32
+FS.GG.Game.Core.Command+Tags.MoveSouth : System.Int32
+FS.GG.Game.Core.Command+Tags.MoveWest : System.Int32
+FS.GG.Game.Core.Command+Tags.Pause : System.Int32
+FS.GG.Game.Core.Command.all : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command> [get]
+FS.GG.Game.Core.Command.id(FS.GG.Game.Core.Command) : System.String
+FS.GG.Game.Core.Command.label(FS.GG.Game.Core.Command) : System.String
+FS.GG.Game.Core.Command.ofId(System.String) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Command>
+FS.GG.Game.Core.Contact.Depth : System.Double [get]
+FS.GG.Game.Core.Contact.Normal : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Contact.new(FS.GG.Game.Core.Point, System.Double)
+FS.GG.Game.Core.ConvexPolygon.Vertices : FS.GG.Game.Core.Point[] [get]
+FS.GG.Game.Core.ConvexPolygon.new(FS.GG.Game.Core.Point[])
+FS.GG.Game.Core.DamageTrace.Final : System.Double [get]
+FS.GG.Game.Core.DamageTrace.Halted : Microsoft.FSharp.Core.FSharpValueOption<System.String> [get]
+FS.GG.Game.Core.DamageTrace.Seed : System.Double [get]
+FS.GG.Game.Core.DamageTrace.Steps : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, System.Double>> [get]
+FS.GG.Game.Core.DamageTrace.new(System.Double, System.Double, Microsoft.FSharp.Core.FSharpValueOption<System.String>, Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, System.Double>>)
+FS.GG.Game.Core.Damage`1.Base : System.Double [get]
+FS.GG.Game.Core.Damage`1.Kind : K [get]
+FS.GG.Game.Core.Damage`1.Source : FS.GG.Game.Core.Source [get]
+FS.GG.Game.Core.Damage`1.new(K, FS.GG.Game.Core.Source, System.Double)
+FS.GG.Game.Core.Difficulty.AimErrorSigma : System.Double [get]
+FS.GG.Game.Core.Difficulty.ReactionTicks : System.Int32 [get]
+FS.GG.Game.Core.Difficulty.SpotCycleTicks : System.Int32 [get]
+FS.GG.Game.Core.Difficulty.ThreatWeight : System.Double [get]
+FS.GG.Game.Core.Difficulty.UsesWeakPointTargeting : System.Boolean [get]
+FS.GG.Game.Core.Difficulty.clamp(FS.GG.Game.Core.Difficulty) : FS.GG.Game.Core.Difficulty
+FS.GG.Game.Core.Difficulty.easy : FS.GG.Game.Core.Difficulty [get]
+FS.GG.Game.Core.Difficulty.hard : FS.GG.Game.Core.Difficulty [get]
+FS.GG.Game.Core.Difficulty.new(System.Int32, System.Double, System.Int32, System.Boolean, System.Double)
+FS.GG.Game.Core.Difficulty.normal : FS.GG.Game.Core.Difficulty [get]
+FS.GG.Game.Core.Effects+Active`1.Effect : E [get]
+FS.GG.Game.Core.Effects+Active`1.TicksRemaining : System.Int32 [get]
+FS.GG.Game.Core.Effects+Active`1.new(E, System.Int32)
+FS.GG.Game.Core.Effects+Policy`1+Tags.Once : System.Int32
+FS.GG.Game.Core.Effects+Policy`1+Tags.Refresh : System.Int32
+FS.GG.Game.Core.Effects+Policy`1+Tags.Stacks : System.Int32
+FS.GG.Game.Core.Effects+Policy`1+Tags.Strongest : System.Int32
+FS.GG.Game.Core.Effects.amplify<T, K>(FSharpFunc<T, System.Double>) : Stage<T, K>
+FS.GG.Game.Core.Effects.applyAll<T, K>(FSharpList<Stage<T, K>>, Damage<K>, FSharpList<Tuple<T, System.Double>>) : FSharpList<Tuple<T, FS.GG.Game.Core.DamageTrace>>
+FS.GG.Game.Core.Effects.applyEffect<E>(Policy<E>, Active<E>, FSharpList<Active<E>>) : FSharpList<Active<E>>
+FS.GG.Game.Core.Effects.floorAt<T, K>(System.Double) : Stage<T, K>
+FS.GG.Game.Core.Effects.gatedBy<T, K>(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Source>, Stage<T, K>) : Stage<T, K>
+FS.GG.Game.Core.Effects.immuneWhen<T, K>(FSharpFunc<T, FSharpFunc<Damage<K>, System.Boolean>>) : Stage<T, K>
+FS.GG.Game.Core.Effects.pipeline<T, K>(FSharpList<Stage<T, K>>, T, Damage<K>) : FS.GG.Game.Core.DamageTrace
+FS.GG.Game.Core.Effects.resist<T, K>(FSharpFunc<T, FSharpFunc<K, System.Double>>) : Stage<T, K>
+FS.GG.Game.Core.Effects.subtract<T, K>(FSharpFunc<T, FSharpFunc<K, System.Double>>) : Stage<T, K>
+FS.GG.Game.Core.Effects.tickEffects<E>(FSharpList<Active<E>>) : FSharpList<Active<E>>
+FS.GG.Game.Core.FixedStep.defaultMaxFrameTime : System.Double [get]
+FS.GG.Game.Core.FixedStep.drain(System.Double, System.Double, System.Double) : System.ValueTuple<System.Int32, System.Double>
+FS.GG.Game.Core.FixedStep.drainWith(System.Double, System.Double, System.Double, System.Double) : System.ValueTuple<System.Int32, System.Double>
+FS.GG.Game.Core.Fov.fov(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell, System.Int32) : Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.Geometry.aabbContact(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Rect) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Contact>
+FS.GG.Game.Core.Geometry.center(FS.GG.Game.Core.Rect) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.Geometry.circleAabbContact(FS.GG.Game.Core.Circle, FS.GG.Game.Core.Rect) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Contact>
+FS.GG.Game.Core.Geometry.circleContact(FS.GG.Game.Core.Circle, FS.GG.Game.Core.Circle) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Contact>
+FS.GG.Game.Core.Geometry.contains(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Rect) : System.Boolean
+FS.GG.Game.Core.Geometry.containsPoint(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Point) : System.Boolean
+FS.GG.Game.Core.Geometry.intersects(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Rect) : System.Boolean
+FS.GG.Game.Core.Geometry.obbPolygon(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, System.Double) : FS.GG.Game.Core.ConvexPolygon
+FS.GG.Game.Core.Geometry.ofCenter(FS.GG.Game.Core.Point, System.Double, System.Double) : FS.GG.Game.Core.Rect
+FS.GG.Game.Core.Geometry.polygonContact(FS.GG.Game.Core.ConvexPolygon, FS.GG.Game.Core.ConvexPolygon) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Contact>
+FS.GG.Game.Core.Geometry.polygonManifold(FS.GG.Game.Core.ConvexPolygon, FS.GG.Game.Core.ConvexPolygon) : Microsoft.FSharp.Core.FSharpValueOption<FS.GG.Game.Core.Manifold>
+FS.GG.Game.Core.Geometry.segmentAabbHit(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.Rect) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>
+FS.GG.Game.Core.Geometry.segmentCircleHit(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.Circle) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>
+FS.GG.Game.Core.Geometry.segmentPolygonHit(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.ConvexPolygon) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>
+FS.GG.Game.Core.Geometry.sweptIntersects(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Point, FS.GG.Game.Core.Rect) : System.Boolean
+FS.GG.Game.Core.Grids+Edge.Col : System.Int32 [get]
+FS.GG.Game.Core.Grids+Edge.Orientation : FS.GG.Game.Core.Grids+EdgeOrientation [get]
+FS.GG.Game.Core.Grids+Edge.Row : System.Int32 [get]
+FS.GG.Game.Core.Grids+Edge.new(System.Int32, System.Int32, FS.GG.Game.Core.Grids+EdgeOrientation)
+FS.GG.Game.Core.Grids+EdgeOrientation+Tags.Horizontal : System.Int32
+FS.GG.Game.Core.Grids+EdgeOrientation+Tags.Vertical : System.Int32
+FS.GG.Game.Core.Grids+GridSpec.CellSize : System.Double [get]
+FS.GG.Game.Core.Grids+GridSpec.Origin : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Grids+GridSpec.new(System.Double, FS.GG.Game.Core.Point)
+FS.GG.Game.Core.Grids+Vertex.Col : System.Int32 [get]
+FS.GG.Game.Core.Grids+Vertex.Row : System.Int32 [get]
+FS.GG.Game.Core.Grids+Vertex.new(System.Int32, System.Int32)
+FS.GG.Game.Core.Grids.cellAt(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Point) : FS.GG.Game.Core.Cell
+FS.GG.Game.Core.Grids.cellCenter(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.Grids.cellCorners(FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Vertex>
+FS.GG.Game.Core.Grids.cellEdges(FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Edge>
+FS.GG.Game.Core.Grids.cellRect(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Rect
+FS.GG.Game.Core.Grids.edgeCells(FS.GG.Game.Core.Grids+Edge) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.Grids.edgeMidpoint(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Grids+Edge) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.Grids.edgeSegment(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Grids+Edge) : System.Tuple<FS.GG.Game.Core.Point, FS.GG.Game.Core.Point>
+FS.GG.Game.Core.Grids.edgeVertices(FS.GG.Game.Core.Grids+Edge) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Vertex>
+FS.GG.Game.Core.Grids.vertexCells(FS.GG.Game.Core.Grids+Vertex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.Grids.vertexEdges(FS.GG.Game.Core.Grids+Vertex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Edge>
+FS.GG.Game.Core.Grids.vertexPoint(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Grids+Vertex) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.LineMode+Tags.Supercover : System.Int32
+FS.GG.Game.Core.LineMode+Tags.Thin : System.Int32
+FS.GG.Game.Core.Loop.advance<world>(System.Double, FSharpFunc<world, FSharpFunc<System.Double, world>>, System.Double, StepState<world>) : StepState<world>
+FS.GG.Game.Core.Loop.alpha<world>(System.Double, StepState<world>) : System.Double
+FS.GG.Game.Core.Loop.init<world>(world) : StepState<world>
+FS.GG.Game.Core.Los.line(FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.Los.lineOfSight(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : System.Boolean
+FS.GG.Game.Core.Los.lineOfSightBy(FS.GG.Game.Core.LineMode, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : System.Boolean
+FS.GG.Game.Core.Los.supercover(FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.Los.trace(FS.GG.Game.Core.LineMode, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.Manifold.A : System.Int32 [get]
+FS.GG.Game.Core.Manifold.B : System.Int32 [get]
+FS.GG.Game.Core.Manifold.Depth : System.Double [get]
+FS.GG.Game.Core.Manifold.FeatureId : System.Int32 [get]
+FS.GG.Game.Core.Manifold.Normal : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Manifold.PointCount : System.Int32 [get]
+FS.GG.Game.Core.Manifold.Points : FS.GG.Game.Core.Point[] [get]
+FS.GG.Game.Core.Manifold.new(System.Int32, System.Int32, FS.GG.Game.Core.Point, System.Double, FS.GG.Game.Core.Point[], System.Int32, System.Int32)
+FS.GG.Game.Core.Neighbourhood+Tags.EightWay : System.Int32
+FS.GG.Game.Core.Neighbourhood+Tags.FourWay : System.Int32
+FS.GG.Game.Core.Pathfinding+Reach.Endable : Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell> [get]
+FS.GG.Game.Core.Pathfinding+Reach.Steps : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Pathfinding+Step> [get]
+FS.GG.Game.Core.Pathfinding+Reach.new(Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Pathfinding+Step>, Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell>)
+FS.GG.Game.Core.Pathfinding+Step.CameFrom : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Cell> [get]
+FS.GG.Game.Core.Pathfinding+Step.Cost : System.Int32 [get]
+FS.GG.Game.Core.Pathfinding+Step.new(System.Int32, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Cell>)
+FS.GG.Game.Core.Pathfinding.astar(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>>
+FS.GG.Game.Core.Pathfinding.baseStep : System.Int32 [get]
+FS.GG.Game.Core.Pathfinding.bfs(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>>
+FS.GG.Game.Core.Pathfinding.budgetFor(System.Int32) : System.Int32
+FS.GG.Game.Core.Pathfinding.distanceField(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Int32>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Int32>
+FS.GG.Game.Core.Pathfinding.flowField(FS.GG.Game.Core.Neighbourhood, Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Int32>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.Pathfinding.pathTo(FS.GG.Game.Core.Pathfinding+Reach, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>>
+FS.GG.Game.Core.Pathfinding.reachable(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Int32>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, System.Int32, FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Pathfinding+Reach
+FS.GG.Game.Core.Pathfinding.reachableWithin(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Int32>, System.Int32, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Int32>
+FS.GG.Game.Core.Physics+BodyKind+Tags.Dynamic : System.Int32
+FS.GG.Game.Core.Physics+BodyKind+Tags.Kinematic : System.Int32
+FS.GG.Game.Core.Physics+BodyKind+Tags.Static : System.Int32
+FS.GG.Game.Core.Physics+Config.BounceThreshold : System.Double [get]
+FS.GG.Game.Core.Physics+Config.BroadPhaseCellSize : System.Double [get]
+FS.GG.Game.Core.Physics+Config.Correction : System.Double [get]
+FS.GG.Game.Core.Physics+Config.Gravity : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Physics+Config.PositionIterations : System.Int32 [get]
+FS.GG.Game.Core.Physics+Config.SleepAngular : System.Double [get]
+FS.GG.Game.Core.Physics+Config.SleepLinearSq : System.Double [get]
+FS.GG.Game.Core.Physics+Config.SleepTicks : System.Int32 [get]
+FS.GG.Game.Core.Physics+Config.Slop : System.Double [get]
+FS.GG.Game.Core.Physics+Config.VelocityIterations : System.Int32 [get]
+FS.GG.Game.Core.Physics+Config.new(FS.GG.Game.Core.Point, System.Int32, System.Int32, System.Double, System.Double, System.Double, System.Double, System.Double, System.Int32, System.Double)
+FS.GG.Game.Core.Physics+Material.Friction : System.Double [get]
+FS.GG.Game.Core.Physics+Material.Restitution : System.Double [get]
+FS.GG.Game.Core.Physics+Material.new(System.Double, System.Double)
+FS.GG.Game.Core.Physics+Shape+Tags.SBox : System.Int32
+FS.GG.Game.Core.Physics+Shape+Tags.SCircle : System.Int32
+FS.GG.Game.Core.Physics+Shape+Tags.SPoly : System.Int32
+FS.GG.Game.Core.Physics+Transform.Position : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Physics+Transform.Rotation : System.Double [get]
+FS.GG.Game.Core.Physics+Transform.new(FS.GG.Game.Core.Point, System.Double)
+FS.GG.Game.Core.Physics.addBodies(System.Collections.Generic.IEnumerable<System.Tuple<FS.GG.Game.Core.Physics+BodyKind, FS.GG.Game.Core.Physics+Shape, FS.GG.Game.Core.Physics+Material, FS.GG.Game.Core.Point>>, FS.GG.Game.Core.Physics+World) : System.ValueTuple<System.Int32[], FS.GG.Game.Core.Physics+World>
+FS.GG.Game.Core.Physics.addBody(FS.GG.Game.Core.Physics+BodyKind, FS.GG.Game.Core.Physics+Shape, FS.GG.Game.Core.Physics+Material, FS.GG.Game.Core.Point, FS.GG.Game.Core.Physics+World) : System.ValueTuple<System.Int32, FS.GG.Game.Core.Physics+World>
+FS.GG.Game.Core.Physics.checksum(FS.GG.Game.Core.Physics+World) : System.UInt64
+FS.GG.Game.Core.Physics.empty(FS.GG.Game.Core.Physics+Config) : FS.GG.Game.Core.Physics+World
+FS.GG.Game.Core.Physics.interpolate(System.Double, FS.GG.Game.Core.Physics+World, FS.GG.Game.Core.Physics+World) : FS.GG.Game.Core.Physics+Transform[]
+FS.GG.Game.Core.Physics.manifold(FS.GG.Game.Core.Physics+World, System.Int32, System.Int32) : Microsoft.FSharp.Core.FSharpValueOption<FS.GG.Game.Core.Manifold>
+FS.GG.Game.Core.Physics.pairs(FS.GG.Game.Core.Physics+World) : System.ValueTuple<System.Int32, System.Int32>[]
+FS.GG.Game.Core.Physics.step(FS.GG.Game.Core.Physics+World, System.Double) : FS.GG.Game.Core.Physics+World
+FS.GG.Game.Core.Point.X : System.Double [get]
+FS.GG.Game.Core.Point.Y : System.Double [get]
+FS.GG.Game.Core.Point.new(System.Double, System.Double)
+FS.GG.Game.Core.Projectile.Position : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Projectile.TicksRemaining : System.Int32 [get]
+FS.GG.Game.Core.Projectile.Velocity : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Projectile.new(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, System.Int32)
+FS.GG.Game.Core.ProjectileStep+Tags.Expired : System.Int32
+FS.GG.Game.Core.ProjectileStep+Tags.Flew : System.Int32
+FS.GG.Game.Core.ProjectileStep+Tags.Struck : System.Int32
+FS.GG.Game.Core.RayHit.Normal : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.RayHit.Point : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.RayHit.T : System.Double [get]
+FS.GG.Game.Core.RayHit.new(System.Double, FS.GG.Game.Core.Point, FS.GG.Game.Core.Point)
+FS.GG.Game.Core.Rect.Height : System.Double [get]
+FS.GG.Game.Core.Rect.Width : System.Double [get]
+FS.GG.Game.Core.Rect.X : System.Double [get]
+FS.GG.Game.Core.Rect.Y : System.Double [get]
+FS.GG.Game.Core.Rect.new(System.Double, System.Double, System.Double, System.Double)
+FS.GG.Game.Core.Resolution+CellStep+Tags.Block : System.Int32
+FS.GG.Game.Core.Resolution+CellStep+Tags.Enter : System.Int32
+FS.GG.Game.Core.Resolution+CellStep+Tags.Stop : System.Int32
+FS.GG.Game.Core.Resolution+Push.Entered : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell> [get]
+FS.GG.Game.Core.Resolution+Push.Final : FS.GG.Game.Core.Cell [get]
+FS.GG.Game.Core.Resolution+Push.Outcome : FS.GG.Game.Core.Resolution+PushStop [get]
+FS.GG.Game.Core.Resolution+Push.new(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Resolution+PushStop)
+FS.GG.Game.Core.Resolution+PushStop+Tags.Blocked : System.Int32
+FS.GG.Game.Core.Resolution+PushStop+Tags.Completed : System.Int32
+FS.GG.Game.Core.Resolution+PushStop+Tags.Stopped : System.Int32
+FS.GG.Game.Core.Resolution.knockback(FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>) : FS.GG.Game.Core.Cell
+FS.GG.Game.Core.Resolution.push(FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Resolution+CellStep>) : FS.GG.Game.Core.Resolution+Push
+FS.GG.Game.Core.Resolution.pushOut(FS.GG.Game.Core.Point, FS.GG.Game.Core.Contact) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.Resolution.slide(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.Rng.State : System.UInt64 [get]
+FS.GG.Game.Core.Rng.new(System.UInt64)
+FS.GG.Game.Core.Rng.nextBool(FS.GG.Game.Core.Rng) : System.ValueTuple<System.Boolean, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Rng.nextFloat(FS.GG.Game.Core.Rng) : System.ValueTuple<System.Double, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Rng.nextInt(System.Int32, System.Int32, FS.GG.Game.Core.Rng) : System.ValueTuple<System.Int32, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Rng.ofSeed(System.UInt64) : FS.GG.Game.Core.Rng
+FS.GG.Game.Core.Rng.split(FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Rng, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Sighting`1.Agent : FS.GG.Game.Core.AgentId [get]
+FS.GG.Game.Core.Sighting`1.LastSeenTick : System.Int32 [get]
+FS.GG.Game.Core.Sighting`1.Position : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Sighting`1.Seen : T [get]
+FS.GG.Game.Core.Sighting`1.new(FS.GG.Game.Core.AgentId, FS.GG.Game.Core.Point, T, System.Int32)
+FS.GG.Game.Core.Source+Tags.Collision : System.Int32
+FS.GG.Game.Core.Source+Tags.Declared : System.Int32
+FS.GG.Game.Core.Source+Tags.Environmental : System.Int32
+FS.GG.Game.Core.Source+Tags.Periodic : System.Int32
+FS.GG.Game.Core.SpatialGrid.build<T>(System.Double, IEnumerable<Tuple<FS.GG.Game.Core.Point, T>>) : SpatialGrid<T>
+FS.GG.Game.Core.SpatialGrid.buildBounds<T>(System.Double, IEnumerable<Tuple<FS.GG.Game.Core.Rect, T>>) : SpatialGrid<T>
+FS.GG.Game.Core.SpatialGrid.query<T>(FS.GG.Game.Core.Rect, SpatialGrid<T>) : FSharpList<T>
+FS.GG.Game.Core.SpatialGrid.queryBounds<T>(FS.GG.Game.Core.Rect, SpatialGrid<T>) : FSharpList<T>
+FS.GG.Game.Core.SpatialGrid.queryRadius<T>(FS.GG.Game.Core.Point, System.Double, SpatialGrid<T>) : FSharpList<T>
+FS.GG.Game.Core.StageResult+Tags.Continue : System.Int32
+FS.GG.Game.Core.StageResult+Tags.Halt : System.Int32
+FS.GG.Game.Core.Stage`2.Name : System.String [get]
+FS.GG.Game.Core.Stage`2.Run : FSharpFunc<T, FSharpFunc<Damage<K>, Microsoft.FSharp.Core.FSharpFunc<System.Double, FS.GG.Game.Core.StageResult>>> [get]
+FS.GG.Game.Core.Stage`2.new(System.String, FSharpFunc<T, FSharpFunc<Damage<K>, Microsoft.FSharp.Core.FSharpFunc<System.Double, FS.GG.Game.Core.StageResult>>>)
+FS.GG.Game.Core.StepState`1.Accumulator : System.Double [get]
+FS.GG.Game.Core.StepState`1.Current : world [get]
+FS.GG.Game.Core.StepState`1.Previous : world [get]
+FS.GG.Game.Core.StepState`1.new(world, world, System.Double)
+FS.GG.Game.Core.Visibility+Segment.A : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Visibility+Segment.B : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Visibility+Segment.new(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point)
+FS.GG.Game.Core.Visibility+Settings.Radius : System.Double [get]
+FS.GG.Game.Core.Visibility+Settings.new(System.Double)
+FS.GG.Game.Core.Visibility+VisibilityPolygon.Source : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.Visibility+VisibilityPolygon.Vertices : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Point> [get]
+FS.GG.Game.Core.Visibility+VisibilityPolygon.new(FS.GG.Game.Core.Point, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Point>)
+FS.GG.Game.Core.Visibility.isVisible(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Visibility+Segment>) : System.Boolean
+FS.GG.Game.Core.Visibility.polygon(FS.GG.Game.Core.Visibility+Settings, FS.GG.Game.Core.Point, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Visibility+Segment>) : FS.GG.Game.Core.Visibility+VisibilityPolygon
+FS.GG.Game.Core.Visibility.raySegment(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.Visibility+Segment) : Microsoft.FSharp.Core.FSharpOption<System.Tuple<FS.GG.Game.Core.Point, System.Double>>

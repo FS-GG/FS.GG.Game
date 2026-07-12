@@ -150,8 +150,10 @@ jobs:
           run_filtered "FullyQualifiedName~aabbContact" "collision-manifold-invariants"
 
   # Surface-baseline drift gate (Principle II: "visibility lives in .fsi"). Regenerates the public
-  # surface baseline from the built assembly and fails on any uncommitted drift — the guard that a
+  # surface baselines from the built assembly and fails on any uncommitted drift — the guard that a
   # public-API change is a deliberate, reviewed baseline update (and, for a packable, a SemVer bump).
+  # The generator writes BOTH the type-level and the member-level baseline under that directory, so
+  # this job sees a deleted or re-signatured public function, not just an added/removed type (#236).
   surface-baseline-drift:
     name: Surface baseline drift (readiness/surface-baselines)
     runs-on: ubuntu-latest
@@ -173,11 +175,18 @@ jobs:
       - name: Regenerate baselines
         run: dotnet fsi scripts/refresh-surface-baselines.fsx
 
+      # `git status --porcelain`, NOT `git diff --exit-code`: diff only reports files git already
+      # tracks, so a baseline the generator emits for the first time — a newly added package, or the
+      # members/ directory itself — is invisible to it, and the gate reports green on a baseline
+      # nobody committed. Untracked output is drift too.
       - name: Fail on uncommitted drift
         run: |
           set -euo pipefail
-          if ! git diff --exit-code -- readiness/surface-baselines; then
-            echo "::error::public surface changed but readiness/surface-baselines/*.txt was not updated. If this is an intentional API change, run: dotnet fsi scripts/refresh-surface-baselines.fsx  and commit the result (and bump the package SemVer if it is a break)."
+          drift="$(git status --porcelain --untracked-files=all -- readiness/surface-baselines)"
+          if [ -n "$drift" ]; then
+            echo "$drift"
+            git diff -- readiness/surface-baselines
+            echo "::error::public surface changed but readiness/surface-baselines/ was not updated. This gate covers both the type-level baselines and the member-level ones under members/ — a deleted or re-signatured public function drifts the latter. If this is an intentional API change, run: dotnet fsi scripts/refresh-surface-baselines.fsx  and commit the result (and bump the package SemVer if it is a break)."
             exit 1
           fi
 
