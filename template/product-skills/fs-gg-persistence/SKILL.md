@@ -39,9 +39,22 @@ no helper throws or performs I/O. The payload is **opaque** — the framework ne
 > not later by a host: no `ViewerEffect` case carries a `PersistenceEffect`, so no host runner will
 > ever see one. A product that calls it has saved nothing.
 >
-> The name is a trap, and a known one: everywhere else in this framework `interpret*` means *do it*
-> (`GlHost.interpretEffect` drives real GL work), while this one writes no bytes at all. A later
-> framework release renames it to `interpretRecordOnly`, which says what it does — but **that
+> The name is a trap, and a known one — but not in the way you would guess. It is **not** that
+> `interpret*` means *perform the effect* everywhere else in this framework and this one is the lone
+> exception. **Nothing named `interpret` here performs anything.** The surface your product pins
+> carries exactly two, and both are pure folds that hand you back a value: this one, and
+> `Audio.interpret` — which calls itself a *"record-only interpreter"* with *"no device access"* and
+> returns an `AudioEvidence`, precisely as this returns a `PersistenceEvidence`. Performing an effect
+> is always a **host** call: `Audio.play` takes a backend, `Viewer.runApp` opens a window. **Not one
+> of them is spelled `interpret`.**
+>
+> So do not go looking for a counter-example among its siblings — it has one, and it has this same
+> shape. What `interpret` really promises you is a **downstream**: something, somewhere, that
+> eventually carries your requests out. For persistence there is none, and that is the whole defect.
+> The convention is what misleads you here, not an exception to it — which makes the honest reading
+> the stronger one.
+>
+> A later framework release renames it to `interpretRecordOnly`, which says what it does — but **that
 > spelling is not in the `FS.GG.UI.Canvas` your product pins**, so `interpret` is the one to call
 > today.
 
