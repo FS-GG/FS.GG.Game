@@ -169,7 +169,8 @@ The seam is real and the scaffold ships it wired (FS.GG.Rendering#245). Two file
 - **`src/<ProductDir>/AudioCues.fs`** — *yours*. `forTransition : Msg -> Model -> Model -> AudioEffect list`
   is the one place the product decides what to play. Pure: a function of the message and the
   before/after model. Rewrite it when you swap the model; it names your `Msg` cases.
-- **`src/<ProductDir>/Program.fs`** — *durable*. It creates a backend once and hands the viewer a sink:
+- **`src/<ProductDir>/Program.fs`** — *durable*. It creates a backend once and builds the sink the
+  viewer's launcher takes:
 
 ```fsharp
 open FS.GG.Audio.Host
