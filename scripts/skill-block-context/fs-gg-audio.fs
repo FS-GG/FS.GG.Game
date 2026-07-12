@@ -52,7 +52,29 @@ module AudioCues =
 let viewerOptions : ViewerOptions = Unchecked.defaultof<_>
 let generatedHost : GeneratedAppHost<Model, Msg> = Unchecked.defaultof<_>
 
-//#block 5 "GeneratedAppHost.dispatchKey host keyEvent model"
+//#block 5 "[ Audio.setMasterVolume next.Settings.Volume"
+// `Started`, and the trap it closes (FS.GG.Rendering#458): `forTransition` is a function of a
+// TRANSITION, and the initial model makes none, so state that was LOADED rather than transitioned
+// into never reaches the mixer unless `Started` carries it.
+//
+// The block is the reader's own `AudioCues.forTransition`, so everything it names is theirs: the
+// `Msg` cases, and a `Model` whose initial state implies a sound (a restored volume). Both are
+// declared here — they are exactly what a product would write, and the block is compiled VERBATIM
+// against them, so `Audio.setMasterVolume`/`playMusic`/`playSfx` are checked against the real
+// published `FS.GG.Audio.Core` surface a reader would copy this into.
+//
+// `Started` is a plain `Msg` case, NOT framework surface: the scaffold's generated host dispatches
+// it (`forTransition Started m m`), but the case itself is declared by the product — so it is
+// declared here, in the product's half, rather than arriving from an `open`.
+open FS.GG.Audio.Core
+
+type Settings = { Volume: float }
+type Model = { Settings: Settings }
+type Msg =
+    | Started
+    | Fired
+
+//#block 6 "GeneratedAppHost.dispatchKey host keyEvent model"
 // The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
 // sound WITHOUT a device. `dispatchKey` returns `(model * ViewerEffect list)` and `audioRequests`
 // narrows that to the `AudioEffect list` the block interprets — the `|> snd` and the two module
