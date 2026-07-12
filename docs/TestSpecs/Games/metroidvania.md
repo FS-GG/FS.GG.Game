@@ -5,7 +5,7 @@ category: games
 complexity: complex
 genre: "Metroidvania platformer (action-exploration)"
 target_session_minutes: 45
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -309,7 +309,7 @@ type Model =
       Keys: Set<Key>; Pressed: Set<Action>   // input
       Time: float                        // accumulated sim seconds
       Boss: BossState option
-      Rng: RngState }                    // seeded
+      Rng: Rng }                         // FS.GG.Game.Core; seeded (§13)
 ```
 
 ### 7.2 Msg (DU)
@@ -679,15 +679,23 @@ Normal (1.0 / 60), Veteran (1.5 / 40).
   simultaneous entities**, ≤ **40 live projectiles**, ≤ **200 particles**. Tilemap
   batched in one `drawAtlas` call per layer. Sim step budget ≤ **4 ms**, render ≤
   **8 ms**, slack **4 ms**.
-- **Fixed vs variable timestep:** simulation is **fixed at 1/60 s** via the accumulator
-  (§7.5); rendering is variable (once per real frame). Optional render interpolation
-  between the two latest sim states (lerp positions by `acc / (1/60)`) for smoothness on
-  high-refresh displays — off in v1.
-- **Determinism / RNG:** a single seeded PRNG (`RngState`, e.g. xoshiro) threaded
-  through `simulate`. Seed stored in `Save` for reproducibility. No use of wall-clock or
-  unordered collections in sim. This makes acceptance tests (§14) reproducible.
-- **Collision:** swept AABB, axis-separated (resolve X then Y) against the solid tile
-  layer; broadphase = tile grid query of cells overlapping the swept bounds. One-way
+- **Fixed vs variable timestep:** simulation is **fixed at 1/60 s**, drained by
+  `FixedStep.drain (1.0/60.0) frameTime acc` → `struct (steps, acc')` (§7.5) — it banks the real time,
+  returns the whole steps this frame owes, and caps the frame internally against a stall. Do not
+  hand-roll the accumulator. Rendering is variable (once per real frame). Optional render interpolation
+  between the two latest sim states (lerp positions by `acc / (1/60)`) for smoothness on high-refresh
+  displays — off in v1.
+- **Determinism / RNG:** a single seeded PRNG threaded through `simulate` — `FS.GG.Game.Core`'s
+  **`Rng`** (splitmix64), seeded with `Rng.ofSeed`. Do not hand-roll an `RngState`: `Rng` is already a
+  value, so threading it is the natural thing, and every draw returns `struct (x, rng')` to write back.
+  Seed stored in `Save` for reproducibility. No use of wall-clock or unordered collections in sim. This
+  makes acceptance tests (§14) reproducible.
+- **Collision:** swept AABB, axis-separated (resolve X then Y) against the solid tile layer;
+  broadphase = tile grid query of cells overlapping the swept bounds — **deliberately not
+  `SpatialGrid`**. The tilemap *is* already a uniform grid, so the overlapping cells are an O(1) index
+  into it; `SpatialGrid.build` would be a second index of the same data, rebuilt every step. Reach for
+  it when you need to broadphase *entities against each other* (a bullet-hell room of shot↔enemy
+  pairs); this game's entity counts are small enough that the tile query is the whole story. One-way
   platforms supported via Y-only-down collision flag.
 - **Persistence:** `Save` serialized to JSON (one file per slot, 3 slots). Atomic write
   (temp file + rename). Saving only at Save Veins. Settings/keybinds stored separately.

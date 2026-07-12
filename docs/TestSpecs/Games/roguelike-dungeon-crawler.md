@@ -5,7 +5,7 @@ category: games
 complexity: complex
 genre: "Top-down action roguelike / twin-stick dungeon crawler"
 target_session_minutes: 35
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng (split for sub-streams); SpatialGrid for the broadphase)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -213,10 +213,12 @@ Each floor is a **graph of rooms** placed on an integer grid of cells. Generatio
 pure function of the floor seed (§13).
 
 **Algorithm (deterministic, seeded):**
-1. **Seed derivation:** `floorSeed = hash(runSeed, floorIndex)`. A per-floor `Rng`
-   (splittable PRNG) is created from `floorSeed`; all subsequent draws use it.
-2. **Room budget:** `roomCount = round(7 + 1.6 * floorIndex + Rng.range(0,2))`, clamped
-   to `[8, 20]`.
+1. **Seed derivation:** `floorSeed = hash(runSeed, floorIndex)`. The per-floor generator is
+   `Rng.ofSeed floorSeed` (`FS.GG.Game.Core`'s **`Rng`** — splitmix64, and splittable); all
+   subsequent draws use it.
+2. **Room budget:** `roomCount = round(7 + 1.6 * floorIndex + n)` where
+   `let struct (n, rng') = Rng.nextInt 0 2 rng` (inclusive `[0, 2]`), clamped to `[8, 20]`. Write
+   `rng'` back — every draw returns the advanced generator alongside the value.
 3. **Floor-plan walk (placement):** start at grid cell `(0,0)` = START room. Maintain a
    queue of placed cells. Repeatedly: pop a cell, for each of its 4 neighbors, with
    probability `p = 0.5` (and if neighbor empty and neighbor would have ≤ `maxNeighbors=`
@@ -789,19 +791,25 @@ and `dropNothingWeight`.
 
 - **Performance budget:** target **60 FPS render / 16.7 ms frame**. Per-room worst case:
   ≤ 30 enemies, ≤ 120 enemy bullets, ≤ 40 player shots, ≤ 600 particles. Collision is
-  broad-phased with a coarse **uniform grid** (cell `64 px`) so shot↔enemy and
-  bullet↔player are near-O(n). Total active objects per room comfortably under ~800; full
-  redraw per frame fits the budget.
-- **Fixed vs variable timestep:** **fixed** `FIXED_DT = 1/120 s` for the simulation
-  (deterministic physics & bullets), driven by an **accumulator** fed by the variable
-  render `Tick dt`. Render interpolation between sim steps is optional (v1 can render the
-  latest sim state directly). `MAX_STEPS = 5` per frame guards the spiral of death.
-- **Determinism / RNG seeding:** a **splittable, serializable PRNG** (e.g. PCG/xoshiro
-  stored as `uint64` state in the Model). The run derives **independent sub-streams**:
+  broad-phased with a coarse **uniform grid** (cell `64 px`) so shot↔enemy and bullet↔player are
+  near-O(n) — that grid is `SpatialGrid.build 64.0`, queried with `SpatialGrid.queryRadius`; do not
+  hand-roll the buckets. Total active objects per room comfortably under ~800; full redraw per frame
+  fits the budget.
+- **Fixed vs variable timestep:** **fixed** `FIXED_DT = 1/120 s` for the simulation (deterministic
+  physics & bullets), drained by `FixedStep.drainWith (5.0 * FIXED_DT) FIXED_DT dt Accumulator` →
+  `struct (steps, acc')`. Do not hand-roll the accumulator: the first argument *is* the
+  `MAX_STEPS = 5` spiral-of-death guard, expressed as the frame-time budget the function takes. Render
+  interpolation between sim steps is optional (v1 can render the latest sim state directly).
+- **Determinism / RNG seeding:** a **splittable, serializable PRNG** — this is exactly
+  `FS.GG.Game.Core`'s **`Rng`** (splitmix64, a `uint64` of state, a value), so use it rather than
+  re-deriving one. `Rng.split` is what makes the sub-streams below real: it returns
+  `struct (rng', branch)` — two generators that cannot perturb each other. The run derives
+  **independent sub-streams**:
   - `LayoutRng` — floor generation & templates only. Advanced solely during generation, so
     the layout is independent of how combat unfolds.
   - `DropRng` — drops, AI jitter, boss-pattern variance. Advanced during combat.
-  Each floor derives its seeds via `splitmix(runSeed, floorIndex)`. Same `runSeed` ⇒
+  Each floor derives its seeds by `Rng.split`ting the run generator (`splitmix` *is* what `Rng` is).
+  Same `runSeed` ⇒
   identical floors and identical drop sequence **given identical player actions/timing**;
   layout alone is identical regardless of play (because it uses a separate stream). All
   randomness flows through the model — no `System.Random` ambient calls, no clock reads in

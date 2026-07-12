@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Fixed-shooter / arcade"
 target_session_minutes: 5
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the march; Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -249,7 +249,7 @@ type Model =
       // Input (held keys)
       LeftDown: bool; RightDown: bool
 
-      Rng: System.Random }          // seeded for determinism
+      Rng: Rng }                    // FS.GG.Game.Core, seeded for determinism
 ```
 
 ### Msg
@@ -535,13 +535,18 @@ Data-driven tunables (load from a config record so balance is editable without c
   16.7 ms frame. Cull Dead
   aliens from the list; iterate bunker cells with simple AABB pre-filter (only test the
   ~1 bunker a bullet overlaps).
-- **Timestep**: the *march* uses a **fixed-step accumulator** (deterministic regardless
-  of FPS); other motion (cannon, bullets, bombs, UFO) uses variable dt integration with
-  dt clamped to ≤ 0.05 s. This keeps the iconic march timing exact while keeping motion
-  smooth.
-- **Determinism/RNG**: a single seeded `System.Random` in the Model drives UFO timing,
-  UFO bonus selection, bomb column choice, and bomb-type alternation. Seeding the RNG
-  makes full runs reproducible for tests.
+- **Timestep**: the *march* uses a **fixed-step accumulator** — `FixedStep.drain marchInterval dt
+  StepAccumMs` returns `struct (steps, acc')`, the whole marches this frame owes and the remainder to
+  bank, capped internally against a stall. Do not hand-roll it. Other motion (cannon, bullets, bombs,
+  UFO) deliberately stays on **variable `dt`** clamped to ≤ 0.05 s: it is pure `pos += vel·dt`
+  integration with nothing to quantise, and forcing it onto the march's step would make it jerkier, not
+  more correct. That split is the point — the iconic march timing is exact, the motion stays smooth.
+- **Determinism/RNG**: a single **`Rng`** (`FS.GG.Game.Core`, splitmix64) in the Model, seeded with
+  `Rng.ofSeed`, drives UFO timing, UFO bonus selection, bomb column choice, and bomb-type alternation
+  (`Rng.nextInt` / `Rng.nextBool`). Seeding it makes full runs reproducible for tests. It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Persistence**: high score stored to a local file/`localStorage`-equivalent
   (`%score%` integer); loaded on Title, written on Game Over if exceeded.
 - **Edge cases**: simultaneous left+right → no move; firing with bullet in flight →

@@ -5,7 +5,7 @@ category: games
 complexity: complex
 genre: "2D sandbox survival/crafting (side-view, tile-based)"
 target_session_minutes: 45
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for determinism; Pathfinding for light propagation; Los for placement reach)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -74,7 +74,9 @@ tick the key is down).
 
 **Reach rule:** placement and mining are only allowed within a **5-tile (160 px) radius**
 of the player's center, and the target tile must be adjacent (4-connected) to an existing
-tile or the player must have line-of-sight to it (prevents floating placement).
+tile or the player must have line-of-sight to it (prevents floating placement). The sight test is
+`Los.lineOfSight isTransparent playerTile targetTile` (`FS.GG.Game.Core`) — do not hand-roll a
+Bresenham; `Los.line` is the same walk if you want the cells rather than the verdict.
 
 ## 4. Mechanics (detailed)
 
@@ -204,14 +206,24 @@ queried from the chunk store (§7.2). Sub-pixel positions are kept as `float32`.
 - **AI state machine** (per enemy archetype, see §5): `Idle → Patrol → Chase → Attack →
   (Flee | Dead)`. Walkers do simple "move toward player X; jump if blocked by a 1-tile
   wall and player is higher"; flyers ignore tile collision and steer directly; jumpers
-  leap on a cooldown. Pathing is **greedy local** (no A*) — acceptable for a v1; enemies
-  may get stuck on terrain, which is fine (the design leans on it).
+  leap on a cooldown. Pathing is **greedy local** — and this is a **deliberate refusal of
+  `Pathfinding.astar`**, not an oversight. Enemies that get stuck on terrain are part of the design:
+  the player is *supposed* to be able to wall off a base with dirt and have the horde mill about
+  outside it, and a horde that solved the maze would delete that. It is also the cheap option at
+  hundreds of enemies. Reach for `Pathfinding.astar` (one route) or `Pathfinding.distanceField` +
+  `Pathfinding.flowField` (one field, all enemies) the day an enemy is supposed to *outsmart* terrain
+  — a v1.1 "hunter" that finds the door would want exactly that, and it is one call, not a project.
 
 ### 4.10 Lighting (optional in v1, specced for v1.1)
 
 - Per-tile light value `0–1`. **Sources:** sky (top-down flood scaled by day phase),
-  torches/lava (`emit = 0.9`, radius ~10 tiles). Propagation = **BFS flood fill** with
-  attenuation `−0.08` per air tile and `−0.16` per solid tile, recomputed incrementally on
+  torches/lava (`emit = 0.9`, radius ~10 tiles). Propagation is a flood fill with attenuation
+  `−0.08` per air tile and `−0.16` per solid tile — which is a **cost-aware** flood, so it is
+  `Pathfinding.distanceField Neighbourhood.FourWay maxVisited cost sources`, not a plain
+  `Pathfinding.bfs`: `cost` is the per-tile attenuation (air 8, solid 16, in hundredths), the `sources`
+  are every emitter seeded at once, and the resulting `Map<Cell, int>` is *falloff from the nearest
+  light* — subtract it from the emitter's value and you have the light map. Seeding all emitters as
+  one goal list is why this is a single pass and not one flood per torch. Recompute incrementally on
   tile change within the affected region (not the whole world).
 - Light drives both **rendering darkness** (§8.5) and **spawn eligibility** (§4.9).
 - If disabled in v1, treat underground as uniformly dark and surface as day-phase lit.
@@ -390,7 +402,7 @@ type Model =
       Camera:    Vec2
       Input:     InputState        // current held keys + mouse tile + buttons
       Ui:        UiState           // Playing | InventoryOpen | Paused | Dead | Title
-      Rng:       RngState          // deterministic sim RNG (separate from worldgen)
+      Rng:       Rng               // FS.GG.Game.Core; sim RNG (separate from worldgen)
       DaysSurvived: int
       Events:    WorldEvent list } // transient, drained each frame
 ```
@@ -449,7 +461,8 @@ Per `Tick dt` (dt = 1/60), in this order, to keep determinism:
 7. **Enemies:** spawner attempt → per-enemy AI state machine → integrate + collide →
    contact damage → death/loot.
 8. **Projectiles & drops:** integrate, collide, resolve hits, magnet pickup, despawn/merge.
-9. **Lighting:** if any tile changed, run incremental BFS over affected regions only.
+9. **Lighting:** if any tile changed, re-run the §4.10 `Pathfinding.distanceField` over the affected
+   regions only — not the whole world.
 10. **Camera:** lerp toward player (`smooth = 8/s`), clamp to world bounds.
 11. **Drain `Events`** into the save/undo/audio pipelines; clear for next tick.
 
@@ -819,16 +832,22 @@ designer bounds.
   surfaces to the visible+margin set**, ~12–16, and recycle the rest). Off-screen chunk
   *data* may stay cached; their *surfaces* are evicted.
 
-**Fixed vs. variable timestep:** **fixed** 1/60 simulation via accumulator; rendering is
-variable and interpolates entity positions between the last two sim states for smoothness
-(store `PrevPos` per dynamic entity; render at `lerp(prev, cur, alpha)`).
+**Fixed vs. variable timestep:** **fixed** 1/60 simulation, drained by
+`FixedStep.drain (1.0/60.0) frameTime acc` → `struct (steps, acc')` — it banks the real time, returns
+the whole steps this frame owes, and caps the frame internally so a chunk-generation hitch cannot
+spiral into a catch-up storm. Do not hand-roll the accumulator. Rendering is variable and interpolates
+entity positions between the last two sim states for smoothness (store `PrevPos` per dynamic entity;
+render at `lerp(prev, cur, alpha)`).
 
 **Determinism / RNG:** two seeded streams. **Worldgen RNG** is a pure function of the
 world `Seed` and tile coordinates (use a hashed-coordinate noise so any tile/chunk is
 reproducible regardless of generation order — *not* a single sequential PRNG, so streaming
-order can't change the world). **Sim RNG** (`Rng: RngState`, a small splitmix/xorshift) is
-seeded once and advanced only inside the ordered tick, so a recorded input log replays
-identically. Floats in sim are `float32` with the fixed dt to bound divergence.
+order can't change the world). **Sim RNG** is `FS.GG.Game.Core`'s **`Rng`** — which *is* the
+"small splitmix" this spec used to describe hand-rolling, so declare `Rng: Rng` and use it: seed once
+with `Rng.ofSeed`, advance it only inside the ordered tick, and a recorded input log replays
+identically. It is a value, so threading it through the Model is the natural thing rather than a
+discipline. If you want the worldgen stream kept genuinely independent of the sim stream,
+`Rng.split` gives you two that cannot perturb each other. Floats in sim are `float32` with the fixed dt to bound divergence.
 
 **World generation pipeline (deterministic from `Seed`):**
 

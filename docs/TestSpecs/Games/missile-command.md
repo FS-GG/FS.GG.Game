@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "fixed-shooter / arcade defense"
 target_session_minutes: 8
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -248,7 +248,7 @@ type Model =
       // bonus tally animation
       BonusTimer: float
       NextId: int
-      Rng: System.Random
+      Rng: Rng                // FS.GG.Game.Core — a VALUE, so the Model stays one (§13)
       Now: float }                 // accumulated seconds (for trails/animation)
 ```
 
@@ -547,14 +547,22 @@ All tunables live in a single `Config` record so balance is data-driven and test
 - **Performance budget:** target **60 FPS / 16.7 ms** frame. Worst-case entity counts:
   ≤ 32 incoming (+ up to ~16 MIRV children mid-wave), ≤ 30 counter-missiles, **≤ 12
   blasts**, ≤ 1 plane. Trails capped to ~12 points each. Well within Skia 2D budget.
-- **Timestep:** variable `dt` from the tick, **clamped to 0.05 s** to prevent tunneling
-  (fast missiles skipping the blast on a stall). Integration is `pos += vel·dt`.
-  Optionally substep movement when `dt` large, but clamp is sufficient at these speeds.
+- **Timestep:** variable `dt` from the tick, **clamped to 0.05 s** to prevent tunneling (fast missiles
+  skipping the blast on a stall) — **deliberately not `FixedStep.drain`**. Determinism here (§14.16) is
+  two runs fed the same seed and the same ordered `Tick` sequence, and each `Tick` carries its own
+  `dt`, so identical inputs already give identical positions; a fixed accumulator would add a moving
+  part without adding a guarantee. Integration is `pos += vel·dt`. Optionally substep movement when
+  `dt` is large, but the clamp is sufficient at these speeds. Reach for `FixedStep.drain` if the sim
+  ever has to advance independently of the frame.
 - **Collision:** point-in-circle for incoming head vs. blast radius (cheap O(blasts ×
   incoming), ≤ 12×48 per frame). Counter-missile arrival = distance-to-target ≤ 6 px.
-- **Determinism / RNG:** single seeded `System.Random` in the model; all spawn X,
-  target choice, MIRV split altitude/count, plane spawn drawn from it. Seed injectable
-  for tests so scenarios are reproducible.
+- **Determinism / RNG:** a single **`Rng`** (`FS.GG.Game.Core`, splitmix64) in the model, seeded with
+  `Rng.ofSeed`; all spawn X, target choice, MIRV split altitude/count and plane spawn are drawn from it
+  (`Rng.nextInt` / `Rng.nextFloat`). The seed is injectable for tests so scenarios are reproducible.
+  It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Persistence:** high score saved to local storage / a small file; loaded at startup,
   written on game over if beaten. If unavailable, high score is session-only.
 - **Edge cases:** click with no ammo anywhere → ignored (+ dry cue); all batteries

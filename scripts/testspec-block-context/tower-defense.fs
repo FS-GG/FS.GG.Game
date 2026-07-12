@@ -29,7 +29,6 @@ type TileKind = Buildable | Path | Blocked | Spawn | Goal
 type TransientFx =
     | Beam of from: Geometry.Vec2 * to_: Geometry.Vec2 * life: float
     | Explosion of at: Geometry.Vec2 * radius: float * life: float
-type RngState = { Seed: uint64 }
 type RunStats = { Kills: int; Leaks: int; DamageDealt: float }
 
 //#block 7 "| MenuUp | MenuDown              // move cursor (wraps)"
@@ -40,7 +39,7 @@ type RunStats = { Kills: int; Leaks: int; DamageDealt: float }
 // reader copies, and they are what this checks.
 type MenuMsg =
 
-//#block 8 "acc <- acc + realDt"
+//#block 8 "let struct (ticks, acc') ="
 // The fixed-step accumulator fragment (§12). The block is a BODY, lifted out of the Tick handler —
 // its free names are the handler's locals, so they are bound here. `Model` and `simStep` come from
 // the document itself (block 5 declares `Model`; the accumulator is what drives it).

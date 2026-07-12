@@ -5,7 +5,7 @@ category: games
 complexity: complex
 genre: "Turn-based tactics (grid combat, telegraphed enemy intent)"
 target_session_minutes: 25
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (Pathfinding; Los for ranged LoS)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (Pathfinding; Los for ranged LoS; Rng for mission seeds)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -40,8 +40,11 @@ document **cites it rather than re-teaching it** — the grid coordinate is `Cel
 primitives are deterministic and property-tested; a reimplementation here would be a second, weaker
 copy that drifts. So the code blocks below are *sketches of the game's rules*, not of the algorithms
 underneath them, and where one does spell an algorithm out it is because the framework has no
-answer for it. If you find yourself hand-rolling a Dijkstra, a Bresenham, or an FoV, check
-`Game.Core` first — §4.4 was exactly that mistake, and it shipped for a while.
+answer for it. If you find yourself hand-rolling a Dijkstra, a Bresenham, or a shadowcast, check
+`Game.Core` first: `Pathfinding.astar`, `Los.line` and `Fov.fov` are already there, tested. §4.4 was
+exactly that mistake, and it shipped for a while. (This game uses the first two. It has no fog, so it
+does **not** use `Fov` — which is why `stack:` above does not claim it. A stack that names a module the
+game never touches misleads a reader just as surely as one that stays silent about a module it does.)
 
 ## 2. Core Game Loop
 
@@ -550,7 +553,7 @@ type Model =
       Round: int
       WaveSchedule: Map<int, (string * Tile) list>
       MissionId: int
-      Rng: System.Random                     // seeded per mission; deterministic
+      Rng: Rng                               // FS.GG.Game.Core; seeded per mission
       History: Model list                    // undo stack (this turn only)
       Redo: Model list
       // ---- view-only / transient ----
@@ -921,8 +924,10 @@ tune). Defaults below; ranges are sane tuning bounds.
 
 **Determinism:** there are **no random combat rolls** at all — damage, knockback, and
 AI choice are fully deterministic. RNG is used *only* for cosmetic particle jitter and
-(optionally) for procedural mission seeds; the authoritative `Rng` is seeded per
-mission so any mission is reproducible bit-for-bit. This makes balance testing exact.
+(optionally) for procedural mission seeds; the authoritative generator is `FS.GG.Game.Core`'s **`Rng`**
+(splitmix64), seeded per mission with `Rng.ofSeed`, so any mission is reproducible bit-for-bit. It is a
+value, so it threads through the Model without the aliasing a `System.Random` would bring. This makes
+balance testing exact.
 
 ## 13. Technical Notes
 
