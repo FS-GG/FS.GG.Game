@@ -54,18 +54,20 @@
        enforces (`pinnedVersion`): it reads the central pin and REFUSES to invent a version, since a
        second copy of a version is a drift bug with a delay fuse.
 
-       FS.GG.UI.Canvas / FS.GG.UI.SkiaViewer are the same FS.GG.Rendering release train as the render
-       edge above and MUST move with it — both depend on FS.GG.UI.Scene at their own version, so a
-       skill typechecked against a different one would be gated against a surface the reader's product
-       never restores. Keep all four Rendering pins on one version (currently 0.9.0).
+       FS.GG.UI.Canvas / FS.GG.UI.Controls.Elmish / FS.GG.UI.SkiaViewer are the same FS.GG.Rendering
+       release train as the render edge above and MUST move with it — each depends on FS.GG.UI.Scene at
+       its own version, so a skill typechecked against a different one would be gated against a surface
+       the reader's product never restores. Keep all five Rendering pins on one version (currently
+       0.9.0).
 
        This group is why the train pin is a CEILING on the DOCUMENTATION and not just a floor under the
        build (FS.GG.Game#217): a skill can only teach an API the gate can compile, and the gate compiles
        against exactly these versions. At 0.5.0 that excluded `ControlsElmish.runInteractiveAppWithAudio`
        — the launcher an `app`-profile product must call for sound, first shipped in FS.GG.UI 0.9.0 — so
-       #215 had to ship the entry points as a prose table instead of a block. FS.GG.UI.Controls.Elmish is
-       deliberately NOT pinned here yet: nothing binds it until that block is restored (#225), and a
-       gate-only pin that compiles nothing overstates what this gate checks.
+       #215 had to ship the entry points as a prose table instead of a block. FS.GG.Game#225 restored the
+       block, and FS.GG.UI.Controls.Elmish is pinned below to compile it: the pin and the block land
+       TOGETHER, because a gate-only pin that compiles nothing overstates what this gate checks, and a
+       block with no pin does not compile at all.
 
        The NEXT train move (0.9.0 -> 0.10.0) is gated on FS.GG.Game#219: FS.GG.UI 0.10.0 REMOVES
        `Persistence.interpret`, which fs-gg-persistence still teaches, so bumping to it reds the md-block
@@ -79,6 +81,7 @@
     <PackageVersion Include="FS.GG.Audio.Core" Version="0.2.0" />
     <PackageVersion Include="FS.GG.Audio.Host" Version="0.2.0" />
     <PackageVersion Include="FS.GG.UI.Canvas" Version="0.9.0" />
+    <PackageVersion Include="FS.GG.UI.Controls.Elmish" Version="0.9.0" />
     <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.9.0" />
   </ItemGroup>
 
@@ -94,11 +97,11 @@
        generator reads the central pin and REFUSES to invent one (a second copy of a version is a drift
        bug with a delay fuse).
 
-       SAME RELEASE TRAIN as the four Rendering pins above, and it must stay that way. `_scaffold.fs`
+       SAME RELEASE TRAIN as the five Rendering pins above, and it must stay that way. `_scaffold.fs`
        binds `Scene.Point`/`Rect` directly, so the template that SHIPS the fragment and the
        FS.GG.UI.Scene the gate COMPILES it against have to be one coherent set — otherwise the scaffold
        could be generated from a fragment written against a Scene surface the gate never restores, and
-       the gate would go green over a pairing no reader can reproduce. Keep all five on one version
+       the gate would go green over a pairing no reader can reproduce. Keep all six on one version
        (currently 0.9.0).
 
        FS.GG.UI.Template packs the Rendering repo under `content/`, which is what makes the fragment a
