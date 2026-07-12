@@ -30,6 +30,15 @@ let private pathCost (path: Cell list) =
     |> List.pairwise
     |> List.sumBy (fun (a, b) -> if a.Col <> b.Col && a.Row <> b.Row then 14 else 10)
 
+// What the path ACTUALLY costs the unit: the same 10/14 baseStep, times the cost of the cell being
+// entered. `pathCost` above is this with the terrain thrown away — which is exactly what `astar`
+// prices, and exactly why an `astar` path can overrun a budget `reachableWithin` costed (#212). The
+// start is not charged: you are already standing on it.
+let private terrainPathCost (cost: Cell -> int) (path: Cell list) =
+    path
+    |> List.pairwise
+    |> List.sumBy (fun (a, b) -> (if a.Col <> b.Col && a.Row <> b.Row then 14 else 10) * cost b)
+
 // Follow the flow field from `c`, at most `fuel` steps, and report where it comes to rest.
 let private rollDownhill (flow: Map<Cell, Cell>) (fuel: int) (c: Cell) =
     let rec walk n c =
@@ -291,7 +300,7 @@ let tests =
             Expect.equal (Map.tryFind { Col = 0; Row = 0 } flow) (Some { Col = 0; Row = 1 }) "routes around, never diagonally past the missing corner"
         }
 
-        test "reachableWithin is the move range, start inclusive and free" {
+        test "reachableWithin costs the reachable set, start inclusive and free" {
             let cost = gridCost 5 1 Set.empty Set.empty
             let range = Pathfinding.reachableWithin FourWay 5000 cost 20 { Col = 0; Row = 0 }
             Expect.equal
@@ -328,6 +337,232 @@ let tests =
             Expect.equal (Map.tryFind { Col = 0; Row = 0 } range) (Some 0) "the start is settled first, and costs nothing"
             Expect.all (range |> Map.toList |> List.map snd) (fun v -> v >= 0 && v <= 100_000) "every settled value is within budget"
         }
+
+        // -----------------------------------------------------------------------------------------
+        // reachable / pathTo — the budgeted, predecessor-keeping move range (#212, and §4.4 of
+        // docs/TestSpecs/Games/turn-based-tactics.md, whose `Reach = {Steps; Endable}` this is).
+
+        test "#212: the highlight and the path agree, where reachableWithin + astar did not" {
+            // The trap, exactly as filed. Rough terrain at (1,0) costs 5; everything else costs 1.
+            //
+            //          col 0    col 1     col 2
+            //   row 0  START    ROUGH(5)  DEST
+            //   row 1  .        .         .
+            //
+            // Budget 40 = four 1-cost steps (baseStep 10 × cost 1). The cheapest route to DEST goes
+            // the long way round the rough cell and costs exactly 40 — so DEST is in budget, and any
+            // honest move range highlights it.
+            let cost (c: Cell) =
+                if c.Col < 0 || c.Col > 2 || c.Row < 0 || c.Row > 1 then 0
+                elif c = { Col = 1; Row = 0 } then 5
+                else 1
+
+            let start = { Col = 0; Row = 0 }
+            let dest = { Col = 2; Row = 0 }
+            let budget = 40
+            let reach = Pathfinding.reachable FourWay 5000 cost (fun _ -> true) budget start
+
+            Expect.isTrue (Set.contains dest reach.Endable) "DEST is in budget, so it is highlighted"
+            Expect.equal (reach.Steps.[dest].Cost) 40 "...at a cost of exactly the budget"
+
+            // THE BUG: `astar` takes no cost function, so it minimises STEPS. The two-step route
+            // straight through the rough cell is the fewest steps, and it costs 5×10 + 1×10 = 60 —
+            // 50% over a budget the highlight already promised was affordable.
+            let viaAstar = Pathfinding.astar FourWay 5000 (fun c -> cost c > 0) start dest
+            Expect.equal viaAstar (Some [ start; { Col = 1; Row = 0 }; dest ]) "astar takes the rough shortcut"
+            Expect.equal (terrainPathCost cost viaAstar.Value) 60 "which the unit cannot afford"
+            Expect.isTrue (terrainPathCost cost viaAstar.Value > budget) "the old composition overruns the budget"
+
+            // THE FIX: the path comes out of the same search that costed the highlight.
+            let path = (Pathfinding.pathTo reach dest).Value
+
+            Expect.equal
+                path
+                [ start; { Col = 0; Row = 1 }; { Col = 1; Row = 1 }; { Col = 2; Row = 1 }; dest ]
+                "pathTo walks the cheapest route: around the rough cell"
+
+            Expect.equal (terrainPathCost cost path) 40 "and it costs what the highlight said it would"
+            Expect.isTrue (terrainPathCost cost path <= budget) "in budget, by construction"
+        }
+
+        test "you may path THROUGH an ally but not end ON them (§4.4's v1 rule)" {
+            // The split one predicate cannot express: the ally's cell is traversable AND not endable.
+            let ally = { Col = 1; Row = 0 }
+            let cost = gridCost 3 1 Set.empty Set.empty
+            let reach = Pathfinding.reachable FourWay 5000 cost (fun c -> c <> ally) 100 { Col = 0; Row = 0 }
+
+            Expect.isTrue (Map.containsKey ally reach.Steps) "the ally's cell IS traversable, so it is in Steps"
+            Expect.isFalse (Set.contains ally reach.Endable) "...and is NOT a legal destination"
+
+            let dest = { Col = 2; Row = 0 }
+            Expect.isTrue (Set.contains dest reach.Endable) "the cell beyond the ally is reachable"
+
+            // Reconstruct from Steps, not Endable. Filter the thing you reconstruct from and this
+            // path — the one the rule exists to allow — dead-ends on the ally.
+            Expect.equal
+                (Pathfinding.pathTo reach dest)
+                (Some [ { Col = 0; Row = 0 }; ally; dest ])
+                "and the route to it passes straight through the ally"
+        }
+
+        test "canEndOn narrows destinations only — including the unit's own cell, with no exception" {
+            let cost = gridCost 3 1 Set.empty Set.empty
+            let start = { Col = 0; Row = 0 }
+            // A `canEndOn` meaning "unoccupied" excludes `start`: the unit is standing on it. Whether
+            // standing still is a legal move is the game's call, so the framework does not guess.
+            let occupied c = c = start
+            let reach = Pathfinding.reachable FourWay 5000 cost (fun c -> not (occupied c)) 100 start
+
+            Expect.isTrue (Map.containsKey start reach.Steps) "start is always settled"
+            Expect.isFalse (Set.contains start reach.Endable) "but canEndOn is applied to it like any other cell"
+
+            // The documented idiom for making standing still legal.
+            let reach2 = Pathfinding.reachable FourWay 5000 cost (fun c -> c = start || not (occupied c)) 100 start
+            Expect.isTrue (Set.contains start reach2.Endable) "`c = start || ...` puts it back"
+        }
+
+        test "pathTo totality: the start, an unsettled cell, and the CameFrom root" {
+            let cost = gridCost 3 3 Set.empty Set.empty
+            let start = { Col = 0; Row = 0 }
+            let reach = Pathfinding.reachable FourWay 5000 cost (fun _ -> true) 20 start
+
+            Expect.equal (Pathfinding.pathTo reach start) (Some [ start ]) "dest = start ⇒ a single-element path"
+            Expect.equal (reach.Steps.[start].CameFrom) None "start is the one cell with no predecessor"
+
+            Expect.equal (Pathfinding.pathTo reach { Col = 2; Row = 2 }) None "out of budget ⇒ never settled ⇒ None"
+            Expect.equal (Pathfinding.pathTo reach { Col = 9; Row = 9 }) None "off the map ⇒ None"
+
+            let settledButOne =
+                reach.Steps |> Map.toList |> List.filter (fun (_, s) -> s.CameFrom.IsNone) |> List.length
+
+            Expect.equal settledButOne 1 "the CameFrom tree has exactly one root, and it is the start"
+        }
+
+        test "reachable totality: a negative budget, an impassable start, or maxVisited <= 0" {
+            let cost = gridCost 4 4 (Set.ofList [ (0, 0) ]) Set.empty
+            let empty = { Pathfinding.Steps = Map.empty; Pathfinding.Endable = Set.empty }
+            let go maxVisited budget start = Pathfinding.reachable FourWay maxVisited cost (fun _ -> true) budget start
+
+            Expect.equal (go 5000 -1 { Col = 1; Row = 1 }) empty "negative budget ⇒ empty Steps AND empty Endable"
+            Expect.equal (go 5000 100 { Col = 0; Row = 0 }) empty "impassable start"
+            Expect.equal (go 0 100 { Col = 1; Row = 1 }) empty "zero maxVisited"
+            Expect.equal (go -1 100 { Col = 1; Row = 1 }) empty "negative maxVisited"
+
+            let standStill = go 5000 0 { Col = 1; Row = 1 }
+            Expect.equal (standStill.Steps |> Map.toList |> List.map fst) [ { Col = 1; Row = 1 } ] "zero budget ⇒ stand still"
+            Expect.equal standStill.Endable (Set.singleton { Col = 1; Row = 1 }) "...and it is endable"
+        }
+
+        test "EightWay + non-uniform cost: a settled cell's CameFrom must track the cost that WON" {
+            // The one configuration in which a cell is improved AFTER it is first queued — and so the
+            // one place a predecessor can go stale while its cost moves on. It needs BOTH a diagonal
+            // (which makes the edge weight depend on the edge, not just the cell entered) AND a
+            // non-uniform cost. Under FourWay, or under a uniform cost, a cell's first relaxation is
+            // already its cheapest and this can never fire, which is exactly why it is easy to miss.
+            //
+            //   row 0:  START(1)  1
+            //   row 1:  1         MUD(3)
+            //
+            // (1,1) is first reached DIAGONALLY from START: 14 × 3 = 42.
+            // It is then improved ORTHOGONALLY via (1,0) or (0,1): 10 + (10 × 3) = 40.
+            // Keep the cost but not the predecessor and the highlight says 40 while the path costs 42.
+            let cost (c: Cell) =
+                if c.Col < 0 || c.Col > 1 || c.Row < 0 || c.Row > 1 then 0
+                elif c = { Col = 1; Row = 1 } then 3
+                else 1
+
+            let start = { Col = 0; Row = 0 }
+            let mud = { Col = 1; Row = 1 }
+            let reach = Pathfinding.reachable EightWay 5000 cost (fun _ -> true) 100 start
+
+            Expect.equal (reach.Steps.[mud].Cost) 40 "the orthogonal route is cheaper than the diagonal one (40 < 42)"
+            Expect.notEqual (reach.Steps.[mud].CameFrom) (Some start) "so CameFrom must NOT still point at the diagonal predecessor"
+
+            let path = (Pathfinding.pathTo reach mud).Value
+            Expect.equal (List.length path) 3 "the winning route is two orthogonal steps, not one diagonal"
+            Expect.equal (terrainPathCost cost path) 40 "and the path costs exactly what the highlight promised"
+        }
+
+        testCase "every settled path costs exactly what the highlight promised, and fits the budget (FsCheck)" <| fun () ->
+            // The property the whole primitive exists for, and the one #212's composition broke:
+            // cost-consistency between the highlight and the path, BY CONSTRUCTION.
+            //
+            // Terrain comes from dense BITMASKS, not from FsCheck's default `(int * int) list` — that
+            // generator yields the empty list far too often, so `mud` was usually empty, the cost was
+            // usually uniform, and the EightWay-with-mud case (the only one where a cell is improved
+            // after it is queued — see the test above) was reached only by luck. A stale-predecessor
+            // mutant survived 300 runs of the list-generator version of this property.
+            let prop (mudRaw: int) (blockedRaw: int) (b: int) (eightWay: bool) =
+                let bitAt (mask: int) (c: Cell) = (mask >>> (c.Row * 5 + c.Col)) &&& 1 = 1
+                // Mask, never `abs`: `abs Int32.MinValue` throws, and FsCheck may hand us one.
+                let mudMask = (mudRaw &&& 0x1FFFFFF) ||| 2 // never 0: (1,0) is mud at minimum
+                let blockedMask = blockedRaw &&& 0x1FFFFFF
+                let start = { Col = 0; Row = 0 }
+
+                let cost (c: Cell) =
+                    if c.Col < 0 || c.Col > 4 || c.Row < 0 || c.Row > 4 then 0
+                    elif bitAt blockedMask c then 0
+                    elif bitAt mudMask c then 3
+                    else 1
+
+                let nb = if eightWay then EightWay else FourWay
+                let budget = 30 + (b &&& 0x7F)
+
+                if cost start <= 0 then
+                    true
+                else
+                    // An arbitrary endable rule, to prove `canEndOn` never leaks into costs or paths.
+                    let canEndOn (c: Cell) = (c.Col + c.Row) % 3 <> 1
+                    let reach = Pathfinding.reachable nb 5000 cost canEndOn budget start
+
+                    // Checked over EVERY settled cell, not just the endable ones: a path routes THROUGH
+                    // pass-through cells, so their predecessors must be sound too.
+                    let consistent =
+                        reach.Steps
+                        |> Map.forall (fun dest step ->
+                            match Pathfinding.pathTo reach dest with
+                            | None -> false // settled ⇒ pathTo MUST reconstruct
+                            | Some path ->
+                                // The route the unit walks costs exactly what the highlight was costed
+                                // at, and that is within budget. astar cannot give you this.
+                                terrainPathCost cost path = step.Cost
+                                && step.Cost <= budget
+                                && List.head path = start
+                                && List.last path = dest
+                                && path |> List.forall (fun c -> cost c > 0))
+
+                    // Endable is exactly the canEndOn subset of Steps — it never adds or reprices.
+                    let endableIsASubset =
+                        reach.Endable = (reach.Steps |> Map.toList |> List.map fst |> List.filter canEndOn |> Set.ofList)
+
+                    consistent && endableIsASubset
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+        testCase "reachableWithin is exactly reachable's Steps with the predecessors dropped (FsCheck)" <| fun () ->
+            // One engine, so the cost map and the move range can never drift apart about what is in
+            // budget — which is the failure #212 is a special case of.
+            let prop (mudRaw: int) (blockedRaw: int) (b: int) (eightWay: bool) =
+                let bitAt (mask: int) (c: Cell) = (mask >>> (c.Row * 5 + c.Col)) &&& 1 = 1
+                // Mask, never `abs`: `abs Int32.MinValue` throws, and FsCheck may hand us one.
+                let mudMask = (mudRaw &&& 0x1FFFFFF) ||| 2
+                let blockedMask = blockedRaw &&& 0x1FFFFFF
+
+                let cost (c: Cell) =
+                    if c.Col < 0 || c.Col > 4 || c.Row < 0 || c.Row > 4 then 0
+                    elif bitAt blockedMask c then 0
+                    elif bitAt mudMask c then 3
+                    else 1
+
+                let nb = if eightWay then EightWay else FourWay
+                let budget = 30 + (b &&& 0x7F)
+                let start = { Col = 0; Row = 0 }
+                let range = Pathfinding.reachableWithin nb 5000 cost budget start
+                // `canEndOn` is irrelevant here: it must not touch Steps.
+                let reach = Pathfinding.reachable nb 5000 cost (fun c -> c.Col % 2 = 0) budget start
+                range = (reach.Steps |> Map.map (fun _ s -> s.Cost))
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
 
         testCase "distanceField agrees with astar's path cost for every reachable cell (FsCheck)" <| fun () ->
             // The optimality cross-check: with a uniform cost of 1, the field value at `c` is exactly
