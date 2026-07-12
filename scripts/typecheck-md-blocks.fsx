@@ -168,9 +168,15 @@ type Corpus =
 /// product does. Do not hand-edit it; CI regenerates and fails on drift.
 let scaffold = "scripts/skill-block-context/_scaffold.fs"
 
-/// The namespace `_scaffold.fs` declares. Read from the generated file rather than restated, so that
-/// a template that ever re-homes the fragment fails HERE — loudly, naming the file — instead of as an
-/// inscrutable wall of `FS0039 Geometry not defined` in every block of both corpora.
+/// The namespace `_scaffold.fs` declares — READ from the generated file, never restated here.
+///
+/// Restating it would put the same string in two places and make this harness able to drift from the
+/// file it compiles, which is the identical defect one level up from the twin this item deleted. So
+/// the generator requires the fragment to declare SOME namespace and does not care which; the corpora
+/// then `open` whatever it declares. A template that re-homed the fragment out of `AppRoot` would
+/// therefore be absorbed, not break the gate — the one thing that must never happen silently is the
+/// namespace VANISHING, which would otherwise surface as an inscrutable wall of `FS0039 Geometry is
+/// not defined` in every block of both corpora. That case fails here, loudly, naming the file.
 let scaffoldNs =
     let path = repoPath scaffold
     if not (File.Exists path) then
@@ -747,6 +753,71 @@ if not (File.Exists coreDll) && not listOnly then
     fail $"FS.GG.Game.Core.dll not found at {relative coreDll} — build it first \
            (dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c {configuration}). Refusing to \
            typecheck the docs against an assembly that does not exist."
+
+// ---------------------------------------------------------------------------------------------
+// 3a. The two `Geometry` modules must not collide (#189)
+// ---------------------------------------------------------------------------------------------
+//
+// Both corpora open `FS.GG.Game.Core` and THEN the scaffold, and F# MERGES same-named modules from
+// two opened namespaces — which is the whole point (see `AmbientOpens`): `Geometry.Vec2` (product)
+// and `Geometry.intersects` (Game.Core) both resolve, exactly as in a reader's product. The merge is
+// the mechanism, and it has a sharp edge: the scaffold is opened LAST, so on a name they SHARE, the
+// scaffold silently WINS.
+//
+// While the scaffold was a hand-written twin it exposed three names (`Vec2`, `toPoint`, `toRect`) and
+// the edge was narrow. Generating it from the published fragment (#189) widened it to nine — `zero`,
+// `vec2`, `add`, `sub`, `scale`, `clamp` came along too, which is most of the value, and every one of
+// them is a name a geometry library plausibly wants. The day `FS.GG.Game.Core.Geometry` grows a
+// `scale` or a `clamp`, every block calling it silently re-resolves to the scaffold's Vec2 overload
+// instead of the sim one. If the signatures happen to typecheck, this gate stays GREEN while readers
+// copy a block that means something different in their product — a value crossing between the two
+// halves of the merged namespace, which is precisely the #129/#132/#140 bug class.
+//
+// Nothing else would catch it, so assert it: the two modules' member names must be DISJOINT. Today
+// they are (Game.Core: intersects/contains/center/ofCenter/aabbContact/…). This is a guard that can
+// actually fail — the property it asserts is one an innocent upstream addition breaks.
+let assertGeometryModulesDisjoint () =
+    // The scaffold's module-level members, taken at the SHALLOWEST `let`/`type` indent in the file —
+    // derived rather than hardcoded to 4 spaces, so a reindent upstream cannot silently shrink the set
+    // this guard compares (a guard that quietly checks less is worse than no guard).
+    let scaffoldText = File.ReadAllText(repoPath scaffold)
+    let decls =
+        Regex.Matches(scaffoldText, @"(?m)^(?<indent>[ ]+)(?:let|type)\s+(?<name>\w+)")
+        |> Seq.map (fun m -> m.Groups["indent"].Value.Length, m.Groups["name"].Value)
+        |> List.ofSeq
+    if decls.IsEmpty then
+        fail $"{scaffold} declares no members — it is generated from the published fragment, which \
+               declares several. Regenerate: dotnet fsi scripts/generate-scaffold-context.fsx"
+    let moduleIndent = decls |> List.map fst |> List.min
+    let scaffoldNames = decls |> List.filter (fst >> (=) moduleIndent) |> List.map snd |> Set.ofList
+
+    // Game.Core's `Geometry`, by reflection over the SAME assembly the blocks compile against.
+    let asm = Reflection.Assembly.LoadFrom coreDll
+    match asm.GetType "FS.GG.Game.Core.Geometry" with
+    | null ->
+        fail "FS.GG.Game.Core.Geometry not found in the built assembly. The corpora's ambient opens \
+              merge it with the scaffold's `Geometry`, so its absence means the merge this gate \
+              reproduces is not the one a reader gets."
+    | geom ->
+        let coreNames =
+            geom.GetMembers(Reflection.BindingFlags.Public ||| Reflection.BindingFlags.Static)
+            |> Seq.map _.Name
+            |> Seq.append (geom.GetNestedTypes() |> Seq.map _.Name)
+            |> Set.ofSeq
+
+        let collisions = Set.intersect scaffoldNames coreNames
+        if not collisions.IsEmpty then
+            let names = collisions |> Set.toList |> String.concat ", "
+            fail $"the scaffold's `Geometry` and `FS.GG.Game.Core.Geometry` both declare: {names}. The \
+                   corpora open Game.Core and THEN the scaffold, and F# merges same-named modules — so \
+                   on a shared name the SCAFFOLD WINS, silently, in every block. If the signatures \
+                   happen to typecheck, this gate goes green while readers copy a block that means \
+                   something else in their product (the #129/#132/#140 crossing-bug class). Resolve it \
+                   deliberately: rename in FS.GG.Game.Core, or raise it on FS.GG.Rendering — do not \
+                   delete this check."
+
+if not listOnly then
+    assertGeometryModulesDisjoint ()
 
 let ident (s: string) = Regex.Replace(s, @"[^A-Za-z0-9]", "_")
 

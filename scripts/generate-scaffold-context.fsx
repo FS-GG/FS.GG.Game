@@ -150,7 +150,16 @@ let run (fileName: string) (args: string) (workingDir: string) =
 let workDir = Path.Combine(Path.GetTempPath(), $"fsgg-scaffold-gen-{Guid.NewGuid():N}")
 Directory.CreateDirectory workDir |> ignore
 
-try
+// Cleanup is hung off ProcessExit, NOT a `try/finally`. `fail` ends in `exit`, which is
+// `Environment.Exit` — it terminates the process WITHOUT unwinding, so a `finally` around this block
+// would never run on any of the failure paths, which are precisely the paths that leave a fully
+// restored NuGet package behind. (Measured: every failing run leaked a temp dir.) `Environment.Exit`
+// does raise ProcessExit, so this handler fires on the success path, on every `fail`, and on an
+// unhandled exception alike.
+AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
+    try Directory.Delete(workDir, true) with _ -> ())
+
+do
     // `PackageDownload` fetches the package WITHOUT putting it in a compile graph — we want the file
     // out of it, not a reference to it. It requires an exact-version range: `[x]`, not `x`.
     //
@@ -218,22 +227,28 @@ try
     // still look like the scaffold geometry, or we refuse to write it.
     let body = (File.ReadAllText fragment).Replace("\r\n", "\n")
 
+    // Anchored to the DECLARATIONS, not to any occurrence of the name. A substring check would match
+    // the fragment's own prose — it documents "cross into the scene vocabulary with `toPoint`/`toRect`"
+    // — so deleting the bindings and leaving the comment would sail straight through the very check
+    // meant to catch it, and the failure would resurface as an opaque FS0039 wall across both corpora.
+    // Whitespace-tolerant for the same reason in reverse: `Vx : float` is a cosmetic reformat, and a
+    // guard that hard-fails on one is a guard someone edits out.
     let required =
-        [ "namespace AppRoot", "the fixed namespace the corpora `open`"
-          "module Geometry", "the module the skills write as `Geometry.Vec2`"
-          "type Vec2 =", "the scaffold's vector type"
-          "Vx:", "the collision-safe label `Vx` (the whole point of Vec2)"
-          "Vy:", "the collision-safe label `Vy` (the whole point of Vec2)"
-          "toPoint", "the scene edge the corpora compile"
-          "toRect", "the scene edge the corpora compile" ]
+        [ @"^namespace\s+\w", "a namespace declaration (the corpora `open` whatever it declares)"
+          @"^module\s+Geometry\s*=", "`module Geometry` — the module the skills write as `Geometry.Vec2`"
+          @"type\s+Vec2\s*=", "`type Vec2` — the scaffold's vector type"
+          @"\bVx\s*:", "the collision-safe label `Vx` (the whole point of Vec2)"
+          @"\bVy\s*:", "the collision-safe label `Vy` (the whole point of Vec2)"
+          @"^\s*let\s+toPoint\b", "`let toPoint` — the scene edge the corpora compile"
+          @"^\s*let\s+toRect\b", "`let toRect` — the scene edge the corpora compile" ]
 
-    for token, why in required do
-        if not (body.Contains token) then
+    for pattern, why in required do
+        if not (Regex.IsMatch(body, pattern, RegexOptions.Multiline)) then
             fail
-                $"the fragment restored from {packageId} {version} does not contain '{token}' — {why}. \
-                  Refusing to overwrite {target} with a file that is not the scaffold geometry. If the \
-                  scaffold has legitimately changed shape, this script and the corpora must be updated \
-                  DELIBERATELY (and FS.GG.Rendering told), not silently."
+                $"the fragment restored from {packageId} {version} does not declare {why}. Refusing to \
+                  overwrite {target} with a file that is not the scaffold geometry. If the scaffold has \
+                  legitimately changed shape, this script and the corpora must be updated DELIBERATELY \
+                  (and FS.GG.Rendering told), not silently."
 
     // -----------------------------------------------------------------------------------------
     // 4. Emit
@@ -270,14 +285,18 @@ try
     let current = if File.Exists targetFile then File.ReadAllText targetFile else ""
 
     if checkOnly then
+        // Note this catches a MISSING target too (`current` is "", which never equals `generated`).
+        // That is not incidental — it is why CI runs `--check` rather than regenerating and diffing
+        // with `git diff --exit-code`: git diff is blind to an untracked file, so a DELETED
+        // _scaffold.fs would be silently recreated and the drift job would report green over a
+        // scaffold that is not in the repo. A gate green over a subject it never examined is the
+        // exact defect this file exists to remove; it must not be reintroduced by the guard on it.
         if current.Replace("\r\n", "\n") <> generated then
             fail
-                $"{target} is STALE — it does not match {packageId} {version}. Regenerate it and commit \
-                  the result:  dotnet fsi scripts/generate-scaffold-context.fsx"
+                $"{target} is STALE or MISSING — it is not what {packageId} {version} ships. It is a \
+                  GENERATED file: do not hand-edit it. Regenerate and commit the result:  dotnet fsi \
+                  scripts/generate-scaffold-context.fsx"
         printfn "OK — %s is up to date with %s %s." target packageId version
     else
         File.WriteAllText(targetFile, generated)
         printfn "wrote %s (from %s %s)" target packageId version
-
-finally
-    try Directory.Delete(workDir, true) with _ -> ()
