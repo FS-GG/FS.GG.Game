@@ -255,11 +255,30 @@ jobs:
             exit 1
           fi
 
-  # Dangling skill-reference gate (FS.GG.Game#35). A `[[wiki-ref]]` in a published SKILL.md promises the
-  # reader a skill that resolves. Before #35, 21 refs across all 5 skills pointed at skills this repo does
-  # not publish (`fs-gg-scene`, `fs-gg-skiaviewer`, …, all owner:fs-gg-rendering), and each newly authored
-  # skill inherited the defect. A ref must now either name a skill published here or carry its publishing
-  # repo's registry owner id — `[[fs-gg-rendering:fs-gg-scene]]`. Pure text scan; no build, no .NET.
+  # Dangling skill-reference gate (FS.GG.Game#35, extended by #202). A published SKILL.md makes two kinds
+  # of promise to its reader, and this job checks both.
+  #
+  # A `[[wiki-ref]]` promises a skill that resolves. Before #35, 21 refs across all 5 skills pointed at
+  # skills this repo does not publish (`fs-gg-scene`, `fs-gg-skiaviewer`, …, all owner:fs-gg-rendering),
+  # and each newly authored skill inherited the defect. A ref must now either name a skill published here
+  # or carry its publishing repo's registry owner id — `[[fs-gg-rendering:fs-gg-scene]]`.
+  #
+  # An ISSUE/PR LINK promises a live issue at the other end (#202). One sentence in fs-gg-persistence
+  # pointed at a CLOSED issue for four generations running (Rendering#445 -> #535 -> #587 -> #535 again,
+  # the last re-introduced by the very commit that adopted the "canonical" body) — and every rot was
+  # caught by a HUMAN reading the prose, never by CI. This job was already scanning exactly these files
+  # for dangling references; it just never looked at links. Right scope, wrong vocabulary.
+  #
+  # A closed link is an ERROR, not a warning, because a warning is what we already had: green CI and a
+  # human expected to notice. Closed-and-still-correct is real (fs-gg-audio cites the issue that WIRED
+  # the audio seam — history, and history stays closed), so a body may excuse one by name:
+  #   <!-- skill-refs: closed-ok FS.GG.Rendering#245 — why -->
+  # An excuse that no longer excuses anything is reported too: a stale allowlist is where the next rot
+  # hides. See the header of scripts/check-skill-refs.sh for the full convention.
+  #
+  # GH_TOKEN: resolving a link is a handful of REST reads (no GraphQL) against PUBLIC repos, so the
+  # default token suffices — it buys the 1,000/hr authenticated budget instead of a shared-IP 60/hr.
+  # The script REFUSES to self-skip in CI: a link it cannot read is one it will not call green.
   skill-refs:
     name: Dangling skill refs (template/product-skills)
     runs-on: ubuntu-latest
@@ -268,8 +287,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Fail on a dangling or unqualified [[ref]]
+      - name: Fail on a dangling [[ref]] or a stale issue/PR link
         run: scripts/check-skill-refs.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,
