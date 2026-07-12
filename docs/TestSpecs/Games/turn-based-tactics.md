@@ -161,11 +161,21 @@ When a unit is selected, the game computes the set of **reachable tiles** given 
   enemies block both path and destination. (Flying ignores terrain cost — every
   passable-to-flyer tile costs 1 — and ignores ground occupants for *pathing through*
   but still can't end on an occupied tile.)
-- Output: `reachable : Map<Tile, {cost:int; cameFrom:Tile option}>`. The keys are the
-  highlight set; `cameFrom` reconstructs the path for the move animation.
-- **Preview** (`PreviewMove tile`): if `tile ∈ reachable`, store a `Pending.Move`
-  with the reconstructed path. The highlight set is rendered cyan; the previewed path
-  is drawn as a polyline; the destination shows a ghost of the unit.
+- Output: `reachable : Reach` — **two sets, and they are not the same set**.
+  `Steps : Map<Tile, {Cost:int; CameFrom:Tile option}>` is every tile the search
+  *visited*; `Endable : Set<Tile>` is the subset you may legally **stop** on.
+  They differ by exactly the v1 pass-through rule above: an allied-occupied tile is
+  traversable, so it is in `Steps`, and it is not a legal destination, so it is not in
+  `Endable`. `Endable` is the highlight set. `Steps` is what reconstructs a path — and
+  it must be the *unfiltered* map, because a path through an ally passes through a tile
+  that is deliberately absent from `Endable`. Filter the thing you reconstruct from and
+  reconstruction dead-ends on precisely the routes this section goes out of its way to
+  allow.
+- **Preview** (`PreviewMove tile`): if `tile ∈ reachable.Endable`, walk `CameFrom` back
+  from `tile` over `reachable.Steps` to the unit's own tile (whose `CameFrom` is `None`),
+  and store the reversed chain as a `Pending.Move` with that path. The highlight set is
+  rendered cyan; the previewed path is drawn as a polyline; the destination shows a ghost
+  of the unit.
 - For ranged units the **attack range** is computed separately *from the previewed
   destination* (so the player sees, live, which enemies a planned move would let them
   hit). Attack range = all tiles within `attackRange` Manhattan distance from the
@@ -190,29 +200,61 @@ element, so a cost left in the priority alone is a cost you can never read back.
 ```fsharp
 open System.Collections.Generic
 
-let reachable (board: Board) (unit: Unit) : Map<Tile, int> =
+type Step =
+    { Cost: int
+      CameFrom: Tile option }                     // None only for the unit's own tile
+
+type Reach =
+    { Steps: Map<Tile, Step>                      // EVERY visited tile — including pass-through-only
+      Endable: Set<Tile> }                        // the subset you may STOP on = the highlight set
+
+let reachable (board: Board) (unit: Unit) : Reach =
     let start = unit.Pos
     let pq = PriorityQueue<Tile * int, int>()     // element = (tile, cost), priority = cost
     pq.Enqueue((start, 0), 0)
-    let best = Dictionary<Tile, int>()
-    best[start] <- 0
+    let best = Dictionary<Tile, Step>()
+    best[start] <- { Cost = 0; CameFrom = None }
     while pq.Count > 0 do
         let tile, cost = pq.Dequeue()
-        if cost = best[tile] then                 // skip stale entries
+        if cost = best[tile].Cost then            // skip stale entries
             for nb in neighbors4 tile do
                 match enterCost board unit nb with
                 | Some step ->
                     let nc = cost + step
                     if nc <= unit.MoveRange &&
-                       (not (best.ContainsKey nb) || nc < best[nb]) then
-                        best[nb] <- nc
+                       (not (best.ContainsKey nb) || nc < best[nb].Cost) then
+                        best[nb] <- { Cost = nc; CameFrom = Some tile }
                         pq.Enqueue((nb, nc), nc)
                 | None -> ()                      // impassable / blocked
-    best
-    |> Seq.filter (fun kv -> canEndOn board unit kv.Key)
-    |> Seq.map (fun kv -> kv.Key, kv.Value)       // a Dictionary yields KeyValuePairs, not tuples
-    |> Map.ofSeq
+    // `canEndOn` narrows the DESTINATIONS, never the traversal. Applying it to `Steps` would
+    // punch a hole in the predecessor chain at exactly the allied tiles you are allowed to
+    // path through, and `pathTo` would dead-end there.
+    { Steps = best |> Seq.map (fun kv -> kv.Key, kv.Value)   // a Dictionary yields KeyValuePairs
+                   |> Map.ofSeq
+      Endable = best |> Seq.map (fun kv -> kv.Key)
+                     |> Seq.filter (canEndOn board unit)
+                     |> Set.ofSeq }
+
+/// The path the move animation follows, and the `path` §7's `PendingMove` carries.
+/// Precondition: `dest ∈ reach.Endable` (so it is also a key of `reach.Steps`).
+let pathTo (reach: Reach) (dest: Tile) : Tile list =
+    let rec walk (tile: Tile) (acc: Tile list) =
+        match reach.Steps[tile].CameFrom with
+        | None -> tile :: acc                     // the unit's own tile: chain complete
+        | Some prev -> walk prev (tile :: acc)
+    walk dest []                                  // start-to-dest, inclusive of both
 ```
+
+> **Why store `CameFrom` rather than re-derive the path from costs alone?** Because you *can*
+> re-derive it today — from `dest`, step to any neighbour whose `Cost` is
+> `Cost - (enterCost board unit dest).Value` — and that trick relies on the very property the note
+> above says will expire: it reads the step
+> cost off the **destination tile**, which is only meaningful while `enterCost` is a function of
+> the tile entered. Add a zone-of-control penalty, a per-unit terrain modifier, or a diagonal step
+> and the cost becomes a property of the **edge**; the subtraction then names no particular
+> neighbour, and the descent starts silently returning paths the unit could not walk. `CameFrom`
+> records the edge the search actually took, so it survives that change. It is one `Tile option`
+> per visited tile — pay it.
 
 ### 4.5 Attack resolution & damage
 
@@ -481,7 +523,10 @@ type Model =
       Telegraphs: Map<int, Telegraph>        // enemyId -> intent for THIS round
       SelectedUnit: int option
       ArmedAbility: string option
-      Reachable: Map<Tile, int>              // cached highlight for SelectedUnit
+      Reachable: Reach                       // cached §4.4 result for SelectedUnit:
+                                             //   .Endable = the highlight set / legal destinations
+                                             //   .Steps   = every visited tile, incl. pass-through-
+                                             //              only; `pathTo` reconstructs from THIS
       Pending: Pending
       GridPower: int
       Round: int
@@ -530,9 +575,9 @@ type Msg =
   `SelectedUnit`, recompute `Reachable` via Dijkstra (§4.4), clear `Pending`.
 - `ArmAbility ab`: set `ArmedAbility`; recompute the attack-range overlay from the
   selected unit's current-or-previewed position.
-- `PreviewMove tile`: if `tile ∈ Reachable`, set `Pending = PendingMove(...)` with
-  reconstructed path (purely cosmetic until confirmed). Recompute attack ranges from
-  `dest`.
+- `PreviewMove tile`: if `tile ∈ Reachable.Endable` — the *endable* set, not merely a
+  visited tile — set `Pending = PendingMove(unitId, pathTo Reachable tile, tile)`
+  (purely cosmetic until confirmed). Recompute attack ranges from `dest`.
 - `PreviewAttack (ab,target)`: validate range/LoS; compute `hitPreview` (damage after
   cover) and `pushPreview` (resolve §4.6 *on a copy* to show where things land). Store
   as `PendingAttack`. **No mutation of real units yet.**
@@ -559,7 +604,7 @@ type Msg =
 ### view
 
 `view` is pure: it renders the board, terrain, buildings, units (at their authoritative
-tiles, offset by `Anim` lerp), highlight sets (`Reachable`, attack range), the
+tiles, offset by `Anim` lerp), highlight sets (`Reachable.Endable`, attack range), the
 `Pending` ghost/path, **all enemy `Telegraphs` as danger overlays**, and the HUD.
 Skia performs the actual drawing (§8). The view emits `Msg` from clicks/keys.
 
@@ -895,11 +940,23 @@ required**. Boards are given as legends; coordinates are `(col,row)`.
    *Given* a Skirmisher (`moveRange = 4`) at `(0,0)` on otherwise-Ground board with
    `Rough` (cost 2) at `(2,0)`,
    *When* it is selected,
-   *Then* `Reachable` contains `(2,0)` with cost 3 (`1 + 2` for the rough tile) and
-   `(3,0)` with cost 4 (cheapest, through the rough tile), **does not contain** `(4,0)`
-   (its cheapest path costs 5, exceeding `moveRange = 4`), and contains no tile whose
-   cheapest path cost exceeds 4. Tiles occupied by enemies are excluded from both path
-   and destination.
+   *Then* `Reachable.Steps` has `(2,0)` at cost 3 (`1 + 2` for the rough tile) and
+   `(3,0)` at cost 4 (cheapest, through the rough tile); neither `Steps` nor `Endable`
+   contains `(4,0)` (its cheapest path costs 5, exceeding `moveRange = 4`); and no tile
+   in `Steps` has a cost exceeding 4. Here `Endable` and `Steps`' key set coincide —
+   nothing is occupied. Tiles occupied by enemies are excluded from both path and
+   destination.
+
+   **Pass-through tiles are traversable, not endable — and the path still reconstructs.**
+   *Given* the same Skirmisher at `(0,0)` on an all-Ground row, but with an **allied**
+   unit standing at `(2,0)` (v1: you may path through allies, not end on them),
+   *When* it is selected and `PreviewMove (4,0)` is issued,
+   *Then* `(2,0)` **is** a key of `Reachable.Steps` (cost 2) and is **not** in
+   `Reachable.Endable`; `(4,0)` is in both; and `Pending = PendingMove` whose `path` is
+   the full `[(0,0); (1,0); (2,0); (3,0); (4,0)]` — *through* the ally. A `Reachable`
+   that filtered its predecessor chain by `canEndOn` cannot produce this path at all: the
+   walk back from `(4,0)` dead-ends at `(3,0)`, whose predecessor is the very tile the
+   filter removed. `PreviewMove (2,0)` — onto the ally — is **rejected** (no `Pending`).
 
 2. **Move preview is non-destructive; confirm mutates; undo restores.**
    *Given* a unit at `(1,1)` and `PreviewMove (3,1)` issued (valid),
