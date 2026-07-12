@@ -34,19 +34,24 @@ harness session id — and on Claude Code every subagent of a session shares one
 `CLAUDE_CODE_SESSION_ID`, so a fan-out silently collapses onto **one id**. That is the same-account
 bug one level down, and it defeats the lock you are about to take.
 
-**Mint the id. Do not invent one** — run this verbatim, before anything else:
+**Mint the id with the tool. Do not invent one, and do not copy one out of a document** — run this
+verbatim, before anything else:
 
 ```sh
-export FSGG_WORKER="w-$(od -An -tx1 -N4 /dev/urandom | tr -d ' \n')"
+eval "$(scripts/fsgg-coord whoami --mint)"
 ```
+
+This is the **one** mint idiom across the tool, the protocol doc, and both skill roots. It is the line
+`whoami`'s own warning prints, so the thing the tool tells you to run is the thing written here.
 
 Inventing one *feels* safe and is not. Agents asked to pick an id converge on the same corner of the
 name space, and an id two workers share is an id the lock cannot separate — `release` would drop the
 other's claim mid-flight, `heartbeat` would renew a marker that is not yours, and `say`/`inbox` would
-cross-deliver. This board has carried **four `finch-*` workers at once**, all of them hand-picked from
-the example that used to sit on this line, while `whoami`'s own derived ids spread cleanly across the
-word list (#419). The attractor is the *word*, not the suffix: randomising `-a3f` does not help if you
-still reach for the bird you just read.
+cross-deliver. This board has carried **four `finch-*` workers at once**, all of them pattern-matched
+off the single example id that used to sit on this line, while `whoami`'s own minted ids spread
+cleanly across the word list (#419). The attractor is the *word*, not the suffix: re-rolling the hex
+does not help if you still reach for the bird you just read — which is why **no literal id appears
+anywhere in these docs for you to copy**, and why minting is the tool's job, not yours (#551).
 
 Until `claim` refuses a marker whose `worker=` duplicates a live one (the tool half of #419), **the id
 scheme is advisory** — a mint you skip is a lock you do not have.
@@ -157,10 +162,14 @@ discipline, managed for you.
   tells you to stop working it. Believe it. Re-take with `claim`, or walk away — renewing a dead
   marker would put two workers on one item, which is the entire failure this protocol exists to
   prevent.
-- **Commit with the trailer** `claim` printed, so attribution survives into history:
+- **Commit with the trailer `claim` printed** — the literal line, with your id already in it — so
+  attribution survives into history. No id is written here to copy (#551), and **do not derive one**:
+  `$FSGG_WORKER` is empty if your id came from the worktree name, and `$(git config fsgg.worker)`
+  returns whoever claimed most recently (it is repo-shared unless `extensions.worktreeConfig` is set).
+  A blank trailer loses the attribution; a borrowed one asserts a false one.
 
-  ```
-  FSGG-Worker: w-4f2a91c7
+  ```sh
+  git commit --trailer "FSGG-Worker: <the id `claim` printed>"
   ```
 
 - Watch for stray build artifacts (`.pyc`, `bin/`, `obj/`) sneaking into the commit from a fresh
