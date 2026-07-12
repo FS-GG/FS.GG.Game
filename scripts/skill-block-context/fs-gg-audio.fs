@@ -82,6 +82,14 @@ type Msg =
 // mistake the section exists to prevent — reaching for the game family's function on a Controls
 // product — is only visible when both are in scope and their host records are distinct types.
 //
+// All FOUR launchers, because the SILENT twins were the same defect one level down (#234). #225 left
+// `ControlsElmish.runInteractiveApp` and `Viewer.runApp` in the prose table only — and the coverage
+// scanner counts symbols it finds in ```fsharp blocks, so the skill taught four launchers and gated
+// two. They need no new bindings: a silent launcher is its `*WithAudio` twin with the sink argument
+// left out, so it takes `viewerOptions` and the same host record, and returns the same
+// `Result<ViewerLaunchOutcome, ViewerRunFailure>` — which is what the block now proves, rather than
+// the body merely asserting it.
+//
 // The hosts are `Unchecked.defaultof<_>` because what the block teaches is the CALL: which launcher,
 // and the sink's position between `viewerOptions` and the host record. A hand-built host record would
 // be fiction with more moving parts; the launcher SIGNATURES are real published surface, and they are
