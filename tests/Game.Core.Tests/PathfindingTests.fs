@@ -671,4 +671,84 @@ let tests =
                 f1 = f2 && Pathfinding.flowField EightWay f1 = Pathfinding.flowField EightWay f2
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+
+        // ------------------------------------------------------------------------------------------
+        // The `baseStep` scale, exported (#229). It was load-bearing and unexported, so every caller
+        // hardcoded `10`. Getting it wrong fails SILENTLY and TOTALLY — nothing throws, `int` goes in
+        // and `int` comes out — which is what these tests pin, from both ends.
+
+        test "baseStep IS the scale the search charges: orthogonal costs it, diagonal 14/10 of it" {
+            let cost = gridCost 3 3 Set.empty Set.empty
+            let start = { Col = 0; Row = 0 }
+            let reach = Pathfinding.reachable EightWay 5000 cost (fun _ -> true) (Pathfinding.budgetFor 3) start
+
+            Expect.equal
+                (Map.find { Col = 1; Row = 0 } reach.Steps).Cost
+                Pathfinding.baseStep
+                "an orthogonal move costs exactly baseStep"
+
+            // Derived from baseStep in the implementation, not written as a second `14` — so the two
+            // cannot drift apart if the scale ever changes.
+            Expect.equal
+                (Map.find { Col = 1; Row = 1 } reach.Steps).Cost
+                (Pathfinding.baseStep * 14 / 10)
+                "a diagonal costs baseStep * 14/10 — the integer √2, cheaper than the two orthogonals it replaces"
+        }
+
+        test "budgetFor scales a move range into baseStep units — and a RAW move range freezes the unit" {
+            let cost = gridCost 9 9 Set.empty Set.empty
+            let start = { Col = 4; Row = 4 }
+            let moveRange = 4
+
+            Expect.equal
+                (Pathfinding.budgetFor moveRange)
+                (Pathfinding.baseStep * moveRange)
+                "budgetFor is baseStep * moveRange"
+
+            // The #229 bug, pinned. Passing `moveRange` RAW is the obvious thing — the parameter is
+            // called `budget`, and the unit's budget IS 4 — and every step already costs baseStep (10),
+            // which exceeds 4. So the search settles the start cell and stops.
+            let raw = Pathfinding.reachable FourWay 5000 cost (fun _ -> true) moveRange start
+            Expect.equal (Map.count raw.Steps) 1 "a raw moveRange settles ONLY start — the silent, total freeze"
+
+            Expect.equal
+                (Set.toList raw.Endable)
+                [ start ]
+                "...and the highlight is the single cell the unit is standing on"
+
+            // Scaled, the same unit gets its real range: the Manhattan diamond of radius 4 = 41 cells.
+            let scaled =
+                Pathfinding.reachable FourWay 5000 cost (fun _ -> true) (Pathfinding.budgetFor moveRange) start
+
+            Expect.equal (Map.count scaled.Steps) 41 "budgetFor gives the unit the move range it actually has"
+        }
+
+        test "budgetFor saturates rather than wrapping — an overflow is the same freeze from the other end" {
+            let cost = gridCost 5 5 Set.empty Set.empty
+            let start = { Col = 2; Row = 2 }
+
+            // `baseStep * Int32.MaxValue` overflows `int`. Wrapped, it lands NEGATIVE — and a negative
+            // budget yields an EMPTY reach, indistinguishable from the frozen unit above.
+            let huge = Pathfinding.budgetFor System.Int32.MaxValue
+            Expect.equal huge System.Int32.MaxValue "clamped to Int32.MaxValue, not wrapped to a negative"
+
+            let reach = Pathfinding.reachable FourWay 5000 cost (fun _ -> true) huge start
+            Expect.equal (Map.count reach.Steps) 25 "a saturated budget reaches the whole grid, not nothing"
+        }
+
+        test "budgetFor preserves reachable's totality: negative stays empty, zero settles start alone" {
+            let cost = gridCost 5 5 Set.empty Set.empty
+            let start = { Col = 2; Row = 2 }
+
+            Expect.isTrue (Pathfinding.budgetFor -1 < 0) "a negative moveRange is passed through negative"
+            let negative = Pathfinding.reachable FourWay 5000 cost (fun _ -> true) (Pathfinding.budgetFor -1) start
+            Expect.equal (Map.count negative.Steps) 0 "a negative budget yields an empty Steps"
+            Expect.equal (Set.count negative.Endable) 0 "...and an empty Endable"
+
+            // 0 and negative are NOT the same reach, which is exactly why budgetFor must not clamp a
+            // negative moveRange UP to zero: that would turn "no move range" into "may stand still".
+            Expect.equal (Pathfinding.budgetFor 0) 0 "budgetFor 0 = 0"
+            let zero = Pathfinding.reachable FourWay 5000 cost (fun _ -> true) (Pathfinding.budgetFor 0) start
+            Expect.equal (Set.toList zero.Endable) [ start ] "a zero budget settles start alone — standing still"
+        }
     ]

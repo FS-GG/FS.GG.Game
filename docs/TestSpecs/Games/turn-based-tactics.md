@@ -201,16 +201,16 @@ reconstructed path costs exactly what the highlight promised. Call it.
 
 **Two adaptations the framework forces, and both are silent if you get them wrong.**
 
-1. **Costs come back ×10.** `Pathfinding` scales every step by an integer `baseStep` — 10 per
-   orthogonal move, 14 per diagonal — so an edge onto a tile costs `10 × cost tile`, and
-   `Steps[t].Cost` is in those scaled units, *not* movement points. Therefore the `budget` you
-   hand it is `10 * unit.MoveRange`, and a Rough tile (cost 2) shows up at 20, not 2. Pass
-   `unit.MoveRange` raw and a `moveRange`-4 unit cannot move **at all**: every step costs 10, 10
-   already exceeds a budget of 4, so the search settles the unit's own tile and stops. The
-   highlight comes back as the single tile it is standing on, and nothing throws. The scale is why
-   the module never needs a float — a diagonal is 14/10 ≈ √2 in integers, so equal-cost ties cannot
-   leak through floating-point equality — and `baseStep` is not exported, so the `10` is written
-   out here.
+1. **Costs come back ×10 — so scale the budget with `Pathfinding.budgetFor`.** `Pathfinding` scales
+   every step by an integer `baseStep` — 10 per orthogonal move, 14 per diagonal — so an edge onto a
+   tile costs `baseStep × cost tile`, and `Steps[t].Cost` is in those scaled units, *not* movement
+   points. A Rough tile (cost 2) therefore shows up at 20, not 2. Pass `unit.MoveRange` **raw** and a
+   `moveRange`-4 unit cannot move **at all**: every step costs 10, 10 already exceeds a budget of 4,
+   so the search settles the unit's own tile and stops. The highlight comes back as the single tile
+   it is standing on, and nothing throws — `int` goes in and `int` comes out, so the type system
+   cannot help you. `budgetFor unit.MoveRange` is that multiplication, named: use it and the `10`
+   never appears in your game. (The scale is also why the module never needs a float — a diagonal is
+   14/10 ≈ √2 in integers, so equal-cost ties cannot leak through floating-point equality.)
 2. **`canEndOn` is asked about `start` too** — no special case. A `canEndOn` that means "unoccupied"
    therefore excludes the unit's **own** tile, because the unit is standing on it. That is not a
    style question here: §14's AC #1 requires `Endable` and `Steps`' key set to **coincide** on a
@@ -241,7 +241,7 @@ let reachable (board: Board) (unit: Unit) : Pathfinding.Reach =
         4_096                                            // maxVisited: `budget` prunes but does not bound
         (enterCost board unit)
         (fun t -> t = unit.Pos || canEndOn board unit t) // standing still is a legal move — see (2)
-        (10 * unit.MoveRange)                            // budget in baseStep units — see (1)
+        (Pathfinding.budgetFor unit.MoveRange)           // movement points → baseStep units — see (1)
         unit.Pos
 
 /// The path the move animation follows, and the `path` §7's `PendingMove` carries: start-to-dest,
@@ -257,7 +257,7 @@ let previewMove (reach: Pathfinding.Reach) (dest: Tile) : Tile list option =
 
 > **Why the framework keeps a `CameFrom` tree rather than re-deriving the path from costs.** You
 > *can* re-derive it under v1 — from `dest`, step to any neighbour whose `Cost` is
-> `Cost - 10 * enterCost dest` — but that trick reads the step cost off the **destination tile**,
+> `Cost - Pathfinding.baseStep * enterCost dest` — but that trick reads the step cost off the **destination tile**,
 > which is only meaningful while cost is a function of the tile *entered*. Add a zone-of-control
 > penalty, a per-unit terrain modifier, or a diagonal and cost becomes a property of the **edge**;
 > the subtraction then names no particular neighbour, and the descent starts silently returning

@@ -4,11 +4,12 @@ namespace FS.GG.Game.Core
 /// Movement neighbourhood for grid pathfinding. (`Cell`, the grid coordinate this operates over, is a
 /// shared primitive declared in `Primitives`.)
 type Neighbourhood =
-    /// 4-connected: N/E/S/W only, no diagonals. Each move costs 1 (`bfs`) / 10 (`astar`).
+    /// 4-connected: N/E/S/W only, no diagonals. Each move costs 1 (`bfs`) / `baseStep` (`astar`).
     | FourWay
     /// 8-connected: orthogonals plus diagonals. A diagonal is allowed only when both shared orthogonal
-    /// neighbours are walkable (no corner-cutting). Orthogonal move costs 10, diagonal 14 (integer
-    /// √2-scaled; never a float, so equal-cost ties can never leak through floating-point equality).
+    /// neighbours are walkable (no corner-cutting). An orthogonal move costs `baseStep`, a diagonal
+    /// `baseStep * 14 / 10` (integer √2-scaled; never a float, so equal-cost ties can never leak
+    /// through floating-point equality).
     | EightWay
 
 /// Public contract module exposed by the FS.GG.Game.Core package.
@@ -26,7 +27,8 @@ module Pathfinding =
     /// `CameFrom` is `None` for exactly one cell — the `start` the search was seeded with.
     type Step =
         { /// Total cost of entering this cell from `start`, in the same `baseStep`-scaled units as
-          /// `reachableWithin`'s values (10 per orthogonal step, 14 per diagonal, times `cost`).
+          /// `reachableWithin`'s values (`baseStep` per orthogonal step, `baseStep * 14 / 10` per
+          /// diagonal, times `cost`) — *not* movement points. See `baseStep`.
           Cost: int
           /// The predecessor on the cheapest route from `start`. `None` only for `start` itself.
           CameFrom: Cell option }
@@ -49,6 +51,43 @@ module Pathfinding =
           /// The subset of `Steps` that `canEndOn` admitted. The highlight set, and the only set from
           /// which a destination may be offered.
           Endable: Set<Cell> }
+
+    /// Public contract value exposed by the FS.GG.Game.Core package.
+    /// **The integer step scale, and the units every cost and `budget` in this module speaks.** An
+    /// orthogonal move costs `baseStep`; a diagonal costs `baseStep * 14 / 10` (≈ `baseStep * √2` — the
+    /// 14/10 ratio is why the module never needs a float, so equal-cost ties cannot leak through
+    /// floating-point equality). A move onto `c` costs `baseStep * cost c`, and `Step.Cost` /
+    /// `reachableWithin`'s values come back in those units.
+    ///
+    /// **So a caller whose game speaks movement points must scale INTO these units — use `budgetFor`,
+    /// and do not pass a raw move range.** Passing `moveRange` raw is the obvious thing (the parameter
+    /// is called `budget`, and the unit's budget *is* 4) and it fails **silently and totally**: every
+    /// step costs at least `baseStep`, which already exceeds a budget of 4, so the search settles only
+    /// `start` and the highlight comes back as the single cell the unit is standing on. Nothing throws,
+    /// and `int` in / `int` out means the type system cannot help you.
+    ///
+    /// Scaling **out** is the lossy direction, so it is deliberately not offered as a helper: `Cost /
+    /// baseStep` **truncates** — a diagonal costs 14, and `14 / 10 = 1`, so a route that really consumed
+    /// 1.4 points reads as 1. Fine for a display; **never** re-derive a budget from it, and never
+    /// compare a divided cost against a move range. Compare in `baseStep` units, where the arithmetic is
+    /// exact.
+    val baseStep: int
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Scale a **movement budget expressed in game units** (movement points, tiles) into the `baseStep`
+    /// units `reachable`/`reachableWithin` take: `baseStep * moveRange`. This is the conversion that
+    /// belongs in the type rather than in the reader's head — `Pathfinding.reachable … (budgetFor
+    /// unit.MoveRange) unit.Pos` instead of a hardcoded `10 *`, which is what every caller wrote while
+    /// the scale was unexported.
+    ///
+    /// **Saturating, and that is load-bearing.** A plain `10 * moveRange` would *wrap* a large
+    /// `moveRange` to a **negative** budget, and a negative budget yields an **empty** reach — the exact
+    /// silent, total freeze this function exists to prevent, merely reached from the other end. So an
+    /// overflowing `moveRange` clamps to `Int32.MaxValue` (the walk is bounded by `maxVisited` anyway,
+    /// which is what bounds it in the first place). A genuinely **negative** `moveRange` is passed
+    /// through negative, preserving `reachable`'s documented totality: a negative `budget` yields an
+    /// empty `Steps` **and** an empty `Endable`, whereas a `budget` of `0` settles `start` alone.
+    val budgetFor: moveRange: int -> int
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// **The turn-based-tactics move range.** Dijkstra forward from `start` capped at a movement-point
@@ -73,7 +112,11 @@ module Pathfinding =
     /// on it. If standing still is a legal move in your game, say so:
     /// `fun c -> c = start || not (occupied c)`.
     ///
-    /// Same integer 10/14 `baseStep` and the same determinism guarantee as the rest of the module — the
+    /// **`budget` is in `baseStep` units, not movement points — scale it with `budgetFor`.** A raw
+    /// `moveRange` here settles `start` alone and highlights the single cell the unit stands on, without
+    /// throwing: see `baseStep`.
+    ///
+    /// Same `baseStep` scale and the same determinism guarantee as the rest of the module — the
     /// `CameFrom` tree is a pure function of the inputs (ties among equal-cost predecessors settle on the
     /// total `(cost, Col, Row)` order), so the reconstructed path is bit-identical across runs and
     /// platforms. Bounded by `maxVisited` (cells settled) for the same reason `reachableWithin` is: a
@@ -149,9 +192,9 @@ module Pathfinding =
     ///
     /// `cost c` is the cost to **enter** cell `c`, and `cost c <= 0` means **impassable** — so
     /// `fun c -> cost c > 0` is exactly the `isWalkable` predicate `astar`/`bfs` take, and one terrain
-    /// function drives all of them. A move onto `c` costs `baseStep * cost c`, where `baseStep` is the
-    /// same integer 10 (orthogonal) / 14 (diagonal) `astar` uses. Hence with `cost = fun _ -> 1` the
-    /// value at any cell equals `astar`'s path cost from that cell to the goal.
+    /// function drives all of them. A move onto `c` costs the step weight times `cost c` — `baseStep`
+    /// orthogonally, `baseStep * 14 / 10` diagonally, the same scale `astar` uses. Hence with
+    /// `cost = fun _ -> 1` the value at any cell equals `astar`'s path cost from that cell to the goal.
     ///
     /// Deterministic: integer costs and a total `(distance, Col, Row)` frontier order, so the field is
     /// bit-identical across runs and platforms (no `Map`/`Set` iteration-order or float tie-break
@@ -205,8 +248,11 @@ module Pathfinding =
     /// tree and takes a separate `canEndOn`. This function remains the right answer when you want only
     /// the costed set — an AI scoring candidate cells, say, or a threat overlay.
     ///
+    /// **`budget` is in `baseStep` units, not movement points — scale it with `budgetFor`** (a raw
+    /// `moveRange` yields the start cell alone, silently; see `baseStep`).
+    ///
     /// Same `cost` convention as `distanceField` (`cost c` is the cost to enter `c`; `cost c <= 0` is
-    /// impassable), same integer 10/14 `baseStep`, and the same determinism guarantee. Note the
+    /// impassable), same `baseStep` scale, and the same determinism guarantee. Note the
     /// direction differs: `reachableWithin` charges the cell being stepped **onto** as it walks away
     /// from `start`, whereas `distanceField` walks goal-ward. Under a **uniform** cost the two agree
     /// cell-for-cell (`reachableWithin` equals the `distanceField` from `start` filtered by `budget`);
