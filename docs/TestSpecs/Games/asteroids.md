@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Arcade / shoot-'em-up (vector)"
 target_session_minutes: 8
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -267,7 +267,7 @@ type Model =
     WaveClearTimer: float       // >0 during inter-wave pause
     UfoSpawnTimer: float
     Keys: Set<Key>              // currently-held keys
-    Rng: System.Random
+    Rng: Rng                // FS.GG.Game.Core — a VALUE, so the Model stays one (§13)
     HighScore: int }
 ```
 
@@ -536,12 +536,17 @@ Data-driven tunables (defaults chosen above):
 | `extraLifeEvery` | 10000 | 5000–25000 | Extra-life cadence |
 
 ## 13. Technical Notes
-- **Timestep:** fixed `dt = 1/60 s` simulation. The render loop accumulates real frame
-  time and steps the simulation in whole `1/60` increments (accumulator pattern),
-  capping at e.g. 5 steps/frame to avoid a "spiral of death" if the tab stalls.
-- **Determinism:** all randomness flows through `Model.Rng` (`System.Random`) seeded at
-  `StartGame`; given the same seed + same input sequence the run is reproducible — useful
-  for tests.
+- **Timestep:** fixed `dt = 1/60 s` simulation, drained by **`FixedStep.drainWith`** — do not
+  hand-roll the accumulator. `FixedStep.drainWith (5.0/60.0) (1.0/60.0) frameTime acc` returns
+  `struct (steps, acc')`: the whole `1/60` steps this frame owes, and the remainder to bank. The cap
+  is the "spiral of death" guard, stated as the frame-time budget the function takes — `5.0/60.0` is
+  the 5-steps-per-frame ceiling. (`FixedStep.drain` is the same call at the default 0.25 s cap.)
+- **Determinism:** all randomness flows through `Model.Rng` — `FS.GG.Game.Core`'s **`Rng`**
+  (splitmix64), seeded at `StartGame` with `Rng.ofSeed`. Given the same seed + same input sequence the
+  run is reproducible. It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Performance budget:** worst-case entity count is bounded — max ~11 Large →
   effectively ≤ ~44 small fragments + 4 player bullets + 1 UFO + 1 UFO bullet + ≤200
   particles. Far under any 16.7 ms/frame concern; collision is naive O(n²) circle checks

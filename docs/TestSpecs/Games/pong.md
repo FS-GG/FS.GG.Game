@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Arcade / Table Tennis"
 target_session_minutes: 5
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -209,7 +209,7 @@ type Model =
       ServeTo: Side            // side the next serve travels toward (the loser)
       AiError: float           // current per-rally AI aim error, px
       KeysDown: Set<Key>
-      Rng: System.Random }
+      Rng: Rng }                // FS.GG.Game.Core — a VALUE, so the Model stays one (§13)
 ```
 
 ### 7.2 Msg
@@ -467,14 +467,21 @@ Data-driven tunables (all defined as named constants / a config record):
 - **Performance budget:** trivially within 60 FPS / 16.7 ms — fixed entity count (2
   paddles + 1 ball + static net). No allocation per frame beyond the draw list; reuse Skia
   paint objects.
-- **Timestep:** logically **fixed-step physics** at 60 Hz. `Tick dt` carries dt in seconds;
-  clamp `dt ≤ 0.05` to prevent tunneling on frame hitches. For robustness, an implementer
-  may sub-step the ball when `|vel*dt|` exceeds half the ball size (8 px) to avoid passing
-  through thin paddles at >1000 px/s — split the integration into N ≥ ceil(speed·dt/8)
-  sub-steps and run collision each sub-step.
+- **Timestep:** logically **fixed-step physics** at 60 Hz — drained by `FixedStep.drain`, not by a
+  hand-rolled accumulator. `FixedStep.drain (1.0/60.0) frameTime acc` returns `struct (steps, acc')`:
+  how many whole steps this frame owes, and the remainder to bank. It caps the frame internally
+  (`FixedStep.defaultMaxFrameTime`, 0.25 s), so a debugger pause cannot spiral the sim — which is what
+  the old hand-written `dt ≤ 0.05` clamp was reaching for. Run the §4 update `steps` times with a
+  constant `dt = 1/60`. For robustness, an implementer may sub-step the ball *within* a step when
+  `|vel*dt|` exceeds half the ball size (8 px) to avoid passing through thin paddles at >1000 px/s —
+  split the integration into N ≥ ceil(speed·dt/8) sub-steps and run collision each sub-step.
 - **Determinism / RNG:** all randomness (serve direction, serve angle, AI error) draws from
-  a single seeded `System.Random` stored in the model, so a match is reproducible given the
-  seed and an input log. Tests should inject a fixed-seed RNG.
+  `Model.Rng` — `FS.GG.Game.Core`'s **`Rng`** (splitmix64), seeded with `Rng.ofSeed`; the 50/50 serve
+  is `Rng.nextBool` and the launch angle `Rng.nextFloat`. It is a **value**, not a `System.Random`:
+  every draw returns `struct (x, rng')` and you write `rng'` back to the `Model`, so the `Model` stays
+  a value you can snapshot, replay and compare. A `System.Random` in the `Model` is a mutable object
+  *shared* by every copy of it, which silently breaks the reproducibility this bullet promises. A match
+  is reproducible given the seed and an input log.
 - **Persistence:** optional — store the single highest player win-streak (1P) in local
   config. Not required for v1.
 - **Edge cases:** ball hitting the exact corner of a paddle (resolve via the §4.6 contact

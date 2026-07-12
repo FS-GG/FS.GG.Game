@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Falling-block puzzle"
 target_session_minutes: 10
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for gravity/DAS; Rng for the 7-bag)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -241,7 +241,7 @@ type Model =
       DasTimer     : float               // for held left/right auto-shift
       Dir          : int                 // -1 left, 0 none, +1 right (held direction)
       SoftDrop     : bool
-      Rng          : System.Random       // seeded
+      Rng          : Rng                 // FS.GG.Game.Core, seeded (§13)
       HighScore    : int }
 ```
 
@@ -523,12 +523,19 @@ Data-driven tunables:
 ## 13. Technical Notes
 - **Performance budget:** at most ~220 drawn cells (board 200 + active 4 + ghost 4 + panel
   previews) plus HUD text — trivially within a 16.7 ms frame at 60 FPS.
-- **Timestep:** **fixed-logic, variable-render** — accumulate `dt` into `GravityAcc` so
-  gravity is frame-rate independent; clamp `dt ≤ 0.05 s`. DAS/ARR and lock timers are also
-  `dt`-accumulated.
-- **Determinism / RNG:** all randomness (7-bag shuffle) flows through one seeded
-  `System.Random`. Given the same seed and input sequence, the game is fully reproducible —
-  essential for the acceptance tests below.
+- **Timestep:** **fixed-logic, variable-render**. Gravity is drained by **`FixedStep.drain`** — do
+  not hand-roll the accumulator: `FixedStep.drain gravityInterval dt GravityAcc` returns
+  `struct (drops, acc')`, the whole gravity steps this frame owes and the remainder to bank, with the
+  spiral-of-death clamp built in (it supersedes the hand-written `dt ≤ 0.05 s`). Feed it the *current*
+  level's interval and the speed curve falls out of the same call. DAS/ARR and lock timers are plain
+  `dt` countdowns, not fixed steps — leave those as they are.
+- **Determinism / RNG:** the 7-bag shuffle flows through one **`Rng`** (`FS.GG.Game.Core`,
+  splitmix64), seeded with `Rng.ofSeed`; the Fisher–Yates swap index is `Rng.nextInt`. Given the same
+  seed and input sequence the game is fully reproducible — essential for the acceptance tests below.
+  It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Persistence:** high score persisted to local storage / a settings file; loaded on title,
   written on game over if beaten.
 - **Edge cases:** (a) rotation against a wall/floor uses kicks; if no kick fits, rotation is

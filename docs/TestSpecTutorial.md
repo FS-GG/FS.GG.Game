@@ -326,7 +326,8 @@ The TestSpec hands you the design almost verbatim:
 - **§12 Difficulty & Balancing** becomes a data-driven `Config` record so every
   tunable is testable without touching code.
 - **§13 Technical Notes** sets non-negotiables: fixed-timestep simulation via an
-  accumulator, and a **seeded RNG** so tests are deterministic.
+  accumulator (`FixedStep.drain`), and a **seeded RNG** (`Rng.ofSeed`) so tests are
+  deterministic. Both ship in `FS.GG.Game.Core` — the spec's `stack:` names them.
 
 ### 6. `tasks` — break it into ordered work
 
@@ -472,10 +473,16 @@ Group related scenarios in one `testList` and mark the top-level list with
 manual `runTests` entry point is needed. Work through every numbered scenario in
 §14 the same way. Two rules from §13 make this reliable:
 
-- **Fixed timestep** — drive the simulation with an explicit `dt`, never with
-  wall-clock time, so a step is reproducible.
-- **Seeded RNG** — inject a seeded `System.Random` (e.g. `Random(12345)`) so any
-  randomized behavior is deterministic in tests.
+- **Fixed timestep** — drive the simulation with an explicit `dt`, never with wall-clock
+  time, so a step is reproducible. `FixedStep.drain (1.0/60.0) frameTime acc` returns
+  `struct (steps, acc')` — the whole steps this frame owes and the remainder to bank — and
+  caps the frame internally so a breakpoint cannot spiral the sim. Don't write the
+  accumulator loop yourself; this is the one the framework tests.
+- **Seeded RNG** — use `FS.GG.Game.Core`'s `Rng`: `Rng.ofSeed 12345UL`, then
+  `Rng.nextInt` / `Rng.nextFloat`. Each draw returns `struct (x, rng')`, and you store
+  `rng'` back in the `Model`. **Not** a `System.Random`: that is a mutable object, so every
+  copy of your `Model` would share one generator, and the reproducibility you are trying to
+  buy would quietly leak away. `Rng` is a value — the `Model` stays a value.
 
 When every §14 scenario has a passing test, `verify` goes green and your
 `evidence` has real verification behind it — that's the loop closing.

@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Vertical auto-bounce platformer (endless climber)"
 target_session_minutes: 3
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for procedural generation)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -246,7 +246,7 @@ type Model =
       Best: int
       SpawnCursorY: float           // worldY above which we still need to generate
       NextId: int
-      Rng: System.Random
+      Rng: Rng                // FS.GG.Game.Core — a VALUE, so the Model stays one (§13)
       InputLeft: bool
       InputRight: bool
       ElapsedMs: float }
@@ -510,15 +510,20 @@ Weights are data-driven so balancing is config, not code.
 ## 13. Technical Notes
 - **Performance budget:** ≤ ~120 active entities (platforms + enemies + pickups + particles)
   on screen; target **60 FPS / 16.7 ms** per frame. Full redraw per frame is fine at this scale.
-- **Timestep:** **fixed-timestep simulation** at 60 Hz. Accumulate real `dt`; step the sim in
-  fixed `1/60 s` increments (clamp accumulator to avoid spiral-of-death, max 4 steps/frame).
-  This keeps bounce physics and collision deterministic regardless of frame rate.
+- **Timestep:** **fixed-timestep simulation** at 60 Hz, drained by **`FixedStep.drainWith`** — do not
+  hand-roll the accumulator. `FixedStep.drainWith (4.0/60.0) (1.0/60.0) frameTime acc` returns
+  `struct (steps, acc')`: the whole `1/60` steps this frame owes, and the remainder to bank. The cap
+  is the spiral-of-death guard — `4.0/60.0` is the max-4-steps-per-frame rule as the frame-time budget
+  the function takes. This keeps bounce physics and collision deterministic regardless of frame rate.
 - **Swept collision required:** at `vyMax = 1600 px/s`, the doodle moves ~26.7 px per fixed
   step — comparable to platform thickness — so test the previous→current Y sweep against
   platform tops (4.5) to prevent tunneling.
-- **Determinism / RNG:** all procedural generation uses a single seeded
-  `System.Random` stored in the `Model`. Seeding the run reproduces an identical platform
-  layout (useful for tests and daily-challenge stretch goal).
+- **Determinism / RNG:** all procedural generation uses a single **`Rng`** (`FS.GG.Game.Core`,
+  splitmix64) in the `Model`, seeded with `Rng.ofSeed`. Seeding the run reproduces an identical
+  platform layout (useful for tests and the daily-challenge stretch goal). It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Persistence:** `Best` score saved to local storage / app settings; loaded on Title.
 - **Edge cases:**
   - First platform guaranteed reachable; doodle starts *resting* on it (vy = 0) so the run

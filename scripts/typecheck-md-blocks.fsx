@@ -159,6 +159,12 @@ type Corpus =
       PackageRefs: string list
       /// Does block N see the declarations of blocks 1..N-1 of the same document?
       Cumulative: bool
+      /// The directory of documents that SPECIFY a product for an implementer to build — the subject
+      /// of the framework-citation rule (§3b), and the only documents that carry a `stack:`. `None`
+      /// exempts the corpus from §3b entirely, which is a decision a new corpus is forced to MAKE:
+      /// an exemption that has to be typed is one somebody chose, and this file's whole history is
+      /// gates that checked less than they appeared to.
+      GameSpecDir: string option
       /// Namespace for the generated per-block modules.
       ModuleNs: string }
 
@@ -263,6 +269,13 @@ let corpora =
               "FS.GG.UI.Canvas"; "FS.GG.UI.Controls.Elmish"; "FS.GG.UI.SkiaViewer"
               "FS.GG.UI.KeyboardInput"; "FS.GG.UI.Scene" ]
         Cumulative = false
+        // EXEMPT from the framework-citation rule (§3b), deliberately. A SKILL.md is the framework
+        // teaching its OWN module — fs-gg-grids names `Grids` in its title — so the rule would be
+        // asking a document to cite the thing it IS. A TestSpec is the opposite: a product handed to
+        // an implementer who has never heard of `Pathfinding`, and who will hand-roll it if the spec
+        // does not say the word. That asymmetry is the entire reason §3b exists, and it is why this
+        // is `None` rather than an oversight.
+        GameSpecDir = None
         ModuleNs = "FsGg.SkillCheck.Generated" }
 
       { Id = "testspecs"
@@ -296,6 +309,12 @@ let corpora =
         // of how we chose to reconstruct it.
         PackageRefs = [ "Expecto"; "FS.GG.UI.Scene" ]
         Cumulative = true
+        // The subject of §3b. `docs/TestSpecTutorial.md` is in this corpus but NOT under this
+        // directory, which is exactly right: it must cite the primitives it teaches (it is a reader's
+        // first game — the last place a hand-rolled accumulator belongs) but it specifies no product
+        // and carries no `stack:`, so the declaration half skips it BY PATH. A game spec cannot buy
+        // the same exemption by deleting its front-matter; that is a hard failure.
+        GameSpecDir = Some "docs/TestSpecs/Games"
         ModuleNs = "FsGg.DocCheck.Generated" } ]
 
 let selected =
@@ -902,10 +921,16 @@ if not (File.Exists coreDll) && not listOnly then
 // Nothing else would catch it, so assert it: the two modules' member names must be DISJOINT. Today
 // they are (Game.Core: intersects/contains/center/ofCenter/aabbContact/…). This is a guard that can
 // actually fail — the property it asserts is one an innocent upstream addition breaks.
-let assertGeometryModulesDisjoint () =
-    // The scaffold's module-level members, taken at the SHALLOWEST `let`/`type` indent in the file —
-    // derived rather than hardcoded to 4 spaces, so a reindent upstream cannot silently shrink the set
-    // this guard compares (a guard that quietly checks less is worse than no guard).
+/// The scaffold's module-level members, taken at the SHALLOWEST `let`/`type` indent in the file —
+/// derived rather than hardcoded to 4 spaces, so a reindent upstream cannot silently shrink the set
+/// the guards below compare (a guard that quietly checks less is worse than no guard).
+///
+/// TWO guards read this, and they must read the SAME set. §3a asserts these names are disjoint from
+/// `FS.GG.Game.Core.Geometry`'s; §3b resolves the corpus's `Geometry.…` citations against the UNION of
+/// the two, because after the merge described below a reader's `Geometry` really does hold both halves.
+/// One derivation, therefore, not two — the §2b argument one level up: a rule enforced by two separate
+/// implementations is a rule with two sets of bugs.
+let scaffoldMemberNames () =
     let scaffoldText = File.ReadAllText(repoPath scaffold)
     let decls =
         Regex.Matches(scaffoldText, @"(?m)^(?<indent>[ ]+)(?:let|type)\s+(?<name>\w+)")
@@ -915,7 +940,10 @@ let assertGeometryModulesDisjoint () =
         fail $"{scaffold} declares no members — it is generated from the published fragment, which \
                declares several. Regenerate: dotnet fsi scripts/generate-scaffold-context.fsx"
     let moduleIndent = decls |> List.map fst |> List.min
-    let scaffoldNames = decls |> List.filter (fst >> (=) moduleIndent) |> List.map snd |> Set.ofList
+    decls |> List.filter (fst >> (=) moduleIndent) |> List.map snd |> Set.ofList
+
+let assertGeometryModulesDisjoint () =
+    let scaffoldNames = scaffoldMemberNames ()
 
     // Game.Core's `Geometry`, by reflection over the SAME assembly the blocks compile against.
     let asm = Reflection.Assembly.LoadFrom coreDll
@@ -944,6 +972,444 @@ let assertGeometryModulesDisjoint () =
 
 if not listOnly then
     assertGeometryModulesDisjoint ()
+
+// ---------------------------------------------------------------------------------------------
+// 3b. The framework-citation rule (#222, #230)
+// ---------------------------------------------------------------------------------------------
+//
+// A TYPECHECK CANNOT SEE THIS ONE EITHER, and for the same reason §2b cannot be a typecheck: the
+// defect is in the PROSE, and prose compiles to nothing.
+//
+// tower-defense §4.4 says "the path is **computed** by A* over the grid (4-neighbour, unit cost)".
+// sandbox-survival §4.9 says lighting propagates by "**BFS flood fill**". `FS.GG.Game.Core` ships
+// `Pathfinding.astar` and `Pathfinding.bfs` — deterministic, property-tested, and built for exactly
+// this. Neither spec names either. Every ```fsharp block in both documents typechecks perfectly,
+// because a spec that never writes the algorithm down has nothing to typecheck: the reader writes it,
+// from the prose, into their product. **The reader copies the spec, not the framework**, so the
+// framework's tested primitive loses to the spec's prose every time.
+//
+// That is the #222 defect, and #230 is the finding that it was never one spec: the same shape sits in
+// the whole corpus. `FixedStep.drain` — which drains an accumulator AND caps the spiral of death —
+// was hand-described in all sixteen documents. `Rng` — splitmix64, splittable, and a VALUE, so it can
+// live in an Elmish model honestly — was hand-described as `System.Random` in ten of them and
+// re-invented under the name `RngState` in three more, while roguelike-dungeon-crawler's own §13
+// forbids the `System.Random` the other ten mandate. A corpus can contradict itself for a long time
+// when nothing reads it.
+//
+// THE RULE IS "CITE THE MODULE", NOT "USE THE MODULE". This is the load-bearing choice, so it is
+// worth being exact about why.
+//
+// A reimplementation can be legitimate. sandbox-survival's enemy pathing is "greedy local (no A*)",
+// and for a v1 horde that is a real design decision, not an oversight. A gate that demanded
+// `Pathfinding.astar` there would be demanding a WORSE game, and would be routed around within a
+// week. But the honest way to state that decision NAMES THE PRIMITIVE IT DECLINES — "deliberately not
+// `Pathfinding.astar`, because …" — and a reader who meets that sentence learns three things at once:
+// the primitive exists, it was considered, and here is why this game does not want it. A reader who
+// meets "greedy local (no A*)" learns only that they are on their own.
+//
+// So one check serves both outcomes, and there is NO opt-out marker — no `<!--#no-framework-->` to
+// grep for, nothing invisible in the rendered page, nothing that rots into a silent exemption. Use
+// the primitive and cite it, or decline it and cite it. The gate cannot tell those apart and does not
+// need to: the citation is the thing that stops the next reader hand-rolling in ignorance, and it is
+// the thing #222's §4.4 was missing.
+//
+// A CITATION IS `Module.member`, AND IT MUST RESOLVE. Not a bare mention of the module name — that
+// test is free to pass and therefore worthless here. EVERY spec in this corpus already carried a
+// model field called `Rng`, so "the document says Rng somewhere" was satisfied, corpus-wide, by the
+// very documents teaching `System.Random`. And the resolve half is not hypothetical either:
+// roguelike-dungeon-crawler §5 drew room counts from `Rng.range(0,2)`, and `Rng.range` DOES NOT
+// EXIST. A citation to a function the framework does not ship is not a citation — it is a second way
+// to strand the reader, and it is one this gate now refuses. Both halves fall out of one question
+// asked against the REAL built assembly: does `Module.member` name something Game.Core actually has?
+//
+// WHAT IS DELIBERATELY NOT IN THE MAP. `Physics` and `Geometry` ship real primitives and are absent
+// from `algorithmRules` on purpose. `Physics` is a rigid-body world (bodies, manifolds, restitution);
+// a Pong paddle reflecting a ball is not a `Physics.step`, and a keyword rule on "collision" would
+// order eleven arcade specs to adopt a solver they are right not to want — an overclaiming `stack:`
+// is the same lie as a silent one, in the other direction. `Geometry` is the module §3a exists for:
+// the corpus's `Geometry.toRect` is the SCAFFOLD's, not Game.Core's, so a rule demanding a
+// `Geometry.…` citation would be satisfied by a citation of a different module that merely shares its
+// name. Both are judgement calls a human makes per spec; the six rules below are the ones a machine
+// can make. That boundary is the honest one, and naming it here is how it stays deliberate.
+//
+// SCOPE. TestSpecs only — a `Corpus` opts in by declaring `GameSpecDir`, so a corpus added later must
+// DECIDE rather than default into silence. A SKILL.md is the framework teaching its own module and
+// names it in its title; a TestSpec is a product handed to an implementer who has never heard of
+// `Pathfinding`, and that asymmetry is the whole point. Within the corpus the tutorial is checked too
+// — it teaches the reader their first game, so it is the last place a hand-rolled accumulator belongs
+// — but it is not a game spec and has no `stack:`, so the §3b-c `stack:` rules skip it BY PATH,
+// not by the absence of the key they check. A game spec cannot escape them by deleting its own
+// front-matter: that is a hard failure below.
+//
+// WHAT THE `stack:` RULE DOES NOT ASSERT, AND WHY. It checks that a spec built on Game.Core DECLARES
+// a `framework:`, and that every module the declaration CLAIMS is cited somewhere in the body. It does
+// NOT check the other direction — that every module the body cites is claimed — and that omission is
+// deliberate, load-bearing, and was found by this gate failing on correct prose.
+//
+// turn-based-tactics §1 says: "If you find yourself hand-rolling a Dijkstra, a Bresenham, or an FoV,
+// check the framework first." That sentence is the corpus at its BEST — it is the fix #222 shipped.
+// And a `cited => claimed` rule reads it as proof that the game uses `Fov`, and orders the spec to
+// declare it. But turn-based-tactics has no fog and does not use `Fov`; #222 deliberately left it out,
+// because a stack that sends a reader to a module the game never touches is the same lie as a silent
+// one, in the other direction.
+//
+// The gate cannot tell "this document DESCRIBES a visibility sweep" from "this document MENTIONS one,
+// to tell you not to write it". Only the author knows. So the machine asserts the half it can prove —
+// a claim with no citation behind it is certainly false — and leaves the half it cannot to review. A
+// lint that cannot distinguish two cases must not pretend it can: it would be wrong exactly where the
+// prose is best, and a rule that punishes good prose is a rule that gets deleted.
+//
+// THE LIMIT, STATED. This is a TEXTUAL rule at DOCUMENT granularity, like §2b. A spec that cites
+// `Pathfinding.astar` in §4.4 and then hand-rolls a Dijkstra in §9 passes, and a spec could satisfy it
+// with a citation parked in a footnote. That is real, and it is the correct trade: the failure this
+// harness keeps meeting is the SILENT one — a corpus where nobody ever wrote the module's name down —
+// and section-level proximity heuristics would buy a little precision for a lot of arbitrariness. The
+// gate makes the OMISSION loud. A reviewer still has to read the prose.
+
+/// F# compiles a module whose name collides with a type of the same name — `Rng` the struct and `Rng`
+/// the module — to a CLR class with a `Module` suffix. Recover the name the SOURCE writes, which is
+/// the name a spec cites: `RngModule` -> `Rng`, `CommandModule` -> `Command`.
+let sourceModuleName (clrName: string) =
+    if clrName.EndsWith "Module" && clrName.Length > "Module".Length then
+        clrName.Substring(0, clrName.Length - "Module".Length)
+    else
+        clrName
+
+let genericArity = Regex(@"`\d+$", RegexOptions.Compiled)
+
+/// Every top-level MODULE of the built FS.GG.Game.Core, with its public members and nested types — by
+/// reflection over the SAME assembly the blocks compile against, exactly as §3a does. Not a list
+/// maintained here: a hand-kept copy of the framework's surface is a copy that goes stale, and a
+/// citation rule checked against a stale copy is one that starts rejecting real functions and
+/// accepting deleted ones.
+///
+/// MODULES only (`abstract` + `sealed` = an F# module), not records or unions. `Point.X` is an
+/// INSTANCE field, so a doc writing `Point.X` means the field and would fail a static-member lookup —
+/// a false positive on prose that is perfectly correct. The citations that carry the risk this section
+/// is about are module functions (`Pathfinding.astar`, `Rng.ofSeed`), and those resolve exactly.
+let coreModules: Map<string, Set<string>> =
+    if listOnly then
+        Map.empty
+    else
+        let asm = Reflection.Assembly.LoadFrom coreDll
+
+        let byModule =
+            asm.GetExportedTypes()
+            |> Seq.filter (fun t ->
+                t.Namespace = "FS.GG.Game.Core" && not t.IsNested && t.IsAbstract && t.IsSealed)
+            |> Seq.map (fun t ->
+                let members =
+                    t.GetMembers(Reflection.BindingFlags.Public ||| Reflection.BindingFlags.Static)
+                    |> Seq.map _.Name
+                    |> Seq.append (t.GetNestedTypes() |> Seq.map _.Name)
+                    // `get_baseStep` is the property accessor for `baseStep`, which is already in the
+                    // set; `Tags` is the compiler's union-case tag class. Neither is a name a spec cites.
+                    |> Seq.filter (fun n ->
+                        not (n.StartsWith "get_" || n.StartsWith "set_" || n = "Tags"))
+                    |> Seq.map (fun n -> genericArity.Replace(n, ""))
+                    |> Set.ofSeq
+                sourceModuleName t.Name, members)
+            |> Map.ofSeq
+
+        if byModule.IsEmpty then
+            fail "no public modules found in the built FS.GG.Game.Core. The framework-citation rule \
+                  (§3b) resolves every `Module.member` the corpus cites against this set, so an empty \
+                  one would pass every citation in every document — including citations of functions \
+                  that do not exist. Refusing to report the corpus clean against a surface I could not \
+                  read."
+
+        // The corpora open Game.Core and THEN the scaffold, and F# MERGES the two `Geometry` modules
+        // (§3a) — so in a reader's product, and in every block here, `Geometry` really does hold both
+        // halves. `Geometry.toRect` is the scaffold's; `Geometry.intersects` is Game.Core's; both
+        // resolve, and a citation rule that knew only one half would reject four specs for writing
+        // correct code. §3a has just proved the two are disjoint, so this union loses nothing.
+        byModule
+        |> Map.change "Geometry" (function
+            | Some core -> Some(Set.union core (scaffoldMemberNames ()))
+            | None ->
+                fail "FS.GG.Game.Core.Geometry vanished between §3a and §3b."
+                None)
+
+/// An algorithm `FS.GG.Game.Core` ships, and the words a spec reaches for when it is about to
+/// hand-roll it instead.
+type AlgorithmRule =
+    { /// The module that ships it. Asserted to EXIST in the assembly below — see `assertRulesResolve`.
+      Owner: string
+      /// What the spec is about to reimplement, for the diagnostic.
+      What: string
+      /// Where to point the reader instead.
+      Use: string
+      Pattern: Regex }
+
+let algorithmRule owner what use_ pattern =
+    { Owner = owner
+      What = what
+      Use = use_
+      Pattern = Regex(pattern, RegexOptions.IgnoreCase ||| RegexOptions.Compiled) }
+
+let algorithmRules =
+    [ algorithmRule
+        "Pathfinding"
+        "a graph search"
+        "Pathfinding.astar / .bfs / .distanceField — and .flowField, which is what MANY agents \
+         converging on ONE goal actually want (one field, not N searches)"
+        // `(?<![*\w])A\*(?!\*)` and not `\bA\*`: markdown bold is `**A**`, which contains the two
+        // characters `A*` and matched the naive pattern. tower-defense's upgrade trees fork into
+        // "branch **A**/**B**", so the naive rule fired on a document for reasons having nothing to
+        // do with pathfinding — and a rule that cries wolf on bold text is one whose next real
+        // finding gets waved through.
+        //
+        // No `DFS`/`depth-first`, deliberately. Game.Core ships A*, BFS and a Dijkstra
+        // (`distanceField`) — every one of them a shortest-path or flood primitive. A depth-first walk
+        // is a DIFFERENT algorithm used for a different job (carving a maze, walking a tree), and
+        // Game.Core has no answer for it. Firing here would order a spec to cite `Pathfinding` and
+        // then hand its reader four functions that cannot do what they asked — advice worse than
+        // silence, and the rule would be routed around rather than obeyed.
+        @"(?<![*\w])A\*(?!\*)|\bDijkstra\b|\bBFS\b|breadth[- ]first\
+          |flood[- ]?fill|\bpathfind\w*|\bshortest path\b"
+      algorithmRule
+        "Los"
+        "a line between two cells"
+        "Los.line (Bresenham) / Los.lineOfSight"
+        @"\bBresenham\b|line[- ]of[- ]sight|\bLoS\b"
+      algorithmRule
+        "Fov"
+        "a visibility sweep"
+        "Fov.fov (symmetric shadowcasting)"
+        @"\bshadow[- ]?cast\w*|field[- ]of[- ]view|\bFoV\b"
+      algorithmRule
+        "SpatialGrid"
+        "a broadphase"
+        "SpatialGrid.build / .query / .queryRadius"
+        @"\bspatial (grid|hash)\b|\buniform grid\b|\bbroad[- ]?phase\w*|\bquadtree\b"
+      algorithmRule
+        "FixedStep"
+        "a fixed-timestep accumulator"
+        "FixedStep.drain, which drains the accumulator AND caps the spiral of death in one call"
+        @"\bfixed[- ](time)?step\b|\baccumulator\b|spiral[- ]of[- ]death"
+      algorithmRule
+        "Rng"
+        "a seeded PRNG"
+        "Rng — splitmix64, and a VALUE, so it lives in an Elmish model honestly (Rng.split gives \
+         independent sub-streams)"
+        @"\bRNG\b|\bPRNG\b|\bSystem\.Random\b|\bxorshift\b|\bxoshiro\b|\bsplitmix\b|\bPCG\b\
+          |\brandom\w*|\bre-?seed\w*|\bseeded\b" ]
+
+/// ...and a rule that names a module the framework does not have can never fire (#176's lesson, which
+/// this file learned once already: the block-count cross-check shared the extractor's own predicate,
+/// so the two agreed by construction and passed over two blocks nothing compiled).
+///
+/// Rename `Pathfinding` in Game.Core and every pattern above goes on matching, every citation demand
+/// goes on being satisfiable by a module that no longer exists, and this gate reports a clean corpus
+/// forever. So the map is checked against the assembly, and a stale entry is a HARD failure, not a
+/// quietly dead rule.
+let assertRulesResolve () =
+    for r in algorithmRules do
+        if not (coreModules.ContainsKey r.Owner) then
+            let known = coreModules |> Map.keys |> Seq.sort |> String.concat ", "
+            fail $"§3b's algorithm map owns '{r.Owner}' to FS.GG.Game.Core, which has no such module. \
+                   Either it was renamed and this map was not told — in which case every rule for it \
+                   is now DEAD, and this gate would report the corpus clean while nothing enforces the \
+                   citation — or the map has a typo. Known modules: {known}."
+
+if not listOnly then
+    assertRulesResolve ()
+
+/// The YAML front-matter block, and the body BELOW it. The split matters: the `stack:` line names the
+/// modules, so a body that included it would let a document satisfy the "cite the primitive" rule with
+/// its own declaration — the two halves of §3b would prove each other and neither would read the prose.
+let splitFrontMatter (text: string) =
+    let m = Regex.Match(text, @"\A---\r?\n(?<fm>.*?)\r?\n---\r?\n", RegexOptions.Singleline)
+    if m.Success then Some m.Groups["fm"].Value, text.Substring m.Length else None, text
+
+/// Every `Module.member` in a piece of markdown that names a REAL Game.Core module, as
+/// (module, member, 0-based line index). Prose and code alike — `Pathfinding.reachable` in a sentence
+/// is exactly as much a citation as one in a block, and §4.4 (the defect that started this) was prose.
+let citation = Regex(@"\b(?<m>[A-Z][A-Za-z0-9]*)\.(?<x>[A-Za-z_][A-Za-z0-9_']*)", RegexOptions.Compiled)
+
+/// `Pathfinding.fsi` is a FILE, not a citation of a member called `fsi`. Pointing a reader at the
+/// signature file is normal here — the skills corpus does it a dozen times (`Los.fsi`, `Fov.fsi`,
+/// `Effects.fsi`) — and the day a TestSpec does, the resolve rule would report
+/// "`Pathfinding.fsi` does not exist in FS.GG.Game.Core" over prose that is entirely correct.
+///
+/// That is not a small blemish: this section's own header argues that a lint which fires on good prose
+/// is a lint that gets routed around, and it would be true of this one. So a `Module.<ext>` is not a
+/// citation, and it is not a violation either — it is a filename, and the rule has nothing to say
+/// about it.
+let sourceFileExtensions = set [ "fs"; "fsi"; "fsx"; "fsproj"; "md"; "dll"; "json"; "yml"; "yaml" ]
+
+let citationsIn (text: string) =
+    text.Split('\n')
+    |> Seq.indexed
+    |> Seq.collect (fun (i, line) ->
+        citation.Matches line
+        |> Seq.map (fun m -> m.Groups["m"].Value, m.Groups["x"].Value, i)
+        |> Seq.filter (fun (m, x, _) ->
+            coreModules.ContainsKey m && not (sourceFileExtensions.Contains x)))
+    |> List.ofSeq
+
+/// The modules a `stack:` line CLAIMS. The parenthetical is prose — `(Pathfinding; Los for ranged
+/// LoS)` — so this reads the real module names out of it rather than trying to parse a grammar the
+/// authors were never given. A misspelled claim simply is not found, and the underclaim check below
+/// then reports the module as undeclared, which is the true statement anyway.
+let claimedModules (framework: string) =
+    Regex.Matches(framework, @"\b[A-Z][A-Za-z0-9]*\b")
+    |> Seq.map _.Value
+    |> Seq.filter coreModules.ContainsKey
+    |> Set.ofSeq
+
+let lintFrameworkCitations (corpora: Corpus list) : int =
+    let subjects =
+        corpora |> List.choose (fun c -> c.GameSpecDir |> Option.map (fun dir -> c, dir))
+
+    printfn ""
+    printfn "── the framework-citation rule (§3b), over the TestSpecs ──"
+
+    if subjects.IsEmpty then
+        // Not reachable while the testspecs corpus is selected, and deliberately not written as if it
+        // were: `--corpus skills` legitimately selects nothing here, and must SAY so rather than print
+        // a tick over a subject it never opened. The tick is what stops anyone looking.
+        printfn "no corpus in this selection declares a GameSpecDir — the framework rule checked nothing."
+        0
+    else
+
+    let mutable violations = 0
+
+    for (corpus, gameSpecDir) in subjects do
+        let specRoot = Path.GetFullPath(repoPath gameSpecDir) + string Path.DirectorySeparatorChar
+        let sources = corpus.Sources()
+        printfn "%d document(s) in %s; %d module(s) in FS.GG.Game.Core"
+            sources.Length corpus.Label coreModules.Count
+
+        for source in sources do
+            let rel = relative source
+            let text = File.ReadAllText source
+            let frontMatter, body = splitFrontMatter text
+            // The line the body starts on, so a diagnostic lands on the line the AUTHOR sees.
+            let bodyOffset = text.Substring(0, text.Length - body.Length).Split('\n').Length - 1
+
+            let cited = citationsIn body
+            let citedModules = cited |> List.map (fun (m, _, _) -> m) |> Set.ofList
+
+            // ---- (1) every citation must RESOLVE against the real assembly ----
+            for (m, x, i) in cited do
+                if not (coreModules[m].Contains x) then
+                    violations <- violations + 1
+                    let near =
+                        coreModules[m]
+                        |> Set.filter (fun k -> k.StartsWith(x.Substring(0, min 3 x.Length), StringComparison.OrdinalIgnoreCase))
+                        |> Set.toList
+                    let hint =
+                        if near.IsEmpty then
+                            let all = coreModules[m] |> Set.toList |> List.sort |> String.concat ", "
+                            $"{m} ships: {all}."
+                        else
+                            let suggestions = String.concat " / " near
+                            $"Did you mean {suggestions}?"
+                    annotate "error" rel (bodyOffset + i + 1) 1
+                        $"`{m}.{x}` does not exist in FS.GG.Game.Core. A citation to a function the \
+                          framework does not ship strands the reader exactly as a missing citation \
+                          does — they go and write it themselves. {hint}"
+                    printfn "  %s:%d  cites `%s.%s`, which FS.GG.Game.Core does not ship."
+                        rel (bodyOffset + i + 1) m x
+
+            // ---- (2) an algorithm the framework ships must be cited ----
+            let fired =
+                algorithmRules
+                |> List.choose (fun r ->
+                    let m = r.Pattern.Match body
+                    if m.Success then
+                        let line = body.Substring(0, m.Index).Split('\n').Length - 1
+                        Some(r, m.Value, line)
+                    else
+                        None)
+
+            for (r, matched, line) in fired do
+                if not (citedModules.Contains r.Owner) then
+                    violations <- violations + 1
+                    annotate "error" rel (bodyOffset + line + 1) 1
+                        $"this document describes {r.What} (\"{matched}\") and never cites \
+                          `{r.Owner}` — the module FS.GG.Game.Core ships it in. The reader copies the \
+                          SPEC, not the framework, so an uncited primitive is a primitive that gets \
+                          hand-rolled (FS.GG.Game#222). Use {r.Use} — or, if reimplementing it is \
+                          DELIBERATE, say so and name what you are declining (\"deliberately not \
+                          `{r.Owner}.…`, because …\"): a reader who meets that sentence learns the \
+                          primitive exists; a reader who meets \"{matched}\" learns nothing."
+                    printfn "  %s:%d  describes %s (\"%s\") but never cites `%s`."
+                        rel (bodyOffset + line + 1) r.What matched r.Owner
+
+            // ---- (3) the `stack:` declaration — game specs only ----
+            // BY PATH, not by whether the document happens to have the key being checked. The tutorial
+            // is in this corpus and is not a game spec; a game spec that DELETED its stack: line would
+            // otherwise exempt itself from the rule by breaking it.
+            if source.StartsWith(specRoot, StringComparison.Ordinal) then
+                let stack =
+                    frontMatter
+                    |> Option.bind (fun fm ->
+                        let m = Regex.Match(fm, @"(?m)^stack:\s*(?<v>.+)$")
+                        if m.Success then Some m.Groups["v"].Value else None)
+
+                match stack with
+                | None ->
+                    violations <- violations + 1
+                    annotate "error" rel 1 1
+                        "no `stack:` in the front-matter. Every TestSpec declares the stack it is \
+                         built on, and §3b's framework rules are enforced through it — a spec without \
+                         one is not an exempt spec, it is an unreadable one."
+                    printfn "  %s:1  no `stack:` front-matter." rel
+                | Some stack ->
+                    let framework =
+                        let m = Regex.Match(stack, @"framework:\s*""(?<v>[^""]*)""")
+                        if m.Success then Some m.Groups["v"].Value else None
+
+                    // Only a SUGGESTION for the diagnostic below — never a requirement. See the
+                    // "what the stack rule does NOT assert" note in the section header.
+                    let required = fired |> List.map (fun (r, _, _) -> r.Owner) |> Set.ofList
+
+                    match framework with
+                    | None when required.IsEmpty && citedModules.IsEmpty -> ()
+                    | None ->
+                        violations <- violations + 1
+                        // Suggest from whichever set is non-empty: a spec can reach this branch by
+                        // CITING a module without tripping an algorithm rule, and "FS.GG.Game.Core ()"
+                        // is not a suggestion, it is a puzzle.
+                        let names =
+                            Set.union required citedModules |> Set.toList |> String.concat "; "
+                        annotate "error" rel 1 1
+                            $"this spec is built on FS.GG.Game.Core and its `stack:` does not say so. \
+                              Add: framework: \"FS.GG.Game.Core ({names})\". The stack is what a reader \
+                              checks to see what they are allowed to lean on; 8 of these 15 specs \
+                              `open FS.GG.Game.Core` in a block and NONE of them declared it \
+                              (FS.GG.Game#230)."
+                        printfn "  %s:1  uses FS.GG.Game.Core; `stack:` declares no `framework:`." rel
+                    | Some framework ->
+                        if not (framework.Contains "FS.GG.Game.Core") then
+                            violations <- violations + 1
+                            annotate "error" rel 1 1
+                                $"`framework:` is \"{framework}\" and does not name FS.GG.Game.Core, \
+                                  which this spec is built on."
+                            printfn "  %s:1  `framework:` does not name FS.GG.Game.Core." rel
+
+                        let claimed = claimedModules framework
+
+                        // Overclaim: the stack names a module the body never cites ANYWHERE. That
+                        // claim cannot be true, so it is the one direction a machine can call — and
+                        // it is the direction #222 got right by hand, deliberately NOT claiming `Fov`
+                        // for turn-based-tactics because that game has no fog.
+                        for m in Set.difference claimed citedModules do
+                            violations <- violations + 1
+                            annotate "error" rel 1 1
+                                $"`framework:` claims `{m}`, but no `{m}.…` is cited anywhere in this \
+                                  spec. An overclaiming stack is as false as a silent one — it sends \
+                                  the reader to a module this game does not use."
+                            printfn "  %s:1  `framework:` claims `%s`, which this spec never cites." rel m
+
+    if violations = 0 then
+        printfn "OK — every framework algorithm is cited, every citation resolves, every `stack:` is honest."
+    else
+        printfn "%d framework-citation violation(s)." violations
+
+    violations
 
 let ident (s: string) = Regex.Replace(s, @"[^A-Za-z0-9]", "_")
 
@@ -1355,25 +1821,35 @@ let checkCorpus (corpus: Corpus) : int =
 // lint.
 let fixtureLabelViolations = if listOnly then 0 else lintFixtureLabels selected
 
+// The framework-citation rule (§3b), also before the compile, and for the same reason: it is textual,
+// it is instant, and when it fires it explains why a corpus that typechecks perfectly is still
+// teaching the reader to hand-roll a primitive the framework ships.
+let citationViolations = if listOnly then 0 else lintFrameworkCitations selected
+
 let results = selected |> List.map (fun c -> c.Id, checkCorpus c)
-let totalErrors = (results |> List.sumBy snd) + fixtureLabelViolations
+let totalErrors = (results |> List.sumBy snd) + fixtureLabelViolations + citationViolations
 
 printfn ""
 
 if listOnly then exit 0
 
 if totalErrors = 0 then
-    printfn "typecheck-md-blocks: OK — every ```fsharp block typechecks against FS.GG.Game.Core, and \
-             neither the blocks nor the fixtures they are compiled with break the label rule."
+    printfn "typecheck-md-blocks: OK — every ```fsharp block typechecks against FS.GG.Game.Core, \
+             neither the blocks nor the fixtures they are compiled with break the label rule, and every \
+             TestSpec cites the framework primitives it is built on."
     exit 0
 
 for (id, n) in results do
     if n > 0 then printfn "typecheck-md-blocks: %s — %d error(s)." id n
 if fixtureLabelViolations > 0 then
     printfn "typecheck-md-blocks: fixtures — %d forbidden record-field label(s)." fixtureLabelViolations
+if citationViolations > 0 then
+    printfn "typecheck-md-blocks: testspecs — %d framework-citation violation(s)." citationViolations
 
 fail $"{totalErrors} error(s): a ```fsharp block in a published document either does not typecheck \
        against FS.GG.Game.Core, or breaks the X/Y/Width/Height label rule — or a FIXTURE the blocks are \
        compiled with breaks it, which is the worse case: the block it feeds binds against the colliding \
-       shape and compiles perfectly clean (#171). Readers copy these blocks into their product — fix \
-       the prose (or, if the block is a sketch missing a binding, add it to the corpus's fixture file)."
+       shape and compiles perfectly clean (#171) — or a TestSpec describes an algorithm the framework \
+       already ships and never names the module that ships it, which is how a reader ends up \
+       hand-rolling a tested primitive (#222/#230). Readers copy these documents into their product — \
+       fix the prose (or, if a block is a sketch missing a binding, add it to the corpus's fixture file)."

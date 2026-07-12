@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Endless side-scrolling arcade"
 target_session_minutes: 3
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for gap placement)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -195,7 +195,7 @@ type Model =
       Score: int
       Best: int                       // persisted high score
       DistanceSinceSpawn: float       // px scrolled since last spawn, drives spawner
-      Rng: System.Random              // seeded RNG for gap placement (determinism)
+      Rng: Rng                        // FS.GG.Game.Core, seeded — gap placement (§13)
       GameOverElapsedMs: float        // for the restart lockout
       Paused: bool }
 ```
@@ -463,13 +463,18 @@ by default.
 ## 13. Technical Notes
 - **Performance budget:** trivial — 1 bird + ~5 pipe pairs + ground + HUD ≈ < 20 draw
   calls/frame. Target 60 FPS / 16.7 ms frame with vast headroom.
-- **Fixed vs. variable timestep:** **fixed** 60 Hz logic. The tick subscription uses an
-  accumulator: accumulate real elapsed time, step `update (Tick (1/60))` while
-  `accumulator ≥ 1/60`, subtract each step. This makes physics deterministic and
-  frame-rate independent; rendering interpolation is optional and not required for v1.
-- **Determinism / RNG:** `gapCenterY` is the only randomness. Use a single seeded
-  `System.Random` stored in the model. A fixed seed + a fixed sequence of `Flap` ticks
-  yields an identical pipe layout — this is what acceptance tests rely on.
+- **Fixed vs. variable timestep:** **fixed** 60 Hz logic, drained by **`FixedStep.drain`** — do not
+  hand-roll the accumulator. `FixedStep.drain (1.0/60.0) frameTime acc` returns `struct (steps, acc')`:
+  dispatch `Tick (1.0/60.0)` exactly `steps` times and bank `acc'`. It caps the frame internally
+  (`FixedStep.defaultMaxFrameTime`, 0.25 s), so a stall cannot spiral into a catch-up storm. This makes
+  physics deterministic and frame-rate independent; rendering interpolation is optional for v1.
+- **Determinism / RNG:** `gapCenterY` is the only randomness. Use a single **`Rng`**
+  (`FS.GG.Game.Core`, splitmix64) in the model, seeded with `Rng.ofSeed`; draw the gap with
+  `Rng.nextFloat`. A fixed seed + a fixed sequence of `Flap` ticks yields an identical pipe layout —
+  this is what the acceptance tests rely on. It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Persistence:** `Best` is saved to local storage / a small JSON file (`flappy.best`) and
   loaded on boot. If absent, `Best = 0`.
 - **Edge cases:** flap on the exact death frame still dies; multiple pipes can be passed in

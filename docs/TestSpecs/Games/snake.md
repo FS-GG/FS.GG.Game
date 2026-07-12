@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Arcade / grid-based survival"
 target_session_minutes: 5
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -187,7 +187,7 @@ type Model =
       StepSeconds: float        // current step interval
       StepAccumulator: float    // seconds banked toward next step
       Config: Config
-      Rng: System.Random }
+      Rng: Rng }                // FS.GG.Game.Core — a VALUE, so the Model stays one (§13)
 ```
 
 ### Msg
@@ -449,15 +449,20 @@ exactly `PlaySfx (SoundId "eat", _)`).
 All live in `Config` so balance is data-driven and testable without code changes.
 
 ## 13. Technical Notes
-- **Timestep:** fixed-step simulation via accumulator. `Tick dt` banks real time;
-  `step` runs at the current `StepSeconds`. This keeps speed identical regardless of
-  render FPS. Clamp catch-up to **max 4 steps per frame** to avoid a spiral of death after
-  a stall; drop excess accumulator beyond that.
+- **Timestep:** fixed-step simulation, drained by **`FixedStep.drainWith`** — do not hand-roll the
+  accumulator. `FixedStep.drainWith (4.0 * StepSeconds) StepSeconds dt StepAccumulator` returns
+  `struct (steps, acc')`: how many whole `step`s this frame owes, and the remainder to bank. The
+  first argument is the spiral-of-death cap, and `4.0 * StepSeconds` is exactly the "max 4 steps per
+  frame" rule — expressed as the frame-time budget the function actually takes. Pass the *current*
+  `StepSeconds`, so the speed-up falls out of the same call. (`FixedStep.drain` is the same thing at
+  the default 0.25 s cap.)
 - **Performance budget:** ≤576 cells, one food, one HUD pass — trivially within the
   16.7 ms/60 FPS budget. Full-clear redraw is fine.
-- **Determinism / RNG:** food placement uses `Model.Rng` (`System.Random`). For
-  reproducible tests, seed it (e.g. `Random(12345)`) so a given input sequence yields a
-  deterministic food sequence. Tests should inject a seeded RNG.
+- **Determinism / RNG:** food placement uses `Model.Rng` — `FS.GG.Game.Core`'s **`Rng`** (splitmix64),
+  seeded with `Rng.ofSeed 12345UL`; draw the free cell with `Rng.nextInt`. It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Collision/spawn efficiency:** maintain a `HashSet<Cell>` mirror of the body for O(1)
   membership; spawn food by sampling the free-cell set (or rejection-sample then fall
   back to enumerating free cells when the board is dense).

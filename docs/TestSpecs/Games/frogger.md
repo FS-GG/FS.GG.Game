@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Arcade / fixed-screen crossing"
 target_session_minutes: 8
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -257,7 +257,7 @@ type Model =
       Lady: {| PlatformId: int; Escorted: bool |} option
       LifeTimer: float            // seconds remaining, counts down from LifeTime
       MaxRowReached: int          // for per-row scoring this attempt
-      Rng: System.Random
+      Rng: Rng                // FS.GG.Game.Core — a VALUE, so the Model stays one (§13)
       ElapsedTotal: float }
 ```
 
@@ -539,12 +539,19 @@ On death: lose 1 life, respawn at start, reset timer & `MaxRowReached`. **Lives 
 ## 13. Technical Notes
 - **Entity budget:** ~5 road lanes × ≤4 vehicles + 5 river platforms (+turtles) + 1 frog +
   5 slots + ≤2 bonuses ≈ **40 entities**. Trivially within 60 FPS / 16.7 ms.
-- **Timestep:** variable-`dt` `Tick` accepted from the frame subscription, but **clamp
-  dt to ≤ 0.05 s** (skip huge frames after pause/stall). For determinism in tests, a
-  fixed-step accumulator (1/60 s) MAY drive `Tick` so collision is repeatable.
-- **Determinism / RNG:** all randomness (fly slot, fly timing, lady spawns, optional
-  level variation) draws from `Model.Rng` seeded explicitly so a given seed → identical
-  run; tests pass a fixed seed.
+- **Timestep:** variable-`dt` `Tick` from the frame subscription, **clamped to ≤ 0.05 s** (skip huge
+  frames after a pause/stall) — **deliberately not `FixedStep.drain`**. Determinism here (§14.16) is
+  replay of the recorded `Tick`/`Hop` sequence, and each `Tick` carries its own `dt`, so the log alone
+  reproduces the run; lane motion is pure `pos += vel·dt` with nothing to quantise. If you *do* want a
+  fixed-rate sim — for a headless test harness, or to make collision repeatable independently of the
+  recorded frames — use `FixedStep.drain (1.0/60.0) frameTime acc` to drive `Tick`, rather than
+  hand-rolling the accumulator.
+- **Determinism / RNG:** all randomness (fly slot, fly timing, lady spawns, optional level variation)
+  draws from `Model.Rng` — `FS.GG.Game.Core`'s **`Rng`** (splitmix64), seeded explicitly with
+  `Rng.ofSeed` so a given seed → identical run; tests pass a fixed seed. It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Collision order each Tick:** (1) move world; (2) advance turtle phases; (3) if Riding
   update WorldX; (4) resolve hop completion; (5) evaluate death conditions; (6) award
   scoring. Death checks are evaluated once per tick, after movement.

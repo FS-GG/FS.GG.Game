@@ -26,7 +26,6 @@ type ItemStack = { Item: ItemId; Count: int }
 type Chunk = { Cx: int; Cy: int; Tiles: Tile[,] }
 type InputState = { Held: Set<Key>; MouseTile: (int * int) option; LeftDown: bool; RightDown: bool }
 type UiState = Playing | InventoryOpen | Paused | Dead | Title
-type RngState = { Seed: uint64 }
 type WorldEvent =
     | TileBroken of int * int
     | TilePlaced of int * int

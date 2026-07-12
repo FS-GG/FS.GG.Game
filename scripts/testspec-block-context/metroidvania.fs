@@ -32,10 +32,6 @@ type Pickup = { Id: PickupId; At: Vec2 }
 type EnemySpawn = { Kind: EnemyKind; At: Vec2 }
 type BossState = { Id: BossId; Phase: int; Hp: int }
 
-// Seeded, deterministic — the spec's §13 determinism rule. FS.GG.Game.Core ships `Rng`; the spec
-// calls its own wrapper `RngState`, so that is what is reconstructed.
-type RngState = { Seed: uint64 }
-
 //#block 4 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The

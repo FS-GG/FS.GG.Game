@@ -5,7 +5,7 @@ category: games
 complexity: simple
 genre: "Arcade / brick-breaker"
 target_session_minutes: 8
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (Rng for determinism)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -271,7 +271,7 @@ type Model =
       HighScore: int
       AwardedBonusLife: bool
       ElapsedMs: float
-      Rng: System.Random
+      Rng: Rng                // FS.GG.Game.Core — a VALUE, so the Model stays one (§13)
       Input: InputState }        // current held-key snapshot
 
 and InputState =
@@ -568,11 +568,21 @@ Data-driven tunables (defaults shown):
 - **Performance budget:** ~150 bricks + ≤8 balls + ≤3 capsules + ≤8 bolts + ≤64 particles.
   Trivial for 60 FPS / 16.7 ms; the bottleneck is brick draw (batch into one path/loop).
 - **Fixed vs. variable timestep:** physics uses the variable `dt` from `Tick`, **clamped to
-  ≤ 0.05 s**. For robustness against tunneling at high speed, sub-step the ball integration
-  so no ball moves more than its radius (7 px) per substep (e.g. `n = ceil(speed*dt/7)`).
-- **Determinism / RNG:** all randomness (drop rolls, drop kind, multiball spread, particles)
-  draws from `Model.Rng`, a seeded `System.Random`. A fixed seed + recorded input sequence
-  reproduces a run exactly — important for the acceptance tests below.
+  ≤ 0.05 s** — **deliberately not `FixedStep.drain`**, and the reason is worth stating because most of
+  this corpus goes the other way. Determinism here (§14.16) is replay of the recorded `Msg` log, and
+  every `Tick` carries its own `dt`, so replaying the log reproduces the run exactly *without* a fixed
+  accumulator: it would buy nothing the log does not already give. What actually prevents tunneling is
+  sub-stepping — integrate the ball so no ball moves more than its radius (7 px) per substep
+  (`n = ceil(speed*dt/7)`). Reach for `FixedStep.drain` the day the sim must advance independently of
+  the frame (a headless run, a networked one, a fixed-rate replay); until then this is the simpler
+  correct thing.
+- **Determinism / RNG:** all randomness (drop rolls, drop kind, multiball spread, particles) draws
+  from `Model.Rng` — `FS.GG.Game.Core`'s **`Rng`** (splitmix64), seeded with `Rng.ofSeed`. A fixed seed
+  + recorded input sequence reproduces a run exactly — important for the acceptance tests below, and
+  (see the timestep bullet) it is the *only* thing those tests rest on. It is a **value**, not a `System.Random`: every draw returns `struct (x, rng')` and you write
+  `rng'` back to the `Model`, so the `Model` stays a value you can snapshot, replay and compare.
+  A `System.Random` in the `Model` is a mutable object *shared* by every copy of it, which
+  silently breaks the reproducibility this bullet promises.
 - **Persistence:** high score stored to a small local file/registry key
   (`breakout.highscore`), loaded on Title, saved on Game Over if beaten.
 - **Edge cases:** ball trapped between brick wall and top (tunnel trap) — allowed and

@@ -5,7 +5,7 @@ category: games
 complexity: complex
 genre: "Tower Defense / Strategy"
 target_session_minutes: 25
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (FixedStep for the tick; Rng for determinism; Pathfinding for the creep route; SpatialGrid for targeting)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -91,10 +91,20 @@ Two map families are supported and selected per map via a flag `mazeBuilding: bo
 1. **Fixed-path maps (`mazeBuilding=false`).** The path is an authored polyline of **waypoints**
    `Waypoint[]` (pixel coordinates) from Spawn to Goal. Enemies follow it; towers cannot block it.
    Pathfinding is trivial (follow the list). This is the default for the v1 shipped maps.
-2. **Maze maps (`mazeBuilding=true`).** Spawn and Goal are open; the path is **computed** by
-   A* over the grid (4-neighbour, unit cost) treating `Buildable` placed-with-tower tiles as
-   temporarily `Blocked`. Players build towers to *shape* the route. Placement is rejected if it
-   would **fully seal** Spawn from Goal (Section 4.7). The path is **recomputed** whenever a tower
+2. **Maze maps (`mazeBuilding=true`).** Spawn and Goal are open; the path is **computed** over the
+   grid (4-neighbour, unit cost) treating `Buildable` placed-with-tower tiles as temporarily
+   `Blocked`. Do not hand-roll the search — `FS.GG.Game.Core` ships it:
+
+   - **One creep, one route:** `Pathfinding.astar Neighbourhood.FourWay maxVisited isWalkable spawn goal`
+     returns `Cell list option` — `None` is precisely the "sealed" case §4.7 rejects on.
+   - **Many creeps, one Goal — what this game actually is:** do **not** run one A\* per creep. Compute
+     `Pathfinding.distanceField Neighbourhood.FourWay maxVisited cost [ goal ]` **once** (a cost-aware
+     flood fill *from the Goal*), then `Pathfinding.flowField Neighbourhood.FourWay field` turns it into
+     a `Map<Cell, Cell>` — every tile's next hop toward the Goal. All 120 enemies read that one map; a
+     creep spawned mid-wave needs no search at all. One field, not N searches.
+
+   Players build towers to *shape* the route. Placement is rejected if it would **fully seal** Spawn
+   from Goal (Section 4.7). The path is **recomputed** whenever a tower
    is placed or sold, and **in-flight enemies re-target** to the nearest node on the new path
    (Section 4.3).
 
@@ -176,8 +186,12 @@ A placement at tile `(c,r)` for tower `t` (cost `k`) is **valid** iff ALL hold:
    all four tiles must be Buildable & empty).
 3. `gold ≥ k`.
 4. The tile is not under the build panel / a HUD rect.
-5. **(maze maps only)** After tentatively blocking the footprint, A* still finds a Spawn→Goal path
-   **and** every currently-alive ground enemy still has a route. If not → reject ("would seal path").
+5. **(maze maps only)** After tentatively blocking the footprint, a Spawn→Goal route still exists
+   **and** every currently-alive ground enemy still has one. This is the same primitive as §4.4, asked
+   a yes/no question: `Pathfinding.bfs Neighbourhood.FourWay maxVisited isWalkable spawn goal` returns
+   `None` exactly when the placement seals the map (unit cost, so BFS is the cheap form of it). If you
+   recompute the `distanceField` for the flow field anyway, the check is free — a creep's tile simply
+   is not in the field. If sealed → reject ("would seal path").
 6. Not within the **no-build margin** of the Spawn tile (2-tile radius) — prevents spawn camping
    abuse on maze maps.
 
@@ -449,7 +463,7 @@ type Model = {
     HoverTile: (int*int) option
     Difficulty: Difficulty
     FastForward: bool
-    Rng: RngState                          // seeded, deterministic (Section 13)
+    Rng: Rng                               // FS.GG.Game.Core; seeded (Section 13)
     NextId: int
     Stats: RunStats }                      // kills, leaks, dmg, for score screen
 ```
@@ -777,26 +791,33 @@ Hard `(180, 12, 0.09, 1.15, 1.4)`.
 ## 13. Technical Notes
 **Performance budget:** target **60 FPS / 16.7 ms/frame**. Worst-case live counts: ~120 enemies
 (swarm waves), ~50 towers, ~400 projectiles, ~256 particles. Hot loops are O(towers×enemies) for
-targeting and O(projectiles×enemies) for splash; bucket enemies into a **uniform spatial grid**
-(cell = 64 px) so range/splash queries inspect only neighboring cells — keeps per-frame work well
-under budget. Maze A* runs only on place/sell (rare), bounded by 40×22=880 nodes.
+targeting and O(projectiles×enemies) for splash; bucket enemies into a **uniform spatial grid** —
+`SpatialGrid.build 64.0 enemiesByPoint` once per step, then `SpatialGrid.queryRadius towerPos range`
+for targeting and splash, so a query inspects only neighbouring cells. Do not hand-roll the buckets.
+Keeps per-frame work well under budget. The maze search runs only on place/sell (rare), bounded by
+40×22=880 nodes.
 
-**Fixed timestep + accumulator** (determinism):
+**Fixed timestep + accumulator** (determinism) — `FixedStep` does the banking *and* the
+spiral-of-death cap, so there is no accumulator loop to get wrong:
 ```fsharp
-// in the Tick handler
-acc <- acc + realDt
-let steps = (if model.FastForward then 2 else 1)
+// in the Tick handler. drainWith's first argument IS the spiral-of-death cap, expressed as a frame
+// -time budget: maxStepsPerFrame * dtFixed is the old "at most 5 steps per frame" rule.
+let struct (ticks, acc') =
+    FixedStep.drainWith (float maxStepsPerFrame * dtFixed) dtFixed realDt acc
+
+let stepsPerTick = if model.FastForward then 2 else 1  // fast-forward = more steps, same dt
 let mutable m = model
-let mutable n = 0
-while acc >= dtFixed && n < maxStepsPerFrame do      // maxStepsPerFrame = 5 (avoid spiral of death)
-    for _ in 1 .. steps do m <- simStep dtFixed m     // fast-forward = more steps, same dt
-    acc <- acc - dtFixed
-    n <- n + 1
+for _ in 1 .. ticks do
+    for _ in 1 .. stepsPerTick do m <- simStep dtFixed m
+acc <- acc'
 ```
 All sim math uses `dtFixed = 1/60`; rendering may interpolate with leftover `acc/dtFixed` alpha.
 
-**Determinism / RNG:** a single seeded PRNG (`RngState`, e.g. xorshift) threaded through Model;
-every random draw (crit rolls, stun procs, splash falloff jitter, particle spawn) pulls from it in a
+**Determinism / RNG:** a single seeded PRNG threaded through Model — `FS.GG.Game.Core`'s **`Rng`**
+(splitmix64), seeded with `Rng.ofSeed`. Do not hand-roll an `RngState`: `Rng` is already a value, so
+threading it through the Model is the natural thing rather than a discipline you have to maintain, and
+every draw (`Rng.nextFloat`, `Rng.nextInt`, `Rng.nextBool`) returns `struct (x, rng')` to write back.
+Every random draw (crit rolls, stun procs, splash falloff jitter, particle spawn) pulls from it in a
 fixed order. Same seed + same inputs ⇒ identical run (enables replay & test reproducibility). Seed is
 chosen at run start (default fixed `0xBULWARK` in tests).
 
