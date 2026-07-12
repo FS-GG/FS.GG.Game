@@ -51,9 +51,21 @@
        injection itself, so the folder is REMOVED from the source list rather than deprioritised —
        with it set, a restore that can reach no other source fails NU1100 instead of quietly falling
        back to the SDK copy. FSharp.Core then comes from nuget.org (also the signed copy) everywhere,
-       and `contentHash` becomes a function of (id, version) alone — no longer of the SDK patch level,
-       which matters because global.json says rollForward: latestFeature, so the next SDK to bundle a
-       different FSharp.Core would otherwise silently re-hash every lock file in the org.
+       and `contentHash` becomes a function of (id, version) alone — no longer of the SDK patch level.
+
+       WHY THAT MATTERS, STATED HONESTLY (.github#536). This comment used to say it mattered "because
+       global.json says rollForward: latestFeature". That was FALSE of most of the repos reading it:
+       four of the five consumers — Game, Rendering, SDD, Governance — have NO global.json at all, so
+       there is no floor and no rollForward policy to reason from. Only FS.GG.Audio had one.
+
+       The conclusion survives the correction, and is in fact STRONGER: with no SDK pin, the SDK that
+       serves a build is whatever the machine happens to have. So an SDK-dependent contentHash is not
+       a risk that materialises the next time somebody bumps a pin — it is a difference between any
+       two machines, today. An UNPINNED SDK makes SDK-independence more valuable, not less.
+
+       The SDK pin is being distributed as a managed file (dist/dotnet/global.json, #536), but it is
+       NOT in sync-build-config's FILES list yet and MUST NOT BE ADDED until every consumer carries
+       one — see the ordering note in scripts/sync-build-config.sh before you touch that list.
 
        ADOPTING THIS IS A ONE-TIME RE-PIN, AND THE ORDER IS LOAD-BEARING. Syncing this file flips the
        source a repo restores from, so its committed `FwQFuqOA…` becomes `excLf2zM…`. Regenerate the
