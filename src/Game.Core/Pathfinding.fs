@@ -207,9 +207,9 @@ module Pathfinding =
     //
     // `cost c` is the cost to ENTER cell `c`; `cost c <= 0` means impassable. So the walkability
     // predicate `astar`/`bfs` take is exactly `fun c -> cost c > 0`, and one terrain function drives
-    // both. A move onto `c` costs `baseStep * cost c` with `baseStep` the same integer 10 (orthogonal)
-    // / 14 (diagonal) `neighbours` already yields — so with `cost = fun _ -> 1` these fields reproduce
-    // `astar`'s g-score exactly (the optimality cross-check).
+    // both. A move onto `c` costs `stepCost * cost c`, where `stepCost` is the per-edge weight
+    // `neighbours` yields — `baseStep` orthogonal, `diagStep` diagonal — so with `cost = fun _ -> 1`
+    // these fields reproduce `astar`'s g-score exactly (the optimality cross-check).
     //
     // Every edge weight is >= `baseStep` (strictly positive), so a settled cell is final: plain Dijkstra.
     // Accumulation is int64 so a large `cost` cannot silently wrap; a relaxation that would exceed
@@ -219,7 +219,7 @@ module Pathfinding =
     // deterministic, so the settle order (hence the field) is bit-identical across runs/platforms.
     // Exactly one open entry exists per cell: a relaxation removes the stale entry before re-adding.
     //
-    // `stepWeight currentCost n baseStep` decides the direction convention, which is the ONE thing
+    // `stepWeight currentCost n stepCost` decides the direction convention, which is the ONE thing
     // that differs between the reverse (`distanceField`) and forward (`reachableWithin`) walks.
     // `currentCost` is the popped cell's cost, evaluated once per pop rather than once per neighbour.
     //
@@ -269,8 +269,8 @@ module Pathfinding =
                 let (openSet, tentative, cameFrom) =
                     neighbours neighbourhood isWalkable current
                     |> List.fold
-                        (fun (os, tent, cf) (struct (n, baseStep)) ->
-                            let candidate = d + stepWeight currentCost n baseStep
+                        (fun (os, tent, cf) (struct (n, stepCost)) ->
+                            let candidate = d + stepWeight currentCost n stepCost
 
                             if candidate > int64 System.Int32.MaxValue || not (admit candidate) then
                                 (os, tent, cf)
@@ -324,7 +324,7 @@ module Pathfinding =
         // map and the move range drift apart, which IS #212. One engine, one determinism guarantee,
         // one place to be wrong. If a profile ever shows this on a hot path, add the flag then, with a
         // number to justify it — not before.
-        let stepWeight (currentCost: int) (_n: Cell) (baseStep: int) = int64 baseStep * int64 currentCost
+        let stepWeight (currentCost: int) (_n: Cell) (stepCost: int) = int64 stepCost * int64 currentCost
         dijkstra neighbourhood cost stepWeight (fun _ -> true) maxVisited goals |> costsOf
 
     // The forward, budgeted walk that BOTH `reachable` and `reachableWithin` are views of — so the move
@@ -342,7 +342,7 @@ module Pathfinding =
             Map.empty
         else
             // Forward walk: the agent steps current -> n, entering `n`. Weight is `baseStep * cost n`.
-            let stepWeight (_currentCost: int) (n: Cell) (baseStep: int) = int64 baseStep * int64 (cost n)
+            let stepWeight (_currentCost: int) (n: Cell) (stepCost: int) = int64 stepCost * int64 (cost n)
             // `budget` prunes, but it does NOT bound: over an unbounded `cost` predicate the reachable
             // set grows quadratically in `budget`, so `maxVisited` is what makes the walk terminate —
             // the same bound, for the same reason, as `astar`/`bfs`/`distanceField`.
@@ -407,7 +407,7 @@ module Pathfinding =
             (fun acc c v ->
                 let downhill =
                     neighbours neighbourhood inField c
-                    |> List.choose (fun (struct (n, _baseStep)) ->
+                    |> List.choose (fun (struct (n, _stepCost)) ->
                         match Map.tryFind n field with
                         | Some nv when nv < v -> Some(nv, n.Col, n.Row)
                         | _ -> None)

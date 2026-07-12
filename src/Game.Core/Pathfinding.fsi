@@ -4,11 +4,12 @@ namespace FS.GG.Game.Core
 /// Movement neighbourhood for grid pathfinding. (`Cell`, the grid coordinate this operates over, is a
 /// shared primitive declared in `Primitives`.)
 type Neighbourhood =
-    /// 4-connected: N/E/S/W only, no diagonals. Each move costs 1 (`bfs`) / 10 (`astar`).
+    /// 4-connected: N/E/S/W only, no diagonals. Each move costs 1 (`bfs`) / `baseStep` (`astar`).
     | FourWay
     /// 8-connected: orthogonals plus diagonals. A diagonal is allowed only when both shared orthogonal
-    /// neighbours are walkable (no corner-cutting). Orthogonal move costs 10, diagonal 14 (integer
-    /// √2-scaled; never a float, so equal-cost ties can never leak through floating-point equality).
+    /// neighbours are walkable (no corner-cutting). An orthogonal move costs `baseStep`, a diagonal
+    /// `baseStep * 14 / 10` (integer √2-scaled; never a float, so equal-cost ties can never leak
+    /// through floating-point equality).
     | EightWay
 
 /// Public contract module exposed by the FS.GG.Game.Core package.
@@ -26,7 +27,8 @@ module Pathfinding =
     /// `CameFrom` is `None` for exactly one cell — the `start` the search was seeded with.
     type Step =
         { /// Total cost of entering this cell from `start`, in the same `baseStep`-scaled units as
-          /// `reachableWithin`'s values (10 per orthogonal step, 14 per diagonal, times `cost`).
+          /// `reachableWithin`'s values (`baseStep` per orthogonal step, `baseStep * 14 / 10` per
+          /// diagonal, times `cost`) — *not* movement points. See `baseStep`.
           Cost: int
           /// The predecessor on the cheapest route from `start`. `None` only for `start` itself.
           CameFrom: Cell option }
@@ -114,7 +116,7 @@ module Pathfinding =
     /// `moveRange` here settles `start` alone and highlights the single cell the unit stands on, without
     /// throwing: see `baseStep`.
     ///
-    /// Same integer 10/14 `baseStep` and the same determinism guarantee as the rest of the module — the
+    /// Same `baseStep` scale and the same determinism guarantee as the rest of the module — the
     /// `CameFrom` tree is a pure function of the inputs (ties among equal-cost predecessors settle on the
     /// total `(cost, Col, Row)` order), so the reconstructed path is bit-identical across runs and
     /// platforms. Bounded by `maxVisited` (cells settled) for the same reason `reachableWithin` is: a
@@ -190,9 +192,9 @@ module Pathfinding =
     ///
     /// `cost c` is the cost to **enter** cell `c`, and `cost c <= 0` means **impassable** — so
     /// `fun c -> cost c > 0` is exactly the `isWalkable` predicate `astar`/`bfs` take, and one terrain
-    /// function drives all of them. A move onto `c` costs `baseStep * cost c`, where `baseStep` is the
-    /// same integer 10 (orthogonal) / 14 (diagonal) `astar` uses. Hence with `cost = fun _ -> 1` the
-    /// value at any cell equals `astar`'s path cost from that cell to the goal.
+    /// function drives all of them. A move onto `c` costs the step weight times `cost c` — `baseStep`
+    /// orthogonally, `baseStep * 14 / 10` diagonally, the same scale `astar` uses. Hence with
+    /// `cost = fun _ -> 1` the value at any cell equals `astar`'s path cost from that cell to the goal.
     ///
     /// Deterministic: integer costs and a total `(distance, Col, Row)` frontier order, so the field is
     /// bit-identical across runs and platforms (no `Map`/`Set` iteration-order or float tie-break
@@ -250,7 +252,7 @@ module Pathfinding =
     /// `moveRange` yields the start cell alone, silently; see `baseStep`).
     ///
     /// Same `cost` convention as `distanceField` (`cost c` is the cost to enter `c`; `cost c <= 0` is
-    /// impassable), same integer 10/14 `baseStep`, and the same determinism guarantee. Note the
+    /// impassable), same `baseStep` scale, and the same determinism guarantee. Note the
     /// direction differs: `reachableWithin` charges the cell being stepped **onto** as it walks away
     /// from `start`, whereas `distanceField` walks goal-ward. Under a **uniform** cost the two agree
     /// cell-for-cell (`reachableWithin` equals the `distanceField` from `start` filtered by `budget`);
