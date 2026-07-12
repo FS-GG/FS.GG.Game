@@ -60,4 +60,31 @@
     <PackageVersion Include="FS.GG.UI.Canvas" Version="0.5.0" />
     <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.5.0" />
   </ItemGroup>
+
+  <!-- Generator-only — the SOURCE that scripts/skill-block-context/_scaffold.fs is generated FROM
+       (FS.GG.Game#189, answering FS.GG.Rendering#570). Not a PackageReference anywhere, not even in
+       the gate's throwaway project: `_scaffold.fs` is checked in as SOURCE, so the md-block gate
+       compiles it as a plain prelude and needs only FS.GG.UI.Scene (pinned above) to resolve the
+       `Point`/`Rect` its `toPoint`/`toRect` return. The only consumer of THIS pin is
+       scripts/generate-scaffold-context.fsx, which `PackageDownload`s the package into a temp folder
+       and copies `content/template/fragments/vec2/src/Product/Vec2.fs` out of it verbatim.
+
+       The version lives here, not in the generator, for the same reason every other version does: the
+       generator reads the central pin and REFUSES to invent one (a second copy of a version is a drift
+       bug with a delay fuse).
+
+       SAME RELEASE TRAIN as the four Rendering pins above, and it must stay that way. `_scaffold.fs`
+       binds `Scene.Point`/`Rect` directly, so the template that SHIPS the fragment and the
+       FS.GG.UI.Scene the gate COMPILES it against have to be one coherent set — otherwise the scaffold
+       could be generated from a fragment written against a Scene surface the gate never restores, and
+       the gate would go green over a pairing no reader can reproduce. Keep all five on one version
+       (currently 0.5.0).
+
+       FS.GG.UI.Template packs the Rendering repo under `content/`, which is what makes the fragment a
+       published, restorable SOURCE rather than something only a generated product ever sees. Rendering
+       guards that with a merge-blocking test (Feature570PublishedScaffoldGeometryTests), so the path
+       is a contract; the generator still fails closed if it ever stops shipping. -->
+  <ItemGroup Label="Generator-only — source for the generated _scaffold.fs (no project references this)">
+    <PackageVersion Include="FS.GG.UI.Template" Version="0.5.0" />
+  </ItemGroup>
 </Project>

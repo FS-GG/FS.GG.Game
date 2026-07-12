@@ -1,73 +1,90 @@
-// The generated PRODUCT's context — the part of it the skill blocks compile against.
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// GENERATED FILE — DO NOT EDIT. Your changes will be overwritten, and CI will fail first.
 //
-// `Geometry.Vec2` is the scaffold's collision-safe vector (`src/<ProductDir>/Vec2.fs`). It lives in
-// the generated product, which FS.GG.Templates owns — it is NOT in FS.GG.Game.Core and there is no
-// copy of it in this repo. So to compile a block that says `type Creep = { Pos: Geometry.Vec2 }`
-// against the real FS.GG.Game.Core, the gate has to stand the product side up itself. This file is
-// that reconstruction, and nothing else in the harness fabricates anything.
+// Source:    FS.GG.UI.Template 0.5.0 :: content/template/fragments/vec2/src/Product/Vec2.fs
+// Generator: dotnet fsi scripts/generate-scaffold-context.fsx
+// Pin:       Directory.Packages.local.props (generator-only group)
 //
-// This IS a cross-repo contract, and an unenforced one: if FS.GG.Templates renames `Vx`/`Vy` or
-// reshapes `Vec2`, this file keeps compiling and the gate keeps passing over skills that now teach
-// a type the scaffold no longer ships. Filed as FS-GG/FS.GG.Templates#… (see the PR for #141) —
-// the fix is for Templates to publish the scaffold's geometry so this can reference it instead of
-// re-declaring it.
+// This is the generated product's REAL collision-safe geometry, copied verbatim from the
+// published template package — not a re-declaration of it. It is the context the md-block
+// gate (scripts/typecheck-md-blocks.fsx) compiles every skill and TestSpec block against, so
+// it has to be the type the reader's product actually ships, byte for byte.
 //
-// Why `Geometry` and not some neutral name: the skills write `Geometry.Vec2`, unqualified, because
-// in the real product BOTH this module and `FS.GG.Game.Core.Geometry` are in scope and F# MERGES
-// same-named modules from two opened namespaces. `Geometry.Vec2` (product) and `Geometry.intersects`
-// (Game.Core) therefore both resolve — and reproducing that merge is the point: the #129/#132/#140
-// bug class is precisely a value crossing between the two halves of that merged namespace.
+// It used to be a hand-written twin, on the grounds that the real `Vec2` "cannot be
+// referenced" — true of a reference, false of the SOURCE, which FS.GG.Rendering packs under
+// `content/`. The twin was an unenforced cross-repo contract: it kept compiling after the real
+// type moved under it, holding the gate green over skills teaching a shape the scaffold no
+// longer shipped. FS.GG.Game#189 / FS.GG.Rendering#570 replaced it with this.
 //
-// THE SCENE EDGE (#165). The real `Vec2` also ships `toPoint`/`toRect`, which cross into
-// `FS.GG.UI.Scene.Point`/`Rect`. They were omitted while `FS.GG.UI.Scene` was off this gate's
-// reference graph; #150 put it on (FS.GG.UI.Canvas/SkiaViewer both depend on Scene), so the edge is
-// reconstructed here against the REAL Scene types.
-//
-// They return SCENE types, never `FS.GG.Game.Core.Point`/`Rect`. The two are structurally
-// IDENTICAL — both `{ X; Y }` / `{ X; Y; Width; Height }` — and nominally distinct, which is the
-// whole #129/#132/#140 bug class: a `toPoint` returning the SIM point would typecheck everywhere,
-// look right, and be a lie of exactly the shape this gate exists to catch. It would also make the
-// missing `Vec2 -> Game.Core.Point` crossing (the subject of the *Spatial queries* section) silently
-// compile. Scene's types or nothing.
-//
-// Both corpora therefore declare `FS.GG.UI.Scene` in their PackageRefs: this file is a prelude to
-// BOTH, so the moment it binds Scene, both must be able to resolve it.
-//
-// FIDELITY, and the contract this rests on. The generated product that owns the real `Vec2.fs` does
-// not exist yet — FS.GG.Templates ships no game template (the `dotnet new fs-gg-game` package is
-// deferred, ADR-0022 §2.1), so there is no upstream definition to copy and none to diff against.
-// The signatures below are reconstructed from the only authority there is: the published blocks that
-// call them, and Scene's own convention. `toRect` takes the CENTRE and half-extends it, because
-//   - `Rect.X`/`Y` is the TOP-LEFT corner — Scene's own `circleEvidence` builds its bounds as
-//     `{ X = center.X - radius; Y = center.Y - radius; … }`; and
-//   - every caller passes a centre: pong's `Geometry.toRect { Vx = cx; Vy = p.TopY + 55.0 } 18.0
-//     110.0` on a 110-tall paddle lands `Y = TopY` (its actual top edge), flappy-bird passes
-//     `bird.CenterY`, and fs-gg-model-swap annotates the call "centered size".
-// If Templates ever publishes the geometry, DELETE this and reference it — re-declaring a
-// cross-repo type is what makes this file an unenforced contract in the first place (see above).
+// To change what the gate sees, bump the pin and regenerate. To change the GEOMETRY, change it
+// in FS.GG.Rendering — it is theirs, and every scaffolded product gets it from there.
+// ─────────────────────────────────────────────────────────────────────────────────────────
 
-namespace FsGg.SkillCheck.Scaffold
+namespace AppRoot
 
 open FS.GG.UI.Scene
 
+/// Product-owned collision-safe 2D vector — THIS FILE IS YOURS TO ADAPT.
+///
+/// A game model that stores entity positions/velocities collides with the shared scene vocabulary if
+/// it reuses the record labels `FS.GG.UI.Scene.Point` (`X`,`Y`) and `Rect` (`X`,`Y`,`Width`,`Height`)
+/// use. Because the durable `LayoutEvidence.fs` opens BOTH `FS.GG.UI.Scene` and your model, F#'s
+/// record-label inference can then resolve the bare `{ X = …; Y = …; Width = …; Height = … }` literals
+/// in that durable file to YOUR record instead of `Rect` — a wall of `FS3566`/`FS0039` in a file you
+/// were told not to touch, surfacing only after a whole model is written (fs-gg-scene pitfall).
+///
+/// `Vec2` avoids the trap structurally: its labels `Vx`/`Vy` ("vector component x/y") share NO name
+/// with `Point`/`Rect`, so a model built on `Vec2` can never trip the mis-inference. Use it for
+/// position, velocity, and displacement; cross into the scene vocabulary with `toPoint`/`toRect` —
+/// the ONE place bare `Scene` record literals appear in your product tree, where only `Scene` types
+/// are in scope and the resolution is unambiguous. Express an entity's SIZE through `toRect` (a
+/// centered AABB) rather than `Width`/`Height` labels on the record, so the size case stays safe too.
+///
+/// Everything here is pure, total, and deterministic: straight-line float arithmetic guarded against
+/// non-finite input (never throws, never yields NaN silently), so identical inputs yield byte-identical
+/// output across runs and platforms — safe to call from a replayed `update`.
+///
+/// You own this file: rename `Vx`/`Vy`, add a `Z`, add rotation/normalization, or delete it after you
+/// swap `Model.fs` off it (its compile item is `Exists`-guarded, so deletion keeps the build green).
+/// See the `fs-gg-model-swap` / `fs-gg-game-core` skills. Guidance-only; no backing package.
 module Geometry =
 
-    /// The scaffold's collision-safe position/velocity vector. `Vx`/`Vy` — deliberately zero label
-    /// overlap with `FS.GG.UI.Scene.Point`/`Rect` (`X`/`Y`/`Width`/`Height`) and with the sim
-    /// `FS.GG.Game.Core.Point`, which is why a product stores positions in it and must CROSS into
-    /// the sim `Point` at the `SpatialGrid`/`Geometry` boundary rather than passing a bare `.Pos`.
+    /// A 2D vector — position, velocity, or displacement. `Vx`/`Vy` deliberately avoid `X`/`Y`
+    /// (`Scene.Point`) and `Width`/`Height` (`Scene.Rect`) so a model built on this never collides.
     type Vec2 = { Vx: float; Vy: float }
 
-    /// Cross a position into the SCENE's coordinate space. Returns `FS.GG.UI.Scene.Point` — not the
-    /// sim `FS.GG.Game.Core.Point`, which is a different type with the same labels.
+    /// The zero vector.
+    let zero: Vec2 = { Vx = 0.0; Vy = 0.0 }
+
+    /// Construct a vector from its components.
+    let vec2 (x: float) (y: float) : Vec2 = { Vx = x; Vy = y }
+
+    /// Component-wise addition (e.g. advance a position by a displacement).
+    let add (a: Vec2) (b: Vec2) : Vec2 = { Vx = a.Vx + b.Vx; Vy = a.Vy + b.Vy }
+
+    /// Component-wise subtraction.
+    let sub (a: Vec2) (b: Vec2) : Vec2 = { Vx = a.Vx - b.Vx; Vy = a.Vy - b.Vy }
+
+    /// Scalar multiply (e.g. `add pos (scale dt vel)` integrates one step).
+    let scale (k: float) (v: Vec2) : Vec2 = { Vx = k * v.Vx; Vy = k * v.Vy }
+
+    /// Per-component clamp into `[lo, hi]` — keep an entity inside a bound. Total: if a `lo` axis
+    /// exceeds its `hi` axis the low bound wins (no throw), so a degenerate bound can never crash a step.
+    let clamp (lo: Vec2) (hi: Vec2) (v: Vec2) : Vec2 =
+        let clamp1 lo hi x = x |> max lo |> min (max lo hi)
+        { Vx = clamp1 lo.Vx hi.Vx v.Vx
+          Vy = clamp1 lo.Vy hi.Vy v.Vy }
+
+    /// Cross into the shared scene vocabulary: a `Vec2` position becomes a `Scene.Point`.
     let toPoint (v: Vec2) : Point = { X = v.Vx; Y = v.Vy }
 
-    /// Cross a CENTRED position plus a size into a SCENE rect, so a product expresses extent through
-    /// this edge instead of putting `Width`/`Height` labels on its own record (where they would
-    /// mis-resolve against `Scene.Rect` in any file that opens both). `v` is the centre; the result's
-    /// `X`/`Y` is the top-left corner, per Scene's convention.
-    let toRect (v: Vec2) (width: float) (height: float) : Rect =
-        { X = v.Vx - width / 2.0
-          Y = v.Vy - height / 2.0
-          Width = width
-          Height = height }
+    /// A centered axis-aligned rectangle of size `w` x `h` about `center` — the size-bearing case,
+    /// expressed WITHOUT ever putting `Width`/`Height` labels on your own record. Negative sizes are
+    /// treated as their magnitude (total), so a stray sign can never invert the rect.
+    let toRect (center: Vec2) (w: float) (h: float) : Rect =
+        let w = abs w
+        let h = abs h
+        { X = center.Vx - w / 2.0
+          Y = center.Vy - h / 2.0
+          Width = w
+          Height = h }

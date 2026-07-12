@@ -13,7 +13,8 @@
 //
 // The `open` is the whole fixture, and it is load-bearing — the same reason, verbatim, as
 // scripts/testspec-block-context/pong.fs //#block 2. The block annotates `bounds` as `: Rect`
-// UNQUALIFIED, and this corpus's ambient opens end `FS.GG.Game.Core; FsGg.SkillCheck.Scaffold` with no
+// UNQUALIFIED, and this corpus's ambient opens end `FS.GG.Game.Core; AppRoot` (the scaffold's own
+// namespace, since #189 generates it verbatim from the published fragment) with no
 // Scene. `FS.GG.Game.Core.Rect` and `FS.GG.UI.Scene.Rect` are structurally identical and nominally
 // distinct, so without this line `Rect` binds to the SIM rect while `toRect` correctly returns the
 // SCENE one, and the block fails FS0001. A fixture's text is emitted AFTER the ambient opens, so this

@@ -300,10 +300,11 @@ jobs:
   # The harness is fail-closed on ITSELF — no source files, no blocks, a parsed-block count that
   # disagrees with an independent fence count, or a missing FS.GG.Game.Core build are all hard
   # failures, because the one thing this job must never do is go green over code it never compiled.
-  # Blocks it cannot reach (pong's `Geometry.toRect` needs a scene edge the scaffold deliberately
-  # refuses to fake; a handful of blocks are .fsi signature listings or elide their body with `...`)
-  # are SKIPPED with a written reason and re-printed as a warning on every run, so they stay visible
-  # instead of quietly counting as covered.
+  # Blocks it cannot reach (a handful are .fsi signature listings, elide their body with `...`, or are
+  # RIGHT/WRONG contrasts that bind the same name twice by design) are SKIPPED with a written reason
+  # and re-printed as a warning on every run, so they stay visible instead of quietly counting as
+  # covered. The scene edge is NO LONGER among them: `Geometry.toPoint`/`toRect` were reconstructed by
+  # #165 and, since #189, come from the REAL published fragment — see the scaffold-drift job below.
   #
   # A skill may teach a package this repo does not consume — fs-gg-audio binds FS.GG.Audio.*,
   # fs-gg-persistence binds FS.GG.UI.Canvas. Those blocks were unreachable, and so invisible to this
@@ -347,5 +348,52 @@ jobs:
           set -euo pipefail
           if ! dotnet fsi scripts/typecheck-md-blocks.fsx; then
             echo "::error::a \`\`\`fsharp block in a published SKILL.md or TestSpec does not typecheck against FS.GG.Game.Core (or breaks the X/Y/Width/Height label rule). Readers copy these blocks verbatim into their product, so a block that cannot compile is a defect in the document, not in this gate. Reproduce locally with: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug && dotnet fsi scripts/typecheck-md-blocks.fsx"
+            exit 1
+          fi
+
+  # Scaffold-drift gate (FS.GG.Game#189, answering FS.GG.Rendering#570). Separate job = distinct
+  # signal: this one says "the context the md-block gate compiles against is not the context the
+  # reader's product ships", which is a different failure from "a block does not compile".
+  #
+  # scripts/skill-block-context/_scaffold.fs is GENERATED — copied verbatim out of the published
+  # FS.GG.UI.Template package (content/template/fragments/vec2/src/Product/Vec2.fs), which is where a
+  # scaffolded product's real `Geometry.Vec2` comes from. It used to be a hand-written TWIN of that
+  # type, and the twin was the sharpest instance of the very defect this whole workflow exists to
+  # kill: a reconstruction keeps compiling after the real type moves under it, so a rename of `Vx` in
+  # FS.GG.Rendering left the md-block gate GREEN over skills teaching a shape the scaffold no longer
+  # shipped. Nothing anywhere would have gone red. (Verified: rename `Vx` in the generated file today
+  # and the md-block job fails, naming `AppRoot.Geometry.Vec2` and the label.)
+  #
+  # This job regenerates the file and fails on any uncommitted difference, which closes the two ways
+  # the generated copy can go stale: someone hand-edits it, or someone bumps the FS.GG.UI.Template pin
+  # in Directory.Packages.local.props without regenerating. It does NOT chase new upstream releases —
+  # the pin is deliberate, and moving it is a reviewed decision (the pin must stay on the same
+  # Rendering release train as FS.GG.UI.Scene, since the fragment's `toPoint`/`toRect` return Scene's
+  # types; Directory.Packages.local.props says so).
+  #
+  # No locked restore and no repo build: the generator `PackageDownload`s the template into a temp
+  # folder behind an empty Directory.Build.props, so it touches neither the project graph nor any
+  # packages.lock.json. FS.GG.UI.Template is dual-published to nuget.org, so no org-feed credential.
+  scaffold-drift:
+    name: Scaffold drift (_scaffold.fs == published template geometry)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Regenerate _scaffold.fs from the published FS.GG.UI.Template
+        run: dotnet fsi scripts/generate-scaffold-context.fsx
+
+      - name: Fail on uncommitted drift
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code -- scripts/skill-block-context/_scaffold.fs; then
+            echo "::error::scripts/skill-block-context/_scaffold.fs is not what the pinned FS.GG.UI.Template ships. It is a GENERATED file — do not hand-edit it. If you bumped the FS.GG.UI.Template pin in Directory.Packages.local.props, regenerate and commit: dotnet fsi scripts/generate-scaffold-context.fsx. If you meant to change the GEOMETRY, change it in FS.GG.Rendering — the scaffold is theirs, and every scaffolded product gets it from there."
             exit 1
           fi

@@ -46,15 +46,25 @@
 //      re-state `type Vec2 = Geometry.Vec2` in a later block for the reader's benefit (doodle-jump
 //      does exactly this) without the compiler seeing a duplicate definition.
 //
-// The reconstructed context. Two files stand up context that this repo does not own and cannot
-// reference, and NOTHING else in the harness fabricates anything:
+// The product-side context. Two files stand up context that this repo does not own, and NOTHING else
+// in the harness fabricates anything:
 //
-//   skill-block-context/_scaffold.fs      `Geometry.Vec2` (Vx/Vy), from the generated product's
-//                                         src/<ProductDir>/Vec2.fs — owned by FS.GG.Templates.
+//   skill-block-context/_scaffold.fs      `Geometry` (Vec2/Vx/Vy, and the `toPoint`/`toRect` scene
+//                                         edge). GENERATED — copied verbatim from the published
+//                                         FS.GG.UI.Template package by
+//                                         scripts/generate-scaffold-context.fsx, and drift-gated in
+//                                         CI. This is the REAL type a scaffolded product ships, not a
+//                                         re-declaration of it (FS.GG.Game#189 / FS.GG.Rendering#570).
 //   testspec-block-context/_prelude.fs    the host input vocabulary (`Key`, `Button`) the TestSpecs
-//                                         assume — owned by the UI layer.
+//                                         assume — owned by the UI layer. Still a RECONSTRUCTION, and
+//                                         so still an unenforced cross-repo contract; it says so in
+//                                         its own header.
 //
-// Both are unenforced cross-repo contracts; each says so in its own header.
+// The scaffold used to be a reconstruction too, and that was the more dangerous of the two: a
+// hand-written twin keeps compiling after the real type moves under it, holding this gate green over
+// skills that now teach a shape the scaffold no longer ships. Generating it from the published source
+// makes that failure impossible rather than merely documented — which is the same argument this whole
+// harness makes about the blocks themselves.
 //
 // Fail-closed. A gate that reports green over a subject it never compiled is the bug this exists to
 // kill, so the harness refuses to pass unless it can prove it looked: no source files, no blocks, a
@@ -137,7 +147,9 @@ type Corpus =
       DocOf: string -> string
       /// scripts/<dir>, holding one <doc>.fs fixture file per document.
       FixtureDir: string
-      /// Compiled BEFORE the blocks, in order. Reconstructions of context this repo does not own.
+      /// Compiled BEFORE the blocks, in order. Product-side context this repo does not own — the
+      /// scaffold is GENERATED from the published template package; `_prelude.fs` is still a
+      /// reconstruction. See the header.
       Preludes: string list
       /// `open`ed by every block, after the block's own opens, in this order.
       AmbientOpens: string list
@@ -150,7 +162,25 @@ type Corpus =
       /// Namespace for the generated per-block modules.
       ModuleNs: string }
 
+/// The generated product's real geometry, copied verbatim from FS.GG.UI.Template by
+/// scripts/generate-scaffold-context.fsx (FS.GG.Game#189). Its namespace is the one the published
+/// fragment fixes — `AppRoot` — and the corpora `open` exactly that, which is also what a scaffolded
+/// product does. Do not hand-edit it; CI regenerates and fails on drift.
 let scaffold = "scripts/skill-block-context/_scaffold.fs"
+
+/// The namespace `_scaffold.fs` declares. Read from the generated file rather than restated, so that
+/// a template that ever re-homes the fragment fails HERE — loudly, naming the file — instead of as an
+/// inscrutable wall of `FS0039 Geometry not defined` in every block of both corpora.
+let scaffoldNs =
+    let path = repoPath scaffold
+    if not (File.Exists path) then
+        fail $"{scaffold} is missing. It is GENERATED — restore it with: \
+               dotnet fsi scripts/generate-scaffold-context.fsx"
+    let m = Regex.Match(File.ReadAllText path, @"(?m)^namespace\s+(?<ns>[\w.]+)\s*$")
+    if not m.Success then
+        fail $"{scaffold} declares no namespace. It is generated from the published template fragment, \
+               which fixes one — regenerate it with: dotnet fsi scripts/generate-scaffold-context.fsx"
+    m.Groups["ns"].Value
 
 /// The version this repo has centrally pinned for `package`. Read, never restated: the gate must
 /// compile a block against the SAME package the product does, and a hardcoded version here would
@@ -186,7 +216,7 @@ let corpora =
         DocOf = fun f -> Path.GetFileName(Path.GetDirectoryName f)
         FixtureDir = "scripts/skill-block-context"
         Preludes = [ scaffold ]
-        AmbientOpens = [ "FS.GG.Game.Core"; "FsGg.SkillCheck.Scaffold" ]
+        AmbientOpens = [ "FS.GG.Game.Core"; scaffoldNs ]
         // The packages the SKILLS teach and this repo does not consume (FS.GG.Game#150). fs-gg-audio
         // binds FS.GG.Audio.Core/Host; fs-gg-persistence binds FS.GG.UI.Canvas; and audio's host
         // blocks reach into the viewer that DRIVES the audio — `Viewer.runAppWithAudio` and
@@ -205,9 +235,13 @@ let corpora =
         // Directory.Packages.local.props, which is where `pinnedVersion` reads their versions from.
         //
         // FS.GG.UI.Scene is declared EXPLICITLY even though Canvas/SkiaViewer already drag it in
-        // transitively: _scaffold.fs binds `Scene.Point`/`Rect` directly now (#165), and a direct
-        // dependency carried only as somebody else's transitive one breaks the day that somebody
-        // else drops it.
+        // transitively: _scaffold.fs binds `Scene.Point`/`Rect` directly (#165, and now from the
+        // REAL published fragment — #189), and a direct dependency carried only as somebody else's
+        // transitive one breaks the day that somebody else drops it.
+        //
+        // It must also stay on the SAME release train as the FS.GG.UI.Template pin the scaffold is
+        // generated from: the fragment returns Scene's `Point`/`Rect`, so template and Scene are one
+        // coherent set. Both are pinned in Directory.Packages.local.props, which says so.
         PackageRefs =
             [ "FS.GG.Audio.Core"; "FS.GG.Audio.Host"
               "FS.GG.UI.Canvas"; "FS.GG.UI.SkiaViewer"; "FS.GG.UI.KeyboardInput"
@@ -232,7 +266,7 @@ let corpora =
         // is opened after `FS.GG.Game.Core`'s, and F# MERGES the two same-named modules. Reproducing
         // that merge is the point — the #129/#132/#140/#144 bug class is precisely a value crossing
         // between its two halves.
-        AmbientOpens = [ "FS.GG.Game.Core"; "FsGg.DocCheck.Host"; "FsGg.SkillCheck.Scaffold" ]
+        AmbientOpens = [ "FS.GG.Game.Core"; "FsGg.DocCheck.Host"; scaffoldNs ]
         // TestSpecTutorial Part C teaches the scaffold's Expecto test style (`testList`, `Expect.*`).
         // That is a REAL package the scaffolded product's test project references, so the block is
         // compiled against the real thing rather than skipped or faked — the alternative would leave
@@ -240,7 +274,10 @@ let corpora =
         //
         // FS.GG.UI.Scene, because the shared `_scaffold.fs` prelude binds `Scene.Point`/`Rect` for
         // its `toPoint`/`toRect` edge (#165). This corpus never had Scene on its graph — #150 put it
-        // on the SKILLS corpus only — so without this the prelude would not compile here at all.
+        // on the SKILLS corpus only — so without this the prelude would not compile here at all. That
+        // is now doubly true: since #189 the prelude is the REAL published fragment, whose `toPoint`/
+        // `toRect` return Scene types, so Scene is the fragment's own dependency and not an artefact
+        // of how we chose to reconstruct it.
         PackageRefs = [ "Expecto"; "FS.GG.UI.Scene" ]
         Cumulative = true
         ModuleNs = "FsGg.DocCheck.Generated" } ]
@@ -769,8 +806,9 @@ let checkCorpus (corpus: Corpus) : int =
 
     for p in corpus.Preludes do
         if not (File.Exists(repoPath p)) then
-            fail $"[{corpus.Id}] {p} is missing — it reconstructs context the blocks are compiled \
-                   against and FS.GG.Game.Core does not ship."
+            fail $"[{corpus.Id}] {p} is missing — it stands up product-side context the blocks are \
+                   compiled against and FS.GG.Game.Core does not ship. If it is the scaffold, it is \
+                   GENERATED: restore it with  dotnet fsi scripts/generate-scaffold-context.fsx"
 
     // -- report ------------------------------------------------------------------------------
 
@@ -865,7 +903,7 @@ let checkCorpus (corpus: Corpus) : int =
     ///
     ///     A block may therefore only `open` a namespace that resolves WITHOUT the ambient opens —
     ///     they run after it. That rules out opening a module nested inside one of them, e.g. bare
-    ///     `open Geometry` (the scaffold's, inside `FsGg.SkillCheck.Scaffold`). No block does, and
+    ///     `open Geometry` (the scaffold's, inside the fragment's own `AppRoot`). No block does, and
     ///     none should: `FS.GG.Game.Core` ships its own `[<RequireQualifiedAccess>]` `Geometry`, so in
     ///     a reader's file — where both are in scope — `open Geometry` does not compile either
     ///     (FS0892). The corpus reaches the scaffold's geometry the way a reader must, QUALIFIED, as
