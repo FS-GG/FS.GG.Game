@@ -24,33 +24,27 @@
 open FS.GG.Audio.Core
 
 //#block 4 "use backend = OpenAlBackend.create AudioCues.resolver"
-// The host seam: a real device, wired into the viewer's audio sink.
+// The host seam: a real device, and the SINK value the viewer's launcher takes.
 //
 // `AudioCues` is the PRODUCT's generated cue table, not a package — the same kind of reconstruction
 // _scaffold.fs does for `Geometry.Vec2`, and the only thing in this block that is not real published
 // surface. Its `resolver` is a genuine `FS.GG.Audio.Host.AssetResolver`, so the block is still
 // typechecked against the real `OpenAlBackend.create` signature; only the cue bytes are ours, and
 // returning `None` is honest because the resolver's RESULT is not what the block teaches.
-open FS.GG.UI.SkiaViewer
+//
+// The block STOPS at `let audioSink = Audio.play backend` and does not launch (FS.GG.Game#204). It
+// used to end `Viewer.runAppWithAudio viewerOptions (Audio.play backend) generatedHost`, which is
+// the GAME family's launcher — and the skill now also materializes on `app`, whose Controls-family
+// launcher is a different function. Naming one of the two in the one block a reader copies is how an
+// `app` author ends up calling a function that will not type-check for them. The per-family entry
+// points are a TABLE in the body instead, so `viewerOptions`/`generatedHost` have no block left to
+// serve and are gone from this fixture with them.
 open FS.GG.Audio.Core
-
-type Model = { Tick: int }
-type Msg = Advance
 
 module AudioCues =
     let resolver : AssetResolver =
         { ResolveSound = fun (_: SoundId) -> None
           ResolveTrack = fun (_: TrackId) -> None }
-
-// `viewerOptions` and `generatedHost` are the reader's own, and the block never LOOKS at either — it
-// passes them straight into `Viewer.runAppWithAudio`, whose real signature is the whole subject of
-// the block. So they are bound type-true and value-empty: `Unchecked.defaultof` asserts nothing about
-// the value and everything about the type, which is the half that has to be right. Fabricating a
-// plausible ViewerOptions/GeneratedAppHost record instead would put fields in this fixture that the
-// skill does not teach, and would then fail the gate every time Rendering added one — a false alarm
-// on a doc that never changed.
-let viewerOptions : ViewerOptions = Unchecked.defaultof<_>
-let generatedHost : GeneratedAppHost<Model, Msg> = Unchecked.defaultof<_>
 
 //#block 5 "[ Audio.setMasterVolume next.Settings.Volume"
 // `Started`, and the trap it closes (FS.GG.Rendering#458): `forTransition` is a function of a
