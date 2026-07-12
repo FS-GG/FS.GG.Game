@@ -20,8 +20,10 @@ authoritative implementation here is a package module with a different surface. 
 `game-starter-two-copies` registry row, which is `coherent: false` for exactly this reason.
 
 **Originating here** (never in Rendering): `fs-gg-ballistics`, `fs-gg-ai`, `fs-gg-effects`,
-`fs-gg-physics`. These were authored in this repo against `FS.GG.Game.Core` directly, so they have no
-Rendering counterpart and no two-copies cost.
+`fs-gg-physics`. Authored in this repo, so Rendering ships no copy of their `SKILL.md` and the
+two-copies divergence above does not touch these **bodies** — which is a claim about the skills, not
+about the code beneath them (`fs-gg-physics` teaches `Loop.advance`, whose accumulator does duplicate
+one in FS.GG.UI.Canvas).
 
 ### Every pointer in these bodies must resolve
 
