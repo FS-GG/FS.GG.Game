@@ -15,20 +15,42 @@ module Pathfinding =
         { Steps: Map<Cell, Step>
           Endable: Set<Cell> }
 
+    // The integer step scale, and the ONE place it is written. Every 10 and 14 below derives from it
+    // (#229): the literals used to be copied into `neighbours`, `heuristic` and the docstrings, so a
+    // change to the scale had to be caught by prose.
+    let baseStep = 10
+
+    // The diagonal: `baseStep * √2`, integer-scaled — 14 when `baseStep` is 10. The 14/10 ratio IS the
+    // √2 approximation, which is why the module never needs a float and equal-cost ties cannot leak
+    // through floating-point equality. Derived, so it cannot drift from `baseStep`.
+    let private diagStep = baseStep * 14 / 10
+
+    // Saturating, because the failure it prevents is the one #229 is about: `int` multiplication would
+    // WRAP a large `moveRange` to a negative budget, and a negative budget yields an EMPTY reach — the
+    // same silent total freeze as passing `moveRange` raw. Clamping high leaves the walk bounded by
+    // `maxVisited` (which is what bounds it anyway); a genuinely negative `moveRange` stays negative,
+    // preserving `reachable`'s documented "negative budget ⇒ empty" totality.
+    let budgetFor (moveRange: int) : int =
+        let scaled = int64 baseStep * int64 moveRange
+
+        if scaled > int64 System.Int32.MaxValue then System.Int32.MaxValue
+        elif scaled < int64 System.Int32.MinValue then System.Int32.MinValue
+        else int scaled
+
     // Fixed step offsets. The enumeration order does not affect A* output (the total (f,h,Col,Row)
     // frontier order decides), and for BFS it is a deterministic, documented order.
     let private orthoOffsets = [ (0, -1); (0, 1); (-1, 0); (1, 0) ]
     let private diagOffsets = [ (-1, -1); (1, -1); (-1, 1); (1, 1) ]
 
-    // Walkable neighbours of `c` with their integer step cost. Orthogonal = 10, diagonal = 14.
-    // Under EightWay a diagonal is refused unless BOTH shared orthogonal neighbours are walkable
-    // (no corner-cutting).
+    // Walkable neighbours of `c` with their integer step cost: `baseStep` orthogonal, `diagStep`
+    // diagonal. Under EightWay a diagonal is refused unless BOTH shared orthogonal neighbours are
+    // walkable (no corner-cutting).
     let private neighbours (nb: Neighbourhood) (isWalkable: Cell -> bool) (c: Cell) : struct (Cell * int) list =
         let ortho =
             orthoOffsets
             |> List.choose (fun (dx, dy) ->
                 let n = { Col = c.Col + dx; Row = c.Row + dy }
-                if isWalkable n then Some(struct (n, 10)) else None)
+                if isWalkable n then Some(struct (n, baseStep)) else None)
 
         match nb with
         | FourWay -> ortho
@@ -41,23 +63,25 @@ module Pathfinding =
                     let side2 = { Col = c.Col; Row = c.Row + dy }
 
                     if isWalkable n && isWalkable side1 && isWalkable side2 then
-                        Some(struct (n, 14))
+                        Some(struct (n, diagStep))
                     else
                         None)
 
             ortho @ diag
 
-    // Admissible integer heuristic toward `goal`: Manhattan*10 (4-way) / octile (8-way with 10/14).
+    // Admissible integer heuristic toward `goal`: Manhattan (4-way) / octile (8-way), both in `baseStep`
+    // units. Admissible because `diagStep <= 2 * baseStep` — a diagonal never costs more than the two
+    // orthogonals it replaces — so the estimate can never exceed the true remaining cost.
     let private heuristic (nb: Neighbourhood) (goal: Cell) (c: Cell) : int =
         let dx = abs (c.Col - goal.Col)
         let dy = abs (c.Row - goal.Row)
 
         match nb with
-        | FourWay -> 10 * (dx + dy)
+        | FourWay -> baseStep * (dx + dy)
         | EightWay ->
             let lo = min dx dy
             let hi = max dx dy
-            14 * lo + 10 * (hi - lo)
+            diagStep * lo + baseStep * (hi - lo)
 
     // Walk the cameFrom chain from `goal` back to the start, yielding start..goal inclusive.
     let private reconstruct (cameFrom: Map<Cell, Cell>) (goal: Cell) : Cell list =
@@ -187,7 +211,7 @@ module Pathfinding =
     // / 14 (diagonal) `neighbours` already yields — so with `cost = fun _ -> 1` these fields reproduce
     // `astar`'s g-score exactly (the optimality cross-check).
     //
-    // Every edge weight is >= 10 (strictly positive), so a settled cell is final: plain Dijkstra.
+    // Every edge weight is >= `baseStep` (strictly positive), so a settled cell is final: plain Dijkstra.
     // Accumulation is int64 so a large `cost` cannot silently wrap; a relaxation that would exceed
     // Int32.MaxValue is dropped (treated as unreachable) rather than overflowing.
 

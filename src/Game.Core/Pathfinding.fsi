@@ -50,6 +50,43 @@ module Pathfinding =
           /// which a destination may be offered.
           Endable: Set<Cell> }
 
+    /// Public contract value exposed by the FS.GG.Game.Core package.
+    /// **The integer step scale, and the units every cost and `budget` in this module speaks.** An
+    /// orthogonal move costs `baseStep`; a diagonal costs `baseStep * 14 / 10` (≈ `baseStep * √2` — the
+    /// 14/10 ratio is why the module never needs a float, so equal-cost ties cannot leak through
+    /// floating-point equality). A move onto `c` costs `baseStep * cost c`, and `Step.Cost` /
+    /// `reachableWithin`'s values come back in those units.
+    ///
+    /// **So a caller whose game speaks movement points must scale INTO these units — use `budgetFor`,
+    /// and do not pass a raw move range.** Passing `moveRange` raw is the obvious thing (the parameter
+    /// is called `budget`, and the unit's budget *is* 4) and it fails **silently and totally**: every
+    /// step costs at least `baseStep`, which already exceeds a budget of 4, so the search settles only
+    /// `start` and the highlight comes back as the single cell the unit is standing on. Nothing throws,
+    /// and `int` in / `int` out means the type system cannot help you.
+    ///
+    /// Scaling **out** is the lossy direction, so it is deliberately not offered as a helper: `Cost /
+    /// baseStep` **truncates** — a diagonal costs 14, and `14 / 10 = 1`, so a route that really consumed
+    /// 1.4 points reads as 1. Fine for a display; **never** re-derive a budget from it, and never
+    /// compare a divided cost against a move range. Compare in `baseStep` units, where the arithmetic is
+    /// exact.
+    val baseStep: int
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// Scale a **movement budget expressed in game units** (movement points, tiles) into the `baseStep`
+    /// units `reachable`/`reachableWithin` take: `baseStep * moveRange`. This is the conversion that
+    /// belongs in the type rather than in the reader's head — `Pathfinding.reachable … (budgetFor
+    /// unit.MoveRange) unit.Pos` instead of a hardcoded `10 *`, which is what every caller wrote while
+    /// the scale was unexported.
+    ///
+    /// **Saturating, and that is load-bearing.** A plain `10 * moveRange` would *wrap* a large
+    /// `moveRange` to a **negative** budget, and a negative budget yields an **empty** reach — the exact
+    /// silent, total freeze this function exists to prevent, merely reached from the other end. So an
+    /// overflowing `moveRange` clamps to `Int32.MaxValue` (the walk is bounded by `maxVisited` anyway,
+    /// which is what bounds it in the first place). A genuinely **negative** `moveRange` is passed
+    /// through negative, preserving `reachable`'s documented totality: a negative `budget` yields an
+    /// empty `Steps` **and** an empty `Endable`, whereas a `budget` of `0` settles `start` alone.
+    val budgetFor: moveRange: int -> int
+
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// **The turn-based-tactics move range.** Dijkstra forward from `start` capped at a movement-point
     /// `budget`, keeping its **predecessors** — so the highlight and the path come out of one search and
@@ -72,6 +109,10 @@ module Pathfinding =
     /// `canEndOn` that means "unoccupied" excludes the unit's *own* cell, because the unit is standing
     /// on it. If standing still is a legal move in your game, say so:
     /// `fun c -> c = start || not (occupied c)`.
+    ///
+    /// **`budget` is in `baseStep` units, not movement points — scale it with `budgetFor`.** A raw
+    /// `moveRange` here settles `start` alone and highlights the single cell the unit stands on, without
+    /// throwing: see `baseStep`.
     ///
     /// Same integer 10/14 `baseStep` and the same determinism guarantee as the rest of the module — the
     /// `CameFrom` tree is a pure function of the inputs (ties among equal-cost predecessors settle on the
@@ -204,6 +245,9 @@ module Pathfinding =
     /// endable. **For a turn-based-tactics move range, use `reachable`**, which keeps the `CameFrom`
     /// tree and takes a separate `canEndOn`. This function remains the right answer when you want only
     /// the costed set — an AI scoring candidate cells, say, or a threat overlay.
+    ///
+    /// **`budget` is in `baseStep` units, not movement points — scale it with `budgetFor`** (a raw
+    /// `moveRange` yields the start cell alone, silently; see `baseStep`).
     ///
     /// Same `cost` convention as `distanceField` (`cost c` is the cost to enter `c`; `cost c <= 0` is
     /// impassable), same integer 10/14 `baseStep`, and the same determinism guarantee. Note the
