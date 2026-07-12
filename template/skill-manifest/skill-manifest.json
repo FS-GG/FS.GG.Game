@@ -12,7 +12,7 @@
     {
       "id": "fs-gg-audio",
       "scope": "product",
-      "sha256": "66ad2654a4b00bbb6c230e6359ec17ae8268858a9f06f30cf1b859173bd861f7",
+      "sha256": "4bee8ef288daa7225fcefc63b0e1274dc99f49b87e73184118b376d5cda0a9a9",
       "resolvablePath": ".agents/skills/fs-gg-audio/SKILL.md",
       "materializes-when": "profile in [app, sample-pack, game]",
       "supplied-by": "template/product-skills/fs-gg-audio/"

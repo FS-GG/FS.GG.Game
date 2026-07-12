@@ -32,13 +32,11 @@ open FS.GG.Audio.Core
 // typechecked against the real `OpenAlBackend.create` signature; only the cue bytes are ours, and
 // returning `None` is honest because the resolver's RESULT is not what the block teaches.
 //
-// The block STOPS at `let audioSink = Audio.play backend` and does not launch (FS.GG.Game#204). It
-// used to end `Viewer.runAppWithAudio viewerOptions (Audio.play backend) generatedHost`, which is
-// the GAME family's launcher — and the skill now also materializes on `app`, whose Controls-family
-// launcher is a different function. Naming one of the two in the one block a reader copies is how an
-// `app` author ends up calling a function that will not type-check for them. The per-family entry
-// points are a TABLE in the body instead, so `viewerOptions`/`generatedHost` have no block left to
-// serve and are gone from this fixture with them.
+// The block STOPS at `let audioSink = Audio.play backend` and does not launch (FS.GG.Game#204),
+// because the launcher is per-FAMILY and naming one of the two here is how an `app` author ends up
+// copying the `game` family's function. The launch is the LAUNCHER block's job (below), and it
+// teaches BOTH families for that reason. Named, not numbered: a block ordinal in prose is exactly the
+// drift the anchor check catches in the directives and cannot catch here.
 open FS.GG.Audio.Core
 
 module AudioCues =
@@ -68,7 +66,40 @@ type Msg =
     | Started
     | Fired
 
-//#block 6 "GeneratedAppHost.dispatchKey host keyEvent model"
+//#block 6 "let appOutcome = ControlsElmish.runInteractiveAppWithAudio viewerOptions audioSink interactiveHost"
+// The LAUNCH, per family — and the block this skill spent two releases unable to compile.
+//
+// `ControlsElmish.runInteractiveAppWithAudio` is the launcher an `app`-profile product must call to
+// get sound, and it first shipped in FS.GG.UI 0.9.0. While this repo pinned the 0.5.0 train the gate
+// could not reach it, so #215 shipped BOTH entry points as a prose table — uncompiled, and therefore
+// invisible to the consuming repo's API-coverage scanner, which counts symbols it finds in ```fsharp
+// blocks (it dropped fs-gg-audio from 4 documented symbols to 2, and the two it lost were exactly
+// these). #217 moved the train to 0.9.0; this block is what that move was FOR (#225). The table is
+// still in the body as the at-a-glance summary — the defect was never that the table existed, it was
+// that the one example an `app` author copies could not be checked.
+//
+// BOTH families are bound here on purpose. They are the pair a reader must choose BETWEEN, and the
+// mistake the section exists to prevent — reaching for the game family's function on a Controls
+// product — is only visible when both are in scope and their host records are distinct types.
+//
+// The hosts are `Unchecked.defaultof<_>` because what the block teaches is the CALL: which launcher,
+// and the sink's position between `viewerOptions` and the host record. A hand-built host record would
+// be fiction with more moving parts; the launcher SIGNATURES are real published surface, and they are
+// what is checked. `audioSink` is `AudioEffect list -> unit` — the type `Audio.play backend` returns
+// in block 4, so the value this block accepts is the one the reader actually has.
+open FS.GG.Audio.Core
+open FS.GG.UI.SkiaViewer
+open FS.GG.UI.Controls.Elmish
+
+type LaunchModel = { Score: int }
+type LaunchMsg = Fired
+
+let viewerOptions : ViewerOptions = Unchecked.defaultof<_>
+let audioSink : AudioEffect list -> unit = ignore
+let interactiveHost : InteractiveAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
+let generatedHost : GeneratedAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
+
+//#block 7 "GeneratedAppHost.dispatchKey host keyEvent model"
 // The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
 // sound WITHOUT a device. `dispatchKey` returns `(model * ViewerEffect list)` and `audioRequests`
 // narrows that to the `AudioEffect list` the block interprets — the `|> snd` and the two module

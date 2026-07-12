@@ -228,14 +228,31 @@ mixer was *told*, not what the model *holds* — which is exactly what `Generate
 
 The sink is the same value everywhere; only the entry point that accepts it differs. Reaching for the
 game family's function on a Controls product (or vice versa) will not type-check, so this is the table
-to read before you wire anything (FS.GG.Rendering#429, FS.GG.Rendering#436). Each takes the sink
-between `viewerOptions` and your host record — e.g.
-`Viewer.runAppWithAudio viewerOptions audioSink generatedHost`:
+to read before you wire anything (FS.GG.Rendering#429, FS.GG.Rendering#436):
 
 | Profile | Host record | Silent (discards audio) | **With sound** |
 | --- | --- | --- | --- |
 | `app` | `interactiveHost` | `ControlsElmish.runInteractiveApp` | **`ControlsElmish.runInteractiveAppWithAudio`** |
 | `game`, `sample-pack` | `generatedHost` | `Viewer.runApp` | **`Viewer.runAppWithAudio`** |
+
+Each takes the sink **between** `viewerOptions` and your host record. Take the line for the profile you
+scaffolded with — not both:
+
+```fsharp
+// `app` — the Controls family. Host record: `interactiveHost`.
+let appOutcome = ControlsElmish.runInteractiveAppWithAudio viewerOptions audioSink interactiveHost
+
+// `game`, `sample-pack` — the viewer family. Host record: `generatedHost`.
+let gameOutcome = Viewer.runAppWithAudio viewerOptions audioSink generatedHost
+```
+
+Both return `Result<ViewerLaunchOutcome, ViewerRunFailure>`, so a failed launch is an `Error` **value**
+rather than an exception — `ViewerRunFailure` names the stage it blocked at, and that stage is not
+always an early one (`WindowCreation`, but also `FirstFrameRender`, `ControlledExit`, `ArtifactWrite`).
+Do not read `Ok` as *a window appeared*, either: `ViewerLaunchOutcome` is a **record of what actually
+happened** — `WindowOpened`, `FirstFramePresented`, `CloseReason` — so the run that reports itself is
+the thing to ask, not the `Result` tag. Neither type is audio-specific; the `*WithAudio` launchers
+return exactly what their silent twins do.
 
 Each has a window-behavior sibling — `ControlsElmish.runInteractiveAppWithWindowBehaviorAndAudio` and
 `Viewer.runAppWithWindowBehaviorAndAudio` — which slots the parsed `--window-*` request in ahead of

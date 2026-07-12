@@ -249,16 +249,19 @@ let corpora =
         // generated from: the fragment returns Scene's `Point`/`Rect`, so template and Scene are one
         // coherent set. Both are pinned in Directory.Packages.local.props, which says so.
         //
-        // NOT here yet: FS.GG.UI.Controls.Elmish, the `app`-profile launcher family
-        // (`ControlsElmish.runInteractiveAppWithAudio`). The 0.9.0 train this repo now pins can reach
-        // it — that is what FS.GG.Game#217 moved the train FOR — but no ```fsharp block binds it yet:
-        // fs-gg-audio still describes both launchers in a prose TABLE (#215), which is the workaround
-        // the old 0.5.0 pin forced. Adding the PackageRef before the block exists would compile
-        // nothing and overstate this gate's coverage. It lands with the block (#225).
+        // FS.GG.UI.Controls.Elmish is the `app`-profile launcher family
+        // (`ControlsElmish.runInteractiveAppWithAudio`) — the function an `app` product must call to
+        // get sound. It is here because a block now BINDS it: fs-gg-audio's launcher block (#225).
+        // Until then it was deliberately absent, and the reason is worth keeping. The 0.5.0 train this
+        // repo used to pin could not reach the function at all, so #215 was forced to ship both
+        // launchers as a prose TABLE; #217 moved the train to 0.9.0, which made the function reachable
+        // but did NOT add this ref, because a PackageRef whose symbols no block binds compiles nothing
+        // and overstates what this gate checks. The pin, the ref, and the block land together or not
+        // at all.
         PackageRefs =
             [ "FS.GG.Audio.Core"; "FS.GG.Audio.Host"
-              "FS.GG.UI.Canvas"; "FS.GG.UI.SkiaViewer"; "FS.GG.UI.KeyboardInput"
-              "FS.GG.UI.Scene" ]
+              "FS.GG.UI.Canvas"; "FS.GG.UI.Controls.Elmish"; "FS.GG.UI.SkiaViewer"
+              "FS.GG.UI.KeyboardInput"; "FS.GG.UI.Scene" ]
         Cumulative = false
         ModuleNs = "FsGg.SkillCheck.Generated" }
 
