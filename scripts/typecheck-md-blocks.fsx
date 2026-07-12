@@ -248,6 +248,13 @@ let corpora =
         // It must also stay on the SAME release train as the FS.GG.UI.Template pin the scaffold is
         // generated from: the fragment returns Scene's `Point`/`Rect`, so template and Scene are one
         // coherent set. Both are pinned in Directory.Packages.local.props, which says so.
+        //
+        // NOT here yet: FS.GG.UI.Controls.Elmish, the `app`-profile launcher family
+        // (`ControlsElmish.runInteractiveAppWithAudio`). The 0.9.0 train this repo now pins can reach
+        // it — that is what FS.GG.Game#217 moved the train FOR — but no ```fsharp block binds it yet:
+        // fs-gg-audio still describes both launchers in a prose TABLE (#215), which is the workaround
+        // the old 0.5.0 pin forced. Adding the PackageRef before the block exists would compile
+        // nothing and overstate this gate's coverage. It lands with the block (#225).
         PackageRefs =
             [ "FS.GG.Audio.Core"; "FS.GG.Audio.Host"
               "FS.GG.UI.Canvas"; "FS.GG.UI.SkiaViewer"; "FS.GG.UI.KeyboardInput"
