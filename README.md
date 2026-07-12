@@ -63,13 +63,14 @@ is **byte-identical across runs and platforms**, while the float-heavy modules s
 ```sh
 dotnet build FS.GG.Game.slnx
 dotnet test  tests/Game.Core.Tests/Game.Core.Tests.fsproj   # headless: zero Skia, zero Scene
-dotnet fsi   scripts/refresh-surface-baselines.fsx          # regenerate the public-surface baseline
+dotnet fsi   scripts/refresh-surface-baselines.fsx          # regenerate the public-surface baselines
 ```
 
 ## House style
 
 Mirrors the org conventions (synced build config from `FS-GG/.github` `dist/dotnet/`): `.fsi` as the
-sole public surface with a committed surface baseline (`readiness/surface-baselines/`), pure cores,
+sole public surface with a committed surface baseline (`readiness/surface-baselines/` — exported types,
+and their members' signatures under `members/`, so a deleted or re-signatured function is drift), pure cores,
 `net10.0` + FSharp.Core `10.1.301`, central package management with locked restore, deterministic
 builds, warnings-as-errors.
 
