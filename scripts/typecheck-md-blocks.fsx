@@ -1158,7 +1158,14 @@ let algorithmRules =
         // "branch **A**/**B**", so the naive rule fired on a document for reasons having nothing to
         // do with pathfinding — and a rule that cries wolf on bold text is one whose next real
         // finding gets waved through.
-        @"(?<![*\w])A\*(?!\*)|\bDijkstra\b|\bBFS\b|\bDFS\b|breadth[- ]first|depth[- ]first\
+        //
+        // No `DFS`/`depth-first`, deliberately. Game.Core ships A*, BFS and a Dijkstra
+        // (`distanceField`) — every one of them a shortest-path or flood primitive. A depth-first walk
+        // is a DIFFERENT algorithm used for a different job (carving a maze, walking a tree), and
+        // Game.Core has no answer for it. Firing here would order a spec to cite `Pathfinding` and
+        // then hand its reader four functions that cannot do what they asked — advice worse than
+        // silence, and the rule would be routed around rather than obeyed.
+        @"(?<![*\w])A\*(?!\*)|\bDijkstra\b|\bBFS\b|breadth[- ]first\
           |flood[- ]?fill|\bpathfind\w*|\bshortest path\b"
       algorithmRule
         "Los"
@@ -1220,13 +1227,25 @@ let splitFrontMatter (text: string) =
 /// is exactly as much a citation as one in a block, and §4.4 (the defect that started this) was prose.
 let citation = Regex(@"\b(?<m>[A-Z][A-Za-z0-9]*)\.(?<x>[A-Za-z_][A-Za-z0-9_']*)", RegexOptions.Compiled)
 
+/// `Pathfinding.fsi` is a FILE, not a citation of a member called `fsi`. Pointing a reader at the
+/// signature file is normal here — the skills corpus does it a dozen times (`Los.fsi`, `Fov.fsi`,
+/// `Effects.fsi`) — and the day a TestSpec does, the resolve rule would report
+/// "`Pathfinding.fsi` does not exist in FS.GG.Game.Core" over prose that is entirely correct.
+///
+/// That is not a small blemish: this section's own header argues that a lint which fires on good prose
+/// is a lint that gets routed around, and it would be true of this one. So a `Module.<ext>` is not a
+/// citation, and it is not a violation either — it is a filename, and the rule has nothing to say
+/// about it.
+let sourceFileExtensions = set [ "fs"; "fsi"; "fsx"; "fsproj"; "md"; "dll"; "json"; "yml"; "yaml" ]
+
 let citationsIn (text: string) =
     text.Split('\n')
     |> Seq.indexed
     |> Seq.collect (fun (i, line) ->
         citation.Matches line
         |> Seq.map (fun m -> m.Groups["m"].Value, m.Groups["x"].Value, i)
-        |> Seq.filter (fun (m, _, _) -> coreModules.ContainsKey m))
+        |> Seq.filter (fun (m, x, _) ->
+            coreModules.ContainsKey m && not (sourceFileExtensions.Contains x)))
     |> List.ofSeq
 
 /// The modules a `stack:` line CLAIMS. The parenthetical is prose — `(Pathfinding; Los for ranged
@@ -1351,7 +1370,11 @@ let lintFrameworkCitations (corpora: Corpus list) : int =
                     | None when required.IsEmpty && citedModules.IsEmpty -> ()
                     | None ->
                         violations <- violations + 1
-                        let names = required |> Set.toList |> String.concat "; "
+                        // Suggest from whichever set is non-empty: a spec can reach this branch by
+                        // CITING a module without tripping an algorithm rule, and "FS.GG.Game.Core ()"
+                        // is not a suggestion, it is a puzzle.
+                        let names =
+                            Set.union required citedModules |> Set.toList |> String.concat "; "
                         annotate "error" rel 1 1
                             $"this spec is built on FS.GG.Game.Core and its `stack:` does not say so. \
                               Add: framework: \"FS.GG.Game.Core ({names})\". The stack is what a reader \
