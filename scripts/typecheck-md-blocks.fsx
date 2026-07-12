@@ -550,7 +550,9 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) (strict: bo
                 // A second section for the same block would silently REPLACE the first, dropping
                 // bindings the author wrote and then failing the block with a confusing
                 // unbound-identifier error while the binding sits right there in this file.
-                if acc.ContainsKey n then
+                // Gated on `strict` like every other rejection here: --list is the tool you reach for to
+                // REPAIR this file, so it has to survive reading it (see the note on `loadFixtures`).
+                if strict && acc.ContainsKey n then
                     fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n} twice. The second \
                            section would silently discard the first — merge them."
                 current <- Some n
@@ -579,9 +581,13 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) (strict: bo
         // still in range, every fixture now bound one block too early — is invisible here and is what
         // the anchor check below exists for (#181). Both run: the range check gives the better message
         // when a block is deleted off the end, and it is the cheaper of the two.
+        // Both checks below walk their sections in ORDINAL order. `fail` exits on the first problem, and
+        // a Dictionary's enumeration order is not a contract — so without the sort, a file with several
+        // mis-keyed sections could report a different one on CI than it does locally, or on a re-run. A
+        // gate whose diagnosis moves under you is a gate you stop believing.
         let ordinals = docBlocks |> List.map _.Ordinal |> Set.ofList
         if strict then
-            for KeyValue(n, _) in acc do
+            for KeyValue(n, _) in acc |> Seq.sortBy _.Key do
                 if not (ordinals.Contains n) then
                     fail $"{corpus.FixtureDir}/{doc}.fs declares //#block {n}, but {doc} has only \
                            {ordinals.Count} ```fsharp block(s). Stale fixture — a block was deleted or \
@@ -596,7 +602,7 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) (strict: bo
         // block n and in NO OTHER block of the document. An anchor matching two blocks would still nod
         // through the re-key it exists to catch, so ambiguity is a failure in its own right, not a
         // near-miss to be resolved by picking the first match.
-        for KeyValue(n, anchor) in (if strict then Seq.toList anchors else []) do
+        for KeyValue(n, anchor) in (if strict then anchors |> Seq.sortBy _.Key |> List.ofSeq else []) do
             let matching = docBlocks |> List.filter (blockHasAnchor anchor)
             match matching with
             | [ b ] when b.Ordinal = n -> ()        // the binding is proved — this is the happy path
