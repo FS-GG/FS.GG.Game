@@ -136,14 +136,20 @@ Assert on the **effect**, not the request:
   the same as `Load` of a slot whose bytes are truncated or unparseable. A backend that collapses
   both into one "no save" answer silently eats corruption. Decide what each reports, then test it.
 
-⚠️ **The pure surface has no load-result type — you will have to add one, and it is not yours.**
+⚠️ **The pinned surface has no load-result type — and the one you need is not yours to invent.**
 `PersistenceEffect` is request-only (`Save`/`Load`/`DeleteSlot`), and `Persistence.fsi` says so
-outright: *"how a real backend reports 'no such save' is a deferred concern."* There is no
-`LoadResult`, no absent/corrupt vocabulary, and no path that dispatches a loaded save back to
-`update` as a `Msg`. Reporting a load's outcome therefore needs a **new type on the
-`FS.GG.UI.Canvas` surface**, which is an `fs-gg-rendering` change, not a product-local one. It is
-tracked at [FS-GG/FS.GG.Rendering#535](https://github.com/FS-GG/FS.GG.Rendering/issues/535) — add
-your case there rather than inventing a private result type no host will ever dispatch.
+outright: *"how a real backend reports 'no such save' is a deferred concern."* On the
+`FS.GG.UI.Canvas` this product pins (**0.5.0**) there is no `LoadResult`, no absent/corrupt
+vocabulary, and no path that dispatches a loaded save back to `update` as a `Msg` — so a product
+that needs one today cannot get it from the framework, and a private one no host dispatches buys
+nothing.
+
+Reporting a load's outcome needs a **new type on the `FS.GG.UI.Canvas` surface**, which is an
+`fs-gg-rendering` change, not a product-local one. That type is **no longer an open question**: it is
+designed and merged upstream, and is waiting on a release to carry it, tracked at
+[FS-GG/FS.GG.Rendering#587](https://github.com/FS-GG/FS.GG.Rendering/issues/587). Follow that
+release — and expect this section to change when this product's pin moves to it — rather than
+inventing a private result type you would only have to unpick when the real vocabulary lands.
 
 ## Build Commands
 
