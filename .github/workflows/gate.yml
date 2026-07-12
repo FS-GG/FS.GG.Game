@@ -230,7 +230,7 @@ jobs:
 
   # Producer skill-manifest drift gate (ADR-0014 / ADR-0022 P4+P6). template/skill-manifest/
   # skill-manifest.json is the contract the .github org registry (registry/skills.yml) reconciles the
-  # nine owner:fs-gg-game skill rows from — "registry = manifest = bytes". The generator recomputes each
+  # twelve owner:fs-gg-game skill rows from — "registry = manifest = bytes". The generator recomputes each
   # SKILL.md digest; this fails if the committed manifest drifts from the skill bodies (or the
   # generator), the guard that keeps the registry's owner:fs-gg-game rows honest. No build needed —
   # the generator only reads the SKILL.md files.
