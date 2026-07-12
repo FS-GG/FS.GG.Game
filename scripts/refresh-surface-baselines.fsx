@@ -17,7 +17,7 @@
 // keeps a comparable surface record.
 //
 // It deviates from Rendering's generator in exactly three places, each a deliberate bug fix, NOT drift
-// to be "corrected" back into parity (all three are filed against Rendering — FS.GG.Rendering#697):
+// to be "corrected" back into parity (all three are filed against Rendering — FS.GG.Rendering#657):
 //   1. `typeRef` strips the arity suffix from every generic segment instead of truncating at the first
 //      backtick, which silently erased a nested generic's own name (`Dictionary`2+Enumerator`).
 //   2. `displayName` trims the TRAILING "Module" rather than replacing the substring everywhere.
