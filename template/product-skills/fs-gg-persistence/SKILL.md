@@ -27,11 +27,23 @@ The signatures you consume are bundled with this product:
 - `docs/api-surface/Canvas/Persistence.fsi` — the `PersistenceEffect` request DU
   (`Save`/`Load`/`DeleteSlot`), the `SaveSlot`/`SavePayload` identifiers, the `SaveEnvelope` record,
   the `PersistenceEvidence` record, and the `Persistence` module (smart constructors + the
-  record-only `interpret`/`record`). Shipped in `FS.GG.UI.Canvas`, referenced on the `game` and
-  `sample-pack` profiles (the same package that carries the simulation primitives and audio).
+  record-only `interpret`/`record`). Shipped in `FS.GG.UI.Canvas`, referenced on the
+  `game` and `sample-pack` profiles (the same package that carries the simulation primitives and
+  audio).
 
 All helpers are **total**: the save-format version is clamped to `>= minVersion` at the boundary, and
 no helper throws or performs I/O. The payload is **opaque** — the framework never parses it.
+
+> **`Persistence.interpret` PERSISTS NOTHING.** It records your requests into
+> `PersistenceEvidence.Requested` and drops them. No file is written, read or deleted — not here, and
+> not later by a host: no `ViewerEffect` case carries a `PersistenceEffect`, so no host runner will
+> ever see one. A product that calls it has saved nothing.
+>
+> The name is a trap, and a known one: everywhere else in this framework `interpret*` means *do it*
+> (`GlHost.interpretEffect` drives real GL work), while this one writes no bytes at all. A later
+> framework release renames it to `interpretRecordOnly`, which says what it does — but **that
+> spelling is not in the `FS.GG.UI.Canvas` your product pins**, so `interpret` is the one to call
+> today.
 
 ## Requesting save/load from `update`
 
@@ -129,9 +141,9 @@ Assert on the **effect**, not the request:
 outright: *"how a real backend reports 'no such save' is a deferred concern."* There is no
 `LoadResult`, no absent/corrupt vocabulary, and no path that dispatches a loaded save back to
 `update` as a `Msg`. Reporting a load's outcome therefore needs a **new type on the
-`FS.GG.UI.Canvas` surface**, which is an `fs-gg-rendering` change, not a product-local one. Raise it
-there ([FS-GG/FS.GG.Rendering#445](https://github.com/FS-GG/FS.GG.Rendering/issues/445)) rather than
-inventing a private result type no host will ever dispatch.
+`FS.GG.UI.Canvas` surface**, which is an `fs-gg-rendering` change, not a product-local one. It is
+tracked at [FS-GG/FS.GG.Rendering#535](https://github.com/FS-GG/FS.GG.Rendering/issues/535) — add
+your case there rather than inventing a private result type no host will ever dispatch.
 
 ## Build Commands
 
@@ -161,11 +173,28 @@ Be clear about what that host is today: **there isn't one.** No host in this org
 screenshot I/O and documents no persistence sink. Nothing will pick these requests up unless you
 write the backend yourself ([If you own the backend](#if-you-own-the-backend)).
 
+### Which host interprets each `PersistenceEffect`
+
+| `PersistenceEffect` | `Persistence.interpret` does | Which host runner interprets it |
+|---|---|---|
+| `Save` | records the request into `PersistenceEvidence.Requested` (clamping `Version` to `>= 0`); **writes no bytes** | **none** |
+| `Load` | records the request; returns **no payload** | **none** |
+| `DeleteSlot` | records the request; **deletes nothing** | **none** |
+
+The "none" column is structural, not an oversight: a host runner interprets `ViewerEffect`, and **no
+`ViewerEffect` case carries a `PersistenceEffect`**. A persistence request cannot reach a host runner
+even in principle — `Persistence.interpret` is the only thing that will ever see it, and all it does
+is hand the requests back to you.
+
+So `PersistenceEvidence.Requested` proves that your `update` **asked** to save. It proves **nothing
+about durability**, because no code in the framework writes a byte.
+
 ## Generated Product
 
 Map each `Msg` that should save, load, or delete to a `PersistenceEffect` in your `update`, collect
-the frame's requests, and `Persistence.interpret` them for evidence today. The request surface is
-designed so that a real backend can interpret the same values into file I/O without changing it —
+the frame's requests, and pass them to `Persistence.interpret` for evidence today. The
+request surface is designed so that a real backend can interpret the same values into file I/O
+without changing it —
 but no such backend exists yet, and handing a loaded save back to `update` as a `Msg` additionally
 needs a result type the Canvas surface does not have (see
 [If you own the backend](#if-you-own-the-backend)). Treat "the host will handle it later" as
