@@ -255,8 +255,8 @@ jobs:
             exit 1
           fi
 
-  # Dangling skill-reference gate (FS.GG.Game#35, extended by #202). A published SKILL.md makes two kinds
-  # of promise to its reader, and this job checks both.
+  # Dangling skill-reference gate (FS.GG.Game#35, extended by #202 and #208). A published SKILL.md makes
+  # three kinds of promise to its reader, and this job checks all three.
   #
   # A `[[wiki-ref]]` promises a skill that resolves. Before #35, 21 refs across all 5 skills pointed at
   # skills this repo does not publish (`fs-gg-scene`, `fs-gg-skiaviewer`, …, all owner:fs-gg-rendering),
@@ -274,11 +274,25 @@ jobs:
   # the audio seam — history, and history stays closed), so a body may excuse one by name:
   #   <!-- skill-refs: closed-ok FS.GG.Rendering#245 — why -->
   # An excuse that no longer excuses anything is reported too: a stale allowlist is where the next rot
-  # hides. See the header of scripts/check-skill-refs.sh for the full convention.
+  # hides.
+  #
+  # A BARE `#N` PROMISES NOTHING IT CAN KEEP (#208), so it is an ERROR — not "unresolvable", but wrong by
+  # construction. These bodies MATERIALIZE INTO SOMEBODY ELSE'S REPO, and GitHub renders `#999` against
+  # the repo it is READ in: in a scaffolded product it links to that product's OWN tracker. It never
+  # points here, so its upstream state is beside the point and repointing it cannot fix it. The only fix
+  # is to QUALIFY it (`FS.GG.Game#999`), which survives materialization.
+  #
+  # Bare refs are genuinely ambiguous with prose — fs-gg-line-drawing says `the design doc's "#1 LOS
+  # bug"`, meaning the number-one bug, not issue #1. That is an argument for an ESCAPE HATCH, not for
+  # silence, so a body may declare the exception by number, as it does for a closed link:
+  #   <!-- skill-refs: prose-ok #1 — why -->
+  # This marker keys on a BARE INTEGER and so excuses every bare `#1` in that file: keep them rare.
+  # See the header of scripts/check-skill-refs.sh for the full convention.
   #
   # GH_TOKEN: resolving a link is a handful of REST reads (no GraphQL) against PUBLIC repos, so the
   # default token suffices — it buys the 1,000/hr authenticated budget instead of a shared-IP 60/hr.
-  # The script REFUSES to self-skip in CI: a link it cannot read is one it will not call green.
+  # The script REFUSES to self-skip in CI: a link it cannot read is one it will not call green. (The
+  # bare-`#N` check needs no network at all — there is no `#999` here to resolve it against.)
   skill-refs:
     name: Dangling skill refs (template/product-skills)
     runs-on: ubuntu-latest
@@ -287,7 +301,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Fail on a dangling [[ref]] or a stale issue/PR link
+      # QUOTED, and it must stay quoted: an unquoted ` #N` is a YAML comment, and the step name would
+      # silently lose the very words that name the third check.
+      - name: "Fail on a dangling [[ref]], a stale issue/PR link, or a bare #N"
         run: scripts/check-skill-refs.sh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # check-skill-refs — fail on a dangling pointer in this repo's published product skills.
 #
-# A published SKILL.md makes two kinds of promise to its reader, and this script checks both:
+# A published SKILL.md makes three kinds of promise to its reader, and this script checks all three:
 #
 #   [[wiki-ref]]        (FS.GG.Game#35)  — "a skill by this name resolves"
 #   an issue/PR link    (FS.GG.Game#202) — "there is a live issue at the other end"
+#   a bare `#N`         (FS.GG.Game#208) — promises nothing it can keep: § 3 REJECTS it outright
 #
 # ── 1. WIKI REFS (FS.GG.Game#35) ────────────────────────────────────────────────────────────────
 # A skill body that writes `[[fs-gg-scene]]` promises the reader a skill this repo publishes. It
