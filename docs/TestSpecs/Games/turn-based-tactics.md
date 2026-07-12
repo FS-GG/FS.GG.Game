@@ -5,7 +5,7 @@ category: games
 complexity: complex
 genre: "Turn-based tactics (grid combat, telegraphed enemy intent)"
 target_session_minutes: 25
-stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", arch: "Elmish/MVU", lang: "F#" }
+stack: { rendering: "FS.GG.Rendering (Skia/OpenGL)", framework: "FS.GG.Game.Core (Pathfinding; Los for ranged LoS)", arch: "Elmish/MVU", lang: "F#" }
 status: spec
 ---
 
@@ -33,6 +33,15 @@ Model * Cmd<Msg>`, a pure function of the current state and a player/AI action.
 The only place a clock is needed at all is cosmetic animation interpolation, which
 is decoupled from the authoritative game state. This makes the rules trivially
 testable and deterministic.
+
+**This spec sits on `FS.GG.Game.Core`.** Where the framework already ships a primitive, this
+document **cites it rather than re-teaching it** — the grid coordinate is `Cell`, the move range is
+`Pathfinding.reachable` (§4.4), and ranged line-of-sight is `Los.lineOfSight` (§4.5). Those
+primitives are deterministic and property-tested; a reimplementation here would be a second, weaker
+copy that drifts. So the code blocks below are *sketches of the game's rules*, not of the algorithms
+underneath them, and where one does spell an algorithm out it is because the framework has no
+answer for it. If you find yourself hand-rolling a Dijkstra, a Bresenham, or an FoV, check
+`Game.Core` first — §4.4 was exactly that mistake, and it shipped for a while.
 
 ## 2. Core Game Loop
 
@@ -152,109 +161,108 @@ A **round** = one Player Phase followed by one Enemy Phase.
 When a unit is selected, the game computes the set of **reachable tiles** given its
 `moveRange` movement points and terrain costs, and highlights them.
 
-- Because move costs are small non-negative integers (1 or 2), reachability is a
-  **uniform/weighted BFS = Dijkstra on a tiny graph**. Implementation: Dijkstra
-  (priority by accumulated cost) from the unit's tile over the 4-neighbour graph,
-  expanding while `costSoFar ≤ moveRange`, treating impassable terrain and
+**Do not hand-roll this.** `Game.Core`'s `Pathfinding.reachable` *is* the move range — its
+docstring says so in those words — and it returns precisely the two-set shape below, budgeted,
+predecessor-keeping, deterministic, and property-tested for the one invariant that matters: the
+reconstructed path costs exactly what the highlight promised. Call it.
+
+- Reachability is Dijkstra from the unit's tile over the 4-neighbour graph, expanding while
+  accumulated cost stays within the unit's movement budget, treating impassable terrain and
   tiles occupied by *other units* as non-traversable. Friendly units block movement
   **through**? v1 rule: you may **path through allied units but not end on them**;
   enemies block both path and destination. (Flying ignores terrain cost — every
   passable-to-flyer tile costs 1 — and ignores ground occupants for *pathing through*
   but still can't end on an occupied tile.)
-- Output: `reachable : Reach` — **two sets, and they are not the same set**.
-  `Steps : Map<Tile, {Cost:int; CameFrom:Tile option}>` is every tile the search
-  *visited*; `Endable : Set<Tile>` is the subset you may legally **stop** on.
+- That "through but not on" rule is exactly why there are **two** predicates and not one.
+  `cost` decides what may be **entered**; `canEndOn` decides what may be a **destination**, and it
+  never affects traversal. A single predicate cannot say both — make a tile impassable to keep the
+  unit off it and you also make it unwalkable, which forbids the very routes this section allows.
+- Output: `Pathfinding.Reach` — **two sets, and they are not the same set**.
+  `Steps : Map<Cell, Step>` (`Step = {Cost:int; CameFrom:Cell option}`) is every tile the
+  search *settled*; `Endable : Set<Cell>` is the subset you may legally **stop** on.
   They differ by exactly the v1 pass-through rule above: an allied-occupied tile is
   traversable, so it is in `Steps`, and it is not a legal destination, so it is not in
   `Endable`. `Endable` is the highlight set. `Steps` is what reconstructs a path — and
   it must be the *unfiltered* map, because a path through an ally passes through a tile
   that is deliberately absent from `Endable`. Filter the thing you reconstruct from and
   reconstruction dead-ends on precisely the routes this section goes out of its way to
-  allow.
-- **Preview** (`PreviewMove tile`): if `tile ∈ reachable.Endable`, walk `CameFrom` back
-  from `tile` over `reachable.Steps` to the unit's own tile (whose `CameFrom` is `None`),
-  and store the reversed chain as a `Pending.Move` with that path. The highlight set is
-  rendered cyan; the previewed path is drawn as a polyline; the destination shows a ghost
-  of the unit.
+  allow. The framework guarantees this split; you do not have to re-establish it.
+- **Preview** (`PreviewMove tile`): if `tile ∈ reach.Endable`, `Pathfinding.pathTo reach tile`
+  returns the route (start-to-dest inclusive, `None` if the tile was never settled); store it as a
+  `Pending.Move` with that path. The membership test is the caller's job — `pathTo` deliberately
+  does not do it, because reconstructing a route to a pass-through tile is also how you preview
+  one. The highlight set is rendered cyan; the previewed path is drawn as a polyline; the
+  destination shows a ghost of the unit.
 - For ranged units the **attack range** is computed separately *from the previewed
   destination* (so the player sees, live, which enemies a planned move would let them
   hit). Attack range = all tiles within `attackRange` Manhattan distance from the
   (previewed) position, minus tiles blocked by LoS-blocking terrain for ranged
   weapons (melee range 1 ignores LoS).
 
-Dijkstra reachability, with **lazy deletion** — instead of decreasing a queued entry's key
-(which `PriorityQueue` cannot do), a better route to a tile is simply enqueued again and the
-older, worse entry is discarded when it surfaces. Recognising a stale entry means comparing
-the cost it was *queued with* against the best cost known *now*, so the queue's **element** is
-the `(tile, cost)` pair and its **priority** is that same cost: `Dequeue()` returns only the
-element, so a cost left in the priority alone is a cost you can never read back.
+**Two adaptations the framework forces, and both are silent if you get them wrong.**
 
-> Under the v1 cost model that guard never actually fires, and it is worth knowing why before
-> you decide to keep it: `enterCost` is a function of the tile being **entered**, so every edge
-> into a tile costs the same, and a tile's first relaxation is therefore already its cheapest.
-> It is retained because it is what keeps the shape correct the moment that stops being true —
-> a zone-of-control penalty, a per-unit terrain modifier, or a diagonal step would all make cost
-> depend on the edge rather than the destination, and then a tile *can* be improved after it is
-> queued. Drop the pair and the guard together, or not at all.
+1. **Costs come back ×10.** `Pathfinding` scales every step by an integer `baseStep` — 10 per
+   orthogonal move, 14 per diagonal — so an edge onto a tile costs `10 × cost tile`, and
+   `Steps[t].Cost` is in those scaled units, *not* movement points. Therefore the `budget` you
+   hand it is `10 * unit.MoveRange`, and a Rough tile (cost 2) shows up at 20, not 2. Pass
+   `unit.MoveRange` raw and a `moveRange`-4 unit cannot move **at all**: every step costs 10, 10
+   already exceeds a budget of 4, so the search settles the unit's own tile and stops. The
+   highlight comes back as the single tile it is standing on, and nothing throws. The scale is why
+   the module never needs a float — a diagonal is 14/10 ≈ √2 in integers, so equal-cost ties cannot
+   leak through floating-point equality — and `baseStep` is not exported, so the `10` is written
+   out here.
+2. **`canEndOn` is asked about `start` too** — no special case. A `canEndOn` that means "unoccupied"
+   therefore excludes the unit's **own** tile, because the unit is standing on it. That is not a
+   style question here: §14's AC #1 requires `Endable` and `Steps`' key set to **coincide** on a
+   board where nothing is occupied, and the unit occupies its own tile — so the naive predicate
+   fails the spec's own first test, and the unit's tile silently drops out of the cyan highlight.
+   Admit `start` explicitly: `fun t -> t = unit.Pos || not (occupied t)`.
+
+Impassability rides on `cost`, not on an option: **`cost t <= 0` means "cannot be entered"** — the
+same convention as the rest of the module, so one terrain function drives them all.
 
 ```fsharp
-open System.Collections.Generic
+/// Cost to ENTER `tile`, in MOVEMENT POINTS (Ground 1, Rough 2). `0` = impassable, which is the
+/// framework's convention (`cost c <= 0` cannot be entered) — so terrain, enemy-occupied tiles and
+/// (for non-flyers) anything the unit cannot cross all collapse into a single `0`.
+let enterCost (board: Board) (unit: Unit) (tile: Tile) : int = 1
 
-type Step =
-    { Cost: int
-      CameFrom: Tile option }                     // None only for the unit's own tile
+/// May the unit STOP on `tile`? Strictly narrower than `enterCost`, and deliberately a SEPARATE
+/// question: an allied-occupied tile is enterable (cost > 0) and not endable. Never consulted for
+/// traversal, so it cannot break a path that merely passes through.
+let canEndOn (board: Board) (unit: Unit) (tile: Tile) : bool = true
 
-type Reach =
-    { Steps: Map<Tile, Step>                      // EVERY visited tile — including pass-through-only
-      Endable: Set<Tile> }                        // the subset you may STOP on = the highlight set
+/// The reachable set AND the path source, from one search, cost-consistent by construction.
+/// `Reach.Steps` is every settled tile (including pass-through-only ones); `Reach.Endable` is the
+/// subset that `canEndOn` admitted, and it is the cyan highlight set.
+let reachable (board: Board) (unit: Unit) : Pathfinding.Reach =
+    Pathfinding.reachable
+        FourWay
+        4_096                                            // maxVisited: `budget` prunes but does not bound
+        (enterCost board unit)
+        (fun t -> t = unit.Pos || canEndOn board unit t) // standing still is a legal move — see (2)
+        (10 * unit.MoveRange)                            // budget in baseStep units — see (1)
+        unit.Pos
 
-let reachable (board: Board) (unit: Unit) : Reach =
-    let start = unit.Pos
-    let pq = PriorityQueue<Tile * int, int>()     // element = (tile, cost), priority = cost
-    pq.Enqueue((start, 0), 0)
-    let best = Dictionary<Tile, Step>()
-    best[start] <- { Cost = 0; CameFrom = None }
-    while pq.Count > 0 do
-        let tile, cost = pq.Dequeue()
-        if cost = best[tile].Cost then            // skip stale entries
-            for nb in neighbors4 tile do
-                match enterCost board unit nb with
-                | Some step ->
-                    let nc = cost + step
-                    if nc <= unit.MoveRange &&
-                       (not (best.ContainsKey nb) || nc < best[nb].Cost) then
-                        best[nb] <- { Cost = nc; CameFrom = Some tile }
-                        pq.Enqueue((nb, nc), nc)
-                | None -> ()                      // impassable / blocked
-    // `canEndOn` narrows the DESTINATIONS, never the traversal. Applying it to `Steps` would
-    // punch a hole in the predecessor chain at exactly the allied tiles you are allowed to
-    // path through, and `pathTo` would dead-end there.
-    { Steps = best |> Seq.map (fun kv -> kv.Key, kv.Value)   // a Dictionary yields KeyValuePairs
-                   |> Map.ofSeq
-      Endable = best |> Seq.map (fun kv -> kv.Key)
-                     |> Seq.filter (canEndOn board unit)
-                     |> Set.ofSeq }
-
-/// The path the move animation follows, and the `path` §7's `PendingMove` carries.
-/// Precondition: `dest ∈ reach.Endable` (so it is also a key of `reach.Steps`).
-let pathTo (reach: Reach) (dest: Tile) : Tile list =
-    let rec walk (tile: Tile) (acc: Tile list) =
-        match reach.Steps[tile].CameFrom with
-        | None -> tile :: acc                     // the unit's own tile: chain complete
-        | Some prev -> walk prev (tile :: acc)
-    walk dest []                                  // start-to-dest, inclusive of both
+/// The path the move animation follows, and the `path` §7's `PendingMove` carries: start-to-dest,
+/// inclusive of both. `None` when `dest` was never settled (out of budget, or impassable).
+///
+/// It reconstructs from `Steps`, NOT `Endable` — so it happily returns a route THROUGH an allied
+/// tile the unit may not stop on, which is exactly the v1 rule. Guarding the DESTINATION is the
+/// caller's job, and it is one membership test:
+let previewMove (reach: Pathfinding.Reach) (dest: Tile) : Tile list option =
+    if Set.contains dest reach.Endable then Pathfinding.pathTo reach dest
+    else None                                            // e.g. PreviewMove onto an ally: rejected
 ```
 
-> **Why store `CameFrom` rather than re-derive the path from costs alone?** Because you *can*
-> re-derive it today — from `dest`, step to any neighbour whose `Cost` is
-> `Cost - (enterCost board unit dest).Value` — and that trick relies on the very property the note
-> above says will expire: it reads the step
-> cost off the **destination tile**, which is only meaningful while `enterCost` is a function of
-> the tile entered. Add a zone-of-control penalty, a per-unit terrain modifier, or a diagonal step
-> and the cost becomes a property of the **edge**; the subtraction then names no particular
-> neighbour, and the descent starts silently returning paths the unit could not walk. `CameFrom`
-> records the edge the search actually took, so it survives that change. It is one `Tile option`
-> per visited tile — pay it.
+> **Why the framework keeps a `CameFrom` tree rather than re-deriving the path from costs.** You
+> *can* re-derive it under v1 — from `dest`, step to any neighbour whose `Cost` is
+> `Cost - 10 * enterCost dest` — but that trick reads the step cost off the **destination tile**,
+> which is only meaningful while cost is a function of the tile *entered*. Add a zone-of-control
+> penalty, a per-unit terrain modifier, or a diagonal and cost becomes a property of the **edge**;
+> the subtraction then names no particular neighbour, and the descent starts silently returning
+> paths the unit could not walk. `CameFrom` records the edge the search actually took, so it
+> survives that change — and `pathTo` is what reads it.
 
 ### 4.5 Attack resolution & damage
 
@@ -263,6 +271,11 @@ A declared attack from attacker A using ability `ab` against target tile T:
 1. **Validity:** T within `ab.range` of A's position (Manhattan for orthogonal,
    Chebyshev for diagonal abilities), LoS clear if `ab.ranged` (Forest/Mountain/Wall
    block; units do **not** block LoS in v1 except `Massive` units, which do).
+   The LoS test is `Los.lineOfSight isTransparent a b` — do not hand-roll a Bresenham.
+   Everything v1-specific lives in the predicate you pass it:
+   `isTransparent t = not (blocksSight (terrainAt t)) && not (massiveUnitAt t)`, which is
+   precisely the "terrain blocks, units don't, `Massive` does" rule above. (Mortar *ignores* LoS,
+   so it skips this test entirely rather than passing a permissive predicate.)
 2. **Hit set:** compute the set of affected tiles from `ab.shape` (Single, Line N,
    Cross, Blast-radius r, etc.) anchored at T.
 3. **For each occupied affected tile**, compute `dealt = max(0, ab.damage − coverOf
@@ -415,7 +428,12 @@ Movement and ability defaults assume `move-then-act` unless the unit has `Mobile
 ### 5.4 F# type sketch
 
 ```fsharp
-type Tile = { Col: int; Row: int }                     // value type, 0..7
+// The grid coordinate is Game.Core's `Cell` ({ Col; Row }, from `Primitives`) — the type
+// `Pathfinding`/`Fov`/`Los` all speak. This is a type ABBREVIATION, not a new record: `Tile` and
+// `Cell` are the SAME type, so §4.4 can hand a `Tile` straight to `Pathfinding.reachable` with no
+// conversion. Declare your own `{ Col; Row }` record instead and it is a DIFFERENT nominal type
+// that the framework will not accept, which is the trap this spec used to walk into.
+type Tile = Cell                                       // value type, 0..7
 
 type Terrain = Ground | Rough | Forest | Water | Chasm | Wall | Lava
 
@@ -523,9 +541,9 @@ type Model =
       Telegraphs: Map<int, Telegraph>        // enemyId -> intent for THIS round
       SelectedUnit: int option
       ArmedAbility: string option
-      Reachable: Reach                       // cached §4.4 result for SelectedUnit:
+      Reachable: Pathfinding.Reach           // cached §4.4 result for SelectedUnit:
                                              //   .Endable = the highlight set / legal destinations
-                                             //   .Steps   = every visited tile, incl. pass-through-
+                                             //   .Steps   = every settled tile, incl. pass-through-
                                              //              only; `pathTo` reconstructs from THIS
       Pending: Pending
       GridPower: int
@@ -572,12 +590,17 @@ type Msg =
 ### update — key transitions
 
 - `SelectUnit id` (PlayerPhase): if it's a friendly un-acted unit, set
-  `SelectedUnit`, recompute `Reachable` via Dijkstra (§4.4), clear `Pending`.
+  `SelectedUnit`, recompute `Reachable` with §4.4's `reachable` (i.e.
+  `Pathfinding.reachable`), clear `Pending`.
 - `ArmAbility ab`: set `ArmedAbility`; recompute the attack-range overlay from the
   selected unit's current-or-previewed position.
 - `PreviewMove tile`: if `tile ∈ Reachable.Endable` — the *endable* set, not merely a
-  visited tile — set `Pending = PendingMove(unitId, pathTo Reachable tile, tile)`
-  (purely cosmetic until confirmed). Recompute attack ranges from `dest`.
+  settled tile — set `Pending = PendingMove(unitId, path, tile)` where `path` is
+  §4.4's `previewMove Reachable tile`. That is `Pathfinding.pathTo` behind the
+  `Endable` membership test, and it returns an **option**: `None` is the rejection
+  (previewing onto an ally), so there is no `Pending` at all in that case, not a
+  `PendingMove` carrying an empty path. Purely cosmetic until confirmed. Recompute
+  attack ranges from `dest`.
 - `PreviewAttack (ab,target)`: validate range/LoS; compute `hitPreview` (damage after
   cover) and `pushPreview` (resolve §4.6 *on a copy* to show where things land). Store
   as `PendingAttack`. **No mutation of real units yet.**
@@ -940,23 +963,33 @@ required**. Boards are given as legends; coordinates are `(col,row)`.
    *Given* a Skirmisher (`moveRange = 4`) at `(0,0)` on otherwise-Ground board with
    `Rough` (cost 2) at `(2,0)`,
    *When* it is selected,
-   *Then* `Reachable.Steps` has `(2,0)` at cost 3 (`1 + 2` for the rough tile) and
-   `(3,0)` at cost 4 (cheapest, through the rough tile); neither `Steps` nor `Endable`
-   contains `(4,0)` (its cheapest path costs 5, exceeding `moveRange = 4`); and no tile
-   in `Steps` has a cost exceeding 4. Here `Endable` and `Steps`' key set coincide —
+   *Then* `Reachable.Steps` has `(2,0)` at cost **30** (`10×1 + 10×2` for the rough tile) and
+   `(3,0)` at cost **40** (cheapest, through the rough tile); neither `Steps` nor `Endable`
+   contains `(4,0)` (its cheapest path costs 50, exceeding the `10 * moveRange = 40` budget);
+   and no tile in `Steps` has a cost exceeding 40. Here `Endable` and `Steps`' key set coincide —
    nothing is occupied. Tiles occupied by enemies are excluded from both path and
    destination.
+
+   **The costs are ×10 because `Pathfinding` scales by `baseStep`** (§4.4). In movement points
+   this is the same board as ever — 3, 4, and a 5 that does not fit in 4 — but `Step.Cost` is
+   what the framework returns, and asserting `3` against it fails. Divide by 10 only when you
+   show a number to the player.
 
    **Pass-through tiles are traversable, not endable — and the path still reconstructs.**
    *Given* the same Skirmisher at `(0,0)` on an all-Ground row, but with an **allied**
    unit standing at `(2,0)` (v1: you may path through allies, not end on them),
    *When* it is selected and `PreviewMove (4,0)` is issued,
-   *Then* `(2,0)` **is** a key of `Reachable.Steps` (cost 2) and is **not** in
+   *Then* `(2,0)` **is** a key of `Reachable.Steps` (cost 20) and is **not** in
    `Reachable.Endable`; `(4,0)` is in both; and `Pending = PendingMove` whose `path` is
    the full `[(0,0); (1,0); (2,0); (3,0); (4,0)]` — *through* the ally. A `Reachable`
    that filtered its predecessor chain by `canEndOn` cannot produce this path at all: the
    walk back from `(4,0)` dead-ends at `(3,0)`, whose predecessor is the very tile the
-   filter removed. `PreviewMove (2,0)` — onto the ally — is **rejected** (no `Pending`).
+   filter removed. This is why `Pathfinding.reachable` takes `canEndOn` as a *separate*
+   predicate from `cost` and applies it only to `Endable` — the framework is what makes this
+   scenario pass, and it is property-tested for exactly it.
+   `PreviewMove (2,0)` — onto the ally — is **rejected** (no `Pending`), which is the
+   `Set.contains dest reach.Endable` guard in §4.4's `previewMove`, not something `pathTo` does
+   for you.
 
 2. **Move preview is non-destructive; confirm mutates; undo restores.**
    *Given* a unit at `(1,1)` and `PreviewMove (3,1)` issued (valid),
