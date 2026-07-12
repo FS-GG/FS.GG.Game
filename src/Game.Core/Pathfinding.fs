@@ -291,10 +291,39 @@ module Pathfinding =
         : Map<Cell, int> =
         // Reverse walk: expanding goal-ward cell `current` to `n` means the AGENT steps n -> current,
         // i.e. it enters `current`. So the weight is `baseStep * cost current`.
-        // (The `CameFrom` tree of a reverse, multi-source walk points goal-ward and means something
-        // different from `reachable`'s, so it is not exposed — only the costs are.)
+        // The `CameFrom` tree of a reverse, multi-source walk points goal-ward and means something quite
+        // different from `reachable`'s, so it is not exposed — only the costs are.
+        //
+        // KNOWN COST, deliberately paid: this walk therefore builds a predecessor map it throws away (a
+        // `Map.add` per relaxation, a `Step` per settle). The alternative is a second Dijkstra, or a
+        // flag threading "don't track" through this one — and a second engine is exactly how the cost
+        // map and the move range drift apart, which IS #212. One engine, one determinism guarantee,
+        // one place to be wrong. If a profile ever shows this on a hot path, add the flag then, with a
+        // number to justify it — not before.
         let stepWeight (currentCost: int) (_n: Cell) (baseStep: int) = int64 baseStep * int64 currentCost
         dijkstra neighbourhood cost stepWeight (fun _ -> true) maxVisited goals |> costsOf
+
+    // The forward, budgeted walk that BOTH `reachable` and `reachableWithin` are views of — so the move
+    // range and the cost map are one search and cannot disagree about what is in budget, which is the
+    // whole of #212. `reachable` adds the `Endable` split on top; `reachableWithin` projects the costs
+    // out. Neither pays for the other's work.
+    let private settle
+        (neighbourhood: Neighbourhood)
+        (maxVisited: int)
+        (cost: Cell -> int)
+        (budget: int)
+        (start: Cell)
+        : Map<Cell, Step> =
+        if budget < 0 then
+            Map.empty
+        else
+            // Forward walk: the agent steps current -> n, entering `n`. Weight is `baseStep * cost n`.
+            let stepWeight (_currentCost: int) (n: Cell) (baseStep: int) = int64 baseStep * int64 (cost n)
+            // `budget` prunes, but it does NOT bound: over an unbounded `cost` predicate the reachable
+            // set grows quadratically in `budget`, so `maxVisited` is what makes the walk terminate —
+            // the same bound, for the same reason, as `astar`/`bfs`/`distanceField`.
+            let admit (candidate: int64) = candidate <= int64 budget
+            dijkstra neighbourhood cost stepWeight admit maxVisited [ start ]
 
     let reachable
         (neighbourhood: Neighbourhood)
@@ -304,25 +333,16 @@ module Pathfinding =
         (budget: int)
         (start: Cell)
         : Reach =
-        if budget < 0 then
-            { Steps = Map.empty; Endable = Set.empty }
-        else
-            // Forward walk: the agent steps current -> n, entering `n`. Weight is `baseStep * cost n`.
-            let stepWeight (_currentCost: int) (n: Cell) (baseStep: int) = int64 baseStep * int64 (cost n)
-            // `budget` prunes, but it does NOT bound: over an unbounded `cost` predicate the reachable
-            // set grows quadratically in `budget`, so `maxVisited` is what makes the walk terminate —
-            // the same bound, for the same reason, as `astar`/`bfs`/`distanceField`.
-            let admit (candidate: int64) = candidate <= int64 budget
-            let steps = dijkstra neighbourhood cost stepWeight admit maxVisited [ start ]
+        let steps = settle neighbourhood maxVisited cost budget start
 
-            // `canEndOn` narrows the DESTINATIONS; it never narrows `Steps`. That split is the point:
-            // a cell held by an ally is traversable and not endable, and one predicate cannot say so.
-            // Applied to `start` too, with no exception — a `canEndOn` meaning "unoccupied" excludes the
-            // unit's own cell, and whether standing still is legal is the game's call, not ours.
-            let endable =
-                steps |> Map.fold (fun acc c _ -> if canEndOn c then Set.add c acc else acc) Set.empty
+        // `canEndOn` narrows the DESTINATIONS; it never narrows `Steps`. That split is the point:
+        // a cell held by an ally is traversable and not endable, and one predicate cannot say so.
+        // Applied to `start` too, with no exception — a `canEndOn` meaning "unoccupied" excludes the
+        // unit's own cell, and whether standing still is legal is the game's call, not ours.
+        let endable =
+            steps |> Map.fold (fun acc c _ -> if canEndOn c then Set.add c acc else acc) Set.empty
 
-            { Steps = steps; Endable = endable }
+        { Steps = steps; Endable = endable }
 
     let reachableWithin
         (neighbourhood: Neighbourhood)
@@ -331,9 +351,11 @@ module Pathfinding =
         (budget: int)
         (start: Cell)
         : Map<Cell, int> =
-        // Exactly `reachable`'s settled field with the predecessors dropped — same search, same costs,
-        // so the two can never disagree about what is in budget.
-        (reachable neighbourhood maxVisited cost (fun _ -> true) budget start).Steps |> costsOf
+        // The same settled field `reachable` returns, with the predecessors dropped. Deliberately NOT
+        // routed through `reachable`: that would fold an `Endable` set over every settled cell (with
+        // `canEndOn` constantly true) and then discard it — and this is the primitive the docstring
+        // sends AI threat overlays and candidate-cell scoring to.
+        settle neighbourhood maxVisited cost budget start |> costsOf
 
     let pathTo (reach: Reach) (dest: Cell) : Cell list option =
         // Walk the CameFrom chain back to the seed (the one cell whose CameFrom is None). Reads `Steps`,

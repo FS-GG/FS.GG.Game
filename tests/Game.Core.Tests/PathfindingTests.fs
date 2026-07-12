@@ -494,8 +494,9 @@ let tests =
             // mutant survived 300 runs of the list-generator version of this property.
             let prop (mudRaw: int) (blockedRaw: int) (b: int) (eightWay: bool) =
                 let bitAt (mask: int) (c: Cell) = (mask >>> (c.Row * 5 + c.Col)) &&& 1 = 1
-                let mudMask = (abs mudRaw) % (1 <<< 25) ||| 2 // never 0: (1,0) is mud at minimum
-                let blockedMask = (abs blockedRaw) % (1 <<< 25)
+                // Mask, never `abs`: `abs Int32.MinValue` throws, and FsCheck may hand us one.
+                let mudMask = (mudRaw &&& 0x1FFFFFF) ||| 2 // never 0: (1,0) is mud at minimum
+                let blockedMask = blockedRaw &&& 0x1FFFFFF
                 let start = { Col = 0; Row = 0 }
 
                 let cost (c: Cell) =
@@ -505,7 +506,7 @@ let tests =
                     else 1
 
                 let nb = if eightWay then EightWay else FourWay
-                let budget = 30 + (abs b) % 120
+                let budget = 30 + (b &&& 0x7F)
 
                 if cost start <= 0 then
                     true
@@ -543,8 +544,9 @@ let tests =
             // budget — which is the failure #212 is a special case of.
             let prop (mudRaw: int) (blockedRaw: int) (b: int) (eightWay: bool) =
                 let bitAt (mask: int) (c: Cell) = (mask >>> (c.Row * 5 + c.Col)) &&& 1 = 1
-                let mudMask = (abs mudRaw) % (1 <<< 25) ||| 2
-                let blockedMask = (abs blockedRaw) % (1 <<< 25)
+                // Mask, never `abs`: `abs Int32.MinValue` throws, and FsCheck may hand us one.
+                let mudMask = (mudRaw &&& 0x1FFFFFF) ||| 2
+                let blockedMask = blockedRaw &&& 0x1FFFFFF
 
                 let cost (c: Cell) =
                     if c.Col < 0 || c.Col > 4 || c.Row < 0 || c.Row > 4 then 0
@@ -553,7 +555,7 @@ let tests =
                     else 1
 
                 let nb = if eightWay then EightWay else FourWay
-                let budget = 30 + (abs b) % 120
+                let budget = 30 + (b &&& 0x7F)
                 let start = { Col = 0; Row = 0 }
                 let range = Pathfinding.reachableWithin nb 5000 cost budget start
                 // `canEndOn` is irrelevant here: it must not touch Steps.

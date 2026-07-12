@@ -21,7 +21,7 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the detecti
 
 ### The grid
 
-- **`Pathfinding`** — grid A*/BFS over walkable cells (`astar`/`bfs`), plus the many-to-one AI substrate `distanceField`/`flowField`/`reachableWithin`.
+- **`Pathfinding`** — grid A*/BFS over walkable cells (`astar`/`bfs`), the turn-based-tactics move range (`reachable`/`pathTo`), and the many-to-one AI substrate `distanceField`/`flowField`/`reachableWithin`. Pick by the question: `astar` minimises **steps** and takes no `cost`, so it is the wrong tool for a unit spending a movement budget over non-uniform terrain — `reachable` costs the highlight and the path in one search, and `pathTo` walks it. `reachableWithin` is that search with the predecessors dropped: the costed set, for scoring cells or a threat overlay, not for pathing to one.
 - **`Grids`** — the parts of a square grid: `Edge`, `Vertex`, `GridSpec`, the six adjacency conversions, and the pixel↔cell map (`cellRect`/`cellCenter`/`edgeSegment`/`cellAt`). Names the boundary *between* two tiles, which is where a wall lives.
 
 ### Sight
