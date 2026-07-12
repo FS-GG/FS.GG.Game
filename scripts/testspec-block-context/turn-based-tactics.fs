@@ -1,6 +1,6 @@
 // Typecheck fixtures for the turn-based-tactics TestSpec (see scripts/typecheck-md-blocks.fsx).
 
-//#block 1
+//#block 1 "let reachable (board: Board) (unit: Unit) : Map<Tile, int> ="
 // §4.4's reachability sketch is the document's FIRST block and stands ~180 lines AHEAD of the §5.4
 // type sketch (block 2) that declares `Tile` and `Unit` — so the cumulative opens have nothing to
 // give it and the fixture stands them up here, field-for-field as §5.4 states them, narrowed to the
@@ -27,12 +27,12 @@ let neighbors4 (tile: Tile) : Tile seq = Seq.empty
 let enterCost (board: Board) (unit: Unit) (tile: Tile) : int option = None
 let canEndOn (board: Board) (unit: Unit) (tile: Tile) : bool = true
 
-//#block 3
+//#block 3 "type Phase ="
 // The spec marks this "cosmetic; not authoritative" and never declares it — the animation state is
 // the reader's, and the rules must not read it.
 type AnimState = { Elapsed: float; Playing: string option }
 
-//#block 5
+//#block 5 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled

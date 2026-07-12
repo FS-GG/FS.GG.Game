@@ -9,5 +9,5 @@
 // Block 2 is self-contained (it opens FS.GG.UI.Canvas and binds its own values), so it needs no
 // section here.
 
-//#block 1
+//#block 1 "type Msg = CheckpointReached | ContinueGame | EraseSave"
 //#skip an ELIDED body: `let serialize (model: Model) : string = ...`, where `...` stands in for the reader's own encoder. `...` is not F#, so there is nothing here to typecheck — the same honest property as fs-gg-ai block 2, and NOT the package hole that used to hide behind it (FS.GG.UI.Canvas is referenced now, and block 2 compiles against it).

@@ -1,6 +1,6 @@
 // Typecheck fixtures for the pong TestSpec (see scripts/typecheck-md-blocks.fsx).
 
-//#block 2
+//#block 2 "let paddleRect (p: Paddle) : Rect ="
 // The `Vec2 -> Scene.Rect` crossing — the one block in this corpus that exercises it. It was SKIPPED
 // until #165, because `_scaffold.fs` did not reconstruct `Geometry.toRect`; it does now, against the
 // REAL `FS.GG.UI.Scene.Rect`. This is the gate's former blind spot, and it is now compiled.
@@ -17,7 +17,7 @@
 // is the defect this gate exists to catch.
 open FS.GG.UI.Scene
 
-//#block 5
+//#block 5 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled

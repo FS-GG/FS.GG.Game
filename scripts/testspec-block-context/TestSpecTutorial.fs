@@ -7,7 +7,7 @@
 // catch that (1 is still a valid ordinal in a 2-block document) — it would simply have bound this
 // fixture to the wrong block, in silence. Re-key deliberately when a block is inserted.
 
-//#block 1
+//#block 1 "type Screen = Title | Playing | PointScored | GameOver"
 // The tutorial's §5 `plan` sketch: "§7 State Model is your F# architecture… For Pong that's roughly:"
 // It declares `Screen`, `Model` and `Msg` itself, and leans on five types it never names, because the
 // reader is meant to have written them in §4 — `Ball`, `Paddle`, `Config`, `Side`, `Direction`.
@@ -46,7 +46,7 @@ type Config =
       ServeSpeed: float      // 420 px/s
       WinScore: int }        // 11
 
-//#block 2
+//#block 2 "[<Tests>]"
 // Part C teaches how a §14 acceptance scenario becomes an Expecto test, using a Pong-style model the
 // tutorial never declares (it is the reader's own `update`/`Model`, and the prose says so). The
 // fixture supplies exactly that model — shaped after docs/TestSpecs/Games/pong.md §5, which is the

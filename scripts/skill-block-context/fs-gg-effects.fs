@@ -5,13 +5,13 @@
 // re-declared per section rather than shared — a block must typecheck against the world its OWN
 // prose describes, not against a world some earlier block set up.
 
-//#block 1
+//#block 1 "let applied = max 1.0 (damage * (1.0 - resist))     // <- WRONG"
 // The floor-erases-the-zero pitfall. Deliberately WRONG arithmetic, but well-typed — the gate reads
 // types, and the prose owns the semantics.
 let damage = 30.0
 let resist = 1.0
 
-//#block 2
+//#block 2 "let pipeline ="
 type Kind = Frost | Physical
 type Unit =
     { Vulnerable: float
@@ -21,7 +21,7 @@ type Unit =
 let isElemental (k: Kind) = k = Frost
 let spectre : Unit = { Vulnerable = 0.2; Armor = 5.0; Resists = Map.empty }
 
-//#block 3
+//#block 3 "let hit target damage rider ="
 type Kind = Frost | Physical
 type Slow = { Factor: float }
 type Unit =
@@ -32,13 +32,13 @@ type Unit =
 let pipeline : Stage<Unit, Kind> list = []
 let slowMagnitude (e: Slow) = 1.0 - e.Factor
 
-//#block 4
+//#block 4 "let targets = region |> List.filter (fun (_, m) -> m > 0.0)"
 // `region` is what a region operator (Ballistics.splash / SpatialGrid.queryRadius) returned:
 // (target, transport multiplier) pairs.
 type Enemy = { Hp: int }
 let region : (Enemy * float) list = []
 
-//#block 5
+//#block 5 "let cover = Effects.gatedBy [ Source.Declared ] (Effects.subtract (fun u _ -> coverOf u.Tile))"
 //#rec
 type Kind = Frost | Physical
 type Unit =
@@ -55,17 +55,17 @@ let coverOf (_tile: Cell) = 0.25
 // mere forward type reference, which `module rec` rejects outright — FS0695.)
 let private stagesInAPipeline () : Stage<Unit, Kind> list = [ cover; armored ]
 
-//#block 6
+//#block 6 "let armor = Effects.subtract (fun u k -> if isElemental k then 0.0 else u.Armor)"
 //#skip a RIGHT/WRONG contrast: it binds `let armor` TWICE (the Kind-keyed stage, then the Source-gated mistake), which is a duplicate definition in one module by design. Compiling it would mean restructuring the block — i.e. typechecking something other than what the reader reads.
 
-//#block 7
+//#block 7 "let td = [ Effects.amplify vulnerableBonus; Effects.resist resistOf; Effects.subtract armorOf; Effects.floorAt 1.0 ]"
 type Kind = Frost | Physical
 type Unit = { Vulnerable: float; Armor: float }
 let vulnerableBonus (u: Unit) = u.Vulnerable
 let resistOf (_u: Unit) (_k: Kind) = 0.0
 let armorOf (u: Unit) (_k: Kind) = u.Armor
 
-//#block 8
+//#block 8 "let slowPolicy = Effects.Strongest (fun e -> 1.0 - e.Factor)"
 // Slow stacking. `Effects.Strongest` takes the magnitude projection; `frost` is the reader's own
 // effect payload, and the section's whole point is that its magnitude is INVERTED (a stronger slow
 // has the lower factor), so `Factor` is the field the policy reads.
@@ -74,12 +74,12 @@ type Unit = { Slows: Effects.Active<Slow> list }
 let frost : Slow = { Factor = 0.65 }
 let unit : Unit = { Slows = [] }
 
-//#block 9
+//#block 9 "let stepUnit u = { u with Effects = Effects.tickEffects u.Effects }   // once per fixed step. Not per frame."
 type Slow = { Factor: float }
 type Unit = { Effects: Effects.Active<Slow> list }
 let u : Unit = { Effects = [] }
 
-//#block 10
+//#block 10 "let classify (c: Cell) ="
 // Environmental push. Every predicate below is "the only coupling to your world".
 type Unit = { Cell: Cell; Hp: int; PushDistance: int }
 let unit : Unit = { Cell = { Col = 4; Row = 4 }; Hp = 30; PushDistance = 3 }
@@ -94,10 +94,10 @@ let lavaTick = 5
 let die (u: Unit) = u
 let collide (u: Unit) (_obstacle: Cell) = u
 
-//#block 11
+//#block 11 "let landed = Resolution.knockback start step distance blocked"
 //#skip the same before/after migration contrast as fs-gg-collision block 4: it binds `let landed` TWICE (removed `Resolution.knockback`, then the `Resolution.push` replacement) — a duplicate definition in one module by design.
 
-//#block 12
+//#block 12 "type Enemy = { Pos: Geometry.Vec2; Hp: int }"
 //#rec
 // Region operator + pipeline: splash decides WHO, the pipeline decides FOR HOW MUCH. As in
 // fs-gg-ballistics block 5, the block declares its OWN `Enemy` (storing a `Geometry.Vec2`) and its

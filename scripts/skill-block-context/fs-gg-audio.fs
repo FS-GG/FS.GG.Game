@@ -15,7 +15,7 @@
 // Blocks 1 and 3 are self-contained — they open FS.GG.Audio.Core themselves and bind their own
 // values, so they need no section here.
 
-//#block 2
+//#block 2 "Audio.setBusVolume Music 0.4                     // quieten the music bus"
 // The bus/ducking section. The block is a bare sequence of calls with NO `open` of its own (it
 // continues the previous section's context in the prose), so the open is supplied here. `Music` is
 // `Bus.Music`, unqualified — which is what the reader types, and it resolves only because `Bus` is
@@ -23,7 +23,7 @@
 // is wrong: that is the gate working.
 open FS.GG.Audio.Core
 
-//#block 4
+//#block 4 "use backend = OpenAlBackend.create AudioCues.resolver"
 // The host seam: a real device, wired into the viewer's audio sink.
 //
 // `AudioCues` is the PRODUCT's generated cue table, not a package — the same kind of reconstruction
@@ -52,7 +52,7 @@ module AudioCues =
 let viewerOptions : ViewerOptions = Unchecked.defaultof<_>
 let generatedHost : GeneratedAppHost<Model, Msg> = Unchecked.defaultof<_>
 
-//#block 5
+//#block 5 "GeneratedAppHost.dispatchKey host keyEvent model"
 // The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
 // sound WITHOUT a device. `dispatchKey` returns `(model * ViewerEffect list)` and `audioRequests`
 // narrows that to the `AudioEffect list` the block interprets — the `|> snd` and the two module

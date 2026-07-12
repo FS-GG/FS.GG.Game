@@ -1,9 +1,9 @@
 // Typecheck fixtures for fs-gg-model-swap (see scripts/typecheck-md-blocks.fsx).
 
-//#block 1
+//#block 1 "type Model = Product.Model.Model"
 //#skip the Program.fs seam of the GENERATED product — it aliases `Product.Model.Model`, `Product.View.view`, `Product.EvidenceCommands.tick`, namespaces that exist only inside a scaffolded product (FS.GG.Templates owns them) and nowhere in this repo. Nothing here to compile it against.
 
-//#block 2
+//#block 2 "type Enemy ="
 // The `Vec2 -> Scene.Rect` crossing, in the skills corpus. This block is the one that TEACHES the
 // crossing — "build your positions on Geometry.Vec2 and cross into the scene with its toPoint/toRect"
 // is the whole point of the pitfall it closes — and until #176 it was gated by NOTHING: its fence is
