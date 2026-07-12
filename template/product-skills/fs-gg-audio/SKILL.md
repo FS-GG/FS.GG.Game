@@ -140,6 +140,8 @@ requests, and `Audio.interpret` them for evidence in tests; at runtime the host 
 through `FS.GG.Audio.Host`, with no change to your `update`.
 
 The seam is real and the scaffold ships it wired (FS.GG.Rendering#245). Two files carry it:
+<!-- skill-refs: closed-ok FS.GG.Rendering#245 — cited as the issue that WIRED the seam, not as somewhere to go. Closed is correct; it stays closed. -->
+
 
 - **`src/<ProductDir>/AudioCues.fs`** — *yours*. `forTransition : Msg -> Model -> Model -> AudioEffect list`
   is the one place the product decides what to play. Pure: a function of the message and the
