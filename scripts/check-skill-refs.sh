@@ -96,10 +96,78 @@
 # with no `gh` or no auth, the link half announces loudly that it did not run, and the wiki half
 # still does. `SKILL_REFS_SKIP_LINKS=1` skips the link half locally; it is IGNORED in CI.
 #
-# Usage: scripts/check-skill-refs.sh          # exit 1 and name every offending file:line
+# ── 4. WHAT A MERGE GATE MAY ASK (FS.GG.Game#238) ───────────────────────────────────────────────
+# Sort the three checks by what their verdict is a FUNCTION of, because they do not agree:
+#
+#   § 1 wiki refs   f(tree)         hermetic — same tree, same answer, forever
+#   § 3 bare #N     f(tree)         hermetic — the FORM is the defect; no network can change it
+#   § 2 link state  f(tree, WORLD)  NOT hermetic — it decays in place, with no commit
+#
+# § 2 asks whether the world still agrees with what we published. That is a real and valuable
+# question — it is the one that caught the persistence pointer rotting four generations running.
+# But its answer moves on its own. FS-GG/FS.GG.Rendering#494 was closed at 14:43:32Z, and from that
+# minute `main`@e4c07c2 — green at 14:35:30Z, unchanged since — failed. The gate did not become
+# wrong; the world moved, and § 2 correctly reported it. It just reported it AT whoever happened to
+# have a PR open.
+#
+# THE RULE THIS ENFORCES: **a merge gate may only demand a change inside the diff it is gating.**
+# The old § 2 broke that rule, and not merely unfairly — IMPOSSIBLY. #235 touched four pathfinding
+# files; the only edit that could turn it green was in `fs-gg-persistence/SKILL.md`, which is not in
+# that item's declared `Paths:`. Under this repo's parallel-work protocol (ADR-0021/0027) the author
+# cannot just fix it: they must `widen` onto a file their item has nothing to do with, and collide
+# with whoever holds the skills. The gate MANUFACTURED a false collision, and the worker's only
+# honest move was to prove the red was not theirs.
+#
+# So § 2 is not weakened — a warning is what we already had, and § 2's own header explains why that
+# failed. It is SCOPED. `--changed <base>` restricts the link half to the skill bodies THIS diff
+# touches:
+#
+#   * A diff that touches a skill OWNS that skill's pointers. The fix — repoint, or `closed-ok` —
+#     is inside a file the diff already holds, so it is always compliable. Every rot § 2 was written
+#     to catch is introduced by such a diff, so authorship-time strictness is fully preserved.
+#   * A diff that touches no skill CANNOT be reddened by the link half. There is no edit it could
+#     make, so there is no verdict it deserves.
+#
+# AND THE SWEEP IS WHAT MAKES THAT HONEST — the two halves are ONE change, and shipping the scope
+# without the sweep would be strictly worse than shipping neither. Scoping alone leaves every link
+# in an unchanged file resolved by nobody: a gate green over a subject it never examined, which is
+# the exact `.github#416` shape this script exists to close, reintroduced by its own fix. So the
+# FULL sweep still runs — on a schedule, over `main`, in .github/workflows/skill-refs-sweep.yml,
+# where it gates nothing. There, a red means the world moved and a citation needs maintenance, which
+# is TRUE and is addressed to the repo. It is not an accusation aimed at a stranger's diff.
+#
+# Same subject, same strictness, two questions, and each asked where it can be answered:
+#
+#   did this DIFF introduce a bad pointer?   → the merge gate, blocking, fix is inside the diff
+#   has the WORLD moved under a good one?    → the sweep, non-blocking, fix is a maintenance task
+#
+# DEGRADE TOWARD MORE CHECKING, NEVER LESS. If `--changed` gets a base it cannot resolve (a force
+# push; `github.event.before` all-zeros on a branch's first push), it does NOT quietly conclude
+# "no files changed" and pass — that is the silent no-op again, and it would disable the gate at
+# exactly the moment history looks strange. It announces the fallback and sweeps EVERYTHING.
+#
+# Usage: scripts/check-skill-refs.sh                  # full sweep: every link in the tree
+#        scripts/check-skill-refs.sh --changed <ref>  # link half only for skills this diff touches
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+CHANGED_BASE=""
+while (($#)); do
+  case $1 in
+    --changed)
+      [[ $# -ge 2 ]] || { echo "check-skill-refs: --changed needs a base ref" >&2; exit 2; }
+      CHANGED_BASE=$2; shift 2 ;;
+    --changed=*) CHANGED_BASE=${1#*=}; shift ;;
+    -h|--help)
+      echo "usage: check-skill-refs.sh [--changed <base-ref>]"
+      echo "  (no args)          full sweep: every issue/PR link in the tree"
+      echo "  --changed <ref>    link half only for skill bodies changed since <ref>"
+      echo "                     ([[refs]] and bare #N are hermetic and always sweep the tree)"
+      exit 0 ;;
+    *) echo "check-skill-refs: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+done
 
 SKILL_ROOT="template/product-skills"
 SELF_OWNER="fs-gg-game"
@@ -205,10 +273,67 @@ AWK_STRIP='
 # -r: with no *.md at all, xargs would otherwise run awk with NO file operands, and awk would read
 # the script's stdin — yielding zero hits from whatever it found there. A silent no-op is the one
 # outcome this gate may never produce.
+#
+# WHOLE-TREE, and it stays that way even under `--changed`. § 1 and § 3 are f(tree): they need no
+# network, they cost nothing, and they cannot decay — so there is no reason to scope them and one
+# good reason not to. Scoping a hermetic check buys nothing and can only lose coverage.
 md_files() { find "$SKILL_ROOT" -name '*.md' -print0; }
 
+# The files § 2 resolves links in — the ONLY check that is f(world), and so the only one scoped.
+# See § 4. Deletions are excluded (--diff-filter=ACMR): a body the diff REMOVED has no pointers
+# left to keep, and scanning a path that is no longer on disk would just fail to open it.
+link_scope="tree"          # tree | diff
+link_scope_note=""
+if [[ -n $CHANGED_BASE ]]; then
+  # USABLE means two things, and checking only the first is a bug this script already made once.
+  #
+  #   1. it RESOLVES — `github.event.before` is all-zeros on a branch's first push, and a base that
+  #      was never fetched is not here either;
+  #   2. it SHARES HISTORY with HEAD — `git diff A...HEAD` is defined via the merge base, so a
+  #      commit that EXISTS but has no common ancestor (a force push that rewrote the root; a ref
+  #      from an unrelated repo) makes git exit 128 with `fatal: no merge base`.
+  #
+  # (2) is not hypothetical and existence does not imply it: `git rev-parse --verify` says yes to an
+  # orphan commit, and the diff then dies — killing the gate job with a raw `fatal:` on a PR that did
+  # nothing wrong. That is the FALSE RED of #238 walking back in through the fallback that exists to
+  # prevent it. Both conditions, or sweep the tree.
+  base_problem=""; base_hint=""
+  if ! git rev-parse --verify --quiet "$CHANGED_BASE^{commit}" >/dev/null; then
+    base_problem="does not resolve here"
+    base_hint="It was never fetched, or it is the all-zeros of a first/force push."
+  elif ! git merge-base "$CHANGED_BASE" HEAD >/dev/null 2>&1; then
+    base_problem="shares no history with HEAD"
+    base_hint="There is no merge base, so there is no diff to take against it."
+  fi
+
+  if [[ -z $base_problem ]]; then
+    link_scope="diff"
+    # NOT `${CHANGED_BASE:0:12}` — that is a SHA abbreviation applied to something that need not be a
+    # SHA, and it turns `--changed origin/some-long-branch` into `origin/some` in the report: a ref
+    # that does not exist, named as the thing we diffed against. Abbreviate only what git says is one.
+    link_scope_note="changed since $(git rev-parse --short "$CHANGED_BASE" 2>/dev/null || printf '%s' "$CHANGED_BASE")"
+  else
+    # DEGRADE TOWARD MORE CHECKING (§ 4). An unusable base is not "nothing changed" — reading it that
+    # way would switch the gate off precisely when history looks strange. Say so, and sweep everything.
+    echo "check-skill-refs: NOTE — base '$CHANGED_BASE' $base_problem. $base_hint" >&2
+    echo "  Falling back to the FULL link sweep rather than checking nothing." >&2
+    link_scope_note="base '$CHANGED_BASE' $base_problem — swept the whole tree instead"
+  fi
+fi
+
+link_md_files() {
+  if [[ $link_scope == diff ]]; then
+    git diff --name-only -z --diff-filter=ACMR "$CHANGED_BASE...HEAD" -- "$SKILL_ROOT" \
+      | while IFS= read -r -d '' f; do
+          [[ $f == *.md && -f $f ]] && printf '%s\0' "$f"
+        done
+  else
+    md_files
+  fi
+}
+
 emit_links() {
-  md_files | xargs -0 -r awk -v OFS='\t' -v def="$DEFAULT_OWNER" "$AWK_STRIP"'
+  link_md_files | xargs -0 -r awk -v OFS='\t' -v def="$DEFAULT_OWNER" "$AWK_STRIP"'
       {
         line = strip_markers($0)
 
@@ -276,10 +401,25 @@ emit_bare() {
 links=$(emit_links | sort -u | sort -t$'\t' -k1,1 -k2,2n)
 bares=$(emit_bare | sort -u | sort -t$'\t' -k1,1 -k2,2n)
 
+# How many bodies the link half actually LOOKED at — reported, so a scoped run states its subject
+# rather than leaving the reader to infer it from a count of zero.
+n_link_files=$(link_md_files | tr '\0' '\n' | grep -c . || true)
+
 # The closed-ok allowlist, normalised to `file<TAB>line<TAB>owner/repo#num` — one row per marker.
-markers=$( { grep -rEon --include='*.md' \
+#
+# SCOPED WITH § 2, because it IS § 2: auditing a marker means resolving its ref, so it is f(world)
+# and decays the same way. A `closed-ok` whose issue REOPENS goes red with no commit — the identical
+# time-bomb, one level down — and left tree-wide it would redden the innocent PRs the scope exists
+# to protect, through the very mechanism we just closed. The sweep audits every marker.
+#
+# -H, and it is load-bearing: `grep -r <dir>` always prefixes the filename, but grep given a SINGLE
+# file operand does not, and under `--changed` a one-file diff is the common case. Without it the
+# row would parse as `<line>:<match>` and every marker in that file would silently stop excusing
+# anything — turning a correct, marked citation red. `|| true` covers both grep's no-match 1 and
+# xargs' 123, which `set -e` would otherwise take as fatal.
+markers=$( { link_md_files | xargs -0 -r grep -HEon \
     '<!--[[:space:]]*skill-refs:[[:space:]]*closed-ok[[:space:]]+[A-Za-z0-9._/-]+#[0-9]+' \
-    "$SKILL_ROOT" || true; } | while IFS= read -r m; do
+    || true; } | while IFS= read -r m; do
     [[ -z $m ]] && continue
     mfile=${m%%:*}; mrest=${m#*:}; mline=${mrest%%:*}; mref=${mrest##* }
     [[ $mref == */* ]] || mref="$DEFAULT_OWNER/$mref"
@@ -287,6 +427,7 @@ markers=$( { grep -rEon --include='*.md' \
   done)
 
 # The prose-ok allowlist, normalised to `file<TAB>line<TAB>num` — one row per marker.
+# WHOLE-TREE, pairing with § 3: no network, no decay, so nothing to scope away from.
 prose_markers=$( { grep -rEon --include='*.md' \
     '<!--[[:space:]]*skill-refs:[[:space:]]*prose-ok[[:space:]]+#[0-9]+' \
     "$SKILL_ROOT" || true; } | while IFS= read -r m; do
@@ -449,12 +590,36 @@ if ((fail)); then
 fi
 
 n_skills=$(grep -c . <<<"$published")
+echo "check-skill-refs: ok — $n_skills skills published; every [[ref]] resolves."
+
+# The link half reports its SUBJECT, not just its verdict. "I found no stale links" and "I did not
+# look at any" are different sentences, and a gate that prints one when it means the other is the
+# `.github#416` shape this script exists to close. Under `--changed` the second is the NORMAL case —
+# most diffs touch no skill — so it is the one that must never read as a clean bill of health.
 case $link_mode in
-  checked) echo "check-skill-refs: ok — $n_skills skills published; every [[ref]] resolves and all $checked issue/PR link(s) are open or marked." ;;
-  empty)   echo "check-skill-refs: ok — $n_skills skills published; every [[ref]] resolves (no issue/PR links to check)." ;;
-  skipped) echo "check-skill-refs: ok — $n_skills skills published; every [[ref]] resolves."
-           echo "check-skill-refs: NOTE — issue/PR links were NOT checked ($skip_reason)." >&2 ;;
+  checked)
+    if [[ $link_scope == diff ]]; then
+      echo "check-skill-refs: ok — all $checked issue/PR link(s) in the $n_link_files skill body/bodies this diff touches are open or marked."
+    else
+      echo "check-skill-refs: ok — all $checked issue/PR link(s) in the tree are open or marked."
+    fi
+    ;;
+  empty)
+    if [[ $link_scope == diff ]]; then
+      echo "check-skill-refs: link check N/A — this diff touches no published skill body, so it owns no"
+      echo "  pointers and cannot be judged on them. Every link in the tree is swept on a schedule"
+      echo "  (.github/workflows/skill-refs-sweep.yml) — that is where a link the WORLD broke surfaces."
+    else
+      echo "check-skill-refs: ok — no issue/PR links in the tree to check."
+    fi
+    ;;
+  skipped)
+    echo "check-skill-refs: NOTE — issue/PR links were NOT checked ($skip_reason)." >&2
+    ;;
 esac
+if [[ -n $link_scope_note ]]; then
+  echo "check-skill-refs: link scope — $link_scope_note."
+fi
 
 # Said out loud even at zero. § 3 is the half that still runs when the link half is skipped, so a
 # silent pass here is indistinguishable from a check that did not happen — and "I found nothing" and
