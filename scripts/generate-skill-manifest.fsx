@@ -73,7 +73,15 @@ let repoPath (rel: string) =
 // pending, after fs-gg-effects above — see FS-GG/.github#330 and #328.
 let catalog =
     [ "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [game, sample-pack]"
+      // NOT [game, sample-pack] (FS.GG.Game#204). Audio is the ONE product skill here that is not
+      // simulation-only: FS.GG.Rendering#436 widened it to every profile that opens a viewer window,
+      // and so to every profile that can make a sound. Rendering's template.json — the only thing
+      // that actually materializes these bodies today — gates it on
+      // `(profile == "app" || profile == "sample-pack" || profile == "game")`, and its generator
+      // normalizes that condition into the row below. This catalog is hand-declared (there is no
+      // `dotnet new fs-gg-game` template to read yet), so it can — and did — drift away from the
+      // materialization it describes. Keep it equal to Rendering's condition, not to its neighbours.
+      "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [app, sample-pack, game]"
       "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-effects", "template/product-skills/fs-gg-effects/SKILL.md", "profile in [game, sample-pack]"
