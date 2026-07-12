@@ -276,6 +276,21 @@ jobs:
   # An excuse that no longer excuses anything is reported too: a stale allowlist is where the next rot
   # hides.
   #
+  # THE LINK HALF IS SCOPED TO THE DIFF HERE (#238), and only here. Link state is f(WORLD): it decays
+  # with no commit. Rendering#494 closed at 14:43:32Z and main@e4c07c2 — green at 14:35:30Z, unchanged
+  # since — failed from that minute, reddening every PR then in flight. #235's was a PATHFINDING diff,
+  # and the only edit that could clear it lived in a skill body outside that item's declared `Paths:`:
+  # under ADR-0021/0027 the author could not fix it without widening onto a file their item had no
+  # business touching. A merge gate may only demand a change inside the diff it gates. So `--changed`
+  # resolves links only in the skill bodies THIS diff touches — where the fix is always in reach, and
+  # where every rot #202 was written to catch is in fact introduced.
+  #
+  # The FULL sweep did not go away; it MOVED, to .github/workflows/skill-refs-sweep.yml, on a schedule,
+  # gating nothing. Scoping without that sweep would leave links in unchanged bodies resolved by nobody
+  # — green over an unexamined subject, the FS-GG/.github#416 shape this gate exists to close. The two
+  # are one change. The [[ref]] and bare-#N halves are f(tree), hermetic, and still sweep the WHOLE tree
+  # on every run: they cost nothing and cannot decay, so there is nothing to scope.
+  #
   # A BARE `#N` PROMISES NOTHING IT CAN KEEP (#208), so it is an ERROR — not "unresolvable", but wrong by
   # construction. These bodies MATERIALIZE INTO SOMEBODY ELSE'S REPO, and GitHub renders `#999` against
   # the repo it is READ in: in a scaffolded product it links to that product's OWN tracker. It never
@@ -300,13 +315,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # `--changed <base>` has to be able to REACH the base to diff against it, and the default
+          # depth-1 checkout does not contain it. The script fails safe if the base is unresolvable —
+          # it announces the fallback and sweeps the whole tree — but that fallback would hand back
+          # the very false-red this scoping removes, so fetch the history and mean it.
+          fetch-depth: 0
 
       # QUOTED, and it must stay quoted: an unquoted ` #N` is a YAML comment, and the step name would
       # silently lose the very words that name the third check.
       - name: "Fail on a dangling [[ref]], a stale issue/PR link, or a bare #N"
-        run: scripts/check-skill-refs.sh
+        # The base to scope the LINK half against: the PR's merge base, or — on a push to main — the
+        # commit main was at before. workflow_dispatch has neither, so it sweeps everything, which is
+        # the right answer for a run somebody asked for by hand.
+        #
+        # `github.event.before` is all-zeros on a branch's first push and after a force push. That is
+        # NOT "nothing changed": the script refuses to read it that way, says so, and sweeps the whole
+        # tree. Degrade toward more checking, never less.
+        run: |
+          if [[ -n "${SKILL_REFS_BASE:-}" ]]; then
+            scripts/check-skill-refs.sh --changed "$SKILL_REFS_BASE"
+          else
+            scripts/check-skill-refs.sh
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SKILL_REFS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
   # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,

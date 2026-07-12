@@ -1,0 +1,78 @@
+name: skill-refs sweep
+
+# The FULL issue/PR-link sweep over every published skill body — the half of check-skill-refs that is
+# f(tree, WORLD) rather than f(tree). It is here, on a schedule, and NOT on the per-PR `gate`
+# workflow, and that split is the whole point (FS.GG.Game#238; the script's § 4 carries the argument).
+#
+# WHY IT IS NOT A MERGE GATE. A link's state moves on its own. FS-GG/FS.GG.Rendering#494 closed at
+# 14:43:32Z and `main`@e4c07c2 — green at 14:35:30Z, and unchanged since — failed from that minute on.
+# Nothing in this repo changed. As a required check that is a false accusation: it reddens whoever
+# happens to have a PR open, and worse, the only edit that clears it is in a skill body their item
+# never declared in its `Paths:` — so under ADR-0021/0027 they cannot even fix it without widening
+# onto a file they have no business touching. A merge gate may only demand a change inside the diff
+# it gates; this check cannot promise that, so it does not gate.
+#
+# WHY IT STILL EXISTS. Because scoping the gate to the diff, on its own, would leave every link in an
+# unchanged body resolved by NOBODY — a gate green over a subject it never examined, which is the
+# exact FS-GG/.github#416 shape check-skill-refs was written to close, reintroduced by its own fix.
+# So the subject is still swept in full, daily. The two changes are one change: neither is correct
+# alone, and deleting this workflow silently guts the gate rather than merely removing a job.
+#
+# WHAT A RED HERE MEANS. Not "somebody broke the build" — nobody did. It means the world moved under a
+# citation we published: an issue we point at closed, reopened, or vanished. That is a maintenance
+# task addressed to this repo, and the fix is the one the script names — repoint the link at live
+# work, or, if it is cited as history (which a closed issue usually is), mark it:
+#
+#     <!-- skill-refs: closed-ok FS-GG/FS.GG.Rendering#494 — why -->
+#
+# Authorship-time strictness is untouched and lives where it belongs: a PR that TOUCHES a skill still
+# resolves that skill's links, blocking, in `gate`. Every rot this check was written for is
+# introduced by such a diff. This job catches only the decay that no diff can be blamed for.
+on:
+  schedule:
+    # 07:00 UTC daily. Decay is not urgent — an issue that closed overnight is not on fire — and a
+    # slower cadence keeps this a signal people trust rather than noise they mute.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+  # The sweep is itself code, and a change to it must be checked BY it — otherwise its first real run
+  # is post-merge, on a schedule nobody is watching, and a typo here disables the load-bearing half of
+  # the gate SILENTLY. That is the #416 shape at the top level: the check that makes the scoped gate
+  # honest, quietly checking nothing. Same for the script it drives.
+  #
+  # AND YES, THIS ONE RUN IS A FULL SWEEP ON A PR — the exact shape the rest of this file exists to
+  # abolish, so it is deliberate and narrow rather than an oversight. Two things make it affordable,
+  # and both must stay true: it is NOT a required check (a decay cannot block the merge, it can only
+  # inform it), and it fires ONLY on a PR that edits skill-refs itself — whose author is, by
+  # construction, the one person already holding this machinery in their head and the right reader for
+  # "a citation has rotted". If it ever becomes required, this trigger must go: a signal that cannot
+  # block is information, and the same signal wired to block is the false accusation #238 removed.
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/skill-refs-sweep.yml'
+      - 'scripts/check-skill-refs.sh'
+
+concurrency:
+  group: skill-refs-sweep-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: Skill-ref link sweep (whole tree)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # No --changed: this is the full sweep, and it is the ONLY run that resolves every link in the
+      # tree. GH_TOKEN buys the 1,000/hr authenticated REST budget instead of a shared-IP 60/hr; the
+      # links are public repos and no GraphQL is spent. The script REFUSES to self-skip in CI — a link
+      # it cannot read is one it will not call green.
+      - name: "Resolve every issue/PR link in every published skill"
+        run: scripts/check-skill-refs.sh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
