@@ -60,7 +60,7 @@
     {
       "id": "fs-gg-line-drawing",
       "scope": "product",
-      "sha256": "f6a3c81d8a8f064a13420d4328f8d446331fa0f60d66c2785efd8ac1917247de",
+      "sha256": "822a6c4241e92405236fdd38d6a7532e7d49f76f3f933d376c141e5816d58882",
       "resolvablePath": ".agents/skills/fs-gg-line-drawing/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-line-drawing/"

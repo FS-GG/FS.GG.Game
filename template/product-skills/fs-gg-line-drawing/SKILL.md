@@ -120,6 +120,8 @@ cell — keep the integer form for anything replayed.
 
 ## Common pitfalls
 
+<!-- skill-refs: prose-ok #1 — the design doc's NUMBER-ONE bug, not issue #1. Prose, not a pointer. -->
+
 - **Using the thin `line` for sight.** A `Thin` line cuts corners and leaks through a diagonal wall join —
   the design doc's "#1 LOS bug". Use `supercover`/`lineOfSight` unless your movement rules genuinely allow
   moving through that join.

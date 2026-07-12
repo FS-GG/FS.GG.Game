@@ -35,15 +35,7 @@
 # It must resolve, and it must be OPEN — because the prose around it almost always tells the reader
 # to go and DO something there ("add your case there"), and a closed issue is a place nobody can act.
 #
-# A BARE `#535` IS DELIBERATELY NOT A POINTER, for two independent reasons:
-#   * It is ambiguous with prose. fs-gg-line-drawing says `the design doc's "#1 LOS bug"` — that is
-#     the number-one bug, not issue #1. A gate that resolved it would report a false dangling ref,
-#     and a gate that cries wolf is one people turn off.
-#   * These bodies are MATERIALIZED INTO SOMEBODY ELSE'S REPOSITORY. A bare `#535` there resolves
-#     against the *product's* issue tracker, not ours — so it is already unresolvable to the reader
-#     it was written for. The fix for a bare ref is to qualify it, not to teach this script to guess
-#     which repo the author meant.
-# This mirrors the wiki-ref rule above: only an unambiguous, qualified form promises resolvability.
+# A BARE `#535` IS NOT ONE OF THOSE FORMS. It is not resolved — it is REJECTED. See § 3.
 #
 # CLOSED-AND-STILL-CORRECT IS REAL, so there is an opt-out. A body may legitimately cite the issue
 # that IMPLEMENTED something — fs-gg-audio's "the scaffold ships it wired (FS.GG.Rendering#245)" is
@@ -59,6 +51,45 @@
 # and the intent becomes machine-readable rather than inferred from the surrounding sentence.
 # A marker that excuses nothing is itself reported — a stale allowlist is where the next rot hides.
 #
+# ── 3. BARE `#N` REFS (FS.GG.Game#208) ──────────────────────────────────────────────────────────
+# A bare `#999` in a shipped body is an ERROR. Not "unresolvable" — WRONG, and wrong by construction:
+#
+#   THESE BODIES MATERIALIZE INTO SOMEBODY ELSE'S REPOSITORY (`profile in [game, sample-pack]`).
+#   GitHub renders `#999` against the repo it is READ in, so in a scaffolded product it links to
+#   that product's OWN tracker — an unrelated issue, or nothing. It never points here.
+#
+# So its upstream state is beside the point: there is no `#999` we could resolve it against, and a
+# bare ref is never correct in a shipped body even when the issue it meant is open. This is why the
+# check needs no network, and why — unlike a stale link — it cannot be fixed by repointing it. The
+# only fix is to QUALIFY it (`FS.GG.Game#999`), which survives materialization.
+#
+# #202 excluded bare refs because they are ambiguous with prose: fs-gg-line-drawing says `the design
+# doc's "#1 LOS bug"` — the number-one bug, not issue #1. That ambiguity is real, and it is an
+# argument for an ESCAPE HATCH, not for silence. Silence is the `.github#416` shape this gate exists
+# to close — green over a pointer it never examined — surviving one level down. So: reject by
+# default, and let a body declare the one honest exception, naming the exact number:
+#
+#     <!-- skill-refs: prose-ok #1 — the design doc's number-one bug, not issue #1 -->
+#
+# NO CARVE-OUT FOR CODE. A `#123` inside a fence or a code span is reported too. GitHub does not
+# autolink there, so the RENDERING hazard is absent — but the pointer is still unresolvable to the
+# reader, and exempting code would hand anyone a way to park an unchecked ref where the gate cannot
+# see it. That is the silent-no-op hole again, reopened as a convenience. The marker costs one line.
+#
+# THE MARKER IS FILE-SCOPED, and knowingly so — `closed-ok` is too, and a marker that had to sit on
+# the ref's own line could not be written above a list, which is where the one real case wants it.
+# Own the cost, because it is not free: `prose-ok #1` keys on a BARE INTEGER, so it excuses EVERY
+# bare `#1` in that file — including a genuine `see #1` somebody adds later. `closed-ok` keys on a
+# whole `owner/repo#num` and is far harder to collide with. So keep prose-ok markers RARE and their
+# numbers odd-looking; a file that wants to excuse `#1`, `#2` and `#3` is a file that should be
+# rewording its prose instead. Narrowing the scope is FS.GG.Game#208's obvious follow-up if a second
+# one ever shows up.
+#
+# WHY GUESSING IS NOT AN OPTION. `#1` in quotes reads as prose; `#1` after "see" reads as a pointer.
+# Teaching the script that difference would make the gate's verdict depend on the surrounding
+# sentence — unpredictable to the author, and wrong often enough to be turned off. The author knows
+# which one they meant; the marker is how they say it, and it is self-documenting to the next reader.
+#
 # NETWORK. Resolving a link needs the API (REST only; a handful of calls, no GraphQL). The gate must
 # never SELF-SKIP: under GITHUB_ACTIONS an unresolvable link is a FAILURE, never a pass. Locally,
 # with no `gh` or no auth, the link half announces loudly that it did not run, and the wiki half
@@ -71,6 +102,10 @@ cd "$(dirname "$0")/.."
 
 SKILL_ROOT="template/product-skills"
 SELF_OWNER="fs-gg-game"
+# This repo's GitHub name — the qualification a bare `#N` in a body of OURS almost always wants. It
+# is only ever a SUGGESTION in § 3's message: the author may well have meant another repo, and the
+# gate does not guess (see § 3).
+SELF_REPO="FS.GG.Game"
 # registry/skills.yml `owner:` vocabulary (FS-GG/.github), one per line.
 KNOWN_OWNERS=$'fs-gg-game\nfs-gg-rendering\nfs-gg-sdd'
 # The org an unqualified `FS.GG.Rendering#535` belongs to.
@@ -136,34 +171,43 @@ done < <(grep -rEon '\[\[[A-Za-z0-9._:-]+\]\]' "$SKILL_ROOT" --include='*.md' \
 # The persistence pointer is BOTH forms at once — `[FS-GG/FS.GG.Rendering#587](https://…/587)` — so
 # the two scans overlap by design and `sort -u` collapses them to one row (and so to one API call).
 #
-# The leading `[^A-Za-z0-9._/#-]` (or start-of-line) is what keeps a BARE `#1` out: in fs-gg-line-
-# drawing's `the design doc's "#1 LOS bug"` the char before `#` is a quote and no repo token
-# precedes it, so nothing matches. It is consumed by the match, so the ref is re-trimmed.
-emit_links() {
-  # -r: with no *.md at all, xargs would otherwise run awk with NO file operands, and awk would read
-  # the script's stdin — yielding zero links from whatever it found there. A silent no-op is the one
-  # outcome this gate may never produce.
-  find "$SKILL_ROOT" -name '*.md' -print0 \
-    | xargs -0 -r awk -v OFS='\t' -v def="$DEFAULT_OWNER" '
-      # Strip skill-refs markers, terminating on `-->` rather than on the first `>`. A rationale is
-      # prose and may well contain one ("superseded -> #9"), and a marker left un-stripped is scanned
-      # as a link and EXCUSES ITSELF — the exact defect the strip exists to prevent. Other HTML
-      # comments are kept: a ref inside one is still a ref.
-      function strip_markers(s,   res, i, j, seg) {
-        res = ""
-        while ((i = index(s, "<!--")) > 0) {
-          j = index(substr(s, i), "-->")
-          if (j == 0) {                       # unterminated — drop it if it is ours, else stop
-            if (substr(s, i) ~ /^<!--[[:space:]]*skill-refs:/) s = substr(s, 1, i - 1)
-            break
-          }
-          seg = substr(s, i, j + 2)
-          res = res substr(s, 1, i - 1)
-          if (seg !~ /^<!--[[:space:]]*skill-refs:/) res = res seg
-          s = substr(s, i + j + 2)
-        }
-        return res s
+# The leading `[^A-Za-z0-9._/#-]` (or start-of-line) is what keeps a BARE `#1` out of THIS scan: in
+# fs-gg-line-drawing's `the design doc's "#1 LOS bug"` the char before `#` is a quote and no repo
+# token precedes it, so nothing matches. It is consumed by the match, so the ref is re-trimmed. A
+# bare ref is no longer thereby IGNORED — § 3 scans for exactly what this pattern declines to claim.
+
+# Strip skill-refs markers, terminating on `-->` rather than on the first `>`. A rationale is prose
+# and may well contain one ("superseded -> #9"), and a marker left un-stripped is scanned as a ref
+# and EXCUSES ITSELF — the exact defect the strip exists to prevent. Other HTML comments are kept: a
+# ref inside one is still a ref.
+#
+# Shared by BOTH scans, and load-bearing for each. For § 2 an un-stripped `closed-ok FS.GG.X#9` is a
+# link that vouches for itself; for § 3 an un-stripped `prose-ok #9` is *itself a bare `#9`* — it
+# would excuse itself and every marker would be self-justifying. Config must not be its own subject.
+AWK_STRIP='
+  function strip_markers(s,   res, i, j, seg) {
+    res = ""
+    while ((i = index(s, "<!--")) > 0) {
+      j = index(substr(s, i), "-->")
+      if (j == 0) {                       # unterminated — drop it if it is ours, else stop
+        if (substr(s, i) ~ /^<!--[[:space:]]*skill-refs:/) s = substr(s, 1, i - 1)
+        break
       }
+      seg = substr(s, i, j + 2)
+      res = res substr(s, 1, i - 1)
+      if (seg !~ /^<!--[[:space:]]*skill-refs:/) res = res seg
+      s = substr(s, i + j + 2)
+    }
+    return res s
+  }'
+
+# -r: with no *.md at all, xargs would otherwise run awk with NO file operands, and awk would read
+# the script's stdin — yielding zero hits from whatever it found there. A silent no-op is the one
+# outcome this gate may never produce.
+md_files() { find "$SKILL_ROOT" -name '*.md' -print0; }
+
+emit_links() {
+  md_files | xargs -0 -r awk -v OFS='\t' -v def="$DEFAULT_OWNER" "$AWK_STRIP"'
       {
         line = strip_markers($0)
 
@@ -186,9 +230,50 @@ emit_links() {
       }'
 }
 
+# § 3's scan: every BARE `#N`, normalised to `file<TAB>line<TAB>num`. No API call — the FORM is the
+# defect, so there is nothing to resolve and nothing the network could tell us.
+#
+# `#[0-9][A-Za-z0-9_-]*` over-matches on purpose, and only an all-digit run is kept. A CSS colour
+# `#1a2b3c` opens exactly like an issue ref, and a bare `#[0-9]+` would match its leading `#1` and
+# report a dangling ref that was never there — a false positive in a gate people would then turn
+# off. Taking the WHOLE run and then requiring it to be all digits rejects `1a2b3c` and `abc123`.
+# An all-NUMERIC colour (`#123456`) is genuinely indistinguishable from an issue ref — no pattern
+# can separate them — so it is reported, and `prose-ok` is the answer. That is the honest limit:
+# the gate declines to GUESS, here as everywhere, and asks the author who knows.
+#
+# The leading class carries `/` and `#`, which is what excludes the three near-misses: a URL fragment
+# (`…/page#1`), a markdown heading (`## 3`), and the `#535` of a qualified `FS.GG.Rendering#535` —
+# that last one is § 2's ref, and reporting it here would double-report every honest link.
+emit_bare() {
+  md_files | xargs -0 -r awk -v OFS='\t' "$AWK_STRIP"'
+      {
+        s = strip_markers($0)
+
+        # An EXPLICIT markdown link is not a bare ref, and this is the difference between a gate and
+        # a nuisance: `[#587](https://github.com/FS-GG/FS.GG.Rendering/issues/587)` is the single most
+        # idiomatic way to cite an issue, and it is CORRECT — the `#587` is a link LABEL, so GitHub
+        # renders it as display text and never autolinks it. It cannot resolve against the reader`s
+        # tracker, which is the whole hazard § 3 exists for. Reporting it would reject the right
+        # answer, and this gate would be the one people turn off.
+        #
+        # Drop the whole `[label](absolute-url)` construct — the label of ANY http(s) link, not just a
+        # `[#N]` one, so `[see #459](https://…)` is spared too. Nothing is lost: § 2 scans the
+        # UNSTRIPPED line, so the URL is still resolved and a closed or missing target still fails.
+        # `[#587]` with NO target keeps its report, and must: GitHub autolinks that one.
+        gsub(/\[[^]]*\]\(https?:\/\/[^)]+\)/, " ", s)
+
+        while (match(s, /(^|[^A-Za-z0-9._\/#-])#[0-9][A-Za-z0-9_-]*/)) {
+          t = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+          sub(/^[^#]*#/, "", t)          # drop the consumed boundary char and the `#`
+          if (t ~ /^[0-9]+$/) print FILENAME, FNR, t
+        }
+      }'
+}
+
 # `sort -u` must dedupe on the WHOLE row — keying it would collapse two distinct refs sharing a line.
 # Order for display in a second, non-unique pass.
 links=$(emit_links | sort -u | sort -t$'\t' -k1,1 -k2,2n)
+bares=$(emit_bare | sort -u | sort -t$'\t' -k1,1 -k2,2n)
 
 # The closed-ok allowlist, normalised to `file<TAB>line<TAB>owner/repo#num` — one row per marker.
 markers=$( { grep -rEon --include='*.md' \
@@ -199,6 +284,20 @@ markers=$( { grep -rEon --include='*.md' \
     [[ $mref == */* ]] || mref="$DEFAULT_OWNER/$mref"
     printf '%s\t%s\t%s\n' "$mfile" "$mline" "$mref"
   done)
+
+# The prose-ok allowlist, normalised to `file<TAB>line<TAB>num` — one row per marker.
+prose_markers=$( { grep -rEon --include='*.md' \
+    '<!--[[:space:]]*skill-refs:[[:space:]]*prose-ok[[:space:]]+#[0-9]+' \
+    "$SKILL_ROOT" || true; } | while IFS= read -r m; do
+    [[ -z $m ]] && continue
+    mfile=${m%%:*}; mrest=${m#*:}; mline=${mrest%%:*}; mnum=${m##*#}
+    printf '%s\t%s\t%s\n' "$mfile" "$mline" "$mnum"
+  done)
+
+is_prose() { # file num
+  [[ -n $prose_markers ]] &&
+    awk -F'\t' -v f="$1" -v n="$2" '$1==f && $3==n {found=1} END{exit !found}' <<<"$prose_markers"
+}
 
 is_excused() { # file owner/repo#num
   [[ -n $markers ]] && awk -F'\t' -v f="$1" -v r="$2" '$1==f && $3==r {found=1} END{exit !found}' <<<"$markers"
@@ -310,10 +409,41 @@ if [[ $link_mode == checked && -n $markers ]]; then
   done <<<"$markers"
 fi
 
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+# 3. BARE `#N` REFS
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+# UNGATED BY `link_mode`, and that is the point. § 2 needs the API to learn whether an issue is open;
+# § 3 needs nothing — a bare ref is wrong by its FORM, in every repo, whatever the issue's state. So
+# it must still run with SKILL_REFS_SKIP_LINKS set, and on a laptop with no `gh`. Hanging it off
+# `link_mode` would make an offline check silently skippable — the very shape § 3 exists to close.
+n_bare=0
+if [[ -n $bares ]]; then
+  while IFS=$'\t' read -r file line num; do
+    [[ -z ${num:-} ]] && continue
+    n_bare=$((n_bare + 1))
+    is_prose "$file" "$num" && continue
+    report "$file" "$line" "bare ref — #$num is read against the repo this body is MATERIALIZED into, so it points at the reader's own tracker, never ours. Qualify it (e.g. $SELF_REPO#$num), or, if it is prose and not a pointer, say so: <!-- skill-refs: prose-ok #$num — why -->"
+  done <<<"$bares"
+fi
+
+# A prose-ok marker that excuses nothing is dead config, exactly as a stale closed-ok is: the
+# sentence it guarded was rewritten, or its number changed and the marker kept the old one. Markers
+# are stripped before extraction, so one cannot vouch for itself and this check means something.
+if [[ -n $prose_markers ]]; then
+  while IFS=$'\t' read -r mfile mline mnum; do
+    [[ -z ${mnum:-} ]] && continue
+    if ! awk -F'\t' -v f="$mfile" -v n="$mnum" \
+         '$1==f && $3==n {found=1} END{exit !found}' <<<"$bares"; then
+      report "$mfile" "$mline" "stale prose-ok marker — nothing in this file writes a bare #$mnum; drop it"
+    fi
+  done <<<"$prose_markers"
+fi
+
 if ((fail)); then
   echo >&2
   echo "check-skill-refs: FAILED — every pointer in a published skill must resolve: a [[ref]] to a" >&2
   echo "  skill, and an issue/PR link to a LIVE issue (or a marked, deliberate citation of history)." >&2
+  echo "  A bare #N is not a pointer at all — qualify it, or mark it as prose." >&2
   exit 1
 fi
 
@@ -324,3 +454,12 @@ case $link_mode in
   skipped) echo "check-skill-refs: ok — $n_skills skills published; every [[ref]] resolves."
            echo "check-skill-refs: NOTE — issue/PR links were NOT checked ($skip_reason)." >&2 ;;
 esac
+
+# Said out loud even at zero. § 3 is the half that still runs when the link half is skipped, so a
+# silent pass here is indistinguishable from a check that did not happen — and "I found nothing" and
+# "I did not look" being the same output is the defect this gate keeps being extended to kill.
+if ((n_bare > 0)); then
+  echo "check-skill-refs: ok — $n_bare bare #N ref(s); every one is marked prose-ok."
+else
+  echo "check-skill-refs: ok — no bare #N refs."
+fi
