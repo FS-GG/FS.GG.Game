@@ -12,9 +12,18 @@
 // purely additive.
 //
 // Adapted from FS.GG.Rendering scripts/refresh-surface-baselines.fsx (ADR-0022 / P2), now including
-// the member half that was dropped when this script was first ported. Same emit format for BOTH files
+// the member half that was dropped when this script was first ported. Same emit shape for BOTH files
 // (sorted, "Module" suffix stripped, compiler-generated excluded) so a package moved between the repos
-// keeps a byte-comparable surface record.
+// keeps a comparable surface record.
+//
+// It deviates from Rendering's generator in exactly three places, each a deliberate bug fix, NOT drift
+// to be "corrected" back into parity (all three are filed against Rendering — FS.GG.Rendering#697):
+//   1. `typeRef` strips the arity suffix from every generic segment instead of truncating at the first
+//      backtick, which silently erased a nested generic's own name (`Dictionary`2+Enumerator`).
+//   2. `displayName` trims the TRAILING "Module" rather than replacing the substring everywhere.
+//   3. `writeLines` emits "\n" explicitly rather than Environment.NewLine.
+// Each one made the baseline record something other than the surface — which is the whole failure this
+// file exists to prevent, so parity with a buggy emitter is worth less than a baseline that is true.
 
 open System
 open System.Collections.Generic
@@ -136,11 +145,16 @@ let fullNameOf (ty: Type) =
     | null -> ty.Name
     | value -> value
 
+// Strip only the TRAILING "Module" that F# appends when a module's name collides with a type's.
+// `fullName.Replace("Module", "")` — which is what Rendering still does — eats the word EVERYWHERE in
+// the name, so a module named `ModuleRegistry` (FullName `…ModuleRegistryModule`) would be recorded
+// as `…Registry`: a baseline entry naming a type that does not exist. `fullName` ends with `ty.Name`,
+// so trimming the suffix by length is exact.
 let displayName (ty: Type) =
     let fullName = fullNameOf ty
 
     if ty.Name.EndsWith("Module", StringComparison.Ordinal) then
-        fullName.Replace("Module", "")
+        fullName.Substring(0, fullName.Length - "Module".Length)
     else
         fullName
 
@@ -166,12 +180,34 @@ let rec typeRef (ty: Type) : string =
         | null -> ty.Name
         | element -> typeRef element + suffix
     elif ty.IsGenericType then
+        // A constructed generic's FullName is `Ns.Outer\`2+Inner\`1[[System.Int32, System.Private…]]`:
+        // arity suffix on EVERY generic segment, and assembly-qualified arguments in brackets. Cut the
+        // bracketed arguments (we render our own from GetGenericArguments), then drop each `N.
+        //
+        // Truncating at the FIRST backtick instead — which is what Rendering still does — throws away
+        // everything after it, so `Dictionary\`2+Enumerator` emits as plain `Dictionary<K, V>`. The
+        // nested type's name vanishes, a member returning `Dictionary<K,V>.Enumerator` records the same
+        // line as one returning `Dictionary<K,V>`, and `Array.distinct` then merges them — a real
+        // signature change that this baseline exists to catch would leave the file untouched.
         let stem =
             let raw = fullNameOf ty
 
-            match raw.IndexOf('`') with
-            | -1 -> raw
-            | tick -> raw.Substring(0, tick)
+            let withoutArguments =
+                match raw.IndexOf('[') with
+                | -1 -> raw
+                | bracket -> raw.Substring(0, bracket)
+
+            let builder = Text.StringBuilder(withoutArguments.Length)
+            let mutable inArity = false
+
+            for c in withoutArguments do
+                if c = '`' then inArity <- true
+                elif inArity && Char.IsDigit c then ()
+                else
+                    inArity <- false
+                    builder.Append(c) |> ignore
+
+            builder.ToString()
 
         let args = ty.GetGenericArguments() |> Array.map typeRef |> String.concat ", "
         $"{stem}<{args}>"
@@ -240,9 +276,14 @@ let memberSignatures (assembly: Assembly) =
     |> Array.distinct
     |> Array.sort
 
+// Explicit "\n", NOT File.WriteAllLines: that separates with Environment.NewLine, so regenerating on
+// Windows rewrites every line with CRLF. The repo has no .gitattributes normalising it, so the whole
+// baseline would show as drift and the gate would go red on a machine, not on an API change. A
+// baseline is only a baseline if the bytes depend on the surface alone.
 let private writeLines path (values: string array) noun =
     Directory.CreateDirectory(Path.GetDirectoryName(path: string)) |> ignore
-    File.WriteAllLines(path, values)
+    let text = if Array.isEmpty values then "" else String.concat "\n" values + "\n"
+    File.WriteAllText(path, text)
     printfn "wrote %s (%d public %s)" path (Array.length values) noun
 
 let write packageName (assembly: Assembly) =
