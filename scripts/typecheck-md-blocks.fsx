@@ -696,6 +696,43 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) (strict: bo
 //
 // This runs over EVERY block, including the //#skip'd ones: a skipped block is still published prose
 // that a reader copies, and the check is textual, so nothing excuses it from the rule.
+//
+// ...AND OVER EVERY FIXTURE (#171). It did not, until #171, and that hole was the same shape as the
+// bug this whole harness exists to end. The lint read `Block.Code` — the MARKDOWN — while fixture text
+// is spliced into the block's compilation unit downstream, in `generateBlockFile`. So
+//
+//     type LintProbe = { X: float; Y: float; Width: float; Height: float }
+//
+// in any fixture file was four violations of the rule this section exists to enforce, and zero
+// diagnostics: the gate stayed green. That is the silent-no-op shape (.github#416) reproduced INSIDE
+// the harness built to end it — the same sentence this file's header uses about the bug it was
+// written for.
+//
+// And a fixture is where the rule bites HARDEST, not least. A block that declares its own X/Y record
+// at least states the collision in prose a reader can see and a reviewer can catch. A FIXTURE that
+// hands a block an X/Y-labelled `Tile` teaches the block to bind against the colliding shape from
+// OUTSIDE the document: the block then compiles perfectly, the markdown is spotless, and the gate
+// ticks green over the precise defect it was built to kill.
+//
+// The subject is each corpus's <FixtureDir>/*.fs AND its preludes, read WHOLE. The preludes have to be
+// named explicitly because one of them lives outside the FixtureDir it serves — `_scaffold.fs` is a
+// skills fixture but a testspecs PRELUDE — and it is the sharpest file of the lot: it is compiled into
+// every block of BOTH corpora, so a single colliding label there would retrain the whole corpus at
+// once. It is also GENERATED, which changes the ADVICE the diagnostic gives (you do not hand-edit it;
+// you raise it upstream) but not the rule — a violation there is real, and it is the loudest available.
+//
+// "Read WHOLE" is deliberate, and it is a SUPERSET of what is spliced: `loadFixtures` ignores a
+// fixture file's header (everything above the first //#block) and DISCARDS the context of a //#skip'd
+// section, so neither reaches a compilation unit. The lint reads them anyway. A forbidden label parked
+// in a skipped section is not exempt — it is one deleted //#skip away from being live, and it is
+// already the shape a later author will copy from. Same reasoning as the block lint running over the
+// skipped blocks, one level down. The cost is nil: the only text this adds is comments, which are
+// stripped before matching.
+//
+// ONE pass over the deduplicated UNION, not one pass per corpus. `_scaffold.fs` lives in the skills
+// FixtureDir and is ALSO a testspecs prelude, so a per-corpus pass would count one defect twice and
+// annotate it twice. A gate that reports two errors for one bug is one whose count nobody believes,
+// and the count is the thing this section is for.
 
 let forbiddenFieldLabels = [ "X"; "Y"; "Width"; "Height" ]
 
@@ -712,32 +749,111 @@ let forbiddenLabelPattern =
     Regex($@"(^|[{{;(|])\s*(?<label>{String.Join('|', forbiddenFieldLabels)})\s*:",
           RegexOptions.Compiled)
 
-let lintLabels (blocks: Block list) : int =
+/// Every forbidden record-field label DECLARATION in a piece of F# text, as (0-based line index within
+/// the text, 0-based column within that line, the label). The one scanner both lints below share — the
+/// markdown and the fixtures are two halves of one compilation unit, and a rule enforced by two
+/// separate implementations is a rule with two sets of bugs.
+let forbiddenLabelsIn (text: string) : (int * int * string) list =
+    text.Split('\n')
+    |> Seq.indexed
+    |> Seq.collect (fun (i, line) ->
+        // Strip a trailing comment before matching — both corpora are full of prose like
+        // "// NOT X — that label collides with Scene's Point/Rect", which must not trip its own rule.
+        let code =
+            match line.IndexOf "//" with
+            | -1 -> line
+            | at -> line.Substring(0, at)
+        // Every match on the line, not just the first: `{ X: float; Y: float }` is TWO violations, and
+        // reporting one of them would understate the very thing being counted.
+        forbiddenLabelPattern.Matches code
+        |> Seq.map (fun (m: Match) -> i, m.Groups["label"].Index, m.Groups["label"].Value))
+    |> List.ofSeq
+
+/// WHY the label is forbidden — one sentence, shared, because a block and a fixture break the same rule
+/// for the same reason. What differs is the ADVICE, which each lint appends.
+let labelRuleWhy (label: string) =
+    $"forbidden record-field label '{label}'. X/Y/Width/Height are the labels of Scene's Point/Rect AND \
+      of the sim Point/Rect, so a bare record literal resolves against the wrong one \
+      (FS.GG.Game#129/#132/#140/#144)."
+
+let lintBlockLabels (blocks: Block list) : int =
     let mutable violations = 0
     for b in blocks do
-        b.Code.Split('\n')
-        |> Array.iteri (fun i line ->
-            // Strip a trailing comment before matching — the corpus is full of prose like
-            // "// NOT X — that label collides with Scene's Point/Rect", which must not trip its own rule.
-            let code =
-                match line.IndexOf "//" with
-                | -1 -> line
-                | at -> line.Substring(0, at)
-            // Every match on the line, not just the first: `{ X: float; Y: float }` is TWO
-            // violations, and reporting one of them would understate the very thing being counted.
-            for m in forbiddenLabelPattern.Matches code do
-                violations <- violations + 1
-                let label = m.Groups["label"].Value
-                let docLine = b.StartLine + i
-                // + b.Indent: the code was dedented at extraction, the markdown was not.
-                annotate "error" (relative b.SourceFile) docLine (b.Indent + m.Groups["label"].Index + 1)
-                    $"forbidden record-field label '{label}'. X/Y/Width/Height are the labels of \
-                      Scene's Point/Rect AND of the sim Point/Rect, so a bare record literal resolves \
-                      against the wrong one (FS.GG.Game#129/#132/#140/#144). Positions and velocities \
-                      go in the scaffold's collision-safe Geometry.Vec2 (Vx/Vy); scalars take an \
-                      honest name (LeftX, TopY, WidthPx, HeightTiles)."
-                printfn "  %s:%d  forbidden field label '%s' — use Vx/Vy (Geometry.Vec2) or a scalar \
-                         named LeftX/TopY/WidthPx." (relative b.SourceFile) docLine label)
+        for (i, col, label) in forbiddenLabelsIn b.Code do
+            violations <- violations + 1
+            let docLine = b.StartLine + i
+            // + b.Indent: the code was dedented at extraction, the markdown was not.
+            annotate "error" (relative b.SourceFile) docLine (b.Indent + col + 1)
+                $"{labelRuleWhy label} Positions and velocities go in the scaffold's collision-safe \
+                  Geometry.Vec2 (Vx/Vy); scalars take an honest name (LeftX, TopY, WidthPx, \
+                  HeightTiles)."
+            printfn "  %s:%d  forbidden field label '%s' — use Vx/Vy (Geometry.Vec2) or a scalar \
+                     named LeftX/TopY/WidthPx." (relative b.SourceFile) docLine label
+    violations
+
+/// The same rule over the FIXTURES — the other half of every block's compilation unit (#171). See the
+/// section header for why this is the sharper half, why the subject is read whole, and why it is one
+/// pass over a deduplicated union rather than one pass per corpus.
+let lintFixtureLabels (corpora: Corpus list) : int =
+    let scaffoldPath = Path.GetFullPath(repoPath scaffold)
+
+    let files =
+        corpora
+        |> List.collect (fun c ->
+            let dir = repoPath c.FixtureDir
+            if not (Directory.Exists dir) then
+                fail $"[{c.Id}] {c.FixtureDir} does not exist — it holds the fixtures every block of \
+                       this corpus is compiled with. Refusing to lint a subject that is not there."
+            [ yield! Directory.GetFiles(dir, "*.fs")
+              yield! c.Preludes |> List.map repoPath ])
+        |> List.map Path.GetFullPath
+        |> List.distinct
+        |> List.sort
+
+    printfn ""
+    printfn "── the X/Y/Width/Height label rule, over the fixtures ──"
+    printfn "%d fixture/prelude file(s)" files.Length
+
+    // ...and the same fail-closed rule the rest of this harness holds itself to: a lint with no subject
+    // is a green light over nothing. Every corpus today declares at least the scaffold as a prelude, so
+    // this cannot fire NOW — but it is not a tautology, and that is the point of writing it: a corpus
+    // added with no preludes, or a FixtureDir emptied by a rename that misses this file, would
+    // otherwise print "OK — no forbidden record-field label" having opened not one file, and the tick
+    // is what stops anyone looking.
+    if files.IsEmpty then
+        fail "[fixtures] the label rule found 0 fixture/prelude file(s) to lint across the selected \
+              corpora. Every block is compiled WITH these files, so a corpus that has none means either \
+              the fixtures moved and this lint was not told, or a corpus declares no preludes. Refusing \
+              to report the fixtures clean over a subject I never opened."
+
+    let mutable violations = 0
+    for file in files do
+        let rel = relative file
+        // The advice is a property of the FILE, not of the violation. The scaffold is GENERATED, so
+        // "rename the label" would send its reader to hand-edit a file CI regenerates and fails on any
+        // diff in. A violation there is not a local mistake at all — it is the published fragment
+        // shipping a colliding label, which is upstream's to fix and everyone's to suffer.
+        let advice =
+            if file = scaffoldPath then
+                $"{scaffold} is GENERATED from the published FS.GG.UI.Template fragment — do NOT \
+                   hand-edit it (CI regenerates it and fails on any diff). A colliding label HERE means \
+                   the PUBLISHED fragment now ships one, which poisons every block of both corpora and \
+                   every scaffolded product alike. Raise it on FS.GG.Rendering."
+            else
+                "A fixture is spliced into the block's compilation unit, so a colliding label here \
+                 teaches the BLOCK to bind against it — and the block then compiles CLEAN, leaving this \
+                 gate green over the exact defect it exists to catch (FS.GG.Game#171). Use the \
+                 scaffold's Geometry.Vec2 (Vx/Vy), or an honest scalar name (LeftX, TopY, WidthPx)."
+        for (i, col, label) in forbiddenLabelsIn (File.ReadAllText file) do
+            violations <- violations + 1
+            annotate "error" rel (i + 1) (col + 1) $"{labelRuleWhy label} {advice}"
+            printfn "  %s:%d  forbidden field label '%s' in a FIXTURE — the block it feeds would \
+                     compile clean against it." rel (i + 1) label
+
+    if violations = 0 then
+        printfn "OK — no forbidden record-field label in any fixture or prelude."
+    else
+        printfn "%d forbidden record-field label(s) in the fixtures." violations
     violations
 
 // ---------------------------------------------------------------------------------------------
@@ -932,8 +1048,9 @@ let checkCorpus (corpus: Corpus) : int =
     else
 
     // The label rule (see §2b). Runs over EVERY block — including the skipped ones, which the
-    // compiler never sees but a reader still copies.
-    let labelViolations = lintLabels blocks
+    // compiler never sees but a reader still copies. The FIXTURE half of the rule runs once, in §4,
+    // over the union of the selected corpora's fixture files.
+    let labelViolations = lintBlockLabels blocks
     if labelViolations > 0 then
         printfn "%d forbidden record-field label(s)." labelViolations
 
@@ -1222,21 +1339,31 @@ let checkCorpus (corpus: Corpus) : int =
 // 4. Drive
 // ---------------------------------------------------------------------------------------------
 
+// The fixture half of the label rule (§2b), FIRST: it is textual, it is instant, and it is the half
+// that — when it fires — explains why an otherwise-clean corpus is teaching the wrong shape. `--list`
+// compiles nothing and checks nothing, so it stays out of this exactly as it stays out of the block
+// lint.
+let fixtureLabelViolations = if listOnly then 0 else lintFixtureLabels selected
+
 let results = selected |> List.map (fun c -> c.Id, checkCorpus c)
-let totalErrors = results |> List.sumBy snd
+let totalErrors = (results |> List.sumBy snd) + fixtureLabelViolations
 
 printfn ""
 
 if listOnly then exit 0
 
 if totalErrors = 0 then
-    printfn "typecheck-md-blocks: OK — every ```fsharp block typechecks against FS.GG.Game.Core."
+    printfn "typecheck-md-blocks: OK — every ```fsharp block typechecks against FS.GG.Game.Core, and \
+             neither the blocks nor the fixtures they are compiled with break the label rule."
     exit 0
 
 for (id, n) in results do
     if n > 0 then printfn "typecheck-md-blocks: %s — %d error(s)." id n
+if fixtureLabelViolations > 0 then
+    printfn "typecheck-md-blocks: fixtures — %d forbidden record-field label(s)." fixtureLabelViolations
 
 fail $"{totalErrors} error(s): a ```fsharp block in a published document either does not typecheck \
-       against FS.GG.Game.Core, or breaks the X/Y/Width/Height label rule. Readers copy these blocks \
-       into their product — fix the prose (or, if the block is a sketch missing a binding, add it to \
-       the corpus's fixture file)."
+       against FS.GG.Game.Core, or breaks the X/Y/Width/Height label rule — or a FIXTURE the blocks are \
+       compiled with breaks it, which is the worse case: the block it feeds binds against the colliding \
+       shape and compiles perfectly clean (#171). Readers copy these blocks into their product — fix \
+       the prose (or, if the block is a sketch missing a binding, add it to the corpus's fixture file)."

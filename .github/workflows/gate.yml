@@ -318,6 +318,13 @@ jobs:
   # record literal resolve against the wrong one — a LABEL bug, not a type error. It is checked as
   # itself, textually, over every block including the skipped ones.
   #
+  # ...and over every FIXTURE those blocks are compiled with (#171), which is the half that bites
+  # hardest. A block declaring its own X/Y record at least states the collision in prose a reader can
+  # see; a FIXTURE that hands the block an X/Y-labelled type teaches it to bind against the colliding
+  # shape from OUTSIDE the document — so the block compiles perfectly, the markdown is spotless, and
+  # the gate ticks green over the precise defect it exists to kill. Until #171 the lint read the
+  # markdown and nothing else, and a fixture could do exactly that: verified, on this gate, at exit 0.
+  #
   # The harness is fail-closed on ITSELF — no source files, no blocks, a parsed-block count that
   # disagrees with an independent fence count, or a missing FS.GG.Game.Core build are all hard
   # failures, because the one thing this job must never do is go green over code it never compiled.
@@ -368,7 +375,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! dotnet fsi scripts/typecheck-md-blocks.fsx; then
-            echo "::error::a \`\`\`fsharp block in a published SKILL.md or TestSpec does not typecheck against FS.GG.Game.Core (or breaks the X/Y/Width/Height label rule). Readers copy these blocks verbatim into their product, so a block that cannot compile is a defect in the document, not in this gate. Reproduce locally with: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug && dotnet fsi scripts/typecheck-md-blocks.fsx"
+            echo "::error::a \`\`\`fsharp block in a published SKILL.md or TestSpec does not typecheck against FS.GG.Game.Core, or breaks the X/Y/Width/Height label rule — or a FIXTURE in scripts/*-block-context/ breaks that rule, which is the worse case: the block it feeds binds against the colliding shape and compiles perfectly clean (#171). The annotations above name the file at fault, which may be the fixture rather than the markdown. Readers copy these blocks verbatim into their product, so a block that cannot compile is a defect in the document, not in this gate. Reproduce locally with: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug && dotnet fsi scripts/typecheck-md-blocks.fsx"
             exit 1
           fi
 
