@@ -7,6 +7,14 @@ type Neighbourhood =
 [<RequireQualifiedAccess>]
 module Pathfinding =
 
+    type Step =
+        { Cost: int
+          CameFrom: Cell option }
+
+    type Reach =
+        { Steps: Map<Cell, Step>
+          Endable: Set<Cell> }
+
     // Fixed step offsets. The enumeration order does not affect A* output (the total (f,h,Col,Row)
     // frontier order decides), and for BFS it is a deterministic, documented order.
     let private orthoOffsets = [ (0, -1); (0, 1); (-1, 0); (1, 0) ]
@@ -190,6 +198,16 @@ module Pathfinding =
     // `stepWeight currentCost n baseStep` decides the direction convention, which is the ONE thing
     // that differs between the reverse (`distanceField`) and forward (`reachableWithin`) walks.
     // `currentCost` is the popped cell's cost, evaluated once per pop rather than once per neighbour.
+    //
+    // The walk SETTLES a `Step`, keeping the predecessor that produced each cell's final cost — the
+    // relaxation already knows it, and discarding it is what left callers unable to reconstruct a path
+    // from a budgeted search and reaching for `astar`, which prices a different question (#212). The
+    // cost-only fields project it back out; `reachable` returns the tree.
+    //
+    // The `CameFrom` tree is deterministic for the same reason the costs are: cells settle in the total
+    // `(dist, Col, Row)` order, and a relaxation improves a cell only on a STRICTLY lower candidate
+    // (`existing <= candidate` skips), so among equal-cost predecessors the earliest-settled one wins
+    // and no later tie can displace it.
     let private dijkstra
         (neighbourhood: Neighbourhood)
         (cost: Cell -> int)
@@ -197,15 +215,16 @@ module Pathfinding =
         (admit: int64 -> bool)
         (maxVisited: int)
         (seeds: Cell list)
-        : Map<Cell, int> =
+        : Map<Cell, Step> =
         let isWalkable c = cost c > 0
 
         let rec loop
             (openSet: Set<int64 * int * int>)
             (tentative: Map<Cell, int64>)
-            (settled: Map<Cell, int>)
+            (cameFrom: Map<Cell, Cell>)
+            (settled: Map<Cell, Step>)
             (expansions: int)
-            : Map<Cell, int> =
+            : Map<Cell, Step> =
             if Set.isEmpty openSet || expansions >= maxVisited then
                 settled
             else
@@ -213,21 +232,27 @@ module Pathfinding =
                 let current = { Col = col; Row = row }
                 let openSet = Set.remove (d, col, row) openSet
                 // Popped with the minimum key and all weights > 0 => `d` is final for `current`.
-                let settled = Map.add current (int d) settled
+                // A seed has no predecessor, so `CameFrom` is None for exactly the seeds.
+                let settled =
+                    Map.add
+                        current
+                        { Cost = int d
+                          CameFrom = Map.tryFind current cameFrom }
+                        settled
                 // `cost` is arbitrary caller code; evaluate it once per pop, not once per neighbour.
                 let currentCost = cost current
 
-                let (openSet, tentative) =
+                let (openSet, tentative, cameFrom) =
                     neighbours neighbourhood isWalkable current
                     |> List.fold
-                        (fun (os, tent) (struct (n, baseStep)) ->
+                        (fun (os, tent, cf) (struct (n, baseStep)) ->
                             let candidate = d + stepWeight currentCost n baseStep
 
                             if candidate > int64 System.Int32.MaxValue || not (admit candidate) then
-                                (os, tent)
+                                (os, tent, cf)
                             else
                                 match Map.tryFind n tent with
-                                | Some existing when existing <= candidate -> (os, tent)
+                                | Some existing when existing <= candidate -> (os, tent, cf)
                                 | prior ->
                                     // Drop any stale open entry for n (old distance) before re-adding.
                                     let os =
@@ -235,10 +260,12 @@ module Pathfinding =
                                         | Some oldD -> Set.remove (oldD, n.Col, n.Row) os
                                         | None -> os
 
-                                    (Set.add (candidate, n.Col, n.Row) os, Map.add n candidate tent))
-                        (openSet, tentative)
+                                    (Set.add (candidate, n.Col, n.Row) os,
+                                     Map.add n candidate tent,
+                                     Map.add n current cf))
+                        (openSet, tentative, cameFrom)
 
-                loop openSet tentative settled (expansions + 1)
+                loop openSet tentative cameFrom settled (expansions + 1)
 
         // Only cells that are actually settled are returned, so a `maxVisited` cut-off yields a
         // partial-but-correct field rather than a field with unfinalised tentative values in it.
@@ -249,7 +276,12 @@ module Pathfinding =
         else
             let openSet = seeds |> List.map (fun g -> (0L, g.Col, g.Row)) |> Set.ofList
             let tentative = seeds |> List.map (fun g -> g, 0L) |> Map.ofList
-            loop openSet tentative Map.empty 0
+            loop openSet tentative Map.empty Map.empty 0
+
+    // The cost-only projection of a settled field. `distanceField`/`reachableWithin` predate the
+    // `Step` tree and are defined in terms of it, so they cannot drift from `reachable`.
+    let private costsOf (settled: Map<Cell, Step>) : Map<Cell, int> =
+        settled |> Map.map (fun _ s -> s.Cost)
 
     let distanceField
         (neighbourhood: Neighbourhood)
@@ -259,8 +291,38 @@ module Pathfinding =
         : Map<Cell, int> =
         // Reverse walk: expanding goal-ward cell `current` to `n` means the AGENT steps n -> current,
         // i.e. it enters `current`. So the weight is `baseStep * cost current`.
+        // (The `CameFrom` tree of a reverse, multi-source walk points goal-ward and means something
+        // different from `reachable`'s, so it is not exposed — only the costs are.)
         let stepWeight (currentCost: int) (_n: Cell) (baseStep: int) = int64 baseStep * int64 currentCost
-        dijkstra neighbourhood cost stepWeight (fun _ -> true) maxVisited goals
+        dijkstra neighbourhood cost stepWeight (fun _ -> true) maxVisited goals |> costsOf
+
+    let reachable
+        (neighbourhood: Neighbourhood)
+        (maxVisited: int)
+        (cost: Cell -> int)
+        (canEndOn: Cell -> bool)
+        (budget: int)
+        (start: Cell)
+        : Reach =
+        if budget < 0 then
+            { Steps = Map.empty; Endable = Set.empty }
+        else
+            // Forward walk: the agent steps current -> n, entering `n`. Weight is `baseStep * cost n`.
+            let stepWeight (_currentCost: int) (n: Cell) (baseStep: int) = int64 baseStep * int64 (cost n)
+            // `budget` prunes, but it does NOT bound: over an unbounded `cost` predicate the reachable
+            // set grows quadratically in `budget`, so `maxVisited` is what makes the walk terminate —
+            // the same bound, for the same reason, as `astar`/`bfs`/`distanceField`.
+            let admit (candidate: int64) = candidate <= int64 budget
+            let steps = dijkstra neighbourhood cost stepWeight admit maxVisited [ start ]
+
+            // `canEndOn` narrows the DESTINATIONS; it never narrows `Steps`. That split is the point:
+            // a cell held by an ally is traversable and not endable, and one predicate cannot say so.
+            // Applied to `start` too, with no exception — a `canEndOn` meaning "unoccupied" excludes the
+            // unit's own cell, and whether standing still is legal is the game's call, not ours.
+            let endable =
+                steps |> Map.fold (fun acc c _ -> if canEndOn c then Set.add c acc else acc) Set.empty
+
+            { Steps = steps; Endable = endable }
 
     let reachableWithin
         (neighbourhood: Neighbourhood)
@@ -269,16 +331,23 @@ module Pathfinding =
         (budget: int)
         (start: Cell)
         : Map<Cell, int> =
-        if budget < 0 then
-            Map.empty
+        // Exactly `reachable`'s settled field with the predecessors dropped — same search, same costs,
+        // so the two can never disagree about what is in budget.
+        (reachable neighbourhood maxVisited cost (fun _ -> true) budget start).Steps |> costsOf
+
+    let pathTo (reach: Reach) (dest: Cell) : Cell list option =
+        // Walk the CameFrom chain back to the seed (the one cell whose CameFrom is None). Reads `Steps`,
+        // NOT `Endable`: a legal route may pass THROUGH a cell it may not stop on, so reconstructing
+        // from the filtered set would dead-end on exactly the routes `canEndOn` exists to allow.
+        let rec walk acc c =
+            match Map.tryFind c reach.Steps with
+            | Some { CameFrom = Some prev } -> walk (c :: acc) prev
+            | _ -> c :: acc // the seed (CameFrom = None); the tree has no other roots.
+
+        if Map.containsKey dest reach.Steps then
+            Some(walk [] dest)
         else
-            // Forward walk: the agent steps current -> n, entering `n`. Weight is `baseStep * cost n`.
-            let stepWeight (_currentCost: int) (n: Cell) (baseStep: int) = int64 baseStep * int64 (cost n)
-            // `budget` prunes, but it does NOT bound: over an unbounded `cost` predicate the reachable
-            // set grows quadratically in `budget`, so `maxVisited` is what makes the walk terminate —
-            // the same bound, for the same reason, as `astar`/`bfs`/`distanceField`.
-            let admit (candidate: int64) = candidate <= int64 budget
-            dijkstra neighbourhood cost stepWeight admit maxVisited [ start ]
+            None
 
     let flowField (neighbourhood: Neighbourhood) (field: Map<Cell, int>) : Map<Cell, Cell> =
         // Membership in the field IS walkability here, so the no-corner-cutting rule still applies:
