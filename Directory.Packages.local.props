@@ -16,13 +16,21 @@
        shipped PackageReferences beyond the org-baseline FSharp.Core; Game.Core stays BCL-only
        (reaches up to nothing).
 
-       Both pins MUST be a stable version, and stay on the coherent set (currently 0.5.0 — the release
-       that first carries the KeyboardInput `Keymap` type, FS-GG/FS.GG.Rendering#343). FS.GG.Game.Render
+       Both pins MUST be a stable version, and stay on the coherent set (currently 0.9.0). FS.GG.Game.Render
        is itself packed stable, and NU5104 forbids a stable package from taking a prerelease dependency
-       — a `-preview` pin here fails the release at pack, before any push. -->
+       — a `-preview` pin here fails the release at pack, before any push.
+
+       The train moved 0.5.0 -> 0.9.0 in FS.GG.Game#217. 0.5.0 was the release that first carried the
+       KeyboardInput `Keymap` type (FS-GG/FS.GG.Rendering#343) and it was pinned there for that reason;
+       what made it a CEILING as well as a floor is that the gate-only group below compiles the published
+       skills against this same train, so the pin bounded which FS.GG.UI API a SKILL.md could TEACH. It
+       could not teach `ControlsElmish.runInteractiveAppWithAudio` — first shipped in 0.9.0, and the
+       launcher an `app`-profile product must call — so #215 shipped the entry points as a prose table
+       rather than a compiled block, which cost the consuming repo's API-coverage scanner both launcher
+       symbols. Moving the train is what gives the documentation back its reach. -->
   <ItemGroup Label="Runtime — render edge">
-    <PackageVersion Include="FS.GG.UI.Scene" Version="0.5.0" />
-    <PackageVersion Include="FS.GG.UI.KeyboardInput" Version="0.5.0" />
+    <PackageVersion Include="FS.GG.UI.Scene" Version="0.9.0" />
+    <PackageVersion Include="FS.GG.UI.KeyboardInput" Version="0.9.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test-only">
@@ -49,7 +57,20 @@
        FS.GG.UI.Canvas / FS.GG.UI.SkiaViewer are the same FS.GG.Rendering release train as the render
        edge above and MUST move with it — both depend on FS.GG.UI.Scene at their own version, so a
        skill typechecked against a different one would be gated against a surface the reader's product
-       never restores. Keep all four Rendering pins on one version (currently 0.5.0).
+       never restores. Keep all four Rendering pins on one version (currently 0.9.0).
+
+       This group is why the train pin is a CEILING on the DOCUMENTATION and not just a floor under the
+       build (FS.GG.Game#217): a skill can only teach an API the gate can compile, and the gate compiles
+       against exactly these versions. At 0.5.0 that excluded `ControlsElmish.runInteractiveAppWithAudio`
+       — the launcher an `app`-profile product must call for sound, first shipped in FS.GG.UI 0.9.0 — so
+       #215 had to ship the entry points as a prose table instead of a block. FS.GG.UI.Controls.Elmish is
+       deliberately NOT pinned here yet: nothing binds it until that block is restored (#225), and a
+       gate-only pin that compiles nothing overstates what this gate checks.
+
+       The NEXT train move (0.9.0 -> 0.10.0) is gated on FS.GG.Game#219: FS.GG.UI 0.10.0 REMOVES
+       `Persistence.interpret`, which fs-gg-persistence still teaches, so bumping to it reds the md-block
+       gate until that body is repointed at `interpretRecordOnly`. 0.9.0 is the newest train on which
+       every existing skill block still compiles.
 
        FS.GG.Audio.* is its own train (Audio.Host depends on Audio.Core at the same version). Being
        gate-only, these can never reach a packed artefact, so the NU5104 stable-only rule that binds
@@ -57,8 +78,8 @@
   <ItemGroup Label="Gate-only — packages the published skills teach (no project references these)">
     <PackageVersion Include="FS.GG.Audio.Core" Version="0.2.0" />
     <PackageVersion Include="FS.GG.Audio.Host" Version="0.2.0" />
-    <PackageVersion Include="FS.GG.UI.Canvas" Version="0.5.0" />
-    <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.5.0" />
+    <PackageVersion Include="FS.GG.UI.Canvas" Version="0.9.0" />
+    <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.9.0" />
   </ItemGroup>
 
   <!-- Generator-only — the SOURCE that scripts/skill-block-context/_scaffold.fs is generated FROM
@@ -78,13 +99,13 @@
        FS.GG.UI.Scene the gate COMPILES it against have to be one coherent set — otherwise the scaffold
        could be generated from a fragment written against a Scene surface the gate never restores, and
        the gate would go green over a pairing no reader can reproduce. Keep all five on one version
-       (currently 0.5.0).
+       (currently 0.9.0).
 
        FS.GG.UI.Template packs the Rendering repo under `content/`, which is what makes the fragment a
        published, restorable SOURCE rather than something only a generated product ever sees. Rendering
        guards that with a merge-blocking test (Feature570PublishedScaffoldGeometryTests), so the path
        is a contract; the generator still fails closed if it ever stops shipping. -->
   <ItemGroup Label="Generator-only — source for the generated _scaffold.fs (no project references this)">
-    <PackageVersion Include="FS.GG.UI.Template" Version="0.5.0" />
+    <PackageVersion Include="FS.GG.UI.Template" Version="0.9.0" />
   </ItemGroup>
 </Project>
