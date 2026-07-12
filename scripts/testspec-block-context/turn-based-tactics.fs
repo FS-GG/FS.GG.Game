@@ -1,6 +1,6 @@
 // Typecheck fixtures for the turn-based-tactics TestSpec (see scripts/typecheck-md-blocks.fsx).
 
-//#block 1 "let reachable (board: Board) (unit: Unit) : Map<Tile, int> ="
+//#block 1 "type Step ="
 // §4.4's reachability sketch is the document's FIRST block and stands ~180 lines AHEAD of the §5.4
 // type sketch (block 2) that declares `Tile` and `Unit` — so the cumulative opens have nothing to
 // give it and the fixture stands them up here, field-for-field as §5.4 states them, narrowed to the
