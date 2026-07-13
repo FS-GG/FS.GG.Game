@@ -847,10 +847,14 @@ expect_eq "$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .env.REPORT
 # taking the invitation now costs an hour rebuilding a gate that already gates them.
 #
 # `.github/workflows/gate.yml` runs actionlint — pinned, driving a pinned shellcheck — over every
-# workflow in `.github/workflows`, this one included, as the required check "Shell lint (actionlint +
-# shellcheck over every run: block, and over the repo's own scripts)". It knows an `if:` from a typo'd
-# `ifs:`, it shellchecks the `run:` blocks, and being f(tree) it can gate honestly, so it does. It
-# reproduces on a laptop:
+# workflow in `.github/workflows`, this one included. It is the `workflow-lint` job, "Shell lint
+# (actionlint + shellcheck over every run: block, and over the repo's own scripts)", and it runs
+# unguarded on every `pull_request` to main. It knows an `if:` from a typo'd `ifs:`, it shellchecks
+# the `run:` blocks, and being f(tree) it is entitled to go red at you: every red it raises was
+# introduced by the diff in front of it. (Entitled to, not empowered to — `main` carries no branch
+# protection and no ruleset, so NOTHING in this repo is a mechanically-required check, and a red one
+# stops only the worker who reads it. That is a wider fact than this file, and it is filed as #287.)
+# It reproduces on a laptop:
 #
 #   actionlint -shellcheck /path/to/shellcheck
 #
