@@ -67,12 +67,64 @@ on:
     paths:
       - '.github/workflows/skill-refs-sweep.yml'
       - 'scripts/check-skill-refs.sh'
+  # AND ON THE MERGE THAT FIXES THE DECAY. Exactly one thing retires the tracking issue below — a
+  # green sweep — so without this trigger the only thing that ever closes it is the 07:00 cron, and a
+  # decay fixed at 10:52 leaves the issue open, red, and ASSERTING A DECAY THAT NO LONGER EXISTS until
+  # the next morning. Up to ~21 hours of a lie.
+  #
+  # That is not merely untidy, and the issue's own wording is why: it advertises the finding as "small,
+  # well-specified, unblocked" work. That is exactly what makes it the most attractive item on the
+  # board — `take` will hand it to the next worker who asks — so a STALE one does not sit quietly, it
+  # gets picked up. The worker claims it, cuts a worktree, reproduces the gate, and finds it green.
+  # FS.GG.Game#268 did precisely this: filed 10:18Z, fixed at 10:52Z by FS.GG.Game#271, still open and
+  # still being claimed two hours later. The cost of a late close is a worker's item, not a stale row.
+  #
+  # THE CRON STAYS, and is still the only thing that catches what this trigger structurally cannot: a
+  # citation that rots — or heals — because the WORLD moved. An upstream issue closing or reopening
+  # changes no file here and pushes nothing, so `push` never fires for it. The two are one mechanism:
+  # `push` closes the tracker promptly when the TREE is the fix; `schedule` is what notices when the
+  # tree never changes at all. Deleting either leaves a class of decay unresolved by anybody.
+  #
+  # AND IT IS STILL NOT A MERGE GATE (FS.GG.Game#238). It runs AFTER the merge, on `main`. It cannot
+  # block a PR, and must never be made to.
+  #
+  # It CAN go red on a `main` commit — the `Verdict` step re-raises the sweep's rc, and that is the
+  # point: a red nobody can see is the #242 defect.
+  #
+  # It does not, however, make the red land on an innocent author for the first time — which is the
+  # objection to look for here, given #237. A SCHEDULED run already attaches its check to whatever
+  # commit happens to be `main`'s HEAD at 07:00, and that commit is somebody's merge. So decay has
+  # always reddened a commit that did not cause it; `push` changes WHEN that happens, not WHETHER, and
+  # it picks a strictly more related commit (one that touched a skill) than the cron's arbitrary HEAD.
+  #
+  # Nor can a push run be the first to discover decay a diff introduced: `gate` already resolves the
+  # links of any skill a PR touches, blocking, at authorship time. So what a push run finds is only
+  # ever decay the WORLD caused — exactly what this workflow is for, and what #238 moved off the gate
+  # rather than out of sight.
+  #
+  # What it buys, in both directions, is timeliness: red sooner when decay lands, and — the reason this
+  # trigger exists — GREEN-AND-CLOSED sooner when the fix does.
+  push:
+    branches: [main]
+    paths:
+      - 'template/product-skills/**'              # the subject: every published skill body
+      - 'scripts/check-skill-refs.sh'             # the judge — a change here can flip a verdict
+      - '.github/workflows/skill-refs-sweep.yml'  # and the sweep itself: the PR run above is a DRY
+                                                  # RUN, so this is its first real reconcile.
 
 concurrency:
-  # Never cancel a scheduled sweep in flight: the reconcile step below is a read-modify-write of one
-  # shared issue, and a half-run that is killed between "render" and "reconcile" leaves that issue
-  # asserting a decay set that is no longer the truth. PR runs are still cancellable — they only ever
-  # render, never write.
+  # Never cancel a WRITING sweep in flight — scheduled, dispatched, or `push`. The reconcile step below
+  # is a read-modify-write of one shared issue, and a half-run that is killed between "render" and
+  # "reconcile" leaves that issue asserting a decay set that is no longer the truth. PR runs are still
+  # cancellable — they only ever render, never write.
+  #
+  # This is why the condition below is `== 'pull_request'` and not `!= 'schedule'`: every non-PR event
+  # writes, so every non-PR event must be uncancellable. `push` (FS.GG.Game#275) relies on that, and a
+  # future trigger will too. Narrowing this to name one event would silently re-arm the race.
+  #
+  # A push and the cron share one group (both resolve `github.ref` to `refs/heads/main`), so they
+  # serialise against each other rather than racing the issue write. That is the intent, not a
+  # coincidence to be tidied away.
   group: skill-refs-sweep-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
