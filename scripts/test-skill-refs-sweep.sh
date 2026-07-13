@@ -842,7 +842,33 @@ expect_eq "$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .env.REPORT
 
 # ── summary ─────────────────────────────────────────────────────────────────────────────────────
 #
-# STILL MISSING, and worth someone's next hour: nothing in CI parses this workflow's YAML beyond
-# GitHub itself. The PyYAML load at the top of this file is a lower bound on that — a workflow that
-# does not parse fails here — but it does not know an `if:` from a typo'd `ifs:`, and actionlint does.
+# WHO ELSE READS THIS WORKFLOW. Until #270 the honest answer was "GitHub, at dispatch time", and the
+# note that stood here invited the next reader to go and fix that. They should not: it is fixed, and
+# taking the invitation now costs an hour rebuilding a gate that already gates them.
+#
+# `.github/workflows/gate.yml` runs actionlint — pinned, driving a pinned shellcheck — over every
+# workflow in `.github/workflows`, this one included. It is the `workflow-lint` job, "Shell lint
+# (actionlint + shellcheck over every run: block, and over the repo's own scripts)", and it runs
+# unguarded on every `pull_request` to main. It knows an `if:` from a typo'd `ifs:`, it shellchecks
+# the `run:` blocks, and being f(tree) it is ENTITLED to go red at you: every red it raises was
+# introduced by the diff in front of it.
+#
+# Entitled to. Whether a red check can also STOP a merge is a repo-settings question — it depends on
+# branch protection, which is not in this tree — so this file does not answer it and must not pretend
+# to. #287 is where that question lives, and where its answer will stay true. (This paragraph used to
+# answer it. That was the same bug in a new coat: a fact about the world, asserted in a comment, in a
+# file whose whole subject is that nothing in CI reads comments — so the fix for #287 would silently
+# turn this note back into the lie it was written to remove.)
+#
+# It reproduces on a laptop — with the versions gate.yml pins, which is the point of pinning them
+# (#261): an actionlint or shellcheck you happened to have can disagree with the one that gates.
+#
+#   actionlint -shellcheck /path/to/shellcheck
+#
+# That does not make this suite redundant, and the split is worth naming. actionlint checks the YAML
+# against the Actions SCHEMA; it cannot know the pipeline still has the SHAPE these tests model. That
+# is § 0's job — it pins the `if:` conditions, the `DRY_RUN` env and the `pull_request` trigger by
+# hand, precisely because they are GitHub expressions no harness in this language can evaluate. And
+# the PyYAML load at the top stays for a reason of its own: it is what EXTRACTS the `run:` blocks
+# tested below, which is also why a workflow that does not parse still fails here, away from CI.
 harness_summary test-skill-refs-sweep
