@@ -22,6 +22,11 @@
 # copy of the script, plus a fake `gh` on PATH whose answers come from a per-fixture state file.
 # Nothing here touches the network or the real board.
 #
+# The counters, the assertions, the fixture builder and that fake `gh` are SHARED with
+# scripts/test-skill-refs-sweep.sh — see scripts/lib/test-harness.sh (FS.GG.Game#259). What is local
+# to this file is the git-repo fixture and `run`, because the subject here is a script rather than a
+# workflow step, and that is the part the two suites do not have in common.
+#
 # GITHUB_ACTIONS IS CONTROLLED, NEVER INHERITED. The subject's behaviour genuinely forks on it
 # (SKILL_REFS_SKIP_LINKS is ignored in CI; an unreadable link is fatal in CI and a note locally),
 # so a test that let it leak in from the environment would assert one thing on a laptop and a
@@ -38,97 +43,31 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SUT="$REPO_ROOT/scripts/check-skill-refs.sh"
 [[ -f $SUT ]] || { echo "test-check-skill-refs: cannot find $SUT" >&2; exit 2; }
 
-TMPROOT=$(mktemp -d)
-trap 'rm -rf "$TMPROOT"' EXIT
+# shellcheck source=lib/test-harness.sh
+. "$REPO_ROOT/scripts/lib/test-harness.sh"
+harness_init
 
-n_pass=0
-n_fail=0
-n_fix=0
-FIX=""
-OUT=""
-RC=0
+# ── fixture ─────────────────────────────────────────────────────────────────────────────────────
 
-# ── harness ─────────────────────────────────────────────────────────────────────────────────────
-
-case_start() { printf '\n%s\n' "$1"; }
-
-ok()  { n_pass=$((n_pass + 1)); printf '  ok    %s\n' "$1"; }
-bad() {
-  n_fail=$((n_fail + 1))
-  printf '  FAIL  %s\n' "$1"
-  printf '        %s\n' "$2"
-  printf '        ── subject output (exit %s) ──\n' "$RC"
-  printf '%s\n' "$OUT" | sed 's/^/        │ /'
-  printf '        ─────────────────────────────\n'
-}
-
-expect_rc() { # expect_rc <want> <what>
-  if [[ $RC == "$1" ]]; then ok "$2"; else bad "$2" "expected exit $1, got $RC"; fi
-}
-expect_has() { # expect_has <substring> <what>
-  if grep -qF -- "$1" <<<"$OUT"; then ok "$2"; else bad "$2" "output does not contain: $1"; fi
-}
-expect_hasnt() { # expect_hasnt <substring> <what>
-  if grep -qF -- "$1" <<<"$OUT"; then bad "$2" "output should NOT contain: $1"; else ok "$2"; fi
-}
-
-# A fresh fixture repo: a copy of the subject, an empty skill root, and a fake `gh`.
-#
-# COUNTED, not $RANDOM. $$ is fixed within a run, so $RANDOM was the only entropy — a 1-in-32768
-# draw taken ~20 times, i.e. a ~0.6% birthday collision every run, or one run in ~170. `mkdir -p`
-# would then hand the second fixture the FIRST one's tree, so a case would inherit a skill body it
-# never wrote and pass or fail on it. A flaky test in a suite whose entire product is
-# trustworthiness is worse than no test at all, and it would decay exactly like the defects this
-# suite exists to catch: rarely, and looking like something else.
+# The shared tree (skill root, fake `gh`, its state files), plus the one thing that is ours: a copy
+# of the subject, which the git helpers below then commit into a throwaway repo.
 fixture() {
-  n_fix=$((n_fix + 1))
-  FIX="$TMPROOT/fix-$n_fix"
-  mkdir -p "$FIX/scripts" "$FIX/template/product-skills" "$FIX/bin"
+  fixture_new
   cp "$SUT" "$FIX/scripts/check-skill-refs.sh"
   chmod +x "$FIX/scripts/check-skill-refs.sh"
-  : >"$FIX/gh-state"
-
-  # Fake `gh`. Answers only what the subject asks: `gh auth status`, and
-  # `gh api repos/<owner>/<repo>/issues/<n> --jq .state`.
-  #
-  # An unknown ref 404s rather than erroring, deliberately: the subject retries an ERROR three times
-  # with 2s+4s backoff, so a typo'd fixture ref would cost six seconds of sleep and read as a hang.
-  # 404 is the honest answer for "no such issue" anyway — it is what the real API says.
-  cat >"$FIX/bin/gh" <<'FAKE_GH'
-#!/usr/bin/env bash
-case ${1:-} in
-  auth)
-    [[ ${GH_NOAUTH:-0} == 1 ]] && exit 1
-    exit 0 ;;
-  api)
-    p=${2:-}
-    k=${p#repos/}; owner=${k%%/*}
-    r=${k#*/};     repo=${r%%/*}
-    num=${p##*/}
-    st=$(awk -F'\t' -v k="$owner/$repo#$num" '$1==k {print $2; exit}' "${GH_STATE:-/dev/null}")
-    case $st in
-      open|closed) printf '%s' "$st"; exit 0 ;;
-      *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
-    esac ;;
-esac
-exit 1
-FAKE_GH
-  chmod +x "$FIX/bin/gh"
 }
-
-# skill <id>   — body on stdin
-skill() {
-  mkdir -p "$FIX/template/product-skills/$1"
-  cat >"$FIX/template/product-skills/$1/SKILL.md"
-}
-
-# issue <owner/repo#num> <open|closed>   — anything not registered 404s as missing
-issue() { printf '%s\t%s\n' "$1" "$2" >>"$FIX/gh-state"; }
 
 git_init() {
   git -C "$FIX" init -q -b main
   git -C "$FIX" config user.email test@example.invalid
   git -C "$FIX" config user.name 'skill-refs tests'
+  # The harness's plumbing is not part of the repo under test, and `git add -A` cannot tell the
+  # difference. `gh.log` is the one that bites: the fake `gh` APPENDS to it on every call, so a
+  # fixture that tracked it would carry a file that mutates while the subject runs — and a case
+  # that committed after a `run` would find the harness's own call log inside the diff it is
+  # asserting on. Excluded before the first `add`, so none of it is ever tracked.
+  printf '%s\n' bin/ gh.log gh-state gh-bodies/ trackers.json unlabelled.json \
+    >"$FIX/.git/info/exclude"
   git -C "$FIX" add -A
   git -C "$FIX" commit -qm 'fixture base'
 }
@@ -152,8 +91,8 @@ git_orphan() {
 
 # run [args…] — env knobs: CI_MODE=1, SKIP_LINKS=1, GH_NOAUTH=1
 run() {
-  local -a e=(env -u GITHUB_ACTIONS -u SKILL_REFS_SKIP_LINKS -u GH_NOAUTH
-              "PATH=$FIX/bin:$PATH" "GH_STATE=$FIX/gh-state")
+  local -a e=(env -u GITHUB_ACTIONS -u SKILL_REFS_SKIP_LINKS -u GH_NOAUTH) base
+  mapfile -t base < <(gh_env); e+=("${base[@]}")
   [[ ${CI_MODE:-0}   == 1 ]] && e+=("GITHUB_ACTIONS=true")
   [[ ${SKIP_LINKS:-0} == 1 ]] && e+=("SKILL_REFS_SKIP_LINKS=1")
   [[ ${GH_NOAUTH:-0}  == 1 ]] && e+=("GH_NOAUTH=1")
@@ -178,7 +117,7 @@ skill fs-gg-beta <<'MD'
 MD
 run
 expect_rc 0 'clean tree passes'
-expect_has 'every [[ref]] resolves' 'says the wiki half resolved'
+expect_out_has 'every [[ref]] resolves' 'says the wiki half resolved'
 
 case_start '§1 a bare [[ref]] to a skill this repo does NOT publish fails'
 fixture
@@ -188,8 +127,8 @@ See [[fs-gg-nowhere]].
 MD
 run
 expect_rc 1 'dangling bare ref fails'
-expect_has 'dangling [[fs-gg-nowhere]]' 'names the dangling ref'
-expect_has 'qualify it as' 'tells the author how to fix it'
+expect_out_has 'dangling [[fs-gg-nowhere]]' 'names the dangling ref'
+expect_out_has 'qualify it as' 'tells the author how to fix it'
 
 case_start '§1 a SELF-qualified ref to a skill we do publish fails — write it bare'
 fixture
@@ -202,7 +141,7 @@ skill fs-gg-beta <<'MD'
 MD
 run
 expect_rc 1 'self-qualified ref fails'
-expect_has 'write it bare' 'says to write it bare'
+expect_out_has 'write it bare' 'says to write it bare'
 
 case_start '§1 a ref qualified with an owner outside the registry vocabulary fails'
 fixture
@@ -212,7 +151,7 @@ See [[fs-gg-bogus:fs-gg-scene]].
 MD
 run
 expect_rc 1 'unknown owner fails'
-expect_has "unknown owner 'fs-gg-bogus'" 'names the unknown owner'
+expect_out_has "unknown owner 'fs-gg-bogus'" 'names the unknown owner'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # § 2  ISSUE / PR LINKS  — f(tree, world)
@@ -227,7 +166,7 @@ MD
 issue 'FS-GG/FS.GG.Rendering#100' open
 run
 expect_rc 0 'open link passes'
-expect_has 'issue/PR link(s) in the tree are open or marked' 'states what it resolved'
+expect_out_has 'issue/PR link(s) in the tree are open or marked' 'states what it resolved'
 
 fixture
 skill fs-gg-alpha <<'MD'
@@ -237,8 +176,8 @@ MD
 issue 'FS-GG/FS.GG.Rendering#100' closed
 run
 expect_rc 1 'closed link fails'
-expect_has 'stale link' 'calls it a stale link'
-expect_has 'closed-ok' 'offers the marker as the opt-out'
+expect_out_has 'stale link' 'calls it a stale link'
+expect_out_has 'closed-ok' 'offers the marker as the opt-out'
 
 case_start '§2 a CLOSED link with a matching closed-ok marker passes'
 fixture
@@ -261,8 +200,8 @@ MD
 issue 'FS-GG/FS.GG.Rendering#999' closed
 run
 expect_rc 1 'orphan marker fails'
-expect_has 'stale closed-ok marker' 'calls out the dead marker'
-expect_has 'nothing in this file links to' 'says why it is dead'
+expect_out_has 'stale closed-ok marker' 'calls out the dead marker'
+expect_out_has 'nothing in this file links to' 'says why it is dead'
 
 case_start '§2 a marker whose issue REOPENED is reported'
 fixture
@@ -274,7 +213,7 @@ MD
 issue 'FS-GG/FS.GG.Rendering#245' open
 run
 expect_rc 1 'reopened issue defeats its marker'
-expect_has 'is OPEN again; drop the marker' 'tells the author to drop it'
+expect_out_has 'is OPEN again; drop the marker' 'tells the author to drop it'
 
 case_start '§2 a link to an issue that does not exist fails as dangling'
 fixture
@@ -284,7 +223,7 @@ See FS.GG.Rendering#4242.
 MD
 run   # unregistered → the fake gh 404s it
 expect_rc 1 'missing issue fails'
-expect_has 'dangling link' 'calls it dangling'
+expect_out_has 'dangling link' 'calls it dangling'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # § 3  BARE #N  — f(tree), hermetic, no network
@@ -298,8 +237,8 @@ Track it in #4242.
 MD
 run
 expect_rc 1 'bare ref fails'
-expect_has 'bare ref' 'calls it a bare ref'
-expect_has 'FS.GG.Game#4242' 'suggests the qualified form'
+expect_out_has 'bare ref' 'calls it a bare ref'
+expect_out_has 'FS.GG.Game#4242' 'suggests the qualified form'
 
 case_start '§3 a bare #N with a matching prose-ok marker passes'
 fixture
@@ -310,7 +249,7 @@ The design doc's "#4242 LOS bug" is the one to read first.
 MD
 run
 expect_rc 0 'prose-ok excuses the bare ref'
-expect_has 'bare #N ref(s); every one is marked prose-ok' 'states the subject it excused'
+expect_out_has 'bare #N ref(s); every one is marked prose-ok' 'states the subject it excused'
 
 case_start '§3 a prose-ok marker that excuses nothing is dead config'
 fixture
@@ -321,7 +260,7 @@ Clean prose.
 MD
 run
 expect_rc 1 'orphan prose-ok fails'
-expect_has 'stale prose-ok marker' 'calls out the dead prose marker'
+expect_out_has 'stale prose-ok marker' 'calls out the dead prose marker'
 
 case_start '§3 a CSS colour is not an issue ref, and neither is a labelled markdown link'
 fixture
@@ -336,8 +275,8 @@ issue 'FS-GG/FS.GG.Rendering#587' open
 issue 'FS-GG/FS.GG.Rendering#459' open
 run
 expect_rc 0 'colours and labelled links do not fire §3'
-expect_has 'no bare #N refs' 'reports zero bare refs, out loud'
-expect_hasnt '1a2b3c' 'never mentions the colour'
+expect_out_has 'no bare #N refs' 'reports zero bare refs, out loud'
+expect_out_hasnt '1a2b3c' 'never mentions the colour'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # THE #241 NEAR-MISS  — closed-ok markers must survive a SINGLE-FILE --changed scope
@@ -371,9 +310,9 @@ git_commit 'touch exactly one skill'
 issue 'FS-GG/FS.GG.Rendering#245' closed
 run --changed "$BASE"
 expect_rc 0 'the marker still excuses its link when grep sees a single file'
-expect_hasnt 'stale link' 'the marked citation is not reported as stale'
-expect_hasnt 'stale closed-ok marker' 'the marker is not reported as dead'
-expect_has 'skill body/bodies this diff touches' 'names the scoped subject'
+expect_out_hasnt 'stale link' 'the marked citation is not reported as stale'
+expect_out_hasnt 'stale closed-ok marker' 'the marker is not reported as dead'
+expect_out_has 'skill body/bodies this diff touches' 'names the scoped subject'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # SCOPE  (#238) — the link half may only judge what the diff touches…
@@ -394,9 +333,9 @@ git_commit 'unrelated change'
 issue 'FS-GG/FS.GG.Rendering#100' closed     # …and the world moved under an untouched skill
 run --changed "$BASE"
 expect_rc 0 'the innocent diff is not reddened'
-expect_has 'link check N/A' 'says the link half judged nothing'
-expect_has 'swept on a schedule' 'points at where that rot DOES surface'
-expect_hasnt 'stale link' 'does not report the untouched stale link'
+expect_out_has 'link check N/A' 'says the link half judged nothing'
+expect_out_has 'swept on a schedule' 'points at where that rot DOES surface'
+expect_out_hasnt 'stale link' 'does not report the untouched stale link'
 
 case_start 'scope: …but a diff that DOES touch a skill still owns that skill'"'"'s links'
 fixture
@@ -414,7 +353,7 @@ git_commit 'introduce a stale link'
 issue 'FS-GG/FS.GG.Rendering#100' closed
 run --changed "$BASE"
 expect_rc 1 'scoping did not neuter the gate'
-expect_has 'stale link' 'still catches the rot the diff introduced'
+expect_out_has 'stale link' 'still catches the rot the diff introduced'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # FALLBACK — degrade toward MORE checking, never less
@@ -430,8 +369,8 @@ git_init
 issue 'FS-GG/FS.GG.Rendering#100' closed
 run --changed 0000000000000000000000000000000000000000
 expect_rc 1 'the fallback SWEPT — it found the stale link it could have skipped'
-expect_has 'does not resolve here' 'names the unusable base'
-expect_has 'Falling back to the FULL link sweep' 'announces the fallback, loudly'
+expect_out_has 'does not resolve here' 'names the unusable base'
+expect_out_has 'Falling back to the FULL link sweep' 'announces the fallback, loudly'
 # The `link scope — …` summary line is NOT asserted here: on a failing run the subject prints its
 # failure block and exits before reaching the summary. The fallback is still announced up front
 # (above), which is the disclosure that matters. The summary wording is pinned in the clean-tree
@@ -448,12 +387,12 @@ ORPHAN=$(git_orphan)
 issue 'FS-GG/FS.GG.Rendering#100' closed
 run --changed "$ORPHAN"
 expect_rc 1 'exits 1 on the stale link it swept up — NOT 128 from a raw git fatal'
-expect_has 'shares no history with HEAD' 'diagnoses the real problem'
-expect_has 'Falling back to the FULL link sweep' 'announces the fallback'
-# Not `expect_hasnt 'no merge base'`: the subject's OWN diagnosis says "there is no merge base, so
+expect_out_has 'shares no history with HEAD' 'diagnoses the real problem'
+expect_out_has 'Falling back to the FULL link sweep' 'announces the fallback'
+# Not `expect_out_hasnt 'no merge base'`: the subject's OWN diagnosis says "there is no merge base, so
 # there is no diff to take against it", which is the sentence we want. What must never appear is
 # git's raw plumbing error leaking through as the gate's verdict.
-expect_hasnt 'fatal:' 'never leaks git'"'"'s raw fatal into the gate output'
+expect_out_hasnt 'fatal:' 'never leaks git'"'"'s raw fatal into the gate output'
 
 case_start 'fallback: an unusable base over a CLEAN tree still passes, and still says what it did'
 fixture
@@ -465,9 +404,9 @@ git_init
 issue 'FS-GG/FS.GG.Rendering#100' open
 run --changed 0000000000000000000000000000000000000000
 expect_rc 0 'clean tree under a bad base passes'
-expect_has 'Falling back to the FULL link sweep' 'still announces the fallback'
-expect_has 'swept the whole tree instead' 'the summary restates the scope, so a green run cannot be mistaken for a scoped one'
-expect_hasnt 'link check N/A' 'a fallback is never reported as "nothing to judge"'
+expect_out_has 'Falling back to the FULL link sweep' 'still announces the fallback'
+expect_out_has 'swept the whole tree instead' 'the summary restates the scope, so a green run cannot be mistaken for a scoped one'
+expect_out_hasnt 'link check N/A' 'a fallback is never reported as "nothing to judge"'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # NEVER SELF-SKIP — the promise that matters most
@@ -482,8 +421,8 @@ MD
 issue 'FS-GG/FS.GG.Rendering#100' open
 CI_MODE=1 GH_NOAUTH=1 run
 expect_rc 1 'a link it cannot read is not a link it may call green'
-expect_has 'no authenticated' 'says why it failed'
-expect_hasnt 'ok — all' 'does not claim it resolved anything'
+expect_out_has 'no authenticated' 'says why it failed'
+expect_out_hasnt 'ok — all' 'does not claim it resolved anything'
 
 case_start 'CI ignores SKILL_REFS_SKIP_LINKS — the skip is a local convenience, not a CI escape'
 fixture
@@ -494,7 +433,7 @@ MD
 issue 'FS-GG/FS.GG.Rendering#100' closed
 CI_MODE=1 SKIP_LINKS=1 run
 expect_rc 1 'the stale link is still caught in CI'
-expect_has 'stale link' 'the link half ran anyway'
+expect_out_has 'stale link' 'the link half ran anyway'
 
 case_start 'locally, SKILL_REFS_SKIP_LINKS skips the link half — and SAYS it skipped it'
 fixture
@@ -505,9 +444,9 @@ MD
 issue 'FS-GG/FS.GG.Rendering#100' closed
 SKIP_LINKS=1 run
 expect_rc 0 'the skipped half cannot fail the run'
-expect_has 'were NOT checked' 'a skipped subject is announced, never silently passed'
-expect_has 'SKILL_REFS_SKIP_LINKS is set' 'names the reason it skipped'
-expect_hasnt 'stale link' 'the link half really was skipped — the stale link went unreported'
+expect_out_has 'were NOT checked' 'a skipped subject is announced, never silently passed'
+expect_out_has 'SKILL_REFS_SKIP_LINKS is set' 'names the reason it skipped'
+expect_out_hasnt 'stale link' 'the link half really was skipped — the stale link went unreported'
 
 case_start 'locally, the hermetic §3 still gates with the link half skipped — it needs no network'
 fixture
@@ -517,7 +456,7 @@ Track it in #4242.
 MD
 SKIP_LINKS=1 run
 expect_rc 1 'a bare ref is caught with no network at all'
-expect_has 'bare ref' '§3 fired offline'
+expect_out_has 'bare ref' '§3 fired offline'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # ARGUMENT HANDLING
@@ -530,7 +469,7 @@ skill fs-gg-alpha <<'MD'
 MD
 run --changed
 expect_rc 2 'refuses a --changed with no ref'
-expect_has 'needs a base ref' 'says what is missing'
+expect_out_has 'needs a base ref' 'says what is missing'
 
 fixture
 skill fs-gg-alpha <<'MD'
@@ -540,9 +479,4 @@ run --nonsense
 expect_rc 2 'refuses an unknown argument'
 
 # ── summary ─────────────────────────────────────────────────────────────────────────────────────
-printf '\n────────────────────────────────────────\n'
-if ((n_fail)); then
-  printf 'test-check-skill-refs: FAILED — %d passed, %d failed\n' "$n_pass" "$n_fail"
-  exit 1
-fi
-printf 'test-check-skill-refs: ok — %d assertions passed\n' "$n_pass"
+harness_summary test-check-skill-refs
