@@ -1646,6 +1646,7 @@ next() {
   # handing FRESH down into either call would rescan the whole board again. `next --fresh` would then
   # silently cost two or three full scans of the one budget #418 exists to protect.
   [ -n "$fresh" ] && CACHED=1 FRESH=1 board_items >/dev/null
+
   pickid="$(CACHED=1 batch_cmd "${repoflag[@]+"${repoflag[@]}"}" \
               "${ignflag[@]+"${ignflag[@]}"}" -n 1 --json | jq -r '.[0] // empty')"
   if [ -z "$pickid" ]; then
@@ -2680,6 +2681,7 @@ claim_cmd() {
   # that branch's commits into this item's PR (.github#319).
   printf '  isolate:  git worktree add ../%s-%s -b %s origin/main\n' "$R_REPO" "$R_NUM" "$branch"
   printf '  attribute: git commit --trailer "FSGG-Worker: %s"\n' "$w"
+  lane_note "$R_OWNER/$R_REPO#$R_NUM"
   warn_shared_identity
 }
 
@@ -4600,6 +4602,79 @@ divergence_fleet() {
   esac
 }
 
+# KEEPING TABS: tell a worker which lane it just entered, and who else is in it (#428).
+#
+# The claim already says WHAT you took. This says WHERE — because a lane is the set of items your
+# touch-set can contend with, and the two facts a worker actually needs are: is anybody else in here with
+# me, and what else is in here that I will probably want next? (Follow-up findings land in the files you
+# were just standing in, which is the same lane, which is why this is worth printing at all.)
+#
+# Advisory, and never fatal. A lane is a nicety; a claim is a lock. If the partition cannot be computed —
+# no engine, a scan that did not collect — the claim stands exactly as before and this says nothing.
+lane_note() {  # <owner/repo#n>
+  engine_resolve >/dev/null 2>&1 || return 0
+  [ -s "${SHADOW_ITEMS:-}" ] || return 0
+
+  local snap part id
+  id="${1#*/}"                                 # owner/repo#n -> repo#n, the form the engine prints
+  snap="$(mktemp "$CACHE/.lanenote.XXXXXX")"; TMPFILES+=("$snap")
+  jq -n --slurpfile items "$SHADOW_ITEMS" --arg schema "$SNAPSHOT_SCHEMA" \
+    '{ schema: $schema, allowBacklog: true, limit: 0, inFlight: [], items: $items }' >"$snap" 2>/dev/null || return 0
+  part="$("${ENGINE_ARGV[@]}" lanes --json <"$snap" 2>/dev/null)" || return 0
+
+  jq -r --arg id "$id" '
+    ( .partition[] | select(.items[].ref == $id) ) as $lane
+    | if $lane == null then empty
+      else
+        "  lane:     \($lane.id)  ·  \($lane.items | length) item(s) share files with this one"
+        + ( if ($lane.heldBy | length) > 0
+            then "\n  SHARING:  \($lane.heldBy | join(", ")) " +
+                 "— you are NOT alone in this lane. Your touch-sets may still be disjoint (batch proved " +
+                 "this item is), but a `widen` here can collide. Say so early: fsgg-coord say <issue> --to <worker>"
+            else "\n  yours:    nobody else is in this lane — your follow-ups here will not be locked out"
+            end )
+      end' <<<"$part" 2>/dev/null || true
+}
+
+# Prefer a FREE lane — a lane nobody is standing in (#428).
+#
+# THIS MAKES NO SAFETY CLAIM, AND IT CANNOT. Every id handed to it is one `batch` has ALREADY proven
+# startable and disjoint from every live claim and from every other id in the set. This only chooses
+# WHICH of those equally-safe items to hand over. If it picks wrong, a worker gets a safe item in a busy
+# lane — a preference missed, never a collision. That distinction is the whole reason this is allowed to
+# be a heuristic at all: the moment an ordering could make an unsafe pick, it would have to move into the
+# typed core and be proven, and it does not.
+#
+# WHY PREFER A FREE LANE. Two items in the SAME lane may still be pairwise disjoint (A—B, B—C leaves A
+# and C disjoint), so the scheduler is right to offer both, and forbidding it would UNDER-schedule. But a
+# worker dropped into an occupied lane is one `widen` away from a collision, and — the part that actually
+# bites — its own FOLLOW-UP findings land in the files it was just standing in, i.e. the same lane, where
+# somebody else is now holding the lock. That is #533's shape one level up: the recipe reliably produces
+# an item its own author is locked out of.
+#
+# Degrades to today's behaviour with no engine: the partition is computed in the typed core, and a
+# receiver without one simply gets the batch's own order, exactly as before.
+lane_prefer() {  # <json array of ids, batch order> -> the same ids, free-lane ones first
+  local ids="$1"
+  [ "$(jq 'length' <<<"$ids" 2>/dev/null || echo 0)" -gt 1 ] || { printf '%s' "$ids"; return 0; }
+  engine_resolve || { printf '%s' "$ids"; return 0; }
+  [ -s "${SHADOW_ITEMS:-}" ] || { printf '%s' "$ids"; return 0; }
+
+  local snap part
+  snap="$(mktemp "$CACHE/.lanepref.XXXXXX")"; TMPFILES+=("$snap")
+  jq -n --slurpfile items "$SHADOW_ITEMS" --arg schema "$SNAPSHOT_SCHEMA"     '{ schema: $schema, allowBacklog: true, limit: 0, inFlight: [], items: $items }' >"$snap" 2>/dev/null     || { printf '%s' "$ids"; return 0; }
+
+  part="$("${ENGINE_ARGV[@]}" lanes --json <"$snap" 2>/dev/null)" || { printf '%s' "$ids"; return 0; }
+
+  # A STABLE PARTITION, not a re-sort: `batch`'s order is deterministic and two workers depend on
+  # agreeing about it, so free-lane ids keep their relative order and the rest follow in theirs.
+  jq -c --argjson ids "$ids" '
+    [ .partition[] | select(.free) | .items[].ref ] as $freeRefs
+    | ( $ids | map(select(. as $i | $freeRefs | index($i))) ) as $preferred
+    | ( $ids | map(select(. as $i | $freeRefs | index($i) | not)) ) as $rest
+    | $preferred + $rest' <<<"$part" 2>/dev/null || printf '%s' "$ids"
+}
+
 # ---- lanes: the partition of the board into work that can NEVER collide (#428) --------------------
 #
 # `batch` answers "what may run RIGHT NOW, given what is in flight?" — a question about this instant,
@@ -5111,15 +5186,48 @@ take_cmd() {
     [ "$attempt" -gt 1 ] && export FRESH=1
     local berr from_backlog=""
     berr="$(mktemp "$CACHE/.batch-err.XXXXXX")"
-    pick="$(CACHED=1 batch_cmd "${repoflag[@]+"${repoflag[@]}"}" -n 1 --json 2>"$berr" | jq -r '.[0] // empty')"
-    # READY, ELSE BACKLOG — the same rule `next` already follows (#440). `take` used to stop at
-    # `Ready`, so a board with zero Ready items and a queue of startable Backlog ones reported
-    # "nothing to do" while a worker stood idle in front of it. The two commands a worker treats as
-    # "what do I do next" must agree about what EXISTS; this is the line that makes them.
+    # PREFER A FREE LANE (#428) — a lane nobody is standing in. This asks `batch` for the WHOLE
+    # startable set rather than just its first member, because `-n 1` makes the lane invisible:
+    # whatever the batch happened to order first is the only thing on offer.
+    #
+    # IT IS A PREFERENCE OVER AN ALREADY-SAFE SET, and it makes no safety claim of its own. Every id in
+    # that set is one `batch` has proven startable, disjoint from every live claim, and disjoint from
+    # every other id in it. Choosing differently among them can miss a preference; it cannot cause a
+    # collision. That is the only reason this is allowed to be a heuristic instead of a proof.
+    local ids="[]" lrc=0
+    LANES_COLLECT=1
+    ids="$(CACHED=1 batch_cmd "${repoflag[@]+"${repoflag[@]}"}" --json 2>"$berr")" || lrc=$?
+    [ "$lrc" -eq 0 ] && [ -n "$ids" ] || ids="[]"
+    if [ "$(jq 'length' <<<"$ids" 2>/dev/null || echo 0)" -eq 0 ]; then
+      lrc=0
+      ids="$(CACHED=1 batch_cmd "${repoflag[@]+"${repoflag[@]}"}" --include-backlog --json 2>"$berr")" || lrc=$?
+      [ "$lrc" -eq 0 ] && [ -n "$ids" ] || ids="[]"
+      [ "$(jq 'length' <<<"$ids" 2>/dev/null || echo 0)" -gt 0 ] && from_backlog=1
+    fi
+    pick="$(jq -r '.[0] // empty' <<<"$(lane_prefer "$ids")")"
+
+    # THE FALLBACK, AND IT IS NOT OPTIONAL. `batch` fails CLOSED on a touch-set it could not read — it
+    # refuses to schedule against a body it never saw, and that is correct (it is the whole Red leg).
+    # But `-n 1` STOPPED AT THE FIRST PICK, so it never reached a later unreadable item; asking for the
+    # WHOLE set walks straight into one. A single unreadable issue body anywhere on the board would then
+    # leave `take` with NOTHING — a lane preference costing a worker their item, which is exactly
+    # backwards. Measured: the fixture's FS.GG.Governance#203 does this, and the uncapped read returns
+    # an empty batch where the capped one returns #202.
+    #
+    # A PREFERENCE MAY NEVER SUBTRACT. If the wide read failed for any reason, fall back to precisely
+    # the pick `take` made before lanes existed. The worker loses the preference and keeps the work.
     if [ -z "$pick" ]; then
-      pick="$(CACHED=1 batch_cmd "${repoflag[@]+"${repoflag[@]}"}" --include-backlog -n 1 --json 2>"$berr" \
-              | jq -r '.[0] // empty')"
-      [ -n "$pick" ] && from_backlog=1
+      from_backlog=""
+      pick="$(CACHED=1 batch_cmd "${repoflag[@]+"${repoflag[@]}"}" -n 1 --json 2>"$berr" | jq -r '.[0] // empty')"
+      # READY, ELSE BACKLOG — the same rule `next` already follows (#440). `take` used to stop at
+      # `Ready`, so a board with zero Ready items and a queue of startable Backlog ones reported
+      # "nothing to do" while a worker stood idle in front of it. The two commands a worker treats as
+      # "what do I do next" must agree about what EXISTS; this is the line that makes them.
+      if [ -z "$pick" ]; then
+        pick="$(CACHED=1 batch_cmd "${repoflag[@]+"${repoflag[@]}"}" --include-backlog -n 1 --json 2>"$berr" \
+                | jq -r '.[0] // empty')"
+        [ -n "$pick" ] && from_backlog=1
+      fi
     fi
     if [ -z "$pick" ]; then
       # Say what is TRUE, and let `batch` say WHY — per item, in its own words. The old sentence
