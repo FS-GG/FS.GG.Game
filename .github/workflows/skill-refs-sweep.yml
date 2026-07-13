@@ -139,9 +139,11 @@ jobs:
           banner=false
           grep -qF 'every pointer in a published skill must resolve' "$RUNNER_TEMP/sweep.err" && banner=true
 
-          echo "rc=$rc"          >> "$GITHUB_OUTPUT"
-          echo "findings=$n"     >> "$GITHUB_OUTPUT"
-          echo "reported=$banner" >> "$GITHUB_OUTPUT"
+          {
+            echo "rc=$rc"
+            echo "findings=$n"
+            echo "reported=$banner"
+          } >> "$GITHUB_OUTPUT"
           echo "sweep: rc=$rc, $n finding(s), script-reported=$banner"
 
       # Render the issue body. This runs on EVERY trigger, including `pull_request` — that is
@@ -234,6 +236,21 @@ jobs:
             } >> "$body"
 
             cur=""
+            # shellcheck disable=SC2016
+            #
+            # SC2016 ("expressions don't expand in single quotes") is a FALSE POSITIVE on both printf
+            # formats below. They are single-quoted because they are Markdown, and the BACKTICKS in
+            # them are literal code-span delimiters — which shellcheck reads as a command
+            # substitution you forgot to let expand.
+            #
+            # The span is load-bearing, not decoration: it is what stops GitHub swallowing the
+            # `<!-- skill-refs: closed-ok … -->` marker that IS the fix, and what stops the bare `#N`s
+            # autolinking onto unrelated issues. Double-quoting these formats to silence the lint
+            # would break the thing the span exists for — and scripts/test-skill-refs-sweep.sh § 2
+            # asserts the span, so it would fail there too.
+            #
+            # Scoped to this loop (the directive binds to the next command, and both offenders are
+            # inside it) and to SC2016 alone — SC2086 and the rest still gate this script.
             while IFS= read -r ln; do
               f=${ln%%:*}; rest=${ln#*:}
               n=${rest%%:*}; msg=${rest#*: }

@@ -454,6 +454,110 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
           scripts/test-skill-refs-sweep.sh
 
+  # Workflow lint (FS.GG.Game#258). Every gate in this file guards the PRODUCT. Nothing guarded the
+  # GATES — six workflow files, ~600 lines of YAML and several hundred lines of shell inside `run:`
+  # blocks, and until now the first thing to read any of it was GitHub, at dispatch time.
+  #
+  # That is the worst possible reader, because GitHub's reaction to a malformed workflow is to
+  # SILENTLY NOT RUN IT, or to run it with the bad key ignored. A typo in a `run:` block is caught by
+  # the shell; a typo in the STRUCTURE — `ifs:` for `if:`, `runs-on: ubuntu-latests`, a step reading
+  # `steps.swep.outputs.rc` — is caught by nobody, and the only evidence is a check that quietly
+  # stopped appearing. A gate that is silently not a gate is the FS-GG/.github#416 shape at the top
+  # level, and this repo has now hit that shape at three descending depths (#238, #242, #251).
+  #
+  # #251 bolted on a lower bound — its test suite PyYAML-parses skill-refs-sweep.yml to extract the
+  # `run:` blocks it tests, so a workflow that does not PARSE fails there. But parsing is not linting:
+  # `ifs: false` parses perfectly, and so does `runs-on: ubuntu-latests`. actionlint knows the schema;
+  # PyYAML only knows the grammar.
+  #
+  # THIS ONE MAY BLOCK, and that is the difference between it and the sweep. `skill-refs-sweep` cannot
+  # be a required check because it is f(tree, WORLD) — a link rots on its own, and reddening whoever
+  # happens to have a PR open is a false accusation (#238). actionlint is f(tree): hermetic, no world
+  # state, no decay. Every red it raises was introduced by the diff in front of it, and the fix is
+  # always inside that diff. So it gates, honestly.
+  workflow-lint:
+    # QUOTED, and it must stay quoted — for the same reason the skill-refs step name is, one gate up.
+    # An unquoted `run:` inside a scalar is a mapping value, and YAML rejects the file outright. The
+    # first thing this job ever did was catch that, in its own definition.
+    name: "Workflow lint (actionlint + shellcheck over every run: block)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Pinned, and checksum-verified below. This binary reads every workflow in the repo and decides
+      # whether they may merge; fetching whatever `latest` happens to be that morning would make the
+      # gate's verdict a function of the release schedule of a third party.
+      ACTIONLINT_VERSION: 1.7.7
+      ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install actionlint (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          tgz="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -fsSL --retry 3 -o "$tgz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${tgz}" | sha256sum -c -
+          tar -xzf "$tgz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -version
+
+      # THE SUBJECT IS CHECKED BEFORE THE VERDICT IS TRUSTED — twice, because this job's entire
+      # purpose is to stop a green being reported over something nobody read, and it does not get to
+      # do that to itself.
+      #
+      # 1. shellcheck. actionlint's shell linting is an INTEGRATION: if `shellcheck` is not on PATH it
+      #    does not fail, it does not warn — it silently skips the shell half and exits 0. The `run:`
+      #    blocks in this repo hold several hundred lines of bash (skill-refs-sweep.yml alone is ~200,
+      #    and it files GitHub issues), so a silent skip would leave the largest, sharpest part of the
+      #    subject unread while the check went green. It ships on ubuntu-latest; if it ever stops
+      #    shipping, this must be a RED, not a shrug.
+      #
+      # 2. The file count. `actionlint` over zero files also exits 0. A green over an empty subject is
+      #    the exact defect this job exists to close, so the count is compared against the workflows
+      #    actually on disk — not merely asserted to be non-zero, because "it linted 1 of 6" is just
+      #    as much a lie as "it linted 0".
+      - name: Lint every workflow
+        run: |
+          set -euo pipefail
+          command -v shellcheck >/dev/null || {
+            echo "::error::shellcheck is not on PATH. actionlint would SILENTLY skip every run: block" \
+                 "and still exit 0 — a green over the shell it is here to read. Install it, or this" \
+                 "gate is lying."
+            exit 1
+          }
+          shellcheck --version | sed -n 2p
+
+          # ONE invocation, and the count and the verdict both come out of it. Linting twice — once to
+          # count, once to judge — would mean the number reported here describes a DIFFERENT run from
+          # the one that decided the merge, which is a strange thing for a job about not trusting
+          # unexamined subjects to do.
+          #
+          # No file arguments: actionlint's own discovery walks .github/workflows and takes exactly
+          # the *.yml/*.yaml in it — the same set `find` counts below. Passing a `.github/workflows/*`
+          # glob instead would hand it every file in that directory, so the day someone drops a
+          # README.md or a .gitkeep there, the two counts disagree and this gate goes red over
+          # nothing. Same subject, derived the same way, or the comparison is theatre.
+          log="$RUNNER_TEMP/actionlint.log"
+          rc=0
+          "$RUNNER_TEMP/actionlint" -verbose -color >"$log" 2>&1 || rc=$?
+          cat "$log"
+
+          on_disk=$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | wc -l)
+          linted=$(sed -n 's/^verbose: Linting \([0-9]\{1,\}\) files$/\1/p' "$log")
+          echo "workflows on disk: $on_disk · linted by actionlint: ${linted:-0}"
+
+          # An explicit `if`, not `A && B || C` — which is not if-then-else, and which SC2015 rightly
+          # flags. Suppressing a lint inside the job that introduces the linter would be a poor way to
+          # start.
+          if [ "${linted:-0}" != "$on_disk" ] || [ "$on_disk" -eq 0 ]; then
+            echo "::error::actionlint examined ${linted:-0} of $on_disk workflow file(s). A lint that" \
+                 "reports green over a subject it never read is the defect this job exists to close."
+            exit 1
+          fi
+
+          exit "$rc"
+
   # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,
   # digests match, cross-references resolve — and the `fsharp` blocks, the part a reader actually
