@@ -1,0 +1,81 @@
+name: Locked restore (cold)
+description: >-
+  The single definition of the deterministic locked NuGet restore for FS.GG.Game (ADR-0006 /
+  FS-GG/.github#7; adopted from FS.GG.SDD per FS-GG/.github#429). Restores in --locked-mode against
+  the committed packages.lock.json so dependency-graph drift, or a silently substituted version
+  (NU1603) / out-of-range version (NU1608), FAILS the build instead of resolving quietly.
+
+  The restore is COLD BY CONSTRUCTION: it resolves into a fresh, empty package folder with the HTTP
+  cache cleared, so --locked-mode validates the committed contentHash against THE FEED. A warm
+  package folder silently degrades the gate into comparing a record against a record — see below.
+
+  It also consolidates the formerly-6x-duplicated inline "Restore (locked)" step, so the
+  enforcement, the error text, and the --force-evaluate regenerate hint live in exactly one place.
+
+inputs:
+  target:
+    description: >-
+      The solution or single project to restore in locked mode. Defaults to the whole solution.
+    required: false
+    default: FS.GG.Game.slnx
+
+runs:
+  using: composite
+  steps:
+    # WHY A FRESH PACKAGE FOLDER (FS-GG/.github#429, epic #266 — "compare against reality, not
+    # against a record of reality").
+    #
+    # NU1403 ("package content hash validation failed") is raised by comparing the lock file against
+    # the package ALREADY PRESENT in the global-packages folder. If that copy is stale — restored
+    # from the actions cache, or pre-seeded in the runner image — then --locked-mode validates a
+    # record against a record and NEVER CONTACTS THE FEED. The gate's verdict becomes a function of
+    # runner cache state, which is the one property a determinism gate must not have, and it fails in
+    # BOTH directions:
+    #
+    #   * GREEN on a lock file no fresh clone could restore  (fails open), and
+    #   * RED on a correct, freshly-generated lock file      (fails closed).
+    #
+    # That is not hypothetical here: this repo's own lock files were unrestorable from a cold clone
+    # for a whole release cycle (FS.GG.Game#152/#157/#161, FSharp.Core 10.1.301) and every job in
+    # gate.yml stayed green over it, because every one of them compared the same record against the
+    # same record.
+    #
+    # Restoring into an empty NUGET_PACKAGES forces a real download, so the hash the gate checks is
+    # the hash the feed actually serves. NUGET_PACKAGES is exported to GITHUB_ENV so the later
+    # --no-restore build / --no-build test steps in the same job resolve from the same folder.
+    #
+    # NOTE: NUGET_PACKAGES relocates the global-packages folder but NOT the HTTP cache, which will
+    # happily replay stale .nupkg bytes into it. Clearing the HTTP cache is LOAD-BEARING, not
+    # belt-and-braces — without it the "cold" folder is refilled from a warm cache and the gate is
+    # right back to validating a record against a record.
+    - name: Restore (locked, cold)
+      shell: bash
+      env:
+        LOCKED_RESTORE_TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+
+        NUGET_PACKAGES="$(mktemp -d)"
+        export NUGET_PACKAGES
+        echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
+        dotnet nuget locals http-cache --clear
+
+        if dotnet restore "$LOCKED_RESTORE_TARGET" --locked-mode; then
+          exit 0
+        fi
+
+        # The restore failed AGAINST THE FEED. Rather than leave the author to guess which hash to
+        # commit, regenerate from the feed and print exactly what a cold restore resolves.
+        #
+        # This hint is the difference between a five-minute fix and a re-broken build: THREE
+        # different hashes exist for one package, and the obvious move — pasting the package's
+        # published hash — is the wrong one (ADR-0032 §3). Only --force-evaluate against a cold
+        # folder writes the value --locked-mode will accept.
+        echo "::group::what a cold restore from the feed actually resolves (commit this)"
+        dotnet restore "$LOCKED_RESTORE_TARGET" --force-evaluate >/dev/null 2>&1 || true
+        git --no-pager diff --stat -- '**/packages.lock.json' || true
+        git --no-pager diff -- '**/packages.lock.json' || true
+        echo "::endgroup::"
+
+        echo "::error::locked restore failed — the committed packages.lock.json does not match what the feed serves (or a version was substituted, NU1603). The diff above is what a cold restore resolves; regenerate with: dotnet restore $LOCKED_RESTORE_TARGET --force-evaluate  and commit the updated packages.lock.json files. Let --force-evaluate write the hash — never hand-copy one, and never re-pin the lock to the SDK's library-packs hash (that is the reverted fix, ADR-0032 §3): the lock's contentHash is NOT the .nupkg's SHA512."
+        exit 1

@@ -21,6 +21,21 @@ name: gate
 # the source list, so FSharp.Core resolves from nuget.org everywhere and the hash is a function of
 # (id, version) alone. If a lock hash ever mismatches here, regenerate it cold with force-evaluate —
 # do NOT re-pin the lock to the SDK's library-packs hash: that is the reverted fix (ADR-0032 §3).
+#
+# EVERY RESTORE IN THIS FILE IS COLD (#135, adopting FS-GG/.github#429). --locked-mode raises NU1403
+# by comparing the lock against the package ALREADY IN the global-packages folder — pre-seeded in the
+# runner image, or restored from the actions cache — so with a warm folder it validates a record
+# against a record and never contacts the feed. The gate's verdict was therefore a function of runner
+# cache state, and it failed in BOTH directions: green on a lock no fresh clone could restore, red on
+# a correct one. This repo's locks were in exactly that state for a release cycle (#152/#157/#161) and
+# all six restores here stayed green over it.
+#
+# So the restore is not written inline any more: it lives in .github/actions/locked-restore, which
+# resolves into a fresh empty NUGET_PACKAGES with the HTTP cache cleared, and `cache: false` is set on
+# every job below. Both halves are load-bearing. Note that RestoreLockedMode is set for EVERY restore
+# in CI by the org-shared Directory.Build.props (GITHUB_ACTIONS=true + a lockfile exists), so an
+# implicit restore inside `dotnet build` is a locked restore too — which is why the jobs below all
+# restore explicitly through the action and then build with --no-restore.
 on:
   push:
     branches: [main]
@@ -48,24 +63,28 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
-          # Warm the NuGet restore from the committed lockfiles. A lockfile change misses the cache
-          # and re-restores; --locked-mode still validates the graph.
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
+          # NO NuGet cache, deliberately (#135 / FS-GG/.github#429). This used to read `cache: true`,
+          # justified as "speed only — --locked-mode still validates the graph". It does not:
+          # --locked-mode validates the committed contentHash against the package copy ALREADY in the
+          # global-packages folder, so a cache hit is precisely what stops the gate from ever asking
+          # the feed. A cache that can decide the verdict is not a cache, it is an input.
+          #
+          # The locked-restore action below now resolves into a fresh, empty NUGET_PACKAGES, so this
+          # job's package folder is cold by construction and a setup-dotnet cache would be pure
+          # overhead — restored, then never read. The cost is one real download per job; the gate
+          # gets to be a function of the tree and the feed alone.
+          cache: false
 
-      # Locked restore is the single enforcement point. RestoreLockedMode is set in the org-shared
-      # Directory.Build.props when GITHUB_ACTIONS=true and a lockfile exists; --locked-mode here
-      # forces it explicitly and gives one clear place to point at the regenerate command.
-      - name: Restore (locked)
-        run: |
-          set -euo pipefail
-          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
-            echo "::error::locked restore failed — the resolved graph does not match the committed packages.lock.json (or a version was substituted, NU1603). If this is an intentional dependency change, run: dotnet restore FS.GG.Game.slnx --force-evaluate  and commit the updated packages.lock.json files."
-            exit 1
-          fi
+      # Locked restore is the single enforcement point, and it is now defined in exactly one place —
+      # .github/actions/locked-restore — rather than copy-pasted into six jobs across two workflows.
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: FS.GG.Game.slnx
 
-      # --no-restore: restore already happened above (exactly once). NU1603/NU1608 are promoted to
-      # errors in the org-shared Directory.Build.props; FS/warnings-as-errors in local.props.
+      # --no-restore: restore already happened above (exactly once), into the cold NUGET_PACKAGES the
+      # action exported to GITHUB_ENV. NU1603/NU1608 are promoted to errors in the org-shared
+      # Directory.Build.props; FS/warnings-as-errors in local.props.
       - name: Build (net10.0)
         run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
 
@@ -83,16 +102,13 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
+          # Cold by construction — see the gate job above.
+          cache: false
 
-      - name: Restore (locked)
-        run: |
-          set -euo pipefail
-          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
-            echo "::error::locked restore failed — see the gate job's message to regenerate the lockfiles."
-            exit 1
-          fi
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: FS.GG.Game.slnx
 
       - name: Test (full suite)
         run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
@@ -116,16 +132,13 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
+          # Cold by construction — see the gate job above.
+          cache: false
 
-      - name: Restore (locked)
-        run: |
-          set -euo pipefail
-          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
-            echo "::error::locked restore failed — see the gate job's message to regenerate the lockfiles."
-            exit 1
-          fi
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: FS.GG.Game.slnx
 
       - name: Build (net10.0)
         run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
@@ -166,11 +179,20 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
+          # Cold by construction — see the gate job above.
+          cache: false
 
-      - name: Restore + build (Debug — the generator reflects over the built assembly)
-        run: dotnet build FS.GG.Game.slnx -c Debug
+      # This job used to lean on `dotnet build`'s IMPLICIT restore, which reads as innocent and is
+      # not: RestoreLockedMode is set for every CI restore by the org-shared Directory.Build.props, so
+      # that implicit restore was a LOCKED restore against a warm folder — the same defect as the
+      # explicit ones, just harder to see. Restore explicitly, cold, then build with --no-restore.
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: FS.GG.Game.slnx
+
+      - name: Build (Debug — the generator reflects over the built assembly)
+        run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
 
       - name: Regenerate baselines
         run: dotnet fsi scripts/refresh-surface-baselines.fsx
@@ -843,6 +865,59 @@ jobs:
           fi
           echo "shellcheck: clean at -S warning across ${#subject[@]} file(s)."
 
+      # ...and now the THIRD place this repo keeps shell, which #135 created: inside a COMPOSITE
+      # ACTION. Neither step above can see it — actionlint discovers `.github/workflows/*.yml` and
+      # nothing else (handed an action.yml explicitly it rejects it as a malformed workflow), and the
+      # scripts/ pass discovers shell by extension or shebang, which shell embedded in YAML has
+      # neither of. So the cold restore's ~20 lines of bash — the code that decides whether every
+      # other job in this file restores at all — would have merged unread, beneath two green lint
+      # steps. Verified, not assumed: an unquoted `$NUGET_PACKAGES` planted in the action passes both
+      # of them at exit 0.
+      #
+      # The subject, the counting, and the fail-closed reasoning live in the script, where a developer
+      # can run them (`SHELLCHECK=<pinned> scripts/lint-action-shell.sh`) and where the step above
+      # LINTS them — the same standard this job applies to every other line of shell in the repo, now
+      # applied to the linter that reads the actions. scripts/test-lint-action-shell.sh drives it.
+      #
+      # Same pinned shellcheck as both steps above. No second download, no second version to keep in
+      # step: when the pin moves, all three halves of this job move with it.
+      - name: Lint the shell inside composite actions
+        env:
+          SHELLCHECK: ${{ runner.temp }}/shellcheck
+        run: |
+          set -euo pipefail
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
+          scripts/lint-action-shell.sh
+
+  # Tests for the composite-action linter in workflow-lint above (#135). It is the only thing standing
+  # between a composite action's shell and an unread merge, and its dangerous failure is not going red
+  # — it is finding NOTHING and reporting that in green. Every comparable gate in this repo was
+  # required to have a behavioural suite for exactly that reason (#243 for check-skill-refs.sh, #251
+  # for the sweep, #264 for the harness beneath them both), and the linter is no different: a gate
+  # whose subject can silently empty out is one whose emptiness must itself be a tested case.
+  #
+  # Separate job = distinct signal, as everywhere in this file. A red HERE means the linter is not
+  # trustworthy, which is a different fact from "an action has bad shell" — and if the linter is
+  # broken, its verdict on the actions is worth nothing anyway.
+  #
+  # It stands on scripts/lib/test-harness.sh, which #259 extracted "before there is a third". This is
+  # the third.
+  #
+  # Hermetic: fixture trees under mktemp, a real shellcheck, no token, no network, no gh.
+  lint-action-shell-tests:
+    name: Composite-action lint tests (scripts/lint-action-shell.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Behavioural test suite (fixture action in, exit code + subject claim out)
+        run: |
+          set -euo pipefail
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
+          scripts/test-lint-action-shell.sh
+
   # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,
   # digests match, cross-references resolve — and the `fsharp` blocks, the part a reader actually
@@ -905,16 +980,13 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
-          cache: true
-          cache-dependency-path: '**/packages.lock.json'
+          # Cold by construction — see the gate job above.
+          cache: false
 
-      - name: Restore (locked)
-        run: |
-          set -euo pipefail
-          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
-            echo "::error::locked restore failed — see the gate job's message to regenerate the lockfiles."
-            exit 1
-          fi
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: FS.GG.Game.slnx
 
       # The blocks are typechecked against the BUILT assembly, exactly as a product consumer binds to the
       # package — not against the source, and never against a stub. The harness refuses to run if this
