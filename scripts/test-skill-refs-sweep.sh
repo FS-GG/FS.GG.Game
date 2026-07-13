@@ -97,9 +97,13 @@ step_run sweep     >"$SWEEP_SH"
 step_run render    >"$RENDER_SH"
 step_run reconcile >"$RECONCILE_SH"
 
-# The workflow's own env, so the suite tests the REAL label and title rather than a guess at them.
+# The workflow's own env, so the suite tests the REAL labels and titles rather than a guess at them.
+# There are TWO trackers — the decay one, and the one for a sweep that could not RUN — and keeping them
+# apart is the whole of § 6 (FS.GG.Game#277).
 DECAY_LABEL=$(wf '.env.DECAY_LABEL')
 DECAY_TITLE=$(wf '.env.DECAY_TITLE')
+INFRA_LABEL=$(wf '.env.INFRA_LABEL')
+INFRA_TITLE=$(wf '.env.INFRA_TITLE')
 
 # ── fixture ─────────────────────────────────────────────────────────────────────────────────────
 #
@@ -165,6 +169,8 @@ step_base_env() {
   echo "GH_REPO=$REPO"
   echo "DECAY_LABEL=$DECAY_LABEL"
   echo "DECAY_TITLE=$DECAY_TITLE"
+  echo "INFRA_LABEL=$INFRA_LABEL"
+  echo "INFRA_TITLE=$INFRA_TITLE"
 }
 
 # GITHUB_OUTPUT is a real key=value file on a runner; read it back the way Actions does.
@@ -204,7 +210,10 @@ run_render() {
 run_reconcile() {
   local -a e=(env) base
   mapfile -t base < <(step_base_env); e+=("${base[@]}")
-  e+=("REPO=$REPO" "SHA=$SHA" "RUN_URL=$RUN_URL" "RC=$(out_of rc)")
+  # REPORTED is what tells DECAY from a sweep that could not RUN, and therefore which tracker this run
+  # is about (FS.GG.Game#277). It is passed here exactly as the workflow passes it — out of the sweep
+  # step's own outputs, not recomputed — so a fixture cannot accidentally disagree with the step.
+  e+=("REPO=$REPO" "SHA=$SHA" "RUN_URL=$RUN_URL" "RC=$(out_of rc)" "REPORTED=$(out_of reported)")
   [[ ${GH_LABEL_EXISTS:-0}    == 1 ]] && e+=("GH_LABEL_EXISTS=1")
   [[ ${GH_LABEL_POST_FAILS:-0} == 1 ]] && e+=("GH_LABEL_POST_FAILS=1")
   [[ -n ${GH_NEW_NUM:-} ]] && e+=("GH_NEW_NUM=$GH_NEW_NUM")
@@ -257,6 +266,16 @@ expect_eq "$(step_env render DRY_RUN)" "\${{ github.event_name == 'pull_request'
           'DRY_RUN is the pull_request predicate'
 expect_eq "$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .if' <<<"$WF_JSON")" \
           "steps.sweep.outputs.rc != '0'" 'the verdict re-raises exactly when the sweep was red'
+
+case_start '§0 reconcile is HANDED the bit that says which red this is'
+# `reported` is what separates decay from a sweep that could not run. Before FS.GG.Game#277 the step
+# never received it, and filed both to the decay tracker. run_reconcile() passes it because the
+# WORKFLOW passes it — pin that, or the suite could go on modelling a wiring the workflow has dropped,
+# and § 6 would then be asserting over an input the real step never sees.
+expect_eq "$(step_env reconcile REPORTED)" '${{ steps.sweep.outputs.reported }}' \
+          'reconcile reads the sweep'"'"'s own reported= output'
+expect_eq "$(step_env reconcile RC)" '${{ steps.sweep.outputs.rc }}' \
+          'and its rc, as before'
 
 case_start '§0 the pull_request trigger still fires on the sweep'"'"'s own code'
 expect_has '.github/workflows/skill-refs-sweep.yml' "$(wf '.on.pull_request.paths[]')" \
@@ -440,8 +459,8 @@ unset GH_LABEL_POST_FAILS
 
 case_start '§3 red + tracker OPEN → rewrites the body, and stays quiet'
 fixture
-trackers <<'JSON'
-[{"number":42,"state":"open"}]
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_findings <<'ERR'
 template/product-skills/alpha/SKILL.md:9: stale link FS.GG.Rendering#100 is closed
@@ -454,8 +473,8 @@ expect_has 'UPDATED #42 (already open)' "$OUT" 'says what it did'
 
 case_start '§3 red + tracker CLOSED → reopens it, and THAT gets a comment'
 fixture
-trackers <<'JSON'
-[{"number":42,"state":"closed"}]
+trackers <<JSON
+[{"number":42,"state":"closed","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_findings <<'ERR'
 template/product-skills/alpha/SKILL.md:9: stale link FS.GG.Rendering#100 is closed
@@ -469,8 +488,8 @@ expect_has '"state": "open"' "$(any_payload | jq . 2>/dev/null || any_payload)" 
 case_start '§3 GREEN + tracker OPEN → comments, then closes it'
 # The half that keeps the tracker trustworthy: one that only ever opens is one people learn to ignore.
 fixture
-trackers <<'JSON'
-[{"number":42,"state":"open"}]
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_green
 pipeline
@@ -481,20 +500,20 @@ expect_has 'state_reason' "$(any_payload)" 'closed as completed, not as "not pla
 
 case_start '§3 GREEN + tracker already CLOSED → does nothing at all'
 fixture
-trackers <<'JSON'
-[{"number":42,"state":"closed"}]
+trackers <<JSON
+[{"number":42,"state":"closed","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_green
 pipeline
 gh_no_writes 'a green run over a closed tracker is a no-op'
-expect_has 'green; no open tracking issue. Nothing to do.' "$OUT" 'and says so'
+expect_has "tracker[$DECAY_LABEL]: nothing open to close." "$OUT" 'and says so, naming the tracker'
 
 case_start '§3 GREEN + NO tracker → does nothing at all'
 fixture
 sweep_green
 pipeline
 gh_no_writes 'the common case — green repo, no tracker — writes nothing'
-expect_has 'Nothing to do.' "$OUT" 'and says so'
+expect_has "tracker[$DECAY_LABEL]: nothing open to close." "$OUT" 'and says so, naming the tracker'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # § 4  THE TRACKER LOOKUP — the bug #249 actually shipped a fix for
@@ -514,15 +533,15 @@ case_start '§4 a PULL REQUEST carrying the label is not mistaken for the tracke
 # /issues returns PRs too. Without the `select(.pull_request == null)` filter the sweep would PATCH a
 # pull request's body with a decay report.
 fixture
-trackers <<'JSON'
-[{"number":41,"state":"open","pull_request":{"url":"https://api.github.com/…/pulls/41"}},
- {"number":42,"state":"open"}]
+trackers <<JSON
+[{"number":41,"state":"open","labels":["$DECAY_LABEL"],"pull_request":{"url":"https://api.github.com/…/pulls/41"}},
+ {"number":42,"state":"open","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_findings <<'ERR'
 template/product-skills/alpha/SKILL.md:9: stale link FS.GG.Rendering#100 is closed
 ERR
 pipeline
-expect_has 'tracker: 42 open' "$OUT" 'skips the PR and finds the real issue'
+expect_has "tracker[$DECAY_LABEL]: 42 open" "$OUT" 'skips the PR and finds the real issue'
 gh_called     PATCH "/issues/42$" 'writes to the issue'
 gh_not_called PATCH "/issues/41$" 'and never to the pull request'
 
@@ -530,8 +549,8 @@ case_start '§4 the ORIGINAL tracker stays the tracker when a duplicate exists'
 # `sort=created&direction=asc` + `first`: oldest wins, so a duplicate made by hand does not steal the
 # thread of comments — and the history — that the real one carries.
 fixture
-trackers <<'JSON'
-[{"number":42,"state":"open"},{"number":88,"state":"open"}]
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]},{"number":88,"state":"open","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_green
 pipeline
@@ -543,8 +562,8 @@ case_start '§4 a CLOSED tracker is still FOUND — `state=all`, or every regres
 # concludes none exists, and it files a SECOND one — every time the repo regresses. The tracker that
 # carries the history is the one that stops being used.
 fixture
-trackers <<'JSON'
-[{"number":42,"state":"closed"}]
+trackers <<JSON
+[{"number":42,"state":"closed","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_findings <<'ERR'
 template/product-skills/alpha/SKILL.md:9: stale link FS.GG.Rendering#100 is closed
@@ -562,14 +581,14 @@ fixture
 unlabelled <<'JSON'
 [{"number":7,"state":"open"}]
 JSON
-trackers <<'JSON'
-[{"number":42,"state":"open"}]
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]}]
 JSON
 sweep_findings <<'ERR'
 template/product-skills/alpha/SKILL.md:9: stale link FS.GG.Rendering#100 is closed
 ERR
 pipeline
-expect_has 'tracker: 42 open' "$OUT" 'finds the labelled tracker, not the older stranger'
+expect_has "tracker[$DECAY_LABEL]: 42 open" "$OUT" 'finds the labelled tracker, not the older stranger'
 gh_called     PATCH "/issues/42$" 'writes to its own tracker'
 gh_not_called PATCH "/issues/7$"  'and never to an issue it does not own'
 
@@ -625,8 +644,8 @@ skill fs-gg-alpha <<'MD'
 Add your case at FS.GG.Rendering#100.
 MD
 issue 'FS-GG/FS.GG.Rendering#100' open
-trackers <<'JSON'
-[{"number":42,"state":"open"}]
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]}]
 JSON
 pipeline
 expect_eq "$(out_of rc)" '0' 'the real script is green on a healthy tree'
@@ -650,6 +669,176 @@ expect_eq "$(out_of reported)" 'false' 'and it never judged a pointer, so this i
 run_render
 expect_has 'the links are UNCHECKED' "$(body)" 'it files the infra failure, by its right name'
 unset GH_NOAUTH
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# § 6  DECAY IS NOT AN INFRA FAILURE — the two trackers, and the wall between them (FS.GG.Game#277)
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+#
+# A red sweep has two utterly different causes, and `reconcile` used to file BOTH to the decay tracker.
+# So a bad token would REOPEN an issue titled "A published skill points at something that no longer
+# resolves" and comment "the sweep went red again" — on the one path in this workflow that deliberately
+# NOTIFIES. Both sentences were false. Nothing decayed; nothing was even looked at.
+#
+# The bit that separates them was already computed and thrown away (`reported`), and § 1 and § 2 above
+# already assert that the SWEEP computes it and the RENDERER honours it. This § is about the third
+# step, which did not.
+#
+# The asymmetry is the fix, and each half of it is a case below:
+#   - an INFRA failure leaves the decay tracker STRICTLY ALONE. It judged nothing, so it is evidence
+#     neither that decay appeared nor that it went away.
+#   - a DECAY run CLOSES the infra tracker, because the sweep plainly ran. Waiting for green would
+#     leave "the pointers are UNCHECKED" asserted over a run that checked them and found them rotten.
+
+case_start '§6 THE BUG: infra failure + a CLOSED decay tracker → does NOT reopen it'
+# The headline. A reopen is the notifying path, and it would announce a decay regression that did not
+# happen, on an issue whose title says a published pointer rotted.
+fixture
+trackers <<JSON
+[{"number":42,"state":"closed","labels":["$DECAY_LABEL"]}]
+JSON
+sweep_broken
+pipeline
+expect_rc 0 'reconcile runs clean'
+gh_not_called PATCH "/issues/42$"          'the decay tracker is NOT reopened — nothing decayed'
+gh_not_called POST  "/issues/42/comments$" 'and nobody is notified of a regression that did not happen'
+expect_has 'UNTOUCHED' "$OUT" 'and it SAYS it left the decay tracker alone'
+gh_called POST "/issues$" 'the infra failure is still filed — it is not swallowed'
+P=$(any_payload)
+expect_has "$INFRA_TITLE" "$P" 'under the infra title'
+expect_has "$INFRA_LABEL" "$P" 'and the infra label, so it cannot be mistaken for the decay tracker'
+expect_hasnt "$DECAY_TITLE" "$P" 'and NEVER under the decay one'
+expect_has 'The sweep could not complete — the links are UNCHECKED' "$P" \
+           'carrying the body that names it for what it is'
+
+case_start '§6 infra failure + an OPEN decay tracker → does not rewrite or close it either'
+# The other direction, and the more dangerous lie: closing a live decay item because a run that read
+# NOTHING came back with no findings. The decay is still there; only the sweep is broken.
+fixture
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]}]
+JSON
+sweep_broken
+pipeline
+gh_not_called PATCH "/issues/42$"          'the open decay item is neither closed nor overwritten'
+gh_not_called POST  "/issues/42/comments$" 'and it is not commented on'
+gh_called     POST  "/issues$"             'the infra tracker is filed alongside it'
+
+case_start '§6 infra failure + a CLOSED infra tracker → THAT one reopens, and comments'
+# The infra tracker gets the behaviour the decay tracker used to get wrongly: a reopen IS a fresh
+# regression here, and it is true — the sweep has failed to run again.
+fixture
+trackers <<JSON
+[{"number":91,"state":"closed","labels":["$INFRA_LABEL"]}]
+JSON
+sweep_broken
+pipeline
+gh_called PATCH "/issues/91$"          'reopens the infra tracker'
+gh_called POST  "/issues/91/comments$" 'a sweep that broke AGAIN is worth a notification'
+gh_not_called POST "/issues$"          'and does not file a duplicate'
+expect_has 'REOPENED #91' "$OUT" 'says it reopened'
+expect_has 'failed to run again' "$(any_payload)$(cut -f3 "$FIX/gh.log")" \
+           'and the comment says the SWEEP broke, not that a pointer rotted'
+
+case_start '§6 infra failure + an OPEN infra tracker → rewrites it, and stays quiet'
+fixture
+trackers <<JSON
+[{"number":91,"state":"open","labels":["$INFRA_LABEL"]}]
+JSON
+sweep_broken
+pipeline
+gh_called     PATCH "/issues/91$"          'the body is refreshed'
+gh_not_called POST  "/issues/91/comments$" 'a daily comment on an open item is the noise that gets this muted'
+expect_has 'UPDATED #91 (already open)' "$OUT" 'says what it did'
+
+case_start '§6 DECAY closes the infra tracker — the sweep plainly RAN'
+# The converse, and it matters: leaving the infra tracker open across a legitimate decay would assert
+# "every published pointer is UNCHECKED" over a run that checked them all and found one rotten.
+fixture
+trackers <<JSON
+[{"number":91,"state":"open","labels":["$INFRA_LABEL"]}]
+JSON
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: stale link FS.GG.Rendering#100 is closed
+ERR
+pipeline
+gh_called POST  "/issues/91/comments$" 'the infra tracker is told the sweep runs again'
+gh_called PATCH "/issues/91$"          'and closed'
+expect_has 'CLOSED #91' "$OUT" 'says it closed'
+gh_called POST "/issues$" 'while the decay finding is filed on its own tracker'
+expect_has "$DECAY_TITLE" "$(any_payload)" 'under the DECAY title, because that is what this red is'
+
+case_start '§6 GREEN closes BOTH trackers'
+fixture
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]},{"number":91,"state":"open","labels":["$INFRA_LABEL"]}]
+JSON
+sweep_green
+pipeline
+gh_called PATCH "/issues/42$" 'the decay tracker closes — every pointer resolves again'
+gh_called PATCH "/issues/91$" 'and the infra tracker closes — the sweep ran to completion'
+expect_has 'CLOSED #42' "$OUT" 'says so for decay'
+expect_has 'CLOSED #91' "$OUT" 'and for infra'
+
+case_start '§6 DRIFT is DECAY, not an infra failure — it files to the decay tracker'
+# reported=true, findings=0: the script found REAL decay that this workflow could not parse. That is a
+# fact about the TREE — the sweep ran fine — so it belongs on the decay tracker, and § 2 already
+# asserts it renders the drift body rather than the UNCHECKED one. Here: it is FILED as decay too.
+fixture
+sweep_drifted
+pipeline
+P=$(any_payload)
+expect_has "$DECAY_TITLE" "$P" 'drift is filed as decay'
+expect_hasnt "$INFRA_TITLE" "$P" 'and never as "the sweep could not run" — the sweep ran'
+expect_has 'The sweep found decay — and this workflow could not read it' "$P" 'with the drift body'
+
+case_start '§6 the two lookups ask for DIFFERENT labels — or the wall is imaginary'
+# Everything above rests on the tracker lookup honouring `labels=`. If reconcile asked for the decay
+# label while filing the infra body — or the fake answered every label query with the same list —
+# these cases would pass while the bug walked straight back in. So assert the query itself.
+fixture
+sweep_broken
+pipeline
+GETS=$(awk -F'\t' '$1=="GET" && $2 ~ /\/issues$/ {print $3}' "$FIX/gh.log")
+expect_has "labels=$INFRA_LABEL" "$GETS" 'an infra run looks the INFRA tracker up'
+expect_hasnt "labels=$DECAY_LABEL" "$GETS" 'and never reads the decay tracker at all — it has nothing to say about it'
+
+case_start '§6 a green run looks up BOTH, because it closes both'
+fixture
+sweep_green
+pipeline
+GETS=$(awk -F'\t' '$1=="GET" && $2 ~ /\/issues$/ {print $3}' "$FIX/gh.log")
+expect_has "labels=$DECAY_LABEL" "$GETS" 'green reads the decay tracker'
+expect_has "labels=$INFRA_LABEL" "$GETS" 'and the infra tracker'
+gh_no_writes 'and writes nothing when neither exists'
+
+case_start '§6 a sweep step that DIED writes no outputs — and that falls to INFRA, not decay'
+# If the sweep step dies before writing $GITHUB_OUTPUT, `reported` arrives EMPTY. Empty is not "true",
+# so it lands in the infra branch — and that is the fail-safe direction, deliberately: the one thing a
+# run which produced no output whatsoever must never do is reopen "a published pointer rotted" and
+# notify somebody about it. The renderer already defaults the same way (§ 2's BROKEN body); this
+# asserts the third step agrees with it, rather than defaulting the other way and undoing it.
+fixture
+trackers <<JSON
+[{"number":42,"state":"closed","labels":["$DECAY_LABEL"]}]
+JSON
+printf 'rc=1\n' >>"$FIX/github-output"     # ...and no `reported=` line at all
+run_render
+run_reconcile
+expect_rc 0 'reconcile survives the missing output'
+gh_not_called PATCH "/issues/42$"          'the closed decay tracker is NOT reopened by a run that read nothing'
+gh_not_called POST  "/issues/42/comments$" 'and nobody is told a pointer rotted'
+GETS=$(awk -F'\t' '$1=="GET" && $2 ~ /\/issues$/ {print $3}' "$FIX/gh.log")
+expect_hasnt "labels=$DECAY_LABEL" "$GETS" 'the decay tracker is not even looked up'
+expect_has   "labels=$INFRA_LABEL" "$GETS" 'the infra tracker is — the failure still reaches a human'
+
+case_start '§6 the VERDICT points the reader at the tracker this red actually went to'
+# The notice on the run is the one line a human reads before deciding which issue to open. Pointing
+# every red at the decay tracker is FS.GG.Game#277 in miniature, so it does not get to do that either.
+VERDICT_SH=$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .run' <<<"$WF_JSON")
+expect_has 'REPORTED' "$VERDICT_SH" 'the verdict branches on which red this is'
+expect_has 'INFRA_LABEL' "$VERDICT_SH" 'and can name the infra tracker'
+expect_eq "$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .env.REPORTED' <<<"$WF_JSON")" \
+          '${{ steps.sweep.outputs.reported }}' 'and is actually handed the bit it branches on'
 
 # ── summary ─────────────────────────────────────────────────────────────────────────────────────
 #

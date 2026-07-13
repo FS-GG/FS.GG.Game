@@ -25,11 +25,25 @@ name: skill-refs sweep
 # red sweep sitting unread in the Actions tab while everyone's PRs are green — the links effectively
 # unchecked, which is the #416 shape one level up, moved rather than removed.
 #
-# So the sweep FILES ITS FINDING where this org already looks: an issue. One issue, labelled
-# `skill-refs-decay`, rewritten in place on every run and REOPENED rather than duplicated, and it
-# CLOSES ITSELF the next time the sweep is green. That turns decay from a notification nobody gets
-# into a work item somebody can pick up — it even carries a `Paths:` line so it is schedulable under
-# ADR-0021/0027 the moment someone puts it on the board.
+# So the sweep FILES ITS FINDING where this org already looks: an issue — rewritten in place on every
+# run, REOPENED rather than duplicated, and CLOSED again by the run that shows the condition is over.
+# That turns decay from a notification nobody gets into a work item somebody can pick up — it even
+# carries a `Paths:` line so it is schedulable under ADR-0021/0027 the moment someone puts it on the
+# board.
+#
+# WHICH red goes WHERE (FS.GG.Game#277). There are TWO of those issues, because a red sweep has two
+# utterly different causes and this workflow must not call either by the other's name:
+#
+#   `skill-refs-decay` — a pointer we published stopped resolving. A fact about the TREE. Real work,
+#       well-specified, somebody's item.
+#   `skill-refs-infra` — the sweep never judged a pointer at all: a bad token, an exhausted budget, a
+#       link the API would not return. A fact about the SWEEP. Nothing decayed; nothing was LOOKED at.
+#
+# They were once the same issue, and an infra blip therefore REOPENED the decay tracker and announced
+# a regression that had not happened — on the one path here that deliberately notifies. `reconcile`
+# now branches on `steps.sweep.outputs.reported`, which is exactly the bit that tells them apart, and
+# an infra failure leaves the decay tracker strictly alone: a run that judged nothing is evidence
+# neither that decay appeared nor that it went away.
 #
 # The fix is still the one the script names — repoint the link at live work, or, if it is cited as
 # history (which a closed issue usually is), mark it:
@@ -114,9 +128,14 @@ on:
 
 concurrency:
   # Never cancel a WRITING sweep in flight — scheduled, dispatched, or `push`. The reconcile step below
-  # is a read-modify-write of one shared issue, and a half-run that is killed between "render" and
-  # "reconcile" leaves that issue asserting a decay set that is no longer the truth. PR runs are still
-  # cancellable — they only ever render, never write.
+  # is a read-modify-write of the shared tracking issues, and a half-run that is killed between
+  # "render" and "reconcile" leaves one asserting a state that is no longer the truth. PR runs are
+  # still cancellable — they only ever render, never write.
+  #
+  # There are TWO of those issues now (FS.GG.Game#277), which widens the window rather than changing
+  # the argument: a run killed BETWEEN the two trackers it reconciles has written one and not the
+  # other, and the pair is then incoherent — "the sweep could not run" left open beside a decay report
+  # that only a completed sweep could have produced.
   #
   # This is why the condition below is `== 'pull_request'` and not `!= 'schedule'`: every non-PR event
   # writes, so every non-PR event must be uncancellable. `push` (FS.GG.Game#275) relies on that, and a
@@ -135,8 +154,17 @@ permissions:
   issues: write
 
 env:
+  # TWO trackers, because a red sweep has two utterly different causes and `reconcile` must never call
+  # one of them by the other's name (FS.GG.Game#277).
+  #
+  # DECAY — a pointer we published stopped resolving. A fact about the TREE.
   DECAY_LABEL: skill-refs-decay
   DECAY_TITLE: "[skill-refs] A published skill points at something that no longer resolves"
+  # INFRA — the sweep never judged a pointer, so the tree came out UNCHECKED. A fact about the SWEEP,
+  # and a strictly different one: it says nothing whatever about decay. Its own label and its own
+  # title are what stop it masquerading as — or clobbering — the decay tracker.
+  INFRA_LABEL: skill-refs-infra
+  INFRA_TITLE: "[skill-refs] The sweep could not run — the published pointers are UNCHECKED"
 
 jobs:
   sweep:
@@ -382,11 +410,21 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SHA: ${{ github.sha }}
           RC: ${{ steps.sweep.outputs.rc }}
+          # The bit that says WHICH red this is. The render step has always branched on it to pick the
+          # body; before FS.GG.Game#277 this step ignored it and filed both to the decay tracker.
+          REPORTED: ${{ steps.sweep.outputs.reported }}
         run: |
           set -euo pipefail
 
           # REST throughout. It is the cheap budget, it is the one that is still up when GraphQL is
           # gone, and `gh issue create|edit|close` are all GraphQL (FS-GG/.github#587).
+
+          # ── one lookup, one raise, one resolve — parameterised by label ──────────────────────────
+          #
+          # There are two trackers now, and they are read and written by the SAME three functions. That
+          # is deliberate: every parameter on the lookup below is load-bearing, and a second, hand-copied
+          # lookup for the infra tracker would be a second chance to get `-X GET` wrong — which is the
+          # bug FS.GG.Game#249 actually shipped a fix for.
 
           # `-X GET` IS LOAD-BEARING. `gh api` defaults to POST the moment any `-f` is present, so
           # without it this "read" POSTs to /issues — the CREATE-ISSUE endpoint — and the daily sweep
@@ -398,19 +436,31 @@ jobs:
           # (FS-GG/.github#547). `--slurp` cannot be combined with `--jq`, so aggregate in a separate
           # `jq`. `/issues` returns PRs too; filter them out. Oldest-first, so the ORIGINAL tracker
           # stays the tracker even if a duplicate ever gets made by hand.
-          tracker=$(gh api -X GET "repos/$REPO/issues" \
-                      -f "labels=$DECAY_LABEL" -f state=all -f sort=created -f direction=asc \
-                      --paginate --slurp \
-                    | jq -c '[.[][] | select(.pull_request == null)] | first // {}')
-          num=$(jq -r '.number // empty' <<<"$tracker")
-          state=$(jq -r '.state // empty' <<<"$tracker")
-          echo "tracker: ${num:-none} ${state:-}"
+          find_tracker() {   # <label> → "<number> <state>", or blank when there is none
+            gh api -X GET "repos/$REPO/issues" \
+              -f "labels=$1" -f state=all -f sort=created -f direction=asc \
+              --paginate --slurp \
+            | jq -r '[.[][] | select(.pull_request == null)] | first // {}
+                     | "\(.number // "") \(.state // "")"'
+          }
 
-          if [ "$RC" != "0" ]; then
+          # File the tracker, or rewrite it in place and reopen it if it had closed. The body is
+          # whichever one the render step wrote for THIS run's condition.
+          raise() {   # <label> <title> <colour> <label-description> <reopen-comment>
+            local label=$1 title=$2 colour=$3 desc=$4 reopen=$5
+            local found num state url
+
+            # Assign, THEN read. `read -r … <<<"$(find_tracker …)"` would take `read`'s exit status
+            # instead of the lookup's, so a failed lookup would read as "no tracker exists" and file a
+            # fresh duplicate — silently, every day. This way `set -e` aborts on it, loudly (#547).
+            found=$(find_tracker "$label")
+            read -r num state <<<"$found"
+            echo "tracker[$label]: ${num:-none} ${state:-}"
+
             if [ -z "$num" ]; then
               # Give the label a colour and a description the first time it is needed. Only this branch
-              # needs it — an existing tracker already carries it — so a green repo that has never
-              # decayed never grows the label, and a green run spends no call on it.
+              # needs it — an existing tracker already carries it — so a repo that has never hit this
+              # condition never grows the label, and a run that does not hit it spends no call on it.
               #
               # `|| true`, deliberately: the probe reads ANY non-zero as "absent", including a 5xx or a
               # rate-limit blip, and the POST that follows would then 422 with `already_exists` and, under
@@ -418,51 +468,117 @@ jobs:
               # at exactly the moment the sweep is red and has something to say. Label bookkeeping does
               # not get to veto the report; if the label is genuinely unusable, the issue POST below says
               # so loudly.
-              if ! gh api "repos/$REPO/labels/$DECAY_LABEL" --silent 2>/dev/null; then
+              if ! gh api "repos/$REPO/labels/$label" --silent 2>/dev/null; then
                 gh api -X POST "repos/$REPO/labels" \
-                  -f "name=$DECAY_LABEL" -f color=B60205 \
-                  -f "description=A pointer published in a product skill stopped resolving. Filed by the skill-refs sweep." \
-                  --silent 2>/dev/null || echo "note: could not create label $DECAY_LABEL (it probably exists)"
+                  -f "name=$label" -f "color=$colour" -f "description=$desc" \
+                  --silent 2>/dev/null || echo "note: could not create label $label (it probably exists)"
               fi
 
-              url=$(jq -n --arg t "$DECAY_TITLE" --rawfile b "$RUNNER_TEMP/body.md" --arg l "$DECAY_LABEL" \
+              url=$(jq -n --arg t "$title" --rawfile b "$RUNNER_TEMP/body.md" --arg l "$label" \
                       '{title:$t, body:$b, labels:[$l]}' \
                     | gh api -X POST "repos/$REPO/issues" --input - --jq .html_url)
               echo "FILED $url"
-              echo "- Filed [the tracking issue]($url)." >> "$GITHUB_STEP_SUMMARY"
-            else
-              # Rewrite the body every run so it is never stale, and reopen if it had closed. A body
-              # edit notifies nobody, which is right: while the issue is open it is already somebody's
-              # work item and a daily comment on it would be the noise that gets this muted. A REOPEN
-              # is a fresh regression, so that one gets a comment — and a notification with it.
-              jq -n --rawfile b "$RUNNER_TEMP/body.md" '{body:$b, state:"open"}' \
-                | gh api -X PATCH "repos/$REPO/issues/$num" --input - --silent
-
-              if [ "$state" = "closed" ]; then
-                gh api -X POST "repos/$REPO/issues/$num/comments" \
-                  -f "body=Reopened: the sweep went red again at \`${SHA:0:7}\`. The decayed pointers are listed in the issue body, which has been rewritten. ([run]($RUN_URL))" \
-                  --silent
-                echo "REOPENED #$num"
-              else
-                echo "UPDATED #$num (already open)"
-              fi
-              echo "- Updated [#$num]($GITHUB_SERVER_URL/$REPO/issues/$num) — still red." >> "$GITHUB_STEP_SUMMARY"
+              echo "- Filed [$label]($url)." >> "$GITHUB_STEP_SUMMARY"
+              return
             fi
-          else
+
+            # Rewrite the body every run so it is never stale, and reopen if it had closed. A body
+            # edit notifies nobody, which is right: while the issue is open it is already somebody's
+            # work item and a daily comment on it would be the noise that gets this muted. A REOPEN
+            # is a fresh regression, so that one gets a comment — and a notification with it. Which is
+            # exactly why it must be TRUE: see the branch below.
+            jq -n --rawfile b "$RUNNER_TEMP/body.md" '{body:$b, state:"open"}' \
+              | gh api -X PATCH "repos/$REPO/issues/$num" --input - --silent
+
+            if [ "$state" = "closed" ]; then
+              gh api -X POST "repos/$REPO/issues/$num/comments" -f "body=$reopen" --silent
+              echo "REOPENED #$num"
+            else
+              echo "UPDATED #$num (already open)"
+            fi
+            echo "- Updated [$label #$num]($GITHUB_SERVER_URL/$REPO/issues/$num) — still red." >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          # The condition is over: say so where the work was filed, and close it. This is the half that
+          # keeps a tracker trustworthy — one that only ever opens is one people learn to ignore.
+          resolve() {   # <label> <closing-comment>
+            local label=$1 closing=$2
+            local found num state
+
+            found=$(find_tracker "$label")
+            read -r num state <<<"$found"
+
             if [ -n "$num" ] && [ "$state" = "open" ]; then
-              # Green. The decay is gone, so the work item is done — say so where it was filed, and
-              # close it. This is the half that keeps the issue trustworthy: a tracker that only ever
-              # opens is one people learn to ignore.
-              gh api -X POST "repos/$REPO/issues/$num/comments" \
-                -f "body=Resolved: every pointer in every published skill resolves again as of \`${SHA:0:7}\`. Closing. ([run]($RUN_URL))" \
-                --silent
+              gh api -X POST "repos/$REPO/issues/$num/comments" -f "body=$closing" --silent
               jq -n '{state:"closed", state_reason:"completed"}' \
                 | gh api -X PATCH "repos/$REPO/issues/$num" --input - --silent
               echo "CLOSED #$num"
-              echo "- Sweep is green; closed [#$num]($GITHUB_SERVER_URL/$REPO/issues/$num)." >> "$GITHUB_STEP_SUMMARY"
+              echo "- Closed [#$num]($GITHUB_SERVER_URL/$REPO/issues/$num)." >> "$GITHUB_STEP_SUMMARY"
             else
-              echo "green; no open tracking issue. Nothing to do."
+              echo "tracker[$label]: nothing open to close."
             fi
+          }
+
+          # ── WHICH red is this? (FS.GG.Game#277) ─────────────────────────────────────────────────
+          #
+          # A red sweep has two utterly different causes. The render step above already knows — it
+          # writes a different body for each — and this step used to throw that away and file BOTH to
+          # the decay tracker. So an expired token or an exhausted REST budget would REOPEN an issue
+          # titled "A published skill points at something that no longer resolves", and comment "the
+          # sweep went red again" on it — the one path in this workflow that deliberately NOTIFIES,
+          # because a reopen is supposed to mean a fresh regression. Both sentences were false: nothing
+          # decayed, and nothing was even looked at. A check that misreports its own subject is the
+          # thing this workflow exists to stop; it does not get to do it to itself.
+          #
+          # `reported` is precisely the bit that separates them — the script prints its FAILED banner if
+          # and only if `report()` fired, i.e. iff it judged at least one pointer. So:
+          #
+          #   rc=0                    the sweep RAN; every pointer resolves.      → decay over, sweep well
+          #   rc≠0 · reported=true    the sweep RAN; some pointer does not.       → DECAY  (sweep well)
+          #   rc≠0 · reported=false   the sweep judged NOTHING.                   → INFRA  (decay UNKNOWN)
+          #
+          # And note the two trackers close on DIFFERENT conditions. That asymmetry IS the fix:
+          #
+          #   The decay tracker is about the TREE, and only a run that actually judged the pointers
+          #   knows anything about it. So an infra failure leaves it strictly ALONE — untouched, not
+          #   reopened, not closed, not even rewritten. It is not evidence that decay appeared, and it
+          #   is not evidence that it went away; closing it would be the more dangerous lie of the two.
+          #
+          #   The infra tracker is about the SWEEP. Any run that completed is proof the sweep runs
+          #   again — so a DECAYED run closes it just as a green one does. Waiting for green would
+          #   leave it open across a legitimate decay, asserting the pointers are unchecked when they
+          #   were checked and found rotten.
+          INFRA_RESOLVED="Resolved: the sweep ran to completion again as of \`${SHA:0:7}\` — every published pointer was judged. Closing. ([run]($RUN_URL))"
+
+          if [ "$RC" = "0" ]; then
+            # GREEN. The sweep ran, and every pointer resolves. Both conditions are over.
+            resolve "$DECAY_LABEL" "Resolved: every pointer in every published skill resolves again as of \`${SHA:0:7}\`. Closing. ([run]($RUN_URL))"
+            resolve "$INFRA_LABEL" "$INFRA_RESOLVED"
+
+          elif [ "$REPORTED" = "true" ]; then
+            # DECAY. The sweep judged the pointers and some of them no longer resolve.
+            #
+            # This is also where the parser-DRIFT body lands (reported=true, findings=0), and that is
+            # right: drift means the script found REAL decay that this workflow could not read. That is
+            # a fact about the tree, not about the sweep's ability to run — the sweep ran fine.
+            raise "$DECAY_LABEL" "$DECAY_TITLE" B60205 \
+                  "A pointer published in a product skill stopped resolving. Filed by the skill-refs sweep." \
+                  "Reopened: the sweep went red again at \`${SHA:0:7}\`. The decayed pointers are listed in the issue body, which has been rewritten. ([run]($RUN_URL))"
+            resolve "$INFRA_LABEL" "$INFRA_RESOLVED"
+
+          else
+            # INFRA. The sweep never judged a pointer, so it knows NOTHING about decay — and it does
+            # not get to say anything about it. Its own tracker, its own label, its own title.
+            #
+            # It still gets FILED rather than merely going red, and that is the FS.GG.Game#242 rule
+            # holding for this condition too: a failing scheduled run notifies almost nobody, and "the
+            # links are UNCHECKED" is not a smaller fact than decay — it is the `FS-GG/.github#416`
+            # shape itself, and it is the easier of the two to miss.
+            raise "$INFRA_LABEL" "$INFRA_TITLE" D93F0B \
+                  "The skill-refs sweep could not run, so every published pointer is unchecked. Filed by the skill-refs sweep." \
+                  "Reopened: the sweep failed to run again at \`${SHA:0:7}\`, so the published pointers are unchecked once more. ([run]($RUN_URL))"
+            echo "decay tracker: UNTOUCHED — this run judged no pointer, so it is evidence neither way."
+            echo "- The decay tracker is untouched: this run judged no pointer, so it knows nothing about decay." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       # Re-raise the sweep's verdict. The job is RED when a pointer does not resolve — the issue above
@@ -470,6 +586,15 @@ jobs:
       # become is a REQUIRED check: see the header.
       - name: Verdict
         if: steps.sweep.outputs.rc != '0'
+        env:
+          REPORTED: ${{ steps.sweep.outputs.reported }}
         run: |
-          echo "::notice::The sweep is red. The finding is on the \`$DECAY_LABEL\` issue; this check does not gate a merge."
+          # Which red, and therefore which issue to go and read. Pointing every red at the decay
+          # tracker is the FS.GG.Game#277 bug in miniature — and this line is the one a human actually
+          # sees on the run, so it does not get to be vague either.
+          if [ "$REPORTED" = "true" ]; then
+            echo "::notice::The sweep is red: a pointer published in a skill no longer resolves. The finding is on the \`$DECAY_LABEL\` issue; this check does not gate a merge."
+          else
+            echo "::notice::The sweep is red: it could not RUN, so every published pointer is UNCHECKED — this is NOT decay. The finding is on the \`$INFRA_LABEL\` issue; this check does not gate a merge."
+          fi
           exit 1
