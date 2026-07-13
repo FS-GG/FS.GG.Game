@@ -43,14 +43,14 @@ trap 'rm -rf "$TMPROOT"' EXIT
 
 n_pass=0
 n_fail=0
+n_fix=0
 FIX=""
 OUT=""
 RC=0
-CASE=""
 
 # ── harness ─────────────────────────────────────────────────────────────────────────────────────
 
-case_start() { CASE="$1"; printf '\n%s\n' "$CASE"; }
+case_start() { printf '\n%s\n' "$1"; }
 
 ok()  { n_pass=$((n_pass + 1)); printf '  ok    %s\n' "$1"; }
 bad() {
@@ -73,8 +73,16 @@ expect_hasnt() { # expect_hasnt <substring> <what>
 }
 
 # A fresh fixture repo: a copy of the subject, an empty skill root, and a fake `gh`.
+#
+# COUNTED, not $RANDOM. $$ is fixed within a run, so $RANDOM was the only entropy — a 1-in-32768
+# draw taken ~20 times, i.e. a ~0.6% birthday collision every run, or one run in ~170. `mkdir -p`
+# would then hand the second fixture the FIRST one's tree, so a case would inherit a skill body it
+# never wrote and pass or fail on it. A flaky test in a suite whose entire product is
+# trustworthiness is worse than no test at all, and it would decay exactly like the defects this
+# suite exists to catch: rarely, and looking like something else.
 fixture() {
-  FIX="$TMPROOT/fix-$((RANDOM))-$$"
+  n_fix=$((n_fix + 1))
+  FIX="$TMPROOT/fix-$n_fix"
   mkdir -p "$FIX/scripts" "$FIX/template/product-skills" "$FIX/bin"
   cp "$SUT" "$FIX/scripts/check-skill-refs.sh"
   chmod +x "$FIX/scripts/check-skill-refs.sh"
