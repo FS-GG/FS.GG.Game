@@ -37,7 +37,7 @@
     <PackageVersion Include="Expecto" Version="10.2.3" />
     <PackageVersion Include="FsCheck" Version="3.3.3" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
-    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.15.6" />
+    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.16.0" />
   </ItemGroup>
 
   <!-- Gate-only — the packages the published SKILLS teach (FS.GG.Game#150).
