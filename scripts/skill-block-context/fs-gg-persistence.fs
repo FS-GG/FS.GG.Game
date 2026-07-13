@@ -8,7 +8,9 @@
 //
 // Blocks 2 and 3 are self-contained (each opens FS.GG.UI.Canvas and binds its own values), so neither
 // needs a section here. Block 2 is the `SaveCues.forTransition` cue seam (FS.GG.Game#214); block 3 is
-// the record-only `Persistence.interpret` fold. Block 2 is deliberately COMPILED rather than skipped:
+// the record-only `Persistence.interpretRecordOnly` fold (repointed off the deprecated
+// `Persistence.interpret` in FS.GG.Game#219, once FS.GG.UI 0.9.2 published the honest name). Block 2
+// is deliberately COMPILED rather than skipped:
 // it is the one that teaches the `Started` case, so a reader copying it is copying the fix for the
 // `Init` blind spot — it has to bind.
 
