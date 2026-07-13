@@ -44,13 +44,19 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - name: Restore (locked)
-        run: |
-          set -euo pipefail
-          if ! dotnet restore FS.GG.Game.slnx --locked-mode; then
-            echo "::error::locked restore failed — the resolved graph does not match the committed packages.lock.json. If intentional, run: dotnet restore FS.GG.Game.slnx --force-evaluate  and commit the lockfiles."
-            exit 1
-          fi
+
+      # COLD, via the shared action (#135 / FS-GG/.github#429) — and this is the job where a warm
+      # restore was worst. There is no `cache: true` here to blame: --locked-mode validates the
+      # committed contentHash against whatever copy of the package is already in the global-packages
+      # folder, and on a GitHub runner that folder is PRE-SEEDED BY THE IMAGE. So this restore never
+      # had to contact the feed either, and `publish-packages` needs: this job — meaning the one gate
+      # standing between a lock file no fresh clone can restore and a PUBLISHED, dual-published,
+      # immutable package was comparing a record against a record.
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: FS.GG.Game.slnx
+
       - name: Build (net10.0, Debug)
         run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
       - name: Test (full headless suite)
@@ -111,17 +117,32 @@ jobs:
           fi
           echo "Version-of-truth matches the tag: $VER"
 
+      # The BYTES THAT GET PUBLISHED are restored here, so this restore is cold too. It carried no
+      # --locked-mode flag, which made it look like a plain build prerequisite; it was not. The
+      # org-shared Directory.Build.props sets RestoreLockedMode for EVERY restore in CI
+      # (GITHUB_ACTIONS=true + a lockfile exists), so this was a locked restore against the image's
+      # pre-seeded package folder, exactly like the one in `verify` — just harder to see, because the
+      # flag that would have told you was implicit.
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: FS.GG.Game.slnx
+
       # Pack the coherent set. Only FS.GG.Game.Core + FS.GG.Game.Render are IsPackable=true (the two
       # test projects are IsPackable=false), so packing the whole slnx yields exactly those two
       # packages, both at $VER — and Game.Render's ProjectReference to Game.Core is emitted as a
       # package dependency at the same $VER (coherent set).
+      #
+      # `dotnet pack` restores implicitly, and that is left alone deliberately: it re-resolves with
+      # -p:Version set, which is how the packed nuspec gets the right dependency version. It now
+      # resolves into the COLD NUGET_PACKAGES the step above exported to GITHUB_ENV, so it validates
+      # against the same feed-backed folder rather than the image's.
       - name: Pack FS.GG.Game.* (coherent set @ $VER)
         shell: bash
         env:
           VER: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          dotnet restore FS.GG.Game.slnx
           dotnet pack FS.GG.Game.slnx -c Release -p:Version="$VER" -o artifacts/packages
           echo "Packed:"; ls -1 artifacts/packages/*.nupkg
 
