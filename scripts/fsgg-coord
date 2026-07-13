@@ -2410,6 +2410,57 @@ done_cmd() {
   # exists (cheap probe above) so non-epic items pay nothing.
   local has_parent; has_parent="$(jq -r '.data.repository.issue.parent.number // ""' <<<"$out")"
   [ -n "$flip" ] && [ -n "$has_parent" ] && epic_rollup "$ref"
+
+  # PUBLISH THE SHADOW EVIDENCE HERE, BECAUSE ASKING DID NOT WORK (#656).
+  #
+  # The kit asked every worker to run `divergence --publish` at the end of its loop — in the canonical
+  # doc and in both skill roots. Measured against a live fleet of 28 workers and 597 compared
+  # item-verdicts: it was run ZERO times. Not once, by anybody, including by the worker who wrote it.
+  # ASKING IS NOT A MECHANISM. A request at the end of a long recipe, competing with the worker actual
+  # job, is what an 0% hit rate looks like.
+  #
+  # So it happens HERE — in the one command every worker runs when it finishes an item. No new step in
+  # the recipe, no discipline required, nothing to remember.
+  #
+  # AND IT MAY NEVER COST A WORKER THEIR DONE-STAMP. This runs AFTER the green banner and after the
+  # roll-up: the stamp is already earned and printed. A publish that fails — no network, an exhausted
+  # REST budget, a ledger issue somebody renamed — is a publish that failed, and it is not a reason to
+  # tell a worker that their merged, green, rolled-up work is not done. Advisory, silent on the happy
+  # path, and its failure is swallowed on purpose.
+  #
+  # Idempotent by construction: the ledger row is keyed on (worker, day, engine) and REWRITTEN in place,
+  # so publishing on every `done` costs one REST call and cannot double-count a day.
+  done_publish_evidence
+
+  return 0
+}
+
+# The shadow evidence, published as a side effect of finishing work (#656). Never fails its caller.
+#
+# Silent unless it did something. A worker with no evidence — no engine, or a shadow that never compared
+# anything — has nothing to say, and saying so on every `done` is noise that trains people to stop reading
+# the output of the one command that carries their DONE-STAMP.
+done_publish_evidence() {
+  [ -s "$DIVERGENCE_LOG" ] || return 0
+
+  # `soft_run`, NOT a bare `$( )`. A `die` in this tool is FATAL BY DEFAULT — `die_rc` ends in
+  # `kill -s TERM $$`, which takes the whole shell down, and a command substitution does NOT contain it.
+  # `soft_run` sets SOFT_DIE=1 so the die unwinds only its own subshell and its chosen exit code comes
+  # back as an ordinary rc. That is the mechanism this file already uses everywhere a die must be
+  # survived (`soft_run claim_cmd`, `soft_run set_field`).
+  #
+  # Getting this wrong is not academic: the ledger issue being unreadable would have killed the worker
+  # `done` MID-STAMP — the exact thing the comment above promises it cannot do. It did, until this line.
+  local out rc=0
+  out="$(soft_run divergence_publish 2>&1)" || rc=$?
+  case "$rc" in
+    0) printf '%s\n' "$out" | grep -E '^fsgg-coord: published' || true ;;
+    3) : ;;                                   # nothing worth publishing. The honest answer, and not news.
+    *) echo "fsgg-coord: note — could not publish the shadow divergence evidence to the fleet ledger." >&2
+       echo "  Your work is DONE and stamped; this is bookkeeping. The evidence is still in your local" >&2
+       echo "  log, and the next done will republish it. To see why: fsgg-coord divergence --publish" >&2
+       ;;
+  esac
   return 0
 }
 
@@ -4397,8 +4448,21 @@ DIVERGENCE_MARKER_RE="^<!--\\s*fsgg:divergence\\s+worker=(?<w>[^\\s>]+)\\s+day=(
 # Grouped by ENGINE too, so that a worker who upgrades mid-day does not silently blend evidence from
 # two builds into a single row that is true of neither.
 divergence_summaries() {  # -> JSONL, one summary per (worker, engine, day)
+  # ONLY ROWS THAT NAME A BUILD, AND NAME IT AS A VERSION.
+  #
+  # Before #644 the engine stamp was the ENGINE DECISION DOCUMENT — a JSON object, not a version —
+  # because `--slurpfile engine` and `--arg engine` collided. Those rows are still sitting in every
+  # worker local log, and folding one would emit a marker whose `engine=` field is a JSON blob full of
+  # spaces and quotes. `--fleet` REFUSES to compute a verdict over a marker it cannot parse (correctly:
+  # an unreadable row might be the one that diverged), so ONE bad marker would make the ledger
+  # permanently unreadable for everybody.
+  #
+  # Evidence that cannot be attributed to a build is not evidence: `Divergence.evaluate` counts only
+  # reports from the build under test and would discard it anyway. Drop it HERE, where it can still be
+  # dropped quietly, rather than in the ledger, where it cannot.
   jq -c -s '
     map(select(.ran))
+    | map(select((.engine | type) == "string" and (.engine | test("^[0-9]+[.][0-9]+"))))
     | group_by([(.worker // "unknown-worker"), (.engine // "unknown"), (.ts[0:10])])
     | map({ worker:   (.[0].worker // "unknown-worker"),
             engine:   (.[0].engine // "unknown"),
