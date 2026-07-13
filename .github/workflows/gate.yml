@@ -514,7 +514,7 @@ jobs:
     # QUOTED, and it must stay quoted — for the same reason the skill-refs step name is, one gate up.
     # An unquoted `run:` inside a scalar is a mapping value, and YAML rejects the file outright. The
     # first thing this job ever did was catch that, in its own definition.
-    name: "Workflow lint (actionlint + shellcheck over every run: block)"
+    name: "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -671,6 +671,154 @@ jobs:
           fi
 
           exit "$rc"
+
+      # ...and now the shell that is NOT in a `run:` block (#266).
+      #
+      # The step above is the only shellcheck this repo has ever run, and it reads `run:` blocks. So
+      # `scripts/` — several hundred lines of bash that CI itself depends on, including the two
+      # harnesses that decide whether the skill-refs gates work at all — was never read by any linter.
+      #
+      # The tell was already in the tree: those scripts carry `# shellcheck source=` pragmas, which
+      # exist to CONFIGURE a run that never happened. That is the silent-no-op shape
+      # (FS-GG/.github#416) turned inside out — not a gate reporting green over an unread subject, but
+      # a subject that believes it is being read.
+      #
+      # Same pinned binary as the step above. No second download, and no second version to keep in
+      # step: when the pin moves, both halves of this job move with it. That is the property #261
+      # bought, and this step is its second customer.
+      - name: Lint the repo's own shell
+        run: |
+          set -euo pipefail
+          shellcheck_bin="$RUNNER_TEMP/shellcheck"
+
+          # DISCOVERED, not listed. A hand-maintained file list is a thing that goes stale in silence,
+          # and the failure it produces here is the one this job exists to prevent: a shell script the
+          # gate has never heard of, merging unread, green. So the subject is derived the way a shell
+          # file actually identifies itself — by extension, or by shebang. The shebang half is not
+          # hypothetical: the repo's largest shell file, `scripts/fsgg-coord`, has no `.sh` on it.
+          mapfile -t discovered < <(
+            {
+              git ls-files -- '*.sh' '*.bash'
+              git ls-files | while IFS= read -r f; do
+                case "$f" in *.sh|*.bash) continue ;; esac
+                [ -f "$f" ] || continue
+                IFS= read -r first <"$f" || true
+                if printf '%s\n' "$first" | grep -qE '^#!.*[ /](ba|da|k)?sh([[:space:]]|$)'; then
+                  printf '%s\n' "$f"
+                fi
+              done
+            } | sort -u
+          )
+
+          # VENDORED, so not ours to lint. The coordination kit is SYNCED from FS-GG/.github (`chore:
+          # sync coordination kit from FS-GG/.github@…`, #233/#252/#262). Linting it here would report
+          # findings this repo cannot fix — the next sync reverts any local edit — and it would do it
+          # LOUDLY and WRONGLY: four of its SC1010s are false positives (a `local` variable named
+          # `done`, and `banner done …` as an argument; shellcheck sees the keyword, the shell does
+          # not). A gate that goes red on day one over a file nobody here owns is the false-accusation
+          # shape #238 taught this repo to refuse, and #261 just closed. Its four real-but-cosmetic
+          # SC2155s were routed UPSTREAM instead, where they can actually be fixed.
+          kit=(scripts/fsgg-coord)
+
+          # An exclusion that names nothing excludes nothing — silently. If a future sync renames or
+          # moves the kit, this list keeps "excluding" a path that is gone while the kit's real file
+          # sails into the subject and reds the gate with the false positives above. So the exclusion
+          # is checked as itself, exactly like the pinned binary and the file count are.
+          for k in "${kit[@]}"; do
+            if [ ! -f "$k" ]; then
+              echo "::error::the excluded path '$k' is not in the tree. The coordination kit moved," \
+                   "so this exclusion now excludes NOTHING and the kit is about to be linted as if" \
+                   "this repo wrote it. Re-derive the exclusion; do not delete this check."
+              exit 1
+            fi
+          done
+
+          subject=()
+          for f in "${discovered[@]}"; do
+            excluded=0
+            for k in "${kit[@]}"; do
+              if [ "$f" = "$k" ]; then excluded=1; fi
+            done
+            if [ "$excluded" -eq 0 ]; then subject+=("$f"); fi
+          done
+
+          echo "shell in tree: ${#discovered[@]} · vendored (not linted): ${#kit[@]} · linted: ${#subject[@]}"
+
+          # Run over zero files, shellcheck exits 0 — and a green over an empty subject is precisely
+          # the defect this job exists to close. If discovery ever returns nothing, that is a RED.
+          #
+          # (This comment does not begin with the linter's name, and neither does the one below. A
+          # comment whose first word is that name is parsed as a shellcheck DIRECTIVE, not as prose —
+          # SC1072/SC1073, and the run: block fails to parse. Caught by this very step, on itself.)
+          if [ "${#subject[@]}" -eq 0 ]; then
+            echo "::error::discovered no repo-authored shell to lint. shellcheck over nothing exits 0," \
+                 "so this would have been a GREEN over an unread subject."
+            exit 1
+          fi
+
+          # -x, so the `# shellcheck source=lib/test-harness.sh` pragmas the harnesses already carry
+          # become live and shellcheck follows the source.
+          #
+          # And NO `-P`/`--source-path` here, deliberately. The scripts declare `source-path=SCRIPTDIR`
+          # themselves, so `shellcheck -x <file>` resolves the source from ANY working directory — which
+          # means the command below is the command a developer types, and this gate reproduces on a
+          # laptop. Passing `-P` here instead would fix it for CI ONLY: a script that forgot the pragma
+          # would pass the gate and fail on the desk of whoever ran shellcheck by hand, which is the
+          # divergence the pinning in this job exists to kill.
+          #
+          # -S info, and the severity floor is applied BELOW rather than here — because two different
+          # verdicts come out of this one log and they do not share a floor. See both guards.
+          log="$RUNNER_TEMP/shellcheck.log"
+          rc=0
+          "$shellcheck_bin" -x -S info -f gcc "${subject[@]}" >"$log" 2>&1 || rc=$?
+          cat "$log"
+
+          # rc 0 = clean, 1 = findings (judged below). Anything ELSE is shellcheck failing to PROCESS a
+          # file — an unreadable path, a syntax error it cannot parse past — and a file that could not
+          # be read is a file that was not checked.
+          if [ "$rc" -ge 2 ]; then
+            echo "::error::shellcheck exited $rc — it could not process one of the files above." \
+                 "That file went unread; this is a RED, not a shrug."
+            exit 1
+          fi
+
+          # THE SOURCE MUST ACTUALLY BE FOLLOWED, and this guard is the whole reason #266 was not a
+          # two-line PR.
+          #
+          # `source=lib/test-harness.sh` resolves against the linter's source path. Get that wrong and
+          # nothing fails — it emits SC1091 ("Not following: ...") and carries on with the harness
+          # UNREAD. SC1091 is an `info`, so a `-S warning` floor never even prints it. What the
+          # gate reports instead is a set of confident, WRONG SC2034s: every variable the suites set
+          # for the harness to read (RC, consumed only by `expect_rc`) looks unused, because the reader
+          # was never parsed. Three of them, and #266 filed them as real, suspecting the tests were not
+          # checking the exit codes they thought they were. They were. The `source` was unread.
+          #
+          # So an unfollowed source is a RED in its own right, at its own floor. A linter running with
+          # half its subject invisible does not get to report on the other half.
+          if grep -q '\[SC1091\]' "$log"; then
+            echo "::error::shellcheck could not follow a sourced file (SC1091, above). It linted the" \
+                 "sourcing script with the source UNREAD — which invents SC2034s for every variable" \
+                 "the sourced file consumes. Add '# shellcheck source-path=SCRIPTDIR' to the script."
+            exit 1
+          fi
+
+          # THE FLOOR: warning. With the sources followed, the tree is clean here — no baseline, no
+          # suppressions, nothing silenced to get to green.
+          #
+          # Below the floor sit 10 SC2016s ("expressions don't expand in single quotes"), and they are
+          # correct-as-written, not debt: they are literal markdown code spans in test assertions
+          # (`expect_has '### `path``') and `$1`/`$2` inside single-quoted awk programs. shellcheck
+          # reads a backtick in single quotes as a command substitution; the shell does not. The same
+          # code is already suppressed for the same reason in skill-refs-sweep.yml. They are PRINTED
+          # above and not fixed, which is the honest state — not hidden behind a `disable` that would
+          # also hide the next real one.
+          blocking=$(grep -cE ': (error|warning):' "$log" || true)
+          if [ "$blocking" -ne 0 ]; then
+            echo "::error::shellcheck found $blocking finding(s) at or above 'warning' in the repo's" \
+                 "own shell. See the gcc-format lines above: path:line:col."
+            exit 1
+          fi
+          echo "shellcheck: clean at -S warning across ${#subject[@]} file(s)."
 
   # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,

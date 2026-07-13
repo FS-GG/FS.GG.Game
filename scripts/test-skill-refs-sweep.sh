@@ -56,6 +56,10 @@ python3 -c 'import yaml' 2>/dev/null || {
 
 # The subject here is a workflow STEP, not a script — so `bad` says so when it dumps the output.
 HARNESS_OUTPUT_LABEL='step output'
+# SCRIPTDIR, or the `source=` below resolves against the CWD and finds nothing — see the note in
+# test-check-skill-refs.sh. Unfollowed, the harness's reads of HARNESS_OUTPUT_LABEL and RC are
+# invisible, and both turn into phantom SC2034s (#266).
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/test-harness.sh
 . "$REPO_ROOT/scripts/lib/test-harness.sh"
 harness_init
