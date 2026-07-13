@@ -6,7 +6,7 @@
         "type": "Direct",
         "requested": "[0.9.2, )",
         "resolved": "0.9.2",
-        "contentHash": "iHIFC5t4d6KcKR5ZFqlg8T1C4K9M5W7DroE1wDlAo11k5M5dNe6nom79nCPx3LVleQ/71lwE1Lm/82u4KaQpQQ==",
+        "contentHash": "UDAJQiz5aelEVhqRfsAVmH9bgdrVSy/96jH7BsvPclvjPXAWSD3aAKr4mmOq7rJDMI5m5xNwr5ynfPNd+M09qA==",
         "dependencies": {
           "FS.GG.UI.Scene": "0.9.2",
           "FSharp.Core": "10.1.301"
@@ -16,7 +16,7 @@
         "type": "Direct",
         "requested": "[0.9.2, )",
         "resolved": "0.9.2",
-        "contentHash": "Z16GvtJv+ZnXCfqF56UCKiU1Yrd7apvpl7NODmrrcjSiqi6Wqwl0sy6VcbVEcI+XVU0R8XcgLfGiFhTVr1WB0A==",
+        "contentHash": "J/6z0D5qnz5LE0f6dVUSk+HIVoQMJtgHU32CdajlEd8FjPnayHIfRqyJAprtKedAjviL5LgHXUvqd3T6+deZEQ==",
         "dependencies": {
           "FSharp.Core": "10.1.301"
         }
