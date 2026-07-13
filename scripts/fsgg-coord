@@ -165,6 +165,15 @@
 #   fsgg-coord take [--repo R] [--tries N]    # pick + claim the next SCHEDULABLE item in one step,
 #                                             # retrying on a lost race so a worker never idles.
 #   fsgg-coord batch [--repo R] [-n N] [--json] [--include-backlog]
+#   fsgg-coord lanes [--repo R] [--json]      # partition the board into LANES — connected components
+#                                             # of the item-overlap graph. Items in DIFFERENT lanes can
+#                                             # never collide, so they are PROVABLY safe to run at once.
+#                                             # Prints the CEILING (how many workers this board can
+#                                             # actually absorb — fan out wider and the extras are handed
+#                                             # nothing), names the CHOKEPOINT lanes, and lists the items
+#                                             # that cannot be laned at all: the ones invisible to every
+#                                             # worker who asks for work. DERIVED from the touch-sets in
+#                                             # the typed core, never asserted by anyone (#428, #485).
 #                                             # the scheduler: a maximal set of Ready items whose
 #                                             # touch-sets are disjoint from EACH OTHER and from
 #                                             # every in-flight claim. Hand one to each worker.
@@ -3740,6 +3749,13 @@ SHADOW_UNOBSERVED=0
 # In `auto`, the presence of an engine IS the switch. In `shadow`, the switch is the caller's word, and
 # a missing engine is a skip they get told about — because they asked for a comparison and did not get
 # one, which is a different fact from "this machine does not do comparisons".
+# `lanes` needs the item set the SCHEDULER sees — the same scan, the same bodies, the same claims — so
+# that a lane can never disagree with the batch about what exists or what it reserves (#485). It must do
+# that with the shadow OFF, so the collection is switched on independently of shadowing. Collecting is
+# free: it appends to a temp file and decides nothing.
+LANES_COLLECT=""
+shadow_collecting() { [ -n "$LANES_COLLECT" ] && return 0; shadow_enabled; }
+
 shadow_enabled() {
   case "$ENGINE_MODE" in
     shadow|fs) return 0 ;;
@@ -3946,7 +3962,7 @@ SHADOW_VERDICTS=""
 SHADOW_SEEN=""
 
 shadow_init() {
-  shadow_enabled || return 0
+  shadow_collecting || return 0
   SHADOW_ITEMS="$(mktemp "$CACHE/.snap-items.XXXXXX")"
   SHADOW_VERDICTS="$(mktemp "$CACHE/.snap-verdicts.XXXXXX")"
   SHADOW_SEEN="$(mktemp "$CACHE/.snap-seen.XXXXXX")"
@@ -3958,7 +3974,7 @@ shadow_init() {
 # BASH's verdict for one candidate, in the vocabulary the typed core also speaks. The tokens are the
 # comparable surface; the human sentence beside them in `skipped` is not, and never was.
 shadow_verdict() {  # <short> <verdict> [holder-kind] [paths(newline-separated)]
-  shadow_enabled || return 0
+  shadow_collecting || return 0
   jq -c -n --arg short "$1" --arg verdict "$2" --arg holder "${3:-}" --arg paths "${4:-}" \
     '{short: $short, verdict: $verdict,
       holder: (if $holder == "" then null else $holder end),
@@ -3969,7 +3985,7 @@ shadow_verdict() {  # <short> <verdict> [holder-kind] [paths(newline-separated)]
 # facts. Anything the engine had to fetch for itself would be a second observation of a moving board,
 # and the comparison would be measuring the clock rather than the rule.
 shadow_item() {  # <owner> <repo> <num> <status> <state> <body-file> <blockers-json> <claim-json>
-  shadow_enabled || return 0
+  shadow_collecting || return 0
   printf '%s/%s#%s\n' "$1" "$2" "$3" >>"$SHADOW_SEEN"
   jq -c -n \
     --arg owner "$1" --arg repo "$2" --argjson number "$3" \
@@ -4022,7 +4038,7 @@ shadow_claim_json() {  # <worker> <ageSec> <liveness-kind> [pr]
 # Record ONE candidate exactly as bash saw it: the board row, the body it read (or did not), and the
 # claim — including WHICH liveness question was actually asked.
 shadow_observe() {  # <item json> <body> <liveness-kind|""> <worker|""> <ageSec> [pr]
-  shadow_enabled || return 0
+  shadow_collecting || return 0
   local it="$1" body="$2" kind="$3" worker="$4" age="${5:-0}" pr="${6:-}"
   local r num owner repo status state bf claim blockers
   r="$(jq -r '.repo // ""' <<<"$it")"; num="$(jq -r '.number // ""' <<<"$it")"
@@ -4045,7 +4061,7 @@ shadow_observe() {  # <item json> <body> <liveness-kind|""> <worker|""> <ageSec>
 # Bash's verdict for every candidate a jq filter selects — the bulk pre-filters (closed, blocked),
 # which never reach the per-item loop and so have no other place to be recorded.
 shadow_verdict_bulk() {  # <cands json> <jq select expr> <verdict token>
-  shadow_enabled || return 0
+  shadow_collecting || return 0
   local id
   while IFS= read -r id; do
     [ -n "$id" ] || continue
@@ -4065,7 +4081,7 @@ shadow_verdict_bulk() {  # <cands json> <jq select expr> <verdict token>
 # dies under fan-out. If this number turns out to be large in practice, that is a real argument about
 # the check ORDER, and it belongs in the flip decision with evidence attached rather than in a guess.
 shadow_sweep() {  # <all cands json>
-  shadow_enabled || return 0
+  shadow_collecting || return 0
   local n i=0 it r num id body hold holder age stale alive kind pr
   n="$(jq 'length' <<<"$1" 2>/dev/null || echo 0)"
   while [ "$i" -lt "$n" ]; do
@@ -4582,6 +4598,82 @@ divergence_fleet() {
     4) return 3 ;;
     *) echo "fsgg-coord: the engine could not fold the ledger (exit $rc) — no verdict." >&2; return 3 ;;
   esac
+}
+
+# ---- lanes: the partition of the board into work that can NEVER collide (#428) --------------------
+#
+# `batch` answers "what may run RIGHT NOW, given what is in flight?" — a question about this instant,
+# recomputed every call. A LANE is the structural fact underneath it: two items whose touch-sets do not
+# overlap, and which are not joined by any CHAIN of items that do, can never contend for a file no
+# matter who claims what or in which order. So a lane is a connected component of the item-overlap
+# graph, and items in different lanes are PROVABLY safe to run concurrently.
+#
+# DERIVED, NEVER ASSERTED. Nobody declares that two items are safe together — not an agent, not a human,
+# not a label on an issue. Safety is COMPUTED, in the typed core, by the same `TouchSet.conflicts` the
+# scheduler already reserves against, so a lane cannot disagree with the batch about what collides
+# (#485: one question, five implementations, agreeing in none). An agent's job is to improve the INPUT —
+# to give an undeclared item an honest touch-set — never to pronounce on the OUTPUT. If it could, a
+# confident wrong answer would put two workers in one file, which is the failure this whole protocol
+# exists to prevent (#273, #461).
+#
+# WHAT IT BUYS over `batch`:
+#   THE CEILING     the number of free lanes is how many workers this board can actually absorb. Fan out
+#                   wider and the extra workers are handed NOTHING — and `take` reports an empty queue
+#                   over a board full of work (#440's shape), which is indistinguishable from "no work".
+#   THE CHOKEPOINT  a lane that swallows the board is not a scheduling accident; it is ONE over-broad
+#                   touch-set gluing unrelated work together. `scripts/fsgg-coord` is exactly that, and
+#                   it serialises four open items (#428). The partition makes it a STRUCTURE you can see
+#                   rather than a series of surprises.
+#   THE CHORE       the items that cannot be laned at all — the ones invisible to every worker who asks
+#                   for work. That list is the agent chore's whole input.
+lanes_cmd() {
+  local repo="" json="" want_backlog=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo)            repo="${2:?--repo needs a value}"; shift 2 ;;
+      --json)            json=1; shift ;;
+      --include-backlog) want_backlog=1; shift ;;
+      *) die "lanes: unknown argument '$1'." ;;
+    esac
+  done
+
+  # THE PARTITION IS THE ENGINE'S, SO THERE MUST BE ONE. Computing "which items can never collide?" with
+  # no engine present would mean reimplementing the conflict closure in jq — a SIXTH place that answers
+  # a question already answered in five (#485). Refuse, and say how to fix it.
+  if ! engine_resolve; then
+    echo "fsgg-coord: no engine resolves, so lanes cannot be computed." >&2
+    echo "  A lane is a claim about SAFETY, and it is computed in the typed core — not guessed at here." >&2
+    echo "  Install it:  dotnet tool install -g FS.GG.Coord.Cli" >&2
+    return 3
+  fi
+
+  # THE SCHEDULER'S OWN SCAN. `batch` populates the snapshot as a side effect of deciding, so lanes and
+  # the batch see the SAME items, the SAME bodies and the SAME claims by construction. Recomputing the
+  # candidate set here would be a second observation of a moving board — and a lane that disagreed with
+  # the batch about what exists is worse than no lane at all.
+  LANES_COLLECT=1
+  local rc=0
+  batch_cmd ${repo:+--repo "$repo"} --include-backlog --json >/dev/null 2>&1 || rc=$?
+  # rc is the BATCH's verdict (75 = budget, 1 = refused). A refused batch still observed the board, so
+  # the partition is computable; only an unreadable board is not.
+  if [ "$rc" -eq 75 ]; then
+    die_rate
+  fi
+  [ -s "$SHADOW_ITEMS" ] || {
+    echo "fsgg-coord: the board scan produced no items — refusing to report an empty partition." >&2
+    echo "  An empty board and an unread board are not the same thing (#266)." >&2
+    return 3
+  }
+
+  local snap; snap="$(mktemp "$CACHE/.lanes.XXXXXX")"; TMPFILES+=("$snap")
+  jq -n --slurpfile items "$SHADOW_ITEMS" --arg schema "$SNAPSHOT_SCHEMA"     --argjson allow "$([ -n "$want_backlog" ] && echo true || echo false)" '
+    { schema: $schema, allowBacklog: $allow, limit: 0, inFlight: [], items: $items }' >"$snap"     || die "lanes: could not assemble the board snapshot."
+
+  if [ -n "$json" ]; then
+    "${ENGINE_ARGV[@]}" lanes --json <"$snap" || die "lanes: the engine could not partition the board."
+  else
+    "${ENGINE_ARGV[@]}" lanes --text <"$snap" || die "lanes: the engine could not partition the board."
+  fi
 }
 
 # ---- batch: THE scheduler. A maximal set of items that may run at once. --------------------------
@@ -5657,6 +5749,7 @@ case "$cmd" in
   reap)      reap_cmd "$@" ;;
   take)      take_cmd "$@" ;;
   batch)     batch_cmd "$@" ;;
+  lanes)     lanes_cmd "$@" ;;
   overlap)   overlap_cmd "$@" ;;
   widen)     widen_cmd "$@" ;;
   say)       say_cmd "$@" ;;
