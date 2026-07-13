@@ -216,13 +216,25 @@ jobs:
       # how. Every other job in this file hands back a command you can actually run; this one now does
       # too. The upstream message is FS-GG/.github's to fix (filed there) and this step is right either
       # way — it names the repo the script actually lives in, which a generic org-side message cannot.
+      # A non-zero exit is NOT proof of drift, and saying so would repeat the very defect this step
+      # exists to fix. The script also exits non-zero when it REFUSES TO RUN: the org source of truth
+      # is malformed XML/JSON and it will not distribute it (.github#29 is that, having happened), or
+      # it has moved/lost its exec bit in .github (126/127 — and an org file moving is exactly what
+      # #248 was). Re-syncing fixes none of those, so we assert drift only when the script SAYS DRIFT,
+      # and otherwise send the reader upstream. The script's own exit code is propagated, not flattened
+      # to 1: `--check` exits 1 for drift and 2 for "you called me wrong", and that is worth keeping.
       - name: Drift check (managed files == source of truth)
         run: |
-          set -euo pipefail
-          if ! _org-build/scripts/sync-build-config.sh --check "$GITHUB_WORKSPACE"; then
-            echo "::error::build-config drift: a managed file differs from the org source of truth in FS-GG/.github dist/dotnet/. The three managed files (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json) are SYNCED, not authored here (ADR-0006, sync-not-fork) — do not hand-edit them to make this green. sync-build-config.sh is NOT in this repo; it lives in FS-GG/.github. To re-sync, from the repo root run: git clone --depth 1 https://github.com/FS-GG/.github.git /tmp/fsgg-org && /tmp/fsgg-org/scripts/sync-build-config.sh .  then commit the result. If instead the org baseline itself is wrong, change it in FS-GG/.github first — this gate tracks .github@main, so the source of truth moves before the receivers do."
-            exit 1
+          set -uo pipefail
+          out="$(_org-build/scripts/sync-build-config.sh --check "$GITHUB_WORKSPACE" 2>&1)"; rc=$?
+          printf '%s\n' "$out"
+          [ "$rc" -eq 0 ] && exit 0
+          if printf '%s' "$out" | grep -q '^DRIFT'; then
+            echo "::error::build-config drift: a managed file differs from the org source of truth in FS-GG/.github dist/dotnet/. The three managed files (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json) are SYNCED, not authored here (ADR-0006, sync-not-fork) — do not hand-edit them to make this green. sync-build-config.sh is NOT in this repo; it lives in FS-GG/.github. To re-sync, from this repo's root run: rm -rf /tmp/fsgg-org && git clone --depth 1 https://github.com/FS-GG/.github.git /tmp/fsgg-org && /tmp/fsgg-org/scripts/sync-build-config.sh .  then commit the result. If instead the org baseline itself is wrong, change it in FS-GG/.github first — this gate tracks .github@main, so the source of truth moves before the receivers do."
+          else
+            echo "::error::the build-config drift check did not complete (exit $rc) — this is NOT drift, and re-syncing will not clear it. The check reported no DRIFT line, so it failed before it could compare: most likely the org source of truth in FS-GG/.github dist/dotnet/ is malformed and the script refused to distribute it (see .github#29), or _org-build/scripts/sync-build-config.sh moved or is not executable in FS-GG/.github. Read the script output above — the fix belongs in FS-GG/.github, not in this repo."
           fi
+          exit "$rc"
 
   # Lock-range coherence gate (FS.GG.Game#153, adopting FS-GG/.github#495; ADR-0006). The locked
   # restore above is the enforcement point for package entries — id, version, contentHash — but it
