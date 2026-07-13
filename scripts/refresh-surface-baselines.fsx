@@ -16,14 +16,23 @@
 // (sorted, "Module" suffix stripped, compiler-generated excluded) so a package moved between the repos
 // keeps a comparable surface record.
 //
-// It deviates from Rendering's generator in exactly three places, each a deliberate bug fix, NOT drift
-// to be "corrected" back into parity (all three are filed against Rendering — FS.GG.Rendering#657):
+// Three emit details were fixed here and filed upstream as FS.GG.Rendering#657. That fix has landed,
+// so the two generators now AGREE on all three:
 //   1. `typeRef` strips the arity suffix from every generic segment instead of truncating at the first
 //      backtick, which silently erased a nested generic's own name (`Dictionary`2+Enumerator`).
 //   2. `displayName` trims the TRAILING "Module" rather than replacing the substring everywhere.
 //   3. `writeLines` emits "\n" explicitly rather than Environment.NewLine.
-// Each one made the baseline record something other than the surface — which is the whole failure this
-// file exists to prevent, so parity with a buggy emitter is worth less than a baseline that is true.
+// Each one made the baseline record something other than the surface — the whole failure this file
+// exists to prevent — so the reasoning stays at each site below: it is what stops the next reader from
+// "simplifying" a shape back into the bug it was written to fix.
+//
+// The two `typeRef`s still READ differently: Rendering strips the arity with a regex where this scans
+// the string. They agree on every stem a CLR type name can produce — a mechanism difference, not a
+// behavioural one. They are NOT equivalent in general, so do not "prove" it and move the caveat: the
+// scan drops a backtick unconditionally, while the regex only drops one that a digit follows. They
+// part company on a backtick with no digit after it, and on nothing else. Neither F# nor C# can put
+// such a backtick in a FullName — an arity marker always carries its digits — so no input this script
+// can see tells them apart.
 
 open System
 open System.Collections.Generic
@@ -146,10 +155,10 @@ let fullNameOf (ty: Type) =
     | value -> value
 
 // Strip only the TRAILING "Module" that F# appends when a module's name collides with a type's.
-// `fullName.Replace("Module", "")` — which is what Rendering still does — eats the word EVERYWHERE in
-// the name, so a module named `ModuleRegistry` (FullName `…ModuleRegistryModule`) would be recorded
-// as `…Registry`: a baseline entry naming a type that does not exist. `fullName` ends with `ty.Name`,
-// so trimming the suffix by length is exact.
+// The obvious `fullName.Replace("Module", "")` eats the word EVERYWHERE in the name, so a module named
+// `ModuleRegistry` (FullName `…ModuleRegistryModule`) would be recorded as `…Registry`: a baseline
+// entry naming a type that does not exist. `fullName` ends with `ty.Name`, so trimming the suffix by
+// length is exact.
 let displayName (ty: Type) =
     let fullName = fullNameOf ty
 
@@ -184,11 +193,11 @@ let rec typeRef (ty: Type) : string =
         // arity suffix on EVERY generic segment, and assembly-qualified arguments in brackets. Cut the
         // bracketed arguments (we render our own from GetGenericArguments), then drop each `N.
         //
-        // Truncating at the FIRST backtick instead — which is what Rendering still does — throws away
-        // everything after it, so `Dictionary\`2+Enumerator` emits as plain `Dictionary<K, V>`. The
-        // nested type's name vanishes, a member returning `Dictionary<K,V>.Enumerator` records the same
-        // line as one returning `Dictionary<K,V>`, and `Array.distinct` then merges them — a real
-        // signature change that this baseline exists to catch would leave the file untouched.
+        // Truncating at the FIRST backtick instead throws away everything after it, so
+        // `Dictionary\`2+Enumerator` emits as plain `Dictionary<K, V>`. The nested type's name
+        // vanishes, a member returning `Dictionary<K,V>.Enumerator` records the same line as one
+        // returning `Dictionary<K,V>`, and `Array.distinct` then merges them — a real signature change
+        // that this baseline exists to catch would leave the file untouched.
         let stem =
             let raw = fullNameOf ty
 
