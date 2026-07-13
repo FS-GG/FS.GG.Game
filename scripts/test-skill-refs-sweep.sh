@@ -850,11 +850,18 @@ expect_eq "$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .env.REPORT
 # workflow in `.github/workflows`, this one included. It is the `workflow-lint` job, "Shell lint
 # (actionlint + shellcheck over every run: block, and over the repo's own scripts)", and it runs
 # unguarded on every `pull_request` to main. It knows an `if:` from a typo'd `ifs:`, it shellchecks
-# the `run:` blocks, and being f(tree) it is entitled to go red at you: every red it raises was
-# introduced by the diff in front of it. (Entitled to, not empowered to — `main` carries no branch
-# protection and no ruleset, so NOTHING in this repo is a mechanically-required check, and a red one
-# stops only the worker who reads it. That is a wider fact than this file, and it is filed as #287.)
-# It reproduces on a laptop:
+# the `run:` blocks, and being f(tree) it is ENTITLED to go red at you: every red it raises was
+# introduced by the diff in front of it.
+#
+# Entitled to. Whether a red check can also STOP a merge is a repo-settings question — it depends on
+# branch protection, which is not in this tree — so this file does not answer it and must not pretend
+# to. #287 is where that question lives, and where its answer will stay true. (This paragraph used to
+# answer it. That was the same bug in a new coat: a fact about the world, asserted in a comment, in a
+# file whose whole subject is that nothing in CI reads comments — so the fix for #287 would silently
+# turn this note back into the lie it was written to remove.)
+#
+# It reproduces on a laptop — with the versions gate.yml pins, which is the point of pinning them
+# (#261): an actionlint or shellcheck you happened to have can disagree with the one that gates.
 #
 #   actionlint -shellcheck /path/to/shellcheck
 #
