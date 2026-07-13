@@ -842,7 +842,22 @@ expect_eq "$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .env.REPORT
 
 # ── summary ─────────────────────────────────────────────────────────────────────────────────────
 #
-# STILL MISSING, and worth someone's next hour: nothing in CI parses this workflow's YAML beyond
-# GitHub itself. The PyYAML load at the top of this file is a lower bound on that — a workflow that
-# does not parse fails here — but it does not know an `if:` from a typo'd `ifs:`, and actionlint does.
+# WHO ELSE READS THIS WORKFLOW. Until #270 the honest answer was "GitHub, at dispatch time", and the
+# note that stood here invited the next reader to go and fix that. They should not: it is fixed, and
+# taking the invitation now costs an hour rebuilding a gate that already gates them.
+#
+# `.github/workflows/gate.yml` runs actionlint — pinned, driving a pinned shellcheck — over every
+# workflow in `.github/workflows`, this one included, as the required check "Shell lint (actionlint +
+# shellcheck over every run: block, and over the repo's own scripts)". It knows an `if:` from a typo'd
+# `ifs:`, it shellchecks the `run:` blocks, and being f(tree) it can gate honestly, so it does. It
+# reproduces on a laptop:
+#
+#   actionlint -shellcheck /path/to/shellcheck
+#
+# That does not make this suite redundant, and the split is worth naming. actionlint checks the YAML
+# against the Actions SCHEMA; it cannot know the pipeline still has the SHAPE these tests model. That
+# is § 0's job — it pins the `if:` conditions, the `DRY_RUN` env and the `pull_request` trigger by
+# hand, precisely because they are GitHub expressions no harness in this language can evaluate. And
+# the PyYAML load at the top stays for a reason of its own: it is what EXTRACTS the `run:` blocks
+# tested below, which is also why a workflow that does not parse still fails here, away from CI.
 harness_summary test-skill-refs-sweep
