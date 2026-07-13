@@ -40,7 +40,54 @@ let repoRoot =
 let repoPath (rel: string) =
     Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar))
 
-// The product-scope catalog: id -> (canonical SKILL.md source, ADR-0017 canonical materializes-when).
+/// ADR-0022 §6: is FS.GG.Rendering REQUIRED to ship a byte-identical copy of this body?
+/// (FS.GG.Game#280)
+///
+/// This is the mirror set, and it is the reason the manifest carries a `mirrored` flag at all:
+/// scripts/check-skill-refs.sh READS it, to decide whether a bare `[[ref]]` in a body is an error.
+/// A mirrored body is read by two gates with different publish sets, so a bare (repo-relative) ref
+/// gets OPPOSITE verdicts from them — it resolves here and dangles there. Only a qualified ref
+/// survives the mirror (FS.GG.Game#273/#279).
+///
+/// AN OBLIGATION, NOT AN OBSERVATION — and the distinction is not academic, because the obligation
+/// is VIOLATED as this is written. Rendering's copies still carry the pre-#279 BARE refs while ours
+/// are qualified, so not one of the four is byte-identical today; FS.GG.Rendering#714 / PR #721 are
+/// the in-flight re-sync. `Mirrored` therefore says "ADR-0022 §6 requires Rendering to ship these
+/// bytes", which is exactly the property the ref rule needs — a body under that obligation must be
+/// written so it survives BOTH readers, whether or not the copy is currently in step. It emphatically
+/// does not say "the copy is in step". Nothing in this repo could say that: Rendering's tree is not
+/// visible from here, and this gate is deliberately hermetic (no network), a design FS.GG.Rendering#722
+/// independently reaches for its own copy of this same script.
+///
+/// THE TRAP, and it is the whole subtlety of this field: `Mirrored` does NOT mean "FS.GG.Rendering
+/// has a body by this name". The P6 four below — collision / grids / line-drawing / visibility — DO
+/// have Rendering counterparts and are under NO such obligation: they were rewritten against the
+/// .fsi and deliberately diverge (see the catalog note). Nobody promises those bytes agree, so
+/// nothing forces the two gates to agree, and a bare ref in one of them is checked by exactly one
+/// reader that can see the tree it names. Classify on the OBLIGATION, not on name collision. Four,
+/// not eight — which is also what Rendering derives from the org registry (#722), and what its own
+/// #541 got wrong.
+///
+/// This repo cannot VERIFY the verdict, and must not pretend to. Checking a mirror against its
+/// canonical needs a reader that sees both trees — FS-GG/.github, where registry/skills.yml already
+/// reconciles its rows FROM this manifest (registry = manifest = bytes), which is the direction that
+/// makes this flag useful to everyone else rather than a third hand-maintained reading of one fact.
+type Mirror =
+    /// ADR-0022 §6 requires FS.GG.Rendering to ship these bytes — bare [[refs]] here are an error.
+    | Mirrored
+    /// Under no mirror obligation: no copy, or one that deliberately diverges. Bare is fine.
+    | NotMirrored
+
+// The product-scope catalog: id -> (canonical SKILL.md source, ADR-0017 canonical materializes-when,
+// ADR-0022 §6 mirror verdict).
+//
+// THE MIRROR VERDICT IS MANDATORY, and that is the point of it being a field rather than a list
+// somewhere (FS.GG.Game#280). It used to live in scripts/check-skill-refs.sh as a hardcoded
+// MIRRORED_SKILLS list, and a list is a thing you can FORGET TO UPDATE — silently, and in the
+// direction that hurts: a body mirrored in FUTURE was simply absent from it, so bare refs in it
+// stayed legal, so it dangled in Rendering while BOTH gates reported green. That is FS.GG.Game#273
+// verbatim, reintroduced by the guard written to prevent it. Here, a new row that omits the verdict
+// does not COMPILE, so the question cannot be skipped — only answered.
 // Four game product skills migrated from FS.GG.Rendering (ADR-0022 P4), plus fs-gg-ballistics, which
 // is NOT a migration: it originates here and has no FS.GG.Rendering counterpart to stay byte-identical
 // with. All gate on the simulation profiles. supplied-by is derived from the source path (dirname + "/").
@@ -72,7 +119,7 @@ let repoPath (rel: string) =
 // (registry = manifest = bytes), deliberately outside this repo's touch-set. It is the second such row
 // pending, after fs-gg-effects above — see FS-GG/.github#330 and #328.
 let catalog =
-    [ "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]"
+    [ "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]", NotMirrored
       // NOT [game, sample-pack] (FS.GG.Game#204). Audio is the ONE product skill here that is not
       // simulation-only: FS.GG.Rendering#436 widened it to every profile that opens a viewer window,
       // and so to every profile that can make a sound. Rendering's template.json — the only thing
@@ -81,17 +128,17 @@ let catalog =
       // normalizes that condition into the row below. This catalog is hand-declared (there is no
       // `dotnet new fs-gg-game` template to read yet), so it can — and did — drift away from the
       // materialization it describes. Keep it equal to Rendering's condition, not to its neighbours.
-      "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [app, sample-pack, game]"
-      "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-effects", "template/product-skills/fs-gg-effects/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-physics", "template/product-skills/fs-gg-physics/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-visibility", "template/product-skills/fs-gg-visibility/SKILL.md", "profile in [game, sample-pack]" ]
+      "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [app, sample-pack, game]", Mirrored
+      "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]", NotMirrored
+      "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack]", NotMirrored
+      "fs-gg-effects", "template/product-skills/fs-gg-effects/SKILL.md", "profile in [game, sample-pack]", NotMirrored
+      "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]", Mirrored
+      "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]", NotMirrored
+      "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]", NotMirrored
+      "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]", Mirrored
+      "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]", Mirrored
+      "fs-gg-physics", "template/product-skills/fs-gg-physics/SKILL.md", "profile in [game, sample-pack]", NotMirrored
+      "fs-gg-visibility", "template/product-skills/fs-gg-visibility/SKILL.md", "profile in [game, sample-pack]", NotMirrored ]
 
 /// Provider source directory (trailing slash) that holds the canonical SKILL.md — supplied-by.
 let suppliedByOf (source: string) : string =
@@ -107,15 +154,31 @@ let sha256Text (body: string) : string =
     |> Array.map (fun b -> b.ToString "x2")
     |> String.concat ""
 
+// A duplicated id would emit two rows for one skill, and if their verdicts disagreed the gate would
+// silently take the MIRRORED one (`select(.mirrored == true)` matches the row that says yes) — a
+// contradiction in the catalog resolving itself, quietly, in a file whose entire job since #280 is to
+// state the verdict out loud. Cheap to make impossible, so it is.
+let duplicateIds =
+    catalog
+    |> List.countBy (fun (id, _, _, _) -> id)
+    |> List.filter (fun (_, n) -> n > 1)
+    |> List.map fst
+
+if not duplicateIds.IsEmpty then
+    eprintfn "skill-manifest: duplicate catalog id(s): %s" (String.concat ", " duplicateIds)
+    exit 1
+
 let manifestJson =
     let entries =
         catalog
-        |> List.sortBy (fun (id, _, _) -> id)
-        |> List.map (fun (id, source, condition) ->
+        |> List.sortBy (fun (id, _, _, _) -> id)
+        |> List.map (fun (id, source, condition, mirror) ->
             let body = File.ReadAllText(repoPath source)
+            let mirrored = match mirror with | Mirrored -> "true" | NotMirrored -> "false"
+
             sprintf
-                "    {\n      \"id\": \"%s\",\n      \"scope\": \"product\",\n      \"sha256\": \"%s\",\n      \"resolvablePath\": \".agents/skills/%s/SKILL.md\",\n      \"materializes-when\": \"%s\",\n      \"supplied-by\": \"%s\"\n    }"
-                id (sha256Text body) id (jsonEscape condition) (jsonEscape (suppliedByOf source)))
+                "    {\n      \"id\": \"%s\",\n      \"scope\": \"product\",\n      \"sha256\": \"%s\",\n      \"mirrored\": %s,\n      \"resolvablePath\": \".agents/skills/%s/SKILL.md\",\n      \"materializes-when\": \"%s\",\n      \"supplied-by\": \"%s\"\n    }"
+                id (sha256Text body) mirrored id (jsonEscape condition) (jsonEscape (suppliedByOf source)))
         |> String.concat ",\n"
 
     sprintf "{\n  \"schemaVersion\": 1,\n  \"skills\": [\n%s\n  ]\n}\n" entries

@@ -191,11 +191,19 @@ as_repo() {
 
 # One body. The SAME BYTES are fed to both readers below — if you edit it, edit it once, here. Both
 # directions are qualified: a ref to a skill we own, and a ref to one Rendering owns.
+#
+# `mirror` is what puts it IN the mirror set, and since FS.GG.Game#280 that is a fact the subject
+# reads out of the fixture's producer manifest rather than one it carries. The old subject held a
+# hardcoded MIRRORED_SKILLS list, so `fs-gg-game-core` was mirrored HERE by the coincidence of being
+# named in the script under test — a fixture could not have said otherwise, and no test could reach
+# the rule for any other body. Now the fixture declares it, which is why the cases below can mirror
+# fs-gg-physics (they could not before) and prove the set is data.
 mirrored_body() {
   skill fs-gg-game-core <<'MD'
 # game-core
 Ballistics: [[fs-gg-game:fs-gg-ballistics]]. Scene: [[fs-gg-rendering:fs-gg-scene]].
 MD
+  mirror fs-gg-game-core
 }
 
 case_start '§1 mirror invariant: the qualified body is green in FS.GG.Game — it owns ballistics, and scene is foreign'
@@ -231,6 +239,7 @@ skill fs-gg-game-core <<'MD'
 # game-core
 See [[fs-gg-ballistics]].
 MD
+mirror fs-gg-game-core
 skill fs-gg-ballistics <<'MD'
 # ballistics
 MD
@@ -238,6 +247,41 @@ run
 expect_rc 1 'bare ref in a mirrored body fails'
 expect_out_has 'MIRRORED' 'says the body is mirrored'
 expect_out_has 'fs-gg-game:fs-gg-ballistics' 'prints the qualified spelling to use'
+
+# ── THE MIRROR SET IS DATA (FS.GG.Game#280) ─────────────────────────────────────────────────────
+#
+# The rule above was only ever reachable for the four bodies named in the subject's own hardcoded
+# MIRRORED_SKILLS list. THIS is the case that could not be written before, and it is the one the item
+# was filed about: a FIFTH body gets mirrored, and the guard must arm itself — with no edit to the
+# subject, which is exactly what nobody remembered to do.
+#
+# The two cases are the same bytes in the same body, and the ONLY difference is the manifest row. If
+# the subject ever goes back to carrying the set, the first goes green and this pair fails loudly.
+case_start '§1/#280 a body mirrored in FUTURE is guarded the moment the MANIFEST says so — no edit to the subject'
+fixture
+skill fs-gg-physics <<'MD'
+# physics
+See [[fs-gg-ballistics]].
+MD
+mirror fs-gg-physics
+skill fs-gg-ballistics <<'MD'
+# ballistics
+MD
+run
+expect_rc 1 'the fifth mirrored body is guarded too — the set came from the manifest'
+expect_out_has 'MIRRORED' 'and it is named as a mirror failure, not a dangling ref'
+
+case_start '§1/#280 …and the SAME bytes are green while the manifest does not mirror it — the row is what decides'
+fixture
+skill fs-gg-physics <<'MD'
+# physics
+See [[fs-gg-ballistics]].
+MD
+skill fs-gg-ballistics <<'MD'
+# ballistics
+MD
+run
+expect_rc 0 'not mirrored → bare resolves → green, on identical bytes'
 
 # The converse, and it is the one that keeps the rule from being a blanket ban: a body nobody mirrors
 # has exactly one reader, that reader can resolve a bare ref, and bare stays correct there.
@@ -252,6 +296,81 @@ skill fs-gg-ballistics <<'MD'
 MD
 run
 expect_rc 0 'bare ref in a non-mirrored body passes'
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# § 0  THE MIRROR VERDICT IS MANDATORY  (FS.GG.Game#280)
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+#
+# Reading the set from data replaces one way of being wrong with another, unless the subject refuses
+# to GUESS. There is exactly one plausible guess — "not mirrored", the majority answer — and it is
+# the old hardcoded list's bug wearing a data structure: the body nobody classified is, by
+# construction, the body nobody thought about, which is precisely the body someone just mirrored. The
+# single case where the default is wrong is the case that exercises it, and it fails silently.
+#
+# So these cases assert the subject's refusal, and they are the ones that keep #280 from being a
+# relocation. Delete the §0 check and they go green while the gate quietly waves the next mirrored
+# body through.
+
+# The manifest as it was BEFORE #280 introduced the field: every row present, not one of them stating
+# a verdict. Not a hypothetical — it is on disk in every checkout older than this change, and it is
+# what a bad merge or a hand-edit reproduces.
+manifest_before_280() {
+  local m="$FIX/template/skill-manifest/skill-manifest.json"
+  jq 'del(.skills[].mirrored)' "$m" >"$m.tmp" && mv "$m.tmp" "$m"
+}
+
+case_start '§0 a published body with NO manifest row is RED — the gate will not guess "not mirrored"'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+MD
+unclassify fs-gg-alpha
+run
+expect_rc 1 'an unclassified body fails rather than defaulting'
+expect_out_has 'NO mirror verdict' 'names the missing verdict'
+expect_out_has 'will not assume' 'and says it is refusing to guess, not that the refs are bad'
+expect_out_has 'generate-skill-manifest.fsx' 'points at the catalog that has to answer'
+
+# A row that EXISTS but does not SAY. This is what every row in the manifest looked like before #280
+# added the field, so it is the shape a stale artifact, a bad merge, or a hand-edit produces — and it
+# is the one that nearly shipped: `select(.mirrored == true)` reads a missing field as FALSE, because
+# `null == true` is false. A gate that stopped there would answer "not mirrored" for all twelve
+# bodies, confidently, and leave the four Rendering really does ship byte-identically UNGUARDED —
+# #280's own bug, walking back in through the data that replaced the list.
+#
+# The bare ref below is what gives this case teeth: under that reading it RESOLVES, so the run goes
+# green. It must not.
+case_start '§0 a row with no `mirrored` field does NOT mean "not mirrored" — a stale manifest is unclassified'
+fixture
+skill fs-gg-game-core <<'MD'
+# game-core
+See [[fs-gg-ballistics]].
+MD
+mirror fs-gg-game-core
+skill fs-gg-ballistics <<'MD'
+# ballistics
+MD
+manifest_before_280   # del(.skills[].mirrored) — every row present, none of them saying
+run
+expect_rc 1 'a verdict-less row is unclassified, not silently unmirrored'
+expect_out_has 'NO mirror verdict' 'names the verdict as the thing that is missing'
+expect_out_hasnt 'every [[ref]] resolves' 'and does not wave the bare ref through'
+
+# The subject reads the mirror set from ONE file. If it cannot read that file it knows nothing about
+# ANY body — so a green here would be "I examined 12 bodies and found nothing wrong" spoken by a gate
+# that examined none. `expect_rc 2`, not 1: this is not a bad pointer, it is a subject the gate could
+# not judge, and the sweep tells those two apart (FS.GG.Game#277).
+case_start '§0 a MISSING manifest is exit 2 — "I could not look" is not "I found nothing"'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See [[fs-gg-alpha]].
+MD
+rm -f "$FIX/template/skill-manifest/skill-manifest.json"
+run
+expect_rc 2 'no manifest → exit 2, not a green and not a ref failure'
+expect_out_has 'cannot tell which bodies' 'says what it could not determine'
+expect_out_hasnt 'every [[ref]] resolves' 'and NEVER claims the refs resolved'
 
 case_start '§1 a ref qualified with an owner outside the registry vocabulary fails'
 fixture

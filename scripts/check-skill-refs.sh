@@ -182,17 +182,23 @@ KNOWN_OWNERS=$'fs-gg-game\nfs-gg-rendering\nfs-gg-sdd'
 # and repo-relative is exactly what FS.GG.Game#273 proved cannot survive the mirror. Bare stays legal
 # everywhere else — a body that is never mirrored has one reader, and that reader can check it.
 #
-# Without this list the #273 fix is FOLKLORE: qualifying the refs once fixes today, and the very next
-# bare ref added to one of these four bodies silently restores the contradiction — green here (we
-# publish it) and dangling there. Both gates green, because the one that would object has been told
-# to NOTE these bodies rather than fail on them. That is the shape this whole script exists to refuse,
-# so it does not get to hold it.
+# Without this rule the #273 fix is FOLKLORE: qualifying the refs once fixes today, and the very next
+# bare ref added to one of these bodies silently restores the contradiction — green here (we publish
+# it) and dangling there. Both gates green, because the one that would object has been told to NOTE
+# these bodies rather than fail on them. That is the shape this whole script exists to refuse, so it
+# does not get to hold it.
 #
-# THE LIST IS THE ROT RISK, and it is deliberate rather than ideal: the mirror set is defined in
-# ADR-0022 (another repo) and nothing here can derive it, so a body mirrored in FUTURE is unguarded
-# until someone adds it below. Making the set machine-readable — a `mirrored:` flag in
-# template/skill-manifest — is filed as the follow-up.
-MIRRORED_SKILLS=$'fs-gg-game-core\nfs-gg-audio\nfs-gg-persistence\nfs-gg-model-swap'
+# THE SET IS DATA NOW, NOT A LIST HERE (FS.GG.Game#280). It used to be a hardcoded MIRRORED_SKILLS
+# list on this line — a copy of a fact that lives in ADR-0022, in another repo, checked against
+# nothing. And it failed in the SILENT direction: a body mirrored in FUTURE was simply absent from
+# it, so bare refs in it stayed legal, so it dangled in Rendering while BOTH gates said green. That
+# is #273 verbatim, reintroduced by the guard written to prevent it, and it happens the next time the
+# org does something entirely normal — mirror a fifth body.
+#
+# It now comes from the producer manifest, which is generated (scripts/generate-skill-manifest.fsx),
+# drift-gated in CI, and — the part that matters — REQUIRES a verdict: a new skill's catalog row does
+# not compile without one. The question can no longer be skipped, only answered.
+MANIFEST="template/skill-manifest/skill-manifest.json"
 # The org an unqualified `FS.GG.Rendering#535` belongs to.
 DEFAULT_OWNER="FS-GG"
 
@@ -201,15 +207,60 @@ if [[ ! -d $SKILL_ROOT ]]; then
   exit 0
 fi
 
+# The mirror set is only as good as the file it comes from, so a manifest this gate cannot READ is
+# fatal (exit 2), never a shrug. Carrying on without it would mean every body looks unmirrored — the
+# gate would examine each one and find nothing to say, which is indistinguishable from a clean tree.
+# "I found nothing" and "I could not look" must not be the same output; that is the silent-no-op this
+# script exists to refuse, and it does not get to commit it either.
+REGEN="run \`dotnet fsi scripts/generate-skill-manifest.fsx\`"
+if [[ ! -f $MANIFEST ]]; then
+  echo "check-skill-refs: no $MANIFEST — cannot tell which bodies ADR-0022 §6 mirrors." >&2
+  echo "check-skill-refs: $REGEN." >&2
+  exit 2
+fi
+if ! command -v jq >/dev/null 2>&1; then
+  echo "check-skill-refs: jq is required to read $MANIFEST (the ADR-0022 §6 mirror set)." >&2
+  exit 2
+fi
+
 # The skills THIS repo publishes: one directory per skill id.
 published=$(for d in "$SKILL_ROOT"/*/; do basename "$d"; done | sort)
+
+# ADR-0022 §6, machine-readable: the bodies FS.GG.Rendering ships byte-identically.
+#
+# `classified` is a STRICTLY DIFFERENT QUESTION, and conflating the two would rebuild the bug: it is
+# the rows that state a verdict — `mirrored` present AND boolean — not merely the rows that exist.
+#
+# The distinction is not pedantry, it is the whole defect one level down. `select(.mirrored == true)`
+# reads a row with NO mirrored field as false, because `null == true` is false. So a manifest written
+# before this field existed — a stale artifact, a bad merge, a hand-edit — would answer "not mirrored"
+# for ALL TWELVE bodies, every one of them confidently, and the four that Rendering really does ship
+# byte-identically would go UNGUARDED while this gate reported green. That is the exact failure #280
+# removes, walking back in through the data it replaced the list with. A row that does not SAY is a
+# row that does not KNOW, and it is handled below with every other unclassified body: loudly.
+#
+# A manifest that is not readable as JSON at all fails the same way for the same reason (exit 2, not
+# an empty set: an empty set is an answer, and "I could not parse it" is not).
+# NOT `jq -e`: it exits 4 when a filter yields NO output, and an empty mirror set is a perfectly good
+# answer (a tree with no mirrored bodies), not a broken file. Plain jq already exits non-zero on the
+# states that must be fatal — unparseable JSON, a `.skills` that is not an array — and zero, with no
+# output, on the states that must not be.
+if ! mirrored=$(jq -r '.skills[] | select(.mirrored == true) | .id' "$MANIFEST" 2>/dev/null) \
+  || ! classified=$(jq -r '.skills[] | select(.mirrored == true or .mirrored == false) | .id' "$MANIFEST" 2>/dev/null); then
+  echo "check-skill-refs: cannot read $MANIFEST as a skill manifest — cannot tell which bodies ADR-0022 §6 mirrors." >&2
+  echo "check-skill-refs: $REGEN." >&2
+  exit 2
+fi
+mirrored=$(sort <<<"$mirrored")
+classified=$(sort <<<"$classified")
 
 # -x -F, never -w: `grep -w game` matches inside `fs-gg-game` (a `-` is a word boundary), and an
 # unanchored pattern is a REGEX, so `fs.gg.game` would match too. Both would wave a typo'd owner
 # through — and a foreign qualified ref is trusted, so nothing downstream would catch it.
 is_published() { grep -qxF -- "$1" <<<"$published"; }
 is_known_owner() { grep -qxF -- "$1" <<<"$KNOWN_OWNERS"; }
-is_mirrored() { grep -qxF -- "$1" <<<"$MIRRORED_SKILLS"; }
+is_mirrored() { grep -qxF -- "$1" <<<"$mirrored"; }
+is_classified() { grep -qxF -- "$1" <<<"$classified"; }
 # `template/product-skills/fs-gg-game-core/SKILL.md` → `fs-gg-game-core`.
 skill_of() { local rel=${1#"$SKILL_ROOT"/}; printf '%s' "${rel%%/*}"; }
 
@@ -220,6 +271,36 @@ report() {
   [[ -n ${GITHUB_ACTIONS:-} ]] && printf '::error file=%s,line=%s::%s\n' "$1" "$2" "$3"
   fail=1
 }
+
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+# 0. THE MIRROR VERDICT IS MANDATORY  (FS.GG.Game#280)
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# A published body the manifest reaches NO verdict on is UNCLASSIFIED, and this gate will not guess.
+#
+# Guessing has exactly one plausible default — "not mirrored", the majority answer — and that default
+# IS the bug this item removed, wearing a different hat. Read the failure the other way round: an
+# unclassified body is, by construction, a body nobody thought about, and the body nobody thought
+# about is precisely the one someone just added to the mirror. So the one case where the default is
+# WRONG is the one case it gets exercised, and it is wrong in the silent direction — bare refs stay
+# legal, the body dangles in Rendering, and both gates report green. Defaulting here would have
+# faithfully rebuilt the hardcoded list's failure mode on top of the data structure that replaced it.
+#
+# So: unclassified is RED, and it names the file to fix. The cost is a chore — add a catalog row when
+# you add a skill — and the chore is loud, immediate, and lands on the author who has the context.
+#
+# This also closes the hole one level up, which nothing else covered: a new skill DIRECTORY with no
+# catalog row was invisible. The manifest simply lacked it, `--check` compared the on-disk manifest to
+# the generator's output, both agreed it did not exist, and the drift gate went green over a body it
+# had never heard of.
+while read -r id; do
+  # An EMPTY skill root leaves the glob unexpanded, so `published` is the literal `*` — not a skill,
+  # and not this check's business to shout about.
+  [[ -z $id || ! -d $SKILL_ROOT/$id ]] && continue
+  is_classified "$id" && continue
+  report "$SKILL_ROOT/$id/SKILL.md" 1 \
+    "'$id' is published but has NO mirror verdict in $MANIFEST (no row, or a row with no \`mirrored\` field) — the gate cannot tell whether ADR-0022 §6 mirrors it, and it will not assume. Add it to the catalog in scripts/generate-skill-manifest.fsx (Mirrored or NotMirrored) and regenerate (FS.GG.Game#280)"
+done <<<"$published"
 
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # 1. WIKI REFS
