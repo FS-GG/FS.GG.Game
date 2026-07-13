@@ -488,6 +488,17 @@ jobs:
       # gate's verdict a function of the release schedule of a third party.
       ACTIONLINT_VERSION: 1.7.7
       ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+      # ...and the argument above is not weaker for the tool actionlint DRIVES (#261). actionlint does
+      # not lint shell itself; it shells out to whatever `shellcheck` it is given. Taking that one from
+      # the runner image made half this gate reproducible and half of it a function of the image: the
+      # verdict was f(tree, runner-image), and the second argument moves on its own schedule. It was
+      # already drifting — #260 was developed against 0.10.0 and the run that merged it used the image's
+      # 0.9.0 — and the failure that shape produces is the FALSE ACCUSATION #238 taught this repo to
+      # refuse: GitHub bumps the image to a shellcheck with a new check (SC2320 and friends all arrived
+      # in point releases), and the next PR goes red on a `run:` block it did not write, in a workflow
+      # it never opened, unreproducibly, in a file its item never declared in `Paths:`.
+      SHELLCHECK_VERSION: 0.11.0
+      SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -502,31 +513,68 @@ jobs:
           tar -xzf "$tgz" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -version
 
+      - name: Install shellcheck (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          txz="$RUNNER_TEMP/shellcheck.tar.xz"
+          curl -fsSL --retry 3 -o "$txz" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  ${txz}" | sha256sum -c -
+          tar -xJf "$txz" -C "$RUNNER_TEMP" --strip-components=1 \
+            "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          "$RUNNER_TEMP/shellcheck" --version | sed -n 2p
+
       # THE SUBJECT IS CHECKED BEFORE THE VERDICT IS TRUSTED — twice, because this job's entire
       # purpose is to stop a green being reported over something nobody read, and it does not get to
       # do that to itself.
       #
-      # 1. shellcheck. actionlint's shell linting is an INTEGRATION: if `shellcheck` is not on PATH it
-      #    does not fail, it does not warn — it silently skips the shell half and exits 0. The `run:`
-      #    blocks in this repo hold several hundred lines of bash (skill-refs-sweep.yml alone is ~200,
-      #    and it files GitHub issues), so a silent skip would leave the largest, sharpest part of the
-      #    subject unread while the check went green. It ships on ubuntu-latest; if it ever stops
-      #    shipping, this must be a RED, not a shrug.
+      # 1. shellcheck. actionlint's shell linting is an INTEGRATION: handed a shellcheck it cannot
+      #    execute, it does not fail and does not warn — it silently drops the shell half and exits 0.
+      #    The `run:` blocks here hold several hundred lines of bash (skill-refs-sweep.yml alone is
+      #    ~200, and it files GitHub issues), so that skip would leave the largest, sharpest part of
+      #    the subject unread while the check went green.
+      #
+      #    Pinning it (above) does not remove that risk — it MOVES it. The image always had a
+      #    shellcheck; a pinned download is one 404, one renamed asset, one corrupt tarball away from
+      #    having none, and the degraded state is a GREEN. So the binary is checked as itself, and
+      #    then actionlint's own verdict on it is checked too:
+      #
+      #      a. the pinned binary must exist and RUN (`--version`), which catches the 404 and the
+      #         truncated tarball, and
+      #      b. actionlint must not report the rule DISABLED. It says so in `-verbose` —
+      #         `Rule "shellcheck" was disabled: ...` — and that line is the only direct evidence that
+      #         the shell half ran at all. It is strictly stronger than (a): it also catches the wrong
+      #         arch, a non-executable bit, an exec-format error, and every future reason we have not
+      #         thought of, none of which (a) would notice.
+      #
+      #    Both are REDs. A gate whose subject silently halves must not report success. (Verified by
+      #    mutation, #261: a `run:` block with an unquoted `$1` is caught with the pinned shellcheck
+      #    and exits 1 — and passes at exit 0 with none.)
       #
       # 2. The file count. `actionlint` over zero files also exits 0. A green over an empty subject is
       #    the exact defect this job exists to close, so the count is compared against the workflows
       #    actually on disk — not merely asserted to be non-zero, because "it linted 1 of 6" is just
       #    as much a lie as "it linted 0".
+      #
+      # Both halves pinned, this reproduces EXACTLY on a laptop — which is the real prize, because it
+      # stops the gate being something you can only find out about by pushing:
+      #
+      #   actionlint -shellcheck /path/to/shellcheck
       - name: Lint every workflow
         run: |
           set -euo pipefail
-          command -v shellcheck >/dev/null || {
-            echo "::error::shellcheck is not on PATH. actionlint would SILENTLY skip every run: block" \
-                 "and still exit 0 — a green over the shell it is here to read. Install it, or this" \
-                 "gate is lying."
+          shellcheck_bin="$RUNNER_TEMP/shellcheck"
+
+          # An explicit `if` here too, for the reason spelled out below: `A && B || C` is not
+          # if-then-else, and SC2015 flags it. This job lints itself, so the check that the linter is
+          # present must itself survive the linter.
+          if [ ! -x "$shellcheck_bin" ] || ! "$shellcheck_bin" --version >/dev/null 2>&1; then
+            echo "::error::the pinned shellcheck is missing or will not run. actionlint would SILENTLY" \
+                 "skip every run: block and still exit 0 — a green over the shell it is here to read." \
+                 "This is a RED, not a shrug."
             exit 1
-          }
-          shellcheck --version | sed -n 2p
+          fi
+          "$shellcheck_bin" --version | sed -n 2p
 
           # ONE invocation, and the count and the verdict both come out of it. Linting twice — once to
           # count, once to judge — would mean the number reported here describes a DIFFERENT run from
@@ -538,10 +586,23 @@ jobs:
           # glob instead would hand it every file in that directory, so the day someone drops a
           # README.md or a .gitkeep there, the two counts disagree and this gate goes red over
           # nothing. Same subject, derived the same way, or the comparison is theatre.
+          #
+          # -shellcheck takes the PINNED binary explicitly rather than letting actionlint find one on
+          # PATH — which is the whole point of #261. The runner image ships its own; without this flag
+          # that is the one that would run, and the pin above would be decoration.
           log="$RUNNER_TEMP/actionlint.log"
           rc=0
-          "$RUNNER_TEMP/actionlint" -verbose -color >"$log" 2>&1 || rc=$?
+          "$RUNNER_TEMP/actionlint" -verbose -color -shellcheck "$shellcheck_bin" >"$log" 2>&1 || rc=$?
           cat "$log"
+
+          # actionlint's own answer to "did the shell half actually run?", and it is the only direct
+          # one there is. A shellcheck it cannot execute is not an error to actionlint — it prints this
+          # line, drops the rule, and exits 0 over every `run:` block in the repo.
+          if grep -q 'Rule "shellcheck" was disabled' "$log"; then
+            echo "::error::actionlint DISABLED its shellcheck rule — every run: block in this repo went" \
+                 "unread and it would still have exited 0. The pin is broken, not the workflows."
+            exit 1
+          fi
 
           on_disk=$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | wc -l)
           linted=$(sed -n 's/^verbose: Linting \([0-9]\{1,\}\) files$/\1/p' "$log")
