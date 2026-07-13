@@ -375,6 +375,34 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SKILL_REFS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
+  # Tests for the gate ABOVE (FS.GG.Game#243). check-skill-refs.sh is ~600 lines of load-bearing bash
+  # that decides whether every published skill body may ship, and it had no tests: every defect it has
+  # ever had was found by a human reading it, which is precisely the property it was written to end
+  # for other things. #241 came within one review of shipping a one-flag bug — a missing `grep -H` —
+  # that would have reddened every correctly-marked citation on exactly the PRs that touch a skill,
+  # i.e. the ones where the gate is supposed to be trustworthy. It would have looked like the gate
+  # working. The suite pins that case, and every other promise the script makes, above all the one it
+  # makes when it says nothing: "I will not report green over a subject I did not examine."
+  #
+  # Separate job = distinct signal, as everywhere in this file: a red HERE means the gate itself is
+  # broken, which is a different fact from "a skill body has a bad pointer" and wants a different
+  # reader — and if the gate is broken, its own verdict on the bodies is worth nothing anyway.
+  #
+  # Hermetic: the suite builds throwaway git repos and puts a fake `gh` on PATH, so it needs no token,
+  # no network, and no fetch-depth. It also scrubs GITHUB_ACTIONS per case — the script's behaviour
+  # genuinely forks on it, so a suite that inherited it would assert one thing on a laptop and another
+  # in the very CI run that is meant to be gating it.
+  skill-refs-tests:
+    name: Skill-refs gate tests (scripts/check-skill-refs.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Behavioural test suite (fixture tree in, exit code + subject claim out)
+        run: scripts/test-check-skill-refs.sh
+
   # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,
   # digests match, cross-references resolve — and the `fsharp` blocks, the part a reader actually
