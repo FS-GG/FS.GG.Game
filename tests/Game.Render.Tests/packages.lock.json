@@ -140,26 +140,26 @@
         "type": "Project",
         "dependencies": {
           "FS.GG.Game.Core": "[0.4.0, )",
-          "FS.GG.UI.KeyboardInput": "[0.9.0, )",
-          "FS.GG.UI.Scene": "[0.9.0, )",
+          "FS.GG.UI.KeyboardInput": "[0.9.2, )",
+          "FS.GG.UI.Scene": "[0.9.2, )",
           "FSharp.Core": "[10.1.301, )"
         }
       },
       "FS.GG.UI.KeyboardInput": {
         "type": "CentralTransitive",
-        "requested": "[0.9.0, )",
-        "resolved": "0.9.0",
-        "contentHash": "fpdAqxGltADp80hIFsUjdzsnoHscDD2dmrLp3gt3QnbhrlEV5WYUSyGh75PQKujLI13I8Yb/cxmG2RoBagIrxQ==",
+        "requested": "[0.9.2, )",
+        "resolved": "0.9.2",
+        "contentHash": "iHIFC5t4d6KcKR5ZFqlg8T1C4K9M5W7DroE1wDlAo11k5M5dNe6nom79nCPx3LVleQ/71lwE1Lm/82u4KaQpQQ==",
         "dependencies": {
-          "FS.GG.UI.Scene": "0.9.0",
+          "FS.GG.UI.Scene": "0.9.2",
           "FSharp.Core": "10.1.301"
         }
       },
       "FS.GG.UI.Scene": {
         "type": "CentralTransitive",
-        "requested": "[0.9.0, )",
-        "resolved": "0.9.0",
-        "contentHash": "gltM8XTb3HF57aED4B4/ZEMr9Gb09dj0ZL6VD9z14XljsioOsRaK3k/xtdFUjO7SskLyXDiBoMsPIa5zONBtvA==",
+        "requested": "[0.9.2, )",
+        "resolved": "0.9.2",
+        "contentHash": "Z16GvtJv+ZnXCfqF56UCKiU1Yrd7apvpl7NODmrrcjSiqi6Wqwl0sy6VcbVEcI+XVU0R8XcgLfGiFhTVr1WB0A==",
         "dependencies": {
           "FSharp.Core": "10.1.301"
         }
