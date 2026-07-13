@@ -205,6 +205,37 @@ report() {
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # 1. WIKI REFS
 # ────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# A SELF-QUALIFIED ref that RESOLVES is fine, and this used to reject it ("write it bare"). That
+# rejection is what made the convention unmirrorable, and it had to go (FS.GG.Game#273).
+#
+# The verdict on a bare ref is a function of the EVALUATING REPO'S PUBLISH SET, not of the bytes. So
+# the same body, mirrored byte-identically into another repo (ADR-0022 §6 requires exactly that of
+# four of ours), gets OPPOSITE verdicts in the two repos:
+#
+#     [[fs-gg-ballistics]]              here: correct bare   |  in Rendering: DANGLING (no ballistics)
+#     [[fs-gg-rendering:fs-gg-scene]]   here: correct foreign|  in Rendering: "self-qualified, write it bare"
+#
+# Byte-identity and a publish-set-relative convention are not in tension — they are arithmetically
+# incompatible, and both were mandated. There was NO edit to those bytes that made both repos green:
+# every fix for one was a defect in the other, and byte-identity forbade diverging.
+#
+# A fully-qualified ref breaks the tie, because it is the one spelling whose verdict does NOT depend
+# on who is reading:
+#
+#     [[fs-gg-game:fs-gg-ballistics]]   here: self + published → checked, OK
+#                                       in Rendering: foreign → trusted, OK
+#     [[fs-gg-rendering:fs-gg-scene]]   here: foreign → trusted, OK
+#                                       in Rendering: self + published → checked, OK
+#
+# And note what that buys beyond merely agreeing: each ref is now VALIDATED EXACTLY ONCE, by the only
+# repo that can see the tree it names, and trusted everywhere else. The mirrored bodies are qualified
+# throughout for this reason. Bare stays legal — it is correct and checkable in a body that is never
+# mirrored — so this is a widening, not a new obligation.
+#
+# What is NOT weakened: a typo'd owner is still caught, a self-qualified ref to a skill we do NOT
+# publish is still dangling, and a bare ref we do not publish is still dangling. The only thing that
+# stopped being an error is a ref that was always TRUE.
 while IFS=: read -r file line ref; do
   [[ -z ${ref:-} ]] && continue
   if [[ $ref == *:* ]]; then
@@ -212,14 +243,11 @@ while IFS=: read -r file line ref; do
     id=${ref#*:}
     if ! is_known_owner "$owner"; then
       report "$file" "$line" "dangling [[$ref]] — unknown owner '$owner' (known: $KNOWN_OWNERS)"
-    elif [[ $owner == "$SELF_OWNER" ]]; then
-      if is_published "$id"; then
-        report "$file" "$line" "dangling [[$ref]] — self-qualified; this repo publishes '$id' — write it bare as [[$id]]"
-      else
-        report "$file" "$line" "dangling [[$ref]] — qualified to this repo, which does not publish '$id'"
-      fi
+    elif [[ $owner == "$SELF_OWNER" ]] && ! is_published "$id"; then
+      report "$file" "$line" "dangling [[$ref]] — qualified to this repo, which does not publish '$id'"
     fi
     # A foreign qualified ref is trusted: this repo cannot see the other repo's tree.
+    # A self-qualified ref that IS published resolves, and is accepted — see the header.
   elif ! is_published "$ref"; then
     report "$file" "$line" "dangling [[$ref]] — this repo does not publish it; qualify it as [[<owner>:$ref]]"
   fi
