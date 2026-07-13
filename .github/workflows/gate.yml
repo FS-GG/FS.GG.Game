@@ -403,6 +403,57 @@ jobs:
       - name: Behavioural test suite (fixture tree in, exit code + subject claim out)
         run: scripts/test-check-skill-refs.sh
 
+  # Tests for the SWEEP (FS.GG.Game#251) — the OTHER half of skill-refs, and the half that files an
+  # issue. #249 taught the daily sweep to render a finding and create/reopen/update/close a tracking
+  # issue for it, so a decayed pointer stops being a red nobody reads. That filing path is now
+  # load-bearing, and it had no test — and the trigger you would expect to supply one cannot:
+  #
+  #   skill-refs-sweep.yml runs on `pull_request` precisely so that "the sweep is itself code, and a
+  #   change to it must be checked BY it". But the sweep's interesting code only runs when the tree is
+  #   DECAYED, and the tree is normally green — so a PR that rewrites the renderer gets a GREEN run in
+  #   which the renderer never executed. On #249's own run: render skipped, reconcile skipped, verdict
+  #   skipped. A green check over a subject it never examined — the FS-GG/.github#416 shape, sitting
+  #   in the code whose entire job is to not do that.
+  #
+  # So this suite plants the decay that trigger cannot, and drives the workflow's OWN `run:` blocks —
+  # extracted from the YAML at test time, never transcribed — through all three render bodies and all
+  # six reconcile branches, against a fake `gh` that reproduces the one behaviour that bit #249: `gh
+  # api` switches to POST the moment a `-f` appears, which is how the tracker LOOKUP came to POST at
+  # the create-issue endpoint, one missing field away from a daily blank-issue factory.
+  #
+  # It also pins the CROSS-FILE contract the sweep cannot self-diagnose: the `path:line: message` line
+  # that check-skill-refs.sh emits and this workflow greps for. If those two drift apart, the sweep
+  # files "could not read it" and names no files — so the suite runs the REAL script over REAL planted
+  # decay and asserts the REAL parser still reads it.
+  #
+  # Runs on every PR, not just ones touching the sweep: that cross-file contract has two ends, and a
+  # PR editing check-skill-refs.sh breaks it just as easily as one editing the workflow.
+  #
+  # Hermetic — fake `gh`, fixture trees, no token, no network. python3 + PyYAML parse the workflow (a
+  # real parse, not a regex), which also means a workflow that does not PARSE fails here; both are
+  # preinstalled on ubuntu-latest.
+  skill-refs-sweep-tests:
+    name: Skill-refs sweep tests (.github/workflows/skill-refs-sweep.yml)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # PyYAML ships on the ubuntu-latest image today, and the suite REFUSES to run without it rather
+      # than degrading to a regex over the YAML — so an image that drops it would turn this gate red
+      # on an innocent PR. The guard costs nothing when it is already there; it insures against image
+      # drift rather than taking on a dependency.
+      #
+      # apt, NOT pip: the runner's system python is PEP-668 externally-managed, so
+      # `pip install pyyaml` dies with `error: externally-managed-environment` — a fallback that
+      # fails exactly when it is finally needed is worse than no fallback, because it reads as the
+      # suite being broken rather than the image having moved.
+      - name: Behavioural test suite (planted decay in, filed issue out)
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
+          scripts/test-skill-refs-sweep.sh
+
   # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,
   # digests match, cross-references resolve — and the `fsharp` blocks, the part a reader actually
