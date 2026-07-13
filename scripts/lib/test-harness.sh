@@ -164,11 +164,18 @@ fixture_new() {
   [[ -n $TMPROOT ]] || { echo "test-harness: call harness_init before the first fixture" >&2; exit 2; }
   n_fix=$((n_fix + 1))
   FIX="$TMPROOT/fix-$n_fix"
-  mkdir -p "$FIX/scripts" "$FIX/bin" "$FIX/template/product-skills" "$FIX/gh-bodies"
+  mkdir -p "$FIX/scripts" "$FIX/bin" "$FIX/template/product-skills" "$FIX/gh-bodies" \
+           "$FIX/template/skill-manifest"
   : >"$FIX/gh.log"
   : >"$FIX/gh-state"
   echo '[]' >"$FIX/trackers.json"    # LABELLED issues. Empty: no tracker of any kind exists yet.
   echo '[]' >"$FIX/unlabelled.json"  # issues carrying NO label — visible only if `labels=` is dropped
+  # The producer manifest, empty (FS.GG.Game#280). It is part of the TREE, not plumbing: since #280
+  # the subject READS it to learn which bodies ADR-0022 §6 mirrors, and it exits 2 rather than assume
+  # when it cannot. A fixture without one is not a lean fixture — it is a repo the subject rightly
+  # refuses to judge, so every case in every suite would die on the setup instead of the assertion.
+  # `skill` keeps it in step from here; `mirror` re-classifies a row.
+  echo '{"schemaVersion":1,"skills":[]}' >"$FIX/template/skill-manifest/skill-manifest.json"
   _write_fake_gh
 }
 
@@ -184,7 +191,52 @@ gh_env() {
 }
 
 # skill <id> — the SKILL.md body on stdin
-skill() { mkdir -p "$FIX/template/product-skills/$1"; cat >"$FIX/template/product-skills/$1/SKILL.md"; }
+#
+# Writes the body AND its producer-manifest row, because since FS.GG.Game#280 a published body
+# without a row is a FAILURE the subject reports ("no row … the gate will not assume") — the rule
+# that stops a newly mirrored body from being silently unguarded. Keeping the two in step here means
+# no suite has to think about it: a fixture says `skill`, and gets a body the subject will judge on
+# its refs rather than reject on its bookkeeping. A case that WANTS the unclassified state deletes
+# the row (see `unclassify`), and says so out loud by doing it.
+#
+# The row is classified NOT mirrored, which is the majority answer and the safe one to default a
+# FIXTURE to: `mirror` opts a body in, and every mirror case therefore names itself.
+skill() {
+  mkdir -p "$FIX/template/product-skills/$1"
+  cat >"$FIX/template/product-skills/$1/SKILL.md"
+  _manifest_row "$1" false
+}
+
+# mirror <id>… — re-classify bodies as ADR-0022 §6 MIRRORED: FS.GG.Rendering ships these bytes, so a
+# bare [[ref]] in them resolves here and dangles there, and the subject must refuse it.
+mirror() { local id; for id in "$@"; do _manifest_row "$id" true; done; }
+
+# unclassify <id>… — drop the manifest row, leaving the body PUBLISHED but unclassified. The state a
+# skill directory lands in when someone adds it and forgets the catalog, and the one the subject must
+# go red on instead of guessing.
+unclassify() {
+  local f="$FIX/template/skill-manifest/skill-manifest.json" id
+  for id in "$@"; do
+    jq --arg id "$id" '.skills |= map(select(.id != $id))' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+  done
+}
+
+# One row, upserted and kept sorted — the shape scripts/generate-skill-manifest.fsx emits. `sha256` is
+# a placeholder: the SUBJECT never reads it (the digests are the drift gate's business, and that gate
+# is not this subject), and computing a real one would buy a fixture nothing but a dependency.
+_manifest_row() {
+  local f="$FIX/template/skill-manifest/skill-manifest.json"
+  jq --arg id "$1" --argjson mirrored "$2" '
+      .skills |= (map(select(.id != $id))
+                  + [{ id: $id,
+                       scope: "product",
+                       sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+                       mirrored: $mirrored,
+                       resolvablePath: (".agents/skills/" + $id + "/SKILL.md"),
+                       "materializes-when": "profile in [game, sample-pack]",
+                       "supplied-by": ("template/product-skills/" + $id + "/") }]
+                  | sort_by(.id))' "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+}
 
 # issue <owner/repo#num> <open|closed> — link state. Anything not registered 404s as missing.
 issue() { printf '%s\t%s\n' "$1" "$2" >>"$FIX/gh-state"; }
