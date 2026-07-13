@@ -3882,7 +3882,8 @@ shadow_compare() {  # $1=bash verdict NDJSON file  $2=engine decision JSON file 
     --slurpfile engine "$enginef" \
     --slurpfile bash_rows "$bashf" \
     --arg ts "$(now_iso)" --arg mode "$ENGINE_MODE" --arg repo "$repo" \
-    --arg worker "$(shadow_worker)" --arg engine "$(engine_version 2>/dev/null || echo none)" \
+    --arg worker "$(shadow_worker)" \
+    --arg engine_ver "$(engine_version 2>/dev/null || echo none)" \
     --argjson extra "$SHADOW_EXTRA_READS" --argjson unobserved "$SHADOW_UNOBSERVED" '
     ($engine[0] // {}) as $e
     | ($bash_rows | map(select(. != null))) as $b
@@ -3915,7 +3916,16 @@ shadow_compare() {  # $1=bash verdict NDJSON file  $2=engine decision JSON file 
     # green: a confident agreement with an engine that had agreed to nothing. An id only one engine
     # ruled on was not compared; saying otherwise is the same lie as a shadow that never ran.
     | ( [ $ids[] | select($bmap[.] != null and $emap[.] != null) ] | length ) as $paired
-    | { ts: $ts, mode: $mode, repo: $repo, worker: $worker, engine: $engine, ran: true,
+    # $engine_ver, NOT $engine. The --slurpfile above ALREADY binds $engine, to the decision document
+    # the engine emitted, and a second --arg engine beside it silently loses the collision. The
+    # comparison still worked (the slurpfile won, so $engine[0] was still the decision) — but every row
+    # got stamped with that whole JSON document in place of a version string, which breaks the two
+    # things the stamp exists for: --publish groups by engine, and --fleet counts only the build under
+    # test. The ledger would have matched nothing, forever.
+    #
+    # Found by reading 144 real rows, not by a test. The fixture asserted only that the field was
+    # non-empty, and a JSON array is non-empty. It now asserts the TYPE and the SHAPE.
+    | { ts: $ts, mode: $mode, repo: $repo, worker: $worker, engine: $engine_ver, ran: true,
         engineVerdict: ($e.verdict // "missing"),
         compared: $paired,
         extraReads: $extra,
