@@ -89,13 +89,21 @@ on:
   # block a PR, and must never be made to.
   #
   # It CAN go red on a `main` commit — the `Verdict` step re-raises the sweep's rc, and that is the
-  # point: a red that nobody can see is the #242 defect. Note this adds no NEW red. The cron sweeps
-  # that same commit at 07:00 and would go red on it anyway; `push` only moves the verdict earlier, in
-  # both directions — red sooner when decay lands, and GREEN-AND-CLOSED sooner when the fix does. Nor
-  # can a push run be the first to discover decay a diff introduced: `gate` already resolves the links
-  # of any skill a PR touches, blocking, at authorship time. What reaches `main` un-red is only ever
-  # decay the WORLD caused — which is precisely what this workflow is for, and what #238 moved off the
-  # gate rather than out of sight.
+  # point: a red nobody can see is the #242 defect.
+  #
+  # It does not, however, make the red land on an innocent author for the first time — which is the
+  # objection to look for here, given #237. A SCHEDULED run already attaches its check to whatever
+  # commit happens to be `main`'s HEAD at 07:00, and that commit is somebody's merge. So decay has
+  # always reddened a commit that did not cause it; `push` changes WHEN that happens, not WHETHER, and
+  # it picks a strictly more related commit (one that touched a skill) than the cron's arbitrary HEAD.
+  #
+  # Nor can a push run be the first to discover decay a diff introduced: `gate` already resolves the
+  # links of any skill a PR touches, blocking, at authorship time. So what a push run finds is only
+  # ever decay the WORLD caused — exactly what this workflow is for, and what #238 moved off the gate
+  # rather than out of sight.
+  #
+  # What it buys, in both directions, is timeliness: red sooner when decay lands, and — the reason this
+  # trigger exists — GREEN-AND-CLOSED sooner when the fix does.
   push:
     branches: [main]
     paths:
@@ -105,10 +113,18 @@ on:
                                                   # RUN, so this is its first real reconcile.
 
 concurrency:
-  # Never cancel a scheduled sweep in flight: the reconcile step below is a read-modify-write of one
-  # shared issue, and a half-run that is killed between "render" and "reconcile" leaves that issue
-  # asserting a decay set that is no longer the truth. PR runs are still cancellable — they only ever
-  # render, never write.
+  # Never cancel a WRITING sweep in flight — scheduled, dispatched, or `push`. The reconcile step below
+  # is a read-modify-write of one shared issue, and a half-run that is killed between "render" and
+  # "reconcile" leaves that issue asserting a decay set that is no longer the truth. PR runs are still
+  # cancellable — they only ever render, never write.
+  #
+  # This is why the condition below is `== 'pull_request'` and not `!= 'schedule'`: every non-PR event
+  # writes, so every non-PR event must be uncancellable. `push` (FS.GG.Game#275) relies on that, and a
+  # future trigger will too. Narrowing this to name one event would silently re-arm the race.
+  #
+  # A push and the cron share one group (both resolve `github.ref` to `refs/heads/main`), so they
+  # serialise against each other rather than racing the issue write. That is the intent, not a
+  # coincidence to be tidied away.
   group: skill-refs-sweep-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
