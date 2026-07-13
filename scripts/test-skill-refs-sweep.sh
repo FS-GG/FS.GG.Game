@@ -30,7 +30,9 @@
 # THE FAKE `gh` REPRODUCES THE FOOTGUN. `gh api` switches to POST the moment any `-f` appears, unless
 # `-X` says otherwise — which is exactly how #249's tracker lookup came to POST at the CREATE-ISSUE
 # endpoint, one missing field away from a daily blank-issue factory. The fake derives its method the
-# same way, so dropping the `-X GET` fails § 4 here instead of filing junk in production.
+# same way, so dropping the `-X GET` fails § 4 here instead of filing junk in production. It now
+# lives in scripts/lib/test-harness.sh (FS.GG.Game#259), shared with the gate's suite — which used to
+# carry a second, weaker fake of its own.
 #
 # Usage: scripts/test-skill-refs-sweep.sh [-v]
 set -uo pipefail
@@ -44,23 +46,19 @@ REAL_CHECKER="$REPO_ROOT/scripts/check-skill-refs.sh"
 [[ -f $WF ]]           || { echo "test-skill-refs-sweep: cannot find $WF" >&2; exit 2; }
 [[ -f $REAL_CHECKER ]] || { echo "test-skill-refs-sweep: cannot find $REAL_CHECKER" >&2; exit 2; }
 
-command -v jq >/dev/null      || { echo "test-skill-refs-sweep: jq is required" >&2; exit 2; }
-command -v python3 >/dev/null || { echo "test-skill-refs-sweep: python3 is required" >&2; exit 2; }
+# The harness requires `jq`. These two are this suite's alone: it parses the workflow as real YAML.
 # Named, not inferred from a stack trace 40 lines later. Exit 2 (not 1) throughout the preflight: a
 # suite that could not RUN is a different fact from a suite that ran and found a bug, and a harness
 # about not-conflating-those does not get to conflate them itself.
+command -v python3 >/dev/null || { echo "test-skill-refs-sweep: python3 is required" >&2; exit 2; }
 python3 -c 'import yaml' 2>/dev/null || {
   echo "test-skill-refs-sweep: PyYAML is required (python3 -m pip install pyyaml)" >&2; exit 2; }
 
-TMPROOT=$(mktemp -d)
-trap 'rm -rf "$TMPROOT"' EXIT
-
-n_pass=0
-n_fail=0
-n_fix=0
-FIX=""
-OUT=""
-RC=0
+# The subject here is a workflow STEP, not a script — so `bad` says so when it dumps the output.
+HARNESS_OUTPUT_LABEL='step output'
+# shellcheck source=lib/test-harness.sh
+. "$REPO_ROOT/scripts/lib/test-harness.sh"
+harness_init
 
 # ── the workflow, as data ───────────────────────────────────────────────────────────────────────
 #
@@ -99,183 +97,24 @@ step_run reconcile >"$RECONCILE_SH"
 DECAY_LABEL=$(wf '.env.DECAY_LABEL')
 DECAY_TITLE=$(wf '.env.DECAY_TITLE')
 
-# ── harness ─────────────────────────────────────────────────────────────────────────────────────
-
-case_start() { printf '\n%s\n' "$1"; }
-
-ok()  { n_pass=$((n_pass + 1)); printf '  ok    %s\n' "$1"; }
-bad() {
-  n_fail=$((n_fail + 1))
-  printf '  FAIL  %s\n' "$1"
-  printf '        %s\n' "$2"
-  printf '        ── step output (exit %s) ──\n' "$RC"
-  printf '%s\n' "$OUT" | sed 's/^/        │ /'
-  if [[ -n $FIX && -f $FIX/gh.log ]]; then
-    printf '        ── gh calls ──\n'
-    sed 's/^/        │ /' "$FIX/gh.log"
-  fi
-  printf '        ──────────────────────────\n'
-}
-
-expect_eq()     { if [[ "$1" == "$2" ]]; then ok "$3"; else bad "$3" "expected '$2', got '$1'"; fi; }
-expect_re()     { if grep -qE -- "$1" <<<"$2"; then ok "$3"; else bad "$3" "no line matches /$1/"; fi; }
-expect_rc()     { if [[ $RC == "$1" ]]; then ok "$2"; else bad "$2" "expected exit $1, got $RC"; fi; }
-expect_has()    { if grep -qF -- "$1" <<<"$2"; then ok "$3"; else bad "$3" "text does not contain: $1"; fi; }
-expect_hasnt()  { if grep -qF -- "$1" <<<"$2"; then bad "$3" "text should NOT contain: $1"; else ok "$3"; fi; }
-
-# gh_called <METHOD> <path-glob> — did the reconcile step make this API call?
-gh_called()   {
-  if awk -F'\t' -v m="$1" -v p="$2" '$1==m && $2 ~ p {found=1} END{exit !found}' "$FIX/gh.log"; then
-    ok "$3"
-  else
-    bad "$3" "no $1 matching /$2/ in the gh log"
-  fi
-}
-gh_not_called() {
-  if awk -F'\t' -v m="$1" -v p="$2" '$1==m && $2 ~ p {found=1} END{exit !found}' "$FIX/gh.log"; then
-    bad "$3" "unexpected $1 matching /$2/ in the gh log"
-  else
-    ok "$3"
-  fi
-}
-# The whole point of a `pull_request` run: it renders, and it writes NOTHING.
-gh_no_writes() {
-  local w
-  w=$(awk -F'\t' '$1=="POST" || $1=="PATCH" || $1=="PUT" || $1=="DELETE"' "$FIX/gh.log")
-  if [[ -z $w ]]; then ok "$1"; else bad "$1" "the run made writes it must not make:"$'\n'"$w"; fi
-}
-
 # ── fixture ─────────────────────────────────────────────────────────────────────────────────────
 #
 # One fixture = one simulated workflow run. RUNNER_TEMP is shared across the three steps exactly as it
 # is on a runner, which is what lets the suite drive the REAL wiring: `sweep` writes findings.txt and
 # its outputs, `render` reads them and writes body.md, `reconcile` reads that. Nothing is passed
 # between steps by this harness that the workflow does not pass between them itself.
+#
+# The shared tree — the skill root, the fake `gh`, and the state files it answers out of — comes from
+# fixture_new. What is added here is a runner: the files GitHub gives a step (RUNNER_TEMP,
+# GITHUB_OUTPUT, GITHUB_STEP_SUMMARY), and a stub standing in for check-skill-refs.sh.
 fixture() {
-  n_fix=$((n_fix + 1))
-  FIX="$TMPROOT/fix-$n_fix"
-  mkdir -p "$FIX/scripts" "$FIX/bin" "$FIX/runner-temp" "$FIX/gh-bodies" "$FIX/template/product-skills"
-  : >"$FIX/gh.log"
-  : >"$FIX/gh-state"
+  fixture_new
+  mkdir -p "$FIX/runner-temp"
   : >"$FIX/github-output"
   : >"$FIX/step-summary"
-  echo '[]' >"$FIX/trackers.json"     # issues carrying DECAY_LABEL. Empty: no tracker exists yet.
-  echo '[]' >"$FIX/unlabelled.json"   # issues that do NOT carry it — visible only if `labels=` is dropped
   echo 0 >"$FIX/stub.rc"
   : >"$FIX/stub.out"
   : >"$FIX/stub.err"
-
-  # Fake `gh`. It records every call and answers the six endpoints the sweep actually uses.
-  #
-  # THE METHOD IS DERIVED, NOT DECLARED, and that is the most load-bearing line in this file. Real
-  # `gh api` sends POST the moment a field flag is present unless `-X` overrides it — the footgun that
-  # had #249's tracker LOOKUP POSTing to /issues, the create-issue endpoint. Reproduce the footgun and
-  # a regression that drops the `-X GET` shows up here as "the lookup was a POST"; hard-code the method
-  # and this suite would bless the bug it was written to catch.
-  cat >"$FIX/bin/gh" <<'FAKE_GH'
-#!/usr/bin/env bash
-case ${1:-} in
-  auth) [[ ${GH_NOAUTH:-0} == 1 ]] && exit 1; exit 0 ;;
-  api)  shift ;;
-  *)    echo "fake gh: unsupported command: ${1:-}" >&2; exit 1 ;;
-esac
-
-raw="$*"
-path=""; method=""; jqx=""; input=""; silent=0; has_field=0; slurp=0
-fields=()
-while (($#)); do
-  case $1 in
-    -X|--method)      method=$2; shift 2 ;;
-    -f|-F|--raw-field|--field) fields+=("$2"); has_field=1; shift 2 ;;
-    --input)          input=$2; has_field=1; shift 2 ;;
-    --jq)             jqx=$2; shift 2 ;;
-    --silent)         silent=1; shift ;;
-    --slurp)          slurp=1; shift ;;
-    --paginate)       shift ;;
-    -*)               shift ;;
-    *)                [[ -z $path ]] && path=$1; shift ;;
-  esac
-done
-# Exactly `gh`'s rule, and the reason `-X GET` is not decoration.
-[[ -z $method ]] && { if ((has_field)); then method=POST; else method=GET; fi; }
-
-body=""
-[[ $input == - ]] && body=$(cat)
-
-seq=$(( $(wc -l <"$GH_LOG") + 1 ))
-printf '%s\t%s\t%s\t%s\n' "$method" "$path" "${fields[*]-}" "$raw" >>"$GH_LOG"
-[[ -n $body ]] && printf '%s' "$body" >"$GH_BODIES/body-$seq.json"
-
-resp=""
-case "$method $path" in
-  "GET repos/"*"/issues")
-    # THE TRACKER LOOKUP, and the fake honours the query rather than ignoring it — because every
-    # parameter on it is load-bearing, and a fake that returned the same list regardless would bless
-    # a lookup that asks the API for entirely the wrong thing:
-    #
-    #   labels=   drop it and /issues returns EVERY issue in the repo — `first` is then some stranger,
-    #             and the sweep PATCHes a decay report over it.
-    #   state=all drop it and the API defaults to OPEN — a CLOSED tracker becomes invisible, so every
-    #             regression files a SECOND tracker instead of reopening the first.
-    #   direction= flip it and the NEWEST duplicate wins, stealing the thread from the original.
-    #   --slurp   drop it and gh emits a flat array, so the caller's `.[][]` dies.
-    want_label=""; want_state=open; dir=asc
-    for f in "${fields[@]-}"; do
-      case $f in
-        labels=*)    want_label=${f#labels=} ;;
-        state=*)     want_state=${f#state=} ;;
-        direction=*) dir=${f#direction=} ;;
-      esac
-    done
-    items=$(cat "$GH_TRACKERS")
-    # Unrelated issues exist in every real repo. They are only invisible because of `labels=`.
-    [[ -z $want_label ]] && items=$(jq -c -s 'add' "$GH_UNLABELLED" <(printf '%s' "$items"))
-    [[ $want_state != all ]] && items=$(jq -c --arg s "$want_state" '[.[] | select(.state==$s)]' <<<"$items")
-    items=$(jq -c 'sort_by(.number)' <<<"$items")          # issue number as a proxy for created-at
-    [[ $dir == desc ]] && items=$(jq -c 'reverse' <<<"$items")
-    # `--paginate --slurp` makes gh emit an array OF PAGES, which is why the caller flattens with
-    # `.[][]`. Without --slurp it is a flat array and that flatten dies — so the nesting belongs here,
-    # in the fake, not in the fixture.
-    #
-    # `--paginate` itself is NOT modelled: the real thing only bites past a 30-item page, and a
-    # 31-tracker fixture would be theatre. It is asserted on the raw argv in § 4 instead, and that
-    # difference is stated rather than hidden.
-    if ((slurp)); then resp=$(jq -c '[.]' <<<"$items"); else resp=$items; fi ;;
-  "GET repos/"*"/labels/"*)
-    [[ ${GH_LABEL_EXISTS:-0} == 1 ]] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
-    resp='{"name":"label"}' ;;
-  "POST repos/"*"/labels")
-    [[ ${GH_LABEL_POST_FAILS:-0} == 1 ]] && { echo "gh: Validation Failed (HTTP 422) already_exists" >&2; exit 1; }
-    resp='{"name":"label"}' ;;
-  "POST repos/"*"/issues")
-    n=${GH_NEW_NUM:-777}
-    resp="{\"number\":$n,\"html_url\":\"https://github.com/$GH_REPO/issues/$n\"}" ;;
-  "PATCH repos/"*"/issues/"*)
-    resp='{"ok":true}' ;;
-  "POST repos/"*"/issues/"*"/comments")
-    resp='{"ok":true}' ;;
-  "GET repos/"*"/issues/"*)
-    # check-skill-refs.sh resolving a link's state (`--jq .state`). Unregistered → 404, which is the
-    # honest answer for "no such issue" and avoids the subject's 3× retry-with-backoff on an error.
-    k=${path#repos/}; owner=${k%%/*}
-    r=${k#*/};        repo=${r%%/*}
-    num=${path##*/}
-    st=$(awk -F'\t' -v k="$owner/$repo#$num" '$1==k {print $2; exit}' "$GH_STATE")
-    case $st in
-      open|closed) resp="{\"state\":\"$st\"}" ;;
-      *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
-    esac ;;
-  *)
-    echo "fake gh: unmodelled endpoint: $method $path" >&2; exit 1 ;;
-esac
-
-if [[ -n $jqx ]]; then printf '%s' "$resp" | jq -r "$jqx"
-elif ((silent));  then :
-else                   printf '%s' "$resp"
-fi
-exit 0
-FAKE_GH
-  chmod +x "$FIX/bin/gh"
 
   # Stub subject for the sweep step. The three files ARE the contract the sweep step reads: its exit
   # code, and whatever it says on stderr. Cases that need the real script call `use_real_checker`.
@@ -302,11 +141,6 @@ sweep_drifted() { echo 1 >"$FIX/stub.rc"; { printf 'template/product-skills/a/SK
 sweep_broken()  { echo 1 >"$FIX/stub.rc"; printf 'check-skill-refs: no authenticated `gh`; refusing to self-skip in CI\n' >"$FIX/stub.err"; }
 
 use_real_checker() { cp "$REAL_CHECKER" "$FIX/scripts/check-skill-refs.sh"; chmod +x "$FIX/scripts/check-skill-refs.sh"; }
-skill()  { mkdir -p "$FIX/template/product-skills/$1"; cat >"$FIX/template/product-skills/$1/SKILL.md"; }
-issue()  { printf '%s\t%s\n' "$1" "$2" >>"$FIX/gh-state"; }
-# Issues in the repo, as a flat array on stdin. `trackers` carry DECAY_LABEL; `unlabelled` do not.
-trackers()   { cat >"$FIX/trackers.json"; }
-unlabelled() { cat >"$FIX/unlabelled.json"; }
 
 # ── running a step ──────────────────────────────────────────────────────────────────────────────
 
@@ -316,18 +150,14 @@ SHA=abc1234def5678
 RUN_URL="$SERVER/$REPO/actions/runs/999"
 
 # The env every step gets: GitHub's defaults, the workflow's own `env:`, and the fixture's plumbing.
+# `gh_env` is the half the shared fake `gh` answers out of — PATH, its call log, and its state files.
 step_base_env() {
-  echo "PATH=$FIX/bin:$PATH"
+  gh_env
   echo "RUNNER_TEMP=$FIX/runner-temp"
   echo "GITHUB_OUTPUT=$FIX/github-output"
   echo "GITHUB_STEP_SUMMARY=$FIX/step-summary"
   echo "GITHUB_SERVER_URL=$SERVER"
   echo "GH_TOKEN=fake-token"
-  echo "GH_LOG=$FIX/gh.log"
-  echo "GH_BODIES=$FIX/gh-bodies"
-  echo "GH_STATE=$FIX/gh-state"
-  echo "GH_TRACKERS=$FIX/trackers.json"
-  echo "GH_UNLABELLED=$FIX/unlabelled.json"
   echo "GH_REPO=$REPO"
   echo "DECAY_LABEL=$DECAY_LABEL"
   echo "DECAY_TITLE=$DECAY_TITLE"
@@ -822,9 +652,4 @@ unset GH_NOAUTH
 # STILL MISSING, and worth someone's next hour: nothing in CI parses this workflow's YAML beyond
 # GitHub itself. The PyYAML load at the top of this file is a lower bound on that — a workflow that
 # does not parse fails here — but it does not know an `if:` from a typo'd `ifs:`, and actionlint does.
-printf '\n────────────────────────────────────────\n'
-if ((n_fail)); then
-  printf 'test-skill-refs-sweep: FAILED — %d passed, %d failed\n' "$n_pass" "$n_fail"
-  exit 1
-fi
-printf 'test-skill-refs-sweep: ok — %d assertions passed\n' "$n_pass"
+harness_summary test-skill-refs-sweep
