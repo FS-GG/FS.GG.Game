@@ -43,6 +43,12 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SUT="$REPO_ROOT/scripts/check-skill-refs.sh"
 [[ -f $SUT ]] || { echo "test-check-skill-refs: cannot find $SUT" >&2; exit 2; }
 
+# `source=` is resolved against shellcheck's source path, which defaults to the CWD — NOT to this
+# script. Without the SCRIPTDIR below, `lib/test-harness.sh` names nothing from the repo root, the
+# source is silently NOT followed (SC1091, an `info` that a `-S warning` floor never prints), and
+# every variable this file sets FOR the harness — RC, read only by `expect_rc` — looks unused. That
+# is where the three SC2034s in #266 came from: not dead code, an unread `source`.
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/test-harness.sh
 . "$REPO_ROOT/scripts/lib/test-harness.sh"
 harness_init
