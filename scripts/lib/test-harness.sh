@@ -167,8 +167,8 @@ fixture_new() {
   mkdir -p "$FIX/scripts" "$FIX/bin" "$FIX/template/product-skills" "$FIX/gh-bodies"
   : >"$FIX/gh.log"
   : >"$FIX/gh-state"
-  echo '[]' >"$FIX/trackers.json"    # issues carrying DECAY_LABEL. Empty: no tracker exists yet.
-  echo '[]' >"$FIX/unlabelled.json"  # issues that do NOT carry it — visible only if `labels=` is dropped
+  echo '[]' >"$FIX/trackers.json"    # LABELLED issues. Empty: no tracker of any kind exists yet.
+  echo '[]' >"$FIX/unlabelled.json"  # issues carrying NO label — visible only if `labels=` is dropped
   _write_fake_gh
 }
 
@@ -189,7 +189,21 @@ skill() { mkdir -p "$FIX/template/product-skills/$1"; cat >"$FIX/template/produc
 # issue <owner/repo#num> <open|closed> — link state. Anything not registered 404s as missing.
 issue() { printf '%s\t%s\n' "$1" "$2" >>"$FIX/gh-state"; }
 
-# The repo's issues, as a flat JSON array on stdin. `trackers` carry DECAY_LABEL; `unlabelled` do not.
+# The repo's issues, as a flat JSON array on stdin.
+#
+# `trackers` are the LABELLED ones, and each item SAYS which label it carries:
+#
+#     trackers <<'JSON'
+#     [{"number":42,"state":"open","labels":["skill-refs-decay"]}]
+#     JSON
+#
+# Naming the label is not ceremony. The sweep keeps TWO trackers — one for decay, one for a sweep that
+# could not run — and they must never be confused for one another (FS.GG.Game#277). A fixture that left
+# the label implicit would answer BOTH lookups with the same issue, and this fake would then bless the
+# very bug that separation exists to remove. `labels` also accepts the API's real `[{"name":…}]` shape.
+#
+# `unlabelled` issues carry no label at all: they exist in every real repo, and they are invisible to
+# the sweep only because its lookup passes `labels=`.
 trackers()   { cat >"$FIX/trackers.json"; }
 unlabelled() { cat >"$FIX/unlabelled.json"; }
 
@@ -248,7 +262,9 @@ case "$method $path" in
     # a lookup that asks the API for entirely the wrong thing:
     #
     #   labels=   drop it and /issues returns EVERY issue in the repo — `first` is then some stranger,
-    #             and the sweep PATCHes a decay report over it.
+    #             and the sweep PATCHes a decay report over it. Its VALUE matters just as much: the
+    #             sweep keeps two trackers (decay, and could-not-run), and asking for the wrong one
+    #             would reopen "a published pointer rotted" over an expired token (FS.GG.Game#277).
     #   state=all drop it and the API defaults to OPEN — a CLOSED tracker becomes invisible, so every
     #             regression files a SECOND tracker instead of reopening the first.
     #   direction= flip it and the NEWEST duplicate wins, stealing the thread from the original.
@@ -262,8 +278,18 @@ case "$method $path" in
       esac
     done
     items=$(cat "$GH_TRACKERS")
-    # Unrelated issues exist in every real repo. They are only invisible because of `labels=`.
-    [[ -z $want_label ]] && items=$(jq -c -s 'add' "$GH_UNLABELLED" <(printf '%s' "$items"))
+    if [[ -n $want_label ]]; then
+      # Filter by the label REALLY asked for. A fake that answered every label query with the same list
+      # could not fail a subject that asked for the wrong tracker — and "could not fail a wrong
+      # question, so never asked one" is the disease this whole harness exists to refuse.
+      # `.labels` accepts the API's `[{"name":…}]` objects as well as our fixtures' bare strings.
+      items=$(jq -c --arg l "$want_label" \
+                '[.[] | select([(.labels // [])[] | if type == "object" then .name else . end]
+                               | index($l) != null)]' <<<"$items")
+    else
+      # Unrelated issues exist in every real repo. They are only invisible because of `labels=`.
+      items=$(jq -c -s 'add' "$GH_UNLABELLED" <(printf '%s' "$items"))
+    fi
     [[ $want_state != all ]] && items=$(jq -c --arg s "$want_state" '[.[] | select(.state==$s)]' <<<"$items")
     items=$(jq -c 'sort_by(.number)' <<<"$items")          # issue number as a proxy for created-at
     [[ $dir == desc ]] && items=$(jq -c 'reverse' <<<"$items")

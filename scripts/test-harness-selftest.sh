@@ -640,7 +640,7 @@ case_start '§6 `labels=` is load-bearing — drop it and a STRANGER becomes vis
 probe_raw <<'SH'
 harness_init
 fixture_new
-printf '[{"number":5,"state":"open"}]' | trackers
+printf '[{"number":5,"state":"open","labels":["decay"]}]' | trackers
 printf '[{"number":2,"state":"open"}]' | unlabelled
 gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all --jq '[.[].number]|tostring'
 echo "WITH-LABEL=$OUT"
@@ -650,13 +650,45 @@ SH
 says 'WITH-LABEL=[5]' 'with `labels=`, only the tracker is visible'
 says 'WITHOUT-LABEL=[2,5]' 'without it, issue #2 — a stranger — is in the list, and sorts FIRST'
 
+case_start '§6 the VALUE of `labels=` is honoured — two trackers, and the fake can tell them apart'
+# Presence is not enough. The sweep keeps TWO trackers — `skill-refs-decay` and `skill-refs-infra` —
+# and reopening the wrong one announces a decay regression over an expired token (FS.GG.Game#277).
+# A fake that answered every label query with the same list could not fail that, so it would never
+# have asked. It asks here.
+probe_raw <<'SH'
+harness_init
+fixture_new
+printf '[{"number":5,"state":"open","labels":["decay"]},{"number":9,"state":"open","labels":["infra"]}]' | trackers
+gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all --jq '[.[].number]|tostring'
+echo "DECAY=$OUT"
+gh_run api repos/o/r/issues -X GET -f labels=infra -f state=all --jq '[.[].number]|tostring'
+echo "INFRA=$OUT"
+gh_run api repos/o/r/issues -X GET -f labels=nobody-has-this -f state=all --jq '[.[].number]|tostring'
+echo "NEITHER=$OUT"
+SH
+says 'DECAY=[5]'   'the decay label finds only the decay tracker'
+says 'INFRA=[9]'   'and the infra label only the infra one — never each other'
+says 'NEITHER=[]'  'and a label nobody carries finds nothing, rather than the oldest issue going'
+
+case_start '§6 `labels` accepts the API'"'"'s real `[{"name":…}]` shape, not just our bare strings'
+# The real /issues payload labels are OBJECTS. A fake that only understood bare strings would quietly
+# stop matching the moment someone pasted a real API response into a fixture.
+probe_raw <<'SH'
+harness_init
+fixture_new
+printf '[{"number":5,"state":"open","labels":[{"name":"decay","color":"B60205"}]}]' | trackers
+gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all --jq '[.[].number]|tostring'
+echo "OBJECT-LABEL=$OUT"
+SH
+says 'OBJECT-LABEL=[5]' 'an object-shaped label matches by its .name'
+
 case_start '§6 `state=` is load-bearing — without it a CLOSED tracker is invisible'
 # Drop `state=all` and the API defaults to OPEN. A closed tracker becomes invisible, so every
 # regression files a SECOND tracker instead of reopening the first.
 probe_raw <<'SH'
 harness_init
 fixture_new
-printf '[{"number":5,"state":"closed"}]' | trackers
+printf '[{"number":5,"state":"closed","labels":["decay"]}]' | trackers
 gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all --jq '[.[].number]|tostring'
 echo "STATE-ALL=$OUT"
 gh_run api repos/o/r/issues -X GET -f labels=decay --jq '[.[].number]|tostring'
@@ -670,7 +702,7 @@ case_start '§6 `direction=` is load-bearing — flip it and the NEWEST duplicat
 probe_raw <<'SH'
 harness_init
 fixture_new
-printf '[{"number":5,"state":"open"},{"number":11,"state":"open"}]' | trackers
+printf '[{"number":5,"state":"open","labels":["decay"]},{"number":11,"state":"open","labels":["decay"]}]' | trackers
 gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all -f direction=asc --jq 'first(.[]).number'
 echo "ASC-FIRST=$OUT"
 gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all -f direction=desc --jq 'first(.[]).number'
@@ -685,14 +717,14 @@ case_start '§6 `--slurp` changes the SHAPE — drop it and the caller'"'"'s `.[
 probe_raw <<'SH'
 harness_init
 fixture_new
-printf '[{"number":5,"state":"open"}]' | trackers
+printf '[{"number":5,"state":"open","labels":["decay"]}]' | trackers
 gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all --slurp
 echo "SLURPED=$OUT"
 gh_run api repos/o/r/issues -X GET -f labels=decay -f state=all
 echo "FLAT=$OUT"
 SH
-says 'SLURPED=[[{"number":5,"state":"open"}]]' 'with --slurp the response is an array OF PAGES'
-says 'FLAT=[{"number":5,"state":"open"}]' 'and without it, a flat array — so `.[][]` really would die'
+says 'SLURPED=[[{"number":5,"state":"open","labels":["decay"]}]]' 'with --slurp the response is an array OF PAGES'
+says 'FLAT=[{"number":5,"state":"open","labels":["decay"]}]' 'and without it, a flat array — so `.[][]` really would die'
 
 case_start '§6 the call log records the method and the path, and every call'
 probe_raw <<'SH'
