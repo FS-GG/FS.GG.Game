@@ -136,7 +136,11 @@ expect_rc 1 'dangling bare ref fails'
 expect_out_has 'dangling [[fs-gg-nowhere]]' 'names the dangling ref'
 expect_out_has 'qualify it as' 'tells the author how to fix it'
 
-case_start '§1 a SELF-qualified ref to a skill we do publish fails — write it bare'
+# The mirror-safe half of FS.GG.Game#273. This case asserted the OPPOSITE until then — "write it
+# bare" — and that rejection is precisely what made the convention unmirrorable: it is the reason no
+# byte sequence could be green in both this repo and the one ADR-0022 §6 mirrors these bodies into.
+# A self-qualified ref that RESOLVES is true, so it passes. See §1's header in the subject.
+case_start '§1 a SELF-qualified ref to a skill we DO publish is accepted — it is what makes a body mirrorable'
 fixture
 skill fs-gg-alpha <<'MD'
 # alpha
@@ -146,8 +150,108 @@ skill fs-gg-beta <<'MD'
 # beta
 MD
 run
-expect_rc 1 'self-qualified ref fails'
-expect_out_has 'write it bare' 'says to write it bare'
+expect_rc 0 'self-qualified ref to a published skill passes'
+
+# ...but only because it RESOLVES. The dangling case it used to be conflated with must still fail,
+# and this is the assertion that keeps the widening honest: drop the is_published test and this goes
+# green, silently trusting a self-qualified ref to a skill that does not exist.
+case_start '§1 a SELF-qualified ref to a skill we do NOT publish still fails'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See [[fs-gg-game:fs-gg-nonesuch]].
+MD
+run
+expect_rc 1 'self-qualified ref to an unpublished skill fails'
+expect_out_has 'does not publish' 'names it as unpublished, not as a style error'
+
+# ── THE MIRROR INVARIANT (FS.GG.Game#273) ───────────────────────────────────────────────────────
+#
+# The two cases below are the ones the old rule could not both satisfy, and they are why it changed.
+# ADR-0022 §6 mirrors four of our bodies into FS.GG.Rendering BYTE-IDENTICALLY, and both repos gate
+# them with a copy of this subject. The only thing that differs between the two runs is WHO IS
+# READING — SELF_OWNER, and the publish set. So the invariant is not "this ref is well-formed"; it is
+# "this ref gets the same verdict from both readers", and nothing could test that until the test
+# could pose as both.
+#
+# `as_repo` rewrites the two constants that ARE the subject's identity, in the COPY of it that
+# `fixture` just made. That is not reaching inside the script's logic — it is standing the fixture up
+# as the OTHER repo's checkout, which is precisely what Rendering's copy of this file is.
+#
+# Both constants, not just SELF_OWNER: §3 quotes SELF_REPO when it suggests a qualification for a bare
+# `#N`, so a fixture that changed only the owner would pose as Rendering while still calling itself
+# FS.GG.Game — and the next person to add a `#N` case under `as_repo` would be debugging that instead
+# of their test.
+as_repo() {
+  local owner=$1 repo=$2
+  sed -i -e "s/^SELF_OWNER=.*/SELF_OWNER=\"$owner\"/" \
+         -e "s/^SELF_REPO=.*/SELF_REPO=\"$repo\"/" \
+         "$FIX/scripts/check-skill-refs.sh"
+}
+
+# One body. The SAME BYTES are fed to both readers below — if you edit it, edit it once, here. Both
+# directions are qualified: a ref to a skill we own, and a ref to one Rendering owns.
+mirrored_body() {
+  skill fs-gg-game-core <<'MD'
+# game-core
+Ballistics: [[fs-gg-game:fs-gg-ballistics]]. Scene: [[fs-gg-rendering:fs-gg-scene]].
+MD
+}
+
+case_start '§1 mirror invariant: the qualified body is green in FS.GG.Game — it owns ballistics, and scene is foreign'
+fixture
+mirrored_body
+skill fs-gg-ballistics <<'MD'
+# ballistics
+MD
+run
+expect_rc 0 'green for the repo that owns ballistics'
+
+case_start '§1 mirror invariant: THE SAME BYTES are green in FS.GG.Rendering — it owns scene, and ballistics is foreign'
+fixture
+as_repo fs-gg-rendering FS.GG.Rendering
+mirrored_body
+skill fs-gg-scene <<'MD'
+# scene
+MD
+run
+# Under the rule this replaced, THIS is the assertion that failed: [[fs-gg-rendering:fs-gg-scene]]
+# was refused as self-qualified ("write it bare"), while writing it bare made it dangle in Game. No
+# byte sequence satisfied both readers. That is the whole of FS.GG.Game#273, in one case.
+expect_rc 0 'green for the repo that owns scene — the same bytes, the other reader'
+
+# ── and the guard that stops the invariant from rotting ─────────────────────────────────────────
+#
+# Qualifying the four bodies once fixes today. The next bare ref added to one of them restores the
+# contradiction — and RESOLVES here, so without this rule the gate calls it green while it dangles in
+# the mirror. Both gates green over a broken subject, which is the one thing this script may not do.
+case_start '§1 a bare ref in a MIRRORED body fails even though it RESOLVES here — it dangles in the mirror'
+fixture
+skill fs-gg-game-core <<'MD'
+# game-core
+See [[fs-gg-ballistics]].
+MD
+skill fs-gg-ballistics <<'MD'
+# ballistics
+MD
+run
+expect_rc 1 'bare ref in a mirrored body fails'
+expect_out_has 'MIRRORED' 'says the body is mirrored'
+expect_out_has 'fs-gg-game:fs-gg-ballistics' 'prints the qualified spelling to use'
+
+# The converse, and it is the one that keeps the rule from being a blanket ban: a body nobody mirrors
+# has exactly one reader, that reader can resolve a bare ref, and bare stays correct there.
+case_start '§1 the SAME bare ref in a NON-mirrored body is still fine — bare is not deprecated'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See [[fs-gg-ballistics]].
+MD
+skill fs-gg-ballistics <<'MD'
+# ballistics
+MD
+run
+expect_rc 0 'bare ref in a non-mirrored body passes'
 
 case_start '§1 a ref qualified with an owner outside the registry vocabulary fails'
 fixture

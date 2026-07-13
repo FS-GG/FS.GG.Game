@@ -177,6 +177,22 @@ SELF_OWNER="fs-gg-game"
 SELF_REPO="FS.GG.Game"
 # registry/skills.yml `owner:` vocabulary (FS-GG/.github), one per line.
 KNOWN_OWNERS=$'fs-gg-game\nfs-gg-rendering\nfs-gg-sdd'
+# The bodies ADR-0022 §6 mirrors BYTE-IDENTICALLY into FS.GG.Rendering. A [[ref]] in one of these is
+# read by TWO gates with different publish sets, so it must be QUALIFIED: a bare ref is repo-relative,
+# and repo-relative is exactly what FS.GG.Game#273 proved cannot survive the mirror. Bare stays legal
+# everywhere else — a body that is never mirrored has one reader, and that reader can check it.
+#
+# Without this list the #273 fix is FOLKLORE: qualifying the refs once fixes today, and the very next
+# bare ref added to one of these four bodies silently restores the contradiction — green here (we
+# publish it) and dangling there. Both gates green, because the one that would object has been told
+# to NOTE these bodies rather than fail on them. That is the shape this whole script exists to refuse,
+# so it does not get to hold it.
+#
+# THE LIST IS THE ROT RISK, and it is deliberate rather than ideal: the mirror set is defined in
+# ADR-0022 (another repo) and nothing here can derive it, so a body mirrored in FUTURE is unguarded
+# until someone adds it below. Making the set machine-readable — a `mirrored:` flag in
+# template/skill-manifest — is filed as the follow-up.
+MIRRORED_SKILLS=$'fs-gg-game-core\nfs-gg-audio\nfs-gg-persistence\nfs-gg-model-swap'
 # The org an unqualified `FS.GG.Rendering#535` belongs to.
 DEFAULT_OWNER="FS-GG"
 
@@ -193,6 +209,9 @@ published=$(for d in "$SKILL_ROOT"/*/; do basename "$d"; done | sort)
 # through — and a foreign qualified ref is trusted, so nothing downstream would catch it.
 is_published() { grep -qxF -- "$1" <<<"$published"; }
 is_known_owner() { grep -qxF -- "$1" <<<"$KNOWN_OWNERS"; }
+is_mirrored() { grep -qxF -- "$1" <<<"$MIRRORED_SKILLS"; }
+# `template/product-skills/fs-gg-game-core/SKILL.md` → `fs-gg-game-core`.
+skill_of() { local rel=${1#"$SKILL_ROOT"/}; printf '%s' "${rel%%/*}"; }
 
 fail=0
 report() {
@@ -205,6 +224,37 @@ report() {
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # 1. WIKI REFS
 # ────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# A SELF-QUALIFIED ref that RESOLVES is fine, and this used to reject it ("write it bare"). That
+# rejection is what made the convention unmirrorable, and it had to go (FS.GG.Game#273).
+#
+# The verdict on a bare ref is a function of the EVALUATING REPO'S PUBLISH SET, not of the bytes. So
+# the same body, mirrored byte-identically into another repo (ADR-0022 §6 requires exactly that of
+# four of ours), gets OPPOSITE verdicts in the two repos:
+#
+#     [[fs-gg-ballistics]]              here: correct bare   |  in Rendering: DANGLING (no ballistics)
+#     [[fs-gg-rendering:fs-gg-scene]]   here: correct foreign|  in Rendering: "self-qualified, write it bare"
+#
+# Byte-identity and a publish-set-relative convention are not in tension — they are arithmetically
+# incompatible, and both were mandated. There was NO edit to those bytes that made both repos green:
+# every fix for one was a defect in the other, and byte-identity forbade diverging.
+#
+# A fully-qualified ref breaks the tie, because it is the one spelling whose verdict does NOT depend
+# on who is reading:
+#
+#     [[fs-gg-game:fs-gg-ballistics]]   here: self + published → checked, OK
+#                                       in Rendering: foreign → trusted, OK
+#     [[fs-gg-rendering:fs-gg-scene]]   here: foreign → trusted, OK
+#                                       in Rendering: self + published → checked, OK
+#
+# And note what that buys beyond merely agreeing: each ref is now VALIDATED EXACTLY ONCE, by the only
+# repo that can see the tree it names, and trusted everywhere else. The mirrored bodies are qualified
+# throughout for this reason. Bare stays legal — it is correct and checkable in a body that is never
+# mirrored — so this is a widening, not a new obligation.
+#
+# What is NOT weakened: a typo'd owner is still caught, a self-qualified ref to a skill we do NOT
+# publish is still dangling, and a bare ref we do not publish is still dangling. The only thing that
+# stopped being an error is a ref that was always TRUE.
 while IFS=: read -r file line ref; do
   [[ -z ${ref:-} ]] && continue
   if [[ $ref == *:* ]]; then
@@ -212,16 +262,18 @@ while IFS=: read -r file line ref; do
     id=${ref#*:}
     if ! is_known_owner "$owner"; then
       report "$file" "$line" "dangling [[$ref]] — unknown owner '$owner' (known: $KNOWN_OWNERS)"
-    elif [[ $owner == "$SELF_OWNER" ]]; then
-      if is_published "$id"; then
-        report "$file" "$line" "dangling [[$ref]] — self-qualified; this repo publishes '$id' — write it bare as [[$id]]"
-      else
-        report "$file" "$line" "dangling [[$ref]] — qualified to this repo, which does not publish '$id'"
-      fi
+    elif [[ $owner == "$SELF_OWNER" ]] && ! is_published "$id"; then
+      report "$file" "$line" "dangling [[$ref]] — qualified to this repo, which does not publish '$id'"
     fi
     # A foreign qualified ref is trusted: this repo cannot see the other repo's tree.
+    # A self-qualified ref that IS published resolves, and is accepted — see the header.
   elif ! is_published "$ref"; then
     report "$file" "$line" "dangling [[$ref]] — this repo does not publish it; qualify it as [[<owner>:$ref]]"
+  elif is_mirrored "$(skill_of "$file")"; then
+    # It RESOLVES here — and that is the trap. This body is mirrored byte-identically into a repo
+    # with a different publish set, where the very same bare ref dangles. Only a qualified ref gets
+    # the same verdict from both readers.
+    report "$file" "$line" "bare [[$ref]] in a MIRRORED body — it resolves here and dangles in the repo ADR-0022 §6 mirrors this into; write it [[$SELF_OWNER:$ref]] (FS.GG.Game#273)"
   fi
 done < <(grep -rEon '\[\[[A-Za-z0-9._:-]+\]\]' "$SKILL_ROOT" --include='*.md' \
   | sed -E 's/\[\[(.*)\]\]$/\1/')
