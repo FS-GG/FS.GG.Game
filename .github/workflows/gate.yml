@@ -565,16 +565,20 @@ jobs:
           set -euo pipefail
           shellcheck_bin="$RUNNER_TEMP/shellcheck"
 
-          # An explicit `if` here too, for the reason spelled out below: `A && B || C` is not
-          # if-then-else, and SC2015 flags it. This job lints itself, so the check that the linter is
-          # present must itself survive the linter.
-          if [ ! -x "$shellcheck_bin" ] || ! "$shellcheck_bin" --version >/dev/null 2>&1; then
+          # ONE invocation, and the test and the reported version both come out of it — for the same
+          # reason the lint below is run once: a version printed by a SECOND `--version` call is not,
+          # strictly, evidence about the binary the first one approved.
+          #
+          # An explicit `if`, not `A && B || C` — which is not if-then-else, and which SC2015 rightly
+          # flags. This job lints itself, so the check that the linter is present must survive the
+          # linter.
+          if ! shellcheck_version=$("$shellcheck_bin" --version 2>/dev/null); then
             echo "::error::the pinned shellcheck is missing or will not run. actionlint would SILENTLY" \
                  "skip every run: block and still exit 0 — a green over the shell it is here to read." \
                  "This is a RED, not a shrug."
             exit 1
           fi
-          "$shellcheck_bin" --version | sed -n 2p
+          echo "$shellcheck_version" | sed -n 2p
 
           # ONE invocation, and the count and the verdict both come out of it. Linting twice — once to
           # count, once to judge — would mean the number reported here describes a DIFFERENT run from
@@ -598,7 +602,21 @@ jobs:
           # actionlint's own answer to "did the shell half actually run?", and it is the only direct
           # one there is. A shellcheck it cannot execute is not an error to actionlint — it prints this
           # line, drops the rule, and exits 0 over every `run:` block in the repo.
-          if grep -q 'Rule "shellcheck" was disabled' "$log"; then
+          #
+          # ANCHORED TO COLUMN 0, and the shape of the anchor is load-bearing in BOTH directions.
+          #
+          # Not a bare substring: the log also carries the source snippets actionlint echoes back when
+          # it reports an error, so a loose match would read this phrase out of a WORKFLOW — including,
+          # one day, a step in this repo that discusses this very check — and go red claiming the pin
+          # was broken. Echoed source always arrives behind a `N | ` gutter, never at column 0.
+          #
+          # But not `^verbose: ` either, tempting as it looks. actionlint lints files CONCURRENTLY and
+          # its verbose writes INTERLEAVE: the same message appears as `verbose: Rule ...`, as
+          # `verbose: verbose: Rule ...`, and as a bare `Rule ...` with the prefix lost to a racing
+          # goroutine (all three observed in one run, #261). A guard that a race can silently defeat is
+          # a green over unread shell — the exact defect this job exists to close — so the prefix is
+          # optional and repeatable, and the anchor rests on the column, which no interleave moves.
+          if grep -qE '^(verbose: )*Rule "shellcheck" was disabled' "$log"; then
             echo "::error::actionlint DISABLED its shellcheck rule — every run: block in this repo went" \
                  "unread and it would still have exited 0. The pin is broken, not the workflows."
             exit 1
