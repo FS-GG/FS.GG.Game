@@ -489,9 +489,16 @@ jobs:
       - name: Behavioural test suite (probe in, exit code + counted verdict out)
         run: scripts/test-harness-selftest.sh
 
-  # Workflow lint (FS.GG.Game#258). Every gate in this file guards the PRODUCT. Nothing guarded the
-  # GATES — six workflow files, ~600 lines of YAML and several hundred lines of shell inside `run:`
-  # blocks, and until now the first thing to read any of it was GitHub, at dispatch time.
+  # Shell lint (FS.GG.Game#258 for the workflows, #266 for the scripts). Every gate in this file
+  # guards the PRODUCT. Nothing guarded the GATES — six workflow files, ~600 lines of YAML and several
+  # hundred lines of shell inside `run:` blocks, and until now the first thing to read any of it was
+  # GitHub, at dispatch time.
+  #
+  # The job lints shell in BOTH of the places this repo keeps it: inside `run:` blocks (via actionlint,
+  # below) and in `scripts/` (directly, in the last step). The second half is #266 — the `run:` blocks
+  # were the only shell anything had ever read, so the several hundred lines of bash that CI itself
+  # SHELLS OUT TO were unlinted, and were already carrying `# shellcheck source=` pragmas written for
+  # a run that never happened.
   #
   # That is the worst possible reader, because GitHub's reaction to a malformed workflow is to
   # SILENTLY NOT RUN IT, or to run it with the bad key ignored. A typo in a `run:` block is caught by
@@ -696,18 +703,22 @@ jobs:
           # gate has never heard of, merging unread, green. So the subject is derived the way a shell
           # file actually identifies itself — by extension, or by shebang. The shebang half is not
           # hypothetical: the repo's largest shell file, `scripts/fsgg-coord`, has no `.sh` on it.
-          mapfile -t discovered < <(
+          # NUL-delimited end to end. `git ls-files` without `-z` QUOTES any path that is unusual (a
+          # newline, a non-ASCII byte), and a quoted path does not name a file — `[ -f "$f" ]` then
+          # fails and the script is dropped from the subject in silence. An unread script is the exact
+          # failure this step exists to prevent, so it does not get to arrive via the file list.
+          mapfile -d '' -t discovered < <(
             {
-              git ls-files -- '*.sh' '*.bash'
-              git ls-files | while IFS= read -r f; do
+              git ls-files -z -- '*.sh' '*.bash'
+              git ls-files -z | while IFS= read -r -d '' f; do
                 case "$f" in *.sh|*.bash) continue ;; esac
                 [ -f "$f" ] || continue
                 IFS= read -r first <"$f" || true
                 if printf '%s\n' "$first" | grep -qE '^#!.*[ /](ba|da|k)?sh([[:space:]]|$)'; then
-                  printf '%s\n' "$f"
+                  printf '%s\0' "$f"
                 fi
               done
-            } | sort -u
+            } | sort -zu
           )
 
           # VENDORED, so not ours to lint. The coordination kit is SYNCED from FS-GG/.github (`chore:
@@ -734,15 +745,22 @@ jobs:
           done
 
           subject=()
+          excluded_n=0
           for f in "${discovered[@]}"; do
             excluded=0
             for k in "${kit[@]}"; do
               if [ "$f" = "$k" ]; then excluded=1; fi
             done
-            if [ "$excluded" -eq 0 ]; then subject+=("$f"); fi
+            if [ "$excluded" -eq 0 ]; then subject+=("$f"); else excluded_n=$((excluded_n + 1)); fi
           done
 
-          echo "shell in tree: ${#discovered[@]} · vendored (not linted): ${#kit[@]} · linted: ${#subject[@]}"
+          # The vendored count is the number of files actually WITHDRAWN from the discovered set, not
+          # the length of the exclusion list. They differ the day the kit stops looking like shell (a
+          # rewrite, a compiled binary): the path still exists, so the guard above passes, but it was
+          # never discovered and so was never excluded from anything. Printing `${#kit[@]}` there would
+          # produce an accounting line that does not add up — in a step whose entire claim is that its
+          # subject count can be trusted.
+          echo "shell in tree: ${#discovered[@]} · vendored (not linted): $excluded_n · linted: ${#subject[@]}"
 
           # Run over zero files, shellcheck exits 0 — and a green over an empty subject is precisely
           # the defect this job exists to close. If discovery ever returns nothing, that is a RED.
@@ -766,8 +784,13 @@ jobs:
           # would pass the gate and fail on the desk of whoever ran shellcheck by hand, which is the
           # divergence the pinning in this job exists to kill.
           #
-          # -S info, and the severity floor is applied BELOW rather than here — because two different
-          # verdicts come out of this one log and they do not share a floor. See both guards.
+          # -S info, and DO NOT RAISE IT TO warning. The floor this gate enforces is `warning`, so
+          # `-S warning` looks like the tidy-up this line is asking for — and it would silently break
+          # the SC1091 guard below. SC1091 is an INFO. Raise the floor here and it stops appearing in
+          # the log at all, the guard's `grep` stops matching, and an unfollowed `source` goes back to
+          # being invisible. The floor is applied BELOW, where it can be applied to the findings
+          # WITHOUT also applying it to the evidence that the findings are trustworthy: two verdicts
+          # come out of this one log and they do not share a floor.
           log="$RUNNER_TEMP/shellcheck.log"
           rc=0
           "$shellcheck_bin" -x -S info -f gcc "${subject[@]}" >"$log" 2>&1 || rc=$?

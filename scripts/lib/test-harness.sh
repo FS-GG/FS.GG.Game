@@ -22,9 +22,22 @@
 # SOURCED, NEVER EXECUTED:
 #
 #     REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+#     # shellcheck source-path=SCRIPTDIR
 #     # shellcheck source=lib/test-harness.sh
 #     . "$REPO_ROOT/scripts/lib/test-harness.sh"
 #     harness_init
+#
+# COPY BOTH PRAGMAS, and in that order. `source=` is resolved against shellcheck's source path, which
+# defaults to the CWD — not to the script holding the pragma — so on its own `lib/test-harness.sh`
+# names nothing from the repo root and this file is never followed. Nothing fails loudly: shellcheck
+# emits SC1091 (an `info`, which a `-S warning` floor never prints) and lints the sourcing suite with
+# this file UNREAD — so every variable the suite sets FOR it (`RC`, read only by `expect_rc` below;
+# `HARNESS_OUTPUT_LABEL`, read only by `bad`) looks unused, and shellcheck invents an SC2034 for each.
+# That is not a hypothetical: it is where #266's three "unused variable" findings came from, and the
+# obvious fix — deleting the "dead" `RC` — would have broken every exit-code assertion in both suites.
+# `source-path=SCRIPTDIR` resolves it from any working directory. The gate REDs on SC1091 (gate.yml,
+# "Lint the repo's own shell"), so a suite that copies only half of this will be caught — but the
+# cheaper moment to get it right is here.
 #
 # What it gives you: the counters and the summary block, the `ok`/`bad`/`expect_*` family, the
 # counted fixture builder, one faithful fake `gh` with the state helpers that drive it, and the
