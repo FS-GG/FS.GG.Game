@@ -454,6 +454,41 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
           scripts/test-skill-refs-sweep.sh
 
+  # Tests for the HARNESS the two suites above stand on (FS.GG.Game#264). #259 extracted their shared
+  # scaffolding into scripts/lib/test-harness.sh — the counters, the `expect_*` family, the counted
+  # fixture builder, one faithful fake `gh`. That was right, and it moved the blast radius: a bug in
+  # the harness now breaks BOTH suites, and the dangerous direction is not "both go red", which is
+  # loud. It is BOTH GO GREEN. An `expect_has` that returns ok unconditionally, or a `fixture_new`
+  # that stops writing `bin/gh` so no fake is ever on PATH, makes 169 assertions pass over a subject
+  # nobody examined — while the two jobs above report, in green, that they examined it.
+  #
+  # That is the FS-GG/.github#416 shape sitting one level BENEATH the two gates written to refuse it,
+  # and this repo has now met it at four descending depths (#238, #242, #251, #256).
+  #
+  # Separate job = distinct signal, as everywhere in this file. A red HERE means the two suites above
+  # are not trustworthy — which is a strictly worse fact than either of them failing, and it wants a
+  # different reader. If the harness is broken, their verdicts are worth nothing either way.
+  #
+  # THE SUITE DOES NOT USE THE HARNESS TO TEST THE HARNESS. It brings its own three-line assertions
+  # and drives the harness black-box, as a subject, in a child bash — because a selftest built on
+  # `expect_has` would pass unconditionally the moment `expect_has` did, which is the exact defect.
+  # Every assertion is exercised in BOTH directions; the violated one is the one with teeth, and it is
+  # the direction the two real suites never take, since a suite in the green never violates an
+  # assertion.
+  #
+  # Hermetic: it shells out to nothing but bash and jq, builds its fixtures under mktemp, and puts the
+  # fake `gh` on PATH ahead of any real one. No token, no network, no fetch-depth.
+  harness-selftest:
+    name: Test-harness selftest (scripts/lib/test-harness.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Behavioural test suite (probe in, exit code + counted verdict out)
+        run: scripts/test-harness-selftest.sh
+
   # Workflow lint (FS.GG.Game#258). Every gate in this file guards the PRODUCT. Nothing guarded the
   # GATES — six workflow files, ~600 lines of YAML and several hundred lines of shell inside `run:`
   # blocks, and until now the first thing to read any of it was GitHub, at dispatch time.
