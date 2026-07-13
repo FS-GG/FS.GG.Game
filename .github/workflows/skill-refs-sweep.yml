@@ -67,6 +67,42 @@ on:
     paths:
       - '.github/workflows/skill-refs-sweep.yml'
       - 'scripts/check-skill-refs.sh'
+  # AND ON THE MERGE THAT FIXES THE DECAY. Exactly one thing retires the tracking issue below — a
+  # green sweep — so without this trigger the only thing that ever closes it is the 07:00 cron, and a
+  # decay fixed at 10:52 leaves the issue open, red, and ASSERTING A DECAY THAT NO LONGER EXISTS until
+  # the next morning. Up to ~21 hours of a lie.
+  #
+  # That is not merely untidy, and the issue's own wording is why: it advertises the finding as "small,
+  # well-specified, unblocked" work. That is exactly what makes it the most attractive item on the
+  # board — `take` will hand it to the next worker who asks — so a STALE one does not sit quietly, it
+  # gets picked up. The worker claims it, cuts a worktree, reproduces the gate, and finds it green.
+  # FS.GG.Game#268 did precisely this: filed 10:18Z, fixed at 10:52Z by FS.GG.Game#271, still open and
+  # still being claimed two hours later. The cost of a late close is a worker's item, not a stale row.
+  #
+  # THE CRON STAYS, and is still the only thing that catches what this trigger structurally cannot: a
+  # citation that rots — or heals — because the WORLD moved. An upstream issue closing or reopening
+  # changes no file here and pushes nothing, so `push` never fires for it. The two are one mechanism:
+  # `push` closes the tracker promptly when the TREE is the fix; `schedule` is what notices when the
+  # tree never changes at all. Deleting either leaves a class of decay unresolved by anybody.
+  #
+  # AND IT IS STILL NOT A MERGE GATE (FS.GG.Game#238). It runs AFTER the merge, on `main`. It cannot
+  # block a PR, and must never be made to.
+  #
+  # It CAN go red on a `main` commit — the `Verdict` step re-raises the sweep's rc, and that is the
+  # point: a red that nobody can see is the #242 defect. Note this adds no NEW red. The cron sweeps
+  # that same commit at 07:00 and would go red on it anyway; `push` only moves the verdict earlier, in
+  # both directions — red sooner when decay lands, and GREEN-AND-CLOSED sooner when the fix does. Nor
+  # can a push run be the first to discover decay a diff introduced: `gate` already resolves the links
+  # of any skill a PR touches, blocking, at authorship time. What reaches `main` un-red is only ever
+  # decay the WORLD caused — which is precisely what this workflow is for, and what #238 moved off the
+  # gate rather than out of sight.
+  push:
+    branches: [main]
+    paths:
+      - 'template/product-skills/**'              # the subject: every published skill body
+      - 'scripts/check-skill-refs.sh'             # the judge — a change here can flip a verdict
+      - '.github/workflows/skill-refs-sweep.yml'  # and the sweep itself: the PR run above is a DRY
+                                                  # RUN, so this is its first real reconcile.
 
 concurrency:
   # Never cancel a scheduled sweep in flight: the reconcile step below is a read-modify-write of one
