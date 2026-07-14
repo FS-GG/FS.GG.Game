@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // GENERATED FILE — DO NOT EDIT. Your changes will be overwritten, and CI will fail first.
 //
-// Source:    FS.GG.UI.Template 0.9.2 :: content/template/fragments/vec2/src/Product/Vec2.fs
+// Source:    FS.GG.UI.Template 0.10.0 :: content/template/fragments/vec2/src/Product/Vec2.fs
 // Generator: dotnet fsi scripts/generate-scaffold-context.fsx
 // Pin:       Directory.Packages.local.props (generator-only group)
 //
