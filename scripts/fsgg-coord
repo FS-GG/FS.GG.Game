@@ -61,6 +61,11 @@
 #                                             # #448). A partial failure is reported as PARTIAL
 #                                             # (exit 4), never as success — the aliases run serially,
 #                                             # so the ones before an error have already landed.
+#   fsgg-coord landable <pr> [--repo R]       # is this PR SAFE TO MERGE? prints
+#                                             # green|pending|red|conflicted|unknown; exit 0 on green,
+#                                             # 3 on pending (the only one worth retrying), 1 otherwise.
+#                                             # Scores WORKFLOW RUNS with the supersession rule (#720) —
+#                                             # do NOT hand-roll this in a recipe (#724).
 #   fsgg-coord issues <repo> [--label L] [--state open|closed|all] [--refresh] [--jq EXPR]
 #                                             # list issues over REST with ETag revalidation
 #   fsgg-coord ready [--repo R] [--status S] [--phase P] [--all] [--json|--jq EXPR]
@@ -3552,7 +3557,9 @@ pr_alive() {  # $1=owner $2=repo $3=num
 #
 # Cost is the design question, exactly as it is for `pr_alive`: REST (a different budget from the
 # GraphQL one that is routinely gone, #418), and only for a claim that is ALREADY stale and ALREADY
-# has an open PR — which is rare. Two reads: the PR, and its head SHA's check-runs.
+# has an open PR — which is rare. THREE reads: the PR, its head SHA's WORKFLOW RUNS, and that SHA's
+# CHECK RUNS. The third is not redundant — each of the last two sees a failure the other cannot (see
+# the rollup below), and the runs are also what tell us which check-runs are SUPERSEDED (#720).
 #
 # TWO TRAPS. BOTH FAIL CLOSED HERE, DELIBERATELY:
 #
@@ -3574,9 +3581,24 @@ pr_alive() {  # $1=owner $2=repo $3=num
 # report as `unknown`, and the one state we most need to name would be the one we could never see.
 # `tostring` tells all three apart.
 #
+# SUPERSESSION, as one expression, because it is applied to TWO things (the runs, and the check-runs
+# of the runs it kills) and the two must never drift apart. Splits the runs on a head SHA into:
+#
+#   .live — the runs that still mean something
+#   .dead — the check_suite_id of every run a later run of its OWN concurrency group replaced
+#
+# `cgroup` is the key `cancel-in-progress` actually cancels on. See the note at the call site for why
+# matching it exactly — rather than on `.path` — is what stops the drop rule becoming a hole (#703).
+SUPERSEDE_JQ='
+  def cgroup: [.path, .event, .head_branch, ([.pull_requests[]?.number] | sort)];
+  . as $all
+  | def replaced($r): [$all[] | select(cgroup == ($r|cgroup) and .run_number > $r.run_number)] | length > 0;
+    { live: [ $all[] | . as $r | select($r.conclusion != "cancelled" or (replaced($r) | not)) ],
+      dead: [ $all[] | . as $r | select($r.conclusion == "cancelled" and replaced($r)) | .check_suite_id ] }'
+
 # Prints exactly one of: green | conflicted | red | pending | unknown
 pr_landable() {  # $1=owner $2=repo $3=pr -> green|conflicted|red|pending|unknown
-  local pr m sha checks total pend bad try
+  local pr m sha runs live checks total pend bad try
   # THE RETRY HAS TO WAIT, OR IT IS NOT A RETRY. GitHub computes mergeability in a BACKGROUND JOB and
   # returns `null` until it lands; the documented remedy is to poll again *after a delay*. A second
   # read fired microseconds after the first cannot have observed a job that had not finished when the
@@ -3596,19 +3618,146 @@ pr_landable() {  # $1=owner $2=repo $3=pr -> green|conflicted|red|pending|unknow
   sha="$(jq -r '.head.sha // ""' <<<"$pr")"
   if [ -z "$sha" ]; then echo unknown; return 0; fi
 
-  # --paginate: check-runs pages at 30 and this org runs ~30 workflows. A truncated read reports a
-  # clean page 1 while the check that would have stopped us sits on page 2 (#547).
+  # THE ROLLUP IS OVER WORKFLOW RUNS, NOT CHECK RUNS (#720). SUPERSESSION IS A PROPERTY OF THE RUN —
+  # it is what `concurrency: cancel-in-progress` replaces — and it is NOT VISIBLE ON A CHECK RUN AT
+  # ALL. The same workflow can run TWICE on one SHA (a second trigger starts a fresh run and cancels
+  # the first), and BOTH runs' check-runs stay attached to that SHA forever. Aggregating them raw —
+  # which is what this function used to do — sees `cancelled` and calls a GREEN PR red.
+  #
+  # That is not cosmetic here. `adopt` (#697) uses this verdict to tell FINISHED work from abandoned
+  # work, and its whole population is PRs whose author was iterating when their harness died — i.e.
+  # FORCE-PUSHED PRs, which are exactly the ones that carry superseded runs. The tool would point at
+  # a green, mergeable, finished PR and refuse to land it, which is #697's remedy failing precisely
+  # where #697 was aimed. Measured on .github#718: 20 check-runs, 4 `cancelled` from two superseded
+  # suites, while GitHub itself said `mergeable_state=clean`.
+  #
+  # DO NOT "FIX" THIS BY DEDUPING CHECK-RUNS BY NAME. Six workflows in this repo name their job
+  # `fixture`; collapsing by name lets one workflow's success mask another's failure. The obvious fix
+  # is the wrong one, which is why it is written down. (#703 found the same trap in the recipe.)
+  #
+  # --paginate: this org runs ~30 workflows and the endpoint pages at 30. A truncated read reports a
+  # clean page 1 while the run that would have stopped us sits on page 2 (#547).
+  runs="$(gh api "repos/$1/$2/actions/runs?head_sha=$sha&per_page=100" --paginate --slurp 2>/dev/null \
+          | jq -c '[.[].workflow_runs[]]' 2>/dev/null)" || { echo unknown; return 0; }
+  if [ -z "$runs" ]; then echo unknown; return 0; fi
+
+  # SUPERSEDED runs, and NOTHING else: a cancelled run that a LATER run of its OWN concurrency group
+  # replaced. A cancelled run nobody re-ran is still a finding, and a FAILED run is never dropped —
+  # so this cannot fail open.
+  #
+  # `cgroup` is the group `cancel-in-progress` actually keys on. Matching it EXACTLY is what stops
+  # the drop rule being a hole: keying on `.path` alone would let a run from a DIFFERENT group
+  # license the drop. A `workflow_dispatch` run on the same branch shares the SHA and the path and
+  # carries a HIGHER run_number, but it is a different `github.ref` — it supersedes nothing — and a
+  # gate job that is `if: github.event_name == 'pull_request'` SKIPS in it and still concludes
+  # `success`. Dropping the cancelled PR run in its favour would count a vacuous green (#703).
+  #
+  # This yields BOTH the live runs and the check SUITES of the dead ones, because a superseded run's
+  # check-runs stay attached to the SHA and have to be dropped with it.
+  local dead
+  live="$(jq -c "$SUPERSEDE_JQ | .live"  <<<"$runs" 2>/dev/null)" || { echo unknown; return 0; }
+  dead="$(jq -c "$SUPERSEDE_JQ | .dead"  <<<"$runs" 2>/dev/null)" || { echo unknown; return 0; }
+  if [ -z "$live" ] || [ -z "$dead" ]; then echo unknown; return 0; fi
+
+  # SCORE THE CHECK RUNS TOO — the union, not either alone. Each sees a failure the other cannot:
+  #
+  #   * A run can fail with NO CHECK RUNS AT ALL. `startup_failure` (malformed workflow YAML) concludes
+  #     the RUN as `failure` and never creates a job, so a check-runs-only rollup sees nothing and
+  #     calls it green. Same for a run still `queued`: its check-runs do not exist yet, so the checks
+  #     that DO exist can all be complete and green while a workflow has not started.
+  #   * A CHECK RUN can fail while its run SUCCEEDS. A job-level `continue-on-error: true` concludes
+  #     the job's check-run `failure` and the workflow run `success` — and branch protection scores
+  #     CHECK RUNS, so GitHub would block a merge this function had called green. (Step-level
+  #     continue-on-error does not diverge; only the job-level form does.)
+  #   * And check-runs are the ONLY place a non-Actions app appears at all. This function used to read
+  #     them, so scoring runs alone would silently drop third-party coverage — #266's signature,
+  #     introduced by the fix for it. A foreign app's suite is never in the runs list, so it is never
+  #     in `dead`, so it is never dropped: it is scored by construction, with no special case.
+  #
+  # `--paginate`, again, and for the same reason (#547).
   checks="$(gh api "repos/$1/$2/commits/$sha/check-runs" --paginate --slurp 2>/dev/null \
-            | jq -c '[.[].check_runs[]]' 2>/dev/null)" || { echo unknown; return 0; }
+            | jq -c --argjson dead "$dead" '[.[].check_runs[] | select([.check_suite.id] - $dead | length > 0)]' 2>/dev/null)" \
+    || { echo unknown; return 0; }
   if [ -z "$checks" ]; then echo unknown; return 0; fi
 
-  total="$(jq 'length' <<<"$checks")"
-  if [ "$total" -eq 0 ]; then echo red; return 0; fi        # #606: no checks is NOT a pass
-  pend="$(jq '[.[] | select(.status != "completed")] | length' <<<"$checks")"
-  if [ "$pend" -gt 0 ]; then echo pending; return 0; fi
-  bad="$(jq '[.[] | select(.conclusion != "success" and .conclusion != "skipped")] | length' <<<"$checks")"
-  if [ "$bad" -gt 0 ]; then echo red; return 0; fi
+  # #606: an EMPTY subject is a FINDING, not a pass. "Every check passed" and "CI never started" are
+  # the same empty set, and a CONFLICTED PR is permanently in it — GitHub cannot build
+  # refs/pull/N/merge while it conflicts, so no workflow ever starts and the head SHA has zero runs
+  # forever. One jq over both lists rather than six.
+  #
+  # THE TWO LISTS GO IN ON STDIN, NOT THROUGH `--argjson`. Linux caps a SINGLE argv string at 128KB
+  # (MAX_ARG_STRLEN — a much lower ceiling than the ~2MB ARG_MAX everyone quotes), and a workflow_run
+  # carries whole `repository` / `head_repository` / `head_commit` objects, so ELEVEN real runs are
+  # already ~150KB. `--argjson` therefore died with "Argument list too long" on essentially every real
+  # PR in this repo, and returned `unknown` — while every unit test passed, because a fixture's runs
+  # are three fields long. Caught only by driving it against a live PR. stdin has no such ceiling, so
+  # this cannot come back as the payload grows.
+  local roll
+  roll="$(printf '%s\n%s\n' "$live" "$checks" | jq -rs '
+      (.[0] + .[1]) as $all
+      | [ ($all | length),
+          ([$all[] | select(.status != "completed")] | length),
+          ([$all[] | select(.status == "completed"
+                            and .conclusion != "success" and .conclusion != "skipped")] | length) ]
+      | @tsv' 2>/dev/null)" || { echo unknown; return 0; }
+  read -r total pend bad <<<"$roll"
+  [ -n "${bad:-}" ] || { echo unknown; return 0; }
+
+  if [ "$total" -eq 0 ]; then echo red;     return 0; fi
+  if [ "$pend"  -gt 0 ]; then echo pending; return 0; fi
+  if [ "$bad"   -gt 0 ]; then echo red;     return 0; fi
   echo green
+}
+
+# `landable <pr>` — pr_landable's verdict, as a COMMAND (#724).
+#
+# WHY THIS EXISTS AT ALL. This gate has now been written FOUR times, in four copies: `/pnext-item` §5
+# (fixed for pagination in #547, for zero-checks in #606, for supersession in #703), the
+# skill-registry autofix bot (#710 — it read its OWN superseded runs as RED and refused to merge the
+# PR it had just pushed), and this function (#720). Every one of those fixes edited a COPY. Nothing
+# executes a recipe, so nothing tests one — and the result was backwards: the copy that IS testable
+# was the copy still carrying the bug, while the untested prose was right.
+#
+# A recipe should NAME the command, not EMBED the logic. That is also what makes protocol staleness
+# harmless: a recipe is copied into an agent's context at session start and never refreshed, so a
+# worker can execute a gate the org fixed hours earlier (measured: .github#718 was red-lit by a
+# nine-commit-stale snapshot of §5, and the worker then re-filed the fixed bug as #719). A recipe that
+# CALLS this reads the CURRENT tool off disk at run time. The prose may drift; the behaviour cannot.
+# That is #609's "an import cannot drift by construction", applied to the protocol itself.
+#
+# The verdict goes to STDOUT and the DECISION goes to the exit code, so a poll loop can tell "keep
+# waiting" from "stop" without parsing prose:
+#
+#   0  green        — mergeable, and every live run/check passed
+#   3  pending      — checks still running. RETRY; this is the only verdict worth waiting on.
+#   1  red | conflicted | unknown — do not merge, and do not wait: none of these clear by waiting.
+landable_cmd() {
+  local repo="" pr="" v
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo) repo="${2:?--repo needs a value}"; shift 2 ;;
+      -*)     die "landable: unknown flag '$1'" ;;
+      *)      pr="$1"; shift ;;
+    esac
+  done
+  [ -n "$pr" ] || die "landable: <pr> required (the PULL number — not the item number)"
+  case "$pr" in ''|*[!0-9]*) die "landable: '$pr' is not a pull number. This takes the PR number, not an issue ref." ;; esac
+
+  # scope_repo, not `gh repo view`: it reads the git remote — free, offline, and it cannot misreport
+  # an exhausted GraphQL budget as "you are in the wrong directory" (#430).
+  local scope O R
+  scope="$(scope_repo "$repo")"
+  [ -n "$scope" ] || die "landable: could not determine which repo PR #$pr is in — no --repo given, and no readable 'origin' remote here. Pass --repo FS-GG/<repo>."
+  if [[ "$scope" == */* ]]; then O="${scope%%/*}"; R="${scope#*/}"
+  else O="$OWNER"; R="$(resolve_repo "$scope")"; fi
+
+  v="$(pr_landable "$O" "$R" "$pr")"
+  echo "$v"
+  case "$v" in
+    green)   return 0 ;;
+    pending) return 3 ;;
+    *)       return 1 ;;
+  esac
 }
 
 # Every OPEN issue in a repo that could possibly hold a claim, with the body its touch-set is
@@ -6705,6 +6854,7 @@ case "$cmd" in
   heartbeat) heartbeat_cmd "$@" ;;
   release)   release_cmd "$@" ;;
   who)       who_cmd "$@" ;;
+  landable)  landable_cmd "$@" ;;
   reap)      reap_cmd "$@" ;;
   take)      take_cmd "$@" ;;
   batch)     batch_cmd "$@" ;;
