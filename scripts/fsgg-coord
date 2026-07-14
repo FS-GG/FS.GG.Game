@@ -109,16 +109,21 @@
 # THE SHADOW (ADR-0034 Phase 2). The coordination domain is moving to a typed F# core, and this tool
 # schedules the work that rewrites this tool — so nothing is cut over on faith. BOTH engines decide
 # every `batch`/`next`/`take`, BASH'S ANSWER IS THE ONE RETURNED, and every disagreement is logged.
-# Bash stays authoritative until the log has been empty for three consecutive days across the live
-# fleet — which is what `--engine fs` is waiting for, and why it is still refused.
+# `--engine fs` is now OPEN (ADR-0038): the flip is gated on the DEFECT CORPUS, not on a fleet clock
+# that could never tick (#728). THE DEFAULT DOES NOT MOVE — it is `auto`, and `auto` returns BASH'S
+# ANSWER. You get the typed core's answer only by asking for it.
 #
 # IT IS ON BY DEFAULT WHEREVER AN ENGINE EXISTS (`--engine auto`), and off wherever one does not — so
 # a repo without the engine on its coordination path is byte-for-byte unaffected, and a repo with it
 # starts contributing evidence without anybody remembering to opt in. A shadow nobody switches on is
-# not a cautious shadow; it is a decoration, and the three-day clock never starts.
+# not a cautious shadow; it is a decoration — and now that the shadow is TELEMETRY rather than the
+# gate, an observer that cannot move an answer costs its caller nothing.
 #
 #   fsgg-coord --engine bash next             # the escape hatch: never shadow
 #   fsgg-coord --engine shadow next           # insist on it; a missing engine is a logged skip
+#   fsgg-coord --engine fs next               # THE ENGINE'S ANSWER IS THE ANSWER (ADR-0038). No
+#                                             # fallback: every failure here is FATAL, where in every
+#                                             # other mode it is a logged skip
 #   fsgg-coord divergence [--json] [--since T] [--clear]
 #                                             # the acceptance test for the port. Reports OUTCOME
 #                                             # divergences (the engines disagree about what may be
@@ -6934,11 +6939,13 @@ if [ "${1:-}" = "--worker" ]; then
   WORKER_OVERRIDE="${2:?--worker needs a value}"; shift 2
 fi
 
-# ...and a global `--engine`, for the same reason (ADR-0034 Phase 2). DEFAULTS TO `bash`: the typed
-# engine is not authoritative and will not be until its divergence log has been empty for three days.
+# ...and a global `--engine`, for the same reason (ADR-0034 Phase 2). DEFAULTS TO `auto` — see the
+# ENGINE_MODE default above: shadow wherever an engine resolves, plain bash everywhere else, and in
+# BOTH cases BASH'S ANSWER IS THE ONE RETURNED. The flip opened `fs`; it did not move the default.
 #
-# `shadow` is the mode that earns the flip — both engines decide, BASH'S ANSWER IS RETURNED, and the
-# disagreement is logged. `fs` is reserved for the flip itself and is refused here rather than quietly
+# `shadow` is the mode that fed the flip — both engines decide, BASH'S ANSWER IS RETURNED, and the
+# disagreement is logged. `fs` IS the flip, and it is accepted here (ADR-0038): the engine's answer is
+# the answer, and there is no fallback. What is refused is an UNKNOWN mode, rather than quietly
 # accepted, because an option that is accepted and ignored is indistinguishable from one that was
 # honoured — and a worker who believed they were running the typed engine would be reading bash's
 # answer and calling it evidence.
