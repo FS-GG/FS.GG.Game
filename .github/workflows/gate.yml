@@ -425,6 +425,51 @@ jobs:
       - name: Behavioural test suite (fixture tree in, exit code + subject claim out)
         run: scripts/test-check-skill-refs.sh
 
+  # Release-train coherence (FS.GG.Game#319). Directory.Packages.local.props states the invariant twice
+  # — "Keep all five Rendering pins on one version", "Keep all six on one version" — and explains that
+  # it is load-bearing: `_scaffold.fs` binds `Scene.Point`/`Rect` directly, so a split set compiles one
+  # train's fragment against another train's surface, and "the gate would go green over a pairing no
+  # reader can reproduce."
+  #
+  # It DID go green over exactly that. Renovate PR #317 bumped FIVE of the six FS.GG.UI.* pins to 0.10.0
+  # and left FS.GG.UI.Template at 0.9.2 — one file, one PR — and every check in this workflow passed.
+  # The invariant lived only in a comment, and a comment is not a gate. That PR is now the regression
+  # fixture in the suite below.
+  #
+  # The scaffold-drift job above cannot cover this and it is worth saying why, because it looks like it
+  # should: it compares `_scaffold.fs` against THE PINNED Template, whichever version that is. Pin and
+  # artefact stay mutually consistent while drifting away from the rest of the train, so that gate is
+  # satisfied by the very state it should reject. Staleness check, not a coherence check.
+  #
+  # Separate job = distinct signal, as everywhere in this file: a red here means the PINS disagree,
+  # which is a different fact — and a different reader — from a stale generated artefact.
+  pin-coherence:
+    name: Release-train coherence (FS.GG.UI.* and FS.GG.Audio.* each on one version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Fail on a split release train (the state Renovate PR #317 shipped green)
+        run: scripts/check-pin-coherence.sh
+
+  # Tests for the gate ABOVE. Same argument as skill-refs-tests: the failure that matters is not the
+  # checker going red, it is the checker matching NOTHING — a renamed props file, a re-shaped
+  # <PackageVersion>, a rotted regex — and reporting that in green, which is indistinguishable from
+  # "the pins agree". The suite demands a red for each of those, and pins #317's exact split set as a
+  # regression fixture. Hermetic: it builds its own props fixtures in a temp dir; no network, no token.
+  pin-coherence-tests:
+    name: Pin-coherence gate tests (scripts/check-pin-coherence.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Behavioural test suite (props fixture in, exit code + subject claim out)
+        run: scripts/test-check-pin-coherence.sh
+
   # Tests for the SWEEP (FS.GG.Game#251) — the OTHER half of skill-refs, and the half that files an
   # issue. #249 taught the daily sweep to render a finding and create/reopen/update/close a tracking
   # issue for it, so a decayed pointer stops being a red nobody reads. That filing path is now
