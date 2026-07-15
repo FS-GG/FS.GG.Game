@@ -315,8 +315,22 @@ ones for a released library. File references are the starting points, not the wh
       local edit — doing it here would just desync this repo from the org's floating-main convention.
       Verified: YAML well-formed on all four files; org `@main` refs unchanged; the pin is a pure ref
       substitution (a SHA is a valid `uses:` ref and actionlint prefers it), so no behavioural change.
-- [ ] Reconcile the `global.json` SDK pin against the "Game has NO global.json" comment —
-      `Directory.Build.props:74-80`
+- [x] Reconcile the `global.json` SDK pin against the "Game has NO global.json" comment —
+      `Directory.Build.props:74` (now line 74 post-#303/#315 sync). DONE 2026-07-15. The contradiction
+      is real: Game carries a root `global.json` (SDK `10.0.301`, `rollForward: latestFeature`,
+      `allowPrerelease: false`) adopted deliberately in #179, yet the org-synced comment still lists
+      Game among the consumers that "have NO global.json at all". The pin STAYS — #179 was a deliberate
+      adoption and the org's own direction (#536) is for *every* consumer to carry one (the precondition
+      for `global.json` to join `sync-build-config`'s managed FILES list). The stale sentence lives in
+      the canonical, DO-NOT-EDIT `Directory.Build.props`, owned upstream (FS-GG/.github →
+      `dist/dotnet/Directory.Build.props`): a local edit is reverted on the next sync and reds the drift
+      check, so it is corrected upstream, not here — flagged as an upstream doc fix. The review's other
+      half — "it justifies the hash-determinism fix" — was already resolved by the #303/#315 syncs, which
+      pulled in #536's rewrite decoupling the determinism fix from `global.json` (the comment now argues
+      an UNPINNED SDK makes SDK-independence *more* valuable). Local deliverable: a repo-owned note in
+      `Directory.Build.local.props` documenting the intentional pin and pointing a future reader at the
+      stale-but-upstream-owned sentence, so the two reconcile at the point of confusion. No behavioural
+      change; no surface-baseline drift.
 - [ ] (Low) Evaluate CodeQL / dependency-review / Dependabot given the small dependency surface
 
 ### P4 — documentation fixes
