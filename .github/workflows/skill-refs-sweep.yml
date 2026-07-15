@@ -173,7 +173,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       # No --changed: this is the full sweep, and it is the ONLY run that resolves every link in the
       # tree. GH_TOKEN buys the 1,000/hr authenticated REST budget instead of a shared-IP 60/hr; the
