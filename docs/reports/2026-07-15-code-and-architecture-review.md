@@ -459,8 +459,30 @@ ones for a released library. File references are the starting points, not the wh
 
 ### P5 — governance right-sizing (deliberate decision, not a defect)
 
-- [ ] Decide, consciously, whether the fourth-level meta-testing tier (`harness-selftest`,
-      workflow-self-parsing sweep tests) earns its keep for a library this size
+- [x] Decide, consciously, whether the fourth-level meta-testing tier (`harness-selftest`,
+      workflow-self-parsing sweep tests) earns its keep for a library this size — DECIDED 2026-07-15:
+      **retain, and cap with a stop-rule.** First, the item conflates two things of different value.
+      The "workflow-self-parsing sweep test" (`scripts/test-skill-refs-sweep.sh`, 874 lines) is not a
+      fourth meta-level at all — it is a *(b)-level behavioural test of a real (a)-level gate* (the
+      `skill-refs-sweep` workflow that guards the docs-as-code teaching product); its PyYAML extraction
+      of the workflow's real `run:` blocks is an **anti-drift** mechanism (the test runs the shipped
+      workflow, not a transcribed copy that can rot), not meta-bloat. It plainly earns its keep. The
+      genuine fourth level is `scripts/test-harness-selftest.sh` (790 lines, the `harness-selftest`
+      gate job), the black-box selftest of the shared `lib/test-harness.sh`. **Kept**, for two reasons
+      the review does not dispute: (a) it guards a real *both-go-green* failure mode of a dependency
+      that sits under two 700–900-line suites — a silent-pass bug in the shared harness would falsely
+      validate both — and (b) the carrying cost of a stable, passing test is low, so deleting correct
+      coverage purely to make a proportionality point is itself disproportionate. The over-engineering
+      the review names is the *accretion of meta-levels*, so the proportionate control is a stop-rule,
+      not a retroactive deletion: **no fifth level** (nothing tests the selftest; its own assertions
+      are three lines each so it is audited by eye), and **collapse the selftest into
+      `lib/test-harness.sh`'s own coverage — or retire it — the next time that harness is materially
+      changed**, rather than carrying the fourth level indefinitely. NB the review's "amortized across
+      six FS-GG repos" defense does *not* apply here: all six shell scripts are repo-local-authored,
+      not org-synced, so this stands on the silent-green risk alone, not on shared cost. Recorded at
+      the point of confusion: a "TIER FLOOR — retained and capped" block in the selftest header and a
+      reciprocal `STOP-RULE` note at the collapse trigger in `scripts/lib/test-harness.sh`. Doc/marker
+      only ⇒ no source, test, or CI change; no surface-baseline drift.
 - [ ] Trim the PR-lineage comment archaeology in `gate.yml` to what a future reader needs, moving the
       history to commit messages / ADRs
 
