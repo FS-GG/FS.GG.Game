@@ -122,4 +122,15 @@ module Visibility =
     /// Pure, deterministic, and total: non-finite or zero-length occluders are discarded (they can never
     /// occlude), a non-positive or non-finite `Settings.Radius` falls back to `1.0`, and a non-finite
     /// `source` yields an empty ring. No returned vertex is ever NaN.
+    ///
+    /// **Ordering of coincident hits is input-order-dependent.** The ring sorts hits by a total
+    /// rotational comparator — half-plane, then cross-product sign, then squared distance — and breaks a
+    /// *remaining* tie (two hits at identical angle **and** identical distance, i.e. coincident vertices)
+    /// by the ray-casting index. That index follows the order of `segments`: rays are aimed at occluder
+    /// endpoints in input order, so permuting `segments` can swap the positions of coincident duplicate
+    /// vertices in the ring. Hits that differ in angle *or* distance are ordered independently of input
+    /// order — only exact coincidences move. Because `VisibilityPolygon` is golden-testable by structural
+    /// equality, a golden pinned against one `segments` order matches a permutation of that order except
+    /// in the placement of such duplicates; a caller that needs a permutation-invariant golden should
+    /// pass `segments` in a canonical order, or dedupe coincident vertices before comparing.
     val polygon: settings: Settings -> source: Point -> segments: Segment list -> VisibilityPolygon

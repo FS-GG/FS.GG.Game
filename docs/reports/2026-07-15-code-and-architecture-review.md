@@ -442,7 +442,20 @@ ones for a released library. File references are the starting points, not the wh
       comment already described it correctly (`Geometry.fs:222`), so no code-comment change. Doc-only ⇒
       no surface-baseline drift (regeneration reports zero change; 82 core types / 257 members unchanged);
       585 core + 23 render tests green.
-- [ ] Note `Visibility.polygon`'s input-order dependence for coincident hits — `Visibility.fsi`
+- [x] Note `Visibility.polygon`'s input-order dependence for coincident hits — `Visibility.fsi`. DONE
+      2026-07-15. Added an "Ordering of coincident hits is input-order-dependent" paragraph to the
+      `polygon` docstring: the sweep sorts hits with a total rotational comparator (half-plane →
+      cross-product sign → squared distance) whose *final* tiebreak — for two hits at identical angle
+      **and** identical distance, i.e. coincident vertices — is the ray-casting index (`angleCompare`'s
+      `compare ia ib`, `Visibility.fs:252`). That index follows `segments` order, since rays are aimed at
+      occluder endpoints in input order (`Visibility.fs:296-311`), so permuting `segments` can swap the
+      positions of coincident duplicate vertices in the ring; hits differing in angle *or* distance are
+      permutation-independent — only exact coincidences move. Called out the consequence for the
+      structurally-golden-testable `VisibilityPolygon` (a golden matches a permuted `segments` order
+      except in the placement of such duplicates) and the caller remedy (canonical `segments` order or
+      dedupe coincident vertices before comparing). Within contract — no permutation-invariance is
+      claimed. Doc-only ⇒ no surface-baseline drift (regeneration reports zero change; 82 core types /
+      257 members unchanged); 585 core + 23 render tests green.
 
 ### P5 — governance right-sizing (deliberate decision, not a defect)
 
