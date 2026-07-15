@@ -534,6 +534,53 @@ let stepTests =
               Expect.equal (Physics.checksum (advance 600 w)) (Physics.checksum w) "infinite mass, zero motion"
           }
 
+          // Kinematic bodies through `step`. The public surface has NO velocity setter — `addBody` seeds
+          // every body at rest and gravity is the only thing that imparts a velocity (the speculative-CCD
+          // section below leans on the same fact) — so the "moved by the game" leg of the Kinematic
+          // contract cannot be driven from here. What CAN be observed is its shadow and the other two
+          // legs: gravity/contacts do not move it (only the game does), and it holds a load unpushed.
+
+          test "a kinematic body is unmoved by gravity — only a dynamic one falls" {
+              // Kinematic, like Static, moves ONLY under a velocity the game gives it; at rest under
+              // gravity it stays put. The control is the identical scene with a Dynamic body, which falls.
+              let build kind =
+                  let w = Physics.empty stepConfig
+                  let struct (_, w) = Physics.addBody kind (box 0.5 0.5) (material 0.0 0.5) (p 0.0 10.0) w
+                  w
+
+              let kin = build Physics.Kinematic
+              Expect.equal (Physics.checksum (advance 600 kin)) (Physics.checksum kin) "kinematic: gravity does not move it"
+              let dyn = build Physics.Dynamic
+              Expect.notEqual (Physics.checksum (advance 600 dyn)) (Physics.checksum dyn) "control: a dynamic body does fall"
+          }
+
+          test "a kinematic floor holds a dynamic load without being pushed by it" {
+              // "unmoved by impulses" + "holds a load": a dynamic box dropped onto a KINEMATIC floor comes
+              // to rest ON it (infinite mass — things pile on it, not through it), and the floor's own pose
+              // is left bit-identical by the resting contact's impulse. Control: a DYNAMIC floor (nothing
+              // holding it up) does move.
+              let build floorKind =
+                  let w = Physics.empty stepConfig
+                  let struct (fi, w) = Physics.addBody floorKind (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+                  let struct (di, w) = Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 5.0) w
+                  struct (fi, di, w)
+
+              let poseOf i w = (Physics.interpolate 1.0 w w).[i].Position
+
+              let struct (fi, di, w0) = build Physics.Kinematic
+              let floorBefore = poseOf fi w0
+              let settled = advance 600 w0
+              Expect.isTrue
+                  (ValueOption.isSome (Physics.manifold settled fi di))
+                  "the dynamic load rests ON the kinematic floor, not through it"
+              Expect.equal (poseOf fi settled) floorBefore "the kinematic floor is not pushed by the load it holds"
+
+              // Control: a dynamic floor under the same load is NOT held fixed.
+              let struct (fi2, _, w1) = build Physics.Dynamic
+              let dynFloorBefore = poseOf fi2 w1
+              Expect.notEqual (poseOf fi2 (advance 600 w1)) dynFloorBefore "control: a dynamic floor moves"
+          }
+
           // -----------------------------------------------------------------------------------------
           // Integrate, solve, correct
           // -----------------------------------------------------------------------------------------
