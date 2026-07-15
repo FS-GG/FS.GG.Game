@@ -388,8 +388,20 @@ ones for a released library. File references are the starting points, not the wh
 
 ### P4 — documentation fixes
 
-- [ ] Document the CCW-winding requirement / CW contact-point limitation on `polygonManifold` —
-      `Geometry.fsi`
+- [x] Document the CCW-winding requirement / CW contact-point limitation on `polygonManifold` —
+      `Geometry.fsi`. DONE 2026-07-15. Added a "Winding" paragraph to the `polygonManifold` docstring:
+      the `ConvexPolygon` CCW convention (an unenforced input assumption) is load-bearing HERE in a way
+      it is not for `polygonContact`. `Normal`/`Depth` come from the SAT scan, which orients the MTV by
+      the projection exit and is winding-agnostic (`satScan`, `Geometry.fs`) — a CW-wound polygon still
+      yields the correct `Normal`/`Depth` and still agrees with `polygonContact`. The contact *points*
+      do not survive the same abuse: reference/incident-face selection argmaxes over each face's
+      OUTWARD normal (`edgeNormalAt`, outward only for a CCW ring), so a CW ring flips every edge normal
+      inward and its `Points`/`PointCount`/`FeatureId` (warm-start key) become unreliable — a
+      wrong-answer limitation, not a totality violation (a CW input still returns without throwing).
+      Flagged the trap the review named: `Physics` accepts either winding for mass and circle-vs-poly
+      contacts, so a CW body is taken with correct mass yet corrupted poly-vs-poly points. Doc-only ⇒
+      no surface-baseline drift (regeneration reports zero change; 82 core types / 257 members
+      unchanged).
 - [ ] Add the corner-tunneling caveat to `speculativeContact`'s "prevents tunneling" prose —
       `Physics.fsi`
 - [ ] Cross-reference `Geometry.circleContact` (invents `(1,0)`) vs `Physics.circleCircleManifold`

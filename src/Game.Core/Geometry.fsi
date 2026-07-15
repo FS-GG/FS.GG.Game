@@ -138,6 +138,19 @@ module Geometry =
     /// polygon, an exact tie between faces resolves to the first in vertex order; and the incident face
     /// is tie-broken the same way.
     ///
+    /// Winding: `ConvexPolygon`'s CCW convention (an input assumption, not runtime-enforced) is
+    /// load-bearing HERE in a way it is not for `polygonContact`. `Normal` and `Depth` come from the
+    /// SAT scan, which orients the MTV by the projection exit and is winding-agnostic — a CW-wound
+    /// polygon still yields the correct `Normal`/`Depth` (and so still agrees with `polygonContact`).
+    /// The contact *points* do NOT survive the same abuse: reference- and incident-face selection
+    /// argmax over each face's OUTWARD normal, which is outward only for a CCW ring — a CW ring flips
+    /// every edge normal inward, so a CW polygon selects the wrong reference/incident faces and its
+    /// `Points`, `PointCount`, and `FeatureId` (the warm-start key) are unreliable. This is a
+    /// wrong-answer limitation, not a totality violation: a CW input still returns without throwing.
+    /// The trap is that `Physics` tolerates either winding for mass and circle-vs-poly contacts, so a
+    /// CW body is accepted with correct mass yet corrupted poly-vs-poly points — feed CCW rings (as
+    /// `obbPolygon` does by construction) if you consume `Points`/`FeatureId`.
+    ///
     /// Pure and total: a polygon with fewer than 3 vertices, a zero-area polygon, or any NaN
     /// coordinate yields `ValueNone` without throwing, exactly as `polygonContact` yields `None`.
     val polygonManifold: a: ConvexPolygon -> b: ConvexPolygon -> Manifold voption
