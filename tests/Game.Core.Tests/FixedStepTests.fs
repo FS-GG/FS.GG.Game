@@ -136,7 +136,7 @@ let tests =
                 Expect.equal steps System.Int32.MaxValue "step count saturates, never wraps negative"
                 Expect.isTrue (steps >= 0) "never negative"
                 // Saturation is the ONE documented exception to `0 <= newAccumulator < interval` (FixedStep.fsi):
-                // the ~0.36e9 steps past Int32.MaxValue stay banked in `rem`, so `rem` exceeds `interval`.
+                // the ~0.35e9 steps past Int32.MaxValue stay banked in `rem`, so `rem` exceeds `interval`.
                 // The guarantees that DO still hold are pinned here — finite and non-negative.
                 Expect.isTrue (System.Double.IsFinite rem) "the banked remainder stays finite"
                 Expect.isTrue (rem >= 0.0) "the banked remainder is never negative"
