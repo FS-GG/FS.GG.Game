@@ -528,7 +528,11 @@ module Physics =
     //
     // Coincident centres yield `ValueNone` rather than an arbitrary normal. There is no direction to
     // separate along, and inventing one (`(1, 0)`, say) would be a silent, unphysical bias — and would
-    // divide by zero to get there.
+    // divide by zero to get there. This is the OPPOSITE call from the narrow-phase primitive
+    // `Geometry.circleContact`, which DOES invent `(1, 0)` on coincident centres (DEC-002): that
+    // primitive guarantees a total `Contact` on every overlap, whereas the solver refuses to feed a
+    // physically-absent normal (and its zero-length warm-start key) into the impulse pass. Two
+    // deliberate, documented answers to the same degenerate — cross-referenced, not a discrepancy.
     let private circleCircleManifold (a: int) (b: int) (ca: Circle) (cb: Circle) : Manifold voption =
         let d = vsub cb.Center ca.Center
         let d2 = vdot d d

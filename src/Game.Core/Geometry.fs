@@ -58,8 +58,11 @@ module Geometry =
 
     // Narrow-phase circle–circle contact. Squared distance keeps the boolean test sqrt-free; the
     // single sqrt (correctly-rounded IEEE, cross-platform deterministic) builds the manifold only on
-    // a hit. Coincident centres (d = 0, DEC-002) default the normal to (1, 0). A NaN or non-positive
-    // radius fails the strict `<` (NaN comparisons are false), yielding None without throwing.
+    // a hit. Coincident centres (d = 0, DEC-002) default the normal to (1, 0) — the opposite choice from
+    // `Physics.circleCircleManifold`, which returns `ValueNone` there rather than invent a direction (see
+    // its comment): this primitive keeps `Contact` total on every overlap; the solver declines an
+    // unphysical normal. A NaN or non-positive radius fails the strict `<` (NaN comparisons are false),
+    // yielding None without throwing.
     let circleContact (a: Circle) (b: Circle) : Contact option =
         let dx = b.Center.X - a.Center.X
         let dy = b.Center.Y - a.Center.Y

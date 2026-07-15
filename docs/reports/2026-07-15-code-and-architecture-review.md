@@ -416,8 +416,19 @@ ones for a released library. File references are the starting points, not the wh
       `step`. Mirrored the corner caveat in the `Physics.fs` `speculativeContact` scope comment. Doc-only
       ⇒ no surface-baseline drift (regeneration reports zero change; 82 core types / 257 members
       unchanged); 585 core + 23 render tests green.
-- [ ] Cross-reference `Geometry.circleContact` (invents `(1,0)`) vs `Physics.circleCircleManifold`
-      (returns `ValueNone`) on coincident centres
+- [x] Cross-reference `Geometry.circleContact` (invents `(1,0)`) vs `Physics.circleCircleManifold`
+      (returns `ValueNone`) on coincident centres — `Geometry.fsi`, `Geometry.fs`, `Physics.fs`. DONE
+      2026-07-15. The two contact producers already documented their coincident-centre degenerate in
+      isolation but neither pointed at the other, so a reader hitting one couldn't tell the divergence was
+      deliberate. Added a mutual cross-reference: `Geometry.circleContact` (public `.fsi` + `.fs` comment)
+      now names `Physics.circleCircleManifold` as the OPPOSITE call and states the *why* — the narrow-phase
+      primitive guarantees a total `Contact` on every overlap (deterministic `(1, 0)` fallback so a caller
+      always gets separation guidance, DEC-002), whereas the solver refuses to feed a physically-absent
+      normal and its zero-length warm-start key into the impulse pass. `Physics.circleCircleManifold`'s
+      `.fs` comment (the function is private ⇒ not in any `.fsi`) gained the reciprocal pointer to
+      `Geometry.circleContact`. Framed as "two deliberate, documented answers to the same degenerate — not
+      a discrepancy." Doc-only ⇒ no surface-baseline drift (regeneration reports zero change; 82 core
+      types / 257 members unchanged); 585 core + 23 render tests green.
 - [ ] Fix the `polygonContact` "centroid delta" docstring to describe the exit-direction orientation the
       code actually uses — `Geometry.fsi`
 - [ ] Note `Visibility.polygon`'s input-order dependence for coincident hits — `Visibility.fsi`
