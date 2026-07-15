@@ -286,8 +286,17 @@ ones for a released library. File references are the starting points, not the wh
       script steps that would otherwise hit Windows' default pwsh. NB: adding the matrix renames the
       three checks (GitHub appends the matrix value), so branch-protection required-check names need a
       one-time update.
-- [ ] Set `ContinuousIntegrationBuild=true` for reproducible packed artifacts —
-      `Directory.Build.local.props`
+- [x] Set `ContinuousIntegrationBuild=true` for reproducible packed artifacts —
+      `Directory.Build.local.props`. DONE 2026-07-15. Added a `Reproducible builds` PropertyGroup that
+      sets `ContinuousIntegrationBuild=true` **gated on `GITHUB_ACTIONS=='true'`**, mirroring the
+      canonical `RestoreLockedMode` CI-gate. `Deterministic=true` (already repo-wide) makes compilation
+      deterministic but still embeds the build machine's absolute source paths; CIB additionally turns on
+      `DeterministicSourcePaths`, normalizing them — the missing half of source-path reproducibility for
+      the dual-published nupkgs. `release.yml` packs under `GITHUB_ACTIONS=true`, so every RELEASED
+      artifact is normalized; a local `dotnet pack` keeps real paths (step-into debugging still resolves)
+      and a verifier can reproduce the release bytes with `-p:ContinuousIntegrationBuild=true`. Verified:
+      packs clean with no SourceLink present, CI-mode PDB carries zero `/home/developer` absolute paths
+      vs one in a local build, and 585 core + 23 render tests stay green.
 - [ ] SHA-pin third-party actions on the publish path (`NuGet/login@v1`, `actions/*`) and the org
       reusable workflows currently on `@main` — `.github/workflows/release.yml`, `gate.yml`
 - [ ] Reconcile the `global.json` SDK pin against the "Game has NO global.json" comment —
