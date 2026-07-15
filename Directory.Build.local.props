@@ -47,4 +47,22 @@
     <None Include="$(MSBuildProjectDirectory)/README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!-- Pack each project's own .fsi into its nupkg under api-surface/ (cross-repo Game#321):
+       FS.GG.Rendering retires its hand-copied scaffold API mirror (#694) by GENERATING it from the
+       PINNED package a scaffolded product restores. Nine mirror files under Game.Core/ have no
+       source until FS.GG.Game.Core ships its .fsi. Notes that cost time if got wrong:
+         - PackagePath is the file's FULL target path (%(Filename)%(Extension)), NOT a folder with a
+           trailing slash — a folder makes NuGet append the recursive path a second time.
+         - Condition on IsPackable != 'false' (its default-true is applied in .targets, AFTER item
+           evaluation, so == 'true' silently skips a project that never sets it by hand); guard on
+           PackageId != '' too — both are set explicitly by every packable project here.
+       api-surface/ is an inert custom folder: carried in the nupkg, never fed to a consumer's
+       compiler, so a restoring product's build is unchanged. Mirrors FS.GG.Rendering PR #782. -->
+  <ItemGroup Label="api-surface" Condition="'$(IsPackable)' != 'false' And '$(PackageId)' != ''">
+    <None Include="$(MSBuildProjectDirectory)/**/*.fsi"
+          Exclude="$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**"
+          Pack="true"
+          PackagePath="api-surface/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
