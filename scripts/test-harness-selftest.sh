@@ -50,6 +50,26 @@
 # #259's own verification was a manual mutation pass — four probes, all caught. That was evidence the
 # harness worked that day. It was not a gate, and nobody was ever going to run it again. This is.
 #
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+# TIER FLOOR — reviewed 2026-07-15, RETAINED, and CAPPED HERE.
+#
+# This selftest is the fourth and LAST meta-level: gates → the suites that test the gates → this
+# shared harness (lib/test-harness.sh) → this selftest OF the harness. The 2026-07-15 architecture
+# review (docs/reports/2026-07-15-code-and-architecture-review.md, §5 / roadmap P5) flagged the tier
+# as watching-the-watchers past marginal value for a library this size. The deliberate decision was
+# to KEEP it, for two reasons the review does not dispute: it guards a real both-go-green failure mode
+# (above) of a dependency sitting under two 700–900-line suites, and the carrying cost of a stable,
+# passing test is low. The over-engineering the review names is the *accretion of levels*, so the
+# control is a stop-rule, not a retroactive deletion:
+#
+#   • Add NO fifth level. Nothing tests this file; if it is ever wrong it is caught by eye (its own
+#     assertions are three lines each precisely so it can be).
+#   • COLLAPSE this selftest into lib/test-harness.sh's own coverage, or retire it, the next time that
+#     harness is materially changed — do not carry both indefinitely. The trigger note lives there.
+#
+# Deepen the tier only against a documented new failure mode; otherwise shrink it when the harness
+# next moves.
+#
 # Usage: scripts/test-harness-selftest.sh [-v]
 set -uo pipefail
 

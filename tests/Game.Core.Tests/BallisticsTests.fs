@@ -190,6 +190,33 @@ let tests =
                 Expect.equal (Ballistics.intercept (p 0.0 0.0) bad (p 3.0 0.0) (p 0.0 0.0)) ValueNone (sprintf "speed=%f" bad)
         }
 
+        test "intercept takes the EARLIEST of two positive roots" {
+            // The .fsi promises "when both roots are positive the SMALLER (earliest interception) is
+            // taken" — untested until now. Construct two positive roots and make them land on opposite
+            // sides of the shooter so the choice is unambiguous: target FASTER than the round (a > 0)
+            // but closing head-on (b < 0), c > 0. Round speed 1 from the origin; target at (10,0) moving
+            // (-2,0). Quadratic 3t^2 - 40t + 100 = 0 ⇒ roots t = 10/3 (early) and t = 10 (late). The
+            // early root intercepts at x = 10 - 2·(10/3) = 10/3; the late root at x = 10 - 2·10 = -10.
+            match Ballistics.intercept (p 0.0 0.0) 1.0 (p 10.0 0.0) (p -2.0 0.0) with
+            | ValueSome aim ->
+                Expect.floatClose Accuracy.high aim.X (10.0 / 3.0) "earliest root ⇒ x = 10/3, NOT the late root's -10"
+                Expect.floatClose Accuracy.high aim.Y 0.0 "on the x-axis"
+            | ValueNone -> failtest "two positive roots exist — an interception must be reported"
+        }
+
+        test "intercept accepts the zero root when the target is already at the shooter" {
+            // The .fsi promises "a zero root is accepted (the target is already at the shooter)" — the
+            // stationary test above uses a DISTINCT target, so the c = 0 case was never exercised. With
+            // target = shooter, t = 0 is the root and the aim point IS the shooter's position, even with
+            // a nonzero target velocity (at t=0 the target has not drifted yet).
+            let s = p 5.0 5.0
+            match Ballistics.intercept s 10.0 s (p 3.0 -1.0) with
+            | ValueSome aim ->
+                Expect.floatClose Accuracy.high aim.X 5.0 "aim at the shooter's own position"
+                Expect.floatClose Accuracy.high aim.Y 5.0 "aim at the shooter's own position"
+            | ValueNone -> failtest "target already at the shooter ⇒ zero root accepted, not ValueNone"
+        }
+
         // Two DISTINCT claims, deliberately not fused into one property. Totality holds for arbitrary
         // input (that is what `ValueNone` is for); the defining equation is only *checkable* where the
         // check itself is numerically meaningful. Fusing them makes the harness, not the module, the

@@ -47,6 +47,11 @@
 # in a git repo; the sweep suite runs `run:` blocks extracted from a YAML file with a runner's env
 # around them. That half is genuinely different, it is where each suite's reasoning lives, and
 # merging it would produce a `run()` with a mode flag — which is two functions wearing one name.
+#
+# STOP-RULE (2026-07-15, roadmap P5): this file has a selftest — scripts/test-harness-selftest.sh —
+# and the deliberate decision was to keep the meta-tier at that depth, not grow it. When you next
+# MATERIALLY change this harness, collapse that selftest into your own change (or retire it) rather
+# than carrying a fourth meta-level indefinitely. See its header and the 2026-07-15 review, P5.
 
 [[ ${BASH_SOURCE[0]} != "${0}" ]] || {
   echo "test-harness: this file is sourced by a suite, not run directly" >&2; exit 2; }

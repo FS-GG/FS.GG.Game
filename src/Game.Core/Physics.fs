@@ -528,7 +528,11 @@ module Physics =
     //
     // Coincident centres yield `ValueNone` rather than an arbitrary normal. There is no direction to
     // separate along, and inventing one (`(1, 0)`, say) would be a silent, unphysical bias — and would
-    // divide by zero to get there.
+    // divide by zero to get there. This is the OPPOSITE call from the narrow-phase primitive
+    // `Geometry.circleContact`, which DOES invent `(1, 0)` on coincident centres (DEC-002): that
+    // primitive guarantees a total `Contact` on every overlap, whereas the solver refuses to feed a
+    // physically-absent normal (and its zero-length warm-start key) into the impulse pass. Two
+    // deliberate, documented answers to the same degenerate — cross-referenced, not a discrepancy.
     let private circleCircleManifold (a: int) (b: int) (ca: Circle) (cb: Circle) : Manifold voption =
         let d = vsub cb.Center ca.Center
         let d2 = vdot d d
@@ -867,6 +871,12 @@ module Physics =
             //     Scope: the mover is a CIRCLE — the projectile shape (a bullet, a ball). A fast *polygon*
             //     mover is not swept: linear polygon CCD is a heavier follow-up, and continuous *rotational*
             //     CCD is fenced out by #46's out-list. The target may be any collidable shape.
+            //
+            //     Corner caveat: against a polygon target the mover's CENTRE is cast at the BARE face (no
+            //     Minkowski inflation of the polygon's corners), so a fast circle that clips a corner WITHOUT
+            //     its centre reaching the target registers no speculative hit and can tunnel that corner. The
+            //     discrete phase recovers next tick once real penetration exists; documented as a scope limit
+            //     on `step` in the `.fsi`.
 
             // A speculative contact between fast circle mover `m` (radius `rm`) and target `t`, or
             // `ValueNone` when the mover's swept centre does not reach the target this step, or the two

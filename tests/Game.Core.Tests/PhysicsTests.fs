@@ -450,6 +450,18 @@ let private dropped (cfg: Physics.Config) (shape: Physics.Shape) (m: Physics.Mat
 
 let private restingContact (w: Physics.World) = Physics.manifold w 0 1
 
+/// A CCW right-triangle ramp of the given `rise` over a run of 10, plus a small box placed on its slope.
+/// The two bodies carry INDEPENDENT μ, which is the point of the friction-combination tests below: the
+/// `onRamp` helper above gives both bodies the same μ, so a solver that combined only one body's friction
+/// would pass it. Returns whether the box is still in contact with the ramp after it has had time to slide
+/// off — the only slide/hold readout the public surface offers (no velocity, no position).
+let private holdsOnRamp (rise: float) (rampMu: float) (boxMu: float) =
+    let ramp = Physics.SPoly { Vertices = [| p -5.0 -rise; p 5.0 -rise; p 5.0 rise |] }
+    let w = Physics.empty stepConfig
+    let struct (_, w) = Physics.addBody Physics.Static ramp (material 0.0 rampMu) (p 0.0 0.0) w
+    let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.3 0.3) (material 0.0 boxMu) (p 1.0 0.9) w
+    ValueOption.isSome (Physics.manifold (advance 300 w) 0 1)
+
 /// How far a settled box is off level, read as the height difference between the two points of its
 /// face-on-face contact with the floor. Zero is a level rest; the value is the residual a fixed-iteration
 /// Gauss-Seidel solver leaves behind, and it is the sharpest thing this module's public surface can see
@@ -532,6 +544,88 @@ let stepTests =
               let w = Physics.empty stepConfig
               let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
               Expect.equal (Physics.checksum (advance 600 w)) (Physics.checksum w) "infinite mass, zero motion"
+          }
+
+          test "step is total on degenerate and non-finite bodies, and a real body among them still settles" {
+              // `pairs` totality on these no-collision inputs is asserted in the broad-phase list; this
+              // drives the SAME zoo through the whole solver — integrate, narrow phase, solve, correct,
+              // sleep — for 600 ticks, the thing `pairs` alone never exercises. Every body here is a
+              // no-collision input (zero/NaN shape, degenerate ring, non-finite position), so `step` must
+              // carry them without throwing and without minting a contact.
+              let degenerate =
+                  [ Physics.Dynamic, Physics.SCircle 0.0, p 0.0 5.0 // zero radius
+                    Physics.Dynamic, Physics.SCircle nan, p 1.0 5.0 // NaN radius
+                    Physics.Dynamic, box 0.0 1.0, p 2.0 5.0 // zero half-extent
+                    Physics.Dynamic, Physics.SPoly { Vertices = [| p 0.0 0.0; p 1.0 1.0 |] }, p 3.0 5.0 // < 3 vertices
+                    Physics.Dynamic, Physics.SCircle 1.0, p nan 5.0 // NaN position
+                    Physics.Dynamic, Physics.SCircle 1.0, p infinity 5.0 ] // infinite position
+
+              // A real floor and a real box dropped among the zoo, so the run is not vacuously total over
+              // bodies the solver skips entirely: body 6 is a floor, body 7 falls onto it and must rest.
+              let bodies =
+                  degenerate
+                  @ [ Physics.Static, box 50.0 1.0, p 0.0 0.0
+                      Physics.Dynamic, box 0.5 0.5, p 0.0 3.0 ]
+
+              let w = worldOf 4.0 bodies |> advance 600
+
+              // No throw got us here. The degenerate bodies collide with nothing...
+              for i in 0..5 do
+                  for j in 0..7 do
+                      if i <> j then
+                          Expect.isTrue
+                              (ValueOption.isNone (Physics.manifold w (min i j) (max i j)))
+                              (sprintf "degenerate body %d contacts nothing, even after 600 steps" i)
+
+              // ...and the real box came to rest on the real floor, so the solver genuinely ran.
+              Expect.isTrue (ValueOption.isSome (Physics.manifold w 6 7)) "the real box settled on the real floor"
+          }
+
+          // Kinematic bodies through `step`. The public surface has NO velocity setter — `addBody` seeds
+          // every body at rest and gravity is the only thing that imparts a velocity (the speculative-CCD
+          // section below leans on the same fact) — so the "moved by the game" leg of the Kinematic
+          // contract cannot be driven from here. What CAN be observed is its shadow and the other two
+          // legs: gravity/contacts do not move it (only the game does), and it holds a load unpushed.
+
+          test "a kinematic body is unmoved by gravity — only a dynamic one falls" {
+              // Kinematic, like Static, moves ONLY under a velocity the game gives it; at rest under
+              // gravity it stays put. The control is the identical scene with a Dynamic body, which falls.
+              let build kind =
+                  let w = Physics.empty stepConfig
+                  let struct (_, w) = Physics.addBody kind (box 0.5 0.5) (material 0.0 0.5) (p 0.0 10.0) w
+                  w
+
+              let kin = build Physics.Kinematic
+              Expect.equal (Physics.checksum (advance 600 kin)) (Physics.checksum kin) "kinematic: gravity does not move it"
+              let dyn = build Physics.Dynamic
+              Expect.notEqual (Physics.checksum (advance 600 dyn)) (Physics.checksum dyn) "control: a dynamic body does fall"
+          }
+
+          test "a kinematic floor holds a dynamic load without being pushed by it" {
+              // "unmoved by impulses" + "holds a load": a dynamic box dropped onto a KINEMATIC floor comes
+              // to rest ON it (infinite mass — things pile on it, not through it), and the floor's own pose
+              // is left bit-identical by the resting contact's impulse. Control: a DYNAMIC floor (nothing
+              // holding it up) does move.
+              let build floorKind =
+                  let w = Physics.empty stepConfig
+                  let struct (fi, w) = Physics.addBody floorKind (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+                  let struct (di, w) = Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 5.0) w
+                  struct (fi, di, w)
+
+              let poseOf i w = (Physics.interpolate 1.0 w w).[i].Position
+
+              let struct (fi, di, w0) = build Physics.Kinematic
+              let floorBefore = poseOf fi w0
+              let settled = advance 600 w0
+              Expect.isTrue
+                  (ValueOption.isSome (Physics.manifold settled fi di))
+                  "the dynamic load rests ON the kinematic floor, not through it"
+              Expect.equal (poseOf fi settled) floorBefore "the kinematic floor is not pushed by the load it holds"
+
+              // Control: a dynamic floor under the same load is NOT held fixed.
+              let struct (fi2, _, w1) = build Physics.Dynamic
+              let dynFloorBefore = poseOf fi2 w1
+              Expect.notEqual (poseOf fi2 (advance 600 w1)) dynFloorBefore "control: a dynamic floor moves"
           }
 
           // -----------------------------------------------------------------------------------------
@@ -784,6 +878,31 @@ let stepTests =
               Expect.isTrue (ValueOption.isSome (onRamp 0.9)) "a rough box is still on the ramp"
           }
 
+          test "friction combines from BOTH materials — a frictionless partner frees the pair, in either order" {
+              // The companion to "restitution combines as the MAXIMUM". Friction is the geometric mean
+              // sqrt(μa·μb), so a single frictionless body zeroes the pair however rough the OTHER is — and
+              // the rule must read both bodies' μ to do it. The ramp test above gives the two bodies the
+              // SAME μ; these differ, so a rule that read only one body's μ is caught here.
+              //
+              // A rough box on a frictionless ramp slides: sqrt(0.9·0) = 0, not the max 0.9. Catches a rule
+              // that ignores the ramp's μ.
+              Expect.isFalse (holdsOnRamp 2.0 0.0 0.9) "a rough box slides on a frictionless ramp"
+              // ...and symmetrically, a frictionless box on a rough ramp. Catches a rule that ignores the box's μ.
+              Expect.isFalse (holdsOnRamp 2.0 0.9 0.0) "a frictionless box slides on a rough ramp"
+              // Anti-vacuity: this ramp CAN hold a rough pair, so "everything slides" is not why the two above pass.
+              Expect.isTrue (holdsOnRamp 2.0 0.9 0.9) "and two rough bodies hold — the ramp is not simply too steep"
+          }
+
+          test "the combined friction is the geometric mean, not the minimum" {
+              // sqrt(0.25·1.0) = 0.5 — the SAME effective μ as a symmetric 0.5/0.5 pair, yet a minimum rule
+              // would read the asymmetric pair as 0.25. On a gentler ramp (rise 1.5 over run 10, tan θ = 0.3)
+              // tuned so 0.5 holds and 0.25 slides, the asymmetric 0.25/1.0 pair must HOLD — pinning the
+              // combination as the geometric mean rather than the minimum of the two.
+              Expect.isTrue (holdsOnRamp 1.5 0.5 0.5) "calibration: an effective μ of 0.5 holds on this ramp"
+              Expect.isFalse (holdsOnRamp 1.5 0.25 0.25) "calibration: an effective μ of 0.25 slides on this ramp"
+              Expect.isTrue (holdsOnRamp 1.5 0.25 1.0) "sqrt(0.25·1.0) = 0.5 holds — the geometric mean, not the min 0.25"
+          }
+
           // -----------------------------------------------------------------------------------------
           // The narrow phase
           // -----------------------------------------------------------------------------------------
@@ -933,7 +1052,12 @@ let stepTests =
               Expect.notEqual (Physics.checksum one) (Physics.checksum two) "N and N+1 bodies hash apart"
           }
 
-          test "the checksum is stable across the process, not just the run" {
+          // Named `linux-pinned-float-golden` so the Windows CI leg can exclude it by that substring
+          // (gate.yml full-test-suite matrix). The box golden's residual tilt routes through `sin`/`cos`
+          // (Physics.fs), whose libm differs between glibc and ucrt, so this literal is pinned to the
+          // Linux runner ONLY — the cross-platform claim it would otherwise assert is the one this very
+          // contract disclaims (a cross-platform lockstep guarantee needs fixed-point; see below).
+          test "the checksum is stable across the process, not just the run (linux-pinned-float-golden)" {
               // Golden values. They are FNV-1a over the IEEE-754 bits of Pos/Vel/Rot/AngVel, so they are
               // reproducible on any runtime that agrees on IEEE-754 double arithmetic — which is what
               // `.NET` guarantees on a fixed compiler and ISA. A cross-platform lockstep guarantee needs
@@ -1372,6 +1496,49 @@ let speculativeContactTests =
                   Expect.isFalse hitBackstop (sprintf "dt = %f: and never tunnels through to the backstop beyond it" dt)
           }
 
+          test "a fast BOX mover is not swept — the documented circle-only scope, verified as a limit" {
+              // The speculative sweep's mover is a CIRCLE by design (`Physics.fs`: "the mover is a
+              // CIRCLE"); a fast polygon mover is an explicit heavier follow-up, not swept today. That is a
+              // documented SCOPE, not a bug — so it is pinned as a characterization test rather than left
+              // unverified: a fast box fired at the same thin wall the circle above is caught at TUNNELS
+              // through it, because no speculative contact is minted for it. This test flips the day linear
+              // polygon CCD lands, which is exactly when its author should be reminded to revisit the scope.
+              //
+              // The contrast is the assertion's teeth: circle and box are fired from rest by the identical
+              // launcher at the identical geometry, and only the mover's SHAPE differs. A generous wall
+              // (half-width 0.4) makes the tunnelling a property of the missing sweep, not of a knife-edge
+              // discrete miss the circle would share.
+              let cfg = { stepConfig with Gravity = p 400.0 0.0 }
+
+              let fire moverShape =
+                  let w =
+                      let w = Physics.empty cfg
+                      let struct (_, w) = Physics.addBody Physics.Static (box 0.4 5.0) (material 0.0 0.0) (p 6.0 0.0) w
+                      let struct (_, w) = Physics.addBody Physics.Static (box 0.5 5.0) (material 0.0 0.0) (p 12.0 0.0) w
+                      let struct (_, w) = Physics.addBody Physics.Dynamic moverShape (material 0.0 0.0) (p 0.0 0.0) w
+                      w
+
+                  let mutable acc = w
+                  let mutable hitWall = false
+                  let mutable hitBackstop = false
+
+                  for _ in 1..400 do
+                      acc <- Physics.step acc tick
+                      if (Physics.manifold acc 0 2).IsSome then hitWall <- true
+                      if (Physics.manifold acc 1 2).IsSome then hitBackstop <- true
+
+                  hitWall, hitBackstop
+
+              // Control: the circle mover IS swept — caught at the wall, never reaching the backstop.
+              let circleWall, circleBackstop = fire (Physics.SCircle 0.1)
+              Expect.isTrue circleWall "control: the swept circle is caught at the wall"
+              Expect.isFalse circleBackstop "control: the swept circle never reaches the backstop"
+
+              // The box mover is not swept, so it tunnels the wall and reaches the backstop beyond.
+              let _, boxBackstop = fire (box 0.1 0.1)
+              Expect.isTrue boxBackstop "a fast box mover tunnels the wall — the documented circle-only sweep scope"
+          }
+
           test "a circle dropped hard onto a thin floor lands on it instead of falling through" {
               // The canonical tunnel, vertically: a small fast body and a floor thinner than one step's
               // fall. Discrete-only, the body is above the floor one tick and below it the next and never
@@ -1427,7 +1594,8 @@ let speculativeContactTests =
               Expect.isTrue hitBackstop "and the mover is caught by the backstop that is in its path"
           }
 
-          test "the golden checksums are unchanged: speculation is inert when nothing is fast" {
+          // `linux-pinned-float-golden`: same box/circle literals as above, excluded on the Windows leg.
+          test "the golden checksums are unchanged: speculation is inert when nothing is fast (linux-pinned-float-golden)" {
               // The scenes of #75/#76 carry no fast mover — a box or circle dropped from y = 5 reaches the
               // floor at well under a radius per step — so the speculative pass must produce nothing and
               // leave every bit of their state where #75/#76 recorded it. If the fast-mover threshold ever

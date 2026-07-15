@@ -29,7 +29,9 @@ module Rng =
         let struct (bits, next) = nextU64 rng
         struct (float (bits >>> 11) * (1.0 / 9007199254740992.0), next)
 
-    // Inclusive [lo, hi]. Total on degenerate ranges: lo = hi ⇒ lo; lo > hi ⇒ lo.
+    // Inclusive [lo, hi]. Total on degenerate ranges: lo = hi ⇒ lo; lo > hi ⇒ lo. The `bits % span`
+    // reduction carries a residual modulo bias (unlike `nextBool`, which reads one bit): the lowest
+    // `2^64 mod span` results are over-represented by ~span/2^64 — negligible for game-scale ranges.
     let nextInt (lo: int) (hi: int) (rng: Rng) : struct (int * Rng) =
         if lo >= hi then
             let struct (_, next) = nextU64 rng
@@ -45,7 +47,11 @@ module Rng =
         let struct (bits, next) = nextU64 rng
         struct (bits >>> 63 = 1UL, next)
 
-    // Two independent generators: the left continues the stream, the right is seeded from a mixed draw.
+    // Split into two sub-streams: the left continues the parent stream, the right is re-seeded from a
+    // mixed draw. Both advance by the same global `gamma`, so the child is a phase-shifted view of the
+    // one SplitMix64 cycle rather than the paper's independent-gamma split — practically decorrelated
+    // (overlap risk ~2^-64), not statistically independent. An independent-gamma split would need a
+    // per-instance gamma, i.e. a breaking change to the single-field `Rng` struct.
     let split (rng: Rng) : struct (Rng * Rng) =
         let struct (branch, next) = nextU64 rng
         struct (next, { State = mix (branch + gamma) })
