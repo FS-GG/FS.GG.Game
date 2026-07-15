@@ -30,7 +30,10 @@ module FixedStep =
             let frame = if System.Double.IsFinite frameTime then max 0.0 frameTime else 0.0
             let total = acc + min cap frame
             // Closed-form whole steps (no drain loop); cap at Int32.MaxValue so a pathologically tiny
-            // interval can never wrap the count negative.
+            // interval can never wrap the count negative. This saturation is the ONE documented exception
+            // to `newAccumulator < interval` (see FixedStep.fsi): the steps beyond Int32.MaxValue stay
+            // banked in `rem`, so `rem` can exceed `interval` — it stays finite and non-negative, and no
+            // real sim interval (a frame or physics tick) is ever tiny enough to reach the cap.
             let stepsF = floor (total / interval)
             let steps = if stepsF >= 2147483647.0 then 2147483647 else int stepsF
             let rem = total - float steps * interval

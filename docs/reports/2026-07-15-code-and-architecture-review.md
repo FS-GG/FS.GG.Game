@@ -259,8 +259,13 @@ ones for a released library. File references are the starting points, not the wh
       reduction over-represents the lowest `2^64 mod span` results by ~span/2^64 (negligible at
       game scale), cross-referencing `nextBool` as the modulus-free unbiased draw. Doc-only ⇒ no
       surface-baseline drift.
-- [ ] Document the `FixedStep` step-count-saturation case as the one exception to
-      `0 <= newAccumulator < interval` — `FixedStep.fsi`
+- [x] Document the `FixedStep` step-count-saturation case as the one exception to
+      `0 <= newAccumulator < interval` — `FixedStep.fsi`. DONE 2026-07-15. Documented in `FixedStep.fsi`
+      (and the `FixedStep.fs` comment): when `stepCount` saturates at `Int32.MaxValue` (only a
+      pathologically tiny `interval`), the uncounted steps stay banked in `newAccumulator`, so it can
+      exceed `interval` while remaining finite and `>= 0`. Pinned by extending the existing saturation
+      test to assert the remainder is finite, non-negative, and `> interval`. Doc-only ⇒ no
+      surface-baseline drift (regeneration reports zero change).
 
 ### P3 — build / CI hardening
 
