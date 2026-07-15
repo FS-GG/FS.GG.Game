@@ -402,8 +402,20 @@ ones for a released library. File references are the starting points, not the wh
       contacts, so a CW body is taken with correct mass yet corrupted poly-vs-poly points. Doc-only ⇒
       no surface-baseline drift (regeneration reports zero change; 82 core types / 257 members
       unchanged).
-- [ ] Add the corner-tunneling caveat to `speculativeContact`'s "prevents tunneling" prose —
-      `Physics.fsi`
+- [x] Add the corner-tunneling caveat to `speculativeContact`'s "prevents tunneling" prose —
+      `Physics.fsi`. DONE 2026-07-15. The `.fsi`'s only speculative-contact prose was a module-doc
+      one-liner ("Fast bodies are swept by speculative contacts"), and `step` — where the sweep actually
+      runs — omitted CCD entirely. Added a **"Continuous collision (speculative)"** paragraph to the
+      `step` docstring stating both the guarantee (a fast mover stops AT the surface it would otherwise
+      cross in one step; `dt` never subdivided; inert/byte-identical when no body is fast) and the scope
+      limits the review named: the swept mover is a *circle* only (a fast *polygon* mover is not swept,
+      rotational CCD out of scope), and — the corner caveat — against a polygon the mover's *centre* is
+      cast at the *bare* face, so a circle clipping a *corner* without its centre reaching the target gets
+      no speculative contact and can tunnel that corner (the discrete phase recovers next tick, once real
+      penetration exists). Tightened the module summary to "Fast *circle* movers" and pointed it at
+      `step`. Mirrored the corner caveat in the `Physics.fs` `speculativeContact` scope comment. Doc-only
+      ⇒ no surface-baseline drift (regeneration reports zero change; 82 core types / 257 members
+      unchanged); 585 core + 23 render tests green.
 - [ ] Cross-reference `Geometry.circleContact` (invents `(1,0)`) vs `Physics.circleCircleManifold`
       (returns `ValueNone`) on coincident centres
 - [ ] Fix the `polygonContact` "centroid delta" docstring to describe the exit-direction orientation the

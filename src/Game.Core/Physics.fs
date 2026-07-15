@@ -867,6 +867,12 @@ module Physics =
             //     Scope: the mover is a CIRCLE — the projectile shape (a bullet, a ball). A fast *polygon*
             //     mover is not swept: linear polygon CCD is a heavier follow-up, and continuous *rotational*
             //     CCD is fenced out by #46's out-list. The target may be any collidable shape.
+            //
+            //     Corner caveat: against a polygon target the mover's CENTRE is cast at the BARE face (no
+            //     Minkowski inflation of the polygon's corners), so a fast circle that clips a corner WITHOUT
+            //     its centre reaching the target registers no speculative hit and can tunnel that corner. The
+            //     discrete phase recovers next tick once real penetration exists; documented as a scope limit
+            //     on `step` in the `.fsi`.
 
             // A speculative contact between fast circle mover `m` (radius `rm`) and target `t`, or
             // `ValueNone` when the mover's swept centre does not reach the target this step, or the two
