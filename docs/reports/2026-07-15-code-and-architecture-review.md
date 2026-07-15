@@ -223,15 +223,19 @@ ones for a released library. File references are the starting points, not the wh
 - [x] Confirmed the surface baselines are unchanged (internal-only; no `.fsi` churn) — 577 core + 23
       render tests green, baseline regeneration reports zero drift
 
-### P1 — close the HIGH test gaps
+### P1 — close the HIGH test gaps — HIGH items DONE 2026-07-15
 
-- [ ] Step a `Kinematic` body through `Physics.step` and assert the full contract: moved by the game,
-      unmoved by impulses, holds a load — `PhysicsTests.fs`
-- [ ] Add an intercept scenario with two positive roots asserting the earliest is chosen —
-      `BallisticsTests.fs` against `Ballistics.fsi:77`
-- [ ] Add the "target already at shooter ⇒ zero root" intercept case — `BallisticsTests.fs`
-- [ ] (Medium) Friction-combination test with *differing* per-body μ; speculative-CCD test with a fast
-      box/polygon (not just circles); `Physics.step` totality on degenerate/non-finite bodies
+- [x] Step a `Kinematic` body through `Physics.step` — `PhysicsTests.fs`. Two tests: gravity/contacts do
+      not move it (control: a Dynamic body falls), and it holds a dynamic load bit-identically without
+      being pushed (control: a Dynamic floor moves). NB the "moved by the game" leg is unreachable through
+      the public surface — there is no velocity setter; `addBody` seeds every body at rest and gravity is
+      the only velocity source — so only its shadow (at-rest immunity) and the impulse/load legs are driven.
+- [x] Intercept with two positive roots asserts the earliest is chosen — `BallisticsTests.fs`
+      (`3t²−40t+100`, roots 10/3 vs 10, landing on opposite sides of the shooter so the choice is visible)
+- [x] "target already at shooter ⇒ zero root" intercept case — `BallisticsTests.fs`
+- [ ] (Medium, deferred to a follow-up) Friction-combination test with *differing* per-body μ;
+      speculative-CCD test with a fast box/polygon (not just circles); `Physics.step` totality on
+      degenerate/non-finite bodies
 
 ### P2 — contract truthfulness
 
