@@ -100,9 +100,12 @@ module Geometry =
     /// touch (zero overlap), matching the strict-edge convention of `aabbContact`. The candidate axes
     /// are the outward edge normals of both polygons (a's in vertex order, then b's), deduplicated so
     /// antiparallel/duplicate directions collapse to one. `Contact.Depth` is the minimum projection
-    /// overlap (the minimum translation vector magnitude) and `Contact.Normal` is that axis re-oriented
-    /// from `a` toward `b` by the centroid delta, so translating `a` by `−Normal × Depth` separates the
-    /// pair. An equal-minimum overlap on more than one axis resolves to the first in the a-then-b
+    /// overlap (the minimum translation vector magnitude) and `Contact.Normal` is that axis oriented
+    /// along the nearer exit: on the MTV axis the pair can separate by pushing `a` either way, and the
+    /// normal points along whichever of the two signed exit distances is shorter, so translating `a` by
+    /// `−Normal × Depth` is the least-penetration separation (equivalently, the a→b direction — the
+    /// shorter exit always moves `a` away from `b`). No centroid is computed. An equal-minimum overlap
+    /// on more than one axis resolves to the first in the a-then-b
     /// generation order (byte-deterministic). Pure and total: a polygon with fewer than 3 vertices, a
     /// zero-area polygon, or any NaN coordinate yields `None` without throwing.
     val polygonContact: a: ConvexPolygon -> b: ConvexPolygon -> Contact option

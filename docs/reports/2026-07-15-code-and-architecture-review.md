@@ -429,8 +429,19 @@ ones for a released library. File references are the starting points, not the wh
       `Geometry.circleContact`. Framed as "two deliberate, documented answers to the same degenerate — not
       a discrepancy." Doc-only ⇒ no surface-baseline drift (regeneration reports zero change; 82 core
       types / 257 members unchanged); 585 core + 23 render tests green.
-- [ ] Fix the `polygonContact` "centroid delta" docstring to describe the exit-direction orientation the
-      code actually uses — `Geometry.fsi`
+- [x] Fix the `polygonContact` "centroid delta" docstring to describe the exit-direction orientation the
+      code actually uses — `Geometry.fsi`. DONE 2026-07-15. The docstring claimed `Contact.Normal` is the
+      MTV axis "re-oriented from `a` toward `b` by the centroid delta" — but `satScan` computes no
+      centroid. On the least-penetration axis it derives the two signed exit distances `d1 = aMx - bMn`
+      (push `a` toward `-n`) and `d2 = bMx - aMn` (push `a` toward `+n`) and orients the normal along
+      whichever exit is SHORTER (`Geometry.fs:261-268`), so `-Normal × Depth` is the least-penetration
+      separation. That is equivalent to the a→b direction (the shorter exit always moves `a` away from
+      `b`) but strictly more robust than a centroid delta, which can point the wrong way for
+      non-convex-centroid overlaps — the code is more correct than the prose the review flagged. Rewrote
+      the `.fsi` sentence to the nearer-exit mechanism and stated "No centroid is computed"; the `.fs`
+      comment already described it correctly (`Geometry.fs:222`), so no code-comment change. Doc-only ⇒
+      no surface-baseline drift (regeneration reports zero change; 82 core types / 257 members unchanged);
+      585 core + 23 render tests green.
 - [ ] Note `Visibility.polygon`'s input-order dependence for coincident hits — `Visibility.fsi`
 
 ### P5 — governance right-sizing (deliberate decision, not a defect)
