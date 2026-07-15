@@ -211,15 +211,17 @@ it signals a team that has turned CI hardening into an end. A leaner team would 
 Checkboxed and grouped by phase; each phase is independently shippable, and P0 → P2 are the load-bearing
 ones for a released library. File references are the starting points, not the whole edit.
 
-### P0 — correctness (ship first, one PR)
+### P0 — correctness (ship first, one PR) — DONE 2026-07-15
 
-- [ ] Widen `Pathfinding.heuristic` deltas to `int64` to stop the `abs(Int32.MinValue)` throw —
-      `src/Game.Core/Pathfinding.fs:76-77`, mirroring `Los.fs:16-17` / `Ai.fs:149-150`
-- [ ] Accumulate `astar` g-scores in `int64` and drop relaxations past `Int32.MaxValue`, as `dijkstra`
-      already does — `src/Game.Core/Pathfinding.fs:80,84,116,140`
-- [ ] Add a regression test feeding near-`Int32.MinValue` coordinates to `astar` (start `{0,0}`,
-      goal `{Int32.MinValue,0}`) asserting no throw and an admissible/optimal result
-- [ ] Confirm the surface baselines are unchanged by the fix (internal-only change; no `.fsi` churn)
+- [x] Widen `Pathfinding.heuristic` deltas to `int64` to stop the `abs(Int32.MinValue)` throw —
+      `src/Game.Core/Pathfinding.fs`, mirroring `Los`/`Ai`
+- [x] Accumulate `astar` g-scores and the frontier key `f`/`h` in `int64` — `src/Game.Core/Pathfinding.fs`.
+      (No Int32 cap needed, unlike `dijkstra`: astar never truncates g to `int` — it returns the path, not
+      a cost — so the wider accumulator is the whole fix.)
+- [x] Add regression tests feeding near-`Int32.MinValue` coordinates to `astar` — a far goal returns
+      (no throw) and a reachable extreme-magnitude pair yields the optimal path — `PathfindingTests.fs`
+- [x] Confirmed the surface baselines are unchanged (internal-only; no `.fsi` churn) — 577 core + 23
+      render tests green, baseline regeneration reports zero drift
 
 ### P1 — close the HIGH test gaps
 

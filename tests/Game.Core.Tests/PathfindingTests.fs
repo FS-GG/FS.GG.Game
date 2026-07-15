@@ -254,6 +254,37 @@ let tests =
             Expect.isFalse (Map.containsKey { Col = 2; Row = 0 } field) "a step that would exceed Int32.MaxValue is unreachable"
         }
 
+        test "astar heuristic does not overflow on a far-apart goal (int64 deltas)" {
+            // Regression (docs/reports/2026-07-15-code-and-architecture-review.md §3). `heuristic`
+            // computed `abs (c.Col - goal.Col)` in `int`: for a goal near Int32.MinValue the `int`
+            // subtraction WRAPS and `abs Int32.MinValue` THROWS, so astar's very first `h start` blew up
+            // on a legal cell pair in the "unbounded integer cell space" the module advertises — a
+            // totality violation. Widened to int64 (the hardening Los/Ai already carry), the estimate is
+            // finite and admissible. The point of this test is that the call RETURNS rather than throws.
+            let walk = fun _ -> true
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = System.Int32.MinValue; Row = 0 }
+            // The goal is astronomically far, so a small budget exhausts `maxVisited` and reports
+            // unreachable — which is the correct total answer, and the one the old code never reached.
+            let path = Pathfinding.astar FourWay 50 walk start goal
+            Expect.isNone path "far goal is unreachable within the budget — and reached without throwing"
+        }
+
+        test "astar finds an optimal path at extreme coordinates (int64 widening is sound)" {
+            // The complement of the test above: the widening must fix the throw WITHOUT perturbing
+            // normal operation at large magnitude. Both cells sit near Int32.MinValue but three apart on
+            // an all-walkable grid, so the int64 g-score/heuristic must still yield the shortest route.
+            let walk = fun _ -> true
+            let b = System.Int32.MinValue + 1000 // extreme magnitude, clear of the exact MinValue corner
+            let start = { Col = b; Row = b }
+            let goal = { Col = b + 3; Row = b }
+            match Pathfinding.astar FourWay 1000 walk start goal with
+            | Some p ->
+                Expect.isTrue (validPath walk start goal p) "a valid start..goal path"
+                Expect.equal (pathCost p) 30 "3 orthogonal steps × baseStep 10 — the shortest route"
+            | None -> failtest "expected a path between two near cells at extreme coordinates"
+        }
+
         test "flowField points every cell at its lower neighbour, and omits the sink" {
             let cost = gridCost 4 1 Set.empty Set.empty
             let field = Pathfinding.distanceField FourWay 1000 cost [ { Col = 0; Row = 0 } ]

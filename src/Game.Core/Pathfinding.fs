@@ -72,16 +72,23 @@ module Pathfinding =
     // Admissible integer heuristic toward `goal`: Manhattan (4-way) / octile (8-way), both in `baseStep`
     // units. Admissible because `diagStep <= 2 * baseStep` — a diagonal never costs more than the two
     // orthogonals it replaces — so the estimate can never exceed the true remaining cost.
-    let private heuristic (nb: Neighbourhood) (goal: Cell) (c: Cell) : int =
-        let dx = abs (c.Col - goal.Col)
-        let dy = abs (c.Row - goal.Row)
+    let private heuristic (nb: Neighbourhood) (goal: Cell) (c: Cell) : int64 =
+        // int64 deltas, the same hardening `Los`/`Ai` already carry (Los.fs, Ai.inRange), and for the
+        // same two reasons: over the module's advertised UNBOUNDED integer cell space, `c.Col - goal.Col`
+        // as `int` WRAPS on a far-apart pair (to Int32.MinValue), and `abs` of that then THROWS —
+        // breaking the "pure and total" contract on `astar`'s very first `h start`. The products below
+        // reach at most ~1e11 (baseStep/diagStep × a ~4.3e9 delta), well inside int64, so a coordinate
+        // span that used to overflow `int` into a wrapped, non-admissible estimate now yields the true
+        // admissible one. (docs/reports/2026-07-15-code-and-architecture-review.md §3.)
+        let dx = abs (int64 c.Col - int64 goal.Col)
+        let dy = abs (int64 c.Row - int64 goal.Row)
 
         match nb with
-        | FourWay -> baseStep * (dx + dy)
+        | FourWay -> int64 baseStep * (dx + dy)
         | EightWay ->
             let lo = min dx dy
             let hi = max dx dy
-            diagStep * lo + baseStep * (hi - lo)
+            int64 diagStep * lo + int64 baseStep * (hi - lo)
 
     // Walk the cameFrom chain from `goal` back to the start, yielding start..goal inclusive.
     let private reconstruct (cameFrom: Map<Cell, Cell>) (goal: Cell) : Cell list =
@@ -109,15 +116,21 @@ module Pathfinding =
         | Some result -> result
         | None ->
             let h = heuristic neighbourhood goal
-            // Frontier is a Set keyed by the TOTAL integer order (f, h, Col, Row) — Set.minElement is
+            // Frontier is a Set keyed by the TOTAL order (f, h, Col, Row) — Set.minElement is
             // deterministic, so the pop order (hence the path) is bit-identical across runs/platforms.
+            // f, h and the g-score are int64: `heuristic` returns int64, and g accumulates in int64, so
+            // neither the estimate (wide coordinate span) nor the g-score (long path) can wrap the way
+            // plain `int` did. Unlike `dijkstra`, astar needs no Int32 cap on top of the wider
+            // accumulator — it never truncates g to `int` (it returns the PATH, not a cost), so there is
+            // no narrowing point to overflow at. Col/Row stay `int`: genuine cell coordinates, and the
+            // total order is unaffected by the widening.
             let h0 = h start
             let openSet = Set.singleton (h0, h0, start.Col, start.Row)
-            let gScore = Map.ofList [ start, 0 ]
+            let gScore = Map.ofList [ start, 0L ]
 
             let rec loop
-                (openSet: Set<int * int * int * int>)
-                (gScore: Map<Cell, int>)
+                (openSet: Set<int64 * int64 * int * int>)
+                (gScore: Map<Cell, int64>)
                 (cameFrom: Map<Cell, Cell>)
                 (expansions: int)
                 : Cell list option =
@@ -137,7 +150,7 @@ module Pathfinding =
                             neighbours neighbourhood isWalkable current
                             |> List.fold
                                 (fun (os, gs, cf) (struct (n, cost)) ->
-                                    let tentative = g + cost
+                                    let tentative = g + int64 cost
 
                                     match Map.tryFind n gs with
                                     | Some existing when existing <= tentative -> (os, gs, cf)
