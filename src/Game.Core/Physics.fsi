@@ -3,8 +3,9 @@ namespace FS.GG.Game.Core
 /// Public contract module exposed by the FS.GG.Game.Core package.
 /// The mini rigid-body engine: a world of bodies, a broad phase, a narrow phase, and a semi-implicit
 /// Euler step with a sequential-impulse contact solver, warm started, over bodies that fall asleep once
-/// they settle. Fast bodies are swept by speculative contacts, and `interpolate` blends the double
-/// buffer into presentation-only poses on the shortest arc.
+/// they settle. Fast *circle* movers are swept by speculative contacts (`step` documents the scope and
+/// the corner caveat), and `interpolate` blends the double buffer into presentation-only poses on the
+/// shortest arc.
 ///
 /// **Mass is derived, not given.** Neither `Material` nor `addBody` carries one: a body's mass is the
 /// area of its `Shape` at unit density, and its rotational inertia is taken about its origin, which is
@@ -213,6 +214,18 @@ module Physics =
     /// contact velocities with a sequential-impulse solver over a **fixed** `VelocityIterations`; integrate
     /// position; correct penetration over a fixed `PositionIterations`; then put to sleep whatever has
     /// stopped moving.
+    ///
+    /// **Continuous collision (speculative).** A body moving more than its own thinnest cross-section in one
+    /// step could cross a thin obstacle between its start and end positions, which the discrete phases —
+    /// reading only the two endpoints — would miss. When any fast mover exists, `step` casts each such mover
+    /// and generates a speculative contact for the impending impact; the solver then refuses to let the pair
+    /// close through it, so the mover stops AT the surface rather than through it. `dt` is never subdivided
+    /// (substepping would change the step count, diverging a recorded input replay), and the sweep is INERT —
+    /// byte-identical to its absence — when no body is fast. **Scope and limits:** the swept mover is a
+    /// *circle* (the projectile shape); a fast *polygon* mover is not swept, and rotational CCD is out of
+    /// scope. Against a polygon the mover's *centre* is cast at the *bare* face, so a circle clipping a
+    /// *corner* without its centre reaching the target gets no speculative contact and can still tunnel that
+    /// corner — the discrete phase recovers on the next tick, once real penetration exists.
     ///
     /// **Warm starting.** Each contact point is seeded with the normal and tangent impulse the same contact
     /// — same bodies, same `FeatureId`, same point — accumulated last tick. It is a convergence
