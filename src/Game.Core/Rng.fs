@@ -29,7 +29,9 @@ module Rng =
         let struct (bits, next) = nextU64 rng
         struct (float (bits >>> 11) * (1.0 / 9007199254740992.0), next)
 
-    // Inclusive [lo, hi]. Total on degenerate ranges: lo = hi ⇒ lo; lo > hi ⇒ lo.
+    // Inclusive [lo, hi]. Total on degenerate ranges: lo = hi ⇒ lo; lo > hi ⇒ lo. The `bits % span`
+    // reduction carries a residual modulo bias (unlike `nextBool`, which reads one bit): the lowest
+    // `2^64 mod span` results are over-represented by ~span/2^64 — negligible for game-scale ranges.
     let nextInt (lo: int) (hi: int) (rng: Rng) : struct (int * Rng) =
         if lo >= hi then
             let struct (_, next) = nextU64 rng

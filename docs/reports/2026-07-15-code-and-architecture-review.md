@@ -254,7 +254,11 @@ ones for a released library. File references are the starting points, not the wh
       module `[<Literal>]`): a distinct gamma needs a per-instance `Gamma` field, i.e. a breaking
       public-surface change / SemVer major, for a ~2⁻⁶⁴ practical benefit. Softening is the proportionate
       call for a released library. Doc-only signature effect ⇒ no surface-baseline drift.
-- [ ] Note `nextInt`'s residual modulo bias in `Rng.fsi` (only `nextBool` claims unbiasedness)
+- [x] Note `nextInt`'s residual modulo bias in `Rng.fsi` (only `nextBool` claims unbiasedness) —
+      DONE 2026-07-15. Added to `Rng.fsi` (and the `Rng.fs` comment): the single `bits % span`
+      reduction over-represents the lowest `2^64 mod span` results by ~span/2^64 (negligible at
+      game scale), cross-referencing `nextBool` as the modulus-free unbiased draw. Doc-only ⇒ no
+      surface-baseline drift.
 - [ ] Document the `FixedStep` step-count-saturation case as the one exception to
       `0 <= newAccumulator < interval` — `FixedStep.fsi`
 
