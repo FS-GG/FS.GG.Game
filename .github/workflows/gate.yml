@@ -112,11 +112,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            test-filter: ""
-          - os: windows-latest
-            test-filter: "FullyQualifiedName!~linux-pinned-float-golden"
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -136,16 +132,17 @@ jobs:
           target: FS.GG.Game.slnx
 
       # `shell: bash` so the one script runs the same on both runners (git bash ships on the Windows
-      # image). An empty `test-filter` (Linux) runs the whole suite; the Windows filter drops only the
-      # `linux-pinned-float-golden` cases.
+      # image). Linux runs the WHOLE suite; Windows drops only the `linux-pinned-float-golden` cases
+      # (the Physics box checksum goldens the module's contract disclaims cross-platform — see the job
+      # comment). Branch on the built-in `RUNNER_OS` rather than a matrix `test-filter` dimension, so
+      # the job name stays a clean `(windows-latest)` — a matrix value would bake the whole filter
+      # expression into the check name and hence into branch-protection's required contexts.
       - name: Test (full suite)
         shell: bash
-        env:
-          TEST_FILTER: ${{ matrix.test-filter }}
         run: |
           set -euo pipefail
-          if [ -n "$TEST_FILTER" ]; then
-            dotnet test FS.GG.Game.slnx -c Debug --no-restore --filter "$TEST_FILTER"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            dotnet test FS.GG.Game.slnx -c Debug --no-restore --filter "FullyQualifiedName!~linux-pinned-float-golden"
           else
             dotnet test FS.GG.Game.slnx -c Debug --no-restore
           fi
