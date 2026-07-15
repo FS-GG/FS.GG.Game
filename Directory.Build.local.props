@@ -6,6 +6,24 @@
        the whole lockfile-restore-enforcement block. Mirrors FS.GG.Rendering's local props so the
        new bottom-layer component shares the org house style (ADR-0022 / P2). -->
 
+  <!-- SDK pin (root global.json) — repo-owned and INTENTIONAL (build #179, ADR-0032 direction #536).
+       This repo carries a root global.json pinning the .NET SDK (10.0.301, rollForward: latestFeature,
+       allowPrerelease: false) — the org SDK pin adopted in #179. Keep it.
+
+       Heads-up for a future reader chasing a contradiction (review P3, 2026-07-15): the org-synced,
+       DO-NOT-EDIT Directory.Build.props "lock-hash determinism" comment still lists Game among the
+       consumers that "have NO global.json at all". That sentence is STALE for THIS repo — it predates
+       #179's adoption — but it lives in the canonical file owned upstream (FS-GG/.github →
+       dist/dotnet/Directory.Build.props), so it is corrected THERE, not here: a local edit is reverted
+       on the next sync and reds the drift check. Tracked as an upstream doc fix; no Game-side edit to
+       that file is possible or wanted.
+
+       The two facts do reconcile: the determinism fix does NOT depend on global.json either way — that
+       same comment now says an UNPINNED SDK makes SDK-independence MORE valuable, not less — so the SDK
+       pin and the hash-determinism fix are orthogonal. Carrying the pin only moves the org toward "every
+       consumer carries one", the precondition (#536) for global.json to join sync-build-config's managed
+       FILES list. Until then Game owns its own global.json here. -->
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <LangVersion>latest</LangVersion>
