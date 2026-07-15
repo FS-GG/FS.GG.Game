@@ -131,9 +131,16 @@ let tests =
             }
 
             test "a pathologically tiny interval caps steps at Int32.MaxValue instead of wrapping negative" {
-                let struct (steps, _) = FixedStep.drain 1e-10 0.25 0.0 // true count ~2.5e9 > Int32.MaxValue
+                let interval = 1e-10
+                let struct (steps, rem) = FixedStep.drain interval 0.25 0.0 // true count ~2.5e9 > Int32.MaxValue
                 Expect.equal steps System.Int32.MaxValue "step count saturates, never wraps negative"
                 Expect.isTrue (steps >= 0) "never negative"
+                // Saturation is the ONE documented exception to `0 <= newAccumulator < interval` (FixedStep.fsi):
+                // the ~0.36e9 steps past Int32.MaxValue stay banked in `rem`, so `rem` exceeds `interval`.
+                // The guarantees that DO still hold are pinned here — finite and non-negative.
+                Expect.isTrue (System.Double.IsFinite rem) "the banked remainder stays finite"
+                Expect.isTrue (rem >= 0.0) "the banked remainder is never negative"
+                Expect.isTrue (rem > interval) "documented exception: the uncounted steps overflow the interval bound"
             }
         ]
 
