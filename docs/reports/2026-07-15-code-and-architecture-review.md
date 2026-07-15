@@ -267,10 +267,25 @@ ones for a released library. File references are the starting points, not the wh
       test to assert the remainder is finite, non-negative, and `> interval`. Doc-only ⇒ no
       surface-baseline drift (regeneration reports zero change).
 
-### P3 — build / CI hardening
+### P3 — build / CI hardening — cross-platform matrix DONE 2026-07-15
 
-- [ ] Add a Windows (or full cross-platform matrix) CI leg to actually exercise the
-      "byte-identical across platforms" claim, **or** scope the README claim to Linux
+- [x] Add a Windows (or full cross-platform matrix) CI leg to actually exercise the
+      "byte-identical across platforms" claim, **or** scope the README claim to Linux — DONE
+      2026-07-15. Added a `[ubuntu-latest, windows-latest]` matrix (`fail-fast: false`) to the three
+      determinism-bearing `gate.yml` jobs — `gate` (restore+build), `full-test-suite`, and
+      `determinism-invariants`. The integer/grid layer the README actually claims is byte-identical
+      *across platforms* now runs on Windows, as do all behavioural/property tests. The two Physics
+      process-stable **checksum goldens** are held to the Linux runner only: their box carries residual
+      tilt through `sin`/`cos` (`Physics.fs`), whose libm differs between glibc and ucrt, so their
+      literal values are cross-platform-fragile *by the module's own contract* (`Physics.checksum`: "a
+      cross-platform lockstep guarantee needs fixed-point"). Tagged both test cases
+      `linux-pinned-float-golden` and excluded them on the Windows leg via
+      `--filter "FullyQualifiedName!~linux-pinned-float-golden"` (585→583 core tests; the excluded pair
+      still runs fully on Linux). Geometry/Ballistics goldens are exact/dyadic + `sqrt`-only
+      (correctly-rounded IEEE-754), so they stay in the Windows subset. Added `shell: bash` to the two
+      script steps that would otherwise hit Windows' default pwsh. NB: adding the matrix renames the
+      three checks (GitHub appends the matrix value), so branch-protection required-check names need a
+      one-time update.
 - [ ] Set `ContinuousIntegrationBuild=true` for reproducible packed artifacts —
       `Directory.Build.local.props`
 - [ ] SHA-pin third-party actions on the publish path (`NuGet/login@v1`, `actions/*`) and the org
