@@ -4409,6 +4409,10 @@ reap_cmd() {
 # across the live fleet for three consecutive days — can never be met, because the clock never starts.
 # An observer nobody switches on is not a cautious observer. It is a decoration.
 #
+# (That reasoning held, and then went further than it knew: ADR-0038 found the clock could not tick even
+# with the shadow ON, because a worker in a per-item worktree resolves no engine at all — #728. The
+# criterion is retired; `auto` remains right, for the reason given here.)
+#
 # So the default is AUTO: shadow WHEREVER AN ENGINE ACTUALLY EXISTS, and plain bash everywhere else.
 # That is safe because "exists" is the honest gate — the six receivers have no engine on the
 # coordination path until it is published, so they are byte-for-byte unaffected and cannot be broken
@@ -5122,10 +5126,16 @@ shadow_run() {  # <allowBacklog 0|1> <limit> <inflight-ndjson-file> <repo>
   return 0
 }
 
-# ---- divergence: the acceptance test for the whole port -------------------------------------------
-# ADR-0034's exit criterion is ZERO DIVERGENCE across the live fleet for three consecutive days. This
-# is the surface that says whether that has happened — and, just as importantly, whether the question
-# was ever actually ASKED.
+# ---- divergence: the shadow's telemetry, and no longer the gate -----------------------------------
+# ADR-0034 §5 gated the cut-over on ZERO DIVERGENCE across the live fleet for three consecutive days.
+# ADR-0038 RETIRED that criterion: the clock could not tick (a worker in a per-item worktree resolves no
+# engine and banks no evidence — #728), and its own taxonomy filed as "not a bug, and expected" the three
+# real defects the flip would otherwise have shipped. The gate is now the DEFECT CORPUS — one case per
+# historical defect, run against BOTH engines in CI.
+#
+# This surface still matters, and is still the right instrument for a LIVE fleet: it says whether the two
+# engines agree out there, and — just as importantly — whether the question was ever actually ASKED. It
+# is telemetry now. It is not what the flip waits on.
 #
 # The two classes are reported apart, because they are not the same news:
 #
@@ -5287,6 +5297,10 @@ divergence_cmd() {
 # the whole of the evidence, and ADR-0034 §5 gates the cut-over on a sentence it cannot support:
 #
 #     "zero divergence across the LIVE FLEET for three consecutive days"
+#
+# (ADR-0038 has since retired that criterion outright — see `divergence` below. The ledger survives it,
+# because "is a local cache a fleet?" was always the right question to ask of the evidence, whatever the
+# evidence was FOR.)
 #
 # A local log is not a fleet. Nothing collected it, nothing aggregated it, the rows did not say WHO
 # wrote them, and no code computed the criterion — so the flip would have been decided by a human
