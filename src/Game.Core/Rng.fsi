@@ -32,5 +32,8 @@ module Rng =
     val nextBool: rng: Rng -> struct (bool * Rng)
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
-    /// Derive two independent generators from the current state, for splitting into sub-streams.
+    /// Split into two sub-streams for divergent branches (e.g. per-entity generators). The left
+    /// continues the current stream; the right is re-seeded from a mixed draw. Both share the global
+    /// gamma, so the sub-streams are practically decorrelated (overlap risk ~2^-64) rather than the
+    /// paper's independent-gamma split. Pure: the input generator is unchanged.
     val split: rng: Rng -> struct (Rng * Rng)

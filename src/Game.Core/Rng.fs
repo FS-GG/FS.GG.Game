@@ -45,7 +45,11 @@ module Rng =
         let struct (bits, next) = nextU64 rng
         struct (bits >>> 63 = 1UL, next)
 
-    // Two independent generators: the left continues the stream, the right is seeded from a mixed draw.
+    // Split into two sub-streams: the left continues the parent stream, the right is re-seeded from a
+    // mixed draw. Both advance by the same global `gamma`, so the child is a phase-shifted view of the
+    // one SplitMix64 cycle rather than the paper's independent-gamma split — practically decorrelated
+    // (overlap risk ~2^-64), not statistically independent. An independent-gamma split would need a
+    // per-instance gamma, i.e. a breaking change to the single-field `Rng` struct.
     let split (rng: Rng) : struct (Rng * Rng) =
         let struct (branch, next) = nextU64 rng
         struct (next, { State = mix (branch + gamma) })

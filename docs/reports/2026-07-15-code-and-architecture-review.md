@@ -237,10 +237,15 @@ ones for a released library. File references are the starting points, not the wh
       speculative-CCD test with a fast box/polygon (not just circles); `Physics.step` totality on
       degenerate/non-finite bodies
 
-### P2 — contract truthfulness
+### P2 — contract truthfulness — `Rng.split` DONE 2026-07-15
 
-- [ ] Resolve `Rng.split`: derive a distinct per-child gamma (preferred) **or** soften "independent" in
-      `Rng.fsi:35` to "practically decorrelated (shared gamma)" — `src/Game.Core/Rng.fs:49-51`
+- [x] Resolve `Rng.split`: softened the contract in `Rng.fsi` (and the `Rng.fs` comment) to "practically
+      decorrelated (shared gamma; overlap risk ~2⁻⁶⁴), not the paper's independent-gamma split" —
+      `src/Game.Core/Rng.fs`, `src/Game.Core/Rng.fsi`. The "preferred, cheap" distinct-per-child-gamma
+      option was rejected on discovery that the public `Rng` struct carries only `State` (gamma is a
+      module `[<Literal>]`): a distinct gamma needs a per-instance `Gamma` field, i.e. a breaking
+      public-surface change / SemVer major, for a ~2⁻⁶⁴ practical benefit. Softening is the proportionate
+      call for a released library. Doc-only signature effect ⇒ no surface-baseline drift.
 - [ ] Note `nextInt`'s residual modulo bias in `Rng.fsi` (only `nextBool` claims unbiasedness)
 - [ ] Document the `FixedStep` step-count-saturation case as the one exception to
       `0 <= newAccumulator < interval` — `FixedStep.fsi`
