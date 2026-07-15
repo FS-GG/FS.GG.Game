@@ -1492,8 +1492,8 @@ let speculativeContactTests =
           }
 
           test "a fast BOX mover is not swept — the documented circle-only scope, verified as a limit" {
-              // The speculative sweep's mover is a CIRCLE by design (`Physics.fs`: \"the mover is a
-              // CIRCLE\"); a fast polygon mover is an explicit heavier follow-up, not swept today. That is a
+              // The speculative sweep's mover is a CIRCLE by design (`Physics.fs`: "the mover is a
+              // CIRCLE"); a fast polygon mover is an explicit heavier follow-up, not swept today. That is a
               // documented SCOPE, not a bug — so it is pinned as a characterization test rather than left
               // unverified: a fast box fired at the same thin wall the circle above is caught at TUNNELS
               // through it, because no speculative contact is minted for it. This test flips the day linear
