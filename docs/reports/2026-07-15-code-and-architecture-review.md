@@ -223,7 +223,7 @@ ones for a released library. File references are the starting points, not the wh
 - [x] Confirmed the surface baselines are unchanged (internal-only; no `.fsi` churn) — 577 core + 23
       render tests green, baseline regeneration reports zero drift
 
-### P1 — close the HIGH test gaps — HIGH items DONE 2026-07-15
+### P1 — close the HIGH test gaps — DONE 2026-07-15 (HIGH + the deferred Medium)
 
 - [x] Step a `Kinematic` body through `Physics.step` — `PhysicsTests.fs`. Two tests: gravity/contacts do
       not move it (control: a Dynamic body falls), and it holds a dynamic load bit-identically without
@@ -233,9 +233,17 @@ ones for a released library. File references are the starting points, not the wh
 - [x] Intercept with two positive roots asserts the earliest is chosen — `BallisticsTests.fs`
       (`3t²−40t+100`, roots 10/3 vs 10, landing on opposite sides of the shooter so the choice is visible)
 - [x] "target already at shooter ⇒ zero root" intercept case — `BallisticsTests.fs`
-- [ ] (Medium, deferred to a follow-up) Friction-combination test with *differing* per-body μ;
-      speculative-CCD test with a fast box/polygon (not just circles); `Physics.step` totality on
-      degenerate/non-finite bodies
+- [x] (Medium) Friction-combination test with *differing* per-body μ; speculative-CCD test with a fast
+      box/polygon; `Physics.step` totality on degenerate/non-finite bodies — `PhysicsTests.fs`, DONE
+      2026-07-15. Three tests plus one control-pair: (a) friction reads BOTH materials — a frictionless
+      partner frees the pair in either order (catches a single-body-read rule the same-μ ramp test misses),
+      and the combination is the geometric mean, not the minimum (`sqrt(0.25·1.0) = 0.5` holds where 0.25
+      slides on a calibrated ramp); (b) `step` drives the degenerate/non-finite zoo (already tested for
+      `pairs`) through the whole solver for 600 ticks without throwing or minting a contact, with a real
+      box settling among them as the anti-vacuity control; (c) the fast box/poly CCD case is pinned as a
+      **characterization test of the documented circle-only mover scope** (`Physics.fs`: "the mover is a
+      CIRCLE") — a fast box *tunnels* the wall the swept circle is caught at, since linear polygon CCD is
+      an explicit follow-up, not a bug. That test flips the day polygon CCD lands.
 
 ### P2 — contract truthfulness — `Rng.split` DONE 2026-07-15
 
