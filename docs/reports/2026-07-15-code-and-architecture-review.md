@@ -483,8 +483,25 @@ ones for a released library. File references are the starting points, not the wh
       the point of confusion: a "TIER FLOOR — retained and capped" block in the selftest header and a
       reciprocal `STOP-RULE` note at the collapse trigger in `scripts/lib/test-harness.sh`. Doc/marker
       only ⇒ no source, test, or CI change; no surface-baseline drift.
-- [ ] Trim the PR-lineage comment archaeology in `gate.yml` to what a future reader needs, moving the
-      history to commit messages / ADRs
+- [x] Trim the PR-lineage comment archaeology in `gate.yml` to what a future reader needs, moving the
+      history to commit messages / ADRs — DONE 2026-07-15. Stripped the intra-repo PR-number citations
+      (`#35 → #202 → #208 → #238 …`, the `(#NNN)` attributions, and the "met it at N descending depths"
+      narrative) from the comment prose across the whole file, keeping every load-bearing line a future
+      reader needs: what each gate checks, why it is load-bearing, the fail-closed reasoning and guards,
+      the don't-hand-edit / don't-delete warnings, the reproduction commands, and the ADR pointers
+      (ADR-0006/0021/0022/0027/0032). Converted the recurring "FS-GG/.github#416 shape" — cited ~8 times
+      purely as archaeology shorthand — to the plain-prose name "the silent-no-op shape (a gate reporting
+      green over a subject it never examined)". Illustrative failures were kept but de-numbered (e.g. "a
+      Renovate bump moved five of the six pins and left one behind" instead of naming the PR), since the
+      failure mode is the rationale a reader needs and the PR number is not. DELIBERATELY LEFT: the
+      convention examples that are not lineage (the `closed-ok`/`prose-ok` marker syntax, the `#999`/`#1`
+      bare-ref placeholders), the two runtime error strings that point a maintainer at a past incident at
+      fix time (`.github#29`), and the two live cross-repo decision/verifier pointers that OWN this gate
+      (`FS-GG/.github#519`, `#574`) — those ARE the "history moved to an issue" the review asks for, not
+      intra-repo PR archaeology. Comment-only ⇒ no job `name:` changed (branch-protection contexts
+      unaffected; one step `name:` de-numbered), YAML well-formed, no source/test/CI-behaviour change, no
+      surface-baseline drift. Net −4 lines but the intent is de-archaeology, not shrinkage — most edits
+      swap a PR citation for prose of similar length.
 
 ## 8. Bottom line
 

@@ -1,7 +1,7 @@
 name: gate
 
 # Per-PR deterministic gate for FS.GG.Game (ADR-0022 / P2). Primary purpose (parity with the
-# sibling repos, FS-GG/.github#7 / ADR-0006): restore in --locked-mode against the committed
+# sibling repos, ADR-0006): restore in --locked-mode against the committed
 # packages.lock.json so any dependency-graph drift, or a silently substituted version (NU1603) /
 # out-of-range version (NU1608), FAILS the build instead of resolving quietly. It also builds and
 # runs the whole (headless) Expecto suite so PRs get a real signal.
@@ -22,12 +22,12 @@ name: gate
 # (id, version) alone. If a lock hash ever mismatches here, regenerate it cold with force-evaluate —
 # do NOT re-pin the lock to the SDK's library-packs hash: that is the reverted fix (ADR-0032 §3).
 #
-# EVERY RESTORE IN THIS FILE IS COLD (#135, adopting FS-GG/.github#429). --locked-mode raises NU1403
+# EVERY RESTORE IN THIS FILE IS COLD (ADR-0006). --locked-mode raises NU1403
 # by comparing the lock against the package ALREADY IN the global-packages folder — pre-seeded in the
 # runner image, or restored from the actions cache — so with a warm folder it validates a record
 # against a record and never contacts the feed. The gate's verdict was therefore a function of runner
 # cache state, and it failed in BOTH directions: green on a lock no fresh clone could restore, red on
-# a correct one. This repo's locks were in exactly that state for a release cycle (#152/#157/#161) and
+# a correct one. This repo's locks were in exactly that state for a release cycle, and
 # all six restores here stayed green over it.
 #
 # So the restore is not written inline any more: it lives in .github/actions/locked-restore, which
@@ -72,7 +72,7 @@ jobs:
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: "10.0.x"
-          # NO NuGet cache, deliberately (#135 / FS-GG/.github#429). This used to read `cache: true`,
+          # NO NuGet cache, deliberately (ADR-0006). This used to read `cache: true`,
           # justified as "speed only — --locked-mode still validates the graph". It does not:
           # --locked-mode validates the committed contentHash against the package copy ALREADY in the
           # global-packages folder, so a cache hit is precisely what stops the gate from ever asking
@@ -213,7 +213,7 @@ jobs:
   # surface baselines from the built assembly and fails on any uncommitted drift — the guard that a
   # public-API change is a deliberate, reviewed baseline update (and, for a packable, a SemVer bump).
   # The generator writes BOTH the type-level and the member-level baseline under that directory, so
-  # this job sees a deleted or re-signatured public function, not just an added/removed type (#236).
+  # this job sees a deleted or re-signatured public function, not just an added/removed type.
   surface-baseline-drift:
     name: Surface baseline drift (readiness/surface-baselines)
     runs-on: ubuntu-latest
@@ -280,17 +280,17 @@ jobs:
 
       # The org script's own failure line reads `Re-run: scripts/sync-build-config.sh <repo>` — a path
       # that does not exist in THIS repo, or in any other receiver: the script lives in FS-GG/.github,
-      # and a reader who follows the instruction literally gets `No such file or directory` (#247). So
+      # and a reader who follows the instruction literally gets `No such file or directory`. So
       # the one gate whose whole job is "you have not re-synced" is also the one that cannot tell you
       # how. Every other job in this file hands back a command you can actually run; this one now does
       # too. The upstream message is FS-GG/.github's to fix (filed there) and this step is right either
       # way — it names the repo the script actually lives in, which a generic org-side message cannot.
       # A non-zero exit is NOT proof of drift, and saying so would repeat the very defect this step
       # exists to fix. The script also exits non-zero when it REFUSES TO RUN: the org source of truth
-      # is malformed XML/JSON and it will not distribute it (.github#29 is that, having happened), or
-      # it has moved/lost its exec bit in .github (126/127 — and an org file moving is exactly what
-      # #248 was). Re-syncing fixes none of those, so we assert drift only when the script SAYS DRIFT,
-      # and otherwise send the reader upstream. The script's own exit code is propagated, not flattened
+      # is malformed XML/JSON and it will not distribute it (this has happened), or it has moved/lost
+      # its exec bit in .github (126/127). Re-syncing fixes none of those, so we assert drift only when
+      # the script SAYS DRIFT, and otherwise send the reader upstream. The script's own exit code is
+      # propagated, not flattened
       # to 1: `--check` exits 1 for drift and 2 for "you called me wrong", and that is worth keeping.
       - name: Drift check (managed files == source of truth)
         run: |
@@ -305,14 +305,14 @@ jobs:
           fi
           exit "$rc"
 
-  # Lock-range coherence gate (FS.GG.Game#153, adopting FS-GG/.github#495; ADR-0006). The locked
+  # Lock-range coherence gate (ADR-0006). The locked
   # restore above is the enforcement point for package entries — id, version, contentHash — but it
   # structurally NEVER reads the dependency ranges under a `"type": "Project"` entry. So a release
   # bump that edits <Version> and regenerates no lock freezes every sibling project-reference range at
   # the old version, and every gate in this file stays green over it. That is not hypothetical here:
-  # `release: v0.4.0` (#128) bumped Directory.Build.local.props and touched no lock, leaving
+  # a past release bumped Directory.Build.local.props and touched no lock, leaving
   # tests/Game.Render.Tests/packages.lock.json recording FS.GG.Game.Core at [0.3.0, ) for a whole
-  # release cycle (#152, the data fix, now landed). Harmless at runtime — project references resolve
+  # release cycle. Harmless at runtime — project references resolve
   # from the project graph, not the lock — which is precisely why it survived: the cost is a poisoned
   # lock diff, read by the one reviewer who can least afford noise, the one scrutinising a contentHash.
   #
@@ -357,19 +357,18 @@ jobs:
             exit 1
           fi
 
-  # Dangling skill-reference gate (FS.GG.Game#35, extended by #202 and #208). A published SKILL.md makes
+  # Dangling skill-reference gate. A published SKILL.md makes
   # three kinds of promise to its reader, and this job checks all three.
   #
-  # A `[[wiki-ref]]` promises a skill that resolves. Before #35, 21 refs across all 5 skills pointed at
+  # A `[[wiki-ref]]` promises a skill that resolves. This gate exists because refs once pointed at
   # skills this repo does not publish (`fs-gg-scene`, `fs-gg-skiaviewer`, …, all owner:fs-gg-rendering),
   # and each newly authored skill inherited the defect. A ref must now either name a skill published here
   # or carry its publishing repo's registry owner id — `[[fs-gg-rendering:fs-gg-scene]]`.
   #
-  # An ISSUE/PR LINK promises a live issue at the other end (#202). One sentence in fs-gg-persistence
-  # pointed at a CLOSED issue for four generations running (Rendering#445 -> #535 -> #587 -> #535 again,
-  # the last re-introduced by the very commit that adopted the "canonical" body) — and every rot was
-  # caught by a HUMAN reading the prose, never by CI. This job was already scanning exactly these files
-  # for dangling references; it just never looked at links. Right scope, wrong vocabulary.
+  # An ISSUE/PR LINK promises a live issue at the other end. Skill prose has pointed at a CLOSED issue
+  # for generations running, re-introduced by the very commit that adopted the "canonical" body — and
+  # every rot was caught by a HUMAN reading the prose, never by CI. This job was already scanning exactly
+  # these files for dangling references; it just never looked at links. Right scope, wrong vocabulary.
   #
   # A closed link is an ERROR, not a warning, because a warning is what we already had: green CI and a
   # human expected to notice. Closed-and-still-correct is real (fs-gg-audio cites the issue that WIRED
@@ -378,22 +377,21 @@ jobs:
   # An excuse that no longer excuses anything is reported too: a stale allowlist is where the next rot
   # hides.
   #
-  # THE LINK HALF IS SCOPED TO THE DIFF HERE (#238), and only here. Link state is f(WORLD): it decays
-  # with no commit. Rendering#494 closed at 14:43:32Z and main@e4c07c2 — green at 14:35:30Z, unchanged
-  # since — failed from that minute, reddening every PR then in flight. #235's was a PATHFINDING diff,
-  # and the only edit that could clear it lived in a skill body outside that item's declared `Paths:`:
-  # under ADR-0021/0027 the author could not fix it without widening onto a file their item had no
-  # business touching. A merge gate may only demand a change inside the diff it gates. So `--changed`
-  # resolves links only in the skill bodies THIS diff touches — where the fix is always in reach, and
-  # where every rot #202 was written to catch is in fact introduced.
+  # THE LINK HALF IS SCOPED TO THE DIFF HERE, and only here. Link state is f(WORLD): it decays
+  # with no commit — an issue closes on its own schedule and reddens every PR then in flight, including
+  # ones whose diff is nowhere near the skill body that carries the now-dead link. Under ADR-0021/0027
+  # an author cannot fix a body outside their item's declared `Paths:` without widening onto a file their
+  # item had no business touching, and a merge gate may only demand a change inside the diff it gates. So
+  # `--changed` resolves links only in the skill bodies THIS diff touches — where the fix is always in
+  # reach, and where the rot this half is written to catch is in fact introduced.
   #
   # The FULL sweep did not go away; it MOVED, to .github/workflows/skill-refs-sweep.yml, on a schedule,
   # gating nothing. Scoping without that sweep would leave links in unchanged bodies resolved by nobody
-  # — green over an unexamined subject, the FS-GG/.github#416 shape this gate exists to close. The two
+  # — green over an unexamined subject, the silent-no-op shape this gate exists to close. The two
   # are one change. The [[ref]] and bare-#N halves are f(tree), hermetic, and still sweep the WHOLE tree
   # on every run: they cost nothing and cannot decay, so there is nothing to scope.
   #
-  # A BARE `#N` PROMISES NOTHING IT CAN KEEP (#208), so it is an ERROR — not "unresolvable", but wrong by
+  # A BARE `#N` PROMISES NOTHING IT CAN KEEP, so it is an ERROR — not "unresolvable", but wrong by
   # construction. These bodies MATERIALIZE INTO SOMEBODY ELSE'S REPO, and GitHub renders `#999` against
   # the repo it is READ in: in a scaffolded product it links to that product's OWN tracker. It never
   # points here, so its upstream state is beside the point and repointing it cannot fix it. The only fix
@@ -444,10 +442,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SKILL_REFS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
-  # Tests for the gate ABOVE (FS.GG.Game#243). check-skill-refs.sh is ~600 lines of load-bearing bash
+  # Tests for the gate ABOVE. check-skill-refs.sh is ~600 lines of load-bearing bash
   # that decides whether every published skill body may ship, and it had no tests: every defect it has
   # ever had was found by a human reading it, which is precisely the property it was written to end
-  # for other things. #241 came within one review of shipping a one-flag bug — a missing `grep -H` —
+  # for other things. It once came within one review of shipping a one-flag bug — a missing `grep -H` —
   # that would have reddened every correctly-marked citation on exactly the PRs that touch a skill,
   # i.e. the ones where the gate is supposed to be trustworthy. It would have looked like the gate
   # working. The suite pins that case, and every other promise the script makes, above all the one it
@@ -472,16 +470,16 @@ jobs:
       - name: Behavioural test suite (fixture tree in, exit code + subject claim out)
         run: scripts/test-check-skill-refs.sh
 
-  # Release-train coherence (FS.GG.Game#319). Directory.Packages.local.props states the invariant twice
+  # Release-train coherence. Directory.Packages.local.props states the invariant twice
   # — "Keep all five Rendering pins on one version", "Keep all six on one version" — and explains that
   # it is load-bearing: `_scaffold.fs` binds `Scene.Point`/`Rect` directly, so a split set compiles one
   # train's fragment against another train's surface, and "the gate would go green over a pairing no
   # reader can reproduce."
   #
-  # It DID go green over exactly that. Renovate PR #317 bumped FIVE of the six FS.GG.UI.* pins to 0.10.0
-  # and left FS.GG.UI.Template at 0.9.2 — one file, one PR — and every check in this workflow passed.
-  # The invariant lived only in a comment, and a comment is not a gate. That PR is now the regression
-  # fixture in the suite below.
+  # It DID go green over exactly that. A Renovate bump moved five of the six FS.GG.UI.* pins to a new
+  # version and left one behind — one file, one PR — and every check in this workflow passed.
+  # The invariant lived only in a comment, and a comment is not a gate. That split set is now the
+  # regression fixture in the suite below.
   #
   # The scaffold-drift job above cannot cover this and it is worth saying why, because it looks like it
   # should: it compares `_scaffold.fs` against THE PINNED Template, whichever version that is. Pin and
@@ -498,13 +496,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      - name: Fail on a split release train (the state Renovate PR #317 shipped green)
+      - name: Fail on a split release train (the state a past Renovate bump shipped green)
         run: scripts/check-pin-coherence.sh
 
   # Tests for the gate ABOVE. Same argument as skill-refs-tests: the failure that matters is not the
   # checker going red, it is the checker matching NOTHING — a renamed props file, a re-shaped
   # <PackageVersion>, a rotted regex — and reporting that in green, which is indistinguishable from
-  # "the pins agree". The suite demands a red for each of those, and pins #317's exact split set as a
+  # "the pins agree". The suite demands a red for each of those, and pins that exact split set as a
   # regression fixture. Hermetic: it builds its own props fixtures in a temp dir; no network, no token.
   pin-coherence-tests:
     name: Pin-coherence gate tests (scripts/check-pin-coherence.sh)
@@ -517,22 +515,22 @@ jobs:
       - name: Behavioural test suite (props fixture in, exit code + subject claim out)
         run: scripts/test-check-pin-coherence.sh
 
-  # Tests for the SWEEP (FS.GG.Game#251) — the OTHER half of skill-refs, and the half that files an
-  # issue. #249 taught the daily sweep to render a finding and create/reopen/update/close a tracking
+  # Tests for the SWEEP — the OTHER half of skill-refs, and the half that files an
+  # issue. The daily sweep renders a finding and creates/reopens/updates/closes a tracking
   # issue for it, so a decayed pointer stops being a red nobody reads. That filing path is now
   # load-bearing, and it had no test — and the trigger you would expect to supply one cannot:
   #
   #   skill-refs-sweep.yml runs on `pull_request` precisely so that "the sweep is itself code, and a
   #   change to it must be checked BY it". But the sweep's interesting code only runs when the tree is
   #   DECAYED, and the tree is normally green — so a PR that rewrites the renderer gets a GREEN run in
-  #   which the renderer never executed. On #249's own run: render skipped, reconcile skipped, verdict
-  #   skipped. A green check over a subject it never examined — the FS-GG/.github#416 shape, sitting
+  #   which the renderer never executed. On such a run: render skipped, reconcile skipped, verdict
+  #   skipped. A green check over a subject it never examined — the silent-no-op shape, sitting
   #   in the code whose entire job is to not do that.
   #
   # So this suite plants the decay that trigger cannot, and drives the workflow's OWN `run:` blocks —
   # extracted from the YAML at test time, never transcribed — through all three render bodies and all
-  # six reconcile branches, against a fake `gh` that reproduces the one behaviour that bit #249: `gh
-  # api` switches to POST the moment a `-f` appears, which is how the tracker LOOKUP came to POST at
+  # six reconcile branches, against a fake `gh` that reproduces the one behaviour that bit the sweep:
+  # `gh api` switches to POST the moment a `-f` appears, which is how the tracker LOOKUP came to POST at
   # the create-issue endpoint, one missing field away from a daily blank-issue factory.
   #
   # It also pins the CROSS-FILE contract the sweep cannot self-diagnose: the `path:line: message` line
@@ -568,16 +566,15 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
           scripts/test-skill-refs-sweep.sh
 
-  # Tests for the HARNESS the two suites above stand on (FS.GG.Game#264). #259 extracted their shared
-  # scaffolding into scripts/lib/test-harness.sh — the counters, the `expect_*` family, the counted
+  # Tests for the HARNESS the two suites above stand on. Their shared scaffolding was extracted
+  # into scripts/lib/test-harness.sh — the counters, the `expect_*` family, the counted
   # fixture builder, one faithful fake `gh`. That was right, and it moved the blast radius: a bug in
   # the harness now breaks BOTH suites, and the dangerous direction is not "both go red", which is
   # loud. It is BOTH GO GREEN. An `expect_has` that returns ok unconditionally, or a `fixture_new`
   # that stops writing `bin/gh` so no fake is ever on PATH, makes 169 assertions pass over a subject
   # nobody examined — while the two jobs above report, in green, that they examined it.
   #
-  # That is the FS-GG/.github#416 shape sitting one level BENEATH the two gates written to refuse it,
-  # and this repo has now met it at four descending depths (#238, #242, #251, #256).
+  # That is the silent-no-op shape sitting one level BENEATH the two gates written to refuse it.
   #
   # Separate job = distinct signal, as everywhere in this file. A red HERE means the two suites above
   # are not trustworthy — which is a strictly worse fact than either of them failing, and it wants a
@@ -603,13 +600,13 @@ jobs:
       - name: Behavioural test suite (probe in, exit code + counted verdict out)
         run: scripts/test-harness-selftest.sh
 
-  # Shell lint (FS.GG.Game#258 for the workflows, #266 for the scripts). Every gate in this file
+  # Shell lint. Every gate in this file
   # guards the PRODUCT. Nothing guarded the GATES — six workflow files, ~600 lines of YAML and several
   # hundred lines of shell inside `run:` blocks, and until now the first thing to read any of it was
   # GitHub, at dispatch time.
   #
   # The job lints shell in BOTH of the places this repo keeps it: inside `run:` blocks (via actionlint,
-  # below) and in `scripts/` (directly, in the last step). The second half is #266 — the `run:` blocks
+  # below) and in `scripts/` (directly, in the last step). The `run:` blocks
   # were the only shell anything had ever read, so the several hundred lines of bash that CI itself
   # SHELLS OUT TO were unlinted, and were already carrying `# shellcheck source=` pragmas written for
   # a run that never happened.
@@ -618,17 +615,16 @@ jobs:
   # SILENTLY NOT RUN IT, or to run it with the bad key ignored. A typo in a `run:` block is caught by
   # the shell; a typo in the STRUCTURE — `ifs:` for `if:`, `runs-on: ubuntu-latests`, a step reading
   # `steps.swep.outputs.rc` — is caught by nobody, and the only evidence is a check that quietly
-  # stopped appearing. A gate that is silently not a gate is the FS-GG/.github#416 shape at the top
-  # level, and this repo has now hit that shape at three descending depths (#238, #242, #251).
+  # stopped appearing. A gate that is silently not a gate is the silent-no-op shape at the top level.
   #
-  # #251 bolted on a lower bound — its test suite PyYAML-parses skill-refs-sweep.yml to extract the
+  # The sweep-tests suite bolted on a lower bound — it PyYAML-parses skill-refs-sweep.yml to extract the
   # `run:` blocks it tests, so a workflow that does not PARSE fails there. But parsing is not linting:
   # `ifs: false` parses perfectly, and so does `runs-on: ubuntu-latests`. actionlint knows the schema;
   # PyYAML only knows the grammar.
   #
   # THIS ONE MAY BLOCK, and that is the difference between it and the sweep. `skill-refs-sweep` cannot
   # be a required check because it is f(tree, WORLD) — a link rots on its own, and reddening whoever
-  # happens to have a PR open is a false accusation (#238). actionlint is f(tree): hermetic, no world
+  # happens to have a PR open is a false accusation. actionlint is f(tree): hermetic, no world
   # state, no decay. Every red it raises was introduced by the diff in front of it, and the fix is
   # always inside that diff. So it gates, honestly.
   workflow-lint:
@@ -644,13 +640,13 @@ jobs:
       # gate's verdict a function of the release schedule of a third party.
       ACTIONLINT_VERSION: 1.7.7
       ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
-      # ...and the argument above is not weaker for the tool actionlint DRIVES (#261). actionlint does
+      # ...and the argument above is not weaker for the tool actionlint DRIVES. actionlint does
       # not lint shell itself; it shells out to whatever `shellcheck` it is given. Taking that one from
       # the runner image made half this gate reproducible and half of it a function of the image: the
       # verdict was f(tree, runner-image), and the second argument moves on its own schedule. It was
-      # already drifting — #260 was developed against 0.10.0 and the run that merged it used the image's
-      # 0.9.0 — and the failure that shape produces is the FALSE ACCUSATION #238 taught this repo to
-      # refuse: GitHub bumps the image to a shellcheck with a new check (SC2320 and friends all arrived
+      # already drifting — a change was once developed against one shellcheck version and merged on a run
+      # using the image's older one — and the failure that shape produces is the FALSE ACCUSATION this
+      # repo refuses: GitHub bumps the image to a shellcheck with a new check (SC2320 and friends all arrived
       # in point releases), and the next PR goes red on a `run:` block it did not write, in a workflow
       # it never opened, unreproducibly, in a file its item never declared in `Paths:`.
       SHELLCHECK_VERSION: 0.11.0
@@ -704,7 +700,7 @@ jobs:
       #         thought of, none of which (a) would notice.
       #
       #    Both are REDs. A gate whose subject silently halves must not report success. (Verified by
-      #    mutation, #261: a `run:` block with an unquoted `$1` is caught with the pinned shellcheck
+      #    mutation: a `run:` block with an unquoted `$1` is caught with the pinned shellcheck
       #    and exits 1 — and passes at exit 0 with none.)
       #
       # 2. The file count. `actionlint` over zero files also exits 0. A green over an empty subject is
@@ -748,7 +744,7 @@ jobs:
           # nothing. Same subject, derived the same way, or the comparison is theatre.
           #
           # -shellcheck takes the PINNED binary explicitly rather than letting actionlint find one on
-          # PATH — which is the whole point of #261. The runner image ships its own; without this flag
+          # PATH — which is the whole point of pinning the tool. The runner image ships its own; without this flag
           # that is the one that would run, and the pin above would be decoration.
           log="$RUNNER_TEMP/actionlint.log"
           rc=0
@@ -769,7 +765,7 @@ jobs:
           # But not `^verbose: ` either, tempting as it looks. actionlint lints files CONCURRENTLY and
           # its verbose writes INTERLEAVE: the same message appears as `verbose: Rule ...`, as
           # `verbose: verbose: Rule ...`, and as a bare `Rule ...` with the prefix lost to a racing
-          # goroutine (all three observed in one run, #261). A guard that a race can silently defeat is
+          # goroutine (all three observed in one run). A guard that a race can silently defeat is
           # a green over unread shell — the exact defect this job exists to close — so the prefix is
           # optional and repeatable, and the anchor rests on the column, which no interleave moves.
           if grep -qE '^(verbose: )*Rule "shellcheck" was disabled' "$log"; then
@@ -793,7 +789,7 @@ jobs:
 
           exit "$rc"
 
-      # ...and now the shell that is NOT in a `run:` block (#266).
+      # ...and now the shell that is NOT in a `run:` block.
       #
       # The step above is the only shellcheck this repo has ever run, and it reads `run:` blocks. So
       # `scripts/` — several hundred lines of bash that CI itself depends on, including the two
@@ -801,12 +797,12 @@ jobs:
       #
       # The tell was already in the tree: those scripts carry `# shellcheck source=` pragmas, which
       # exist to CONFIGURE a run that never happened. That is the silent-no-op shape
-      # (FS-GG/.github#416) turned inside out — not a gate reporting green over an unread subject, but
+      # turned inside out — not a gate reporting green over an unread subject, but
       # a subject that believes it is being read.
       #
       # Same pinned binary as the step above. No second download, and no second version to keep in
-      # step: when the pin moves, both halves of this job move with it. That is the property #261
-      # bought, and this step is its second customer.
+      # step: when the pin moves, both halves of this job move with it. That is the property pinning
+      # the tool bought, and this step is its second customer.
       - name: Lint the repo's own shell
         run: |
           set -euo pipefail
@@ -836,12 +832,12 @@ jobs:
           )
 
           # VENDORED, so not ours to lint. The coordination kit is SYNCED from FS-GG/.github (`chore:
-          # sync coordination kit from FS-GG/.github@…`, #233/#252/#262). Linting it here would report
+          # sync coordination kit from FS-GG/.github@…`). Linting it here would report
           # findings this repo cannot fix — the next sync reverts any local edit — and it would do it
           # LOUDLY and WRONGLY: four of its SC1010s are false positives (a `local` variable named
           # `done`, and `banner done …` as an argument; shellcheck sees the keyword, the shell does
           # not). A gate that goes red on day one over a file nobody here owns is the false-accusation
-          # shape #238 taught this repo to refuse, and #261 just closed. Its four real-but-cosmetic
+          # shape this repo refuses. Its four real-but-cosmetic
           # SC2155s were routed UPSTREAM instead, where they can actually be fixed.
           kit=(scripts/fsgg-coord)
 
@@ -919,16 +915,16 @@ jobs:
             exit 1
           fi
 
-          # THE SOURCE MUST ACTUALLY BE FOLLOWED, and this guard is the whole reason #266 was not a
-          # two-line PR.
+          # THE SOURCE MUST ACTUALLY BE FOLLOWED, and this guard is the whole reason the scripts/ pass
+          # was not a two-line PR.
           #
           # `source=lib/test-harness.sh` resolves against the linter's source path. Get that wrong and
           # nothing fails — it emits SC1091 ("Not following: ...") and carries on with the harness
           # UNREAD. SC1091 is an `info`, so a `-S warning` floor never even prints it. What the
           # gate reports instead is a set of confident, WRONG SC2034s: every variable the suites set
           # for the harness to read (RC, consumed only by `expect_rc`) looks unused, because the reader
-          # was never parsed. Three of them, and #266 filed them as real, suspecting the tests were not
-          # checking the exit codes they thought they were. They were. The `source` was unread.
+          # was never parsed. Three of them were once filed as real, on the suspicion that the tests were
+          # not checking the exit codes they thought they were. They were. The `source` was unread.
           #
           # So an unfollowed source is a RED in its own right, at its own floor. A linter running with
           # half its subject invisible does not get to report on the other half.
@@ -957,8 +953,8 @@ jobs:
           fi
           echo "shellcheck: clean at -S warning across ${#subject[@]} file(s)."
 
-      # ...and now the THIRD place this repo keeps shell, which #135 created: inside a COMPOSITE
-      # ACTION. Neither step above can see it — actionlint discovers `.github/workflows/*.yml` and
+      # ...and now the THIRD place this repo keeps shell: inside a COMPOSITE ACTION (the cold-restore
+      # action). Neither step above can see it — actionlint discovers `.github/workflows/*.yml` and
       # nothing else (handed an action.yml explicitly it rejects it as a malformed workflow), and the
       # scripts/ pass discovers shell by extension or shebang, which shell embedded in YAML has
       # neither of. So the cold restore's ~20 lines of bash — the code that decides whether every
@@ -981,18 +977,18 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
           scripts/lint-action-shell.sh
 
-  # Tests for the composite-action linter in workflow-lint above (#135). It is the only thing standing
+  # Tests for the composite-action linter in workflow-lint above. It is the only thing standing
   # between a composite action's shell and an unread merge, and its dangerous failure is not going red
-  # — it is finding NOTHING and reporting that in green. Every comparable gate in this repo was
-  # required to have a behavioural suite for exactly that reason (#243 for check-skill-refs.sh, #251
-  # for the sweep, #264 for the harness beneath them both), and the linter is no different: a gate
+  # — it is finding NOTHING and reporting that in green. Every comparable gate in this repo is
+  # required to have a behavioural suite for exactly that reason (check-skill-refs.sh, the sweep, and
+  # the harness beneath them both), and the linter is no different: a gate
   # whose subject can silently empty out is one whose emptiness must itself be a tested case.
   #
   # Separate job = distinct signal, as everywhere in this file. A red HERE means the linter is not
   # trustworthy, which is a different fact from "an action has bad shell" — and if the linter is
   # broken, its verdict on the actions is worth nothing anyway.
   #
-  # It stands on scripts/lib/test-harness.sh, which #259 extracted "before there is a third". This is
+  # It stands on scripts/lib/test-harness.sh, extracted "before there is a third". This is
   # the third.
   #
   # Hermetic: fixture trees under mktemp, a real shellcheck, no token, no network, no gh.
@@ -1010,13 +1006,13 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
           scripts/test-lint-action-shell.sh
 
-  # Markdown-block typecheck gate (FS.GG.Game#141 for the skills, #148/#149 for the TestSpecs). The
+  # Markdown-block typecheck gate. The
   # three gates above validate everything about a published document EXCEPT its code: refs resolve,
   # digests match, cross-references resolve — and the `fsharp` blocks, the part a reader actually
   # copies into their product, were only ever READ. A document could ship an example that does not
-  # compile and every check stayed green. That is the silent-no-op shape (FS-GG/.github#416) one level
+  # compile and every check stayed green. That is the silent-no-op shape one level
   # up: a gate reporting success over a subject it never examined. The same defect was found five
-  # times BY HAND (#129, #132, #140 ×2, #144) and zero times by CI.
+  # times BY HAND and zero times by CI.
   #
   # This job compiles every block in BOTH corpora against the REAL built FS.GG.Game.Core and reports a
   # type error against the markdown line the reader would copy from:
@@ -1031,16 +1027,16 @@ jobs:
   #
   # It ALSO enforces the label rule, and that is not decoration: a document that declares its own
   # `type Vec2 = { X: float; Y: float }` and uses it consistently TYPECHECKS PERFECTLY, so the
-  # compiler alone would let #144 be reintroduced verbatim and stay green (verified). X/Y/Width/Height
+  # compiler alone would let that class of bug be reintroduced verbatim and stay green (verified). X/Y/Width/Height
   # are the labels of Scene's Point/Rect AND of the sim Point/Rect, so reusing them makes a bare
   # record literal resolve against the wrong one — a LABEL bug, not a type error. It is checked as
   # itself, textually, over every block including the skipped ones.
   #
-  # ...and over every FIXTURE those blocks are compiled with (#171), which is the half that bites
+  # ...and over every FIXTURE those blocks are compiled with, which is the half that bites
   # hardest. A block declaring its own X/Y record at least states the collision in prose a reader can
   # see; a FIXTURE that hands the block an X/Y-labelled type teaches it to bind against the colliding
   # shape from OUTSIDE the document — so the block compiles perfectly, the markdown is spotless, and
-  # the gate ticks green over the precise defect it exists to kill. Until #171 the lint read the
+  # the gate ticks green over the precise defect it exists to kill. The lint once read the
   # markdown and nothing else, and a fixture could do exactly that: verified, on this gate, at exit 0.
   #
   # The harness is fail-closed on ITSELF — no source files, no blocks, a parsed-block count that
@@ -1049,12 +1045,12 @@ jobs:
   # Blocks it cannot reach (a handful are .fsi signature listings, elide their body with `...`, or are
   # RIGHT/WRONG contrasts that bind the same name twice by design) are SKIPPED with a written reason
   # and re-printed as a warning on every run, so they stay visible instead of quietly counting as
-  # covered. The scene edge is NO LONGER among them: `Geometry.toPoint`/`toRect` were reconstructed by
-  # #165 and, since #189, come from the REAL published fragment — see the scaffold-drift job below.
+  # covered. The scene edge is NO LONGER among them: `Geometry.toPoint`/`toRect` were once reconstructed
+  # by hand and now come from the REAL published fragment — see the scaffold-drift job below.
   #
   # A skill may teach a package this repo does not consume — fs-gg-audio binds FS.GG.Audio.*,
   # fs-gg-persistence binds FS.GG.UI.Canvas. Those blocks were unreachable, and so invisible to this
-  # job, until #150: the skills corpus now declares them in `PackageRefs`, the generated project
+  # job, until the skills corpus began declaring them in `PackageRefs`: the generated project
   # takes a real PackageReference, and the block is typechecked against the assembly the READER
   # restores rather than a stub. Versions come from the gate-only group in
   # Directory.Packages.local.props (the harness reads the central pin and refuses to invent one), and
@@ -1090,11 +1086,11 @@ jobs:
         run: |
           set -euo pipefail
           if ! dotnet fsi scripts/typecheck-md-blocks.fsx; then
-            echo "::error::a \`\`\`fsharp block in a published SKILL.md or TestSpec does not typecheck against FS.GG.Game.Core, or breaks the X/Y/Width/Height label rule — or a FIXTURE in scripts/*-block-context/ breaks that rule, which is the worse case: the block it feeds binds against the colliding shape and compiles perfectly clean (#171). The annotations above name the file at fault, which may be the fixture rather than the markdown. Readers copy these blocks verbatim into their product, so a block that cannot compile is a defect in the document, not in this gate. Reproduce locally with: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug && dotnet fsi scripts/typecheck-md-blocks.fsx"
+            echo "::error::a \`\`\`fsharp block in a published SKILL.md or TestSpec does not typecheck against FS.GG.Game.Core, or breaks the X/Y/Width/Height label rule — or a FIXTURE in scripts/*-block-context/ breaks that rule, which is the worse case: the block it feeds binds against the colliding shape and compiles perfectly clean. The annotations above name the file at fault, which may be the fixture rather than the markdown. Readers copy these blocks verbatim into their product, so a block that cannot compile is a defect in the document, not in this gate. Reproduce locally with: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug && dotnet fsi scripts/typecheck-md-blocks.fsx"
             exit 1
           fi
 
-  # Scaffold-drift gate (FS.GG.Game#189, answering FS.GG.Rendering#570). Separate job = distinct
+  # Scaffold-drift gate. Separate job = distinct
   # signal: this one says "the context the md-block gate compiles against is not the context the
   # reader's product ships", which is a different failure from "a block does not compile".
   #
@@ -1119,8 +1115,8 @@ jobs:
   # DELETION of _scaffold.fs would be silently recreated by the generator and the diff would come back
   # empty — the job reporting green over a scaffold that is not in the repo. Verified before it was
   # written that way. `--check` compares the generated bytes against the committed file and treats
-  # "missing" as the mismatch it is. A gate green over a subject it never examined (FS-GG/.github#416)
-  # is the exact defect this scaffold work removes; the guard on it must not reintroduce it one level up.
+  # "missing" as the mismatch it is. A gate green over a subject it never examined — the silent-no-op
+  # shape — is the exact defect this scaffold work removes; the guard on it must not reintroduce it one level up.
   #
   # No locked restore and no repo build: the generator `PackageDownload`s the template into a temp
   # folder behind an empty Directory.Build.props, so it touches neither the project graph nor any
