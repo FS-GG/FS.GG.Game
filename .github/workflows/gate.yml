@@ -53,7 +53,16 @@ permissions:
 jobs:
   gate:
     name: Deterministic gate (locked restore + build)
-    runs-on: ubuntu-latest
+    # Cross-platform matrix (ADR-0022 P3 / 2026-07-15 review §5): the README's strongest determinism
+    # claim is "byte-identical across runs AND platforms" for the integer/grid layer, and it was
+    # exercised on no non-Linux runner. This restore+build leg is platform-agnostic, so it runs on
+    # both. `fail-fast: false` keeps a Windows-only failure from cancelling the Linux leg (and vice
+    # versa) — the whole point is to see each platform's verdict independently.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -92,7 +101,19 @@ jobs:
   # whole suite is headless (zero Skia / zero Scene) — the P2 exit invariant (ADR-0022).
   full-test-suite:
     name: Full test suite (dotnet test, headless)
-    runs-on: ubuntu-latest
+    # Cross-platform matrix — see the gate job. The Linux leg runs the WHOLE suite; the Windows leg
+    # excludes the `linux-pinned-float-golden` tests via `test-filter`. Those are the Physics
+    # process-stable checksum goldens whose bodies carry residual rotation through `sin`/`cos`
+    # (Physics.fs) — libm functions that differ between glibc and ucrt, so their LITERAL values are
+    # not cross-platform-stable by the module's own contract (`Physics.checksum`: "a cross-platform
+    # lockstep guarantee needs fixed-point"). Every integer/grid golden — the layer the README
+    # actually claims is byte-identical across platforms — plus all behavioural/property tests still
+    # run on Windows; only the float literals the contract disclaims are held to the Linux runner.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -110,8 +131,21 @@ jobs:
         with:
           target: FS.GG.Game.slnx
 
+      # `shell: bash` so the one script runs the same on both runners (git bash ships on the Windows
+      # image). Linux runs the WHOLE suite; Windows drops only the `linux-pinned-float-golden` cases
+      # (the Physics box checksum goldens the module's contract disclaims cross-platform — see the job
+      # comment). Branch on the built-in `RUNNER_OS` rather than a matrix `test-filter` dimension, so
+      # the job name stays a clean `(windows-latest)` — a matrix value would bake the whole filter
+      # expression into the check name and hence into branch-protection's required contexts.
       - name: Test (full suite)
-        run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            dotnet test FS.GG.Game.slnx -c Debug --no-restore --filter "FullyQualifiedName!~linux-pinned-float-golden"
+          else
+            dotnet test FS.GG.Game.slnx -c Debug --no-restore
+          fi
 
   # Determinism & property invariants — a DISTINCT signal for the capsule "constraint face" (the
   # game-logic corpus's determinism-as-a-tested-property rule; see
@@ -122,7 +156,17 @@ jobs:
   # capsule design rejects. Not org-managed; gate.yml is repo-local.
   determinism-invariants:
     name: Determinism & property invariants (constraint face)
-    runs-on: ubuntu-latest
+    # Cross-platform matrix — see the gate job. Both filtered subsets are cross-platform-safe: the
+    # `determinism golden` corpus (Geometry manifolds/raycasts) is built from exact/dyadic inputs and
+    # `sqrt` alone — correctly-rounded IEEE-754, hence byte-identical on a fixed ISA — and `aabbContact`
+    # is min/max on exact coordinates. Neither routes through the divergent libm `sin`/`cos` that the
+    # Physics goldens do, so this is exactly the byte-identical-across-platforms claim, now verified on
+    # Windows too.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -148,6 +192,9 @@ jobs:
       # renamed/removed constraint-face test would go green. `determinism golden` is checked as its
       # own subset so the goldens specifically cannot vanish while other manifold tests remain.
       - name: Invariants (determinism goldens + manifold properties, zero-match guarded)
+        # `shell: bash` — the runner's default shell is pwsh on windows-latest; git bash runs this
+        # script identically on both.
+        shell: bash
         run: |
           set -uo pipefail
           run_filtered() {

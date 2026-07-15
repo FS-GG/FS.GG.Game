@@ -1052,7 +1052,12 @@ let stepTests =
               Expect.notEqual (Physics.checksum one) (Physics.checksum two) "N and N+1 bodies hash apart"
           }
 
-          test "the checksum is stable across the process, not just the run" {
+          // Named `linux-pinned-float-golden` so the Windows CI leg can exclude it by that substring
+          // (gate.yml full-test-suite matrix). The box golden's residual tilt routes through `sin`/`cos`
+          // (Physics.fs), whose libm differs between glibc and ucrt, so this literal is pinned to the
+          // Linux runner ONLY — the cross-platform claim it would otherwise assert is the one this very
+          // contract disclaims (a cross-platform lockstep guarantee needs fixed-point; see below).
+          test "the checksum is stable across the process, not just the run (linux-pinned-float-golden)" {
               // Golden values. They are FNV-1a over the IEEE-754 bits of Pos/Vel/Rot/AngVel, so they are
               // reproducible on any runtime that agrees on IEEE-754 double arithmetic — which is what
               // `.NET` guarantees on a fixed compiler and ISA. A cross-platform lockstep guarantee needs
@@ -1589,7 +1594,8 @@ let speculativeContactTests =
               Expect.isTrue hitBackstop "and the mover is caught by the backstop that is in its path"
           }
 
-          test "the golden checksums are unchanged: speculation is inert when nothing is fast" {
+          // `linux-pinned-float-golden`: same box/circle literals as above, excluded on the Windows leg.
+          test "the golden checksums are unchanged: speculation is inert when nothing is fast (linux-pinned-float-golden)" {
               // The scenes of #75/#76 carry no fast mover — a box or circle dropped from y = 5 reaches the
               // floor at well under a radius per step — so the speculative pass must produce nothing and
               // leave every bit of their state where #75/#76 recorded it. If the fast-mover threshold ever
