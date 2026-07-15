@@ -297,8 +297,24 @@ ones for a released library. File references are the starting points, not the wh
       and a verifier can reproduce the release bytes with `-p:ContinuousIntegrationBuild=true`. Verified:
       packs clean with no SourceLink present, CI-mode PDB carries zero `/home/developer` absolute paths
       vs one in a local build, and 585 core + 23 render tests stay green.
-- [ ] SHA-pin third-party actions on the publish path (`NuGet/login@v1`, `actions/*`) and the org
-      reusable workflows currently on `@main` — `.github/workflows/release.yml`, `gate.yml`
+- [x] SHA-pin third-party actions on the publish path (`NuGet/login@v1`, `actions/*`) and the org
+      reusable workflows currently on `@main` — `.github/workflows/release.yml`, `gate.yml`. DONE
+      2026-07-15. Pinned all 32 third-party GitHub-hosted action refs to their full commit SHA with a
+      `# vN` version comment (the Renovate `pinDigests` convention, so the org preset keeps the digest
+      current within the major) across **all four** authored workflows — not just the two the review
+      named — because a partial pin (`checkout` pinned in `gate.yml` but floating in `governance.yml` /
+      `skill-refs-sweep.yml`) is an incoherent supply-chain posture: `actions/checkout@v7` →
+      `@9c091bb…` (v7.0.0), `actions/setup-dotnet@v5` → `@26b0ec1…` (v5.4.0), and the OIDC-publish-path
+      `NuGet/login@v1` → `@8d19675…` (v1.2.0), annotated-tag-dereferenced to its commit. The `NuGet/login`
+      pin is the load-bearing one — it runs on the Trusted-Publishing path that mints the short-lived
+      nuget.org key. The four org reusable-workflow `@main` refs (`coordination-coherence`,
+      `lockfile-sync`, `lock-range-coherence`, `contract-coherence`) are deliberately **left floating**:
+      they are first-party FS-GG coordination-kit thin callers that intentionally track `@main` so every
+      receiver repo picks up kit updates automatically, and a `coordination-sync --check` gate flags kit
+      drift. Pinning them to a SHA is a cross-repo policy decision the kit owns (FS-GG/.github), not a
+      local edit — doing it here would just desync this repo from the org's floating-main convention.
+      Verified: YAML well-formed on all four files; org `@main` refs unchanged; the pin is a pure ref
+      substitution (a SHA is a valid `uses:` ref and actionlint prefers it), so no behavioural change.
 - [ ] Reconcile the `global.json` SDK pin against the "Game has NO global.json" comment —
       `Directory.Build.props:74-80`
 - [ ] (Low) Evaluate CodeQL / dependency-review / Dependabot given the small dependency surface

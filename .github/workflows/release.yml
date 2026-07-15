@@ -40,8 +40,8 @@ jobs:
     if: github.repository == 'FS-GG/FS.GG.Game'
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: '10.0.x'
 
@@ -72,8 +72,8 @@ jobs:
       packages: write
       id-token: write   # ADR-0013: mint the GitHub OIDC token for nuget.org Trusted Publishing
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: '10.0.x'
 
@@ -165,7 +165,7 @@ jobs:
       - name: NuGet login (OIDC → short-lived nuget.org key)
         if: steps.ver.outputs.push == 'true'
         id: nuget-login
-        uses: NuGet/login@v1
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
           user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
       - name: Push coherent set to nuget.org (public)
