@@ -331,7 +331,60 @@ ones for a released library. File references are the starting points, not the wh
       `Directory.Build.local.props` documenting the intentional pin and pointing a future reader at the
       stale-but-upstream-owned sentence, so the two reconcile at the point of confusion. No behavioural
       change; no surface-baseline drift.
-- [ ] (Low) Evaluate CodeQL / dependency-review / Dependabot given the small dependency surface
+- [x] (Low) Evaluate CodeQL / dependency-review / Dependabot given the small dependency surface — DONE
+      2026-07-15. Three-way evaluation resolved to **decline all three**, each for a distinct, verified
+      reason — consistent with the review's own proportionality theme (don't add a security/meta tier a
+      surface this small doesn't earn) and with how the other P3 items deferred org-owned boundaries
+      upstream rather than forcing them locally.
+      - **`Dependabot` — decline (redundant).** Renovate is already configured (`renovate.json` extends
+        the org preset: version bumps + dependency dashboard + vulnerability alerts). Running Dependabot
+        version-updates alongside it just mints duplicate/conflicting PRs, and Dependabot *alerts* are a
+        repo setting Renovate's `vulnerabilityAlerts` already covers the actionable half of.
+      - **`CodeQL` — decline (inapplicable + redundant).** F# is not a CodeQL-supported language, so it
+        cannot scan `Game.Core`/`Game.Render` — the actual product. Its `actions` mode could scan the
+        workflows, but that overlaps the stronger posture already in place: SHA-pinned actions (#335) +
+        checksum-pinned actionlint/shellcheck in `gate.yml`. Marginal net value for a scanning workflow
+        the review already flags this repo as over-governed for.
+      - **`dependency-review` — the right control, but BLOCKED on an org-owned prerequisite, so not
+        adopted here.** A PR built the ~30-line gate (`actions/dependency-review-action@a1d282b…` /
+        v5.0.0, SHA-pinned; `contents: read`; `fail-on-severity: high`) and it was correct — YAML
+        well-formed, CI-pinned actionlint (v1.7.7) green — but it **failed at runtime**: *"Dependency
+        review is not supported on this repository. Please ensure that Dependency graph is enabled."*
+        Verified the blocker is org/enterprise-level, not a local toggle: the Dependency-Graph compare
+        API (`GET /repos/FS-GG/FS.GG.Game/dependency-graph/compare/{base}...{head}`) returns **403
+        Forbidden**; a repo-admin `PATCH … security_and_analysis[dependency_graph][status]=enabled` is
+        accepted (200) but silently drops the key (not repo-settable); and **no FS-GG repo uses
+        dependency-review** — the Dependency Graph is off org-wide. Enabling it is an FS-GG *org security
+        settings* decision (`github.com/organizations/FS-GG/settings/security_analysis`), the same class
+        of upstream-owned boundary as the `@main` reusable workflows and the DO-NOT-EDIT
+        `Directory.Build.props` comment this roadmap already deferred. For a **Low** item on a surface
+        this tiny (FSharp.Core + two FS.GG.UI runtime edges + four test-only packages, all public and
+        lockfile-pinned) already under Renovate's vulnerability alerts, driving an org-policy change
+        isn't warranted — so it is **flagged upstream, not forced here**. The workflow removed from this
+        PR is preserved verbatim below as a drop-in for the day the org enables the Dependency Graph:
+
+      ```yaml
+      # .github/workflows/dependency-review.yml — adopt-ready once FS-GG enables the org Dependency Graph.
+      name: dependency-review
+      on:
+        pull_request:
+          branches: [main]
+      concurrency:
+        group: dependency-review-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+        cancel-in-progress: true
+      permissions:
+        contents: read
+      jobs:
+        dependency-review:
+          name: Dependency review (advisories on introduced deps)
+          runs-on: ubuntu-latest
+          timeout-minutes: 10
+          steps:
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+            - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+              with:
+                fail-on-severity: high   # signal, not noise, for a tiny all-public stack
+      ```
 
 ### P4 — documentation fixes
 
