@@ -28,11 +28,11 @@ touch-sets. This skill only *reconciles*. Decisions: ADR-0001 (the board), ADR-0
 
 ## The one rule: the issue is the truth, the board is the copy
 
-**Fixes only ever write to the board.** Auto-remediation may set `Status` or release an expired
-claim. It may **never** close or reopen an issue, delete a `Blocked by` edge, merge a PR, or touch
-a working tree. Those need judgement, so they are **reported and left for a human**. When ground
-truth and the projection disagree, the projection is what changes. (It used to add a missing item
-to the board too; that is report-only while the engine has no idempotent `add` — §2.)
+**Fixes only ever write to the board.** Auto-remediation may set `Status`, add a missing item to
+the board, or release an expired claim. It may **never** close or reopen an issue, delete a
+`Blocked by` edge, merge a PR, or touch a working tree. Those need judgement, so they are
+**reported and left for a human**. When ground truth and the projection disagree, the projection
+is what changes.
 
 Corollary: an issue is not "done" because the board says `Done`. `fsgg-coord done` exists precisely
 to make the stamp *earned* (PR merged **and** `Status: Done`), and this skill never fakes it.
@@ -127,7 +127,7 @@ Each finding has a code, a ground truth, and a fix — or an explicit refusal to
 |---|---|---|
 | `CLOSED-ISSUE-NOT-DONE` | `state == CLOSED` and `status != Done` | `set-field --batch <i> Status=Done` |
 | `DONE-STATUS-OPEN-ISSUE` | `status == Done` and `state == OPEN` | **report only** — is the work done, or was the flip premature? |
-| `OFF-BOARD-ISSUE` | open `roadmap` issue in a rostered repo with no board item | **report only** while `fsgg-coord add` is gone — see the note below |
+| `OFF-BOARD-ISSUE` | open `roadmap` issue in a rostered repo with no board item | `fsgg-coord add <i>` — idempotent; see the note below |
 | `BLOCKER-CLEARED` | every blocker `closed` **or `merged`**, but `status == Blocked` | `set-field --batch <i> Status=Ready` |
 | `BLOCKER-UNKNOWN` | a blocker ref `scan` could not resolve | resolve over REST (§3), then board the blocker if it is open |
 | `BLOCKER-UNPARSEABLE` | a `Blocked by` token is not an issue ref | **report only** — hand-fix the field |
@@ -156,28 +156,35 @@ answers at once**, and which one is true depends only on where you are standing 
 not a distributed one (`#846`). `--batch` is correct in both, and is the cheaper spend regardless:
 it writes N fields in **one aliased mutation** (`#448`) against a budget every worker shares.
 
-**`OFF-BOARD-ISSUE` is report-only, and there is currently NO sanctioned way to fix it.** Say that
-plainly rather than hand anyone a recipe. The bash client wrapped the raw Projects v2 add in
-something **idempotent** and metered; the typed engine never ported it, so `add`, `item-add` and
-`flush` are all `unknown command` today (`.github#846`, the D.4 client-surface gap). What is left is
-a **standoff**, and you should know it is there rather than rediscover it in a red check:
+**Board an off-board issue with `fsgg-coord add <i>`, and never with the raw `gh project` call.**
+The client is metered and cached; a recipe that reaches past it is an unmetered principal on the
+5,000/hr budget the whole fleet shares, which is why `check-graphql-monopoly` **fails the merge** of
+any skill or doc carrying `gh project item-add` as a runnable line (`#418`, `#586`). `add` was
+missing from the ported engine for a while and that rule had no compliant path — the gate's own
+remediation named a verb that exited 1 — but `#870` has restored it, so the honest spelling and the
+enforceable one are the same again.
 
-- The raw `gh project` add still works — but `check-graphql-monopoly` **fails the merge** of any
-  skill or doc carrying it as a runnable line, because a recipe that reaches past the client is an
-  unmetered principal on a budget the whole fleet shares (`#418`). That gate is right.
-- Its remediation tells you to use `fsgg-coord add` — **which no longer exists**. So the fabric
-  forbids the spelling that works and mandates the one that does not (`.github#859`).
+Same two-answers caveat as `--batch` above, for the same reason: `#870` is *merged*, not
+*distributed*. `.github` builds from source and has `add` now; a receiver restores the **pinned**
+engine and will get `unknown command: add` until a release carries it and the pin flips (`#846`). If
+that is where you are standing, this class is report-only until then — say so rather than reaching
+for the raw call, which the gate will refuse anyway and which is unmetered for a reason.
 
-Until `add` returns, the honest move is the one this skill already prefers: **report the class, name
-the issues, and stop.** Do not smuggle the raw call in behind an exemption marker — the marker means
-*one-time board provisioning run by a human with admin rights*, and a reconcile pass is neither.
+**`add` is idempotent, and it is safe to `--apply` — but not because adding twice is harmless.**
+Adding an already-boarded issue is a **no-op**: it prints the existing item id and exits 0, with no
+twin created (`addProjectV2ItemById` is idempotent server-side — measured on the live board in
+`#870`, not inferred). If you have read this skill before, note the correction: it used to say a
+second add **creates a duplicate**. That was `#421`'s *counterfactual* — "a duplicate would have been
+created had I followed that remediation" — hardening into an assertion as it was copied inward, and
+it does not reproduce (`#871`).
 
-**And `--apply` must never board anything even once `add` is back — unless it is idempotent.**
-Boarding an issue twice creates a **duplicate item**, and the only thing standing between this pass
-and that duplicate is a snapshot being right about *absence*. A failed or partial scan makes a
-boarded issue look off-board — and "I could not read the board" is not "the item is not on it"
-(`#266`), which is precisely the confusion that had `#421` telling workers to add an issue that was
-already there.
+What `#421` is actually about survives intact, and it is the part that matters: **the only thing
+licensing the mutation is a successful read that found nothing.** An error is a read that did not
+happen, and unreachable is not absent (`#266`). Adding on a *failed* read spends a mutation against a
+budget that just refused a query and reports success for an issue whose absence was never
+established — a definite answer built on no information. `add` now enforces that itself, so
+`--apply` may board what your snapshot genuinely shows off-board; if the scan failed, you have no
+finding to act on in the first place.
 
 `CLAIM-STATUS-LAG` is the one class you cannot read off a single command: `who --json` does not
 emit `inProgress`. Join it yourself — an item `who` reports as `held` whose board `status` is not
@@ -299,10 +306,10 @@ scripts/fsgg-coord budget                             # 0. is there budget to fi
                                                       #    half-applied leaves the board worse than found
 scripts/fsgg-coord reap --repo <r>                    # 1. dry run: whose lease expired?
 scripts/fsgg-coord reap --repo <r> --apply            #    release them (tells the reaped worker)
-                                                      # 2. (boarding is REPORT-ONLY today — §2)
+scripts/fsgg-coord add <i>                            # 2. off-board issues + off-board blockers
 scripts/fsgg-coord set-field --batch <i> Status=<V>   # 3. the status flips (--batch, always — #848)
-scripts/fsgg-coord scan --fresh --include-backlog     # 4. RE-READ — --fresh, or you re-read the
-                                                     #    90s cache you already have (§1)
+scripts/fsgg-coord scan --fresh --include-backlog      # 4. RE-READ — --fresh, or you re-read the
+                                                      #    90s cache you already have (§1)
 ```
 
 Step 0 replaces the `flush` that used to lead this list: there is **no write queue** and no `flush`
@@ -310,11 +317,10 @@ in the engine, so nothing is pending and nothing will be replayed. What can stil
 running *out* of budget partway through, which strands the board between two consistent states —
 so look before you start, and if `budget` is thin, do step 1 and stop.
 
-Step 2 is empty on purpose while `add` is missing (§2), which also makes step 4 conditional rather
-than mandatory: it exists because boarding a blocker re-resolves it from `unknown` to `open`/
-`closed`, creating or clearing a `BLOCKER-CLEARED` that was not in your snapshot. Nothing this pass
-now writes can move a blocker, so re-read **only** if a human boarded something alongside you — and
-if they did, reclassify from the fresh scan before applying any newly-earned flip.
+Step 4 is not optional, and `--fresh` is what makes it a re-read rather than a replay of the
+snapshot you already hold (§1). Boarding a blocker in step 2 re-resolves it from `unknown` to
+`open`/`closed`, which can create or clear a `BLOCKER-CLEARED` finding that did not exist in your
+snapshot. Reclassify from the fresh scan, then apply any newly-earned status flips.
 
 ## 5. Confirm, and report what you did not touch
 
@@ -325,10 +331,9 @@ scripts/fsgg-coord budget                # what the pass cost
 ```
 
 Finish with a summary that separates **fixed** from **left alone**. The report-only classes
-(`DONE-STATUS-OPEN-ISSUE`, `OFF-BOARD-ISSUE`, `UNCLAIMED-IN-PROGRESS`, `BLOCKER-UNPARSEABLE`,
-`UNDECLARED-PATHS`, `EPIC-*`) are the ones a human must act on, and a pass that quietly "succeeded"
-while leaving six of them standing is how they survive to the next pass. Name them, with their
-issue refs.
+(`DONE-STATUS-OPEN-ISSUE`, `UNCLAIMED-IN-PROGRESS`, `BLOCKER-UNPARSEABLE`, `UNDECLARED-PATHS`,
+`EPIC-*`) are the ones a human must act on, and a pass that quietly "succeeded" while leaving five
+of them standing is how they survive to the next pass. Name them, with their issue refs.
 
 **Never report a silent cap.** If you scoped to one repo, or stopped after N fixes, say so — a
 partial reconcile that reads as a full one is worse than no reconcile, because it buys false
