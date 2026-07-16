@@ -4,21 +4,21 @@
     "net10.0": {
       "FS.GG.UI.KeyboardInput": {
         "type": "Direct",
-        "requested": "[0.10.0, )",
-        "resolved": "0.10.0",
-        "contentHash": "WoOd/gKJYSiUC2uBwRnByQ5HUb8JSUbfNpakIutFBgyewoLrCCbszVHXRh4xAn2kJm7tbBZQ40hn9c/kbxgW6w==",
+        "requested": "[0.11.0, )",
+        "resolved": "0.11.0",
+        "contentHash": "jorwSdeJoPONbNtbR5X9wcTXOVaSWa8OQqUtYYbHKm3sgkbkVInUbIefIsQj6OvWsXqmq3lyfTaNFn3RIDi1Jw==",
         "dependencies": {
-          "FS.GG.UI.Scene": "0.10.0",
-          "FSharp.Core": "10.1.301"
+          "FS.GG.UI.Scene": "0.11.0",
+          "FSharp.Core": "10.1.302"
         }
       },
       "FS.GG.UI.Scene": {
         "type": "Direct",
-        "requested": "[0.10.0, )",
-        "resolved": "0.10.0",
-        "contentHash": "zAWNSC3QjlPGqMQZ1FTDuHQuzZ8ntJ+tK5J9QgSnRHMNs64/+qHNDciMqqayt8I3LbaAj6ooC7+/S3wt0LaeUg==",
+        "requested": "[0.11.0, )",
+        "resolved": "0.11.0",
+        "contentHash": "TVRxALnd8fzhbZnbPcfpod8dWi8zTz7nOIcRSjhYQwxdi1DFT+aFixJj5bkS3ktDCbUASYVhNoT/qSbPn5f1UA==",
         "dependencies": {
-          "FSharp.Core": "10.1.301"
+          "FSharp.Core": "10.1.302"
         }
       },
       "FSharp.Core": {
