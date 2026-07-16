@@ -265,16 +265,42 @@ authorship test, is [intra-repo-parallel-work §1](../intra-repo-parallel-work/S
 
 ## 2. Isolate
 
-`claim` prints the branch and the worktree command. Use them — never work an item in the shared
-checkout, because the other N workers are in it.
+Never work an item in the shared checkout — the other N workers are in it. **Fetch first, then branch
+from `origin/main` by name.** Both halves, every time:
 
 ```sh
-git worktree add ../<repo>-<n> -b item/<n>-<slug>
+git fetch origin                                                # ...or the base you branch from is the PAST
+git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main
 cd ../<repo>-<n>
 ```
 
+Construct that yourself: `claim` prints **only** the claim line. It names no branch and no worktree
+command — older copies of this recipe said it did, and a worker told to paste what the tool prints
+never thinks about the base ref, which is half of how this bug survives.
+
+**Neither half is optional, and each fails silently without the other.**
+
+- **`git worktree add` does not fetch.** It resolves `origin/main` against the *local* remote-tracking
+  ref, which advances only when something in this checkout fetches. The shared checkout is long-lived
+  and the other N workers are merging into `main` — that is the entire point of the fan-out — so **the
+  better the protocol is working, the staler your base is when you start.** Measured: three commits
+  behind after 15 minutes on a two-worker board; five during a single item on a busy one (#622).
+- **Omit `origin/main` and `-b` branches from the shared checkout's `HEAD`** — routinely another
+  worker's unmerged branch rather than `main`. Your PR then silently carries their commits, and
+  `verify-paths` reports it only as an advisory, only for as long as that branch stays unmerged (#319).
+
+**A stale base does not merely hide a merged fix — it manufactures fresh evidence for the bug.** You
+build the engine from your stale tree, so it reproduces the bug faithfully. The item's body was written
+before the fix landed, so it agrees with you. And every local gate goes green, because they check the
+tree against *itself* and not one has an opinion about whether it is current. One worker re-ported
+`flush` from scratch — an hour of work, deleted before merge — onto a `main` that had carried it for
+two hours (#878). Another came one push from reverting a 76-line rewrite of **this very file**, merged
+2h earlier, with a clean diff and no conflict (#892). Nothing inside the tree can tell you; by the time
+any gate runs, the evidence is gone.
+
 Agents: prefer the harness's built-in worktree isolation (`isolation: "worktree"`) — same
-discipline, managed for you.
+discipline, managed for you. Fetch anyway: whatever cuts the worktree can only cut it from the refs
+**this checkout has already fetched**.
 
 ## 3. Work it
 
