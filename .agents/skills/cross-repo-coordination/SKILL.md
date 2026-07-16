@@ -55,8 +55,15 @@ by two workers who could not see each other's filing —
 
 ```sh
 # --state all IS NOT OPTIONAL — a CLOSED hit is the one you most need to see (see below).
-scripts/fsgg-coord issues <target> --state all \
-  --jq '.[] | select(.title | test("<keyword>"; "i")) | "#\(.number) [\(.state)] \(.title)"'
+# `issues` emits raw JSON and has NO --jq flag (the one below is `gh api`'s). CAPTURE, don't pipe:
+# piping hands you jq's exit code, so a FAILED read prints nothing and exits 0 — identical to
+# "nothing filed", which is the answer that decides whether you file a duplicate (#874).
+hits="$(scripts/fsgg-coord issues <target> --state all)" \
+  || { echo "dedupe read FAILED ($?) — do NOT read this as 'nothing filed'"; exit 1; }
+# contains(), not test(): the keyword is a literal; test("C++") matches any title with "c".
+jq -r --arg k "<keyword>" '.[]
+  | select(.title | ascii_downcase | contains($k | ascii_downcase))
+  | "#\(.number) [\(.state)] \(.title)"' <<<"$hits"
 gh api repos/FS-GG/<repo>/issues/<parent>/sub_issues --paginate --jq '.[] | "#\(.number) \(.title)"'   # filing a child? look here
 ```
 
