@@ -105,7 +105,8 @@ the shim resolves no engine it fails loudly with what to do — never a silent n
 ```sh
 eval "$(scripts/fsgg-coord whoami --mint)"     # MINT one; never invent or copy one (#419, #551)
 scripts/fsgg-coord take --repo <this-repo>     # pick + claim the next SCHEDULABLE item, retrying a lost race
-git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # `take` prints this; name the base
+git fetch origin                               # NOTHING else does — the base is otherwise the PAST (#622)
+git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # name the base (#319)
 # ...implement, commit with the printed FSGG-Worker trailer, PR into main...
 scripts/fsgg-coord done <issue> --flip         # earn the stamp
 ```
@@ -311,6 +312,14 @@ that N workers pass through that checkout: its `HEAD` is routinely another worke
 not `main`. Omit the base and the item's PR silently carries that branch's commits too. Nothing warns
 you: `verify-paths` reports the resulting drift only as an advisory, and only for as long as that
 sibling branch stays unmerged (.github#319).
+
+**And `git fetch origin` FIRST — naming the base is only half of it.** `git worktree add` does not
+fetch; it resolves `origin/main` against the *local* remote-tracking ref, which advances only when
+something in this checkout fetches. The same premise that makes the base ref necessary makes the fetch
+necessary, and pointing the other way: N workers are merging into `main`, so **the better this protocol
+is working, the staler your `origin/main` is when you start.** A stale base is worse than it sounds —
+it does not merely hide a merged fix, it manufactures fresh evidence for the bug, because the tree you
+build and test is internally consistent and simply old (.github#622).
 
 Keep `main` green. **Disjoint** items merge in any order; **overlapping** items (which you
 sequenced) merge in `Blocked by` order and rebase.
