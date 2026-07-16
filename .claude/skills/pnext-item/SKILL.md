@@ -195,18 +195,31 @@ worker: **four hour-long investigations, one answer**
 ([#888](https://github.com/FS-GG/.github/issues/888)).
 
 Nobody was careless. [#867](https://github.com/FS-GG/.github/issues/867) kept re-arming the trap —
-`release --status Blocked` is a silent no-op, so every worker who correctly tried to park #732 put it
-back to `Ready` — and the recipe said *read the body and start*. **The body was the thing that was
-wrong. The comments were where four people had already said so.** This is
+`release --status Blocked` **was** a silent no-op (the port parsed the flag and dropped it on the
+floor), so every worker who correctly tried to park #732 put it back to `Ready` — and the recipe said
+*read the body and start*. [#914](https://github.com/FS-GG/.github/issues/914) fixed the engine: an
+explicit `--status` now beats both the recorded restore and the `Ready` fallback. **The body was the
+thing that was wrong. The comments were where four people had already said so.** This is
 [#464](https://github.com/FS-GG/.github/issues/464)'s shape one level up: *N workers file one finding
 N times* became *N workers WORK one falsified item N times*, and it closes the same way — **look
 before you start.**
 
 **If the comments say the item is already answered, believe them.** Re-running the investigation to
 be sure is the exact hour this step exists to save. Add what you know to the issue, park it
-(*Abandoning an item*, below), and `take` again — then **verify the park landed**, because while
-#867 is open `release --status` reports success and does nothing, which is how #732 came back four
-times:
+(*Abandoning an item*, below), and `take` again — then **verify the park landed.**
+
+**`release` exits 0 even when the column did NOT land, and that is not a bug.** The lock really is
+gone, so a failed column must not red the command. But it means a green exit is *not* the receipt you
+want. Read **stdout**, which states only what is true (#914):
+
+| `release` printed | the column |
+|---|---|
+| `released .github#732 → Blocked` | landed — it names the column, so the board holds it |
+| `released .github#732` (bare) | **did NOT land** — stderr, immediately above, says why |
+
+The bare form is what you get when the board write was **deferred** on an exhausted budget (queued,
+and nothing replays it — `fsgg-coord flush`), when the write failed, or when the item is not on the
+board at all. So a park can still silently not take, and #732 is what that costs. Check:
 
 ```sh
 # `ready` is the always-fresh TRUTH read: it reports the column the board actually holds. Do not
@@ -1023,9 +1036,17 @@ scripts/fsgg-coord release <issue>          # marker deleted, unassigned, Status
 ```
 
 `release` puts back **the column the claim overwrote** — a `Backlog` item returns to `Backlog`, not
-`Ready` (#481). `Ready` is only the fallback for a claim that recorded nothing to restore. A column
-you set *deliberately* during the lease still wins, so `release` will not undo a `Blocked` you meant
-(#331); to land somewhere specific, say so: `release <issue> --status Blocked`.
+`Ready` (#481). `Ready` is only the fallback for a claim that recorded nothing to restore, and for a
+recorded `In progress`, which is the claim's own footprint rather than a column anybody chose.
+
+**To land somewhere specific, say so — and it works now:** `release <issue> --status Blocked`. An
+explicit `--status` beats both the recorded restore and the `Ready` fallback (#331/#481's precedence,
+restored by [#914](https://github.com/FS-GG/.github/issues/914) after the port parsed the flag and
+ignored it — that no-op is how #732 came back four times, §1).
+
+**Confirm it landed rather than assuming**: `release` exits 0 even when the column write does not
+take, and the tell is on stdout — `released <ref> → Blocked` names the column it set, a bare
+`released <ref>` means it did not, with the reason on stderr (§1).
 
 If you got far enough to be worth resuming, say so on the issue first (`fsgg-coord say`), and push
 the branch so the next worker inherits the work rather than redoing it.
