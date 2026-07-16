@@ -8,10 +8,11 @@ description: Reconcile the org-level FS-GG "Coordination" Projects v2 board agai
 The Coordination board is a **projection**. GitHub issues, their `state`, and the `fsgg:claim`
 markers are the **ground truth**; the board's `Status`, `Phase`, and `Blocked by` are a cached
 view of it that humans and `fsgg-coord next`/`take` read to decide what happens next. The board
-drifts, and the ADR-0034/ADR-0040 engine drifts it in three ways this pass hunts. **A refused write
-is not replayed by anything.** The bash client used to queue an exhausted write and replay it on
-`fsgg-coord flush`; the typed engine has **no queue and no `flush`** — exhaustion is `EX_RATE`
-(exit **75**), an instruction to *back off and retry*, and a write nobody retries is a write that
+drifts, and the ADR-0034/ADR-0040 engine drifts it in three ways this pass hunts. **A REFUSED write
+is not replayed by anything** — an unknown field, a `Blocked by` that is not a ref: the engine rejects
+these outright, because replaying them could never succeed (#510). An **exhausted** write is the
+opposite case and must not be confused with it: it is *queued*, and `fsgg-coord flush` replays it
+(#878). Nothing flushes automatically, though, so a deferral nobody flushes is still a write that
 never landed. Second, `done --flip` flips `Status` only once it sees a merged PR. Third, and the
 one that rots quietly: **nothing re-checks a `Blocked by` edge when its blocker closes.** So a
 drifted board hands out work that is already done, hides work that is startable, and keeps items
@@ -188,9 +189,11 @@ finding to act on in the first place.
 
 `CLAIM-STATUS-LAG` is the one class you cannot read off a single command: `who --json` does not
 emit `inProgress`. Join it yourself — an item `who` reports as `held` whose board `status` is not
-`In progress` is a lock whose `Status` write **never landed**. There is no queue to flush and
-nothing will replay it: the engine's answer to an exhausted budget is `EX_RATE` (exit 75) and a
-back-off, so a write refused mid-claim is simply lost, and this pass is what repairs it. Write it:
+`In progress` is a lock whose `Status` write **never landed**. Before you repair it by hand, run
+`scripts/fsgg-coord flush --dry-run`: if that write is sitting in the deferred queue, an exhausted
+budget merely *paused* it, `flush` is the repair, and reconciling it here would duplicate the write
+rather than fix it (#878). What this pass repairs is the lag that is **not** queued — a `Status`
+write that was refused outright, or one whose worker walked away without flushing. Write it:
 
 ```sh
 jq -r --slurpfile s /tmp/scan.json '
@@ -312,10 +315,12 @@ scripts/fsgg-coord scan --fresh --include-backlog      # 4. RE-READ — --fresh,
                                                       #    90s cache you already have (§1)
 ```
 
-Step 0 replaces the `flush` that used to lead this list: there is **no write queue** and no `flush`
-in the engine, so nothing is pending and nothing will be replayed. What can still bite you is
-running *out* of budget partway through, which strands the board between two consistent states —
-so look before you start, and if `budget` is thin, do step 1 and stop.
+Step 0 is a budget check, and it does **not** replace the `flush` that used to lead this list —
+`flush` is back (#878), and a queue this pass does not drain is drift it will "find" and then
+duplicate. Run `scripts/fsgg-coord flush --dry-run` alongside step 0: it reads the queue rather than
+the board, and a non-empty queue means some of the drift below is already owed rather than lost. What
+can still bite you is running *out* of budget partway through, which strands the board between two
+consistent states — so look before you start, and if `budget` is thin, do step 1 and stop.
 
 Step 4 is not optional, and `--fresh` is what makes it a re-read rather than a replay of the
 snapshot you already hold (§1). Boarding a blocker in step 2 re-resolves it from `unknown` to
