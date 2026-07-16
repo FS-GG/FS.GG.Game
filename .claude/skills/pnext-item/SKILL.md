@@ -103,13 +103,35 @@ fan-out that scales and one that takes the board down with it:
 - **Read issues over REST, not GraphQL.** `fsgg-coord issues <repo>` is free; `gh issue list` /
   `gh issue view` cost 2 points each, and `gh issue edit` costs 4. When GraphQL is gone, REST is still
   up — `gh api repos/…` will still open your PR and post your comments.
-- **A rate-limited board write is DEFERRED, not lost.** *Every* board write — `set-field`, `claim`,
-  `done --flip`, `release`, `reap` — says so, queues it, and `fsgg-coord flush` (or the next board
-  write) replays it. Do not "fix" the board by hand; you will just duplicate the write.
-  Until `.github#510` this was true of `claim` **only**, while the exhaustion message promised it to
-  everyone — so a `set-field` on an exhausted budget printed "Board WRITES are queued" and dropped
-  the write, and `flush` then reported "nothing pending" and confirmed the lie. If you are running an
-  older kit, check `fsgg-coord flush --dry-run` after any board write you did not see land.
+- **A rate-limited board write is DEFERRED, not lost — but NOTHING replays it on its own.** *Every*
+  board write — `set-field`, `claim`, `done --flip`, `release`, `reap` — queues itself on an
+  exhausted budget and says so, and `scripts/fsgg-coord flush` replays the queue. Do not "fix" the
+  board by hand; you will just duplicate the write.
+
+  **`flush` is MANUAL.** There is no autoflush: no board write drains the queue as a side effect.
+  Bash had one; the port does not. So `EX_RATE` (75) is a back-off-**and-come-back** instruction, and
+  `flush` is the coming back — a deferral nobody flushes is a write that never lands. What you owe is
+  on disk, so ask before you walk away:
+
+  ```sh
+  scripts/fsgg-coord flush --dry-run   # what is queued, and whose — replays NOTHING
+  scripts/fsgg-coord flush             # replay it, once the budget is back
+  ```
+
+  `flush` replays by **default**; `--dry-run` is the read-only form. Both check the queue before they
+  touch the board, so an empty queue and a dry run cost **zero GraphQL** — which is the point rather
+  than an optimisation: an exhausted budget is the only reason a queue exists, so "what did I defer?"
+  has to be answerable exactly when no board read is possible. `flush` reports what it **replayed**
+  and, separately, what it **DROPPED** — an entry it can never land (an unparseable ref, or an item no
+  longer on the board). A drop is a write that did *not* happen; if it names your item, re-read the
+  board before you believe it.
+
+  **Three repairs got this true, and an older kit has none of them.** `.github#510` made deferral
+  universal — before it, only `claim` queued while the exhaustion message promised it to everyone, so
+  a bare `set-field` printed the promise and dropped the write. `.github#878` then ported `flush`
+  *itself*: the engine had named it in that promise for its whole life and never had it, so a
+  deferred write was queued to `pending.jsonl` and **stranded** — real, on disk, and unreachable by
+  any verb. `.github#862` is this text: the prose went on describing all three states at once.
 - **A REFUSED write is not queued, and that is deliberate.** An unknown field, an unknown option, a
   `Blocked by` that is not a ref — the tool rejects these *before* spending any GraphQL, and replaying
   them could never succeed. You get the refusal and a non-zero exit, not a queue entry.
@@ -799,18 +821,32 @@ parent epic whose children are now all `Done`. A **red** stamp means a check fai
 not done, whatever you believe. Do not hand-set `Status` to make the stamp green; the stamp is
 earned, and faking it is how the board starts lying.
 
-**`done --flip` is a board write, so an exhausted budget DROPS it — silently.** It exits 75 saying
-*"Board WRITES are queued: see `fsgg-coord flush`"*, and that is **false**: only `claim` defers.
-Nothing is queued, `flush` has an empty queue and will cheerfully report success, and your merged
-work sits **unstamped** with your claim still reserving its touch-set
-([#510](https://github.com/FS-GG/.github/issues/510)). Check, don't trust:
+**`done --flip` is a board write, so an exhausted budget QUEUES it and exits 75 — and then it is on
+YOU to replay it.** The stamp is not lost, and it has not landed either: it is a line in
+`pending.jsonl`, and nothing drains that queue by itself (§1). Until you flush, your merged work sits
+**unstamped** with your claim still reserving its touch-set. Check, don't trust — and the check is
+free:
 
 ```sh
-scripts/fsgg-coord budget | jq .pendingBoardWrites   # 0 means your stamp was DROPPED, not queued
+scripts/fsgg-coord flush --dry-run   # is your stamp still owed? Reads the queue, not the board
+scripts/fsgg-coord flush             # replay it, after the budget resets
 ```
 
-**Wait for the reset and re-run `done --flip`.** Do not hand-set `Status` to close the gap — an
-unstamped item is a nuisance; a hand-stamped one is a board that lies.
+If `flush` reports your stamp **DROPPED** rather than replayed, it did not land and never will —
+`--flip` again once you have fixed what made it undroppable.
+
+**Do not hand-set `Status` to close the gap** — an unstamped item is a nuisance; a hand-stamped one is
+a board that lies.
+
+> **This block used to say the opposite, and the opposite was true when it was written.** It said the
+> stamp was *"DROPPED — silently"* because *"only `claim` defers"*, and prescribed
+> `budget | jq .pendingBoardWrites` to prove it. Every part of that is now dead:
+> [#510](https://github.com/FS-GG/.github/issues/510) made deferral universal, so every board write
+> queues; [#878](https://github.com/FS-GG/.github/issues/878) ported the `flush` that replays it,
+> which the engine had named all along and never had. And `pendingBoardWrites` was **never** a field
+> the engine emitted — that `jq` answered `null`, not `0`, so the check prescribed for detecting a
+> dropped write could not detect one, and read as "0 = dropped" on every healthy run. `flush
+> --dry-run` is the read that actually looks at the queue.
 
 ### REST when the budget is gone
 
@@ -851,10 +887,12 @@ Two more that bite in the same state:
     | gh api -X POST repos/FS-GG/<target>/issues --input - --jq '"#\(.number) \(.html_url)"'
   ```
 
-  The **board** placement that follows it (`gh project item-add`, `set-field`) is Projects v2 and has
-  no REST form. It cannot be done on an exhausted budget, and `set-field` will *say* it queued the
-  write and drop it (#510). File the issue now, place it after the reset, and say so on the issue so
-  the gap is a decision somebody made rather than an omission nobody noticed.
+  The **board** placement that follows it (`add`, `set-field`) is Projects v2 and has no REST form, so
+  it cannot land on an exhausted budget. It is not lost: `set-field` QUEUES the write and exits 75, and
+  `scripts/fsgg-coord flush` replays it after the reset (#510 made that true of every board write;
+  #878 gave you the verb that replays them). So file the issue now, then either flush once the budget
+  is back or say on the issue that the placement is still owed — the gap should be a decision somebody
+  made rather than an omission nobody noticed.
 
 ## 6. Clean up, then go again
 

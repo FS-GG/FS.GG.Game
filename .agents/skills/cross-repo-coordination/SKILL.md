@@ -221,7 +221,8 @@ the budget model, executable. Reach for raw `gh` on the board and you are opting
 **When it runs out** (`fsgg-coord budget` shows it, and every command exits **75** with the reset time):
 **back off until the reset — do not retry in a loop.** The claim lock lives on REST, so work continues:
 issues, comments, PRs, and pushes all still function. A board write refused by the budget is **queued,
-not lost** — `fsgg-coord flush` replays it, and the next board-writing command flushes automatically.
+not lost** — `fsgg-coord flush` replays it (#878), but you must RUN it: nothing flushes automatically,
+so check `fsgg-coord flush --dry-run` before you assume a write landed.
 `FSGG_COORD_DEBUG=1` logs every call's cost, so **verify the saving instead of assuming it**. Full cost
 model, with the measured table: `docs/coordination/graphql-budget.md`.
 
