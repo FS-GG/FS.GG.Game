@@ -149,6 +149,59 @@ declares no `Paths:` and is therefore **unschedulable**; every candidate is bloc
 itself looks wrong — items `Blocked` behind closed issues, claims past their lease — run
 [`/check-board`](../check-board/SKILL.md) and try again.
 
+### You hold it. Now read its COMMENTS — before the worktree, not after
+
+`take` hands you a number, and the **body** tells you what somebody wanted three weeks ago. **The
+comments are where a worker who already tried it says how it went** — and a prior worker's *"do not
+do this"* is the highest-signal artifact on the board. Read them. REST, so it costs you nothing:
+
+```sh
+gh api repos/FS-GG/<repo>/issues/<n>/comments --paginate \
+  --jq '.[] | "--- \(.user.login) @ \(.created_at)\n\(.body)"'
+```
+
+`--paginate` is not optional, for §4's reason exactly: a truncated read looks like an answer, and the
+comment that says *"do not do this"* is the **last** one, not the first.
+
+**Nothing else in this loop can tell you.** `take`/`batch` read the **board**, and a conclusion like
+*"investigated — this must not be executed"* has no board field to live in, so it cannot reach the
+scheduler. §0's `inbox` carries only messages addressed **to you**. §4's dedupe asks *"has this
+finding been filed?"* — the right instinct, aimed one step late and at the wrong artifact. The
+question nobody was asked is **"has this item already been worked?"**
+
+On **2026-07-16**, #732 was claimed by **four** workers inside one hour — 16:16, 16:25, 17:08, 17:14.
+Each built the engine, measured both gates, and reached the **same** conclusion (*do not delete*).
+Every one of those conclusions was already sitting on the issue when `take` handed it to the next
+worker: **four hour-long investigations, one answer**
+([#888](https://github.com/FS-GG/.github/issues/888)).
+
+Nobody was careless. [#867](https://github.com/FS-GG/.github/issues/867) kept re-arming the trap —
+`release --status Blocked` is a silent no-op, so every worker who correctly tried to park #732 put it
+back to `Ready` — and the recipe said *read the body and start*. **The body was the thing that was
+wrong. The comments were where four people had already said so.** This is
+[#464](https://github.com/FS-GG/.github/issues/464)'s shape one level up: *N workers file one finding
+N times* became *N workers WORK one falsified item N times*, and it closes the same way — **look
+before you start.**
+
+**If the comments say the item is already answered, believe them.** Re-running the investigation to
+be sure is the exact hour this step exists to save. Add what you know to the issue, park it
+(*Abandoning an item*, below), and `take` again — then **verify the park landed**, because while
+#867 is open `release --status` reports success and does nothing, which is how #732 came back four
+times:
+
+```sh
+# `ready` is the always-fresh TRUTH read: it reports the column the board actually holds. Do not
+# check with `next` — it answers from the shared 90s scan cache, which can be older than your own
+# write, and it reports only what is SCHEDULABLE. An item withheld because it overlaps somebody
+# else in flight is not offered either, and that reads exactly like a park that landed.
+p="$(scripts/fsgg-coord ready --repo <r> --all)" || { echo "read FAILED — no verdict"; exit 1; }
+jq -r --argjson n <n> '.[] | select(.number == $n) | "status=\(.status)"' <<<"$p"
+```
+
+A comment is not a veto, though. It is **evidence** — it can be stale, or the earlier worker can be
+the one who was wrong. Weigh it as you would any other finding. What you may not do is fail to
+**look**.
+
 ### The item has no `Paths:` line
 
 An item with no declared touch-set cannot be scheduled. Add one — but **claim the item first**.
