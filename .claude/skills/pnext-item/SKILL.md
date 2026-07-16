@@ -73,15 +73,29 @@ every in-flight claim — then claims it. On a lost race it re-schedules automat
 
 **CHECK THE EXIT CODE BEFORE YOU WORK — `take` exits `0` ONLY when it actually claimed you an item
 ([#585](https://github.com/FS-GG/.github/issues/585)).** It is the one command in your loop, and its
-code tells "you hold it" from the four ways it can hand you nothing:
+code tells "you hold it" from every way it can hand you nothing:
+
+<!-- BEGIN GENERATED: fsgg-protocol:take-exit-codes -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
+
+  The hand-written copy of this table was WRONG for as long as it existed (#889): it documented
+  EX_PARTIAL — a write that half-landed — as `take` failing to READ the board, and its "≠0, ≠2"
+  row swallowed every other row in the table. Edit Protocol.fs and regenerate.
+-->
 
 | exit | meaning | what to do |
 |---|---|---|
-| **0** | an item was **claimed** | go work it — and only here |
-| **5** (`EX_NONE`) | looked; **nothing startable** (empty or all-blocked queue) | nothing to do — stop, or wait for the board to free up |
-| **≠0, ≠2** (`EX_PARTIAL`/fatal) | **could not read** the board — a no-verdict, not an empty queue | retry; investigate if it persists |
-| **6** (`EX_CONTENDED`) | lost every race — the board is **contended** | back off briefly and retry |
-| **75** (`EX_RATE`) | the GraphQL **budget** is exhausted | back off until the reset it names |
+| **0** | An item was CLAIMED. This is the ONLY code that means you hold one. | Go work it — and only here. |
+| **5** (`EX_NONE`) | Looked, and nothing was startable — an empty or all-blocked queue. A LOOK THAT SUCCEEDED and found nothing, which is why it is not 0 and not a read failure. | Nothing to do: stop, or wait for the board to free up. Diagnose before you idle — `batch --include-backlog`, `who`, `next` each name a different reason a full board looks empty. |
+| **6** (`EX_CONTENDED`) | The item was startable when it was picked and the claim CAS lost every race for it — somebody else got there first. | Back off briefly and retry. The board is busy, not empty. |
+| **75** (`EX_RATE`) | A rate budget is exhausted. The message names WHICH one (#897): REST takes `claim`/`take`/`who` with it, because the lock lives there (ADR-0034 §3); GraphQL takes the board reads. | Back off until the reset it names — do not loop. Then `flush --dry-run`: a board write you made on an exhausted budget is QUEUED, and nothing replays it for you. |
+| **3** | REFUSED — the batch cannot be scheduled at all. Some in-flight claim declares a touch-set that matches no file, so it reserves NOTHING, and scheduling against it would hand its files to a second worker. The message names the item and the offending tokens. | Do NOT retry — it will refuse identically until the declaration is fixed. Fix the claim it names (`widen <issue> --paths '<paths>'`), or talk to its holder. |
+| **1** | No verdict was reached, for one of two reasons the message tells apart: the engine refused your INPUT before it looked (no worker id resolves; the board document does not parse), or the board READ failed. A read failure is never an empty queue and never EX_NONE (#266) — "I could not look" and "I looked, and it is empty" keep different codes on purpose. | Read the message. A refused input is not retryable — it names its own remedy. Retry only a read failure, and investigate one that persists. |
+| **2** | The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs. | Report it. Do not retry, and do not work an item you were not handed. |
+
+<!-- END GENERATED: fsgg-protocol:take-exit-codes -->
 
 So **never** write `take && work_it` — that fires on nothing (it did, live: a poller printed "CLAIMED"
 over the words "nothing schedulable" and started editing with no claim and no touch-set reservation).
@@ -92,8 +106,13 @@ scripts/fsgg-coord take --repo <r> || { rc=$?; echo "no item (exit $rc)"; exit "
 # only here do you hold a claim — read what it printed for the item id and worktree command.
 ```
 
-**If `take` exits 75, the GraphQL budget is exhausted — back off until the reset it names; do not
-loop.** You and every other worker share ONE 5,000-pt/hr budget (one account), and this loop is what
+**If `take` exits 75, a rate budget is exhausted — back off until the reset it names; do not loop.**
+**Read WHICH budget it named** ([#897](https://github.com/FS-GG/.github/issues/897)): they fail
+differently, and the remedy is not the same. GraphQL takes the **board reads** with it. REST takes the
+**claim lock** — so `claim`/`take`/`who` stop while GraphQL-only work keeps running, and a session can
+be locked out of taking an item on a board it can still read perfectly well.
+
+You and every other worker share ONE 5,000-pt/hr GraphQL budget (one account), and this loop is what
 drains it ([#418](https://github.com/FS-GG/.github/issues/418)): board reads are GraphQL-only, so N
 workers polling cost N full scans a round. Three rules follow, and they are the difference between a
 fan-out that scales and one that takes the board down with it:
