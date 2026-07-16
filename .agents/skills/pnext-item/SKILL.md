@@ -297,8 +297,20 @@ is: you are looking at it, you can change it, and you are choosing to write abou
 
 ```sh
 # 1. Is there already an issue for this?  --state all IS NOT OPTIONAL: see below.
-scripts/fsgg-coord issues <target> --state all \
-  --jq '.[] | select(.title | test("<keyword>"; "i")) | "#\(.number) [\(.state)] \(.title)"'
+#    `issues` emits the raw JSON array and has NO --jq flag — it exits 1 on one. The --jq on the
+#    `gh api` line below IS real; the two lines are not the same command (#874).
+#    CAPTURE, don't pipe: `issues | jq` gives you jq's exit code, and jq is happy to read a FAILED
+#    read as empty and print nothing, exit 0. "No hits" and "the read died" would be the same
+#    answer — and the answer decides whether you file a duplicate. On an exhausted budget (§1 says
+#    EXPECT one by now) that is not hypothetical. Believe an empty list only after a 0 here.
+hits="$(scripts/fsgg-coord issues <target> --state all)" \
+  || { echo "dedupe read FAILED ($?) — do NOT read this as 'nothing filed'"; exit 1; }
+#    contains(), not test(): the keyword is a LITERAL, and test() would read it as a regex —
+#    `test("C++")` matches every title containing "c" (oniguruma: `++` is possessive), so a
+#    metachar keyword silently answers "already filed" and suppresses your finding.
+jq -r --arg k "<keyword>" '.[]
+  | select(.title | ascii_downcase | contains($k | ascii_downcase))
+  | "#\(.number) [\(.state)] \(.title)"' <<<"$hits"
 
 # 2. If you are filing a CHILD of an item you hold — look at what it ALREADY has. This is the
 #    highest-signal place to look, and the one people skip.
