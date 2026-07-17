@@ -531,8 +531,9 @@ an unreachable answer is not a negative one.
 - **`no-touch-set`** — No `Paths:` line at all — an OMISSION. The item is real work and it is invisible to every worker who asks for work. Declare one, or `Paths: none` if it truly has no touch-set.
 - **`deliberately-no-touch-set`** — `Paths: none` — a decision somebody made. An epic, a decision item, an investigation whose scope IS the question. Unschedulable BY DESIGN, and correct.
 - **`unusable-touch-set`** — The declaration contains token(s) that can match no file, so they reserve NOTHING — and files nobody reserved are invisible to every other worker's overlap check.
-- **`held`** — A live claim marker holds it. Wait out the lease, or talk to the worker.
+- **`held-by`** — A live claim marker holds it. Wait out the lease, or talk to the worker.
 - **`held-by-live-work`** — The lease EXPIRED but the work did not: an open `item/<n>-*` PR is the worktree protocol's own artifact, and it outranks a timer. Not offered; its touch-set stays reserved.
+- **`item-pr-open`** — No claim marker governs it, but an `item/<n>-*` PR is already OPEN on its branch — an implementation is in flight whether or not anyone claimed it. Not offered: claiming it would duplicate work that is already written (#651).
 - **`overlaps-in-flight`** — Its files collide with work already in flight. The holder and its lease window are named, because "nothing schedulable" and "queued behind a claim that frees in ~96m" are the same fact and two completely different instructions.
 - **`undetermined`** — WE COULD NOT DECIDE — and that is never a silent no. An unreachable answer is not a negative one. This is the case whose absence made every other case a lie waiting to happen.
 
