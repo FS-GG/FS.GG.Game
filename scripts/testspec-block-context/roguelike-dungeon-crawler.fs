@@ -22,7 +22,25 @@ type ActiveItem = { Id: ItemId; ChargeNeeded: int }
 type Owner = PlayerOwned | EnemyOwned
 
 // --- room contents (§5.3) ---
-type Enemy = { Pos: Geometry.Vec2; Hp: float; Contact: float }
+//
+// `EnemyKind` and the four stat fields below are NOT an invention: §5.2 specifies the roster as a
+// TABLE (Radius / HP / Speed / Threat / Contact dmg) and §9.2's stats table then names the type in
+// prose — `killsByType : Map<EnemyKind, int>` and `deathCause : Enemy of EnemyKind | Trap | Bomb` —
+// without any block ever declaring it. §6 leans on the same table again ("enemy threat budget per
+// combat room: 6 + 2*floorIndex"), so `Threat` is load-bearing game logic, not decoration.
+//
+// This fixture's job is to supply what the PROSE describes but no block declares, modelling the
+// document's types rather than a friendlier version of them. A 3-field `{ Pos; Hp; Contact }` stand-in
+// under-modelled a roster the document specifies in full, and §8.1's Enemy → Token ChannelMap is the
+// first block to actually bind against it.
+type EnemyKind = Grub | Maggot | Spitter | FlySwarmNode | Charger | Turret | Caster | Brute
+type Enemy =
+    { Pos: Geometry.Vec2
+      Kind: EnemyKind
+      Hp: float
+      MaxHp: float          // §5.2's HP column; `Hp` alone cannot drive a 0..1 Health fraction
+      Threat: int           // §5.2's Threat column, 1..6 — the §6 room-budget currency
+      Contact: float }
 type Pickup = { Pos: Geometry.Vec2; Item: ItemId }
 type Obstacle = { Pos: Geometry.Vec2; Blocking: bool }
 type Door = { ToRoom: RoomId; Locked: bool }
@@ -38,7 +56,10 @@ type Settings = { Volume: float; ScreenShake: bool }
 type InputState = { MoveX: float; MoveY: float; AimX: float; AimY: float; Firing: bool }
 type TitleCmd = NewRun | Continue | OpenOptions | Quit
 
-//#block 5 "| MenuUp | MenuDown              // move cursor (wraps)"
+// RE-KEYED 5 -> 6: §8.1's Enemy → Token ChannelMap was inserted ahead of this block, which shifted
+// every later ordinal down by one. 5 was still a valid ordinal in a now-6-block document, so only
+// the anchor catches it — see the harness's §1b.
+//#block 6 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled

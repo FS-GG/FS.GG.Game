@@ -1,7 +1,7 @@
 // Typecheck fixtures for the tower-defense TestSpec (see scripts/typecheck-md-blocks.fsx).
 //
 // The spec's §5 sketch names a vocabulary of ids, damage types and per-run state that the prose
-// describes but never declares in code. Supplied here on block 1; blocks 2-8 inherit them, because a
+// describes but never declares in code. Supplied here on block 1; blocks 2-9 inherit them, because a
 // cumulative corpus opens its predecessors.
 //
 // `Difficulty` is NOT here: FS.GG.Game.Core ships it, and the block resolves to the real one — which
@@ -31,7 +31,10 @@ type TransientFx =
     | Explosion of at: Geometry.Vec2 * radius: float * life: float
 type RunStats = { Kills: int; Leaks: int; DamageDealt: float }
 
-//#block 7 "| MenuUp | MenuDown              // move cursor (wraps)"
+// RE-KEYED 7 -> 8 (and 8 -> 9 below): §8.1's Enemy → Token ChannelMap was inserted ahead of both,
+// shifting every later ordinal down by one. 7 and 8 were still valid ordinals in a now-9-block
+// document, so only the anchors catch it — see the harness's §1b.
+//#block 8 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled
@@ -39,7 +42,7 @@ type RunStats = { Kills: int; Leaks: int; DamageDealt: float }
 // reader copies, and they are what this checks.
 type MenuMsg =
 
-//#block 8 "let struct (ticks, acc') ="
+//#block 9 "let struct (ticks, acc') ="
 // The fixed-step accumulator fragment (§12). The block is a BODY, lifted out of the Tick handler —
 // its free names are the handler's locals, so they are bound here. `Model` and `simStep` come from
 // the document itself (block 5 declares `Model`; the accumulator is what drives it).

@@ -536,10 +536,13 @@ Logical 1280×720; scale to window with letterbox. Coordinate system: origin top
 2. **Range overlay** — when placing/selected: filled circle `#FFFFFF22`, stroke `#FFFFFFAA`.
 3. **Towers** — base (rounded rect 28×28, kind color: Arrow `#8D6E63`, Cannon `#455A64`, Frost
    `#4FC3F7`, Tesla `#FDD835`) + rotated turret line/triangle to `Angle`; tier pips (small dots).
-4. **Enemies** — colored circles sized by kind (Grunt r=9 `#A1887F`, Runner r=7 `#FF8A65`, Brute
-   r=13 `#6D4C41`, Wisp r=8 translucent `#B388FF` with float bob, Spectre `#80CBC4`, boss r=24).
-   Above each: **HP bar** (4px tall, `#000000` bg, `#76FF03→#FFEA00→#FF1744` lerp by hp%), and small
-   **effect glyphs** (snowflake=slow, droplet=poison, bolt=stun, crack=vulnerable).
+4. **Enemies** — drawn by `FS.GG.UI.Symbology` in the `Badge` grammar (`Symbology.badge`) from the
+   §8.1 ChannelMap: the library draws the body silhouette, the identity sigil and the health arc as
+   one symbol, sized by kind via `Token.R` (Grunt 9, Runner 7, Brute 13, Wisp 8, Spectre 8, boss 24).
+   The hand-rolled **HP bar** is gone — `Token.Health` is the health channel, and a bar drawn beside
+   an arc encoding the same number is the same fact twice. The four **effect glyphs**
+   (snowflake=slow, droplet=poison, bolt=stun, crack=vulnerable) stay this spec's own overlay and are
+   **not** a Symbology channel — see §8.1 for why.
 5. **Projectiles** — arrows: 10px line `#FFE082`; shells: 5px circle `#263238` with shadow; beams:
    Tesla jagged polyline `#FFF59D` 2px for 0.08 s; explosions: expanding ring `#FF7043` fading.
 6. **Particles/FX** — muzzle flash (Arrow), smoke puff (Cannon), frost sparkle, electric arcs, gold
@@ -551,6 +554,109 @@ Fonts: HUD numerals **"Inter"/system sans** 18–22px bold; titles 48px; tooltip
 on; enemy/projectile motion looks smooth at 60 FPS without interpolation, but the renderer **may
 interpolate** entity positions between fixed steps using a stored `prevPos` for extra smoothness under
 fast-forward (optional).
+
+### 8.1 Enemy symbology (the `Enemy → Token` ChannelMap)
+
+Ten enemy kinds, each with health, armor, flight and a threat level, is precisely the problem
+`FS.GG.UI.Symbology` exists to solve: a fixed channel set (`Token`), interchangeable grammars, and a
+**legibility linter** that scores a symbol set against a per-channel capacity table. The per-game
+work is one **ChannelMap** from §5.2's `Enemy` to `Token`; the library draws it.
+
+**Where the map lives.** `Symbology` depends on `Scene`, so this map belongs in
+`FS.GG.Game.Render`, **never** in the sim that owns `Enemy` — `FS.GG.Game.Core` reaches up to
+nothing (ADR-0022 §2).
+
+**Ten kinds do not overload `Klass`.** The obvious worry — `Klass` ships three cases
+(`Mobile | Heavy | Scout`) and the roster has ten kinds — is not the real constraint. Capacity is
+**how many levels the eye separates, not how many the grammar can draw**: `Klass` has capacity 6 and
+`Sigil` 12. Ten kinds spread across `Klass` × `Sigil` use 3 and 3 distinct levels respectively and
+`Legibility.score` returns `Clean`. Encode kind on the pair, not on either alone.
+
+**`Speed` is pips, not px/s — this one is an `Error`.** `Token.Speed` is an `int` with domain
+**0..6** and capacity **4**. Passing §5.2's `BaseSpeed` raw is not a near-miss; it is ten
+`Error / Speed : Speed out of domain: 110 (expected 0..6)` findings plus a
+`Warning / Speed : Speed overloaded: 10 distinct levels used, capacity 4`. Quantise to three ranked
+tiers (below) and the same roster scores `Clean`. `Health` is likewise a **0..1 fraction** — pass
+`Hp / MaxHp`, never `Hp`, or it is an out-of-domain `Error`.
+
+**What Symbology deliberately does NOT draw here.** `Sigil` is an **identity** mark — who this unit
+is — not a status. The four status glyphs of layer 4 encode `StatusEffect`, which is transient
+per-enemy state, and there is no status channel in the fixed set. `Motion` is close but wrong: it is
+budgeted **whole-board** (more than one distinct non-`Idle` rhythm across the board is a `Warning`),
+so it cannot carry four independent statuses that stack on one enemy. Status stays the spec's own
+overlay, drawn on top of the badge. Stating the absence is the point: a reader who meets this
+sentence learns the channel set was considered and why it stops here.
+
+**Towers** may use the same vocabulary in `Grammar.Token` rather than `Badge`, and they are the one
+place `Token.SecondaryHeading` earns its keep: a tower base does not rotate but its turret tracks a
+target, which is exactly the "a turret on a hull" second rotation channel — `Heading` fixed,
+`SecondaryHeading = Some tower.Angle`. That is left to the implementer; layer 3 above is unchanged.
+
+```fsharp
+// The Enemy → Token ChannelMap. In a product this lives in FS.GG.Game.Render (ADR-0022 §2):
+// Symbology depends on Scene, and the sim reaches up to nothing.
+type Token = FS.GG.UI.Symbology.Token
+type Klass = FS.GG.UI.Symbology.Klass
+type Sigil = FS.GG.UI.Symbology.Sigil
+type SymFaction = FS.GG.UI.Symbology.Faction
+module Sym = FS.GG.UI.Symbology.Symbology
+
+/// Kind → body silhouette. Paired with `sigilOf` below this separates all ten kinds while using
+/// 3 of `Klass`'s capacity-6 and 3 of `Sigil`'s capacity-12 — `Legibility.score` says Clean.
+let klassOf (e: Enemy) : Klass =
+    match e.Kind with
+    | Brute | Shielded | Juggernaut | Wyrm -> Klass.Heavy
+    | Runner | Swarmling -> Klass.Scout
+    | _ -> if e.Fly then Klass.Scout else Klass.Mobile
+
+let sigilOf (e: Enemy) : Sigil =
+    match e.Kind with
+    | Wisp | Spectre -> Sigil.Bolt            // the two that shrug a damage type
+    | Juggernaut | Wyrm -> Sigil.Fang         // boss tier
+    | _ -> Sigil.Ring
+
+/// BaseSpeed (30..110 px/s) → 3 ranked pip tiers. `Speed` is an int in 0..6 with capacity 4:
+/// passing px/s raw is an out-of-domain Error, not merely an overload — see §8.1.
+let speedTierOf (e: Enemy) : int =
+    if e.BaseSpeed <= 45.0 then 1
+    elif e.BaseSpeed <= 70.0 then 2
+    else 3
+
+/// Bounty is the roster's own ranking of "how much does this thing matter" — reuse it rather than
+/// inventing a second one. Quantised to 4 levels, which is exactly `Threat`'s capacity.
+let threatOf (e: Enemy) : float =
+    match e.Kind with
+    | Wyrm -> 1.0
+    | Juggernaut -> 0.75
+    | Brute | Shielded -> 0.5
+    | _ -> 0.25
+
+let radiusOf (e: Enemy) : float =
+    match e.Kind with
+    | Juggernaut | Wyrm -> 24.0
+    | Brute -> 13.0
+    | Runner -> 7.0
+    | Swarmling -> 6.0
+    | _ -> 9.0
+
+let tokenOf (e: Enemy) : Token =
+    { Sym.defaultToken with
+        Cx = e.Pos.Vx
+        Cy = e.Pos.Vy
+        R = radiusOf e                        // R > 0 or Size is a degenerate Error
+        Faction = SymFaction.Enemy            // every creep is hostile; towers are Ally
+        Klass = klassOf e
+        Sigil = sigilOf e
+        Health = e.Hp / e.MaxHp               // 0..1 fraction, NOT raw Hp
+        Shield = e.Armor > 0.0
+        Speed = speedTierOf e
+        Threat = threatOf e }
+```
+
+**Legibility as a test, not a hope.** The map is pure and the roster is data, so "is this wave
+readable" is an ordinary assertion: `Legibility.score (wave |> List.map tokenOf)` and check
+`Verdict = Clean`. See §14. Note `Legibility.Severity.Error` must be written qualified — a bare
+`Error` would shadow `Result.Error` for every consumer that opens the module.
 
 ## 9. UI / HUD / Screens
 **Screens:** Title (logo, *Play*, map select, difficulty), Map Select (3 thumbnails), Play

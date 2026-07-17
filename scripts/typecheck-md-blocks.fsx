@@ -307,7 +307,16 @@ let corpora =
         // is now doubly true: since #189 the prelude is the REAL published fragment, whose `toPoint`/
         // `toRect` return Scene types, so Scene is the fragment's own dependency and not an artefact
         // of how we chose to reconstruct it.
-        PackageRefs = [ "Expecto"; "FS.GG.UI.Scene" ]
+        //
+        // FS.GG.UI.Symbology, because the five specs with a real unit roster (turn-based-tactics,
+        // tower-defense, roguelike-dungeon-crawler, metroidvania, sandbox-survival) write their
+        // stat -> `Token` ChannelMap as a §8 block. That map is the ONE part of the symbology story a
+        // reader can get subtly wrong for free: `Klass` is a fixed three-case table, so a roster with
+        // six enemy kinds must decide what rides `Sigil` instead, and a prose description of that
+        // decision compiles to nothing. This is the first gate-only pin serving the TESTSPEC corpus
+        // rather than the skills; the pin lives in Directory.Packages.local.props for the usual
+        // reason (`pinnedVersion` reads it and refuses to invent a version).
+        PackageRefs = [ "Expecto"; "FS.GG.UI.Scene"; "FS.GG.UI.Symbology" ]
         Cumulative = true
         // The subject of §3b. `docs/TestSpecTutorial.md` is in this corpus but NOT under this
         // directory, which is exactly right: it must cite the primitives it teaches (it is a reader's
