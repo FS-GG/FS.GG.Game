@@ -112,16 +112,48 @@ differently, and the remedy is not the same. GraphQL takes the **board reads** w
 **claim lock** — so `claim`/`take`/`who` stop while GraphQL-only work keeps running, and a session can
 be locked out of taking an item on a board it can still read perfectly well.
 
-You and every other worker share ONE 5,000-pt/hr GraphQL budget (one account), and this loop is what
-drains it ([#418](https://github.com/FS-GG/.github/issues/418)): board reads are GraphQL-only, so N
-workers polling cost N full scans a round. Three rules follow, and they are the difference between a
+You and every other worker authenticate as ONE account, so you share **both** of its budgets:
+5,000 pt/hr of GraphQL, and REST's own 5,000 req/hr — which `budget` **cannot show you** (§5). This
+loop drains both, and they are **not** interchangeable: GraphQL carries the **board reads** (#418:
+five workers looping `take` drained it in ~15 minutes, which is why the scan cache exists), REST
+carries the **claim lock** (ADR-0034 §3). Three rules follow, and they are the difference between a
 fan-out that scales and one that takes the board down with it:
 
 - **Let `take`/`next` use the shared 90s scan cache.** Never add `--fresh` in a loop; it exists for
   `take`'s own retry-after-a-lost-race, which already sets it.
-- **Read issues over REST, not GraphQL.** `fsgg-coord issues <repo>` is free; `gh issue list` /
-  `gh issue view` cost 2 points each, and `gh issue edit` costs 4. When GraphQL is gone, REST is still
-  up — `gh api repos/…` will still open your PR and post your comments.
+- **Do NOT route reads onto REST to save GraphQL points.** This bullet used to say the opposite —
+  *"read issues over REST, not GraphQL; `fsgg-coord issues` is free"* — and it was the doctrine that
+  killed the lock ([#895](https://github.com/FS-GG/.github/issues/895)). `issues` is free in the
+  currency that bullet counted, and **the cost lands somewhere else**: it spends a REST *request*,
+  and REST is where the claim lock lives (ADR-0034 §3). Counting one budget while spending another
+  is how the advice read as thrift for as long as it did.
+
+  **And it bought nothing.** Measured in `.github` on 2026-07-17 — same 402 issues, both ways:
+
+  | | metering | a full issue-list read (402 issues) | a full board read (383 items) | carries the lock? |
+  |---|---|---|---|---|
+  | **GraphQL** | **nodes** | `gh issue list --limit 402`: **7 pts** of 5,000 | `scan --fresh`: **31–41 pts**, 4 paged queries | no |
+  | **REST** | **requests** | `fsgg-coord issues`: **6 reqs** of 5,000 | **no REST form exists** | **yes** (ADR-0034 §3) |
+
+  **Seven GraphQL points, or six REST requests.** That is the whole trade the old advice was making:
+  it spent the budget the lock lives on to save **7 points out of 5,000**. The thrift was not small —
+  it was imaginary.
+
+  The costs are near-identical because both reads are trivial. What is *not* symmetric is what each
+  budget also has to carry, and whether you can do anything about it. REST's 5,000 carries **every
+  claim, every heartbeat, every comment, for every worker on the account**, and per-request metering
+  means there is **no lever to pull** under fan-out. GraphQL's 5,000 carries board reads that batch
+  100 nodes to a query. Put the discretionary reads where the lever is, and leave REST for the thing
+  that has no alternative.
+
+  And it already inverted, live: [REST when the budget is gone](#rest-when-the-budget-is-gone) has
+  the measured account — REST hit **0 / 5,000 twice on 2026-07-16**, taking the claim lock with it
+  both times, while GraphQL stayed healthy throughout. That is the one condition four ADRs forbid —
+  *a lock may never live on the budget that dies first* — and the recipe engineered it by steering
+  the fleet onto the lock's own budget on a single shared account.
+
+  **REST remains the fallback when GraphQL is genuinely exhausted**, and §5 leans on that. A fallback
+  is not a default: reach for it when GraphQL is gone, not to keep it topped up.
 - **A rate-limited board write is DEFERRED, not lost — but NOTHING replays it on its own.** *Every*
   board write — `set-field`, `claim`, `done --flip`, `release`, `reap` — queues itself on an
   exhausted budget and says so, and `scripts/fsgg-coord flush` replays the queue. Do not "fix" the
@@ -434,7 +466,7 @@ is: you are looking at it, you can change it, and you are choosing to write abou
 
 ### Look before you file — you are not the only one filing
 
-**Check whether it is already filed. Two REST reads, zero GraphQL, and they cost you nothing:**
+**Check whether it is already filed. Two REST reads — cheap, but not *free*: they spend the budget the claim lock lives on (#895). Spend them anyway; a duplicate costs the org more than two requests:**
 
 ```sh
 # 1. Is there already an issue for this?  --state all IS NOT OPTIONAL: see below.
