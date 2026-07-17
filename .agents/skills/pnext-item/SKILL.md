@@ -719,9 +719,35 @@ gh api -X PUT repos/FS-GG/<repo>/pulls/<pr>/merge \
 gh api -X DELETE repos/FS-GG/<repo>/git/refs/heads/item/<n>-<slug>    # the branch, explicitly
 ```
 
-`landable` prints one word and puts the decision in the exit code — `green` (0), `pending` (3),
-`red` / `conflicted` / `unknown` (1). Without `--wait` it answers once and returns; that is the form
-`adopt`, `who` and `reap` use.
+`landable` prints one word on stdout and puts the decision in the **exit code**, so a poll loop reads
+"keep waiting" from "stop" without parsing prose. Without `--wait` it answers once and returns; that is
+the form `adopt`, `who` and `reap` use — and it is exactly when you must key on the code yourself:
+
+<!-- BEGIN GENERATED: fsgg-protocol:landable-exit-codes -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
+
+  The hand-written copy of this table documented BASH's codes (#900) — green 0, pending 3, red 1
+  — where the engine returns 0/7/3/4 and keeps 3 == red across every verdict command. It was
+  wrong in BOTH directions on the two codes a poll loop reads. Edit Protocol.fs and regenerate.
+-->
+
+| exit | meaning | what to do |
+|---|---|---|
+| **0** | GREEN — the PR is finished work: it merges cleanly, and every workflow run and check-run scored on its head SHA passed. The ONLY code that means merge it. | Merge it. This is the only code that says so. |
+| **7** | PENDING — the verdict has not SETTLED: checks are still running, none have registered yet, the run set is still growing, or an assertion you added (`--require`, `--sha`) is not yet met. The ONE retryable verdict, which is why it has a code of its own rather than sharing one with a way to stop. | Keep waiting — this is the only code that says wait. Prefer `--wait`, which polls until the verdict settles rather than believing an early green. A `pending` that NEVER resolves is a finding: the job was RENAMED, its workflow's `paths:` filter no longer matches, or `--sha` named the wrong commit. |
+| **3** | RED or CONFLICTED — two words, one code, because both mean STOP and neither improves by waiting. Red: a run or check-run failed. Conflicted: the PR does not merge cleanly, so GitHub cannot build `refs/pull/N/merge` and gives it NO CI at all — which is why it is returned immediately rather than polled. | Stop. Do NOT wait — 3 is the code the recipe used to call `pending`, and a loop that waits on it never terminates. A red check is a finding; a conflicted PR needs a rebase, which is AUTHORING, not landing. |
+| **4** | UNKNOWN — no verdict, and this is the FAIL-CLOSED one (#266). The read could not be made or its answer was not conclusive: a rate limit, a 404, a `mergeable` GitHub has not computed. Note what it is NOT — there is no EX_RATE (75) here, unlike `take`: an exhausted budget arrives as this code, because `landable` has no error channel to carry a budget on. | Do not merge, and do not treat it as a red. An unreachable answer is not a negative one. Look at why the read failed — check `budget` if you suspect a rate limit — and ask again. |
+| **1** | REFUSED — the engine rejected your INPUT before it ever looked at the PR: no `--repo` (so which repo the PR is in is undefined), a ref that is not a PR number, or the wrong number of arguments. It is not a verdict about the PR, and no word is printed. | Read the message and fix the call. Not retryable — it will refuse identically. |
+| **2** | The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs. | Report it. Do not retry, and do not merge a PR you have no verdict on. |
+
+<!-- END GENERATED: fsgg-protocol:landable-exit-codes -->
+
+**`7` is the only code that means wait.** Every other non-zero means stop, which is why §5's own fence
+(`landable <pr> --wait || exit 1`) is safe against this table being wrong — and why it stayed wrong so
+long: the copy-pasteable command never read the numbers, and only a worker building their own loop got
+hurt.
 
 > **THIS USED TO BE FORTY LINES OF `jq` IN THIS FENCE, AND IT WAS WRONG FOUR TIMES**
 > ([#724](https://github.com/FS-GG/.github/issues/724)). Each fix edited a **copy**:
