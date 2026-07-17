@@ -1011,8 +1011,40 @@ a board that lies.
 The **merge** is already REST above — it has to be, under §2's worktree (#564). These are the *other*
 `gh pr …` / `gh issue …` commands, which are GraphQL and die on an exhausted budget with
 `API rate limit already exceeded`. Verified end-to-end at **0 remaining** GraphQL. `gh api repos/…`
-spends the **REST** budget, which is separate and almost never exhausted — `fsgg-coord budget` shows
-both.
+spends the **REST** budget, which is a *separate* one — so GraphQL being gone does not stop it.
+
+**That is the only thing REST being separate buys you. It is not a budget you can count on, and it is
+UNMETERED** ([#907](https://github.com/FS-GG/.github/issues/907)). This line used to say REST was
+"almost never exhausted" and that `fsgg-coord budget` "shows both". Both halves were false:
+
+- **REST dies.** Twice on 2026-07-16 in `.github` — core hit **0 / 5,000** both times, with every real
+  read 403'ing and the budget resetting at 17:46:14Z
+  ([#894](https://github.com/FS-GG/.github/issues/894)) and 18:46:17Z (#907). It takes the **claim
+  lock** with it, because the lock lives on REST (ADR-0034 §3), so `claim`/`take`/`who` stop while
+  GraphQL-only work keeps running — a session can be locked out of taking an item on a board it can
+  still read perfectly well. (Those are the **reset** instants, read from `X-RateLimit-Reset` on the
+  403s; the exhaustion is earlier. #907 probed it dead at 18:29Z, ~17 minutes before its reset.)
+- **`budget` cannot see REST.** It reports the GraphQL meter and the depth of the deferral queue, and
+  nothing else — there is no REST line to read. So the worker who hits a REST limit and reaches for the
+  free pre-flight read is shown a **healthy** number *for the budget that did not die*, and reads it as
+  "everything is fine". That is [#266](https://github.com/FS-GG/.github/issues/266)'s signature — a
+  check reporting green on a subject it cannot see — and this recipe was the thing asserting the check
+  looks.
+
+**`budget` is RIGHT to be silent, and the fix is not to teach it `/rate_limit`.** #894 ruled that out
+explicitly, and two independent probes measured why: on this account `/rate_limit` **disagrees with
+reality**. It reported `core: 2431/5000` (#894) and `core: 2320/5000` (#907, at 18:28Z) while real
+requests 403'd with `x-ratelimit-remaining: 0`, `resource: core` — #907's pair in the *same second*,
+#894's stably across repeated probes and naming a *different reset instant*. Metering REST from it
+would replace silence with a confident wrong number, which is strictly worse.
+
+**So the 403's own headers are the only honest reading of REST**, and the engine's `EX_RATE` message
+is the one thing that names the budget that actually died — since
+[#897](https://github.com/FS-GG/.github/issues/897) it tells three apart (`GraphQlBudget` /
+`RestBudget` / `UnknownBudget`, `src/FS.GG.Coord.GitHub/Errors.fs`), reading them off the failing
+response rather than guessing. **Believe that message over any pre-flight number**: it is emitted by
+the call that actually died, at the moment it died, and `budget` is a *different* call reading a
+*different* budget. When the two disagree, the message is the one that looked.
 
 ```sh
 # CREATE the PR  (gh pr create is GraphQL)
