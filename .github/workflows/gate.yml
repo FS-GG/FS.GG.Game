@@ -259,6 +259,53 @@ jobs:
             exit 1
           fi
 
+  # Doc-vs-surface gate (FS.GG.Game#385). The job above proves the baselines DESCRIBE the surface; this
+  # one holds our own doc prose to them. Nothing did, so an `.fsi` doc comment could name any symbol at
+  # all — private, renamed, invented — and every gate here stayed green. That is how #378 happened:
+  # #340 cross-referenced `Physics.circleCircleManifold`, a `let private`, and it sat wrong for weeks
+  # until FS.GG.Rendering's doc-vs-pin rule caught it one repo downstream (their #752), after we pack,
+  # after they pin, by someone with none of the context.
+  #
+  # Reads the CHECKED-IN baselines, so no build and no restore — which is why this is a 5-minute job
+  # next to the 15-minute one above, and why it can be its own signal rather than another step there.
+  # It rides on that job's guarantee: `surface-baseline-drift` is what makes the oracle current, and
+  # without it this gate would faithfully resolve prose against a stale surface.
+  #
+  # Separate job = distinct signal, as everywhere in this file. A red here means a doc names something
+  # unexported; a red above means the baselines are stale. Those are different facts with different
+  # repairs, and one is not evidence about the other.
+  fsi-doc-surface:
+    name: Doc-vs-surface (.fsi prose names only exported symbols)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Fail on a doc naming a symbol the package does not export
+        run: scripts/check-fsi-doc-surface.sh
+
+  # Tests for the gate ABOVE. Same argument as pin-coherence-tests: the failure that matters is not the
+  # checker going red, it is the checker matching NOTHING — a renamed baseline, a re-shaped member
+  # line, a doc convention that drifts off backticks — and reporting that in green, which is
+  # indistinguishable from "every doc reference resolves". The suite demands a red for each of those,
+  # and pins #340's exact `Physics.circleCircleManifold` line as a regression fixture.
+  #
+  # It also pins the FALSE POSITIVES, which are load-bearing in the other direction: the private symbol
+  # named from a `.fs` implementation comment, the nullary DU case, and the type the baseline emits
+  # top-level are all CORRECT prose, and a gate that flagged them would be a gate everyone learns to
+  # ignore. Hermetic: baseline + .fsi fixtures in a temp dir; no build, no network, no token.
+  fsi-doc-surface-tests:
+    name: Doc-vs-surface gate tests (scripts/check-fsi-doc-surface.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Behavioural test suite (baseline + .fsi fixture in, exit code + subject claim out)
+        run: scripts/test-check-fsi-doc-surface.sh
+
   # Sync-not-fork drift gate (shared-build-config contract, ADR-0006). The three managed build-config
   # files (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json) must stay
   # byte-identical to the org source of truth in FS-GG/.github dist/dotnet/. A hand-edit to a managed
@@ -938,13 +985,18 @@ jobs:
           # THE FLOOR: warning. With the sources followed, the tree is clean here — no baseline, no
           # suppressions, nothing silenced to get to green.
           #
-          # Below the floor sit 10 SC2016s ("expressions don't expand in single quotes"), and they are
+          # Below the floor sit the SC2016s ("expressions don't expand in single quotes"), and they are
           # correct-as-written, not debt: they are literal markdown code spans in test assertions
           # (`expect_has '### `path``') and `$1`/`$2` inside single-quoted awk programs. shellcheck
           # reads a backtick in single quotes as a command substitution; the shell does not. The same
           # code is already suppressed for the same reason in skill-refs-sweep.yml. They are PRINTED
           # above and not fixed, which is the honest state — not hidden behind a `disable` that would
           # also hide the next real one.
+          #
+          # This comment used to say "10 SC2016s", and by the time anyone read it there were 55: the
+          # count is a fact about every suite in the tree, so it went stale each time one was added,
+          # in prose no gate reads. The CLASS is the durable claim and the count never was — the floor
+          # below counts for itself.
           blocking=$(grep -cE ': (error|warning):' "$log" || true)
           if [ "$blocking" -ne 0 ]; then
             echo "::error::shellcheck found $blocking finding(s) at or above 'warning' in the repo's" \
