@@ -392,15 +392,31 @@ discipline, managed for you. Fetch anyway: whatever cuts the worktree can only c
   tells you to stop working it. Believe it. Re-take with `claim`, or walk away — renewing a dead
   marker would put two workers on one item, which is the entire failure this protocol exists to
   prevent.
-- **Commit with the trailer `claim` printed** — the literal line, with your id already in it — so
-  attribution survives into history. No id is written here to copy (#551), and **do not derive one**:
-  `$FSGG_WORKER` is empty if your id came from the worktree name, and `$(git config fsgg.worker)`
-  returns whoever claimed most recently (it is repo-shared unless `extensions.worktreeConfig` is set).
-  A blank trailer loses the attribution; a borrowed one asserts a false one.
+- **Commit with the trailer, so attribution survives into history.** No id is written here to copy
+  (#551) — expand the one §0 minted you:
 
   ```sh
-  git commit --trailer "FSGG-Worker: <the id `claim` printed>"
+  git commit --trailer "FSGG-Worker: $FSGG_WORKER"
   ```
+
+  **`claim` does NOT print this line, and this step used to tell you to copy it from what `claim`
+  printed** (#629). `claim` prints one line — `claimed <repo>#<n> by worker <id>` — and
+  `grep -rn 'FSGG-Worker' src/` matches nothing. The **bash** client printed the trailer; ADR-0040's
+  port dropped that output and this instruction outlived it. Worse, the same sentence forbade **both**
+  ways to reconstruct it, so it left no legal move: copy a line that does not exist, or nothing.
+
+  **`$FSGG_WORKER` is the honest read, and the reason it was forbidden is gone.** The old text said it
+  "is empty if your id came from the **worktree name**" — there is no worktree-name derivation
+  (`Identity.resolve` is `--worker` → `$FSGG_WORKER` → session id → *refuse*), so that is not a way it
+  can be empty. §0 mandates the mint, and the mint sets it: for anyone who followed §0, this variable
+  **is** the id holding the lock.
+
+  If it is empty you skipped §0, and your id came from the session — the one every subagent of your
+  session shares. Mint one rather than writing a trailer around it.
+
+  **`$(git config fsgg.worker)` is still wrong**, for a reason nothing retired: it returns whoever
+  claimed *most recently* (repo-shared unless `extensions.worktreeConfig` is set). A blank trailer
+  loses the attribution; a borrowed one asserts a false one.
 
 - Watch for stray build artifacts (`.pyc`, `bin/`, `obj/`) sneaking into the commit from a fresh
   worktree.
