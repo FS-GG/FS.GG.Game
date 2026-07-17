@@ -89,12 +89,11 @@ On a hit, **comment on the existing issue** rather than opening a rival — the 
 context, and a comment carries that just as well.
 
 **End the body with a `Paths:` line.** An issue with no declared touch-set **cannot be
-scheduled** — `take`/`batch` refuse it, correctly, because an undeclared touch-set cannot be
-proven disjoint from another worker's. A request filed without one lands on the board looking
-like work and is invisible to every worker who asks for work
+scheduled**, and a request filed without one lands on the board looking like work while being
+invisible to every worker who asks for work
 ([#442](https://github.com/FS-GG/.github/issues/442): twelve items, filed by the book, none
 schedulable). You are the one holding the context — you can usually name the files better than
-the eventual claimant can.
+the eventual claimant can. The rules the engine will hold you to are below, generated from it.
 
 ```sh
 # REST: `gh issue create` is GraphQL, and the budget is shared by the whole fleet (#587).
@@ -106,18 +105,38 @@ gh api -X POST repos/FS-GG/<target>/issues \
 Paths: src/Scene/ tests/Scene/" --jq .html_url
 ```
 
-`Paths:` is not a glob language — exact paths, directory prefixes, and a *trailing* `/**` or
-`/*`; a leading `**/` matches nothing and is refused, and so is a backticked one
-([#435](https://github.com/FS-GG/.github/issues/435)).
+### The rules your filing must satisfy
 
-If you genuinely cannot name the touch-set (a decision item, an epic, an investigation whose
-scope *is* the question), declare **`Paths: none`** — the sentinel, not a comment
-([#496](https://github.com/FS-GG/.github/issues/496)). It does not make the item schedulable;
-it makes the absence **deliberate and machine-readable**, and `fsgg-coord lint` goes **red** on a
-`Ready`/`Backlog` item that declares neither paths nor the sentinel. Prose here was the old
-instruction, and **nothing read prose** — so an epic and a forgotten touch-set looked identical,
-and real work went invisible to every worker who asked for work. **A finding filed without either
-is a finding nobody can pick up.**
+<!-- BEGIN GENERATED: fsgg-protocol:filing-rules -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
+
+  These rules were restated by hand here, and #916 measured why that is not survivable: the
+  hand-written copies AGREED with each other for as long as they existed and were wrong the
+  whole time. Edit Protocol.fs and regenerate.
+-->
+
+*Generated from the typed core. The engine that refuses your `Paths:` line is the engine that
+wrote this. The full rule set, with the incident behind each one, is in
+[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).*
+
+**`Paths:` is a declaration, and a fenced one is a QUOTATION**
+
+Declare the touch-set as a `Paths:` line at up to three leading spaces. A `Paths:` line INSIDE a fenced code block is a quotation of the grammar, not a use of it — the protocol docs quote it constantly. `Paths: none` is a SENTINEL meaning "this item deliberately has no touch-set", and it is not the same fact as having forgotten one.
+
+**The touch-set grammar — it is NOT a glob language**
+
+supported: an exact path ('src/Foo.fs'), or a directory prefix ('src/Foo', 'src/Foo/*', 'src/Foo/**'). There is no glob matcher: a leading '**/' or an interior '*' matches nothing — spell the paths out.
+
+**A MERGED blocker is RESOLVED; an unreadable one BLOCKS**
+
+`Blocked by` clears on CLOSED **or MERGED**. It does not clear on OPEN, on a blocker whose state could not be read (unverifiable), or on prose that is not an issue ref at all (unparseable) — all three BLOCK.
+
+<!-- END GENERATED: fsgg-protocol:filing-rules -->
+
+`fsgg-coord lint` goes **red** on a `Ready`/`Backlog` item that declares neither paths nor the
+sentinel — so an omission is caught rather than sitting on the board looking like work.
 
 ## Respond / resolve
 
@@ -164,9 +183,10 @@ cross-repo roadmap (milestones are repo-scoped; keep them for repo-local release
   comma-separated list of issue refs (`owner/repo#n`, `repo#n`, `#n`, or an issue URL) and
   canonicalizes each to `owner/repo#n`; anything else is refused before the write. It is not a
   delivery log and not the inverse (`blocks X`) edge — narrative goes in an issue comment, "this
-  item is blocked" goes in `Status`. Clear it (`''`) when the blocker resolves.
-  `fsgg-coord next` reads it: an item whose blockers are still open — or whose blocker it cannot
-  see on the board — is skipped, with the reason on stderr (`--ignore-blocked` overrides).
+  item is blocked" goes in `Status`. Clear it (`''`) when the blocker resolves. `fsgg-coord next`
+  reads it and skips a blocked item with the reason on stderr (`--ignore-blocked` overrides);
+  **what counts as blocked is the engine's call, and it is stated once** under
+  [*The rules your filing must satisfy*](#the-rules-your-filing-must-satisfy) above.
 - **Epics are the Phase parents**; use **sub-issues** for the children so progress rolls up.
   An epic is a card whose **title** carries `[epic]` (Projects v2 issue types are unset on this
   board). `fsgg-coord lint` enforces the invariants: an **open** `[epic]` must have at least one
