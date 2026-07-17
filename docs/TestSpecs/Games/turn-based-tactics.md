@@ -668,9 +668,11 @@ row*72, 72, 72)`.
    `ShowThreatOverlay` is off, show only telegraphs for the hovered/selected enemy.
 6. **Units** — drawn by `FS.GG.UI.Symbology` in the `Badge` grammar (`Symbology.badge`),
    not hand-rolled: the ChannelMap of §8.1 turns a `Unit` into a `Token` and the library
-   draws the frame, the kind glyph, the health arc and the trait marks as one symbol.
-   Position lerped by `Anim` during movement; the ChannelMap is pure, so `Anim` moves the
-   token's `Cx`/`Cy` and nothing else.
+   draws the frame, the body silhouette, the health arc, the name label and the armor mark
+   as one symbol. Position lerped by `Anim` during movement; the ChannelMap is pure, so
+   `Anim` moves the token's `Cx`/`Cy` and nothing else. Note this replaces the old "HP pip
+   row" with an arc and the "trait icons" with a single `Shield` mark — the channel set has
+   no trait channel, so `Amphibious`/`Mobile` are **not** drawn; see §8.1.
 7. **Selection ring** — `#FFFFFF`, 3 px, around `SelectedUnit`.
 8. **Floating combat text & particles** — damage numbers rise + fade; push impacts
    emit a 6-particle spark; deaths emit a dissolve. All driven by `Anim`, never
@@ -709,6 +711,16 @@ shape as the `Vec2`/`Point`/`Rect` label rule in §5.4. So the block below never
 namespace: it names the library's types through **abbreviations** (which add no cases, so
 nothing can collide) and aliases the function module.
 
+**What the channel set does not carry, stated plainly.** There is no **trait** channel. Of §5.4's
+`Trait` set, only `Armored` reaches one (`Shield`); `Massive` and `Flying` fold into `Klass` as
+silhouette; and **`Amphibious` and `Mobile` are not drawn at all** — the old layer 6 promised "trait
+icons", and this map does not keep that promise. Both are readable from other surfaces (the unit
+card in §9, and `Mobile` is visible the moment a unit acts and can still move), so the trade is
+worth making — but it is a trade, and a reader who meets this sentence learns it now rather than
+when a Hornet drowns. `TokenState` (`Confirmed`/`Suspected`) is likewise unused: it is a
+spotted-vs-ghost distinction and this game has full information — every enemy `Telegraph` is shown
+in §8 layer 5, which is the whole point of the design.
+
 **Quantise `MoveRange` — do not pass it raw.** `Speed` is an `Ordered` channel with a
 capacity of **4**: the eye ranks about four levels, and a fifth is an overload no matter how
 many beads the grammar can draw. The §5.1/§5.2 rosters span `MoveRange` 1–5 (Behemoth 1,
@@ -728,13 +740,18 @@ readability limit, not nagging.
 // importing its cases, so `Player`/`Enemy` below are unambiguously THIS spec's.
 type Token = FS.GG.UI.Symbology.Token
 type Klass = FS.GG.UI.Symbology.Klass
-type Sigil = FS.GG.UI.Symbology.Sigil
 type SymFaction = FS.GG.UI.Symbology.Faction
 module Sym = FS.GG.UI.Symbology.Symbology
 
-/// Body silhouette. `Massive`/`Armored` read as Heavy, high mobility as Scout, the rest Mobile.
+/// Body silhouette — INTRINSIC identity only. `Massive` reads Heavy, flight or high mobility reads
+/// Scout, the rest Mobile.
+///
+/// `Armored` is deliberately NOT read here even though it looks like a Heavy tell: §5.1's Pulsar can
+/// *grant* it to an adjacent ally for one round, so keying the silhouette off it would reshape a
+/// Skirmisher's body mid-mission and reshape it back. Klass says what a unit IS; the buff rides
+/// `Shield`, which is the channel for exactly that. One fact, one channel.
 let klassOf (u: Unit) : Klass =
-    if u.Traits.Contains Massive || u.Traits.Contains Armored then Klass.Heavy
+    if u.Traits.Contains Massive then Klass.Heavy
     elif u.Traits.Contains Flying || u.MoveRange >= 4 then Klass.Scout
     else Klass.Mobile
 
@@ -754,9 +771,11 @@ let tokenOf (centre: Geometry.Vec2) (u: Unit) : Token =
                    | Player -> SymFaction.Ally
                    | Enemy -> SymFaction.Enemy)
         Klass = klassOf u
-        Sigil = Sigil.Fang
+        // Sigil is left at its default ON PURPOSE. `Kind` is a string ("Vanguard", "Crawler"), and
+        // it already rides `Label` below — spending the centre identity mark on a second copy of the
+        // name would encode one fact twice, and a constant Sigil would encode nothing at all.
         Health = float u.Hp / float u.MaxHp       // must be 0..1 — out of domain is an Error
-        Shield = u.Traits.Contains Armored
+        Shield = u.Traits.Contains Armored        // intrinsic OR granted by Pulsar's *Shield*
         Speed = speedTierOf u
         Label = Some (Sym.plainLabel u.Kind) }
 ```

@@ -308,14 +308,24 @@ let corpora =
         // `toRect` return Scene types, so Scene is the fragment's own dependency and not an artefact
         // of how we chose to reconstruct it.
         //
-        // FS.GG.UI.Symbology, because the five specs with a real unit roster (turn-based-tactics,
-        // tower-defense, roguelike-dungeon-crawler, metroidvania, sandbox-survival) write their
-        // stat -> `Token` ChannelMap as a §8 block. That map is the ONE part of the symbology story a
-        // reader can get subtly wrong for free: `Klass` is a fixed three-case table, so a roster with
-        // six enemy kinds must decide what rides `Sigil` instead, and a prose description of that
-        // decision compiles to nothing. This is the first gate-only pin serving the TESTSPEC corpus
-        // rather than the skills; the pin lives in Directory.Packages.local.props for the usual
-        // reason (`pinnedVersion` reads it and refuses to invent a version).
+        // FS.GG.UI.Symbology, because FOUR specs with a real unit roster (turn-based-tactics,
+        // tower-defense, roguelike-dungeon-crawler, sandbox-survival) write their stat -> `Token`
+        // ChannelMap as a §8 block. (metroidvania is the fifth with a roster and deliberately does
+        // NOT: it commits to per-kind sprites and declines the primitive in prose, per §3b. Do not
+        // "fix" that by adding a block.)
+        //
+        // That map is the ONE part of the symbology story a reader can get subtly wrong for free,
+        // and the errors are quiet ones a prose description cannot catch: `Token.Speed` is an int in
+        // 0..6, so a spec that hands it px/s is an out-of-domain Error rather than a rounding slip,
+        // and `Health`/`Threat` are 0..1 fractions with the same trap. This is the first gate-only
+        // pin serving the TESTSPEC corpus rather than the skills; the pin lives in
+        // Directory.Packages.local.props for the usual reason (`pinnedVersion` reads it and refuses
+        // to invent a version).
+        //
+        // WHAT THIS PIN DOES NOT BUY, so nobody mistakes green for readable: the gate compiles the
+        // ChannelMaps, it does not RUN `Legibility` over them. Capacity/domain findings and whether
+        // two kinds are told apart are properties of the mapping, not of its types — the specs carry
+        // those as §14 assertions, which is where they belong.
         PackageRefs = [ "Expecto"; "FS.GG.UI.Scene"; "FS.GG.UI.Symbology" ]
         Cumulative = true
         // The subject of §3b. `docs/TestSpecTutorial.md` is in this corpus but NOT under this

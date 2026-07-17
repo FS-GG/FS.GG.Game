@@ -648,6 +648,15 @@ let speedTierOf (k: EnemyKind) : int =
     | Crawler | Slime -> 2
     | Bat -> 3
 
+/// Three ranked sizes from the §5 catalogue's px dimensions (Bat 28×20 … Brute 40×60). `Size` is
+/// Ordered with capacity 4, so this ranks rather than transcribing: a 40×60 Brute must not draw at
+/// the same radius as a 28×20 Bat, but 26×44 and 28×40 are the same size to the eye.
+let radiusOf (k: EnemyKind) : float =
+    match k with
+    | Brute -> 32.0                 // 40×60, the night-only tank
+    | Crawler | Skeleton -> 22.0    // 28×40, 26×44
+    | Slime | Bat -> 16.0           // 32×24, 28×20
+
 /// THIS FUNCTION IS THE SCENE BOUNDARY §5 NAMES. This world is `float32` throughout and declares
 /// its own `Vec2 = { Vx: float32; Vy: float32 }`; `Token` is `float`. So the widening happens here,
 /// once, at the edge — exactly where §5's comment says to put it — and never leaks into the sim.
@@ -655,7 +664,7 @@ let tokenOf (e: Enemy) : Token =
     { Sym.defaultToken with
         Cx = float e.Pos.Vx                             // float32 -> float: the boundary conversion
         Cy = float e.Pos.Vy
-        R = 20.0                                        // R > 0 or Size is a degenerate Error
+        R = radiusOf e.Kind                             // R > 0 or Size is a degenerate Error
         Heading = (match e.Facing with                  // whole-body rotation in Grammar.Token
                    | Left -> System.Math.PI
                    | Right -> 0.0)

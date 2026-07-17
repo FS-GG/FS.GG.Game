@@ -582,6 +582,18 @@ rather than showing the number.
 **`Health` needs `MaxHp`.** `Token.Health` is a 0..1 fraction. §5.2's HP column is the max; the
 live `Enemy` carries current `Hp`. Pass `Hp / MaxHp`, never `Hp`, or it is an out-of-domain `Error`.
 
+**This map accepts one `Size` warning on purpose, and it is the interesting one.** §5.2's Radius
+column has eight distinct values (8–22), and `Size` is `Ordered` with capacity **4**, so
+`Legibility.score` returns `Warning / Size : Size overloaded: 8 distinct levels used, capacity 4`.
+Do **not** quantise it away. `Symbology` treats `R` as a *channel* — a size the eye should rank —
+but in this game the radius is **physics**: §4.3 resolves a shot against an enemy by circle/circle
+overlap on `shotRadius + enemyRadius`, so the drawn symbol *is* the hitbox. Round a Charger's 16 px
+to a shared "large" tier and the player is now dodging a circle that is not the thing that kills
+them, which is the one unforgivable bug in a bullet-hell. Fairness outranks the linter here, and
+`tower-defense` §8.1 quantises the identical channel precisely because its radii are decorative —
+it resolves hits with `arriveEps`, not with the enemy circle. Same channel, opposite call, because
+the underlying facts differ.
+
 ```fsharp
 // The Enemy → Token ChannelMap. In a product this lives in FS.GG.Game.Render (ADR-0022 §2):
 // Symbology depends on Scene, and the sim reaches up to nothing.
@@ -639,12 +651,30 @@ let tokenOf (facing: Vec2) (e: Enemy) : Token =
         Threat = threatOf e }
 ```
 
-**Legibility as a test, not a hope.** The map is pure and the roster is data, so "is this room
-readable" is an ordinary assertion over the §5.2 roster: `Legibility.score (room |> List.map …)`
-and check `Verdict = Clean`. That matters more here than in a fixed-roster game, because §4.8
-draws room contents from a seeded `LayoutRng` — the linter turns "no seed produces an illegible
-room" into a property test. Note `Legibility.Severity.Error` must be written qualified: a bare
-`Error` would shadow `Result.Error` for every consumer that opens the module.
+**Legibility as a test, not a hope — and `Clean` is the wrong assertion here.** The map is pure and
+the roster is data, so "is this room readable" is an ordinary assertion over the §5.2 roster. But
+per the `Size` note above this map is *deliberately* not `Clean`, so asserting `Verdict = Clean`
+would fail on correct code and the next author would "fix" it by breaking the hitboxes. Assert the
+shape you actually want — **no `Error`s at all, and no `Warning` other than the known `Size` one**:
+
+```fsharp
+module Legibility = FS.GG.UI.Symbology.Legibility
+
+/// The §14 assertion. `Verdict = Clean` is deliberately NOT the check: the Size overload is a
+/// consequence of R being the hitbox (§8.1), so it is pinned as accepted BY CHANNEL — any Error, or
+/// any Warning on a channel other than Size, still fails.
+let roomIsLegible (facing: Vec2) (room: Enemy list) : bool =
+    (Legibility.score (room |> List.map (tokenOf facing))).Findings
+    |> List.forall (fun f ->
+        f.Severity <> Legibility.Severity.Error
+        && f.Channel = Legibility.Channel.Size)
+```
+
+An accepted finding is pinned to its channel, so a *new* overload on any other channel still fails.
+That matters more here than in a fixed-roster game, because §4.8 draws room contents from a seeded
+`LayoutRng` — this turns "no seed produces an illegible room" into a property test. Note
+`Legibility.Severity.Error` must be written qualified: a bare `Error` would shadow `Result.Error`
+for every consumer that opens the module.
 
 ## 9. UI / HUD / Screens
 

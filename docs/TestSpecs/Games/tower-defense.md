@@ -538,7 +538,10 @@ Logical 1280×720; scale to window with letterbox. Coordinate system: origin top
    `#4FC3F7`, Tesla `#FDD835`) + rotated turret line/triangle to `Angle`; tier pips (small dots).
 4. **Enemies** — drawn by `FS.GG.UI.Symbology` in the `Badge` grammar (`Symbology.badge`) from the
    §8.1 ChannelMap: the library draws the body silhouette, the identity sigil and the health arc as
-   one symbol, sized by kind via `Token.R` (Grunt 9, Runner 7, Brute 13, Wisp 8, Spectre 8, boss 24).
+   one symbol, sized by kind via `Token.R` in **four ranked sizes** — swarm 6 (Swarmling), standard 9
+   (Grunt, Runner, Wisp, Spectre, Healer), heavy 13 (Brute, Shielded), boss 24. This replaces the
+   six radii this layer used to specify (Grunt 9, Runner 7, Wisp 8, …): `Size` ranks four levels and
+   a 7 px circle does not read as smaller than an 8 px one — see §8.1.
    The hand-rolled **HP bar** is gone — `Token.Health` is the health channel, and a bar drawn beside
    an arc encoding the same number is the same fact twice. The four **effect glyphs**
    (snowflake=slow, droplet=poison, bolt=stun, crack=vulnerable) stay this spec's own overlay and are
@@ -566,11 +569,22 @@ work is one **ChannelMap** from §5.2's `Enemy` to `Token`; the library draws it
 `FS.GG.Game.Render`, **never** in the sim that owns `Enemy` — `FS.GG.Game.Core` reaches up to
 nothing (ADR-0022 §2).
 
-**Ten kinds do not overload `Klass`.** The obvious worry — `Klass` ships three cases
-(`Mobile | Heavy | Scout`) and the roster has ten kinds — is not the real constraint. Capacity is
-**how many levels the eye separates, not how many the grammar can draw**: `Klass` has capacity 6 and
-`Sigil` 12. Ten kinds spread across `Klass` × `Sigil` use 3 and 3 distinct levels respectively and
-`Legibility.score` returns `Clean`. Encode kind on the pair, not on either alone.
+**Ten kinds do not overload `Klass` — but they do not fit in it either.** Two separate facts, and
+conflating them is how this section first went wrong. *Overload*: not a problem. Capacity is **how
+many levels the eye separates, not how many the grammar can draw** — `Klass` has capacity 6 and
+`Sigil` 12, so a roster using 3 of each scores `Clean`. *Separation*: a real problem, and one the
+linter does **not** check. `Klass` ships three cases and `Sigil` three fixed ones (`Mark of PathSpec`
+is the fourth, and needs an authored vector path), so the pair yields **9 combinations for 10 kinds**
+and some kinds must share. `Legibility.score` says `Clean` either way — it scores channel *capacity
+and domain*, never whether two units are told apart — so a green verdict is not evidence of a
+readable board. Check separation yourself; §14 does.
+
+The collisions this map accepts are between kinds that **play alike** (Brute/Shielded are both slow
+armored walkers; Juggernaut/Wyrm are both bosses), and `Health`, `R` and `Threat` still tell them
+apart. The one it must **not** accept is Grunt/Healer: a Healer restores 6 hp/s to everything near it
+and is the priority target on the board, while a Grunt is trash. They share `(Mobile, Ring)`, so the
+separation has to come from `Threat` — which is exactly why `threatOf` reads `Bounty` (Grunt 4,
+Healer 14) instead of a hand-written kind ranking that would have to remember to say so.
 
 **`Speed` is pips, not px/s — this one is an `Error`.** `Token.Speed` is an `int` with domain
 **0..6** and capacity **4**. Passing §5.2's `BaseSpeed` raw is not a near-miss; it is ten
@@ -578,6 +592,15 @@ nothing (ADR-0022 §2).
 `Warning / Speed : Speed overloaded: 10 distinct levels used, capacity 4`. Quantise to three ranked
 tiers (below) and the same roster scores `Clean`. `Health` is likewise a **0..1 fraction** — pass
 `Hp / MaxHp`, never `Hp`, or it is an out-of-domain `Error`.
+
+**`Size` cost this spec three radii, and it was right to.** Layer 4 used to specify six
+(Swarmling 6, Runner 7, Wisp/Spectre 8, Grunt/Healer 9, Brute 13, boss 24). `Size` is `Ordered`
+with capacity **4**, so that roster returns
+`Warning / Size : Size overloaded: 6 distinct levels used, capacity 4` — and the linter is simply
+right: 6, 7, 8 and 9 px are four sizes inside a three-pixel band, which is decorative precision, not
+a channel a player reads. `radiusOf` collapses them to the four that rank (swarm / standard / heavy
+/ boss). Runner and Grunt now share a radius and are still told apart by `Klass` (Scout vs Mobile)
+and `Speed`, which is what those channels are for.
 
 **What Symbology deliberately does NOT draw here.** `Sigil` is an **identity** mark — who this unit
 is — not a status. The four status glyphs of layer 4 encode `StatusEffect`, which is transient
@@ -601,8 +624,11 @@ type Sigil = FS.GG.UI.Symbology.Sigil
 type SymFaction = FS.GG.UI.Symbology.Faction
 module Sym = FS.GG.UI.Symbology.Symbology
 
-/// Kind → body silhouette. Paired with `sigilOf` below this separates all ten kinds while using
-/// 3 of `Klass`'s capacity-6 and 3 of `Sigil`'s capacity-12 — `Legibility.score` says Clean.
+/// Kind → body silhouette. This GROUPS the roster, it does not separate it: with 3 Klass levels and
+/// the 3 fixed Sigil cases there are 9 combinations for 10 kinds, so pairs necessarily collide
+/// (Brute/Shielded, Juggernaut/Wyrm). That is fine for the kinds that PLAY alike, and the remaining
+/// channels — Threat, Health, R — carry the rest. See §8.1 on the one collision that would not have
+/// been fine.
 let klassOf (e: Enemy) : Klass =
     match e.Kind with
     | Brute | Shielded | Juggernaut | Wyrm -> Klass.Heavy
@@ -622,22 +648,25 @@ let speedTierOf (e: Enemy) : int =
     elif e.BaseSpeed <= 70.0 then 2
     else 3
 
-/// Bounty is the roster's own ranking of "how much does this thing matter" — reuse it rather than
-/// inventing a second one. Quantised to 4 levels, which is exactly `Threat`'s capacity.
+/// `Bounty` is the roster's own ranking of "how much does this thing matter" (§5.2: Swarmling 1,
+/// Grunt 4, Healer 14, Wyrm 200), so READ IT rather than inventing a second ranking that can drift
+/// out of step with the table. Quantised to 4 levels, which is exactly `Threat`'s capacity.
 let threatOf (e: Enemy) : float =
-    match e.Kind with
-    | Wyrm -> 1.0
-    | Juggernaut -> 0.75
-    | Brute | Shielded -> 0.5
-    | _ -> 0.25
+    if e.Bounty >= 60 then 1.0        // Juggernaut, Wyrm
+    elif e.Bounty >= 14 then 0.75     // Healer — the priority target
+    elif e.Bounty >= 9 then 0.5       // Wisp, Brute, Spectre, Shielded
+    else 0.25                         // Swarmling, Grunt, Runner
 
+/// Four ranked sizes, not ten. `Size` is `Ordered` with capacity 4, and the pre-Symbology layer 4
+/// asked for six radii (6/7/8/9/13/24) — which warns, because a 7 px circle does not rank against
+/// an 8 px one. The four that survive are the four that MEAN something: swarm, standard, heavy,
+/// boss. See §8.1.
 let radiusOf (e: Enemy) : float =
     match e.Kind with
-    | Juggernaut | Wyrm -> 24.0
-    | Brute -> 13.0
-    | Runner -> 7.0
-    | Swarmling -> 6.0
-    | _ -> 9.0
+    | Juggernaut | Wyrm -> 24.0       // boss
+    | Brute | Shielded -> 13.0        // heavy
+    | Swarmling -> 6.0                // swarm
+    | _ -> 9.0                        // standard: Grunt, Runner, Wisp, Spectre, Healer
 
 let tokenOf (e: Enemy) : Token =
     { Sym.defaultToken with
