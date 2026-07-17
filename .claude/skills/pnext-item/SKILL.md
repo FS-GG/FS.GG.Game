@@ -214,12 +214,20 @@ want. Read **stdout**, which states only what is true (#914):
 
 | `release` printed | the column |
 |---|---|
-| `released .github#732 → Blocked` | landed — it names the column, so the board holds it |
-| `released .github#732` (bare) | **did NOT land** — stderr, immediately above, says why |
+| `released .github#732 → Blocked` | landed — `release` SET it, so the board holds it |
+| `released .github#732 (column left at Blocked)` | landed — the board already held it, so `release` wrote nothing (#331) |
+| `released .github#732 (no column to reset — …)` | nothing to set: the item is off the board, or has no `Status` |
+| `released .github#732` (bare) | **no column was set** — stderr, immediately above, says why |
+
+The middle row is a **success**, and it is the one to expect when you parked the item yourself during
+the lease: a column you chose is preserved rather than reverted, and preserving it costs no write, so
+there is no column for `release` to name as its own (#331/#911). The board holds `Blocked` either way.
 
 The bare form is what you get when the board write was **deferred** on an exhausted budget (queued,
-and nothing replays it — `fsgg-coord flush`), when the write failed, or when the item is not on the
-board at all. So a park can still silently not take, and #732 is what that costs. Check:
+and nothing replays it — `fsgg-coord flush`), when the write failed, when the item is not on the
+board at all, or when the item's **current column could not be read** — a column `release` cannot read
+is one it will not overwrite, so it leaves it alone and says so. So a park can still silently not take,
+and #732 is what that costs. Check:
 
 ```sh
 # `ready` is the always-fresh TRUTH read: it reports the column the board actually holds. Do not
@@ -572,6 +580,19 @@ scripts/fsgg-coord set-field <this-issue> 'Blocked by' 'FS-GG/<target>#<new>'
 scripts/fsgg-coord set-field <this-issue> Status Blocked
 scripts/fsgg-coord release <this-issue>     # don't hold a lease on work you cannot finish
 ```
+
+**The third line no longer undoes the second, and for most of this protocol's life it did**
+([#331](https://github.com/FS-GG/.github/issues/331)/[#911](https://github.com/FS-GG/.github/issues/911)).
+`release` restored the column recorded in the claim marker *at claim time* and never read the item's live
+one, so the `Blocked` you set on line 2 was reverted to `Ready` by line 3 — **this fence could not produce
+its own documented end state**, and the board was left asserting `Ready` on a row whose `Blocked by` named
+an open issue. `release` now reads the live column: `In progress` is the claim's own footprint and resets,
+and **any other column was chosen deliberately and is preserved** — with no write at all, which is why a
+preserving release reports `released <ref> (column left at Blocked)` rather than naming a column it set.
+`reap` asks the same question, so a lease that lapses on a parked item no longer resets it either.
+
+You may still write `release <this-issue> --status Blocked` — it is equivalent here, and it is the honest
+form when you are parking an item whose column you have *not* already set.
 
 Then `/pnext-item` again — take something startable while the other repo responds.
 
@@ -1087,18 +1108,35 @@ Do not just walk away — the lease holds the item for two hours and blocks its 
 scripts/fsgg-coord release <issue>          # marker deleted, unassigned, Status RESTORED
 ```
 
-`release` puts back **the column the claim overwrote** — a `Backlog` item returns to `Backlog`, not
-`Ready` (#481). `Ready` is only the fallback for a claim that recorded nothing to restore, and for a
-recorded `In progress`, which is the claim's own footprint rather than a column anybody chose.
+`release` undoes **the claim, and only the claim**. It asks one question: *is the item still sitting in
+the `In progress` that `claim` itself wrote?*
 
-**To land somewhere specific, say so — and it works now:** `release <issue> --status Blocked`. An
-explicit `--status` beats both the recorded restore and the `Ready` fallback (#331/#481's precedence,
-restored by [#914](https://github.com/FS-GG/.github/issues/914) after the port parsed the flag and
-ignored it — that no-op is how #732 came back four times, §1).
+- **Yes** — that column is the claim's own footprint, so it goes back to **the column the claim
+  overwrote**: a `Backlog` item returns to `Backlog`, not `Ready` (#481). `Ready` is only the fallback
+  for a claim that recorded nothing to restore, and for a recorded `In progress`, which is that same
+  footprint written twice and still nobody's choice.
+- **No** — then somebody moved it **during the lease**, deliberately, and `release` **preserves it**
+  (#331/#911). A `Blocked` you set because you hit a blocker is yours, not the claim's, and dropping a
+  lease is not a reason to undo it. Preserving costs **no write at all**, which is why stdout reads
+  `released <ref> (column left at Blocked)` rather than naming a column `release` set.
+
+`reap` asks the same question, so a lapsed lease on an item you parked does not reset it either — a
+reaper collects a *lease*, and knows nothing about whether the item became startable.
+
+**A column the tool cannot READ is one it will not overwrite.** On a failed read `release` leaves the
+column exactly as it is and says so on stderr, naming the repair, rather than guessing in either
+direction — the lease is dropped first, so a board it cannot read never strands a lock.
+
+**To land somewhere specific, say so:** `release <issue> --status Blocked`. An explicit `--status` beats
+the preserve, the recorded restore, and the `Ready` fallback alike — the caller stating the end state
+instead of `release` inferring it (#331/#481's precedence, restored by
+[#914](https://github.com/FS-GG/.github/issues/914) after the port parsed the flag and ignored it — that
+no-op is how #732 came back four times, §1). It also spends no read, having left no default to derive.
 
 **Confirm it landed rather than assuming**: `release` exits 0 even when the column write does not
-take, and the tell is on stdout — `released <ref> → Blocked` names the column it set, a bare
-`released <ref>` means it did not, with the reason on stderr (§1).
+take, and the tell is on stdout — `released <ref> → Blocked` names a column it SET, `released <ref>
+(column left at Blocked)` is a preserve (the board holds it either way), and a bare `released <ref>`
+means no column was set, with the reason on stderr (§1).
 
 If you got far enough to be worth resuming, say so on the issue first (`fsgg-coord say`), and push
 the branch so the next worker inherits the work rather than redoing it.
