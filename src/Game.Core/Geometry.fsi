@@ -50,11 +50,11 @@ module Geometry =
     /// sole `sqrt` (a correctly-rounded, cross-platform-deterministic IEEE op) builds the manifold on
     /// a hit. Pure and total: a NaN or non-positive radius yields `None`. Coincident centres are the
     /// documented degenerate — `Normal = (1, 0)`, `Depth = a.Radius + b.Radius`. NB the sibling producer
-    /// `Physics.circleCircleManifold` makes the OPPOSITE call on coincident centres (returns no manifold
-    /// rather than an invented normal): this primitive guarantees a total `Contact` on every overlap,
-    /// picking a deterministic fallback direction so a caller always gets separation guidance, whereas the
-    /// solver refuses to feed a physically-absent normal (and its zero-length warm-start key) into the
-    /// impulse pass. Two deliberate, documented answers to the same degenerate — not a discrepancy.
+    /// `Physics.manifold` makes the OPPOSITE call on a circle–circle pair with coincident centres (returns
+    /// no manifold rather than an invented normal): this primitive guarantees a total `Contact` on every
+    /// overlap, picking a deterministic fallback direction so a caller always gets separation guidance,
+    /// whereas the solver refuses to feed a physically-absent normal (and its zero-length warm-start key)
+    /// into the impulse pass. Two deliberate, documented answers to the same degenerate — not a discrepancy.
     val circleContact: a: Circle -> b: Circle -> Contact option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
