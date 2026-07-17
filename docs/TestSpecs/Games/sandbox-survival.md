@@ -497,7 +497,9 @@ UI draws in screen space (no camera transform).
 3. **Background wall layer** (placed walls; drawn darker, `−25%` brightness).
 4. **Foreground tile layer** (solid tiles).
 5. **Dropped items** (16×16 icons).
-6. **Enemies & projectiles.**
+6. **Enemies & projectiles.** Enemies are drawn by `FS.GG.UI.Symbology` in the `Token` grammar
+   (`Symbology.token`) from the §8.7 ChannelMap — not a per-kind sprite. Projectiles stay plain
+   primitives (8×8 quads, §5); they are not units and have no channels to encode.
 7. **Player** (+ held-tool swing arc).
 8. **Tile cursor highlight** + mining crack overlay (progress → 1 of 4 crack frames).
 9. **Lighting overlay** (multiply darkness, §8.5).
@@ -556,6 +558,128 @@ multiply over the whole screen and a constant dark multiply below the surface ba
 Full redraw at 60 FPS (game world is always animating: day phase, entities, particles).
 The expensive static tile work is amortized by §8.2 chunk caches, so a steady frame is
 ~10 blits + a few hundred dynamic quads, well within budget (§13).
+
+### 8.7 Enemy symbology (the `Enemy → Token` ChannelMap)
+
+Layer 6 above says enemies are drawn by `FS.GG.UI.Symbology` rather than by a per-kind sprite.
+This is the cheapest real decision in §8: the roster in §5 is five kinds each carrying HP, a
+damage figure, a walk speed and a facing, and `Symbology` already ships that exact shape as a
+tested, deterministic vocabulary — a fixed channel set (`Token`), interchangeable grammars, and
+a **legibility linter** that scores a symbol set against a per-channel capacity table. The
+per-game work is one **ChannelMap** from `Enemy` to `Token`; the library draws it, and the game
+is buildable with no art.
+
+**Grammar: `Token`.** `Symbology.token` rotates the whole body by `Heading`, which is right here
+because a sandbox enemy genuinely faces left or right (`Facing`) and that facing is a fact the
+player reads to predict a lunge. `Badge` would flatten it to a discrete edge indicator; `Ring`
+is a radial gauge and encodes no silhouette at all.
+
+**Where the map lives.** `Symbology` depends on `Scene`, so this map belongs in
+`FS.GG.Game.Render`, **never** in the sim that owns `Enemy` — `FS.GG.Game.Core` reaches up to
+nothing (ADR-0022 §2). The sim decides what a Brute *is*; the render edge decides what it looks
+like.
+
+**`Hp` alone cannot drive `Health`.** `Token.Health` is a **0..1 fraction** and the §5 `Enemy`
+record carries no `MaxHp` — only the entity-catalogue table does. So the map needs `maxHpOf`,
+a lookup over that table, and passing raw `Hp` would be an out-of-domain `Error`, not a
+cosmetic slip. `Threat` is likewise 0..1 with capacity **4**: the catalogue's damage figures
+(5/6/8/9/20) are five distinct values and must be quantised to four ranked tiers or
+`Legibility.score` warns. The tiers below score `Clean` over the whole roster.
+
+**This map is the "scene boundary" §5 names.** §5 declares this world's own
+`Vec2 = { Vx: float32; Vy: float32 }` rather than abbreviating the scaffold's float-based
+`Geometry.Vec2`, because the world is `float32` throughout — and its comment says to *convert at
+the scene boundary*. `Token.Cx`/`Cy` are `float`, so this ChannelMap **is** that boundary: the
+widening happens here, once, and the sim never learns about it. Write `Cx = e.Pos.Vx` and it does
+not compile, which is the boundary asserting itself.
+
+**Channels this game does not have, left at their defaults.** `Shield` (no shield concept in
+§4), `TokenState` (`Confirmed`/`Suspected` is a spotted-vs-ghost distinction, and this game has
+no fog of war — §4.10's light level is a *tile* property, not a per-entity one), and
+`SecondaryHeading` (nothing here has a turret). Naming them is the point: a reader learns the
+channel set was considered and where it stops, rather than wondering what was overlooked.
+
+```fsharp
+// The Enemy → Token ChannelMap. In a product this lives in FS.GG.Game.Render (ADR-0022 §2):
+// Symbology depends on Scene, and the sim reaches up to nothing.
+type Token = FS.GG.UI.Symbology.Token
+type Klass = FS.GG.UI.Symbology.Klass
+type Sigil = FS.GG.UI.Symbology.Sigil
+type SymFaction = FS.GG.UI.Symbology.Faction
+module Sym = FS.GG.UI.Symbology.Symbology
+
+/// The §5 entity catalogue's HP column. `Enemy` carries current `Hp` only, so max lives here —
+/// `Token.Health` is a 0..1 fraction and raw Hp is an out-of-domain Error.
+let maxHpOf (k: EnemyKind) : float =
+    match k with
+    | Slime -> 14.0
+    | Crawler -> 22.0
+    | Bat -> 10.0
+    | Skeleton -> 34.0
+    | Brute -> 80.0
+
+/// The catalogue's damage column (5/6/8/9/20) quantised to four ranked tiers — `Threat` is 0..1
+/// with capacity 4, so five raw levels would overload it.
+let threatOf (k: EnemyKind) : float =
+    match k with
+    | Bat -> 0.25
+    | Slime -> 0.5
+    | Skeleton -> 0.5
+    | Crawler -> 0.75
+    | Brute -> 1.0
+
+let klassOf (k: EnemyKind) : Klass =
+    match k with
+    | Brute -> Klass.Heavy          // 80 hp, heavy knockback, night-only
+    | Bat -> Klass.Scout            // the only flyer
+    | _ -> Klass.Mobile
+
+let sigilOf (k: EnemyKind) : Sigil =
+    match k with
+    | Skeleton -> Sigil.Bolt        // the only ranged attacker
+    | Brute -> Sigil.Fang
+    | _ -> Sigil.Ring
+
+/// Speed px/s (50..130) → three ranked pip tiers. `Speed` is an int in 0..6 with capacity 4;
+/// passing px/s raw is an out-of-domain Error.
+let speedTierOf (k: EnemyKind) : int =
+    match k with
+    | Brute | Skeleton -> 1
+    | Crawler | Slime -> 2
+    | Bat -> 3
+
+/// Three ranked sizes from the §5 catalogue's px dimensions (Bat 28×20 … Brute 40×60). `Size` is
+/// Ordered with capacity 4, so this ranks rather than transcribing: a 40×60 Brute must not draw at
+/// the same radius as a 28×20 Bat, but 26×44 and 28×40 are the same size to the eye.
+let radiusOf (k: EnemyKind) : float =
+    match k with
+    | Brute -> 32.0                 // 40×60, the night-only tank
+    | Crawler | Skeleton -> 22.0    // 28×40, 26×44
+    | Slime | Bat -> 16.0           // 32×24, 28×20
+
+/// THIS FUNCTION IS THE SCENE BOUNDARY §5 NAMES. This world is `float32` throughout and declares
+/// its own `Vec2 = { Vx: float32; Vy: float32 }`; `Token` is `float`. So the widening happens here,
+/// once, at the edge — exactly where §5's comment says to put it — and never leaks into the sim.
+let tokenOf (e: Enemy) : Token =
+    { Sym.defaultToken with
+        Cx = float e.Pos.Vx                             // float32 -> float: the boundary conversion
+        Cy = float e.Pos.Vy
+        R = radiusOf e.Kind                             // R > 0 or Size is a degenerate Error
+        Heading = (match e.Facing with                  // whole-body rotation in Grammar.Token
+                   | Left -> System.Math.PI
+                   | Right -> 0.0)
+        Faction = SymFaction.Enemy
+        Klass = klassOf e.Kind
+        Sigil = sigilOf e.Kind
+        Health = float e.Hp / maxHpOf e.Kind            // 0..1 fraction, NOT raw Hp
+        Speed = speedTierOf e.Kind
+        Threat = threatOf e.Kind }
+```
+
+**Legibility as a test, not a hope.** The map is pure and the roster is data, so "is this
+spawn readable" is an ordinary assertion: `Legibility.score (mobs |> List.map tokenOf)` and
+check `Verdict = Clean`. Note `Legibility.Severity.Error` must be written qualified — a bare
+`Error` would shadow `Result.Error` for every consumer that opens the module.
 
 ## 9. UI / HUD / Screens
 

@@ -408,6 +408,27 @@ Coordinate system: world-space in logical px, Y-down. Camera transform = transla
 11. **HUD** (§9) in screen-space (no camera transform).
 12. **Overlays** (map/pause/title) when `Mode` requires.
 
+**Deliberately NOT `FS.GG.UI.Symbology`** (`Symbology.token` / `Symbology.badge`), and it is worth
+saying why, because four of this corpus's specs do use it and the near-miss here is real. Symbology
+draws **legible abstract vector symbols from a fixed channel set** — a unit vocabulary for games that
+need a roster to read at a glance with no art budget, which is exactly why `tower-defense`,
+`turn-based-tactics`, `roguelike-dungeon-crawler` and `sandbox-survival` adopt it. Two of its channels
+fit this game almost suspiciously well: §5.2's Sentinel has a **shielded front** — flank or pogo to hit
+— and `Token.Heading` (whole-body rotation) plus `Token.Shield` encode precisely that, which is the
+only facing-based vulnerability in the whole corpus.
+
+It is still the wrong call here. This game's identity **is** its art: layer 6 is a per-kind sprite,
+the player is a sprite with a 3-ghost dash streak, tiles batch through `drawAtlas` from one texture,
+and every zone carries its own tint. Symbology would replace an artist's silhouette with a linter's,
+and a spec that adopts a primitive because it is nearby rather than because it is right overclaims in
+the same way a spec that hand-rolls a tested one underclaims. The Sentinel's facing is read from its
+**sprite**, and that is the intended reading.
+
+Where it *would* earn its keep is stretch goal #10, the **in-game bestiary**: a bestiary is a roster
+of units displayed out of context, sorted and compared — no scene, no art direction, and
+`Symbology.gallery` renders exactly that (a reproducible grid) with `Legibility.score` to check the
+result reads. If #10 ships, revisit this decision; it is scoped to layer 6, not to the document.
+
 **Palette:** background #1A1A2E base; per-zone tint (Z1 #16213E, Z3 #3A2618,
 Z4 #14323B, Z6 #2B0B1E). Player #E0E1DD. Tiles #495867 / outline #2F3A45.
 **Fonts:** UI "JetBrains Mono" / fallback monospace, 16 px HUD, 28 px headers.

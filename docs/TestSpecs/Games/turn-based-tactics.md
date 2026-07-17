@@ -666,9 +666,13 @@ row*72, 72, 72)`.
    gets a hatched red fill `#E23B3B @ 30%` plus a directional **push arrow**
    (`#FFD34D`) showing knockback, and a small numeric damage badge. If
    `ShowThreatOverlay` is off, show only telegraphs for the hovered/selected enemy.
-6. **Units** — drawn as a colored rounded-rect token (player `#39C16C`, enemy
-   `#E23B3B`) with a 36 px glyph for kind, a small HP pip row (filled = current),
-   and trait icons. Position lerped by `Anim` during movement.
+6. **Units** — drawn by `FS.GG.UI.Symbology` in the `Badge` grammar (`Symbology.badge`),
+   not hand-rolled: the ChannelMap of §8.1 turns a `Unit` into a `Token` and the library
+   draws the frame, the body silhouette, the health arc, the name label and the armor mark
+   as one symbol. Position lerped by `Anim` during movement; the ChannelMap is pure, so
+   `Anim` moves the token's `Cx`/`Cy` and nothing else. Note this replaces the old "HP pip
+   row" with an arc and the "trait icons" with a single `Shield` mark — the channel set has
+   no trait channel, so `Amphibious`/`Mobile` are **not** drawn; see §8.1.
 7. **Selection ring** — `#FFFFFF`, 3 px, around `SelectedUnit`.
 8. **Floating combat text & particles** — damage numbers rise + fade; push impacts
    emit a 6-particle spark; deaths emit a dissolve. All driven by `Anim`, never
@@ -677,6 +681,110 @@ row*72, 72, 72)`.
 
 Fonts: a clean sans (e.g. `Inter`/`Roboto`), `14 px` body, `28 px` banners. Numbers
 right-aligned in cards.
+
+### 8.1 Unit symbology (the `Unit → Token` ChannelMap)
+
+Units are **not** drawn as a bespoke rounded-rect-plus-glyph-plus-pip-row. That shape is
+exactly what `FS.GG.UI.Symbology` already ships as a tested, deterministic vocabulary:
+a fixed channel set (`Token`), three interchangeable grammars, and a **legibility linter**
+that scores a symbol set against a per-channel capacity table. The per-game work is one
+function — a **ChannelMap** from this spec's stats to `Token` — and the library draws it.
+
+**Grammar: `Badge`.** `Symbology.render Grammar.Badge` (≡ `Symbology.badge`) draws a
+compact, screen-aligned framed emblem encoding every channel. That is the right pick here
+because a unit sits square on a 72 px grid tile and has **no facing** in this game:
+`Grammar.Token` rotates the whole body by `Heading`, which would encode a fact this spec
+does not have. Badge draws `Heading` as a discrete edge indicator instead, and the map
+below simply leaves it at its default. `Ring` is the third option (a radial gauge) and is
+wrong for a tile-locked board.
+
+**Where the map lives.** `Symbology` depends on `Scene`, so the `Unit → Token` map belongs
+in `FS.GG.Game.Render`, **never** in the sim module that owns `Unit` — `FS.GG.Game.Core`
+reaches up to nothing (ADR-0022 §2). The sim decides what a unit *is*; the render edge
+decides what it *looks like*, and this map is the seam.
+
+**`Faction` is two different types.** This spec's §5.4 `Faction` (`Player | Enemy`) and
+Symbology's `Faction` (`Ally | Enemy | Neutral | Custom of Color`) are unrelated types that
+**share the case name `Enemy`**. `open FS.GG.UI.Symbology` would shadow this document's own
+`Faction`, and a bare `Enemy` would silently mean the library's — the same crossing-bug
+shape as the `Vec2`/`Point`/`Rect` label rule in §5.4. So the block below never opens the
+namespace: it names the library's types through **abbreviations** (which add no cases, so
+nothing can collide) and aliases the function module.
+
+**What the channel set does not carry, stated plainly.** There is no **trait** channel. Of §5.4's
+`Trait` set, only `Armored` reaches one (`Shield`); `Massive` and `Flying` fold into `Klass` as
+silhouette; and **`Amphibious` and `Mobile` are not drawn at all** — the old layer 6 promised "trait
+icons", and this map does not keep that promise. Both are readable from other surfaces (the unit
+card in §9, and `Mobile` is visible the moment a unit acts and can still move), so the trade is
+worth making — but it is a trade, and a reader who meets this sentence learns it now rather than
+when a Hornet drowns. `TokenState` (`Confirmed`/`Suspected`) is likewise unused: it is a
+spotted-vs-ghost distinction and this game has full information — every enemy `Telegraph` is shown
+in §8 layer 5, which is the whole point of the design.
+
+**Quantise `MoveRange` — do not pass it raw.** `Speed` is an `Ordered` channel with a
+capacity of **4**: the eye ranks about four levels, and a fifth is an overload no matter how
+many beads the grammar can draw. The §5.1/§5.2 rosters span `MoveRange` 1–5 (Behemoth 1,
+Artillery/Spitter/Bruiser 2, Vanguard/Crawler 3, Skirmisher/Hornet 4, Leaper 5), so a
+mission-4 board that fields a Behemoth and a Leaper alongside the player squad puts **five
+distinct levels** on the channel and `Legibility.score` returns
+`Warning / Speed : Speed overloaded: 5 distinct levels used, capacity 4`. The three-tier
+quantisation below scores `Clean` on that same board. The linter is documenting a real
+readability limit, not nagging.
+
+```fsharp
+// The Unit → Token ChannelMap. In a product this file lives in FS.GG.Game.Render (ADR-0022 §2):
+// Symbology depends on Scene, and the sim reaches up to nothing.
+//
+// NOTE: no `open FS.GG.UI.Symbology`. This document's §5.4 declares its own `Faction` whose `Enemy`
+// case would be shadowed by the library's — these abbreviations name the library's types without
+// importing its cases, so `Player`/`Enemy` below are unambiguously THIS spec's.
+type Token = FS.GG.UI.Symbology.Token
+type Klass = FS.GG.UI.Symbology.Klass
+type SymFaction = FS.GG.UI.Symbology.Faction
+module Sym = FS.GG.UI.Symbology.Symbology
+
+/// Body silhouette — INTRINSIC identity only. `Massive` reads Heavy, flight or high mobility reads
+/// Scout, the rest Mobile.
+///
+/// `Armored` is deliberately NOT read here even though it looks like a Heavy tell: §5.1's Pulsar can
+/// *grant* it to an adjacent ally for one round, so keying the silhouette off it would reshape a
+/// Skirmisher's body mid-mission and reshape it back. Klass says what a unit IS; the buff rides
+/// `Shield`, which is the channel for exactly that. One fact, one channel.
+let klassOf (u: Unit) : Klass =
+    if u.Traits.Contains Massive then Klass.Heavy
+    elif u.Traits.Contains Flying || u.MoveRange >= 4 then Klass.Scout
+    else Klass.Mobile
+
+/// MoveRange 1..5 → three ranked tiers. Raw MoveRange overloads `Speed` (capacity 4) on any
+/// board fielding both a Behemoth (1) and a Leaper (5) — see §8.1.
+let speedTierOf (u: Unit) : int =
+    if u.MoveRange <= 2 then 1
+    elif u.MoveRange = 3 then 2
+    else 3
+
+let tokenOf (centre: Geometry.Vec2) (u: Unit) : Token =
+    { Sym.defaultToken with
+        Cx = centre.Vx
+        Cy = centre.Vy
+        R = 30.0                                  // ~tileSize 72 inset; R > 0 or Size is an Error
+        Faction = (match u.Faction with           // THIS spec's Faction, not the library's
+                   | Player -> SymFaction.Ally
+                   | Enemy -> SymFaction.Enemy)
+        Klass = klassOf u
+        // Sigil is left at its default ON PURPOSE. `Kind` is a string ("Vanguard", "Crawler"), and
+        // it already rides `Label` below — spending the centre identity mark on a second copy of the
+        // name would encode one fact twice, and a constant Sigil would encode nothing at all.
+        Health = float u.Hp / float u.MaxHp       // must be 0..1 — out of domain is an Error
+        Shield = u.Traits.Contains Armored        // intrinsic OR granted by Pulsar's *Shield*
+        Speed = speedTierOf u
+        Label = Some (Sym.plainLabel u.Kind) }
+```
+
+**Legibility as a test, not a hope.** `Legibility.scoreIn Grammar.Badge` scores a produced
+symbol set *as drawn* and returns a `Report` whose `Verdict` is `Clean` iff there are no
+findings. Because the ChannelMap is pure and the roster is data, "is this board readable"
+is an ordinary assertion over the §5 rosters — see §14. Note `Legibility.Severity.Error`
+must be written qualified: a bare `Error` would shadow `Result.Error` for every consumer.
 
 **Redraw strategy:** redraw on every `Msg` that changes the model **and** every
 `AnimTick` while animating. When idle (mid player-phase, no animation), the scene is

@@ -526,7 +526,9 @@ transform handles the room-transition camera slide.
 4. **Pickups** — coins `#f5c542`, keys `#d9b14a`, bombs `#2b2b2b`, hearts `#e8424f`
    (red) / `#4a78e8` (soul) / `#222` (black), item pedestals glow.
 5. **Shadows** — soft ellipse `#00000040` under each entity.
-6. **Enemies** — themed sprites; hit-flash overrides fill with `#ffffff` for 0.06 s.
+6. **Enemies** — drawn by `FS.GG.UI.Symbology` in the `Token` grammar (`Symbology.token`) from the
+   §8.1 ChannelMap; hit-flash overrides fill with `#ffffff` for 0.06 s. A themed sprite atlas
+   replaces the symbol layer as a stretch (§15) — see the shapes-vs-sprites note below.
 7. **Player** — body + directional indicator for facing; flashes `#ffffff80` during
    post-hit invuln, semi-transparent (`alpha 0.5`) during roll i-frames.
 8. **Projectiles** — player shots `#7fe3ff` with a soft glow; enemy bullets `#ff5a5a`.
@@ -534,9 +536,13 @@ transform handles the room-transition camera slide.
 10. **HUD** (§9) — hearts row, currency, minimap, active-item charge, floor name.
 11. **Screen overlays** — pause/game-over/title dim layer `#000000b0` + text.
 
-- **Shapes vs sprites:** v1 may ship with **primitive-drawn** entities (circles/rounded
-  rects via `SKPaint`/`SKCanvas`) so the spec is buildable without art; sprite atlas is a
-  stretch (§15). Glows via blurred duplicate or `SKPaint.MaskFilter`.
+- **Shapes vs sprites:** v1 ships **primitive-drawn** entities so the spec is buildable without
+  art; sprite atlas is a stretch (§15). Glows via blurred duplicate or `SKPaint.MaskFilter`.
+  For *enemies* that primitive layer is `FS.GG.UI.Symbology` (§8.1) rather than hand-rolled
+  `SKPaint` circles — "legible abstract vector symbols, no art required" is the library's
+  entire purpose, and it arrives with a linter that hand-rolled circles do not have. The
+  player, pickups and obstacles stay hand-drawn primitives: `Symbology` is a **unit**
+  vocabulary, and a coin is not a unit.
 - **Fonts:** bold pixel/condensed font for HUD numbers; a single UI font for screens.
 - **Camera:** room-locked; the only camera motion is the room-transition slide
   (lerp over 0.35 s). Optional screen-shake (decaying offset) on bombs/boss hits.
@@ -544,6 +550,131 @@ transform handles the room-transition camera slide.
   worst case — well within budget §13). No dirty-rect optimization needed at this scale.
 - **Particles:** pooled; each is a colored circle/quad with velocity, lifetime, fade.
   Caps at `MAX_PARTICLES = 600`.
+
+### 8.1 Enemy symbology (the `Enemy → Token` ChannelMap)
+
+The shapes-vs-sprites note above commits v1 to primitive-drawn entities so the game is buildable
+without art. `FS.GG.UI.Symbology` is that commitment, already built and tested: a fixed channel set
+(`Token`), three interchangeable grammars, and a **legibility linter** that scores a symbol set
+against a per-channel capacity table. §5.2 already specifies the roster as exactly the stats the
+channel set wants — radius, HP, speed, threat — so the per-game work is one **ChannelMap** and the
+library draws it.
+
+**Grammar: `Token`.** `Symbology.token` rotates the whole body by `Heading`. That is right here:
+this is a twin-stick shooter where a Charger telegraphs a dash along a locked direction and a
+Caster's ring burst radiates from a facing, so *which way a thing points* is information the player
+acts on. `Badge` would flatten it to an edge indicator.
+
+**Where the map lives.** `Symbology` depends on `Scene`, so this map belongs in
+`FS.GG.Game.Render`, **never** in the sim that owns `Enemy` — `FS.GG.Game.Core` reaches up to
+nothing (ADR-0022 §2).
+
+**Normalising `Threat` is not enough — quantise it.** §5.2's `Threat` column is the §6 room-budget
+currency (`6 + 2*floorIndex`), and it runs 1, 1, 2, 1, 3, 3, 4, 6 across the roster. `Token.Threat`
+is a `float` in **0..1**, so `float e.Threat / 6.0` fixes the *domain* — and still leaves **five
+distinct levels** on an `Ordered` channel whose capacity is **4**, so `Legibility.score` returns
+`Warning / Threat : Threat overloaded: 5 distinct levels used, capacity 4`. Domain and capacity are
+two different checks and passing the first does not buy the second. The four-tier map below scores
+`Clean` over the whole roster. The linter is documenting a real readability limit: a player cannot
+rank six threat levels at a glance mid-dodge, which is the same reason §6 spends threat as a budget
+rather than showing the number.
+
+**`Health` needs `MaxHp`.** `Token.Health` is a 0..1 fraction. §5.2's HP column is the max; the
+live `Enemy` carries current `Hp`. Pass `Hp / MaxHp`, never `Hp`, or it is an out-of-domain `Error`.
+
+**This map accepts one `Size` warning on purpose, and it is the interesting one.** §5.2's Radius
+column has eight distinct values (8–22), and `Size` is `Ordered` with capacity **4**, so
+`Legibility.score` returns `Warning / Size : Size overloaded: 8 distinct levels used, capacity 4`.
+Do **not** quantise it away. `Symbology` treats `R` as a *channel* — a size the eye should rank —
+but in this game the radius is **physics**: §4.3 resolves a shot against an enemy by circle/circle
+overlap on `shotRadius + enemyRadius`, so the drawn symbol *is* the hitbox. Round a Charger's 16 px
+to a shared "large" tier and the player is now dodging a circle that is not the thing that kills
+them, which is the one unforgivable bug in a bullet-hell. Fairness outranks the linter here, and
+`tower-defense` §8.1 quantises the identical channel precisely because its radii are decorative —
+it resolves hits with `arriveEps`, not with the enemy circle. Same channel, opposite call, because
+the underlying facts differ.
+
+```fsharp
+// The Enemy → Token ChannelMap. In a product this lives in FS.GG.Game.Render (ADR-0022 §2):
+// Symbology depends on Scene, and the sim reaches up to nothing.
+type Token = FS.GG.UI.Symbology.Token
+type Klass = FS.GG.UI.Symbology.Klass
+type Sigil = FS.GG.UI.Symbology.Sigil
+type SymFaction = FS.GG.UI.Symbology.Faction
+module Sym = FS.GG.UI.Symbology.Symbology
+
+/// §5.2's Radius column — the roster's own sizing, reused rather than re-invented.
+let radiusOf (k: EnemyKind) : float =
+    match k with
+    | Grub -> 12.0
+    | Maggot -> 9.0
+    | Spitter -> 14.0
+    | FlySwarmNode -> 8.0
+    | Charger -> 16.0
+    | Turret -> 18.0
+    | Caster -> 13.0
+    | Brute -> 22.0
+
+/// Body silhouette. The two stationary shooters read Heavy, the fast erratic ones Scout.
+let klassOf (k: EnemyKind) : Klass =
+    match k with
+    | Brute | Turret -> Klass.Heavy
+    | Maggot | FlySwarmNode -> Klass.Scout
+    | _ -> Klass.Mobile
+
+/// Identity mark. Paired with `klassOf` this separates all eight kinds while staying well inside
+/// Klass's capacity-6 and Sigil's capacity-12.
+let sigilOf (k: EnemyKind) : Sigil =
+    match k with
+    | Spitter | Turret | Caster -> Sigil.Bolt   // the shooters
+    | Charger | Brute -> Sigil.Fang             // the chargers
+    | _ -> Sigil.Ring
+
+/// §5.2's Threat column (1..6) → four ranked tiers. `float threat / 6.0` would land in `Threat`'s
+/// 0..1 domain but still put FIVE distinct levels on a capacity-4 channel — see §8.1.
+let threatOf (e: Enemy) : float =
+    if e.Threat <= 1 then 0.25
+    elif e.Threat <= 2 then 0.5
+    elif e.Threat <= 4 then 0.75
+    else 1.0
+
+let tokenOf (facing: Vec2) (e: Enemy) : Token =
+    { Sym.defaultToken with
+        Cx = e.Pos.Vx
+        Cy = e.Pos.Vy
+        R = radiusOf e.Kind                       // R > 0 or Size is a degenerate Error
+        Heading = atan2 facing.Vy facing.Vx       // whole-body rotation in Grammar.Token
+        Faction = SymFaction.Enemy
+        Klass = klassOf e.Kind
+        Sigil = sigilOf e.Kind
+        Health = e.Hp / e.MaxHp                   // 0..1 fraction, NOT raw Hp
+        Threat = threatOf e }
+```
+
+**Legibility as a test, not a hope — and `Clean` is the wrong assertion here.** The map is pure and
+the roster is data, so "is this room readable" is an ordinary assertion over the §5.2 roster. But
+per the `Size` note above this map is *deliberately* not `Clean`, so asserting `Verdict = Clean`
+would fail on correct code and the next author would "fix" it by breaking the hitboxes. Assert the
+shape you actually want — **no `Error`s at all, and no `Warning` other than the known `Size` one**:
+
+```fsharp
+module Legibility = FS.GG.UI.Symbology.Legibility
+
+/// The §14 assertion. `Verdict = Clean` is deliberately NOT the check: the Size overload is a
+/// consequence of R being the hitbox (§8.1), so it is pinned as accepted BY CHANNEL — any Error, or
+/// any Warning on a channel other than Size, still fails.
+let roomIsLegible (facing: Vec2) (room: Enemy list) : bool =
+    (Legibility.score (room |> List.map (tokenOf facing))).Findings
+    |> List.forall (fun f ->
+        f.Severity <> Legibility.Severity.Error
+        && f.Channel = Legibility.Channel.Size)
+```
+
+An accepted finding is pinned to its channel, so a *new* overload on any other channel still fails.
+That matters more here than in a fixed-roster game, because §4.8 draws room contents from a seeded
+`LayoutRng` — this turns "no seed produces an illegible room" into a property test. Note
+`Legibility.Severity.Error` must be written qualified: a bare `Error` would shadow `Result.Error`
+for every consumer that opens the module.
 
 ## 9. UI / HUD / Screens
 

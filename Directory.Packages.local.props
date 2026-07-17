@@ -55,11 +55,11 @@
        enforces (`pinnedVersion`): it reads the central pin and REFUSES to invent a version, since a
        second copy of a version is a drift bug with a delay fuse.
 
-       FS.GG.UI.Canvas / FS.GG.UI.Controls.Elmish / FS.GG.UI.SkiaViewer are the same FS.GG.Rendering
-       release train as the render edge above and MUST move with it — each depends on FS.GG.UI.Scene at
-       its own version, so a skill typechecked against a different one would be gated against a surface
-       the reader's product never restores. Keep all five Rendering pins on one version (currently
-       0.10.0).
+       FS.GG.UI.Canvas / FS.GG.UI.Controls.Elmish / FS.GG.UI.SkiaViewer / FS.GG.UI.Symbology are the
+       same FS.GG.Rendering release train as the render edge above and MUST move with it — each depends
+       on FS.GG.UI.Scene at its own version, so a skill typechecked against a different one would be
+       gated against a surface the reader's product never restores. Keep all six Rendering pins on one
+       version (currently 0.10.0).
 
        This group is why the train pin is a CEILING on the DOCUMENTATION and not just a floor under the
        build (FS.GG.Game#217): a skill can only teach an API the gate can compile, and the gate compiles
@@ -96,6 +96,30 @@
        drive, and fs-gg-persistence's blocks are pure-surface by design. The pin now permits a block
        naming them; nothing requires one.
 
+       FS.GG.UI.Symbology is pinned for the TESTSPEC corpus, not the skills — the first gate-only pin
+       whose consumer is a `docs/TestSpecs/Games/*.md` block rather than a `template/product-skills/`
+       one, so it is also added to that corpus's `PackageRefs` in scripts/typecheck-md-blocks.fsx. It
+       lands under the same rule as #219/#225: FOUR specs with a real unit roster (turn-based-tactics,
+       tower-defense, roguelike-dungeon-crawler, sandbox-survival) now write their stat -> `Token`
+       ChannelMap as a compiled block, and a block with no pin does not compile at all. metroidvania
+       is the fifth spec with a roster and deliberately has NO block: it commits to per-kind sprites
+       and declines the primitive in prose (§3b's "decline it and cite it"). The pin serves the four
+       that compile, not the five that have rosters.
+
+       0.10.0 is what makes those blocks expressible: `Token.SecondaryHeading` (an opt-in second
+       rotation channel — a turret on a hull) does NOT exist at 0.9.2, and the docs/reports
+       mini-tanks design still records its absence as open Rendering#260. It shipped; the report is
+       stale, and the specs are written against the package rather than against the report.
+
+       Symbology is Scene-only (its nuspec takes FS.GG.UI.Scene + FSharp.Core and nothing else), so it
+       reaches no Skia surface and adds no restore weight beyond the train already pinned here. And it
+       stays GATE-ONLY rather than joining the render edge above (ADR-0022 §2): `Symbology` depends on
+       `Scene`, so a stat -> `Token` ChannelMap belongs in FS.GG.Game.Render and never in a sim module
+       — but no project references it TODAY. The specs describe where the map would live in the
+       reader's product, and describing is not depending. Promote it to the render-edge group only if
+       Game.Render actually consumes it; that would make it a SHIPPED reference and bind it to the
+       NU5104 stable-only rule that binds the two pins up there.
+
        FS.GG.Audio.* is its own train (Audio.Host depends on Audio.Core at the same version). Being
        gate-only, these can never reach a packed artefact, so the NU5104 stable-only rule that binds
        the render edge does not bind them; they are on the current stable regardless. -->
@@ -105,6 +129,7 @@
     <PackageVersion Include="FS.GG.UI.Canvas" Version="0.10.0" />
     <PackageVersion Include="FS.GG.UI.Controls.Elmish" Version="0.10.0" />
     <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.10.0" />
+    <PackageVersion Include="FS.GG.UI.Symbology" Version="0.10.0" />
   </ItemGroup>
 
   <!-- Generator-only — the SOURCE that scripts/skill-block-context/_scaffold.fs is generated FROM
@@ -119,11 +144,11 @@
        generator reads the central pin and REFUSES to invent one (a second copy of a version is a drift
        bug with a delay fuse).
 
-       SAME RELEASE TRAIN as the five Rendering pins above, and it must stay that way. `_scaffold.fs`
+       SAME RELEASE TRAIN as the six Rendering pins above, and it must stay that way. `_scaffold.fs`
        binds `Scene.Point`/`Rect` directly, so the template that SHIPS the fragment and the
        FS.GG.UI.Scene the gate COMPILES it against have to be one coherent set — otherwise the scaffold
        could be generated from a fragment written against a Scene surface the gate never restores, and
-       the gate would go green over a pairing no reader can reproduce. Keep all six on one version
+       the gate would go green over a pairing no reader can reproduce. Keep all seven on one version
        (currently 0.10.0).
 
        FS.GG.UI.Template packs the Rendering repo under `content/`, which is what makes the fragment a

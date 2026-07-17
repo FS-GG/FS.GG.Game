@@ -34,7 +34,10 @@ type Board = class end
 // the reader's, and the rules must not read it.
 type AnimState = { Elapsed: float; Playing: string option }
 
-//#block 5 "| MenuUp | MenuDown              // move cursor (wraps)"
+// RE-KEYED 5 -> 6: §8.1's Unit → Token ChannelMap was inserted ahead of this block, which shifted
+// every later ordinal down by one. 5 was still a valid ordinal in a now-6-block document, so only
+// the anchor catches it — see the harness's §1b.
+//#block 6 "| MenuUp | MenuDown              // move cursor (wraps)"
 // A DU-CASE CONTINUATION. The prose above this block says "add these cases to your Msg"; the block
 // is written as bare `| Case` lines with no `type ... =` header, so it cannot stand alone. The
 // fixture supplies the header the prose left implicit, and the block's cases are then compiled
