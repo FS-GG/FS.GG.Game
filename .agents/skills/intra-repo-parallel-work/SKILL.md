@@ -147,8 +147,9 @@ scripts/repos.sh relock          # regenerates registry/repos.lock
 
 **The touch-set for a kit change is the kit source ONLY.** `registry/repos.lock` is a **generated,
 CI-gated artifact**, so `#309`'s rule applies to it: *do not reserve a generated artifact*. Regenerate
-it, commit it, and name it as **expected drift** in the PR body. A collision in it is a **rebase, not a
-decision**.
+it and commit it — `verify-paths` asks `repos.sh relock --list` what it emits and reports the lock under
+`regenerated (expected):`, so there is nothing to explain in the PR body (ADR-0044, `#498`). A collision
+in it is a **rebase, not a decision**.
 
 > This paragraph used to say the opposite — reserve `registry/repos.yml`, run `repos.sh digest`. Both
 > were true before `#527`, which moved the digest out of the authored roster and into the generated

@@ -366,7 +366,8 @@ discipline, managed for you. Fetch anyway: whatever cuts the worktree can only c
   file you just touched is one a checked-in generator emits and a CI regeneration gate guards, you
   regenerated it — you did not author it. Declaring it now reserves a file nobody owns and
   serialises every other item that regenerates it, which is the exact failure §1 keeps you out of.
-  Leave it undeclared, and name it as expected drift in the PR (§5).
+  Leave it undeclared: `verify-paths` asks the generators what they emit and reports it under
+  `regenerated (expected):`, apart from the drift you are being asked to act on (ADR-0044, #498).
 - **And the mirror of that rule: if the work turns out NARROWER than declared, re-declare it
   narrower — the moment you know.** `widen` sets the touch-set rather than extending it, so the same
   command gives paths back:
@@ -892,12 +893,31 @@ scripts/fsgg-coord verify-paths --pr <pr>    # did the PR stay inside its declar
 > exactly as GraphQL does. See [REST when the budget is gone](#rest-when-the-budget-is-gone).
 
 `verify-paths` is **advisory** — the touch-set is a declaration, not an enforced boundary, and CI
-reports drift rather than blocking it. Drift means one of three things, and each needs an answer
-before merge: you should have `widen`ed; you edited a file that is not this item's work; or you
-**regenerated an artifact §1 told you not to declare** — which is correct behaviour, and the one
-case where the right answer is to say so and merge. `verify-paths` cannot yet tell the third from
-the first ([#498](https://github.com/FS-GG/.github/issues/498)), so **name which one it is in the
-PR**: an advisory that fires on correct behaviour, unexplained, is one the next worker skips past.
+reports drift rather than blocking it. It reports under two headings, and they ask different things
+of you:
+
+- **`undeclared (review):`** — the finding. Either you should have `widen`ed, or you edited a file
+  that is not this item's work. Answer it before merge.
+- **`regenerated (expected):`** — **not** a finding, and nothing to explain. A generated, CI-gated
+  artifact §1 told you not to declare, which `verify-paths` subtracted by asking the generators
+  themselves what they emit ([ADR-0044](../../../docs/adr/0044-generated-artifacts-are-derived-from-their-generators.md),
+  [#498](https://github.com/FS-GG/.github/issues/498)).
+
+> **This used to be one undifferentiated list, and the recipe's answer was to make the WORKER sort
+> it** — *"name which one it is in the PR"*. That was the best available advice while the tool could
+> not tell a regenerated artifact from a real overrun, and it aged into the thing it was warning
+> about: the advisory fired on the behaviour §1 **mandates**, on every kit change, forever. A signal
+> that fires on correct behaviour is one workers learn to skip past — and the one time it means a real
+> overrun, nobody reads it. The sorting is the tool's job, because the generator already holds the
+> fact; asking the worker to re-state it per PR was the hand-copied list ADR-0044 declined.
+
+**The subtraction FAILS CLOSED, so a `regenerated` heading you do NOT see is not a claim that
+nothing was regenerated.** An absent, failing, or silent `generated-paths` — and a
+`verify-paths --pr N --repo <other>`, where the local generators say nothing about another repo's
+artifacts — all subtract **nothing** and leave the file under `undeclared`. That is deliberate:
+"I could not ask what is generated" and "nothing is generated" are opposite facts, and only one of
+them is safe to act on (#266). So an artifact you expected to be subtracted showing up as
+`undeclared` means **go look at the generator**, not "widen the touch-set".
 
 Then review before you merge. Run `/code-review` on the diff and fix what it finds; if the change
 has a runtime surface, drive it with `/verify` rather than trusting tests.
