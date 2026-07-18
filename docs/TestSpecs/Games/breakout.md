@@ -32,6 +32,26 @@ rebound angle → break bricks → collect/avoid power-ups → repeat. The tensi
 next layout, ball re-serves) or **Ball Lost** (lose a life; re-serve if lives remain) →
 **Game Over** when lives reach 0 → Score summary / high-score table → Restart.
 
+**The read-and-react budget.** The moment a descending ball crosses mid-field (y = 360) is
+the player's decision point: the time left to align the paddle is `(680 − 360) / |vy|`. At a
+straight-down serve of 360 px/s that is ≈ 0.89 s; at the 620 px/s cap with a steep `|vy|` it
+collapses toward ≈ 0.5 s, which is why the speed-up rules (§4.5) are what turn a comfortable
+rally into a panic. A shallow-angle ball buys more horizontal travel time but demands a longer
+paddle slide, so the felt difficulty is the *product* of ball speed and lateral distance, not
+speed alone.
+
+**Two postures.** Early in a rally the loop is *defensive* — return the ball and chip the
+nearest rows. Once a vertical gap opens the loop flips to *offensive*: the player deliberately
+aims deflections (§4.4) to widen that gap into a tunnel, threads the ball above the wall, and
+banks a cascade of top-wall/brick bounces for free while the paddle waits idle. Recognizing
+that flip — and protecting the ball on its way back down out of the tunnel — is the game's
+skill ceiling.
+
+**Rhythm and relief.** Each save resolves the tension cycle above; the design spaces relief
+beats so a run never flatlines — a fresh serve, the level-clear pause (§9), and a caught
+power-up (§4.6) each grant a half-second of low-stakes breathing before the next descent.
+Losing the last ball (§4.7) is the only hard reset of the rhythm.
+
 ## 3. Controls & Input
 Keyboard is primary. Mouse is an optional alternative for paddle movement. Input model
 noted per row (held = continuous while down; pressed = edge-triggered on key-down).
@@ -65,6 +85,21 @@ HUD occupies the top 48 px band; the brick field begins below it.
 - Paddle Y is fixed at **y = 680** (top edge of paddle).
 - Clamped so the paddle stays fully inside the side walls: `x ∈ [16, 1280 − 16 − width]`.
 - Mouse control: paddle center snaps to mouse X each frame, then clamped identically.
+- **Velocity capture for english (§4.4).** Paddle `Vx` is recomputed each Tick as
+  `(LeftX_now − LeftX_prev) / dt`, so it reflects real travel whether driven by keyboard or
+  mouse. It is clamped to ±`paddleSpeed` (620 px/s) before use, so a large mouse jump cannot
+  inject an unrealistic spin.
+- **Mouse vs keyboard tie-break within a frame.** If both a `MouseMove` and a held arrow are
+  live on the same Tick, the *most recently received input event* wins (§3); a mouse that has
+  not moved since last frame does not override active keyboard travel.
+- **Boundary behavior.** At a clamp edge the paddle rests exactly at `x = 16` (left) or
+  `x = 1280 − 16 − width` (right); continued input into the wall is a no-op and yields
+  `Vx = 0`, so an edge-pinned paddle imparts no english. Widening (§4.6) while pinned to the
+  right wall shifts `LeftX` left just enough to keep the wider paddle inside the wall, never
+  clipping through it.
+- **Sub-pixel movement.** Position is a float; movement is `LeftX ± paddleSpeed × dt`. There
+  is no snap-to-grid, so the fine aiming near paddle center (§4.4) that carving a tunnel
+  demands is physically available.
 
 ### 4.3 Ball physics
 - Ball is a circle, radius **7** px (diameter 14).
@@ -80,6 +115,20 @@ HUD occupies the top 48 px band; the brick field begins below it.
 - Minimum vertical speed guard: after any bounce, if `|vy| < 60 px/s` the ball is nudged
   so `|vy| = 60` (preserving total speed by recomputing `vx`). This prevents a
   near-horizontal ball from getting stuck ping-ponging between side walls forever.
+- **Substep integration.** A free ball advances in `n = ceil(speed × dt / 7)` equal substeps
+  (§13) so it never moves more than its 7 px radius before a collision test, eliminating
+  tunneling through bricks or walls at cap speed. Collisions are resolved at the end of each
+  substep, not once per frame.
+- **Reposition epsilon.** After any reflection the ball center is pushed **0.5 px** clear of
+  the surface it struck along the reflected normal, so the next substep cannot re-detect the
+  same overlap and double-bounce.
+- **Corner hits.** A ball that overlaps two perpendicular surfaces in the same substep (a wall
+  corner, or the notch between two bricks) reflects **both** `vx` and `vy`, sending it back the
+  way it came; this is the dominant-axis rule (§4.5) degenerating to a tie, resolved by
+  flipping both axes rather than guessing one.
+- **Trail sampling.** The renderer's 3-sample motion trail (§8) reads the ball's last three
+  *frame* positions, not substep positions, so the visible trail lengthens with speed without
+  any extra model state.
 
 ### 4.4 Paddle deflection & angle control (the skill mechanic)
 When the ball collides with the top face of the paddle, the rebound angle is **not** a
@@ -102,6 +151,25 @@ A small bonus: if the paddle is moving when it strikes the ball, add **15%** of 
 velocity to `vx` (then renormalize to constant speed) — a subtle "english"/spin that
 rewards active play. Capped so total horizontal angle never exceeds 75°.
 
+**Contact face & grazes.** Only the paddle's **top face** produces the offset-angle
+deflection, and the rebound `vy` is always forced upward regardless of the ball's incoming
+direction, so a ball that clips the paddle while already rising is not flung downward. A ball
+whose center is beyond the paddle's left or right end when it reaches `y = 680` is a **miss**,
+not a side hit — the paddle exposes no vertical faces to play, and the ball continues into the
+gutter. This keeps the "reposition or lose it" read honest: there is no lucky edge-of-paddle
+save.
+
+**Sticky interaction (§4.6).** While the Sticky power-up is active, top-face contact instead
+**captures** the ball: it stops dead at the impact point, stores its offset, and rides the
+paddle (§5.2) until the player relaunches with Space/Click, which fires it along the §4.4
+offset angle computed from *where it was caught*. English is not applied to a launched-from-
+catch ball (the paddle's motion is the player's aim, not spin). Each capture spends one of the
+3 sticky charges.
+
+**Determinism note.** The deflection is a pure function of impact offset, current speed, and
+paddle `Vx`; it draws no RNG, so AC #3 and the replay test (§14.16) reproduce every rebound
+exactly.
+
 ### 4.5 Brick collision & destruction
 - The ball checks against bricks using swept circle-vs-AABB (or, acceptably for v1,
   discrete AABB overlap with the ball's bounding box, since dt is small).
@@ -117,6 +185,24 @@ rewards active play. Capped so total horizontal angle never exceeds 75°.
   speed increases by **+8%** up to a cap of **620 px/s**. Speed also steps up when the ball
   first touches the top wall and when it breaks an orange or red brick (classic Atari
   rule), whichever raises it — see §12 for the tunable.
+- **Multi-brick ordering.** When a single substep overlaps more than one brick (possible for a
+  fast ball crossing a 2 px gap), resolve the **nearest** brick first — the one whose surface
+  the ball's pre-step position was closest to along its travel direction — reflect off it, then
+  re-test. A single ball still resolves at most one brick per substep (above), so the
+  reflection stays sane.
+- **Tie-break at equal overlap.** If the X and Y penetration depths are equal (a clean corner
+  hit into the brick lattice), flip **both** `vx` and `vy` (§4.3 corner rule) and reposition
+  diagonally out of the brick.
+- **Gold bricks & clears.** A Gold hit reflects with no HP change, no score, and no particle
+  burst (§8) — only a `wall-bounce`-class blip is heard (§10). Gold bricks are excluded from
+  the breakable count, so a layout with Gold present still clears the instant its last
+  *breakable* brick falls (§11).
+- **Speed-up bookkeeping.** The three triggers — every 8 cumulative bricks, the first top-wall
+  touch **this life**, and the first orange-or-red break **this life** — each fire at most once
+  per the condition that defines them and take the higher resulting speed; they never stack
+  multiplicatively within one frame, and all clamp to `ballSpeedCap` 620 px/s. The two
+  "first-of-life" flags reset on life loss (§4.7), matching classic Atari behavior, so a
+  re-served ball starts calmer.
 
 ### 4.6 Power-ups
 When a destructible brick is destroyed there is a **12%** chance to drop a power-up capsule.
@@ -135,6 +221,29 @@ Power-up drop selection is uniform across the four types unless tuned (§12). Ca
 allowed to stack on screen, but a hard cap of **3 falling capsules** prevents clutter
 (excess drops are skipped).
 
+**Category & stacking rules.** The "1 active per category" rule (above) groups the kinds:
+Widen and Laser are **paddle-modifier** categories (each its own), Sticky is the **catch**
+category, and Multiball is **instant** — it has no active state to replace, spawning balls and
+being gone. Collecting a second Widen while one is active **refreshes** its 15 s timer rather
+than stacking width; Laser likewise refreshes to 12 s. Widen and Laser can be active at once
+(different categories) — a long, twin-cannon paddle is a legitimate reward for a good run.
+
+**Laser detail.** Twin cannons sit at the paddle's left and right thirds; each Space/Click
+fires **one bolt from each cannon** on the same frame, so a shot is a parallel pair. The 4/s
+cap means ≥ 0.25 s between shots; inputs inside the cooldown are ignored, not queued. A bolt
+subtracts exactly 1 HP from the first brick it overlaps and despawns — two bolt hits to break a
+Silver brick, and against Gold the bolt despawns with no effect (§4.5).
+
+**Multiball spread.** The split takes the *currently active* ball and produces `multiballCount`
+(3) balls: the original keeps its heading, the two new balls take that heading rotated **±25°**,
+all at the current shared ball speed. If Multiball is collected while more than one ball is
+already live, only the single ball nearest the paddle splits (avoids runaway counts); the
+performance ceiling is 8 balls (§13), beyond which further splits are skipped.
+
+**Drop suppression & RNG.** The 12% roll (above) is skipped entirely — no RNG drawn — when 3
+capsules are already falling, so the falling-capsule cap never perturbs the deterministic RNG
+stream (§13); replays stay identical whether or not the visual cap was hit that frame.
+
 ### 4.7 Lives & serving
 - Start with **3 lives**.
 - A life is lost when the **last** active ball crosses y = 720. (With multiball, losing
@@ -143,6 +252,19 @@ allowed to stack on screen, but a hard cap of **3 falling capsules** prevents cl
   on the paddle, stuck, awaiting launch. Power-up timers and Widen/Laser are cleared on
   life loss; the layout (remaining bricks) persists.
 - Bonus life at **20,000** points (once).
+- **Serve aiming & auto-launch.** On entering Serve the ball sits centered on the paddle and
+  tracks it horizontally (§5.2); the player may slide to pre-aim before launching. Launch sends
+  the ball upward at the current §4.4 offset angle (dead center → straight up). To keep a run
+  moving, an un-launched serve **auto-launches straight up after 5 s** of held Serve, so an idle
+  player is never stuck.
+- **What clears on life loss.** Widen, Laser, and Sticky effects and their timers are cleared;
+  all **falling capsules and in-flight laser bolts are removed**; multiball collapses to the
+  single fresh serve ball. Persisting across the life: the brick layout, `Score`, `Level`,
+  `BricksDestroyed`, and cumulative ball speed are **not** reset — a life loss costs the ball,
+  not the run's progress. The per-life speed-up flags (§4.5) do reset.
+- **Last-ball accounting.** "Last active ball" is evaluated in Tick step 7 (§7.3) *after*
+  culling every ball past the gutter that frame — so two balls exiting on the same frame with
+  none left still costs exactly one life, never two.
 
 ## 5. Entities / Game Objects
 
@@ -150,26 +272,40 @@ allowed to stack on screen, but a hard cap of **3 falling capsules** prevents cl
 - Size 104×18 (or 168×18 widened), HP n/a. Position (x = left edge, y = 680 fixed).
 - State: `Normal | Widened | Sticky | Laser` flags can co-exist (composed in Model).
 - Created at game start; never destroyed; reset on life loss.
+- Count: exactly one, always present in Play. `Vx` is derived (§4.2), not integrated. The
+  Sticky/Widen/Laser flags compose freely, so a widened, laser-armed paddle mid-catch is a
+  single valid state.
 
 ### 5.2 Ball
 - Circle r = 7. Properties: position (cx, cy), velocity (vx, vy), `stuck: bool`.
 - Behavior: free-flight straight-line motion; reflects on collisions; "stuck" balls track
   the paddle and ignore physics until launched.
 - Created on serve / split by multiball; destroyed when it exits the gutter.
+- Count 1–8 (§13). A `Stuck` ball ignores physics and mirrors the paddle at a fixed offset
+  (centered on serve, or its catch offset under Sticky §4.4), carrying no velocity until
+  launched. Balls are peers — there is no "primary" ball — so any ball can trigger a speed-up
+  (§4.5) or be the last one lost (§4.7).
 
 ### 5.3 Brick
 - Size **64×24** px, 2 px gap between bricks. Properties: row, col, color, `hp`, `points`,
   `breakable: bool`.
 - Behavior: static; decrement HP on hit; destroyed at HP 0.
 - Created from level layout; destroyed by ball/laser.
+- Count ≤ 144 (18×8). Immutable except `Hp`; a Silver brick is the only kind that visibly
+  persists after a hit (HP 2→1). `Breakable = false` only for Gold; the level-clear test counts
+  `Breakable` bricks only (§11).
 
 ### 5.4 PowerUp capsule
 - Size 28×14. Properties: position, falling velocity (0, 140), `kind: PowerUpKind`.
 - Behavior: falls; collected on paddle overlap; lost at gutter.
+- Count ≤ 3 falling (§4.6). Pure ballistic descent at (0, 140) — no horizontal drift, and no
+  collision except the paddle AABB and the gutter.
 
 ### 5.5 Laser bolt
 - Size 4×16. Velocity (0, −700). Destroys one brick HP on contact; despawns on hit or at
   top wall.
+- Count ≤ 8 (a 4/s pair-fire over the bolt's ~1 s flight). Straight vertical flight; ignores
+  the ball, other bolts, and Gold except to despawn on contact (§4.5).
 
 F#-flavored sketch:
 ```fsharp
@@ -215,6 +351,13 @@ Default **Level 1** color rows (top → bottom), classic Atari point scheme:
 | 5–6 | Green | `#3FA34D` | 1 | 3 |
 | 7–8 (bottom) | Yellow | `#E0C020` | 1 | 1 |
 
+- **Full-clear yield (Classic Wall):** each color spans 2 rows × 18 cols = 36 bricks, so a
+  complete Level-1 clear is worth Red 36×7 + Orange 36×5 + Green 36×3 + Yellow 36×1 = 252 + 180
+  + 108 + 36 = **576 points** for all 144 bricks.
+- **Layout data.** Each layout is a data table of `(row, col, color)` — not code — so the
+  Stretch editor (§15.5) and the colorblind remap (§9.1) are pure data swaps. Absent cells (the
+  Checkerboard gaps) simply have no brick entry.
+
 ### 6.2 Level progression
 At least **4** hand-authored layouts that cycle (after level 4, repeat with higher speed):
 
@@ -226,6 +369,17 @@ At least **4** hand-authored layouts that cycle (after level 4, repeat with high
 4. **Tunnels** — three vertical Gold columns split the wall into channels, encouraging the
    tunnel-and-trap strategy; Red/Orange fill.
 
+Per-layout specifics:
+- **Fortress** — 144 cells minus the 1 center Gold = **143 breakable**; the 36 Silver bricks
+  (rows 3–4) each need 2 hits, making it the longest layout to clear. The Gold sits in one of
+  the two center columns of row 1, so the ball must be tunneled *around* it.
+- **Checkerboard** — bricks present where `(row + col)` is even → **72 bricks**; the open cells
+  let a steep ball weave up to two rows deep before deflecting, rewarding precise §4.4 aim over
+  brute force.
+- **Tunnels** — three full-height Gold columns at roughly the field quarters (near columns 5,
+  9, and 14) divide the wall into four channels; Red/Orange fill the remaining ~15 columns, so
+  a ball trapped in one channel racks up a fast vertical cascade.
+
 ### 6.3 Difficulty ramp
 - Ball serve speed: **360 + 20 × (level − 1)** px/s (capped contribution; total ball speed
   still capped at 620).
@@ -233,6 +387,14 @@ At least **4** hand-authored layouts that cycle (after level 4, repeat with high
 - Paddle width and speed are constant across levels (player skill is the variable).
 - "Speed-up triggers" (top-wall touch, orange/red brick break, every 8 bricks) apply each
   level.
+- **Layout cycling & determinism.** Levels beyond 4 repeat the 4-layout cycle
+  (`layout = ((level − 1) mod 4)`) with the speed ramp above stacked on top; layouts are fixed
+  data with **no RNG draw**, so a run's level is fully predictable from `Level` alone — which
+  the replay test (§14.16) relies on. Only drop rolls, drop kind, multiball spread, and
+  particles consume the RNG stream.
+- **Silver scaling.** Silver's `50 × level` value (§11) makes the Fortress silver band worth
+  36 × 50 × level — a strong incentive to reach it at a high `level`, a deliberate risk/reward
+  the ramp leaves in the player's hands rather than forcing.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -542,6 +704,24 @@ lives. No continues in v1.
 **Lives:** start 3; bonus life at 20,000 points (once); max display 3 icons (extra lives
 counted but capped in the icon row).
 
+**Score ceiling & display.** Score is a non-negative `int`; the HUD field is 7 digits (§9), so
+it saturates its *display* at **9,999,999** even if the model value runs higher (the game is
+expected to end long before). Points are only ever added — there is no penalty scoring — so the
+§9.2 score timeline is strictly monotonic.
+
+**Per-clear yield & pacing.** A full Level-1 clear yields the 576 points computed in §6.1;
+higher levels raise ball speed (§6.3) but leave the base per-color points constant, so score
+growth comes from *survival* (more levels) and from Silver/Fortress yields (`50 × level`), not
+inflated per-brick values. This keeps the 20,000-point bonus-life threshold (§4.7) meaningful —
+roughly 30+ levels of clean play, fewer if the player farms Silver bands late.
+
+**Coincident clear vs. gutter loss.** Tick resolves life loss (step 7) *before* the level-clear
+test (step 8, §7.3). So if the last ball exits the gutter on the very frame the last breakable
+brick is destroyed, the life is deducted first; with lives remaining, the fresh Serve ball then
+faces an empty wall → LevelClear on the next step, but at 0 lives it is Game Over even though
+the wall is clear. This precedence is deterministic and intentional: the ball must be *alive*
+at the moment of the clear to bank it.
+
 ## 12. Difficulty & Balancing
 Data-driven tunables (defaults shown):
 
@@ -563,6 +743,25 @@ Data-driven tunables (defaults shown):
 | `laserDurationMs` | 12000 | 5k–30k | Laser lifetime |
 | `bonusLifeScore` | 20000 | 5k–50k | One-time extra life |
 | `levelSpeedStep` | 20 px/s | 0–60 | Serve speed added per level |
+| `stickyCharges` | 3 | 1–6 | Catches before Sticky ends (§4.6) |
+| `laserFireRate` | 4 /s | 1–8 | Max laser shots per second (§4.6) |
+| `multiballSpread` | ±25° | ±10–45° | New-ball angle offset on split (§4.6) |
+| `serveAutoLaunchMs` | 5000 | 2k–15k | Idle serve auto-launch (§4.7) |
+| `maxFallingCapsules` | 3 | 1–6 | On-screen capsule cap (§4.6) |
+| `maxBalls` | 8 | 3–12 | Hard ball-count ceiling (§13) |
+| `englishFactor` | 15% | 0–40% | Paddle-velocity spin added to `vx` (§4.4) |
+| `particleCount` | 6–8 | 0–16 | Debris per brick destroyed (§8) |
+
+**Presets & clamping.** The §9.1 difficulty presets (Casual/Standard/Expert) are thin
+overrides on this table — they move `ballBaseSpeed`, `paddleWidth`, `dropChance`, and `lives`
+only, leaving every other tunable shared, so difficulty changes the *pressure* without changing
+the *rules*. The active preset id is part of the seed context (§13): a run recorded under one
+preset is not replay-compatible with another. Every derived value is clamped to its column
+range before use — serve speed to `min(ballBaseSpeed + levelSpeedStep × (level−1),
+ballSpeedCap)`, `dropChance` floored at 6% by the §6.3 falloff, and `maxBounceAngle` +
+`englishFactor` jointly capped so the post-english horizontal angle never exceeds **75°**
+(§4.4). Out-of-range tunables from a hand-edited config are clamped, not rejected, so a bad
+value degrades gracefully instead of crashing a run.
 
 ## 13. Technical Notes
 - **Performance budget:** ~150 bricks + ≤8 balls + ≤3 capsules + ≤8 bolts + ≤64 particles.
@@ -659,6 +858,45 @@ Data-driven tunables (defaults shown):
 17. **Bonus life** — *Given* score just below 20,000 with the bonus not yet awarded, *When*
     a hit pushes score to ≥ 20,000, *Then* `Lives` increases by 1 once and never again.
 
+18. **Both-held cancels** — *Given* the paddle in motion, *When* both `Left` and `Right` are
+    held on the same frame, *Then* horizontal input resolves to zero, paddle `Vx = 0`, and the
+    paddle does not move (§3, §4.2).
+
+19. **Corner reflection** — *Given* a ball entering a wall corner (or a brick-lattice notch)
+    with equal X and Y penetration depth, *When* the collision resolves, *Then* both `vx` and
+    `vy` flip sign and total speed is preserved within 0.5 px/s (§4.3, §4.5).
+
+20. **Sticky catch & relaunch** — *Given* the Sticky power-up active with 3 charges, *When* the
+    ball strikes the paddle top face, *Then* it is captured (`Stuck = true`) and rides the
+    paddle; *And When* the player presses Space, *Then* it relaunches upward along the §4.4
+    offset angle from its catch point; *And When* 3 catches have been spent, *Then* Sticky ends
+    (§4.4, §4.6).
+
+21. **Laser fire-rate cap** — *Given* the Laser power-up active, *When* Space is pressed twice
+    within 0.25 s, *Then* only one pair of bolts spawns (the second press is ignored, not
+    queued) (§4.6).
+
+22. **Serve auto-launch** — *Given* the game in `Serve` with no launch input, *When* 5 s of
+    unpaused play elapse, *Then* the ball auto-launches straight up and phase becomes `Playing`
+    (§4.7).
+
+23. **Capsule cap suppresses drops** — *Given* 3 capsules already falling, *When* a brick is
+    destroyed, *Then* no capsule drops and the RNG stream is byte-identical to the same run in
+    which the cap was not reached (§4.6, §13).
+
+24. **English adds spin, capped** — *Given* the paddle moving at 620 px/s when it strikes a
+    centered ball, *Then* `vx` gains 15% of paddle velocity, speed is renormalized to the
+    constant magnitude, and the total horizontal angle is ≤ 75° (§4.4).
+
+25. **Coincident clear vs. gutter loss** — *Given* the last ball exits the gutter on the frame
+    the last breakable brick is destroyed with lives remaining, *Then* a life is deducted
+    (step 7) before `LevelClear` (step 8); *And Given* the same event at 1 life, *Then* it is
+    `GameOver` despite the cleared wall (§7.3, §11).
+
+26. **Layout determinism** — *Given* `Level = n`, *When* the layout is built, *Then* it is
+    `((n − 1) mod 4)` of Classic Wall / Fortress / Checkerboard / Tunnels with no RNG draw, and
+    is identical across runs (§6.2, §6.3).
+
 ## 15. Stretch Goals
 1. **Combo multiplier** — consecutive brick hits without a paddle touch increase a score
    multiplier (rewards tunnel-trap play).
@@ -690,16 +928,20 @@ its acceptance test(s) pass (§14)._
 - 🟥 Held left/right + edge-triggered actions; both-held cancels to zero (§3)
 - 🟥 Velocity-based paddle at 620 px/s, wall clamp `x ∈ [16, 1280 − 16 − width]` (§4.2) — AC #14
 - 🟥 Optional mouse-X paddle control, most-recent-source-wins (§3, §4.2)
+- 🟥 Both-held-cancels + per-frame `Vx` velocity capture (keyboard & mouse), clamped for english (§4.2) — AC #18
 
 ### M2 — Ball physics & serve
 - 🟥 Constant-speed straight-line ball integration, no gravity/drag (§4.3)
 - 🟥 Serve state: ball stuck on paddle, launch upward on Space/Click (§4.7, §7.3) — AC #1
 - 🟥 Wall bounce reflects normal component, speed preserved exactly (§4.3) — AC #2
 - 🟥 Anti-stall guard nudges `|vy| ≥ 60 px/s`, total speed preserved (§4.3) — AC #13
+- 🟥 Substep integration (≤ 7 px/substep), 0.5 px reposition epsilon, corner double-axis reflection (§4.3) — AC #19
+- 🟥 Serve pre-aim + 5 s idle auto-launch straight up (§4.7) — AC #22
 
 ### M3 — Paddle deflection (skill mechanic)
 - 🟥 Impact-offset angle control, max 60° from vertical, `vy` forced upward (§4.4) — AC #3
-- 🟥 Paddle-velocity "english" (+15% vx), total angle capped at 75° (§4.4)
+- 🟥 Paddle-velocity "english" (+15% vx), total angle capped at 75° (§4.4) — AC #24
+- 🟥 Top-face-only contact; center-past-paddle-end counts as a miss, no side hit (§4.4)
 
 ### M4 — Bricks, collisions & scoring
 - 🟥 Brick grid built from layout (18×8, color/HP/points) (§5.3, §6.1)
@@ -707,6 +949,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 HP decrement; Silver HP 2, Gold indestructible (§4.5) — AC #5, #6
 - 🟥 Per-color scoring, Silver 50×level, Gold 0 (§11) — AC #4
 - 🟥 Speed-ups (every 8 bricks / top-wall / orange-red), cap 620 px/s; tunneling sub-step guard (§4.5, §13)
+- 🟥 Multi-brick nearest-first resolution + equal-overlap corner tie-break (§4.5)
+- 🟥 Per-life speed-up flags reset on life loss; Gold excluded from breakable/clear count (§4.5, §11)
 
 ### M5 — Lives, serving & power-ups
 - 🟥 Lives (start 3); life lost only when last ball exits gutter, re-serve; Game Over at 0 (§4.7) — AC #8, #10
@@ -715,11 +959,21 @@ its acceptance test(s) pass (§14)._
 - 🟥 Sticky / Widen / Laser effects, one-per-category, timed expiry by `ElapsedMs` (§4.6) — AC #11
 - 🟥 Multiball 3-ball ±25° split; life kept until last ball lost (§4.6, §4.7) — AC #9
 - 🟥 Laser bolt spawns, travels up 700 px/s, breaks one brick HP (§4.6, §5.5) — AC #12
+- 🟥 Sticky capture-and-relaunch along catch offset, 3 charges then ends (§4.4, §4.6) — AC #20
+- 🟥 Power-up categories: refresh-not-stack timers, Widen + Laser co-active (§4.6)
+- 🟥 Twin-cannon pair-fire, 4/s cooldown (no queue), one HP per bolt (§4.6, §5.5) — AC #21
+- 🟥 Multiball nearest-ball split when >1 ball live, 8-ball ceiling (§4.6, §13)
+- 🟥 Drop suppression at 3-capsule cap without perturbing the RNG stream (§4.6, §13) — AC #23
+- 🟥 Life-loss cleanup: clear timers/capsules/bolts, collapse multiball, keep run progress (§4.7)
+- 🟥 Coincident last-brick / last-ball: life-loss (step 7) precedes level-clear (step 8) (§7.3, §11) — AC #25
 
 ### M6 — Levels & progression
 - 🟥 Level clear on last breakable brick → next layout, re-serve after 1.5 s (§7.3, §11) — AC #7
 - 🟥 Four cycling layouts: Classic Wall / Fortress / Checkerboard / Tunnels (§6.2)
 - 🟥 Difficulty ramp: per-level serve speed, drop-chance falloff (§6.3)
+- 🟥 Deterministic layout cycling `((level−1) mod 4)`, no RNG in layout build (§6.2, §6.3) — AC #26
+- 🟥 Per-layout brick counts/patterns: Fortress silver band + center Gold, Checkerboard `(row+col)` even, Tunnels Gold columns (§6.2)
+- 🟥 Expanded tunables (sticky charges, fire rate, spread, auto-launch, caps, english, particles) + range clamping (§12)
 
 ### M7 — Rendering (Skia)
 - 🟥 Draw order: background, walls, bricks, capsules, paddle, bolts, balls + trail, HUD (§8)

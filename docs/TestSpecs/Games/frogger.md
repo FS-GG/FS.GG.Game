@@ -34,6 +34,22 @@ A single "life attempt" loop: spawn at start row with a fresh per-life timer →
 either reach home (score, reset position, keep level) or die (lose a life, reset
 position, timer resets) → continue while lives remain.
 
+**Beat structure:** one *beat* is a single hop plus the read that precedes it. A crossing
+is at minimum 11 beats (start row 11 → home row 0), and at `LifeTime = 30 s` the per-life
+timer (§4.8) budgets ~2.7 s of reading per beat. Nothing in the loop advances on a clock
+the player does not drive except the hazards themselves: the frog is stationary between
+beats unless it is `Riding` (§4.4), so a stalled player loses only to the timer, never to
+a forced move. This is the twitch-*reading* the genre trades in — the pressure is entirely
+in the hazard cadence and the draining bar, not in the frog's own momentum.
+
+**Economy of the two loops:** the *life* loop banks points (rows, home, time bonus) but
+spends a life on failure; the *level* loop converts five bankings into a cleared board. The
+two are deliberately asymmetric — a life is cheap to spend early (respawn is instant, §7)
+but a filled slot is permanent for the level, so the risk gradient rises as slots fill. With
+four slots taken, the only lanes to home are the ones not yet solved, and the fly (§4.7),
+which only ever sits in an *empty* slot, concentrates into the few that remain — the last
+crossing of a level is both the hardest and the most rewarding.
+
 ## 3. Controls & Input
 Input is **edge-triggered** (one hop per key press; holding does nothing and auto-repeat
 is ignored). The frog never moves continuously — every press queues exactly one
@@ -71,6 +87,25 @@ The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 60 px` t
   furthest row reached** awards points once (see §11).
 - Horizontal hops while riding a platform are relative to the frog's current world
   position snapped to the nearest column on landing.
+- **No diagonal hops.** Each press maps to exactly one of four axis directions and a hop
+  never changes two axes; there is no "half hop." A hop either fully resolves to its
+  destination cell or (on wall rejection, §3) never starts — the frog is never left
+  straddling two cells at a beat boundary.
+- **Mid-hop hazard resolution is split by hazard type.** Vehicle collision (§4.2) uses the
+  frog's *interpolated* hitbox during the 0.12 s lerp, so a car can kill a frog in the air
+  over a road lane — "at any time" in §4.2 includes mid-hop. Water/footing (§4.4),
+  home-slot (§4.6) and turtle-submersion (§4.5) outcomes are *discrete*: evaluated only at
+  hop resolve, against the destination cell, because those hazards are about where you land,
+  not where you pass. Scoring and bonus checks likewise fire once, at resolve.
+- **Landing column while riding:** a horizontal hop taken while `Riding` computes its
+  destination from the frog's *current world column* `round(WorldX / CellW)`, then moves one
+  column from there; the fractional `subX` is dropped at hop start and re-snapped on resolve.
+  A vertical hop off a platform likewise departs from the rounded column, so a frog drifting
+  at `subX = 0.6` that hops up aims at the column it visually overlaps most.
+- **Platform-to-platform hops are ordinary hops:** the frog may hop from a plank directly
+  onto an adjacent lane's plank; footing is re-evaluated at the destination (§5) with no
+  carry-over of the previous platform's `Vx` — the frog stops dead in world X the instant it
+  is not `Riding`, then re-inherits the new platform's drift next tick.
 
 ### 4.2 Road section (death on contact)
 - Five road lanes (rows 7–11, see §6). Each lane scrolls vehicles in one direction at a
@@ -89,10 +124,28 @@ The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 60 px` t
 
 - Vehicles wrap: when a vehicle's leading edge exits one side it re-enters the opposite
   side at the same speed (toroidal in X), preserving lane spacing.
+- **Deterministic lane layout, not RNG jitter:** at level build each lane places `Count`
+  vehicles at even `Spacing` from a fixed per-lane phase offset, then scrolls; the toroidal
+  wrap preserves that spacing forever, so gaps are stable and *readable* rather than random.
+  No two vehicles overlap within a lane, so every lane always presents exactly `Count` gaps.
+- **Hitbox insets are symmetric.** A vehicle's lethal AABB is the `Hitbox` in the table
+  (h = 48 within the 60 px row), inset from the drawn sprite; the frog's own 40×40 hitbox is
+  inset from its 48×48 sprite (§5.1). Both insets are symmetric, so a pixel-touching
+  near-miss reads as a near-miss and collision stays center-fair.
+- **No road coyote grace.** A stationary frog on a road row dies the tick a vehicle's moving
+  hitbox reaches it — there is no forgiveness window on the road (contrast the one-tick
+  turtle-submersion grace, §13). Reading the gap is the whole skill; a frog parked in a lane
+  is on borrowed time until it hops clear.
 
 ### 4.3 Median (safe row)
 - Row 6 is a **safe median** strip (grass). No hazards. Frog may rest here indefinitely
   (timer still ticks).
+- The median is the crossing's one mid-point checkpoint of *position* only, never of the
+  timer: the frog can idle here to re-read all five road lanes below and all five river
+  lanes above, but the per-life countdown (§4.8) is unaffected by standing safe. Together
+  with row 11 (start), it is one of only two unconditionally safe rows at every level (§12).
+
+
 
 ### 4.4 River section (death without platform)
 - Five river lanes (rows 1–5). The river water is **lethal by default**: if the frog
@@ -106,6 +159,23 @@ The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 60 px` t
   frog dies (carried into the wall / off the world).
 - After any hop the frog re-evaluates footing: it snaps its column to the nearest grid
   column but keeps a fractional `subX` for smooth riding; collision uses world pixels.
+- **Footing test (center-point rule):** on a hop resolving into a river row, the frog has
+  footing iff its hitbox *center* lies within some platform's AABB in world X (the row is
+  fixed, so only X matters). This means ≥ ~50% of the 40-px frog must be over the plank;
+  landing with a mere corner over a log but the center over open water between two planks
+  **drowns**. The same center-point test governs whether `Riding` continues each tick.
+- **Seams never leak:** because logs/turtles in one lane never overlap and are separated by
+  `Gap` (§13), at most one platform can contain the center; if none does, it is water and
+  the frog drowns. A frog *riding* toward a gap does not spontaneously drown — footing is
+  re-tested only at hop boundaries and on the ride tick, and the ridden platform carries the
+  frog with it, so its center stays over the plank until the frog itself hops off.
+- **Boundary planks:** a platform entering from off-screen offers footing only once its AABB
+  actually covers the landing center — a frog cannot hop onto a plank still 30 px out over
+  water. A frog that hops up out of row 1 into row 0 leaves the ride entirely (§4.6).
+- **The river is not a one-way ratchet:** hopping down toward start from a plank is legal and
+  lands on the row-below platform (or drowns by the same rule); lateral hops reposition along
+  a lane. Only `MaxRowReached` (§11) is monotone — the frog may retreat freely, but never
+  re-earns a row it already banked.
 
 | River lane (row) | Platform | Direction | Speed (px/s) | Platform length | Gap |
 |---|---|---|---|---|---|
@@ -124,12 +194,37 @@ The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 60 px` t
   (Sinking/Rising) it still supports the frog.
 - Not all turtle lanes dive: lane 4's 3-turtle group dives; lane 2's 2-turtle group is
   non-diving in level 1 and begins diving from level 2 onward.
+- **De-synced groups:** each diving group carries its own `phaseTimer`, offset at build so
+  lanes never submerge in unison — the lane-4 group and (from level ≥ 2) the lane-2 group
+  hold complementary windows, so a patient reader can usually find a crossable river. The
+  offsets are drawn from `Model.Rng` (§13) and are therefore replay-stable to the seed.
+- **The tell:** the 0.6 s `TSinking` and 0.6 s `TRising` transitions are the player's
+  warning. During `TSinking` the turtles are *still footing* while their sprite alpha fades
+  1→0 (§8); a frog that hops on during a fade is safe but on notice. The lethal instant is
+  the *end* of `TSinking` (fully `Down`), never its start — hop off before submersion and you
+  live.
+- **Submersion is per-group, not per-turtle:** all turtles in a group share one `divePhase`,
+  so you cannot stand on the "up" end of a half-sunk group. `canDive = false` groups skip
+  phase advancement entirely and are permanent footing (§5.4). As `Down` duration grows with
+  level (§6, cap 3.5 s) while `TUp` stays 4.0 s, late-game crossings demand a hop landed and
+  cleared inside a fixed generosity window that never widens — the ramp shrinks only the safe
+  margin, never the tell.
 
 ### 4.6 Home slots
 - Row 0 (home) has **5 home slots** at fixed columns. Between slots are lethal hedges/wall.
 - The frog must hop up from row 1 into an **empty** home slot to score a "home."
 - Hopping into an **occupied** slot, or into the hedge between slots, is a **death**.
 - Filling all 5 slots clears the level (see §11).
+- **Slot columns:** the 5 slots sit at columns 1, 5, 9, 13, and 17 (even 4-column pitch
+  across the 20-column board), each one cell wide; every other row-0 column is lethal hedge.
+- **Alignment on landing:** a hop up into row 0 resolves its column as `round(WorldX / CellW)`
+  and that rounded column must equal a slot column *exactly*. A frog drifting on a plank must
+  line its center under a slot before hopping — an off-by-one rounding lands on hedge and
+  dies. This makes the final hop of every crossing a precision beat, not a formality: the
+  river's drift is what makes it hard, since `WorldX` is rarely slot-aligned by luck.
+- **Fill order is free:** any empty slot may be filled in any order; the level clears the
+  instant the count reaches 5 (§11), regardless of sequence. Re-entering a filled slot is the
+  occupied-slot death above.
 
 ### 4.7 Bonus targets
 - **Fly:** periodically a fly appears in a random **empty** home slot for `FlyDuration =
@@ -137,11 +232,30 @@ The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 60 px` t
 - **Lady frog:** occasionally a "lady frog" rides a log in the river. If the frog hops
   onto the lady frog's cell, she joins (escort); delivering her home awards a bonus and
   she then disappears. (Implement as a special rider entity in a river lane.)
+- **Fly cadence:** at most one fly exists at a time; after a fly expires or is eaten, the
+  next spawns after `Fly spawn interval = 12 s` (§12) into a uniformly-random *currently
+  empty* slot drawn from `Model.Rng`. If every slot is occupied, no fly spawns. A fly never
+  appears in a slot the same tick it is filled, so the fly-and-fill are never a tie.
+- **Lady frog rules:** she rides a *log* (never a turtle group), spawns at most one at a
+  time on a leftward river lane, and rides with the frog once boarded (the frog still rides
+  the underlying log and inherits its `Vx`). `Escorted` is set on boarding her cell.
+  Delivering her to *any* empty home slot pays the escort bonus (§11) and clears her; dying
+  while escorting simply loses her, no penalty beyond the death. She never fills a slot
+  herself and never blocks one.
 
 ### 4.8 Per-life timer
 - Each life attempt has a countdown timer `LifeTime = 30 s` shown as a draining bar.
 - Reaching home resets the timer for the next attempt. Timer reaching 0 = death.
 - Remaining time at the moment of reaching home contributes a **time bonus** (see §11).
+- **Low-timer band:** color thresholds are keyed to *absolute* seconds, not bar fraction —
+  green above 10 s, yellow 5–10 s, red below 5 s — so the warning always means the same real
+  time even as `LifeTime` shrinks with the level (§6). Below 5 s the `timer-low` cue (§10)
+  ticks. This is purely a tell: the frog is not slowed, hurried, or otherwise altered.
+- **The timer never pauses for animation:** it counts down through `Hopping` and `Riding`,
+  and it stops only in `Paused` and menus (§9.2 `playSeconds` excludes those). Reaching home
+  resets it to the level's `LifeTime` for the next attempt; a death from any cause resets it
+  on respawn (§11). There is no way to bank or carry unspent time between attempts — it is
+  converted to score on a home hop, or lost.
 
 ## 5. Entities / Game Objects
 
@@ -154,6 +268,11 @@ All hitboxes are axis-aligned rectangles; collision is AABB overlap in world pix
   → respawn or game over; `Home` (slot filled, brief celebrate 0.4 s) → respawn at start.
 - Created at level start and after each death/home at the **start cell** (col 9 or 10,
   start row). Destroyed only conceptually (state reset).
+- **Footing resolution** each hop-resolve/ride tick classifies the frog by the row it
+  occupies: on a road, median, start, or home row the outcome is vehicle-death / safe / home
+  by that row's rules; on a river row it is the §4.4 center-point footing test → `Riding` or
+  `Dying`. `WorldX` is the source of truth for horizontal position; the snapped `Cell.col` is
+  a snapshot refreshed on each landing, used for wall/edge rejection and slot alignment.
 
 ### 5.2 Vehicle
 - Properties: lane row, `vx` (signed px/s), width (per table), hitbox h = 48, sprite kind.
@@ -162,14 +281,23 @@ All hitboxes are axis-aligned rectangles; collision is AABB overlap in world pix
 ### 5.3 Log (platform)
 - Properties: lane row, `vx`, length in px. Hitbox = full length × 56 h.
 - Behavior: constant-velocity drift with wrap. Provides footing always.
+- The footing span is the full `LengthPx`; there is no lethal segment in v1 (crocodile
+  segments are stretch, §15.2). Two logs in a lane are separated by `Gap` and never overlap,
+  so the center-point test (§4.4) resolves to at most one.
 
 ### 5.4 TurtleGroup (platform)
 - Properties: lane row, `vx`, turtle count, `divePhase`, `phaseTimer`, `canDive: bool`.
 - Behavior: drift + dive cycle (§4.5). Footing only when not fully `Down`.
+- The footing span is `count * CellW` while not `Down`, and empty while `Down`.
+  `canDive = false` groups (lane 2 before level 2) skip phase advancement entirely and are
+  permanent footing indistinguishable from a log for footing purposes.
 
 ### 5.5 HomeSlot
 - 5 fixed slots on row 0. Properties: `col`, `occupied: bool`, `hasFly: bool`.
 - Created at level start (all empty); `occupied` set true on a successful home.
+- `hasFly` and `occupied` are stored independently, but a fly only ever spawns into an
+  `occupied = false` slot (§4.7); filling a slot with a fly present eats it and clears
+  `hasFly` on the same resolve tick. Slot `col` values are 1, 5, 9, 13, 17 (§4.6).
 
 ### 5.6 Bonus riders
 - `Fly` (in an empty home slot, timed) and `LadyFrog` (rides a river log, escort target).
@@ -237,6 +365,38 @@ Start cell: column 9 or 10 on the start row.
 - `LifeTime` shrinks by 2 s per level, floor 20 s.
 - Gaps between platforms tighten by ~8% per level, floor 1 cell.
 - Optionally spawn an extra vehicle per road lane at levels 3 and 5.
+
+**Home-slot columns:** the 5 slots occupy columns 1, 5, 9, 13, 17 on row 0 (§4.6); hedges
+fill the remaining row-0 columns. The start cell (col 9 or 10, row 11) sits directly below
+the center slot, so straight-up is the most direct route home but rarely the safest — it commits
+to the busiest column of every lane.
+
+**Level identity:** levels differ only by the tuning ramp, never by hand-authored layout —
+the row stack (rows 0–11) is fixed for every level, so difficulty is entirely a function of
+speed, density, dive punishment, gap tightness, and timer. This keeps every board instantly
+readable (§1) while the numbers climb; there is no memorization of level geometry, only of
+the tuning trend.
+
+**Ramp resolution order (per level cleared):** apply the speed multiplier first (clamped to
+the cap), then the turtle-dive changes and lane-2 activation, then the `LifeTime` shrink,
+then gap tightening, then the optional extra vehicle at levels 3 and 5. Every ramped value
+derives from the *base* tables (§4.2, §4.4) times the level factor — never from the previous
+level's already-ramped value — so rounding never compounds and a given level is reproducible
+from its number alone.
+
+| Level | Speed mult `(1 + 0.12·(L-1))` | `LifeTime` (floor 20) | Lane-2 diving | Turtle `Down` (cap 3.5) |
+|---|---|---|---|---|
+| 1 | ×1.00 | 30 s | no | 2.0 s |
+| 2 | ×1.12 | 28 s | yes | 2.3 s |
+| 3 | ×1.24 (+1 vehicle/lane) | 26 s | yes | 2.6 s |
+| 4 | ×1.36 | 24 s | yes | 2.9 s |
+| 5 | ×1.48 (+1 vehicle/lane) | 22 s | yes | 3.2 s |
+| 6 | ×1.60 (cap reached) | 20 s (floor) | yes | 3.5 s (cap) |
+| 7+ | ×1.60 | 20 s | yes | 3.5 s |
+
+At level 6 the speed cap (×1.6), the `LifeTime` floor (20 s), and the turtle `Down` cap
+(3.5 s) all land together, so level 6 onward is a steady-state endurance test at fixed
+maximum tuning — the ramp has no further dial to turn, only the player's stamina.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -504,6 +664,24 @@ representative events (e.g. a resolved `Hop Up` requests exactly `PlaySfx (Sound
 - "New furthest row" awards +10 only the first time the frog reaches that row in the
   current attempt (tracked via `MaxRowReached`).
 
+**Scoring resolution on a home hop** (a single resolve tick, §13 step 6) sums in a fixed
+order so totals are deterministic: (1) the final new-furthest-row +10 if row 0 is a new
+furthest this attempt; (2) +50 home; (3) +10 × ⌊`LifeTimer`⌋ time bonus; (4) +200 fly if
+`HasFly`; (5) +200 lady if escorting; (6) if this fills the 5th slot, +1000 level clear and
++100 × spare lives. Time bonus *floors* the timer — partial seconds are dropped — so AC #10's
+`LifeTimer = 12.0` banks exactly 120.
+
+**No double-award:** each new-furthest-row +10 fires once per attempt per row via
+`MaxRowReached` (§4.1); backtracking down and re-climbing pays nothing. Home, fly, and lady
+each pay once per event. The spare-life bonus counts lives *after* the clearing crossing —
+the currently-active frog is never counted as spare, so at `Lives = 3` a clear pays for 2
+spares (+200).
+
+**Death refunds nothing but the life:** points already banked stay; only the life and the
+per-attempt `MaxRowReached` are lost, so a run's score is monotonic non-decreasing. Dying on
+the very first hop of an attempt (no new row, no home) banks nothing and simply costs the
+life — there is no minimum-progress consolation.
+
 **Win condition:** Fill all 5 home slots → level clears → next level begins (slots reset,
 speeds/density increase). The game has no hard end; it ramps until the player loses.
 
@@ -535,6 +713,26 @@ On death: lose 1 life, respawn at start, reset timer & `MaxRowReached`. **Lives 
 | Level speed mult/level | +0.12 | 0–0.3 | Ramp steepness |
 | Speed mult cap | 1.6 | 1.2–2.5 | Difficulty ceiling |
 | Lives | 3 | 1–5 | Run length |
+| Home-slot count | 5 | 3–5 | Crossings per level |
+| Home-slot pitch | 4 cols | 3–5 | Slot spacing on row 0 |
+| Footing rule | center-in-AABB | — | River landing strictness (§4.4) |
+| Low-timer threshold | 5 s | 3–10 | When the red band + `timer-low` cue arms (§4.8) |
+| Escort bonus | +200 | 100–400 | Lady-frog reward (§4.7) |
+| Fly bonus | +200 | 100–400 | Fly reward (§4.7) |
+
+**Difficulty presets** (from §9.1) are thin re-parameterizations of this table, not separate
+rulesets: Easy `Lives 5 / LifeTime 45 / mult +0.08`, Normal `3 / 30 / +0.12`, Hard
+`2 / 20 / +0.18`. Everything else — grid, hitboxes, dive cycle, footing rule, slot columns —
+is preset-invariant, so a strategy learned on Normal transfers to Hard with only tighter
+timing. The preset multiplier replaces the §6 `+0.12` per-level factor while keeping the same
+×1.6 cap, so Easy reaches the ceiling around level 9 and Hard by level 5.
+
+**Balancing intent:** road lanes are tuned so that at level 1 every lane has at least one
+crossable gap open at all times (the fastest lane, 160 px/s, still leaves a frog-width dwell
+in its `Spacing`), while the river is tuned so the limiting factor is footing *timing*, not
+raw speed. As the ramp closes gaps (§6) and speeds rise, the two sections converge in
+difficulty; the median (§4.3) and start (row 11) remain the only unconditionally safe rows at
+every level, so all pressure funnels into the ten hazard rows between them.
 
 ## 13. Technical Notes
 - **Entity budget:** ~5 road lanes × ≤4 vehicles + 5 river platforms (+turtles) + 1 frog +
@@ -628,6 +826,31 @@ On death: lose 1 life, respawn at start, reset timer & `MaxRowReached`. **Lives 
     `Tick`/`Hop` input sequence *Then* fly spawns, lady spawns, and all positions are
     bit-identical between runs.
 
+17. **River footing center rule.** *Given* the frog hops into a river row and lands with its
+    hitbox center over open water between two logs (a corner overlaps a log but the center
+    does not) *When* the hop resolves *Then* the frog drowns; the same hop landing with its
+    center over the log instead survives as `Riding`.
+
+18. **Home-slot alignment.** *Given* the frog rides a plank in river row 1 whose `WorldX`
+    rounds to a hedge column *When* `Hop Up` resolves into row 0 *Then* the frog dies on the
+    hedge and loses a life; the same hop with `WorldX` rounding to an empty slot column
+    (1, 5, 9, 13, or 17) instead scores a home.
+
+19. **De-synced, replay-stable turtle dives.** *Given* the lane-4 diving group (and, at
+    level ≥ 2, the lane-2 group) seed their `phaseTimer` offsets from `Model.Rng` *When* two
+    runs share a seed and input sequence *Then* every group's `divePhase` at every tick is
+    bit-identical between the runs, and the lane-2 group does not dive at level 1.
+
+20. **Ramp derives from base, not compounded.** *Given* a run reaching level 3 *When* lane
+    speeds are computed *Then* each equals its §4.2 base × 1.24 (not level-2's value × a
+    further factor), and the speed multiplier never exceeds ×1.6 at any level.
+
+21. **Scoring resolution order on a home hop.** *Given* the frog fills the 5th slot while
+    `HasFly` is true, escorting the lady, with 2 spare lives, `LifeTimer = 8.4`, and row 0 a
+    new furthest row *When* the hop resolves *Then* on that single tick the award is +10 (new
+    row) + 50 (home) + 80 (⌊8.4⌋ × 10 time bonus) + 200 (fly) + 200 (lady) + 1000 (clear) +
+    200 (2 spare lives × 100) = +1740, with no value double-counted.
+
 ## 15. Stretch Goals
 1. **Input buffering** — queue one hop during an in-progress hop for smoother play.
 2. **Crocodiles** — open-jaw croc segment on a log that is lethal (front) but rideable
@@ -661,11 +884,17 @@ its acceptance test(s) pass (§14)._
 - 🟥 Mid-hop input dropped, no buffering in v1 (§4.1) — AC #2
 - 🟥 Wall/edge hop rejection, consumes no time or animation (§3, §4.1) — AC #3
 - 🟥 Per-attempt `MaxRowReached` furthest-row tracking (§4.1, §11)
+- 🟥 No diagonal hops; single-axis resolve, never straddling two cells (§4.1)
+- 🟥 Mid-hop hazard split: interpolated hitbox for vehicles, discrete footing/home/turtle at resolve (§4.1)
+- 🟥 Riding hop departs from `round(WorldX/CellW)`, drops `subX`, re-snaps on resolve (§4.1)
 
 ### M2 — Road & vehicles
 - 🟥 `Vehicle` entities: constant-velocity scroll with toroidal X wrap (§4.2, §5.2)
 - 🟥 Five road lanes with per-lane speed/direction/count/spacing (§4.2, §6)
 - 🟥 Vehicle AABB overlap = instant death (§4.2) — AC #4
+- 🟥 Deterministic per-lane spawn layout: even `Spacing` from fixed phase offset, no in-lane overlap (§4.2, §6)
+- 🟥 Symmetric hitbox insets (vehicle h 48, frog 40×40 of 48) for center-fair collision (§4.2, §5.1)
+- 🟥 No road coyote grace: stationary frog dies the tick a vehicle reaches it (§4.2)
 
 ### M3 — River, platforms & riding
 - 🟥 Median safe row, frog may rest indefinitely (§4.3)
@@ -674,11 +903,16 @@ its acceptance test(s) pass (§14)._
 - 🟥 Land `Riding` on a platform whose AABB covers the cell (§4.4) — AC #6
 - 🟥 Velocity inheritance: `WorldX += platform.Vx*dt` while `Riding` (§4.4) — AC #7
 - 🟥 Off-screen ride death (frog center leaves `[0, 1280]`) (§4.4) — AC #8
+- 🟥 Center-point footing test: center-in-AABB grants footing / continues `Riding` (§4.4, §5.3) — AC #17
+- 🟥 Boundary planks give footing only once their AABB covers the landing center (§4.4)
+- 🟥 Backward/lateral river hops legal; only `MaxRowReached` is monotone (§4.4, §11)
 
 ### M4 — Diving turtles
 - 🟥 Dive cycle `TUp → TSinking → TDown → TRising` phase timer (§4.5)
 - 🟥 Footing removed when fully `Down`; lane 4 dives, lane 2 from level ≥ 2 (§4.5, §6)
 - 🟥 Rider on a fully-submerged turtle drowns (§4.5) — AC #9
+- 🟥 RNG-seeded per-group phase offsets, replay-stable, lane 2 static at level 1 (§4.5, §6) — AC #19
+- 🟥 Group-wide submersion; `TSinking`/`TRising` are the tell, lethal only at fully `Down` (§4.5)
 
 ### M5 — Home, bonuses & timer
 - 🟥 5 home slots + lethal hedges; hop into empty slot scores home (§4.6) — AC #10
@@ -686,12 +920,20 @@ its acceptance test(s) pass (§14)._
 - 🟥 Fly bonus in a random empty slot, `FlyDuration` 6 s (§4.7) — AC #12
 - 🟥 Lady-frog rider escort bonus (§4.7, §5.6)
 - 🟥 Per-life `LifeTime` 30 s draining timer, reaching 0 = death (§4.8) — AC #13
+- 🟥 Slot columns 1/5/9/13/17; hop resolves via `round(WorldX/CellW)` alignment (§4.6, §6) — AC #18
+- 🟥 One fly at a time, 12 s cadence into a random empty slot from `Model.Rng`, free fill order (§4.7)
+- 🟥 Lady rides a leftward log, delivered to any slot, cleared on death, never fills a slot (§4.7, §5.6)
+- 🟥 Absolute low-timer band (<5 s red + `timer-low`); timer runs through hop/ride, resets on respawn (§4.8, §9)
 
 ### M6 — Scoring, win/loss & progression
 - 🟥 Row / home / time-bonus / fly / lady scoring table (§11)
 - 🟥 Level clear: 5 slots → +1000, spare-life bonus, slots reset, speed ramp cap ×1.6 (§4.6, §6, §11) — AC #14
 - 🟥 Death handler: lose life, respawn, reset timer & `MaxRowReached`; 0 lives → `GameOver` + persist `HighScore` (§7, §11) — AC #15
 - 🟥 Per-tick collision order: move → phases → ride → hop resolve → death → score (§13)
+- 🟥 Fixed home-hop scoring resolution order, floored time bonus, no double-award (§11) — AC #21
+- 🟥 Score monotonic; death refunds nothing but the life and `MaxRowReached` (§11)
+- 🟥 Ramp derives from base tables × level factor (no compounding), cap ×1.6 (§6, §12) — AC #20
+- 🟥 Level identity is tuning-only over a fixed row stack; steady-state max from level 6 (§6)
 
 ### M7 — Rendering (Skia)
 - 🟥 Background bands + back-to-front draw order (§8)
@@ -704,13 +946,14 @@ its acceptance test(s) pass (§14)._
 - 🟥 Difficulty / volume / grid-overlay settings apply live + persist (§9.1, §12, §13)
 - 🟥 `RunStats`/`LifetimeStats` accumulation + persist (§9.2, §13)
 - 🟥 Deaths-by-cause bar + score-by-level line charts (§9.2)
+- 🟥 Difficulty presets re-parameterize the tuning table; rules stay preset-invariant (§9.1, §12)
 
 ### M9 — Audio
 - 🟥 `AudioEffect` cues per event table, `Audio.interpret`, volume clamp `[0,1]` (§10)
 - 🟥 Looping `arcade-theme` music on `Title`/`Playing`, stop on `GameOver` (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 16 acceptance scenarios green (§14)
+- 🟥 All 21 acceptance scenarios green (§14)
 - 🟥 Seed + `Tick`/`Hop` replay is bit-identical (§13) — AC #16
 
 ### Stretch — deferred (post-v1)

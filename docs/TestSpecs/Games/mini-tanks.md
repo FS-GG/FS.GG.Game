@@ -52,6 +52,15 @@ DEPLOY → │ spot ▸ angle hull ▸ track turret ▸ lead ▸ FIRE │ → mo
    objective met OR clock 0 → WINNER → after-action stats → rematch / title
 ```
 
+**Tempo — the reload window is the beat.** Reloads run 5.5 s (`Cavalier`) to 22 s (`Sabot`), so
+between shots a tank is a soft target that cannot answer, and the whole moment-to-moment loop is
+organised around it: fire, then spend the `ReloadRemaining` window reversing to cover or re-angling the
+hull so the return shot meets your front plate. A `Bastion` that stands still through its 9 s cycle is
+trading its one advantage — armor you have to *aim* to defeat — for a free flank. The reverse speeds in
+§5.1 (`SpeedRev` 3.5–8 m/s) exist to make that retreat a real, and slow, decision; the widest tempo gap
+on the board — the `Sabot`'s 22 s versus the `Lynx`'s 0.35 s burst — is why the scout is the arty's
+predator (§5.1) and why an overextended shot is the most punishable mistake in the game.
+
 ## 3. Controls & Input
 Keyboard drives the hull (held-state, polled each tick); the mouse aims the turret (sampled); firing
 and shell selection are edge-triggered. Held keys come from the host's `KeyboardModel.PressedKeys`
@@ -113,6 +122,22 @@ numbers.
   only by a hull whose `MassTonnes ≥ 40` (§4.13), otherwise they block.
 - Tank-vs-tank and tank-vs-wall overlaps resolve with `Resolution.pushOut` along the
   minimum-translation vector (also the fix for rubble appearing under a tank, §6.2).
+
+Edge rules that make driving *feel* like a tracked hull rather than a sprite:
+
+- **Steer and throttle compose; there is no strafe.** A tank only translates along `HullHeading`, so
+  repositioning is always turn-then-drive — the tension between *where the hull is going* and *which
+  plate it presents* (§4.2) never resolves into a free sidestep. A stationary tank still pivots in place
+  at full `HullTraverse` (neutral steer); at speed the same steer *carves* rather than spins.
+- **Reverse inverts the steer sign.** Backing into cover tracks the way a driver expects — hold reverse
+  and steer-left and the rear swings left — so the reload-window retreat of §2 stays legible under a
+  turned turret.
+- **Rubble halves both top speed and acceleration** (0.5× §6.1). Clipping a rubble tile mid-charge
+  bleeds momentum through `Accel` rather than snapping to half speed, and leaving it re-accelerates the
+  same way — so the debris an HE round leaves behind (§4.9) is a soft movement obstacle, not a wall.
+- **Crush costs momentum.** Driving through a `CrushMass`-eligible tile (§4.13) sheds ~1 m/s per tile
+  crushed (floored at 0), so a `Bastion` ploughing a treeline emerges slower than one that took the
+  road — the shortcut is real but not free.
 
 ### 4.4 Shells are entities with flight time (not hitscan)
 A shell is a simulated body with position and velocity, advanced by `Geometry`/`Ballistics` each tick.
@@ -203,11 +228,45 @@ level down. Module effects are the "damage" the §4.6 pipeline applies at stage 
 Rear-engine placement is why flanking a heavy is worth the risk, and it falls out of the geometry
 rather than a "flanking bonus" multiplier.
 
+**Module timing (all integer ticks, §4.1).** The "N ticks" above are these constants, and every one
+auto-recovers on a timer — v1 has no repair action (§15.3), so the clock is the only cure:
+
+| Module | Effect on hit | Duration | Recovery |
+|---|---|---|---|
+| Tracks | `Immobilized` set to **300 ticks** (5 s); turret still traverses and fires | 300 ticks | auto; a re-hit **refreshes** to 300, it does not stack |
+| Engine | fire drains **0.2 HP/tick** (12 HP/s) | up to **360 ticks** (6 s) | self-extinguishes; a second engine pen re-ignites and refreshes the 360 |
+| Ammo rack | +normal damage, plus one stack marker | **permanent for the match** | none — the third pen detonates (§4.8) |
+| Turret ring | `TurretTraverse` halved | **480 ticks** (8 s) | auto; refreshes on re-hit |
+| Optics | `ViewRangeM` −30% | **600 ticks** (10 s) | auto; refreshes on re-hit |
+
+Refresh-not-stack keeps a focus-fired track lock bounded — you can perma-track a tank only by landing a
+hit every 5 s, which is itself a skill check against the reload window (§2) — and the ammo-rack stack
+being the one *permanent* state is what makes the third-hit detonation a countdown that hangs over the
+whole match rather than a coincidence.
+
 ### 4.9 Breakable terrain
 Terrain is a grid of tiles, each with hit points and a material (§6). A shell or crush that damages a
 tile steps its `TileState` (`Intact → Damaged → Rubble → Open`) and, on every mutation, **bumps
 `Terrain.Version`** (§6.2). HE is the demolition round; a Brick building falling is the appeal of
 destructible terrain, not the edge case.
+
+**Per-tile HP and what damages it.** Each `Tile` carries `Hp` seeded from its `Material.MaxHp` (§6.1);
+a hit that drops `Hp` past a phase threshold steps `TileState` and bumps `Terrain.Version`. Thresholds
+are fractions of `MaxHp`: `Intact` above 66 %, `Damaged` 33–66 %, `Rubble` at 0, `Open` once the rubble
+is itself cleared. What a hit removes depends on the round, because destruction is a *use* of the shell
+table (§4.7), not a separate system:
+
+| Round | Tile damage | Note |
+|---|---|---|
+| HE | full `Damage` to the tile | the demolition round — one `Sabot` HE (500) levels a 300-HP Brick tile |
+| AP / APCR | ~15 % of `Damage` | kinetic rounds punch a hole, they do not demolish |
+| HEAT | detonation `Damage` on the **first** blocking tile (§4.7), then stops | the shaped charge spends itself on the wall it hits |
+| Crush (§4.13) | `Material.MaxHp` (instant) on a `CrushMass`-eligible tile | the treeline falls under the hull, it is not whittled |
+
+Representative `MaxHp`: Brick **300**, Concrete bunker **3000** (the 10× of §6.1 — roughly six `Sabot`
+HE), Sandbags **150**, Bushes **40**, Trees **60**. Tuned so an HE tank opens a firing lane in one or
+two shots while a bunker stays cover for the whole match — the destructible-versus-permanent split of
+§6.1 is these thresholds, not a boolean.
 
 ### 4.10 LOS, field of view, and spotting are three different things
 Conflating these is the classic bug. The game needs all three, at three layers, each backed by a Core
@@ -260,6 +319,17 @@ free. Tank-tank contact transfers momentum through `Resolution.slide`/`pushOut`,
 damage scaled by relative mass and closing speed — a 60-tonne `Bastion` at speed shoves a `Lynx` and
 hurts it. A hull whose mass meets a tile's `CrushMass` drives through it (the `Bastion` through a
 treeline); a lighter tank is stopped.
+
+**The collision numbers.** On contact `Resolution.slide`/`pushOut` separates the bodies and each tank
+takes `collisionDmg = rammingCoeff · (mOther / mSelf) · vClose`, clamped to `collisionDmgCap`, where
+`vClose` is the closing speed along the contact normal (m/s) and masses are `MassTonnes`. With
+`rammingCoeff = 2.0` and `collisionDmgCap = 250`: a 60-tonne `Bastion` closing at 10 m/s into a
+12-tonne `Lynx` deals `2·(60/12)·10 = 100` (≈22 % of the scout's 450 HP) and takes `2·(12/60)·10 = 4`
+back — ramming is a heavy's weapon precisely because the mass ratio makes the two directions asymmetric.
+Below ~2 m/s closing the term rounds to a nudge, so parking against an ally is harmless; a `Bastion`
+pinning a tracked (`Immobilized`) light against a wall, though, is a kill in a few taps. Crush
+drive-through (§4.9) resolves before the collision term, so ploughing a treeline never registers as a
+ram.
 
 ## 5. Entities / Game Objects
 Positions and velocities use the scaffold's collision-safe `Geometry.Vec2` (`Vx`/`Vy`) so a model
@@ -382,6 +452,13 @@ discrete levels** — progression is intra-match (spotting, positioning, the obj
 via the vehicle roster and difficulty. v1 ships **three hand-made maps** tuned to the 45–90 m view band
 so flanking is always possible: *Rubble Row* (dense destructible town), *Two Ridges* (long sightlines,
 a scout/arty map), *The Yards* (mixed cover, capture-point).
+
+Each map ships **fixed team spawns** at opposing corners and **per-rule objective anchors** — the
+capture cell sits at *The Yards'* centre crossroads, the escort route runs *Two Ridges'* long axis, and
+Elimination uses the whole board. Anchors are authored so every rule is winnable on every map, but each
+map *favours* a roster: dense *Rubble Row* rewards brawlers and HE demolition, open *Two Ridges* rewards
+the scout/arty pair (§5.1). Spawns and anchors are map data — a tile array plus a handful of anchor
+cells — so a new map is authored, never coded.
 
 ### 6.1 The material table is where the tactics live
 ```fsharp
@@ -825,8 +902,19 @@ Tanks-vs-tanks with no win condition is a sandbox, so a match always carries one
 - **Escort** — a convoy tank must reach a goal cell; the defender wins by destroying it or running the
   clock.
 
+**Objective mechanics, in ticks.** Capture uses `captureThresholdTicks = 1200` (20 s): `ticksHeld`
+(§7.1) increments only while your team **solely** occupies the cell — an enemy tank in the region
+**contests**, freezing both teams' counters, and leaving lets your progress **decay** at half the fill
+rate. A capture is a hold, not a touch, and holding it means standing in the open where your armor
+angles get read (§5.1) — the whole `Sabot` counter exists to punish exactly that. Escort routes the
+convoy tank along a `Pathfinding.flowField` toward its `goal` cell at `convoySpeed = 6 m/s`; the convoy
+has its own `escortHp = 1200` and cannot fire, so the attacker wins by *clearing the lane* and the
+defender by destroying the convoy or surviving to `ClockRemaining = 0`.
+
 A **match clock** (`ClockRemaining` ticks) bounds every match; on expiry the objective's tiebreak
-(most kills, then most damage) resolves `Match.Winner`. **Scoring** (after-action, §9.2) is additive:
+(most kills, then most damage, then the defender — a draw favours the side denying the objective)
+resolves `Match.Winner`, and a still-tied Elimination is a **mutual defeat** (no `Winner`). Every
+objective tick requests the `sfx-objective` cue (§10). **Scoring** (after-action, §9.2) is additive:
 `+100` per kill, `+40` per penetration, `+objective bonus`, minus `damageTaken/10`; it feeds the
 lifetime stats and the balance harness, not a leaderboard in v1.
 
@@ -849,6 +937,20 @@ less time and worse hands. The knobs map onto `FS.GG.Game.Core.Difficulty` (`Dif
 An easy AI is a slow, wide-shooting, centre-mass tank; a hard one reacts in three ticks and aims at
 your lower plate. **Both play by the armor rules you do — which means both teach them.**
 
+Concrete presets — the §9.1 Difficulty setting selects a column:
+
+| Knob | Easy | Normal | Hard |
+|---|---|---|---|
+| `reactionTicks` | 45 (0.75 s) | 18 (0.30 s) | 3 (0.05 s) |
+| `dispersionMultiplier` | 2.2 | 1.3 | 0.8 |
+| `usesWeakZoneTargeting` | false (centre-mass) | false | true (lower plate / flank) |
+| `spotCycleTicks` | 24 | 12 | 6 |
+| `threatWeight` | 0.3 (aggressive — walks into fire) | 0.6 | 1.0 (values safety — uses cover) |
+
+Every column obeys the §5.1 armor and §4.10 perception rules unchanged — Hard is *faster hands and
+better target selection*, never a pen or armor buff — so beating Hard drills the same reads that beat a
+human, which is the whole point of "both teach them."
+
 Data-driven tunables (defaults / range):
 
 | Name | Default | Range | Effect |
@@ -862,6 +964,13 @@ Data-driven tunables (defaults / range):
 | `penJitter` / `dmgJitter` | ±0.25 | 0–0.4 | §4.6 rolls |
 | `overmatchTrack` | 2.0 | 1.5–3 | track overmatch multiple |
 | `overmatchNoRicochet` | 2.0 | 1.5–3 | ricochet-forbidding caliber multiple |
+| `trackDownTicks` | 300 | 120–600 | track immobilization (§4.8) |
+| `fireDrainPerTick` | 0.2 | 0.1–0.5 | engine-fire HP/tick (§4.8) |
+| `rammingCoeff` | 2.0 | 1–4 | ramming damage scale (§4.13) |
+| `collisionDmgCap` | 250 | 100–400 | max collision damage per contact (§4.13) |
+| `captureThresholdTicks` | 1200 | 600–2400 | capture hold to win (§11) |
+| `convoySpeed` | 6.0 | 3–9 | escort convoy m/s (§11) |
+| `escortHp` | 1200 | 600–2000 | escort convoy HP (§11) |
 
 **Balance is a test, not an opinion.** The headless harness plays all **5×5 vehicle matchups × 200
 seeds** in CI, produces a win-rate matrix, and asserts every vehicle lands in a **35–65 % overall
@@ -1062,6 +1171,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Independent `HullHeading`/`TurretHeading` slew at own traverse rates (§4.2) — AC #1
 - 🟥 Casemate `TurretArcDeg` clamp around the hull (§4.2) — AC #2
 - 🟥 Throttle/steer accel-based driving; `Resolution.pushOut` on overlap (§4.3)
+- 🟥 Movement modifiers: rubble 0.5× speed/accel, no strafe, reverse-steer inversion, crush momentum cost (§4.3)
 - 🟥 Held-key hull + sampled mouse turret → `Order` intents (§3)
 
 ### M2 — Ballistics & hit zones
@@ -1077,6 +1187,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Track absorb (zero hull damage) (§4.6, §4.8) — AC #8
 - 🟥 Four shell types AP/APCR/HEAT/HE; HEAT detonates on first blocking tile (§4.7) — AC #7
 - 🟥 Modules: tracks/engine/ammo-rack/turret-ring/optics; ammo-rack 3rd hit kills (§4.8) — AC #9
+- 🟥 Module timers: track auto-recover, engine-fire DOT self-extinguish, ring/optics timed recovery, refresh-not-stack (§4.8)
 - 🟥 `DamageTrace` narration surfaced to the UI (§4.6, §9)
 
 ### M4 — Perception: LOS, FOV & spotting
@@ -1088,9 +1199,11 @@ its acceptance test(s) pass (§14)._
 
 ### M5 — Terrain, ramming & new v1 mechanics
 - 🟥 Material table + `Tile`/`TileState` destruction Intact→Rubble→Open (§6.1, §4.9)
+- 🟥 Per-tile `Hp`/phase thresholds + shell/HE/crush tile-damage model, representative `MaxHp` (§4.9)
 - 🟥 `Terrain.Version` bump on mutation; consumers recompute on mismatch (§6.2) — AC #15
 - 🟥 Ammo count + shell selection chambers on next reload (§4.12) — AC #19
 - 🟥 Ramming momentum + `CrushMass` drive-through by mass (§4.13) — AC #14
+- 🟥 Collision damage by mass ratio × closing speed, clamped to `collisionDmgCap` (§4.13)
 
 ### M6 — AI (reads the fog)
 - 🟥 `TeamView` decide loop, ascending `EntityId`, own sub-stream (§7.2, §8) — AC #17
@@ -1098,10 +1211,12 @@ its acceptance test(s) pass (§14)._
 - 🟥 Aim layer: `intercept` + `Ai.aimError`; weak-zone vs centre-mass targeting (§8, §12)
 - 🟥 Hull-angling layer bisects top-two threats (§8) — AC #18
 - 🟥 Difficulty knob vector over `Difficulty` presets (§12)
+- 🟥 Concrete Easy/Normal/Hard knob columns (reaction/dispersion/weak-zone/spot-cycle/threat) (§12)
 
 ### M7 — Match layer, win/loss & scoring
 - 🟥 `MatchState` objectives: Elimination / Capture / Escort + match clock (§7.1, §11)
-- 🟥 Winner resolution + tiebreak; additive after-action scoring (§11)
+- 🟥 Capture contest/decay hold to threshold; escort convoy `Pathfinding.flowField` auto-path + convoy HP (§11)
+- 🟥 Winner resolution + tiebreak (kills→damage→defender, tied Elimination = mutual defeat); additive after-action scoring (§11)
 
 ### M8 — Rendering & tank symbology
 - 🟥 Layered draw order: terrain, fog/smoke, tanks, shells, hit tags, HUD, overlays (§8)
@@ -1114,8 +1229,11 @@ its acceptance test(s) pass (§14)._
 
 ### M9 — UI, menus & stats
 - 🟥 In-play HUD: health arc, reload meter (tick int), ammo counts, module pips (§9)
+- 🟥 Objective banner: capture progress / escort distance / enemies remaining per rule (§9, §11)
 - 🟥 Minimap with fog, `Confirmed`/`Suspected` ticks, objective + clock (§9)
 - 🟥 Menu stack: cursor wrap, cycler/slider rows, Title/Pause/run-end (§9.1)
+- 🟥 Loadout screen: pick the player vehicle from the roster (§5.1, §9.1)
+- 🟥 Screen state machine: Title → Play → Victory/Defeat → Stats → restart/title (§2, §9.1)
 - 🟥 Settings apply live + persist (difficulty/rules/volume/aim assist) (§9.1, §13)
 - 🟥 `BattleStats`/`LifetimeStats` accumulation + fold/persist (§9.2)
 - 🟥 Stats screen: KPI tiles, shot-outcome + damage-by-zone charts (§9.2)

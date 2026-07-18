@@ -173,6 +173,45 @@ applies DoT), `Electric` (Tesla — chains). A projectile carries `(amount, type
 
 Effects tick before movement each step; expired effects are removed.
 
+**Damage resolution pipeline.** A single hit resolves in a **fixed order** so stacked modifiers
+compose identically every time (and every random draw is pulled in fire order — Section 13). For a
+**physical** hit of base damage `d` from tower `t` on enemy `e`:
+1. **Crit** — if `t` carries a crit trait (chance `c`, multiplier `x`; Sniper `c=0.15, x=2`), draw
+   one `Rng.nextFloat`; on `< c`, `d ← d*x`. Exactly one draw per shot, whether or not it crits.
+2. **Vs-armored** — if `t` has a "+P% vs armored" trait (Breaker +50%) **and** `e.Armor > 0`,
+   `d ← d*(1+P)`.
+3. **Armor** — effective armor `a = e.Armor * (1 - pierce)`, where `pierce = 0.5` for an armor-ignore
+   trait (Marksman) and `0` otherwise; `d ← d - a`.
+4. **Vulnerable** — if `e` carries `Vulnerable(bonus,_)`, `d ← d*(1+bonus)`.
+5. **Floor** — `applied = max(1, d)`.
+
+For an **elemental** hit (Frost/Poison/Electric), steps 1–3 are replaced by the resistance multiplier
+above (`d ← d*(1 - resist)`); steps 4 (Vulnerable) and 5 (floor at 1) still apply, except a full
+immunity (`resist == 1.0`) yields exactly 0 and skips the floor. Vulnerable therefore amplifies
+**every** damage type, including Poison DoT ticks (`dps*dt`), which pass through steps 4–5 each step.
+
+**Branch traits vs. stat replacements.** Section 5.1 tabulates only the numeric stats that change per
+tier, and those are wholesale replacements. A **named trait** first granted at a T3 fork — crit
+(Sniper), armor-ignore (Marksman line), Vulnerable-on-hit (Demolition/Breaker), pierce (Railgun),
+poison-spread-on-death (Pandemic) — **persists to T4 on the same branch** unless the T4 row supersedes
+it with its own trait. So Marksman keeps Sniper's crit *and* adds armor-ignore; Breaker replaces
+Demolition's Vulnerable with its stronger `+40%/3s` rather than stacking a second copy.
+
+**Healing (Healer aura).** In Tick step 3 (before movement — Section 7), every alive `Healer` heals
+each **other** alive ally whose center lies within `r=60 px` by `6*dt` hp (its tabled 6 hp/s), clamped
+so no enemy exceeds `MaxHp`; a Healer never heals itself. Overlapping Healers **add** (two auras =
+12 hp/s to a unit in both). Healing and Poison DoT net out in the same step, so a `12 dps` Pandemic
+stack out-damages a single Healer while a `6 dps` frost-burn only cancels it. Healers are ordinary
+targets and killing them is the counter — which is why Section 8.1 ranks them `Threat 0.75`.
+
+**On-death effects** resolve **after** bounty is awarded (Section 4.9) and **before** the enemy is
+removed: the **Wyrm** spawns **2 Wisp** at its position (each entering the flying straight-line route
+of Section 4.3; the spawn itself pays no bounty — the Wisps pay their own 9 when later killed); a
+**Pandemic**-poisoned enemy (Frost T4-B) dying with an active Poison stack **spreads** that stack to
+every enemy within `r=40 px` (one copy each, still subject to `dotStackCap`, Section 12); a
+Juggernaut or Wyrm kill additionally requests `sfx-boss-death` (Section 10). Swarmling's "pack of 8"
+is purely a scheduler `SpawnGroup` with `Count=8` (Section 6), not an on-death spawn.
+
 ### 4.6 Lives & Leaks
 The player starts with **20 lives**. When an enemy reaches the Goal it "leaks": lives -= enemy's
 `leakCost` (1 for normal, 2 for "heavy", boss = remaining-lives-or-10 capped at current lives → see
@@ -208,6 +247,12 @@ Given the set `C` of in-range, hittable enemies, pick:
 Targeting is re-evaluated only when the tower has no valid target or its target exits range/dies
 (sticky targeting — avoids jitter). Cycled live with `T`.
 
+**Sniper affinity.** The Sniper branch's "Strongest-target affinity" (Section 5.1, Arrow T3-A) means
+the tower's `targetingMode` is **defaulted to `Strongest` at the moment of the upgrade** — a slow,
+high-damage single shot wants the biggest target — but the player may still cycle it with `T`;
+affinity is a smart default, not a lock. Every other tower **keeps its current mode** across upgrades
+and sells-and-rebuilds start fresh at `First`.
+
 ### 4.9 Economy
 - **Starting gold:** 250 (Easy 350 / Hard 180 — Section 12).
 - **Bounty:** each enemy awards `bounty` gold on death (table Section 5.2). Leaks award nothing.
@@ -231,6 +276,19 @@ Two firing models:
   un-hit enemies within `chainRange`, each jump dealing `damage * chainFalloff^k` (k = jump index).
 
 Projectile lifetime cap = 2.0 s (despawn if target lost and not arrived). Max ~400 live projectiles.
+
+**Chain target selection (Tesla).** Each jump picks the **nearest not-yet-hit** hittable enemy within
+`chainRange` (Section 12, default 90) of the **previous link** — not of the tower — never revisiting an
+enemy already struck this discharge, and honoring `canHitAir`. Jump `k` deals `damage * chainFalloff^k`
+(with `k=1` for the first jump off the primary). A link that lands on a resistant enemy (Wisp, Electric
+.6) **still counts as a used jump**: the un-hit set and the falloff exponent both advance, so a resistant
+body "soaks" a link. The whole discharge stops early the moment no un-hit enemy is in range, even if
+`chainCount` is not exhausted — a lone enemy takes only the primary hit.
+
+**Pierce (Railgun, Tesla T4-B).** Railgun trades chaining for a **piercing beam**: its hitscan hits
+**every** enemy whose center lies within its radius of the tower→target line segment, each taking the
+full `damage` (no falloff), and rolls its `0.7 s` Stun **independently per enemy**. `chainCount` and
+falloff are nominal on this branch — the line, not the jump graph, defines who is hit.
 
 ## 5. Entities / Game Objects
 
@@ -415,6 +473,20 @@ for every group, while `waveClock ≥ At + emitted*Interval` and `emitted < Coun
 the Spawn tile and `emitted += 1`. A wave is **complete** when all groups exhausted **and** no enemies
 remain alive on board → transition `WaveCleared` (1.5 s) → `Building` (next wave) → pay interest &
 wave-clear bonus.
+
+**Two-front waves (15–19).** With a single Spawn tile, "two-front" pressure is authored as
+**overlapping `SpawnGroup`s with staggered `At`**, not a second spawn point: a dense early front (short
+`Interval`) starts taxing the front-line kill-zone while a slower second group of a different kind
+begins a few seconds later, so two zones are stressed at once instead of one uniform stream. This
+needs no new machinery — the "front" is an emergent property of overlapping group windows the
+Section 6 scheduler already runs. Skeleton for a Wave 16:
+```
+At 0.0  Runner   ×12  every 0.30   // fast front — punishes thin early cover
+At 2.5  Brute    ×5   every 1.20   // slow armored front overlaps the Runners' tail
+At 9.0  Wisp     ×6   every 0.60   // air layer arrives while ground towers are committed
+```
+Boss waves (10, 20) instead lean on a single overwhelming target plus a trickle escort, so their
+hand-authored timelines override the count/interval knobs entirely.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -1064,6 +1136,36 @@ Verifiable Given/When/Then. Coordinates assume *Serpentine* (fixed map) unless n
     per accumulator tick (enemies advance ~2× wall-clock distance) while each step still uses
     dt=1/60, and effect timers/damage remain numerically identical to running 1× for twice as long.
 
+21. **Crit doubles a physical hit.**
+    Given an Arrow T3-A Sniper (dmg 40, crit 15% ×2, Physical) and a Grunt (armor 0), fixed seed.
+    When a shot resolves with its single crit draw `Rng.nextFloat < 0.15`. Then applied =
+    `max(1, 40*2 - 0)` = 80; a shot whose draw is ≥ 0.15 applies 40. Exactly one draw is pulled per
+    shot regardless of outcome (§4.5, §13).
+
+22. **Armor-ignore halves effective armor.**
+    Given an Arrow T4-A Marksman (dmg 90, ignores 50% armor) and a Brute (armor 6). When a non-crit
+    hit lands. Then effective armor = `6*(1-0.5)` = 3 and applied = `max(1, 90-3)` = 87 (§4.5).
+
+23. **Vulnerable amplifies the next hit.**
+    Given a Grunt carrying `Vulnerable(0.25, _)` from a Cannon T3-B Demolition and an Arrow T1 hit
+    (dmg 8, armor 0). When the arrow resolves. Then applied = `max(1, (8-0)*1.25)` = 10 — Vulnerable
+    applies **after** armor and **before** the floor (§4.5).
+
+24. **On-death spawn: the Wyrm splits into Wisps.**
+    Given the Wyrm at pos P reaching 0 HP. When death resolves. Then bounty 200 is awarded first, two
+    Wisp enemies are created at P on the flying straight-line route, the Wyrm is removed, and
+    `sfx-boss-death` is requested; the spawn event itself pays no additional bounty (§4.5, §5.2).
+
+25. **Branch traits persist across T3→T4.**
+    Given an Arrow upgraded to T3-A Sniper (15% ×2 crit), then to T4-A Marksman (row lists only
+    armor-ignore). When it fires. Then the tower **both** rolls the 15% ×2 crit and ignores 50% armor:
+    a T4 row supersedes only the traits it restates, and unlisted branch traits carry forward (§4.5).
+
+26. **Railgun pierces a collinear line.**
+    Given a Tesla T4-B Railgun and three enemies collinear on the tower→target segment, each within
+    the beam radius. When it fires. Then all three take the full 120 damage (no chain falloff) and each
+    rolls its 0.7 s Stun independently (§4.10).
+
 ## 15. Stretch Goals
 Ranked, out-of-scope for v1:
 1. **Endless/continuous mode** with early-wave-call bonus and infinite scaling waves + leaderboard.
@@ -1108,6 +1210,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Healer aura heals nearby allies 6 hp/s r=60 (§5.2)
 - 🟥 20 lives; leak removes enemy, `lives -= leakCost`, "-1" float (§4.6) — AC #16
 - 🟥 `lives ≤ 0` → GameOver immediately, wave abandoned (§4.6) — AC #17
+- 🟥 On-death effects: Wyrm spawns 2 Wisp, Pandemic spreads poison r=40 (§4.5, §5.2) — AC #24
+- 🟥 Swarmling packs of 8 via scheduler `Count=8` group (§5.2, §6)
 
 ### M3 — Towers: targeting, firing, damage & status
 - 🟥 Tower table T1 base stats, four kinds (§5.1)
@@ -1116,12 +1220,19 @@ its acceptance test(s) pass (§14)._
 - 🟥 Physical `max(1, dmg-armor)`; elemental resist multiplier + immunity (§4.5) — AC #6, #9
 - 🟥 Slow (strongest wins, no stack), Poison DoT, Stun, Vulnerable (§4.5) — AC #7, #8
 - 🟥 Upgrade trees T1→T2→T3 fork A/B→T4, stat replacement (§5.1)
+- 🟥 Damage pipeline order: crit → vs-armored → armor(−pierce) → Vulnerable → floor (§4.5) — AC #23
+- 🟥 Crit rolls: Sniper 15% ×2 via one `Rng.nextFloat` in fire order (§4.5, §5.1) — AC #21
+- 🟥 Armor-ignore (Marksman 50%) and +% vs-armored (Breaker) traits (§4.5, §5.1) — AC #22
+- 🟥 Branch traits persist T3→T4; only tabulated stats are replacements (§4.5, §5.1) — AC #25
+- 🟥 Sniper/Marksman Strongest-target affinity default on upgrade (§4.8)
 
 ### M4 — Projectiles & flight
 - 🟥 Projectile model: `pos`/`vel`, Arrow re-homes, Cannon no homing (§4.10, §5.3)
 - 🟥 Cannon splash: linear falloff 100%→50% at edge (§4.10) — AC #10
 - 🟥 Hitscan Tesla chain ×N with `falloff^k` over `chainRange` (§4.10) — AC #11
 - 🟥 Projectile lifetime cap 2.0 s, target-loss despawn (§4.10)
+- 🟥 Tesla chain selection: nearest un-hit from last link, no revisit, canHitAir (§4.10)
+- 🟥 Railgun pierce: beam hits all enemies on tower→target segment (§4.10, §5.1) — AC #26
 
 ### M5 — Economy & placement validation
 - 🟥 Placement validity: in-grid Buildable, empty, `gold≥k`, not under panel (§4.7) — AC #1, #2, #3
@@ -1130,6 +1241,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Bounty on kill, wave-clear bonus, interest `floor(gold*0.08)` cap 40 (§4.9) — AC #5, #14
 - 🟥 Sell refund 70% floored + (maze) re-path (§4.9) — AC #13
 - 🟥 Difficulty tunables config record + Easy/Normal/Hard presets (§12)
+- 🟥 Maze no-build margin: 2-tile radius around Spawn (§4.7)
 
 ### M6 — Waves, win/loss & scoring
 - 🟥 Wave scheduler: `SpawnGroup` timeline + per-group emit cursor (§6)
@@ -1138,6 +1250,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Phase state machine Building/Combat/Paused/WaveCleared/Victory/GameOver (§4.2, §7)
 - 🟥 Victory on Wave 20 clear with `lives > 0` (§11) — AC #18
 - 🟥 Additive scoring: kills, wave clear, no-leak, victory + difficulty mult (§11)
+- 🟥 Two-front waves 15–19: overlapping staggered `SpawnGroup`s (§6)
+- 🟥 Per-map high score + best wave reached persisted as JSON (§11, §13)
 
 ### M7 — Rendering & enemy symbology
 - 🟥 Layered draw order: terrain, range, towers, enemies, projectiles, FX, HUD, overlays (§8)
@@ -1146,6 +1260,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Four ranked sizes, `Speed` pip tiers, `Health` fraction (§8.1)
 - 🟥 Status glyph overlay (slow/poison/stun/vulnerable) — not a Symbology channel (§8.1)
 - 🟥 `Legibility.score` per wave asserts `Verdict = Clean` (§8.1)
+- 🟥 Optional render interpolation between fixed steps via `prevPos` alpha (§8, §13)
 
 ### M8 — UI, menus & stats
 - 🟥 Top HUD bar: lives/gold/score, wave x/20 + next-wave preview, phase/interest (§9)
@@ -1154,6 +1269,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Settings apply live + persist (difficulty/volume/grid) (§9.1, §13)
 - 🟥 `RunStats` accumulation + `Lifetime` fold/persist (§9.2)
 - 🟥 Stats screen: KPI tiles, leaks-per-wave bars, economy line chart (§9.2)
+- 🟥 Hover tooltips: enemy hp/armor/resists, tower stats (§9)
+- 🟥 Transient toasts: wave-incoming, not-enough-gold (§9)
 
 ### M9 — Audio
 - 🟥 `AudioEffect` cues per event, `Audio.interpret` → `AudioEvidence` (§10)

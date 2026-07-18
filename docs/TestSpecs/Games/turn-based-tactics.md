@@ -135,6 +135,32 @@ full roster table.
   that has acted (used an ability) cannot then move unless `Mobile`.
 - A unit that only moves can be re-selected and its move re-planned until **End
   Turn** (everything pre-confirmation is freely undoable; see §4.8).
+- **What "acting" means, precisely.** Moving sets `HasMoved`; confirming any ability
+  sets `HasActed`. For the default `move-then-act` unit, the instant `HasActed` flips
+  the unit is done — a move it had banked but not spent is **forfeit, not deferred**.
+  Only `Mobile` decouples the two, letting a unit spend its move and its ability in
+  **either order** (attack-then-move as well as move-then-attack); it does **not** grant
+  a second move or a second ability — the per-turn budget is always exactly one of each,
+  and `HasMoved`/`HasActed` are one-way latches cleared only at `StartRound`.
+- **Cooldowns.** An ability with `Cooldown c > 0` is unusable while its `CurrentCd > 0`;
+  confirming it sets `CurrentCd := Cooldown`, and §4.3's end-of-round step ticks every
+  `CurrentCd` down by 1 (floor 0). A `Cooldown 0` ability — every listed attack except
+  Pulsar's *Shield* — is always available. A unit whose only off-cooldown option is to
+  move is still a legal, useful actor: repositioning for a future shove is a full,
+  worthwhile turn.
+- **The Pulsar *Shield* case.** *Shield* (cooldown 2) is an ability, so casting it sets
+  the Pulsar's `HasActed`; it grants an **adjacent ally** the `Armored` trait until the
+  **next** `StartRound`, at which point the grant is stripped. `Armored` is a boolean
+  trait, so it stacks with nothing — a unit that is already `Armored` (intrinsically,
+  like the Vanguard) gains no second point, and §4.6's "−1 to declared damage" still
+  applies once. Because the buff rides `Armored`, §8.1's `Shield` mark lights for exactly
+  that one round; `klassOf` deliberately ignores `Armored`, so the body silhouette never
+  flickers when the buff lands or lapses.
+- **Death is permanent within a mission.** A unit at HP ≤ 0 is removed from `Units` and
+  does not return that mission — there is no revive and no downed state. Casualties are a
+  per-mission cost only: at the next Deploy (§6) every roster unit is restored to full HP
+  with cooldowns cleared (v1 has no cross-mission attrition; contrast §15.2's persistent
+  pilots).
 
 ### 4.3 Turn structure (player phase → enemy phase)
 
@@ -510,6 +536,25 @@ objective + Grid Power + turn banner).
 
 What ramps over the campaign: more simultaneous enemies (2 → 3 per wave), tougher
 archetypes, more hazards available to weaponize, and a tighter Grid Power budget.
+
+**Deploy step (before each mission).** Between missions the player enters Deploy: pick
+**3 distinct** units from the §5.1 roster and place each on a distinct **player-spawn
+tile** — a small set of tiles marked in the mission legend, always `Ground`, clustered
+away from the enemy spawn vents. Deployed units always begin at **full HP with every
+cooldown clear**, regardless of how they finished the previous mission; a fallen unit is
+back for the next mission (v1 has no cross-mission attrition — contrast §15.2). Grid
+Power is (re)set to the mission's value from the table above at this point, then modified
+by the active difficulty preset (§12). A unit not deployed sits the mission out entirely
+— the roster is larger than 3 so the player tailors the squad to the board (the Hornet
+for *Floodworks*' water, the Pulsar for *Breachpoint*'s dense grid).
+
+**Spawn timing & fairness.** A vent's incoming enemy is shown during the **prior** round's
+player phase as a "spawn warning" overlay (§5.3), so the player can pre-position or
+body-block the vent. The enemy is placed at `StartRound` (§4.3 step 4 / §7) and *then*
+immediately telegraphs (step 1) — so a freshly-spawned enemy **never acts on the round it
+arrives**; the player always gets one full phase to answer its first telegraph. A vent
+occupied by any unit at spawn time delays that spawn one round (§5.3/§13), and the
+warning overlay persists while the spawn is stalled.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -1009,6 +1054,17 @@ The grade rewards the intended style: **preserve the grid, lose no units, and ki
 the environment (push into hazards) rather than slow direct damage.** No lives/continues
 — `Retry` restarts the mission from its deterministic seed (identical board).
 
+**Resolution precedence (when several conditions trip at once).** The loss checks run
+**before** the win check at each `StartRound` (§7). If the enemy phase that just resolved
+drove `GridPower ≤ 0` *and* cleared the last enemy, the mission is a **loss** — a
+destroyed grid is never scored as a victory. Likewise, if that phase killed the player's
+last unit on the very round survival would otherwise have been met, it is a loss. Within
+the loss checks, `GridPower ≤ 0` and "all units dead" are equivalent outcomes (both
+`won=false`); the result screen names whichever tripped. A win is declared only when **no**
+loss condition holds and the mission's single §11 win condition (Survival *or* Elimination
+— never both on one mission) is satisfied. The grade is computed **only on a win**; a loss
+shows no letter.
+
 ## 12. Difficulty & Balancing
 
 All combat constants live in a data table so balance is data-driven (no code change to
@@ -1036,6 +1092,26 @@ AI choice are fully deterministic. RNG is used *only* for cosmetic particle jitt
 (splitmix64), seeded per mission with `Rng.ofSeed`, so any mission is reproducible bit-for-bit. It is a
 value, so it threads through the Model without the aliasing a `System.Random` would bring. This makes
 balance testing exact.
+
+**Difficulty presets.** §9.1's Settings menu selects one of three presets; each is a
+*modifier layer* over the per-mission §6 values and the AI weights above — never a
+replacement, so mission 4 stays the hardest board on every preset. *Veteran* is the
+defaults verbatim; *Recruit* and *Commander* shift a small, fixed set:
+
+| Param | Recruit | Veteran (default) | Commander |
+|---|---|---|---|
+| Grid Power (Δ on the §6 mission value) | +2 | +0 | −2 (floor 1) |
+| `enemiesPerWave` (Δ on the §6 ramp) | −1 (floor 1) | +0 | +1 (cap 4) |
+| `aiBuildingWeight` | 3 | 5 | 7 |
+| `aiDamageWeight` | 2 | 3 | 4 |
+| `aiKillBonus` | 6 | 10 | 14 |
+
+Only these five move: `collisionDamage`, `lavaTickDamage`, cover, and per-unit
+`moveRange` are **preset-invariant**, so the *feel* of a push never changes with
+difficulty — only the spawn pressure and the AI's appetite for the grid do. The preset is
+chosen at the Title/Pause Settings screen, applies live, and persists (§13). It is **not**
+part of the mission seed, so two players on different presets share a board layout but not
+a threat level, and §14's determinism guarantee holds *within* a fixed preset.
 
 ## 13. Technical Notes
 
@@ -1252,11 +1328,15 @@ its acceptance test(s) pass (§14)._
 - 🟥 One move + one ability per turn; move-then-act unless `Mobile` (§4.2)
 - 🟥 Player squad roster (Vanguard, Artillery, Skirmisher, Hornet, Pulsar) (§5.1)
 - 🟥 Enemy roster (Crawler…Behemoth) + props/hazards (Building, spawn vent) (§5.2, §5.3)
+- 🟥 Ability cooldowns: `CurrentCd` gates use, set on cast, ticks down at end of round (§4.2, §4.3)
+- 🟥 Pulsar *Shield* grants an adjacent ally `Armored` until the next `StartRound`, then strips it (§4.2, §5.1)
+- 🟥 Death permanent within a mission (no revive/downed state); full-HP restore at next Deploy (§4.2, §6)
 
 ### M2 — Turn structure & undo
 - 🟥 Round = Player Phase → Enemy Phase; telegraph step at round start (§4.3)
 - 🟥 Deterministic enemy resolution by ascending `enemyId` (§4.3)
 - 🟥 End-of-round hazard ticks, cooldown ticks, spawn schedule, win/loss check (§4.3)
+- 🟥 Spawn warning shown a round ahead; spawned enemy telegraphs before it can act; occupied vent delays spawn (§5.3, §6)
 - 🟥 Action-history stack: `ConfirmAction` snapshot, `Undo`/`Redo` whole-`Model` swap (§4.8) — AC #2
 - 🟥 `EndTurn` clears history/redo — no undo across the enemy phase (§4.8) — AC #12
 
@@ -1287,6 +1367,9 @@ its acceptance test(s) pass (§14)._
 - 🟥 Win: Survival (reach round N, `GridPower > 0`) / Elimination (no enemies, `GridPower > 0`) (§11) — AC #10, #11
 - 🟥 Loss: `GridPower ≤ 0` or all 3 player units dead (§11)
 - 🟥 Score → S/A/B/C grade rewarding preserved grid + environmental/push kills (§11)
+- 🟥 Loss checks resolve before the win check at `StartRound`; grade computed only on a win (§11)
+- 🟥 Grid Power (re)set to the mission's §6 value, then modified by the difficulty preset, at Deploy (§6, §12)
+- 🟥 Retry / `RestartMission` re-seeds from the mission seed for a bit-identical board (§2, §11)
 
 ### M7 — AI: telegraph generation
 - 🟥 `computeTelegraph`: enumerate positions × abilities × targets, deterministic scoring search (§4.9)
@@ -1299,13 +1382,18 @@ its acceptance test(s) pass (§14)._
 - 🟥 Telegraph danger overlays: hatched red fill, directional push arrows, damage badges (§8)
 - 🟥 `Unit → Token` ChannelMap via `Symbology.badge`; `klassOf`/`speedTierOf` quantisation (§8.1)
 - 🟥 `Legibility.scoreIn Grammar.Badge` returns `Clean` over the §5 rosters (§8.1)
+- 🟥 Threat-overlay (`H`) and grid-coordinate (`G`) toggles gate telegraph/label rendering (§3, §8)
 
 ### M9 — UI, menus, stats & audio
 - 🟥 Screens: Title → Mission Select → Deploy → Play → Mission Result, plus HUD (§9)
+- 🟥 Deploy step: pick 3 distinct roster units onto player-spawn tiles, full HP / cooldowns clear (§6, §9)
 - 🟥 Menu stack: cursor wrap, cycler rows, settings apply live + persist (§9.1)
+- 🟥 Difficulty presets (Recruit / Veteran / Commander): modifier layer over §6 values + AI weights (§12, §9.1)
 - 🟥 `MissionStats`/`LifetimeStats` accumulation + snapshot at `MissionResult` (§9.2)
 - 🟥 Kills-by-enemy-type bar chart + damage dealt-vs-taken line chart (§9.2)
 - 🟥 `AudioEffect` cues per event; `Audio.interpret` record-only; `setMasterVolume` clamp `[0,1]` (§10)
+- 🟥 Phase-following music beds (player-phase / enemy-phase / title) with `stopMusic` on transitions (§10)
+- 🟥 Persist campaign progress (highest mission unlocked, best grade per mission) as JSON (§13)
 
 ### M10 — Acceptance & determinism
 - 🟥 All 15 acceptance scenarios green (§14)
