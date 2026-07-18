@@ -594,6 +594,15 @@ them, which is the one unforgivable bug in a bullet-hell. Fairness outranks the 
 it resolves hits with `arriveEps`, not with the enemy circle. Same channel, opposite call, because
 the underlying facts differ.
 
+**Channels this game leaves at their default, stated plainly.** `Speed` is **not** mapped: §5.2's
+movement is pattern-driven, not a single scalar the eye ranks — a Charger is "60 idle / 320 dash", a
+Fly Swarm node orbits, a Caster teleports — so a speed pip would lie for half the roster, and the
+*behaviour* is the read (§5.2's telegraph → commit → recover), not a number. `Shield` has no referent
+(the roster carries contact damage, no armor concept), `TokenState` (`Confirmed`/`Suspected`) is a
+spotted-vs-ghost distinction and this game shows the whole room (no fog), and `SecondaryHeading` needs
+an independent turret this roster does not have — `Heading` already carries the single body facing.
+Naming the absences is the point: a reader learns the channel set was considered and where it stops.
+
 ```fsharp
 // The Enemy → Token ChannelMap. In a product this lives in FS.GG.Game.Render (ADR-0022 §2):
 // Symbology depends on Scene, and the sim reaches up to nothing.
