@@ -44,7 +44,32 @@ module AudioCues =
         { ResolveSound = fun (_: SoundId) -> None
           ResolveTrack = fun (_: TrackId) -> None }
 
-//#block 5 "[ Audio.setMasterVolume next.Settings.Volume"
+//#block 5 "| Started -> [ Audio.setMasterVolume next.Settings.Volume ]"
+// Deriving cues from a model DIFF: most gameplay events (a score, an enemy death) carry no `Msg`,
+// so `forTransition` recovers them by comparing `previous` against `next` inside the `Tick` arm.
+// The block is the reader's own `forTransition`, so everything it names is theirs — the `Msg`
+// cases (`Started`, `Fired`, and a payload-carrying `Tick`) and a `Model` whose fields the diff
+// reads (`Score`, `Enemies`, and the `Settings.Volume` the `Started` arm restores). All are
+// declared here, exactly as a product would write them, and the block is compiled VERBATIM against
+// them so `Audio.playSfx`/`setMasterVolume` are checked against the real published surface.
+//
+// `Enemies` is `int list` (ids) so `List.length` is honest; `Score` is a plain `int` so `>` is the
+// real comparison the reader copies. No label overlaps Scene's Point/Rect (§2b), by construction.
+// Each block compiles against its OWN section, so these `Settings`/`Model`/`Msg` do not collide
+// with block 6's — the two never share a compilation unit.
+open FS.GG.Audio.Core
+
+type Settings = { Volume: float }
+type Model =
+    { Settings: Settings
+      Score: int
+      Enemies: int list }
+type Msg =
+    | Started
+    | Fired
+    | Tick of float
+
+//#block 6 "| Started ->"
 // `Started`, and the trap it closes (FS.GG.Rendering#458): `forTransition` is a function of a
 // TRANSITION, and the initial model makes none, so state that was LOADED rather than transitioned
 // into never reaches the mixer unless `Started` carries it.
@@ -66,7 +91,7 @@ type Msg =
     | Started
     | Fired
 
-//#block 6 "let appOutcome = ControlsElmish.runInteractiveAppWithAudio viewerOptions audioSink interactiveHost"
+//#block 7 "let appOutcome       = ControlsElmish.runInteractiveAppWithAudio viewerOptions audioSink interactiveHost"
 // The LAUNCH, per family — and the block this skill spent two releases unable to compile.
 //
 // `ControlsElmish.runInteractiveAppWithAudio` is the launcher an `app`-profile product must call to
@@ -107,7 +132,7 @@ let audioSink : AudioEffect list -> unit = ignore
 let interactiveHost : InteractiveAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
 let generatedHost : GeneratedAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
 
-//#block 7 "GeneratedAppHost.dispatchKey host keyEvent model"
+//#block 8 "GeneratedAppHost.dispatchKey host keyEvent model"
 // The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
 // sound WITHOUT a device. `dispatchKey` returns `(model * ViewerEffect list)` and `audioRequests`
 // narrows that to the `AudioEffect list` the block interprets — the `|> snd` and the two module
