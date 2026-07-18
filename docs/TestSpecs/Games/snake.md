@@ -30,6 +30,26 @@ continuously reading the board and pre-committing turns.
 collision → Game Over screen showing score and high score → press Restart → new run
 with a fresh 1-length... (actually 3-length, see §5) snake at center.
 
+**Timing window:** because turns commit only on a step boundary (§4.2), the step interval
+*is* the reaction budget. At `baseStepSeconds = 0.18` a turn thrown anywhere in the ~180 ms
+before the next boundary still lands cleanly on the next cell; by the `minStepSeconds = 0.06`
+floor that window has collapsed to ~60 ms. It is this shrinking window — not the snake's raw
+length — that makes the late game tense. The direction queue (§4.3) exists precisely so a turn
+committed early in a window is banked rather than lost.
+
+**Phases of a run** (Classic tuning):
+
+| Phase | Pellets | Feel | Dominant pressure |
+|---|---|---|---|
+| Opening | 0–6 | lazy loops, board wide open | none — pure setup |
+| Midgame | 7–19 | interval shrinks each pellet, body starts to matter | reaction time |
+| Endgame | 20+ | speed pinned at the 0.06 s floor (§4.6), body crowds the board | free space |
+
+The intent is a clean **hand-off** between difficulty sources: the speed ramp (§4.6) owns the
+midgame, and once it saturates at pellet 20 the shrinking free space (§6) becomes the sole
+driver. A run should never feel like both pressures spike at once — if playtests show that, the
+fix is to move the ramp floor, not to add a second squeeze.
+
 ## 3. Controls & Input
 Input is **edge-triggered** (key-down events), not held-state. Pressing a direction
 enqueues a turn for the *next* tick; the snake does not move faster by mashing keys.
@@ -79,6 +99,16 @@ without dropping the second press. See §4.3.
   heading (defense-in-depth; the enqueue guard should already prevent this).
 - Repeated presses of the current heading are accepted (no-op turns) but capped by
   queue capacity.
+- **Capacity cap is a drop, not a clobber:** with two entries already buffered, a third
+  distinct press is discarded — the earliest two win and are honored in order. The queue is
+  never resized past 2 and never overwrites a banked turn. See §14 scenario 13.
+- **Guard reference is the most recent, not the heading:** the enqueue test compares against
+  the last committed *or* last queued direction, whichever is newer. Worked example — heading
+  Right, queue `[Up]`: a Left press is legal (Left opposes Right, but not the queued Up) and
+  enqueues to `[Up, Left]`; stepping then turns Up, then Left — a valid hairpin around a corner.
+- **One dequeue per step, always:** even when a single frame drains several owed steps in
+  catch-up (§13), each step consumes at most its own one turn. Two banked turns therefore take
+  two step boundaries to play out regardless of frame rate.
 
 ### 4.4 Food & eating
 - Exactly **one** food pellet exists at any time.
@@ -88,6 +118,16 @@ without dropping the second press. See §4.3.
   (no free cell), the player **wins** (see §11).
 - When the head steps onto the food cell: increment score, grow the snake, increase
   speed, and spawn a new pellet.
+- **Spawn ordering:** the new pellet is placed *after* the eating step's growth is applied,
+  so it can never land on the just-extended tail cell — the free-cell set already excludes it.
+- **Sampling strategy (matches §13):** while free cells are a comfortable fraction of the board
+  (roughly ≥ 10 %, i.e. ≥ 58 of 576), rejection-sample a random `(col,row)` and redraw on a body
+  hit — expected well under 1.2 draws. Once the board is dense, enumerate the free-cell set once
+  and index into it with a single `Rng.nextInt` draw, so spawn cost stays bounded as the board
+  fills. Either path consumes RNG deterministically (§13).
+- **Exactly one pellet, always:** food is spawned once at run start and once per eat, and the
+  eaten pellet is replaced (not mutated) in the same `step`. There is never zero or two pellets
+  mid-run — an invariant snapshot tests can assert every frame.
 
 ### 4.5 Growth
 - Eating food grows the snake by **+1 cell** (default `growthPerFood = 1`). Mechanically
@@ -102,6 +142,22 @@ without dropping the second press. See §4.3.
 - Reaching the floor takes `(0.18 - 0.06) / 0.006 = 20` pellets, after which speed is
   constant.
 - A step accumulator (§7 / §13) decouples stepping from the 60 FPS render tick.
+- The ramp reads `FoodEaten`, **not** snake length, so `stepSeconds` is independent of
+  `growthPerFood`: a `growthPerFood = 2` config lengthens the body twice as fast without touching
+  the speed curve. The two knobs are orthogonal by design.
+- Exact `stepSeconds` at representative pellet counts (Classic tuning):
+
+  | Pellets eaten | stepSeconds | Steps/s |
+  |---|---|---|
+  | 0 | 0.180 | 5.56 |
+  | 5 | 0.150 | 6.67 |
+  | 10 | 0.120 | 8.33 |
+  | 15 | 0.090 | 11.11 |
+  | 20 | 0.060 (floor) | 16.67 |
+  | 20+ | 0.060 | 16.67 |
+
+  The interval is clamped at `minStepSeconds`, so the floor is flat: pellet 20 and pellet 300
+  step at the same rate. See §14 scenario 14.
 
 ### 4.7 Collision & death
 - **Wall collision:** in *Wall* mode, if the next head cell is outside `[0,31]×[0,17]`,
@@ -111,12 +167,50 @@ without dropping the second press. See §4.3.
   growing), so moving the head into the old tail position is **allowed** and not a
   collision. When growing, the tail does not vacate, so that cell is solid.
 - Death transitions to GameOver.
+- **Fixed resolution order within a `step`** — the first condition that fires wins, and the
+  order is load-bearing for a deterministic `deathCause` (§9.2):
+  1. compute the next head cell, applying wrap first when `wrapWalls` (§4.8);
+  2. **wall test** — skipped entirely in wrap mode;
+  3. **self test** against the body *minus* the vacating tail (when not growing, per the
+     exception above);
+  4. if still alive: prepend head, then food test, then grow-or-drop-tail.
+- **Tie-break:** if a next cell is simultaneously off-grid *and* a body cell (only reachable in
+  wall mode, head cornered by its own body), step 2 fires first, so the recorded cause is
+  **Wall**. In wrap mode step 2 is skipped and the same geometry records **Self**. See §14
+  scenario 16.
 
 ### 4.8 Wrap vs. wall-death mode (option)
 - Config flag `wrapWalls : bool` (default **false** = wall death).
 - When `wrapWalls = true`: instead of dying at a boundary, the head wraps to the
   opposite edge — `col = (col + 32) % 32`, `row = (row + 18) % 18`. Self-collision
   still kills. This is selectable from the Title screen.
+- Wrap is applied per-axis and independently, so a head leaving a corner wraps on whichever
+  axis(es) went out of range; a purely horizontal move only wraps `col`. A wrapped step still
+  runs the self test against the destination cell, so wrapping into your own body still kills.
+
+### 4.9 Step-boundary determinism
+- Every observable change — move, turn, eat, grow, death, food spawn — happens **only** inside a
+  `step`. A `Tick` between boundaries changes nothing but `StepAccumulator`, which makes the sim
+  frame-rate-independent: an identical seeded start fed the same elapsed time at 30 FPS and at
+  144 FPS produces the identical step sequence, score, and food placements. See §14 scenario 17.
+- Within one frame the accumulator may owe several steps (capped at 4, §13). They are applied
+  sequentially, each a full `step` with its own turn dequeue and collision test — never batched.
+  A death on an interior owed step aborts the remaining owed steps for that frame.
+- `StepSeconds` is sampled once at the top of each `step`, so a pellet eaten on an early owed
+  step speeds up the *next* owed step within the same frame.
+
+### 4.10 Corridor & self-threading (endgame consequences)
+This is the emergent late-game puzzle promised in §1 — a direct consequence of the rules above,
+not a separate system:
+- A one-cell-wide gap between two body segments is passable only *along* its length; the head
+  needs a clear next cell in its current heading, and the reversal guard (§4.3) forbids a
+  180° escape.
+- Following your own tail down a corridor is safe **while not growing**, because the tail cell
+  vacates one step ahead of the head (§4.7 exception). The instant you eat, `PendingGrowth`
+  pins the tail in place for one step — so eating the pellet *at the mouth of a tail-chase* can
+  self-trap on the very next step. Expert play defers the final pellet of a corridor pass.
+- A pocket walled on three sides is unrecoverable: the head can turn ±90° but never reverse, so
+  a one-deep dead end ends the run.
 
 ## 5. Entities / Game Objects
 
@@ -144,6 +238,17 @@ type Snake =
 > the `Body: Cell list` sketch above is the canonical conceptual model. Maintain a
 > parallel `HashSet<Cell>` of occupied cells for O(1) collision and food-spawn checks.
 
+- **Length invariant:** at any step boundary with `PendingGrowth = 0`, body length equals
+  `startLength + FoodEaten * growthPerFood`. When a multi-cell growth is still owed
+  (`growthPerFood > 1`), length rises exactly one cell per step until `PendingGrowth` drains to
+  zero — growth is metered one cell at a time, never applied in a lump.
+- **Head/tail identity:** head is `List.head Body`, tail is `List.last Body`. Eye-dot
+  orientation (§8) reads `Heading`, not body geometry, so on the first step after a turn the eyes
+  already face the new direction.
+- **Occupancy mirror stays in lockstep:** the `HashSet<Cell>` is updated inside the same `step`
+  that mutates `Body` — add the new head cell, and remove the dropped tail cell unless growing.
+  It therefore never diverges from `Body`, which is what keeps collision and spawn checks O(1).
+
 ### 5.2 Food
 - Single pellet, one cell, no behavior (static).
 - Created on run start and immediately after each eat; destroyed when eaten.
@@ -151,6 +256,11 @@ type Snake =
 ```fsharp
 type Food = { Pos: Cell }
 ```
+
+- The pellet has no lifetime, no movement, and no collision surface beyond the head-enter test
+  of §4.7 — it is inert until eaten. (Timed and golden pellets are a stretch goal, §15.2.)
+- Exactly one `Food` value lives in the `Model` throughout Play, and it is *replaced* (a new
+  value), never mutated, on each eat — keeping the whole `Model` a snapshot-able value (§13).
 
 ## 6. World / Levels / Progression
 - Single static playfield, **1280×720** logical px, **32×18** grid. No camera, no scroll.
@@ -161,6 +271,19 @@ type Food = { Pos: Cell }
   through reduced free space.
 - A thin border frame is drawn just inside the playfield edges as a visual wall cue
   (purely cosmetic; collision uses grid bounds).
+- **Board budget:** 32×18 = **576** cells; the start snake takes 3, leaving **573** free at run
+  start. Since each pellet adds one cell (default `growthPerFood = 1`), filling the board from
+  length 3 requires 573 pellets — so a perfect game (§11) is exactly **573** pellets and the
+  default board's ceiling score is `573 × 10 = 5730`.
+- **Free-space curve:** free cells = `576 − (3 + FoodEaten)`. At the pellet-20 speed floor the
+  board is still ~96 % open (553 free), so the spatial squeeze is a genuinely *late* phenomenon —
+  reinforcing the clean ramp-then-space hand-off of §2.
+- **Coverage thresholds** (`boardCoveragePercent`, §9.2): coverage crosses **50 %** at 285
+  pellets (length 288) and **90 %** at 516 pellets (length 519) — the informal "half-full" and
+  "expert" marks. All three of these — the win threshold, the free-cell spawn set, and coverage —
+  derive from `Cols × Rows`, so resizing the board (§12) needs no other change.
+- The border frame sits one cue inside the play edges, so the head visually kisses the frame on
+  the step *before* a wall death — a one-cell visual warning that is purely cosmetic.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -432,6 +555,19 @@ exactly `PlaySfx (SoundId "eat", _)`).
 - **Win:** the snake fills all **576** cells (no free cell remains for food). This is a
   perfect game; show a distinct "PERFECT!" message on the Game Over screen and treat the
   run as a win. (Practically rare, but must be handled — see §14 scenario 12.)
+- **Score is eat-only and monotonic:** `Score = FoodEaten * pointsPerFood`; nothing is awarded
+  for survival time, turns, or speed. The only lever a player has is eating, and score never
+  decreases. The default-board ceiling is the perfect game: **5730** (573 pellets × 10).
+- **Death-cause reporting** follows the §4.7 resolution order. A step that is both a wall move
+  and a self move records **Wall** in wall mode and **Self** in wrap mode (where the wall test is
+  skipped) — never both, and never ambiguous. This feeds `deathCause` (§9.2) and the lifetime
+  `deathsByWall`/`deathsBySelf` tallies.
+- **Win beats loss:** eating the last free cell is decided a **win** even though the head then
+  has nowhere legal to advance. The board-full check runs at the eat (§4.4), before any
+  subsequent step's collision test, so a perfect game can never be mis-scored as a self-collision
+  loss (§14 scenario 12).
+- **High score is per Walls mode:** Death-mode and Wrap-mode bests are separate ledgers
+  (§13) and never overwrite each other, since wrap play is materially easier.
 
 ## 12. Difficulty & Balancing
 | Parameter | Default | Range | Effect |
@@ -447,6 +583,32 @@ exactly `PlaySfx (SoundId "eat", _)`).
 | `pointsPerFood` | 10 | 1–100 | Score per pellet |
 
 All live in `Config` so balance is data-driven and testable without code changes.
+
+**Difficulty presets** (selected in Settings, §9.1; each is just a named `Config` snapshot — no
+special-case code, only three points in the same parameter space):
+
+| Parameter | Casual | Classic | Frenzy |
+|---|---|---|---|
+| `baseStepSeconds` | 0.18 | 0.18 | 0.14 |
+| `minStepSeconds` | 0.12 | 0.06 | 0.05 |
+| `stepDecrement` | 0.000 | 0.006 | 0.008 |
+| `growthPerFood` | 1 | 1 | 1 |
+| `pointsPerFood` | 10 | 10 | 10 |
+| pellets to speed floor | — (flat, no ramp) | 20 | ≈ 11 |
+| reaction window at floor | ~180 ms (constant) | ~60 ms | ~50 ms |
+
+- **Casual** sets `stepDecrement = 0`, so the interval never changes and the ~180 ms reaction
+  window holds for the whole run — an accessible, one-handed pace where the only difficulty is
+  the growing body (`minStepSeconds` is set to 0.12 but never binds, since nothing decrements).
+  See §14 scenario 15.
+- **Frenzy** front-loads the pressure: `(0.14 − 0.05)/0.008 ≈ 11` pellets to a ~50 ms floor.
+- Every preset value stays inside the per-parameter Range column above, so presets are always a
+  legal `Config`.
+- **Board-size scaling:** total cells = `cols × rows`; the win threshold, spawn free-set, and
+  `boardCoveragePercent` (§9.2) all derive from it, so a 16×12 (192-cell) or 48×32 (1536-cell)
+  board needs only new `Cols`/`Rows`. The pixel transform re-derives cell size as
+  `1280/cols × 720/rows`; integer factors keep the crisp look of §8 (32,18 were chosen for
+  exactly this — 40×40 px cells with no remainder).
 
 ## 13. Technical Notes
 - **Timestep:** fixed-step simulation, drained by **`FixedStep.drainWith`** — do not hand-roll the
@@ -544,6 +706,37 @@ All live in `Config` so balance is data-driven and testable without code changes
     When the head eats that pellet,
     Then there are no free cells, the game is won, and a "PERFECT!" win state is shown.
 
+13. **Direction queue capacity cap.**
+    Given the snake heading Right and the queue already holding two distinct buffered turns,
+    When a third `TurnRequested` is dispatched before the next step,
+    Then the queue still holds exactly two entries — the third is dropped and the earliest two
+    are honored in order (§4.3).
+
+14. **Speed floor is constant past 20 pellets (Classic).**
+    Given `baseStepSeconds = 0.18`, `stepDecrement = 0.006`, `minStepSeconds = 0.06`, after
+    eating 20 pellets and then 30 pellets,
+    When `StepSeconds` is read in each case,
+    Then it equals `0.06` both times — the floor is reached at 20 and never drops further (§4.6).
+
+15. **Casual preset disables acceleration.**
+    Given the Casual difficulty preset (`stepDecrement = 0`), after eating 10 pellets,
+    When `StepSeconds` is read,
+    Then it still equals `baseStepSeconds` — no ramp occurred (§12).
+
+16. **Resolution order — wall precedes self in death cause.**
+    Given `wrapWalls = false` and a head boxed so the next cell is both outside the grid and a
+    body cell,
+    When the fatal step occurs,
+    Then the run ends with `deathCause = Wall`, because the wall test precedes the self test
+    (§4.7).
+
+17. **Frame-rate independence.**
+    Given identical seeded starts fed the same elapsed play time as a 30 FPS `Tick` stream and a
+    144 FPS `Tick` stream,
+    When both are simulated,
+    Then the two runs produce the identical sequence of steps, `Score`, and food placements
+    (§4.9, §13).
+
 ## 15. Stretch Goals
 1. **Obstacles / maze walls** — static blocker cells per level layout.
 2. **Multiple food types** — golden pellet (worth 50, +2 growth) with a timeout.
@@ -576,24 +769,37 @@ its acceptance test(s) pass (§14)._
 - 🟥 Four-heading unit vectors, initial heading Right (§4.2)
 - 🟥 Direction queue (capacity 2, FIFO) with 180° reversal guard (§4.3) — AC #4
 - 🟥 Buffer two turns, dequeue one per step in order (§4.3) — AC #5
+- 🟥 Capacity cap drops the third press; earliest two win (§4.3) — AC #13
+- 🟥 Reversal guard tests the most-recent committed/queued heading (§4.3)
+- 🟥 One dequeue per step even under multi-step frame catch-up (§4.3, §13)
 
 ### M2 — Food, growth & scoring
 - 🟥 Single pellet spawned in a uniformly random unoccupied cell (§4.4) — AC #11
 - 🟥 Eat → `PendingGrowth += 1`, tail retained so body +1 (§4.5) — AC #2
 - 🟥 `+10` score per pellet, respawn food, board-full win check (§4.4, §11)
 - 🟥 Speed ramp: recompute `StepSeconds` down to `minStepSeconds` floor (§4.6) — AC #3
+- 🟥 Flat speed floor: constant `stepSeconds` past 20 pellets, Classic (§4.6) — AC #14
+- 🟥 Ramp reads `FoodEaten`, orthogonal to `growthPerFood` (§4.6)
+- 🟥 Spawn sampling: rejection then free-set enumeration as board fills (§4.4, §13)
+- 🟥 Pellet placed after growth; single-pellet invariant every frame (§4.4)
+- 🟥 Difficulty hand-off: ramp owns midgame, free space owns endgame (§2, §6)
 
 ### M3 — Collisions & death
 - 🟥 Wall death when next head cell exits `[0,31]×[0,17]` (§4.7) — AC #6
 - 🟥 Self-collision death with vacating-tail exception (§4.7) — AC #8
 - 🟥 `wrapWalls` mode: wrap edges instead of dying (§4.8) — AC #7
 - 🟥 `HashSet<Cell>` body mirror for O(1) collision/spawn checks (§13)
+- 🟥 Fixed step resolution order; wall precedes self in death cause (§4.7) — AC #16
+- 🟥 Per-axis wrap; self test still runs on the wrapped destination (§4.8)
+- 🟥 Corridor/tail-threading: tail-follow safe until an eat pins the tail (§4.10)
 
 ### M4 — Match flow & screens
 - 🟥 Title / Playing / Paused / GameOver screen states (§7, §9)
 - 🟥 Pause freezes sim and banked accumulator, resumes exact state (§7) — AC #10
 - 🟥 Perfect-game win when snake fills all 576 cells, "PERFECT!" (§11) — AC #12
 - 🟥 High score `max(Score, HighScore)`, persisted per `wrapWalls` mode (§11, §13) — AC #9
+- 🟥 Win beats loss: board-full check at the eat, before collision (§11) — AC #12
+- 🟥 Length invariant `startLength + FoodEaten * growthPerFood` at boundaries (§5.1)
 
 ### M5 — Rendering (Skia)
 - 🟥 Draw order: background, frame, grid, food, snake body, HUD, overlays (§8)
@@ -603,6 +809,8 @@ its acceptance test(s) pass (§14)._
 ### M6 — Menus & settings
 - 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
 - 🟥 Difficulty / volume / grid-overlay settings apply live + persist (§9.1, §12, §13)
+- 🟥 Difficulty presets as `Config` points: Casual / Classic / Frenzy (§12) — AC #15
+- 🟥 Board-size scaling from `Cols`×`Rows` alone (win, spawn, coverage) (§12)
 
 ### M7 — Stats & charts
 - 🟥 `RunStats`/`LifetimeStats` accumulation + persist (§9.2, §13)
@@ -615,6 +823,8 @@ its acceptance test(s) pass (§14)._
 ### M9 — Acceptance & determinism
 - 🟥 All 12 acceptance scenarios green (§14)
 - 🟥 Seeded `Rng` value makes food placement + replay reproducible (§13)
+- 🟥 Frame-rate independence: identical step sequence at 30/144 FPS (§4.9) — AC #17
+- 🟥 Step-boundary determinism: no observable change between boundaries (§4.9)
 
 ### Stretch — deferred (post-v1)
 - ⬜ Obstacles / maze walls (§15.1)

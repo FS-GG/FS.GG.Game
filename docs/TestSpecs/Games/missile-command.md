@@ -35,6 +35,27 @@ reload → difficulty escalates → next wave.
 **Session loop:** title → play → (wave → bonus → wave …) → all six cities destroyed →
 **game over** → final score + high-score check → restart.
 
+**Reaction budget:** every intercept is a two-stage delay. A counter takes
+`distance / 900` s to reach the crosshair, and the resulting blast then needs up to
+**0.375 s** more to swell to lethal radius (§4.4). A mid-field detonation from Bravo to
+`y ≈ 360` therefore bites roughly `0.4 s` after firing and reaches full 60 px kill-zone
+`~0.78 s` after firing. Read the board as *time-to-impact*, not altitude, and fire **early
+and high**: a fireball that finishes growing before the warhead arrives has already begun
+shrinking when it does, so the window to touch a fast warhead is the front half of the
+blast, not its whole 1 s life.
+
+**Triage & lead:** because you place kill-zones ahead of threats, aim where the warhead
+*will be*. A 220 px/s warhead falls **~170 px** during a mid-field intercept; aim under
+the head by that lead or the fireball blooms behind it. The scoring skill is not one
+counter per head but **baiting warheads into a shared kill-zone**: the blast holds max
+radius for 0.25 s, so a single detonation dropped on a path convergence can clear a whole
+cluster whose trails cross that spot inside the ~0.6 s lethal window.
+
+**Inter-wave beat:** when the last threat resolves the sim enters `WaveBonus` (§9) for a
+deliberate breather with no incoming — the tally animates, then difficulty recomputes and
+surviving batteries reload **atomically on the transition back to `Playing`**, never
+mid-air. A warhead still falling keeps the wave open; the budget emptying does not end it.
+
 ## 3. Controls & Input
 Mouse is the **primary** input; keyboard provides battery selection and meta actions.
 
@@ -71,6 +92,12 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
 - On reaching the target point (within 6 px) they **detonate** into a blast.
 - Counter-missiles are not destructible and do not collide with enemy missiles in
   flight — only the **blast** kills. Travel time to target = `distance / 900`.
+- **Frozen target:** the target point is captured at fire time and never re-homes. If the
+  warhead you aimed at is already dead by the time the counter arrives, the counter still
+  flies the full arc and detonates on the now-empty point — a wasted shot, by design.
+- **No per-battery flight limit:** several counters may be airborne from one tower at once;
+  ammo is the only gate. A counter whose battery is destroyed mid-flight still completes
+  its arc and detonates (the missile has already left the tube).
 
 ### 4.4 Blast (fireball)
 - Spawns at the detonation point as an expanding circle.
@@ -84,6 +111,17 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
   radius let one detonation clear clusters. (No secondary explosions from enemy deaths
   in v1; see Stretch Goals.)
 - Multiple blasts may be active simultaneously (cap 12, see §13).
+- **Radius is sampled live:** the kill test uses the blast's *current* radius each frame,
+  so a warhead survives until the fireball has physically grown to touch it — grazing the
+  outer edge on frame N kills on frame N, and a warhead entering a *shrinking* blast still
+  dies if it is inside the present radius.
+- **Overlapping blasts are independent:** a warhead sitting inside two blasts is removed
+  and scored exactly **once**, on whichever blast's pass reaches it first that frame
+  (deterministic by `Blasts` list order). Blasts never merge or amplify each other.
+- **Cap gating:** the 12-blast cap counts live blasts. If all 12 are live when a `Fire`
+  would launch, the fire is rejected **before** the counter spawns and ammo is **not**
+  decremented (cosmetic dry cue, §13). Given ≤ 30 counters and a 1 s blast life, a wave
+  rarely lands 12 detonations in one window — the cap is a perf ceiling, not a tactical one.
 
 ### 4.5 Incoming missiles (ICBMs)
 - Spawn at a random X along the top edge (`y = 0`), choose a random ground target from
@@ -94,6 +132,15 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
 - **Impact:** when the head reaches its target's ground point (`y ≥ 680`), it destroys
   that target (city or battery) and is removed. No points to player.
 - **Killed by blast:** removed and awards **25 pts × wave multiplier** (§11).
+- **Target pool:** the ground target is drawn uniformly at spawn from the set of *alive*
+  cities **and** *online* batteries; `Vel = normalize(Target − Head) · speed` is computed
+  once and never changes (MIRV children re-pick only at split, §4.6). Spawn X is drawn in
+  `[40, 1240]` so trails never clip the screen edge.
+- **Harmless landing:** if a warhead's target is flattened by *another* warhead first, it
+  keeps flying to that now-rubble point and is removed on ground contact with no second
+  destruction and no score — a warhead only ever destroys the target it was assigned.
+- Warheads pass through cities, batteries and each other; there is no terrain collision.
+  Only the ground point at `y ≥ 680` matters.
 
 ### 4.6 MIRV split (multiple warheads)
 - Starting **wave 3**, a fraction of incoming missiles are **MIRVs**.
@@ -102,6 +149,15 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
 - Split probability per incoming = **min(0.10 + 0.04·(wave−3), 0.45)**.
 - Children are normal missiles (cannot split again). Killing the parent before split
   prevents the children.
+- **Split is exactly once, at the first frame `Head.Vy ≥ SplitAtY`:** the parent is
+  removed and replaced by its children at the split point that same frame. Each child
+  re-picks a distinct alive target where possible — two children share a target only when
+  fewer alive targets remain than children — so their velocities visibly fan apart from
+  the split point.
+- **No targets at split:** if no cities or batteries are alive when the split fires,
+  children fly straight down from the split point (§13) and land harmlessly.
+- A MIRV that survives past its split altitude with the split already spent behaves as a
+  Standard warhead for the rest of its fall.
 
 ### 4.7 Smart bombs / planes
 - Starting **wave 5**, occasional **bombers** (planes) cross horizontally.
@@ -113,8 +169,19 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
 - Smart bomb (rare, **wave 7+**): a warhead that **evades** — if a blast center is
   within 90 px and the smart bomb's path, it makes one lateral dodge of up to 40 px.
   Each smart bomb may dodge at most **twice**. Worth **125 pts × wave multiplier**.
+- **Dodge geometry:** each frame, if a live blast center is within 90 px of the smart-bomb
+  head and `DodgesLeft > 0`, the bomb shifts its ground target X by up to **40 px away**
+  from the nearest such center (sign points away), recomputes `Vel` toward the new ground
+  point, and decrements `DodgesLeft`. A **0.3 s lockout** after a hop prevents both dodges
+  burning on one lingering blast. With `DodgesLeft = 0` it flies ballistically like a
+  Standard warhead and can be caught by a well-led blast.
+- **Plane lifecycle:** a plane exits only when its body fully clears the opposite edge
+  (`x < −40` or `x > 1320`); while any plane is present a `plane-drone` loops (§10). A
+  plane killed mid-cycle cancels any drop queued that frame; its exit or death frees the
+  single slot for the next 4 s spawn check.
 - At most **1 plane on screen** at a time; spawn check every 4 s with probability
-  `min(0.25 + 0.05·(wave−5), 0.6)`.
+  `min(0.25 + 0.05·(wave−5), 0.6)`. Plane-dropped bombs are Standard warheads (25-pt kill)
+  that inherit the current wave speed.
 
 ### 4.8 Batteries & ammo
 - **3 batteries**: Alpha (x≈160), Bravo (x≈640), Charlie (x≈1120), towers on the ground.
@@ -123,6 +190,12 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
 - A battery whose city/tower is destroyed by an incoming impact is **out** — it cannot
   fire for the rest of the game and shows as rubble.
 - Batteries **reload to 10** at the start of each wave (only surviving batteries).
+- **Auto-select tiebreak:** when the crosshair X is equidistant from two batteries, prefer
+  the one with **more ammo**, then the **lower index** (Alpha < Bravo < Charlie). The
+  fall-through (§3) still skips empty batteries.
+- **Force-fire is literal:** `FireFrom` on an empty named battery is a dry click — no
+  fall-through, because the player asked for *that* tube specifically. A battery at 0 ammo
+  renders all-hollow dots above its tower (§9).
 
 ### 4.9 Cities
 - **6 cities** placed in two groups of three between the batteries:
@@ -131,6 +204,32 @@ into the ground). Rendered as a 24×24 px "+" with a center dot.
 - A city hit by an incoming missile is destroyed (becomes rubble) and cannot be
   re-targeted. Cities do not regenerate during a game (no rebuild in v1; see Stretch).
 - **Game over** when all 6 cities are destroyed (batteries surviving does not matter).
+- The two groups are fixed and **symmetric about x = 640**. A `Rubble` city leaves the
+  target pool immediately, so late in a losing board warheads concentrate on the survivors
+  — the natural difficulty spike of a near-loss, and the reason a lone last city rarely
+  holds.
+
+### 4.10 Intercept geometry & the lead point
+The mechanically-perfect crosshair for a warhead at head `H` with velocity `Vh`, fired
+from muzzle `M` at counter speed `900`, is the point `P` on the warhead's line where
+`|P − M| / 900 = |P − H| / |Vh|` — counter arrival meets warhead arrival. **v1 does not
+solve this**: the player eyeballs the lead, and that estimation *is* the game's skill
+expression. The spec states it so an aim-assist or tutorial overlay (stretch) can compute
+`P` without changing the base rules. Practical envelope: at the speed cap 220 px/s a
+warhead falls the full 680 px in ~3.1 s, and a center-battery counter crosses the field in
+under 0.8 s, so a competent player always has ≥ ~0.5 s of usable lead — the sim never
+presents a mathematically un-interceptable warhead (§12).
+
+### 4.11 Threat targeting & spawn fairness
+Targeting is random but bounded so waves stay solvable:
+- Spawn X ∈ `[40, 1240]`; target drawn only from alive cities / online batteries (§4.5).
+- **Optional fairness clamp** (`Config.targetSpread`, default **on**): the spawner avoids
+  assigning a **third consecutive** warhead to a target while another alive target has
+  none, spreading pressure across the board. Disable it for pure-random targeting. The
+  clamp only reorders target *choice*; it never changes spawn count, speed or cadence, so
+  determinism (§13) is preserved for a fixed seed.
+- MIRV children and plane bombs re-enter the same target pool at their spawn instant, so
+  they respect the current alive set (never targeting rubble).
 
 ## 5. Entities / Game Objects
 
@@ -201,6 +300,31 @@ in a file you must not touch. Express the plane's 40×14 body with
 `Geometry.toRect plane.Pos 40.0 14.0` — qualified, since this sketch abbreviates `Geometry.Vec2`
 rather than opening `Geometry`.
 
+### 5.7 Lifecycle, IDs & per-frame ordering
+`NextId` allocates ids monotonically; nothing is ever reused, so a snapshot diff (§13) can
+match entities by id across ticks. A `Tick` processes entities in a fixed order so results
+are deterministic and tie-breaks are defined:
+
+1. **Integrate** — advance every counter, blast, incoming and plane by `pos += vel·dt`.
+2. **Collide & score** — run the blast × incoming/plane pass, marking kills and adding
+   score (§4.4, §11).
+3. **Spawn** — MIRV splits, plane bomb-drops, and the wave spawner emit *new* entities.
+4. **Prune** — filter out everything marked this frame (detonated counters, done blasts,
+   killed/impacted incoming, exited planes) and cap each trail to ≤ 12 points (§13).
+
+Because collide precedes any impact-destruction resolution, **a kill wins a tie**: a
+warhead that is both inside a blast and at `y ≥ 680` on the same frame is scored as an
+intercept and its target city survives — the fireball beat it to the ground.
+
+| Entity | Max live | Created by | Removed when |
+|---|---|---|---|
+| City | 6 | init | (never removed — flips `Alive`→`Rubble`) |
+| Battery | 3 | init | (never removed — flips `Online`→`Destroyed`) |
+| CounterMissile | ~30 | `Fire`/`FireFrom` | reaches target (→ Blast) |
+| Blast | 12 | counter detonation | radius returns to 0 |
+| Incoming | 32 (+~16 children) | spawner / split / bomb-drop | killed by blast, or impact |
+| Plane | 1 | 4 s spawn check | killed, or clears the opposite edge |
+
 ## 6. World / Levels / Progression
 - Playfield **1280×720**; ground at `y = 680`.
 - A **wave** = a fixed budget of incoming missiles released over a window, then a lull.
@@ -218,6 +342,30 @@ rather than opening `Geometry`.
   then planes (W5), then smart bombs (W7).
 - **Score multiplier** for kills and bonuses increases every 2 waves: waves 1–2 ×1,
   3–4 ×2, 5–6 ×3, … capped ×6.
+
+**Derived wave values** (all from the §12 `Config`, so a preset re-tunes the whole curve):
+
+| Wave | Count | Speed | Interval | MIRV | Plane | Mult | Release window ≈ |
+|---|---|---|---|---|---|---|---|
+| 1 | 8 | 70 | 1.40 s | — | — | ×1 | 9.8 s |
+| 3 | 12 | 94 | 1.28 s | 0.10 | — | ×2 | 14.1 s |
+| 5 | 16 | 118 | 1.16 s | 0.18 | 0.25 | ×3 | 17.4 s |
+| 7 | 20 | 142 | 1.04 s | 0.26 | 0.35 | ×4 | 19.8 s |
+| 10 | 26 | 178 | 0.86 s | 0.38 | 0.50 | ×5 | 21.5 s |
+
+- **Release window** ≈ `(Count − 1) · Interval` — the span over which a wave *releases*
+  warheads. The wave does not *end* until the last warhead and last counter resolve
+  (§4.12 lull, §2 inter-wave beat), so falling MIRV children or a lingering plane can push
+  the actual end past the window. At the §12 caps this yields a session of roughly a dozen
+  waves inside the `target_session_minutes: 8` budget.
+- **Named acts** shape the escalation the player *feels*: **Act I — Ballistic** (W1–2, pure
+  straight ICBMs, learn the lead); **Act II — MIRV** (W3–4, learn to kill high, before
+  split); **Act III — Air raid** (W5–6, planes add horizontal threat); **Act IV —
+  Evasion** (W7+, smart bombs plus the terminal ramp).
+- **Terminal difficulty:** each ramp saturates at its cap — multiplier reaches **×6 at
+  wave 11**, incoming **count 32 by wave 13**, **speed 220 by wave 14**, **interval floor
+  0.35 s by wave 19**. From wave 19 on every wave is mechanically identical; only the board
+  state (how many cities you have left) still changes, so the endgame is pure endurance.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -518,6 +666,33 @@ instant loss).
 
 **Lives/continues:** none. Single run, then restart. High score persists (§13).
 
+**Multi-kill scoring:** each warhead a blast catches is scored **independently** as it is
+removed, so one detonation that clears four warheads adds `4 × 25 × mult` **in a single
+frame** — there is **no combo escalation** in v1 (per-kill streak bonuses are stretch
+§15.3). This is the payoff for the cluster-baiting skill (§2): the value is in *counters
+saved*, not in a bonus multiplier.
+
+**Bonus tally order:** the end-of-wave tally applies **surviving-city bonus first, then
+unused-ammo bonus**, each with its own `bonus-tick` cue (§10) and each folded into `Score`
+**before** `Wave` increments and batteries reload (§4.8). Unused ammo is summed *before*
+the reload, so the ammo bonus rewards restraint in the wave just finished, not the fresh
+reload.
+
+**Worked example (multiplier ×3):** a wave in which the player intercepts 14 Standard
+warheads (`14 × 25`), one MIRV parent before split (`25`), a plane (`100`) and a smart
+bomb (`125`) scores `(350 + 25 + 100 + 125) × 3 = 1800` from kills; ending with 5 cities
+and 12 unused ammo then adds `(100×5 + 25×12) × 3 = 2400` bonus — `4200` for the wave.
+
+**Defensive collapse (death spiral):** losing all three batteries while a city still stands
+does **not** shortcut to Game Over. The player simply cannot fire; the sim runs on, the
+remaining warheads flatten the survivors, and Game Over fires on the last city — the
+collapse plays out on screen (§9) rather than being skipped, matching the arcade's
+inevitable-loss tone (§1).
+
+**Milestone wave:** for test and stat purposes, reaching **Wave 10** is the defined
+"success" checkpoint (§14) — the game has no win state, so this is the concrete milestone
+`wavesSurvived ≥ 10` (§9.2) that a scenario can assert.
+
 ## 12. Difficulty & Balancing
 
 | Param | Default | Range | Effect |
@@ -542,6 +717,37 @@ instant loss).
 | `multiplierEveryWaves` | 2 | 1–4 | Score multiplier cadence |
 
 All tunables live in a single `Config` record so balance is data-driven and testable.
+
+**Difficulty presets** (the §9.1 Settings selector loads one of these into `Config` at run
+start; all values stay inside the ranges above):
+
+| Field | Rookie | Veteran (default) | Elite |
+|---|---|---|---|
+| `blastMaxRadius` | 80 px | 60 px | 48 px |
+| `blastHold` | 0.35 s | 0.25 s | 0.15 s |
+| `ammoPerBattery` | 12 | 10 | 8 |
+| `baseIncomingSpeed` | 55 px/s | 70 px/s | 85 px/s |
+| `incomingSpeedStep` | 9 px/s | 12 px/s | 15 px/s |
+| `minSpawnInterval` | 0.40 s | 0.35 s | 0.30 s |
+
+Rookie widens the kill-zone and slows the curve (bigger radius, longer hold, more ammo,
+gentler speed ramp); Elite tightens all of it. Every other `Config` field keeps its default
+across presets. **A preset applies only at run start** — changing Difficulty mid-run has no
+effect until `Restart`, because the wave curve is derived from the `Config` captured by
+`init` (§7).
+
+**Balance targets** (the numbers the tuning aims to hit, so a change can be judged):
+- **Kill efficiency:** a skilled player should average **2–3 warheads per counter** through
+  cluster-baiting (§2); a wave's ammo budget (`3 × ammoPerBattery`) must stay comfortably
+  above `Count / 2` so a clean wave is always survivable — keep `~30 : Count`.
+- **Expected first loss** for a competent player around **wave 8–12** on Veteran; Rookie
+  pushes this later, Elite earlier.
+- **Interceptability floor:** the reaction budget (§4.10) must stay ≥ ~0.5 s at the speed
+  cap; that is why `incomingSpeedCap` (220) and `counterSpeed` (900) are coupled — raising
+  the cap without raising counter speed can produce un-interceptable warheads.
+- **Cluster window** = `blastMaxRadius × (blastHold + grow/shrink time)`: it sets how forgiving
+  cluster-baiting is, so Rookie's larger radius **and** longer hold compound into a much
+  wider kill-zone than Elite's.
 
 ## 13. Technical Notes
 - **Performance budget:** target **60 FPS / 16.7 ms** frame. Worst-case entity counts:
@@ -638,6 +844,43 @@ All tunables live in a single `Config` record so balance is data-driven and test
     ordered input sequence, *when* both run the same number of ticks, *then* their
     `Score`, `Wave`, and entity positions are identical.
 
+17. **Frozen counter target.** *Given* a counter fired toward a point whose warhead is then
+    destroyed by another blast before the counter arrives, *when* the counter reaches that
+    point, *then* it still detonates into a Blast at the now-empty point and the shot is
+    consumed (§4.3).
+
+18. **Kill wins a tie.** *Given* an incoming that is both inside an active blast radius and
+    at `y ≥ 680` over its target city on the same `Tick`, *when* the frame resolves, *then*
+    the incoming is scored as an intercept (`25 × mult`) and the target city stays `Alive`
+    (§4.5, §5.7, §11).
+
+19. **Multi-kill in one frame.** *Given* one blast at radius 55 overlapping three incoming
+    heads, *when* the collision pass runs, *then* all three are removed and `Score`
+    increases by exactly `3 × 25 × mult` on that single frame, with no combo bonus
+    (§4.4, §11).
+
+20. **Smart-bomb dodge geometry.** *Given* a wave-7 smart bomb with `DodgesLeft = 2` and a
+    blast center 70 px away, *when* the dodge check runs, *then* its target X shifts ≤ 40 px
+    *away* from that center, `Vel` recomputes toward the new ground point, and `DodgesLeft`
+    becomes 1; *when* it has dodged twice, *then* it no longer evades (§4.7).
+
+21. **Difficulty preset at init.** *Given* the Elite preset selected before `StartGame`,
+    *when* the run initializes, *then* `Config.blastMaxRadius = 48` and
+    `baseIncomingSpeed = 85`; *when* Difficulty is changed mid-run, *then* the active run's
+    values are unchanged until `Restart` (§9.1, §12).
+
+22. **Terminal difficulty caps.** *Given* the game reaches wave 14, *when* wave params are
+    computed, *then* incoming speed = 220 (capped), count = 32 (capped since wave 13), and
+    `Multiplier = ×6` (capped since wave 11) (§6).
+
+23. **Force-fire empty battery is a dry click.** *Given* Bravo has 0 ammo and Alpha has
+    ammo, *when* `FireFrom(Bravo, target)` is issued, *then* no CounterMissile spawns, no
+    battery fires by fall-through, and a dry-click cue is requested (§4.8).
+
+24. **Auto-select tiebreak.** *Given* the crosshair X is exactly equidistant from Alpha and
+    Bravo and both have ammo, *when* `Fire` is issued, *then* the battery with more ammo is
+    chosen, and on an ammo tie the lower-index battery (Alpha) fires (§4.8).
+
 ## 15. Stretch Goals
 1. **Chain reactions:** enemy missiles destroyed by a blast spawn their own small
    secondary blast, enabling combo cascades (classic arcade feel).
@@ -673,29 +916,45 @@ its acceptance test(s) pass (§14)._
 - 🟥 `Fire` auto-selects nearest battery with ammo, spawns counter, ammo −1 (§3, §4.3) — AC #2, #3
 - 🟥 Force-fire `A`/`S`/`D` targets named battery (§3) — AC #14
 - 🟥 Dry click with no ammo → ignored + dry-click cue (§3) — AC #13
+- 🟥 Auto-select tiebreak: more ammo, then lower index, on an equidistant crosshair (§4.8) — AC #24
+- 🟥 Force-fire an empty named battery is a dry click, no fall-through (§4.8) — AC #23
 
 ### M2 — Counter-missiles & blasts
 - 🟥 Straight-line counter travel at 900 px/s, detonate within 6 px of target (§4.3) — AC #4
 - 🟥 Blast grow/hold/shrink lifecycle, max radius 60 px, ≈1.0 s total (§4.4) — AC #6
-- 🟥 Simultaneous-blast cap of 12 (§4.4, §13)
+- 🟥 Simultaneous-blast cap of 12; fire rejected before spawn, ammo not spent (§4.4, §13)
+- 🟥 Frozen counter target detonates on the empty point if the warhead is already dead (§4.3) — AC #17
+- 🟥 Live-radius kill test; overlapping blasts score each warhead once (§4.4)
+- 🟥 Multi-kill in one frame adds `n × 25 × mult`, no combo (§4.4, §11) — AC #19
+- 🟥 No auto-lead assist in v1: reaction-budget/lead is player skill (§2, §4.10)
 
 ### M3 — Incoming missiles & collisions
 - 🟥 Incoming spawn at top edge, straight-line to a random alive ground target (§4.5)
 - 🟥 Point-in-circle blast kill → remove + score `25 × mult` (§4.4, §11) — AC #5
 - 🟥 Incoming impact destroys city/battery, no points to player (§4.5, §4.9) — AC #7
 - 🟥 Per-frame collision pass over blasts × incoming (§13)
+- 🟥 Target pool = alive cities + online batteries, spawn X∈[40,1240], velocity frozen at spawn (§4.5)
+- 🟥 Warhead to an already-rubble target lands harmlessly, no double-destroy, no score (§4.5)
+- 🟥 Optional `targetSpread` fairness clamp, determinism-preserving (§4.11)
+- 🟥 Frame order integrate→collide→spawn→prune, monotonic `NextId`, kill-wins-tie (§5.7, §11) — AC #18
 
 ### M4 — Advanced threats (MIRV, planes, smart bombs)
 - 🟥 MIRV split once at altitude → 2–3 retargeting children (§4.6) — AC #9
 - 🟥 MIRV killed before split spawns no children (§4.6) — AC #10
 - 🟥 Bomber planes cross screen + drop bombs, blast kills for `100 × mult` (§4.7)
 - 🟥 Smart-bomb lateral dodge (≤2), worth `125 × mult` (§4.7)
+- 🟥 Smart-bomb dodge geometry: ≤40 px away, 0.3 s lockout, ballistic once spent (§4.7) — AC #20
+- 🟥 MIRV splits once into distinct-target children; no-target children fall straight (§4.6)
+- 🟥 Plane exit/respawn on edge-clear + `plane-drone` loop, drop cancelled on death (§4.7)
 
 ### M5 — Waves & progression
 - 🟥 Wave spawner: `ToSpawn` budget, `SpawnTimer`/`SpawnInterval` cadence (§6, §7)
 - 🟥 Wave clear → `WaveBonus` tally (surviving cities + unused ammo) × mult (§9, §11) — AC #11
 - 🟥 Wave escalation: count/speed/interval/multiplier ramps + battery reload (§6) — AC #12
 - 🟥 Threat unlocks — MIRVs W3, planes W5, smart bombs W7 (§6)
+- 🟥 Release window `(count−1)·interval`; wave ends on last-resolve, not budget-empty (§2, §6)
+- 🟥 Terminal caps: speed 220 (W14), count 32 (W13), interval 0.35 (W19), mult ×6 (W11) (§6) — AC #22
+- 🟥 Bonus tally order city→ammo, per-line `bonus-tick`, folded before reload (§11)
 
 ### M6 — Rendering (Skia)
 - 🟥 Draw order: sky, ground, cities, batteries, trails, blasts, crosshair, HUD (§8, §9)
@@ -707,6 +966,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Game over when all 6 cities are `Rubble` (§4.9, §11) — AC #8
 - 🟥 Menu stack, cursor wrap, cycler/slider rows (§9.1)
 - 🟥 Difficulty presets + volume/scale/shake apply live + persist (§9.1, §12, §13)
+- 🟥 Rookie/Veteran/Elite `Config` presets applied at init only, inert mid-run (§9.1, §12) — AC #21
+- 🟥 Defensive collapse plays out to Game Over, no shortcut when batteries lost (§11)
 
 ### M8 — Stats & charts
 - 🟥 `RunStats`/`LifetimeStats` accumulation + persist (§9.2, §13)
@@ -719,6 +980,8 @@ its acceptance test(s) pass (§14)._
 ### M10 — Acceptance & determinism
 - 🟥 All 16 acceptance scenarios green (§14)
 - 🟥 Seed + input-log replay is identical in `Score`/`Wave`/positions (§13) — AC #16
+- 🟥 Extended acceptance scenarios #17–#24 green (§14)
+- 🟥 Wave 10 milestone checkpoint (`wavesSurvived ≥ 10`) asserted (§11, §9.2)
 
 ### Stretch — deferred (post-v1)
 - ⬜ Chain-reaction secondary blasts on enemy kills (§15.1)

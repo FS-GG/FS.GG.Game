@@ -35,6 +35,26 @@ Restart → new game with reset state and a freshly shuffled bag.
 A single game is one continuous descent with no levels to "complete"; the session ends
 only on loss. Target session length ~10 minutes for a competent player.
 
+**Frame resolution & piece handoff.** A piece never spawns and locks on the same frame
+unless it is hard-dropped: spawn writes the new active piece, and the earliest it can lock is
+the following `Tick`. There is **no entry delay (ARE)** in v1 — the next piece becomes active
+the instant its predecessor's cells are committed, so a fast player can begin steering it on
+the very next frame. Held state **survives the handoff**: if Left (or Right) is still down when
+a piece locks, its `DasTimer` charge carries over, so the next piece spawns under an
+already-charged direction and auto-shifts at `ARR` immediately rather than re-waiting the full
+`DAS` — this "DAS charge" is what lets skilled play slam pieces to a wall with no per-piece
+delay. A held soft drop (↓) likewise persists across the handoff, so a freshly spawned piece
+falls at soft-drop speed from frame one until ↓ releases. Only `HoldUsed` resets on a genuine
+spawn from the queue (§4.8), never on a swap.
+
+**Input-vs-gravity ordering within a frame.** Input messages (`MoveLeftDown`, `RotateCW`, …)
+are applied in the order the player pressed them; the frame's `Tick` — which runs the
+`DasTimer`, gravity, and lock logic (§7.3) — is dispatched **after** that frame's buffered
+input, so a piece is always steered before it falls that frame. This keeps a last-instant
+slide-under-an-overhang honest: the shift lands before gravity re-tests collision. A hard drop
+short-circuits the rest of the frame for that piece — once it teleports and locks, no further
+gravity, shift, or rotate is processed until the next piece spawns.
+
 ## 3. Controls & Input
 Keyboard is primary. Input model mixes **edge-triggered** (fire once on key-down) and
 **held with auto-repeat** (DAS/ARR) actions.
@@ -141,6 +161,121 @@ floods, no droughts longer than 12 pieces.
   piece respawns at the top. Hold may be used **once per spawned piece** (a `holdUsed` flag
   resets when a new piece spawns from the queue, not from a swap).
 
+### 4.9 Entry timing, initial rotation & initial hold
+- **No entry delay (ARE):** the next piece is active the frame its predecessor commits (§2).
+  This is the single most consequential feel choice — placements chain with zero dead time,
+  so throughput is bounded only by the player and by gravity, not by an animation gate.
+- **Initial Rotation System (IRS):** if a rotate key (`↑`/`X`/`Z`/`Ctrl`) is held at the
+  instant a piece spawns, the piece spawns pre-rotated into that orientation. The rotation is
+  applied on the spawn frame and kick-tested at the spawn cells like any rotation (§4.4); if
+  the rotated spawn collides and no kick fits, the piece spawns unrotated. IRS lets an expert
+  present a piece flat against a wall one frame earlier and never counts as an in-play rotate
+  (it consumes no lock reset, since the piece has not yet rested).
+- **Initial Hold System (IHS):** if Hold (`C`/`Shift`) is held at the instant a piece spawns,
+  the swap (§4.8) fires on the spawn frame. IHS is still bounded by one hold per spawned piece
+  — the spawn-frame swap consumes that piece's hold, so `HoldUsed` is set immediately.
+
+### 4.10 Soft drop & gravity interaction
+- Soft drop and natural gravity are a **maximum, not a sum**: the effective interval is
+  `max(gravityInterval / softDropFactor, one frame)` — the piece falls at whichever of the two
+  is faster, clamped so it never advances more than **one cell per frame** (0.0167 s) in v1.
+  There is no true multi-cell-per-frame 20G.
+- At high levels the two converge: from level 19 up, natural gravity is already 0.033 s/cell,
+  so `gravityInterval / 20` saturates the one-frame clamp and soft drop matches natural gravity
+  in *speed*. Its only remaining effect there is the **+1 point per cell** (§11), never a
+  faster fall.
+- Soft-drop points accrue **per cell actually descended**, not per frame or per key-press: a
+  frame that carries the piece k cells adds k points.
+- Soft drop into the floor or stack does nothing once the cell below is blocked, and it never
+  accelerates or skips the lock timer (§4.5, §13 edge (c)). Releasing ↓ reverts to level
+  gravity on the next frame — there is no carried momentum.
+
+### 4.11 Wall-kick tables (SRS)
+The five kick offsets tested per rotation (§4.4), by piece group and transition. Convention is
+guideline: first component is horizontal (right-positive), second is vertical (**up-positive**);
+convert to the y-down grid by negating the second component. The first offset `(0,0)` is the
+naive rotation; the rest are the kicks tried in order. 180° states (`R2`) are reached only by
+two successive CW or CCW rotations (there is no direct 180 input), so no 180 kick row is needed.
+
+**JLSTZ** (shared by J, L, S, T, Z):
+
+| Transition | k1 | k2 | k3 | k4 | k5 |
+|---|---|---|---|---|---|
+| 0→R | (0,0) | (-1,0) | (-1,+1) | (0,-2) | (-1,-2) |
+| R→0 | (0,0) | (+1,0) | (+1,-1) | (0,+2) | (+1,+2) |
+| R→2 | (0,0) | (+1,0) | (+1,-1) | (0,+2) | (+1,+2) |
+| 2→R | (0,0) | (-1,0) | (-1,+1) | (0,-2) | (-1,-2) |
+| 2→L | (0,0) | (+1,0) | (+1,+1) | (0,-2) | (+1,-2) |
+| L→2 | (0,0) | (-1,0) | (-1,-1) | (0,+2) | (-1,+2) |
+| L→0 | (0,0) | (-1,0) | (-1,-1) | (0,+2) | (-1,+2) |
+| 0→L | (0,0) | (+1,0) | (+1,+1) | (0,-2) | (+1,-2) |
+
+**I** (its own table, wider offsets because the I pivots in a 4×4 box):
+
+| Transition | k1 | k2 | k3 | k4 | k5 |
+|---|---|---|---|---|---|
+| 0→R | (0,0) | (-2,0) | (+1,0) | (-2,-1) | (+1,+2) |
+| R→0 | (0,0) | (+2,0) | (-1,0) | (+2,+1) | (-1,-2) |
+| R→2 | (0,0) | (-1,0) | (+2,0) | (-1,+2) | (+2,-1) |
+| 2→R | (0,0) | (+1,0) | (-2,0) | (+1,-2) | (-2,+1) |
+| 2→L | (0,0) | (+2,0) | (-1,0) | (+2,+1) | (-1,-2) |
+| L→2 | (0,0) | (-2,0) | (+1,0) | (-2,-1) | (+1,+2) |
+| L→0 | (0,0) | (+1,0) | (-2,0) | (+1,-2) | (-2,+1) |
+| 0→L | (0,0) | (-1,0) | (+2,0) | (-1,+2) | (+2,-1) |
+
+The vertical `(0,±2)` / `(±_,±2)` offsets are the **floor and ceiling kicks** that let a piece
+rotate out of a flush-against-floor or tucked-under-overhang position; the T's `(-1,-2)` /
+`(+1,-2)` offsets are precisely what enable T-spins (§4.14). **O** has no kick table — it never
+effectively rotates (§4.4). If none of the five offsets clears, the rotation is rejected and
+the piece is left byte-for-byte unchanged (§13 edge (a)); it is never clipped.
+
+### 4.12 Lock-delay edge cases
+- The 500 ms timer runs **only** while the cell below the piece is blocked. If a move or
+  rotation opens space below, the piece returns to **Falling** and `LockTimer` clears (§7.3.4)
+  — no reset is charged for merely un-resting.
+- Two distinct events touch the reset budget. A **move/rotate reset** — a successful shift or
+  rotation while resting — refreshes the timer to 500 ms and increments `LockResets`, capped at
+  **15**. A **downward step** that carries the piece to a **strictly lower row than any it has
+  yet occupied** *forgives* the budget (resets `LockResets` toward 0), so genuine descent is
+  never penalized and only in-place stalling burns the cap.
+- After 15 move/rotate resets with no new-lowest-row progress, the next time the piece rests it
+  **locks immediately** rather than starting a fresh 500 ms (§4.5).
+- Hard drop bypasses the timer and the reset counter entirely: it locks on the spawn-to-floor
+  teleport regardless of `LockResets`.
+
+### 4.13 Line-clear resolution
+- Clearing uses **naive row gravity**, not sticky or cascade: cleared rows are removed and each
+  surviving row falls by the **count of cleared rows beneath it**; empty rows are inserted at
+  the top. The board that is scanned includes the just-locked piece's cells.
+- Cleared rows **need not be contiguous**: if rows 15 and 19 both fill while row 17 is partial,
+  both full rows clear in one scan and the gap rows drop past the removed rows. There is no
+  post-collapse re-scan — a settle can never trigger a fresh clear.
+- A multi-row clear is exactly **one event** for scoring (§11) and audio (§10): a Tetris is a
+  single `tetris` cue, not four `line-clear` cues (§13 edge (e)).
+- **Perfect clear (all-clear):** if the well is entirely empty after a collapse, the lock was a
+  Perfect Clear. It is detectable in v1 but carries **no bonus** (bonus is stretch §15.4); it
+  also feeds the combo/back-to-back tracking used by stretch scoring.
+
+### 4.14 T-spin recognition (stretch §15.3)
+Specified here for scope even though scoring is deferred. A lock is a **T-spin** when: the piece
+is a **T**, the action that placed it was a **rotation** (not a shift or a drop — the piece's
+last successful move before lock was a `RotateCW`/`RotateCCW`), and **≥ 3 of the 4 corners** of
+the T's 3×3 bounding box are filled (by stack cells or a wall). The two corners on the side the
+T points toward distinguish a **full T-spin** (both front corners filled) from a **mini**
+(only one). Combined with the row count this yields the classic tiers — a kicked-in placement
+that uses a `(±1,-2)` offset (§4.11) is the canonical T-spin trigger:
+
+| Placement | Rows cleared | Base points |
+|---|---|---|
+| T-spin (no clear) | 0 | 400 |
+| T-spin Single (TSS) | 1 | 800 |
+| T-spin Double (TSD) | 2 | 1200 |
+| T-spin Triple (TST) | 3 | 1600 |
+| Mini T-spin | 0–1 | 100–200 |
+
+All multiplied by `level + 1` like §11 clears; the `tSpins` stat (§9.2) increments on any
+recognized T-spin. In v1 (no stretch) a T that clears lines simply scores by §11 row count.
+
 ## 5. Entities / Game Objects
 
 ### 5.1 Cell
@@ -182,6 +317,33 @@ Holds the remaining shuffled pieces of the current bag plus enough of the next b
 ### 5.5 Hold slot
 Optional single `PieceKind` plus the `holdUsed` flag.
 
+### 5.6 Ghost piece (derived)
+Not stored and not part of the `Model` — the ghost is **derived each frame** from the active
+piece, exactly like `cellsOf` (§5.2). It is the active piece projected straight down to its
+hard-drop landing row (the lowest legal position, §4.3), so it always occupies the same columns
+and orientation as the active piece and re-derives whenever the piece moves, rotates, or falls.
+It has **no collision or scoring role** — it is a pure rendering aid (§8) that shows where a
+hard drop would land, and it can be turned off via the Ghost-piece setting (§9.1, stretch §15.1).
+
+### 5.7 Spawn origins & rotation pivots
+Every piece spawns horizontally in the columns below, straddling the hidden buffer / top visible
+row (§4.2). Columns are the concrete cells the piece covers at spawn (`R0`); the pivot names the
+box its rotations turn inside (§4.4, §4.11):
+
+| Piece | Bottom-row columns | Top-row columns | Rotation box / pivot |
+|---|---|---|---|
+| I | 3, 4, 5, 6 | — | 4×4 box, pivot between the middle two cells |
+| O | 4, 5 | 4, 5 | 2×2, no effective rotation |
+| T | 3, 4, 5 | 4 | 3×3, pivot on center column 4 |
+| J | 3, 4, 5 | 3 | 3×3, pivot on center column 4 |
+| L | 3, 4, 5 | 5 | 3×3, pivot on center column 4 |
+| S | 3, 4 | 4, 5 | 3×3, pivot on center column 4 |
+| Z | 4, 5 | 3, 4 | 3×3, pivot on center column 4 |
+
+The kick tables (§4.11) are expressed relative to these pivots, so the spawn columns and the
+kick offsets together fully determine every legal orientation without any per-piece special
+cases beyond the JLSTZ / I / O split.
+
 ## 6. World / Levels / Progression
 
 ### 6.1 Playfield dimensions
@@ -217,6 +379,32 @@ well; next-queue panel and score HUD sit to the right.
 
 The only thing that changes over time is gravity speed (and thus required reaction time).
 The board, scoring multipliers, and piece set are constant.
+
+### 6.3 Progression rules & edge cases
+- **Monotone, floored:** `level = max(startLevel, totalLines / linesPerLevel)` (integer
+  division). The `startLevel` floor means the level never drops below where you began, and
+  because `totalLines` only grows, the level is **monotone non-decreasing** — it can never fall.
+- **Starting high defers the first level-up:** the line counter is always cumulative from 0, so
+  from Hard's `startLevel = 9` you must clear **100** lines before `totalLines / 10` overtakes
+  the floor and the level advances to 10. Below that threshold every clear scores at ×10
+  (level 9 + 1) but the level number holds.
+- **At most one level-up per lock** under defaults: a lock clears at most 4 lines, which can
+  cross at most one `linesPerLevel = 10` boundary. The level-up cue (§10) fires once, and the
+  new interval feeds `FixedStep.drain` (§13) from the next frame.
+- **Gravity caps, score does not:** the §6.2 curve bottoms out at level 29 (one cell per frame,
+  0.017 s). Past level 29 gravity no longer changes, but the level keeps incrementing and the
+  `level + 1` score multiplier (§11) keeps growing without bound, so late survival is scored
+  ever more richly even though it plays no faster.
+
+### 6.4 Gravity feel across the curve
+- **Levels 0–8** keep gravity at ≥ 0.133 s/cell — comfortable reaction time, the "learn the
+  bag" band.
+- **Levels 9–18** push under 0.1 s/cell, where placements must be planned during the fall using
+  the next queue (§4.8) rather than improvised.
+- **Levels 19+** fall effectively one row per frame; at this speed a piece reaches the stack in
+  well under a second, so survival leans on **DAS charge** (§2), the hard drop, and pre-reading
+  the queue. Because soft drop is clamped to one cell per frame (§4.10), from level 19 up it no
+  longer outruns natural gravity — its value there is purely the soft-drop score.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -502,6 +690,35 @@ representative events (e.g. a hard drop that locks and clears four rows requests
 
 Lives/continues: none. One game = one descent.
 
+**Top-out variants.** Both resolve to `Phase = GameOver`:
+- **Block-out** (the v1 loss condition, §4.2, AC #14): a newly spawned piece's cells overlap
+  already-filled cells. This is the rule the edge case (§13 (b)) relies on — a hard drop into
+  the spawn zone locks first, and the *next* spawn's block-out ends the game.
+- **Lock-out** (optional stricter detection): a piece that locks entirely within the hidden
+  buffer rows, never having entered the visible field, may top out on that lock instead of
+  deferring to the next spawn. It reaches the same `GameOver` one frame sooner and does not
+  change any score.
+
+**Scoring interactions:**
+- **Drop points and clear points stack.** A hard drop of M cells that clears a Tetris at level n
+  scores `2M + 800 × (n + 1)` on that single lock. Soft- and hard-drop points are awarded even
+  when the resulting lock clears no line, and even on the topping-out lock.
+- **A zero-line lock scores nothing** beyond any drop points already banked during its fall.
+- **Clears are scored at the pre-level-up level.** Within a lock the sequence is *clear → score
+  → level-up* (§2, §7.3), so a Tetris that carries the total across a level boundary is scored
+  at the **old** level; the level-up applies to the *next* clear. A Tetris taking you from
+  level 0 → 1 scores `800 × 1`, and the following clear then uses `× 2`.
+- Worked example: at level 8 a Tetris scores `800 × 9 = 7200`, a Triple `500 × 9 = 4500`, a
+  Single `100 × 9 = 900`.
+- The score is a **non-negative, monotone-increasing integer**; nothing ever subtracts it and
+  there is no cap beyond the integer range. The 7-digit HUD pad (§9) is display-only and rolls
+  presentation, not the stored value.
+
+**Combo & back-to-back (stretch §15.4).** Consecutive line-clearing locks (a **combo**) and
+chained Tetrises / T-spins (**back-to-back**) grant escalating multipliers in stretch scope. The
+base game already tracks `maxCombo` (§9.2) but applies **no multiplier** in v1 — every clear is
+scored purely by the §11 table.
+
 ## 12. Difficulty & Balancing
 Data-driven tunables:
 
@@ -519,6 +736,37 @@ Data-driven tunables:
 | `startLevel` | 0 | 0–19 | Initial gravity level |
 | `nextPreview` | 5 | 1–6 | Visible upcoming pieces |
 | `gravityCurve` | §6.2 | — | Seconds/cell per level table |
+
+**Difficulty presets** (the §9.1 selector maps to a `startLevel` and thus a first gravity from
+the §6.2 curve; nothing else about the rules changes):
+
+| Preset | `startLevel` | First gravity (s/cell) | Feel |
+|---|---|---|---|
+| Easy | 0 | 0.800 | learning band; full reaction time (§6.4) |
+| Normal | 5 | 0.383 | brisk; some pre-planning |
+| Hard | 9 | 0.100 | fast; DAS charge and queue lookahead required |
+
+**Tunable interactions** (constraints a tester should exercise at the range edges):
+- `arrMs = 0` yields **instant DAS** — once `dasMs` elapses the piece traverses to the wall in a
+  single frame; `boardWidth` caps how far one such burst can carry.
+- `dasMs` versus `arrMs` trades tap-precision against hold-slide: lower `dasMs` feels twitchier;
+  the 170 / 50 default balances single-cell taps against wall-slams.
+- `lockDelayMs × maxLockResets` bounds the worst-case hover: `500 ms × 15 = 7.5 s`, and only
+  while the player keeps producing valid moves — the new-lowest-row forgiveness (§4.12) means
+  real descent never counts toward that ceiling.
+- `softDropFactor` interacts with the one-cell-per-frame clamp (§4.10): once
+  `gravityInterval / softDropFactor ≤ 0.0167 s`, higher factors are indistinguishable, so the
+  20–40 top of its range only matters at low levels.
+- `boardWidth` shifts spawn centering — pieces still spawn centered (§4.2, §5.7), so odd/even
+  widths move the I and O spawn columns, while the kick tables (§4.11) stay width-independent.
+- `boardHeight` resizes the well but not the spawn logic; taller boards ease survival, shorter
+  boards raise top-out pressure. `nextPreview` and hold change planning headroom, not the
+  difficulty math.
+
+**Balancing philosophy.** The only *time-based* difficulty lever is `gravityCurve`; every other
+tunable is player-facing preference or accessibility. This deliberately preserves the
+self-inflicted-difficulty fantasy (§1) — the clock speeds up, but you still lose to the board you
+built, never to a rule that changed underneath you.
 
 ## 13. Technical Notes
 - **Performance budget:** at most ~220 drawn cells (board 200 + active 4 + ghost 4 + panel
@@ -614,6 +862,30 @@ All scenarios assume a fixed RNG seed and the default tunables unless stated.
     timestamps, *when* the game is replayed, *then* the final board, score, lines, and level
     are identical to the original run.
 
+17. **DAS charge across handoff.** *Given* Left is held continuously while a piece locks, *when*
+    the next piece spawns, *then* it auto-shifts left at ARR (50 ms/cell) immediately with no
+    fresh 170 ms DAS wait, and it stops flush at column 0. (§2, §4.9)
+
+18. **Soft-drop clamp at high gravity.** *Given* level 19 (gravity 0.033 s/cell) with ↓ held,
+    *when* soft drop applies, *then* the piece descends at most one cell per frame — soft drop
+    and natural gravity both clamp to one cell/frame — while still awarding 1 point per cell
+    descended. (§4.10)
+
+19. **Lock-reset new-lowest-row forgiveness.** *Given* a resting piece the player repeatedly
+    rotates to refresh the lock timer, *when* it has consumed 15 resets and then a gravity step
+    carries it to a strictly lower row, *then* the reset budget is forgiven and further resets
+    are permitted at the new row; *but* 15 resets with no downward progress lock it on the next
+    rest. (§4.12)
+
+20. **Non-contiguous multi-line clear.** *Given* two full rows separated by a partially filled
+    row, *when* a lock completes both, *then* both full rows clear in a single scan, the middle
+    row falls past them, and each surviving row drops by the count of cleared rows beneath it.
+    (§4.13)
+
+21. **Clear scored before level-up.** *Given* 9 lines already cleared at level 0, *when* a Tetris
+    brings the cumulative total to 13, *then* that Tetris scores `800 × 1` (still level 0), the
+    level then becomes 1, and the next clear is scored at `× 2`. (§11, §6.3)
+
 ## 15. Stretch Goals
 1. **Ghost piece toggle & hold-to-rotate options** — accessibility/preference settings.
 2. **Line-clear and lock animations** — flash + collapse tween, particle burst on Tetris.
@@ -644,22 +916,34 @@ its acceptance test(s) pass (§14)._
 - 🟥 7 piece kinds + guideline colors; `cellsOf` derives cells from Kind/Pos/Rotation (§4.2, §5.2)
 - 🟥 Spawn centered in columns 3–6, straddling the hidden buffer rows (§4.2) — AC #1
 - 🟥 Spawn-overlap detection feeding top-out (§4.2, §11)
+- 🟥 Per-piece spawn origins and SRS rotation-box pivots (§5.7)
 
 ### M2 — Input, movement & DAS
 - 🟥 Edge-triggered vs held key model; key-down/up → `Msg` (§3, §7.5)
 - 🟥 One-cell horizontal shift with wall block at columns 0/9 (§7.3) — AC #2
 - 🟥 DAS 170 ms delay → ARR 50 ms auto-repeat while held (§3, §7.3) — AC #3
+- 🟥 No entry delay; DAS/soft-drop charge retained across piece handoff (§2, §4.9) — AC #17
+- 🟥 Buffered input applied before the frame's gravity step (§2)
 
 ### M3 — Gravity, rotation & lock delay
 - 🟥 Per-level gravity step with collision check (§4.3, §6.2) — AC #1
 - 🟥 SRS rotation with 5-offset kick tables (simpler 3-kick fallback allowed) (§4.4) — AC #4
+- 🟥 Full JLSTZ + I kick tables incl. floor/ceiling kicks (§4.11) — AC #4
+- 🟥 Initial Rotation / Initial Hold on keys held at spawn (§4.9)
 - 🟥 Soft drop (÷20, +1/cell) and hard drop (instant, +2/cell, immediate lock) (§4.3) — AC #5, #6
+- 🟥 Soft-drop/gravity as max, clamped to one cell per frame (§4.10) — AC #18
 - 🟥 Lock timer 500 ms with 15 move/rotate resets cap (§4.5) — AC #7
+- 🟥 Lock-reset new-lowest-row forgiveness vs stall cap (§4.12) — AC #19
 
 ### M4 — Line clears, scoring & levels
 - 🟥 Single-scan full-row detection, clear + shift-down collapse (§4.6, §13) — AC #8, #9
+- 🟥 Non-contiguous multi-row clear, per-row shift by cleared-rows-beneath (§4.13) — AC #20
+- 🟥 Perfect-clear (all-clear) detection, no v1 bonus (§4.13)
 - 🟥 Score by clear count × (level+1) plus soft/hard-drop points (§11) — AC #8, #9
+- 🟥 Clears scored pre-level-up; drop and clear points stack (§11, §6.3) — AC #21
 - 🟥 Level up every 10 lines, gravity interval from the §6.2 curve (§6.2) — AC #10
+- 🟥 Monotone floored level; gravity cap at 29+, multiplier uncapped (§6.3)
+- 🟥 Tunable interaction constraints (ARR=0, soft-drop clamp, width centering) (§12)
 
 ### M5 — Bag, hold & next queue
 - 🟥 7-bag Fisher–Yates shuffle via `Rng.nextInt`, refill on empty (§4.7) — AC #11
@@ -669,16 +953,19 @@ its acceptance test(s) pass (§14)._
 ### M6 — Match flow & screens
 - 🟥 Title / Playing / Paused / GameOver phases select the screen (§7.1, §9)
 - 🟥 Top-out on spawn collision → `GameOver`, `HighScore` update (§11) — AC #14
+- 🟥 Block-out and optional lock-out top-out detection (§11) — AC #14
 - 🟥 Pause suspends gravity/timers/input, resumes identical state (§7.3) — AC #15
 
 ### M7 — Rendering (Skia)
 - 🟥 Draw order: background, well frame, locked cells, ghost, active, side panels, HUD (§8)
 - 🟥 Beveled rounded-block style + hard-drop ghost projection (§8)
+- 🟥 Ghost derived from active piece, updates on move/rotate/fall (§5.6)
 - 🟥 Optional line-clear white flash before collapse (§8)
 
 ### M8 — Menus, settings & stats
 - 🟥 Menu stack with wrapping cursor and cycler/slider rows (§9.1)
 - 🟥 Difficulty / volume / sound / ghost settings apply live + persist (§9.1, §12, §13)
+- 🟥 Difficulty presets Easy/Normal/Hard → startLevel 0/5/9 first-gravity map (§12)
 - 🟥 `MatchStats`/`LifetimeStats` accumulation, KPI tiles + clears/score charts (§9.2)
 
 ### M9 — Audio
@@ -687,6 +974,7 @@ its acceptance test(s) pass (§14)._
 
 ### M10 — Acceptance & determinism
 - 🟥 All 16 acceptance scenarios green (§14)
+- 🟥 Deepened acceptance scenarios #17–#21 green (§14) — AC #17, #18, #19, #20, #21
 - 🟥 Seed + timestamped input-log replay is identical (§13) — AC #16
 
 ### Stretch — deferred (post-v1)

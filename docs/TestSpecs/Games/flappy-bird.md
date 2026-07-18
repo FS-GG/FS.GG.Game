@@ -30,6 +30,26 @@ accumulate score) → collide (with pipe or ground) → instant death → game-o
 showing score + best → tap to restart from the ready screen. A full session is dozens of
 2-to-60-second runs.
 
+**The flap cycle (the core rhythm).** A single flap sets `vy = -620` and gravity claws it
+back at `2400 px/s²`, so the bird coasts up for `620 / 2400 ≈ 0.26 s`, gaining about
+`620² / (2·2400) ≈ 80 px` of altitude before it stalls and falls again. That ~80 px lift on a
+~0.26 s arc is the game's fundamental beat: hold a line by re-flapping near the top of each arc
+(roughly 3–4 taps/second), climb hard by flapping *early* (before the apex), and sink through a
+low gap by simply not tapping — terminal velocity (`900 px/s`, reached `0.375 s` after a standing
+start) does the rest.
+
+**The decision window.** A pair spawns at `x = 1360` while the bird sits at `birdX = 320`, so
+every gap telegraphs itself `(1360 − 320) / 180 ≈ 5.8 s` before it arrives — but the *commitment*
+window is far shorter: the bird occupies a gap's column for only `pipeWidth / scrollSpeed =
+80 / 180 ≈ 0.44 s`, and with pairs `pipeSpacing / scrollSpeed = 360 / 180 = 2.0 s` apart the
+player faces a fresh life-or-death judgement every two seconds. Reading the *next* gap's height
+while still threading the current one is the skill the loop trains.
+
+**The failure loop.** Death is instant and always legible — you can see the exact pixel that
+killed you — so the restart urge is immediate; the `restartLockoutMs = 600 ms` window (§3) is the
+only thing between the killing tap and the next run, kept deliberately short so "one more try"
+stays frictionless.
+
 ## 3. Controls & Input
 The game is single-button. The same action ("Flap") starts a run, flaps during play, and
 (after a short lockout) restarts from game-over.
@@ -125,6 +145,46 @@ convention). Positions/velocities are in logical px and px/s. The simulation run
   transition to `GameOver`, the bird falls under gravity to rest on the ground (cosmetic),
   and the death SFX/score panel show.
 
+### 4.8 Flap cadence & the sustainable-altitude band
+- Because a flap **sets** `vy` (§4.2), the bird's maximum sustained climb rate is bounded by
+  `|flapImpulse| = 620 px/s` — reachable only by flapping on (nearly) every tick — and the
+  ceiling clamp (§4.2) is what stops a tap-spammer from parking above the pipes.
+- Flapping once per apex holds a roughly **80 px-tall hover band** (§2): each beat recovers
+  exactly the altitude the preceding fall cost, so net drift ≈ 0. Flap before the apex to climb;
+  let the arc finish before re-tapping to sink. This 80 px band is a hair under half of
+  `gapHeight = 200`, so a centered bird clears a normal gap on one well-timed flap.
+- **Opening grace (emergent, not scripted):** at run start `Pipes` is empty and
+  `DistanceSinceSpawn = 0`, so the first pair spawns only after 360 px of scroll (2.0 s) and then
+  travels from `x = 1360` to the bird's column — giving ~7.8 s of pipe-free air to settle into the
+  flap rhythm before the first real gap. No special-case code is required; it falls out of §4.4.
+
+### 4.9 Near-miss detection & hitbox fairness
+- The `collisionInset = 2 px` (§4.7) means the drawn sprite can visually kiss a pipe by up to 2 px
+  on any side without dying — every near-miss is, by construction, a frame where the *sprite*
+  overlapped but the *hitbox* did not. This forgiveness is what makes a threaded gap feel earned
+  rather than cheap.
+- **Near-miss:** after a pair is scored (§4.6) — i.e. the bird cleared it without the §4.7
+  collision — take the smallest vertical clearance recorded between the bird's inset AABB and
+  either pipe rect of that pair while the bird was inside the gap column. If that minimum was
+  ≤ `nearMissPx = 12 px`, count one `RunStats.nearMisses` (§9.2). A comfortable pass (clearance
+  above `nearMissPx`) counts nothing.
+- **Corner rule (clarifies "any overlap = collision", §4.7):** AABB tests use half-open bounds,
+  so boxes whose edges merely touch (intersection of zero area, clearance exactly 0) do **not**
+  overlap and are survivable; a death requires strictly positive penetration of the inset boxes.
+  A zero-clearance graze is therefore the tightest possible near-miss, not a death.
+
+### 4.10 Pipe traversal, tick order & tunneling
+- The per-tick order is **integrate → scroll → spawn → despawn → score → collide** (§7). Because
+  collision is evaluated **last**, a bird that banks a point and then clips the pipe's trailing lip
+  on the same tick still dies that tick (matches §13, "flap on the exact death frame still dies")
+  — but the point is already counted (§11).
+- **No tunneling at any tunable value:** at the maximum `scrollSpeed = 300` (§12) a pair moves
+  `300 / 60 = 5 px` per tick — far less than `pipeWidth = 80 px` and the gap column — so a pipe can
+  never skip the bird's column between two collision tests. No swept/continuous collision is needed.
+- **Multi-pass:** the scorer loops **every** unpassed pair (§4.6, §7 step 5), so a single large
+  `dt` after a stall (capped at `FixedStep.defaultMaxFrameTime`, §13) that pushes two gaps past
+  `birdX` awards both points in one drain — never just the frontmost (AC #6).
+
 ## 5. Entities / Game Objects
 
 ### Bird (exactly one)
@@ -168,6 +228,31 @@ belongs in the scaffold's collision-safe `Geometry.Vec2` (`Vx`/`Vy`). Derive bou
 boundary instead of storing `Width`/`Height` fields — build the `Vec2` from the scalars you do hold:
 `Geometry.toRect { Vx = birdX; Vy = bird.CenterY } 34.0 24.0`.
 
+**Bird — cosmetic state.** The bird carries no health or hit state (instant death, §4.7); its
+only per-frame extras are the derived `RotationDeg` (§5 sketch) and a 2-frame wing toggle that
+flips on each accepted `Flap` (§8). While `Phase = Ready` it hovers on a cosmetic sine —
+`CenterY = 360 + bobAmplitude · sin(2π · t / bobPeriodS)` with `bobAmplitude = 12 px`,
+`bobPeriodS = 1.6 s` — with gravity and collision disabled (§7). The first `Flap` snaps it out of
+the bob into live physics at whatever `CenterY` the bob left it, with `vy = flapImpulse`.
+
+**PipePair — lifecycle.** Every pair walks the same five stages from spawn to despawn:
+
+| Stage | Trigger | Effect |
+|-------|---------|--------|
+| Spawn | `DistanceSinceSpawn ≥ pipeSpacing` (§4.4) | `LeftX = 1360`, `GapCenterY` drawn from `Rng` (§4.5), `Scored = false` |
+| Approach | every `Tick` (§7) | `LeftX -= scrollSpeed·dt` |
+| Threat | `LeftX < birdX + birdWidth/2` **and** `LeftX + pipeWidth > birdX − birdWidth/2` | pair is inside the collision column (§4.7); a hit here ends the run |
+| Score | `LeftX + pipeWidth < birdX` **and** `not Scored` (§4.6) | `Scored ← true`, `Score += 1` |
+| Despawn | `LeftX + pipeWidth < 0` (§4.4) | removed from `Pipes` |
+
+Threat can precede Score (the bird is in the column before the pair's right edge clears `birdX`),
+which is exactly why the gap must be threaded, not merely reached.
+
+**Ground — divergent visual/collision.** The ground texture wraps every 48 px (§8) and scrolls at
+`scrollSpeed`, but its collision top stays pinned at `groundY = 640`. It is the only entity whose
+drawn position and collision position deliberately diverge — the parallax must never move the
+lethal line.
+
 ## 6. World / Levels / Progression
 - **Playfield:** `1280 × 720` logical px. Origin top-left, +Y down. The view scales this
   logical canvas to the physical window (letterboxed) so physics stays resolution-independent.
@@ -178,6 +263,28 @@ boundary instead of storing `Width`/`Height` fields — build the `Vec2` from th
   speeds scroll as score climbs; it is OFF by default to match the classic feel.
 - **What changes over time:** only the randomized `gapCenterY` per pair, the parallax
   scroll of background/ground, and the score.
+
+**Perceived progression (flat difficulty, rising stakes).** Because every constant is fixed in v1
+(§6), the run never gets mechanically harder — but it *feels* harder as the score you'd forfeit
+grows. The milestones the player actually chases map to the medal thresholds (§15.1): the first
+pipe (nerves), 10 (bronze), 20 (silver), 30 (gold), 40 (platinum). These are among-runs UI goals
+only; they change no physics.
+
+**Parallax stack (back to front).** The world is three scroll planes sharing one `scrollSpeed`:
+
+| Plane | Speed | Role |
+|-------|-------|------|
+| Clouds / sky detail | `0.3 · scrollSpeed = 54 px/s` (§8) | depth, purely cosmetic |
+| Pipes (the world) | `scrollSpeed = 180 px/s` (§4.3) | the only plane the bird collides with |
+| Ground texture | `scrollSpeed = 180 px/s`, wraps every 48 px (§8) | reads the speed; collision top fixed at 640 |
+
+Only the pipe plane is gameplay; the other two never touch physics and may be dropped on low-end
+targets with zero rules impact.
+
+**World determinism.** The entire world state is a function of `(seed, flap-timing sequence)`:
+`gapCenterY` is the sole `Rng` draw (§13) and everything else is deterministic integration, so two
+sessions with the same seed and inputs scroll a byte-identical world (AC #12) — the property the
+ghost-replay and daily-seed stretch goals (§15.4, §15.5) lean on.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -440,6 +547,30 @@ representative events (e.g. a `Flap` while `Playing` requests exactly `PlaySfx (
 - **Lives / continues:** none. One life per run; death → game-over → manual restart.
 - **Best:** `Best = max(Best, finalScore)`, persisted across runs (see §13).
 
+**Scoring edge cases.**
+- A point is awarded the instant a pair's right edge crosses `birdX` (§4.6), *before* that tick's
+  collision test (§7 order, §4.10) — so a bird that clears the gap and then clips the pipe's
+  trailing lip on the same tick still banks the point before dying. Deaths never retroactively
+  revoke a scored point.
+- Passing the X line is sufficient; grazing the pipe on the way through is fine as long as the
+  inset hitboxes never overlap (§4.9). There is no clean-pass bonus and no graze penalty — a
+  near-miss (§4.9) scores exactly the same 1 point as a lazy centred pass.
+- `finalScore` equals the number of `Scored` pairs at the moment of death; it is frozen into
+  `GameOver finalScore` (§7) and never changes while the game-over bird finishes its cosmetic fall.
+
+**Best-score semantics.** `Best = max(Best, finalScore)` is evaluated once, on the transition into
+`GameOver` (§7 step 6), so a new best is known before the panel draws — that is when the `new-best`
+fanfare fires (§10) and the game-over medal (§15.1) is chosen. A run that merely *ties* the current
+`Best` does not re-trigger the fanfare: the sting uses strict `>`, while the stored `max` is a
+no-op on a tie.
+
+**Run-length shape.** A session is dozens of runs (§2), most ending within a few seconds. The
+floor on run length is set by a player who never flaps: from the spawn pose (`CenterY = 360`) the
+inset box bottom starts ~270 px above `groundY`, so it hits the ground in
+`√(2·270 / 2400) ≈ 0.47 s`. The opening grace (§4.8) guarantees the first *pipe* cannot threaten
+for ~7.8 s — the early deaths are self-inflicted, not the level's fault. This short-run,
+high-restart cadence is exactly why the lockout is only 600 ms (§3).
+
 ## 12. Difficulty & Balancing
 Data-driven tunables (defaults match classic feel). The optional `*Ramp` values are OFF
 by default.
@@ -459,6 +590,47 @@ by default.
 | `restartLockoutMs` | 600 ms | 0–1200 | Anti-misclick delay on game-over |
 | `gapHeightRamp` | 0 (off) | 0–0.5 px/pt | Optional: shrink gap by N px per point scored (floor 130) |
 | `scrollSpeedRamp` | 0 (off) | 0–2 px/s/pt | Optional: speed up scroll per point (cap 300) |
+
+**Difficulty presets (from §9.1).** The Settings **Difficulty** row selects one preset; every
+other tunable stays at its default above unless the preset overrides it.
+
+| Preset | `gapHeight` | `scrollSpeed` | Ramps | Gap cadence | Feel |
+|--------|-------------|---------------|-------|-------------|------|
+| Easy | 240 | 150 | off | `360/150 = 2.4 s` | wide gaps, slow world |
+| Normal | 200 | 180 | off | `2.0 s` | the classic tuning |
+| Hard | 170 | 210 | on | `≈1.71 s` | tight gaps, fast world, tightening as you score |
+
+**Ramp math (Hard / the escalating mode, §15.2).** With the optional ramps enabled both quantities
+scale linearly with `Score` and clamp:
+- `gapHeight(s) = max(gapHeightFloor, gapHeightBase − gapHeightRamp · s)`. Example at
+  `gapHeightRamp = 0.5` from a Hard base of 170: the gap is 150 px at score 40 and reaches its
+  `130 px` floor at score 80 — never smaller.
+- `scrollSpeed(s) = min(scrollSpeedCap, scrollSpeedBase + scrollSpeedRamp · s)`. Example at
+  `scrollSpeedRamp = 1.0` from a Hard base of 210: 250 px/s at score 40, hitting the `300 px/s`
+  cap at score 90.
+- Ramps recompute **per scored point, never mid-gap**, and a pair's geometry is frozen at spawn
+  from the `gapHeight` in force at that moment (§4.5) — already-spawned pipes never resize under
+  the player.
+
+**New tunables (added).**
+
+| Name | Default | Range | Effect |
+|------|---------|-------|--------|
+| `nearMissPx` | 12 px | 4–24 | Clearance at or under which a cleared gap counts a near-miss (§4.9, §9.2) |
+| `bobAmplitude` | 12 px | 0–30 | Ready-screen hover height (cosmetic, §5) |
+| `bobPeriodS` | 1.6 s | 0.8–3.0 | Ready-screen hover period (cosmetic, §5) |
+| `gapHeightFloor` | 130 px | 110–200 | Lower clamp for `gapHeightRamp` (§12 ramp math) |
+| `scrollSpeedCap` | 300 px/s | 200–360 | Upper clamp for `scrollSpeedRamp` (§12 ramp math) |
+
+**Tuning rationale (why these numbers).**
+- The `flapImpulse : gravity` ratio fixes the hover band at `620² / (2·2400) ≈ 80 px` (§2, §4.8),
+  a hair under half of `gapHeight = 200`, so a centred bird needs one well-timed flap per gap —
+  loose enough to feel fair, tight enough to punish a lazy tap.
+- `scrollSpeed = 180` with `pipeSpacing = 360` gives the 2.0 s cadence AC #10 pins. Dropping
+  `pipeSpacing` below ~260 collapses the reaction window faster than shrinking `gapHeight` does,
+  which is why the Hard preset leans on `scrollSpeed` and the ramp rather than sub-260 spacing.
+- `collisionInset = 2` and `nearMissPx = 12` are the two forgiveness dials: the first decides what
+  *kills* you, the second decides what merely *thrills* you (§4.9).
 
 ## 13. Technical Notes
 - **Performance budget:** trivial — 1 bird + ~5 pipe pairs + ground + HUD ≈ < 20 draw
@@ -563,6 +735,38 @@ by default.
     WHEN `TogglePause` then several `Tick`s are applied
     THEN `bird.y`, `bird.vy`, and pipe `x` are unchanged until `TogglePause` resumes.
 
+16. **Near-miss is counted on a tight clearance.**
+    GIVEN a `Playing` run where the bird clears a gap with a minimum inset-AABB clearance of 8 px
+    (≤ `nearMissPx = 12`) to a pipe rect
+    WHEN that pair is scored (§4.6)
+    THEN `RunStats.nearMisses` increments by 1; AND an otherwise identical pass clearing by 20 px
+    does not.
+
+17. **A single flap lifts ~80 px before stalling.**
+    GIVEN a `Playing` bird at `bird.vy = 0` that receives one `Flap` (`vy = -620`) and no further
+    input
+    WHEN ticks advance until `bird.vy ≥ 0` again
+    THEN the apex is ~80 px above the pre-flap `CenterY` (`620² / (2·2400) ≈ 80`) reached after
+    ~0.26 s, after which the bird descends.
+
+18. **Ready-screen bob is cosmetic and non-lethal.**
+    GIVEN `Phase = Ready`
+    WHEN many `Tick`s advance
+    THEN `bird.y` oscillates within ±`bobAmplitude` of 360, `Phase` stays `Ready`, gravity is
+    never integrated, and no collision or score occurs; the first `Flap` transitions to `Playing`.
+
+19. **Difficulty preset applies its constants.**
+    GIVEN Settings Difficulty = Hard
+    WHEN a run starts
+    THEN `gapHeight = 170` and `scrollSpeed = 210` are in force (§9.1, §12); AND with ramps enabled
+    the gap shrinks toward its `130 px` floor as `Score` climbs.
+
+20. **Ramp respects the gap floor.**
+    GIVEN the escalating mode with `gapHeightRamp = 0.5` and base `gapHeight = 170`
+    WHEN `Score` reaches 80 and beyond
+    THEN `gapHeight` clamps at `130 px` and never goes lower; AND already-spawned pipes keep the
+    geometry they had at spawn.
+
 ## 15. Stretch Goals
 1. **Medals** (bronze/silver/gold/platinum at score thresholds 10/20/30/40) on game-over.
 2. **Difficulty ramp** — enable `gapHeightRamp`/`scrollSpeedRamp` for an escalating mode.
@@ -597,23 +801,31 @@ its acceptance test(s) pass (§14)._
 - 🟥 Gravity integration `vy += gravity*dt`, terminal clamp `vyMax` (§4.1) — AC #1, #2
 - 🟥 Flap impulse sets `vy = flapImpulse` (override, no stacking) (§4.2) — AC #3
 - 🟥 Ceiling clamp (non-lethal) + velocity-derived `rotationDeg` (§4.2, §5) — AC #9
+- 🟥 Flap-cadence hover band (~80 px) + climb bounded by `|flapImpulse|` (§4.8) — AC #17
 
 ### M3 — World scroll & pipe spawning
 - 🟥 Fixed `birdX`; pipes scroll left at `scrollSpeed` (§4.3)
 - 🟥 Pipe-pair spawner every `pipeSpacing` px, off the right edge (§4.4) — AC #10
 - 🟥 Randomized `gapCenterY` in safe band `[180, 460]` via `Rng` (§4.5) — AC #11
 - 🟥 Despawn pairs once fully off the left edge (§4.4)
+- 🟥 PipePair lifecycle spawn→approach→threat→score→despawn (§5)
+- 🟥 Emergent ~7.8 s opening grace from empty-`Pipes` spawn timing (§4.8)
 
 ### M4 — Collisions & scoring
 - 🟥 Inset bird AABB vs. pipe rects → instant death (§4.7) — AC #7
 - 🟥 Ground-strip collision at `groundY` → instant death (§4.7) — AC #8
 - 🟥 Pass-scoring `scored` flag, loop all unpassed pairs (§4.6) — AC #5, #6
+- 🟥 Near-miss detection on cleared gaps within `nearMissPx` (§4.9) — AC #16
+- 🟥 Tick order move→spawn→despawn→score→collide; no swept collision at max `scrollSpeed` (§4.10)
+- 🟥 Point banked before the collision test; a scored point is never revoked by death (§11)
 
 ### M5 — Phase flow & persistence
 - 🟥 `Ready` / `Playing` / `GameOver` phase transitions (§7)
 - 🟥 Instant-death → `GameOver finalScore`, freeze scroll, cosmetic fall (§4.7, §11)
 - 🟥 `Best = max(Best, finalScore)` persisted to `flappy.best` (§11, §13) — AC #14
 - 🟥 Pause freezes physics, resumes exact state (§7) — AC #15
+- 🟥 Ready-screen cosmetic bob, gravity/collision disabled (§5) — AC #18
+- 🟥 `new-best` fanfare only on a strictly-greater `finalScore` (§10, §11)
 
 ### M6 — Rendering (Skia)
 - 🟥 Draw order: sky, pipes, ground strip, bird, HUD, overlays (§8)
@@ -624,6 +836,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Ready/Playing/Paused/GameOver screens + live score & best HUD (§9)
 - 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
 - 🟥 Difficulty presets + volume/sound/shake settings apply live + persist (§9.1, §12)
+- 🟥 Difficulty preset applies its constants (Easy/Normal/Hard) at run start (§9.1, §12) — AC #19
 
 ### M8 — Stats & charts
 - 🟥 `RunStats`/`LifetimeStats` accumulation + persist, medal tiers (§9.2)
@@ -635,6 +848,7 @@ its acceptance test(s) pass (§14)._
 ### M10 — Acceptance & determinism
 - 🟥 All 15 acceptance scenarios green (§14)
 - 🟥 Seed + `Flap`/`Tick` sequence yields byte-identical pipe layout (§13) — AC #12
+- 🟥 New scenarios green: near-miss, flap apex, ready-bob, difficulty preset, ramp floor (§4.8, §4.9, §5, §9.1, §12) — AC #16, #17, #18, #19, #20
 
 ### Stretch — deferred (post-v1)
 - ⬜ Medals (bronze/silver/gold/platinum at 10/20/30/40) on game-over (§15.1)

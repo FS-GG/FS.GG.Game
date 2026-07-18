@@ -194,6 +194,28 @@ Clamps: `dmg ≥ 0.5`, `fireRate ∈ [0.7, 15] /s`, `shotSpeed ∈ [150, 900]`,
   Soul/black hearts are consumed before red.
 - **Death:** when total half-hearts reach `0`, player dies → permadeath (§4.10).
 
+**Heart-type edge rules (additive):**
+- **Consumption order** is always soul/black *before* red, and within the temporary layer
+  black *before* soul — so red containers are the last thing you lose, and a black-heart
+  burst fires before you start bleeding real HP.
+- **Black-heart burst:** the half-heart that empties a black heart emits a room-wide sting
+  dealing `10` damage to every live enemy in the current room (a mini-bomb: no self-damage,
+  no knockback, no obstacle destruction) — the synergy hook this heart type exists for.
+  Emptying two black hearts in one hit fires the burst twice.
+- **Display / stacking cap:** red containers hard-cap at `12`; the soul+black layer stacks
+  on top, but the **combined displayed row caps at 12 hearts (24 half-hearts) wide** —
+  pickups past the cap are wasted (no overflow to coins in v1).
+- **Pickup grain:** a half red heart heals `+1`, a full `+2`, each only up to current max
+  containers; a container item adds `+1` container (`+2` red half-hearts, healed on grant).
+  Overheal is wasted.
+- **Double-tap** hits (bosses / tagged elites) remove `2` half-hearts in one resolution,
+  still drawing from the soul/black layer first.
+- **Persistence across descent:** every heart type — red, soul, black — carries unchanged
+  through `DescendFloor` (§7.3); descent neither refills nor drains hearts.
+- **Overkill / ordering:** a hit larger than remaining half-hearts still resolves to death
+  (no negative HP); death is committed at end-of-step in the fixed order of §13 so
+  simultaneous lethal events are deterministic.
+
 ### 4.7 Currency: coins, keys, bombs
 
 Three currencies, each capped at `99`, displayed in the HUD:
@@ -206,6 +228,17 @@ Three currencies, each capped at `99`, displayed in the HUD:
   Start: `1`.
 
 Pickups drop from cleared rooms and destroyed obstacles per a weighted table (§4.9).
+
+**Currency edge rules (additive):**
+- **Caps are hard:** coins/keys/bombs each cap at `99`; a pickup that would exceed the cap
+  is wasted (no conversion, no overflow), matching the heart cap of §4.6.
+- **Key sinks:** keys open `LockedKey` doors, golden chests (treasure/shop, §4.11), and
+  key-priced shop slots. A key is consumed on use; a locked object with no key is simply
+  not interactable (the `[E]` prompt still shows the cost, §9).
+- **Bombs are currency *and* weapon:** a dropped bomb (§4.4) is spent from the counter on
+  drop, not on detonation. A bomb caught inside another bomb's blast **chain-detonates
+  immediately** (same step), so a stack reads as one larger explosion; each still deals its
+  own `40` enemy damage / `1` heart self-damage independently (i-frames protect).
 
 ### 4.8 Procedural floor generation
 
@@ -264,6 +297,26 @@ room-clear table (weights sum to 100):
 Drops use the **per-floor RNG stream dedicated to drops** so combat outcomes don't perturb
 layout determinism (separate sub-stream, see §13).
 
+**Obstacle-destruction drops.** Destroying a **pot** rolls its own, more generous table (a
+pot is the classic "free stuff" object); a **tinted rock** (ore) rolls a leaner one; plain
+**rocks**, **spikes**, and **pits** are either indestructible or drop nothing.
+
+| Pot outcome | Weight | · | Tinted-rock outcome | Weight |
+|---|---|---|---|---|
+| Nothing | 40 | · | Nothing | 60 |
+| 1 coin | 28 | · | 1 coin | 30 |
+| Half red heart | 12 | · | Half red heart | 10 |
+| 3 coins | 6 | · | | |
+| Key | 6 | · | | |
+| Bomb | 6 | · | | |
+| Soul heart | 2 | · | | |
+
+Obstacle drops draw from the same `DropRng` sub-stream as room clears (§13), so they belong
+to the combat-variance stream, **not** the layout stream — bombing a pot never perturbs
+where the next floor's rooms land (§14.2). At most one pickup spawns per destroyed object,
+and there is no double-dip when a shot and a bomb destroy it in the same step (the first
+resolver claims the roll).
+
 ### 4.10 Permadeath & meta-progression
 
 - **Permadeath:** on death, the run state is discarded. No mid-run saves, no continues.
@@ -277,6 +330,35 @@ layout determinism (separate sub-stream, see §13).
   a floor" → unlock a character. Unlock checks run at end-of-run against run stats.
 - A run can also be re-launched with an **explicit seed** (daily/shared seed) — same seed
   ⇒ same floors, but item *pool* still respects the player's unlocks (documented caveat).
+
+### 4.11 Shops, item pedestals & the run item pool
+
+Items are drawn from a **run item pool** = the base pool ∪ `Profile.unlockedItems` (§4.10).
+Every item carries a **quality tier** (`0..3`) and one or more **pool tags** (`treasure`,
+`shop`, `boss`) that decide which fixtures can offer it. All fixture contents are drawn from
+**`LayoutRng` at floor-generation time** (§4.8, §13), so *what* a floor offers is
+layout-deterministic and independent of how combat unfolds (§14.2); only *drops* (§4.9)
+ride `DropRng`.
+
+- **No dupes within a run:** once an item id is placed on a pedestal, stocked in a shop, or
+  granted, it is removed from that run's available pool. If a tag's pool empties, the
+  fixture falls back to a currency/consumable slot rather than repeating an item.
+- **Treasure room** (§4.8): exactly one **free pedestal**, drawn from the `treasure` pool.
+  Standing on it and pressing Interact grants the item (modifiers applied per §4.5) and
+  locks the pedestal. Some floors gate the pedestal behind a **golden chest** costing `1`
+  key (§4.7).
+- **Shop** (floors ≥ 2, §4.8): `3` slots, each an item (`shop` pool) or a
+  currency/consumable (heart / key / bomb / soul heart). Base prices — passive item `10¢`
+  (`±3¢` by tier), single heart `3¢`, key `5¢`, bomb `5¢`, soul heart `6¢` — are fixed by
+  `LayoutRng` at generation. **Purchase** (§14.11) deducts coins, applies the item, and
+  empties the slot; insufficient coins reject it (slot unchanged). Shops **do not restock**
+  within a floor — a fresh shop appears each floor; reroll is post-v1 (§15).
+- **Boss floor reward** (§5.3): on boss death the room spawns one **free** item from the
+  `boss` pool (also drawn from `LayoutRng`) beside the trapdoor.
+
+Because every fixture draws from `LayoutRng`, two runs on the same `runSeed` offer identical
+treasure/shop/boss items in identical positions at identical prices, regardless of combat
+pace (§14.12) — the same guarantee §14.2 gives the layout.
 
 ## 5. Entities / Game Objects
 
@@ -323,6 +405,26 @@ type Player =
 `Idle → (player within 260 px) → WindUp(0.6s) → Dash(until wall/0.8s) → Recover(0.7s) →
 Idle`. WindUp shows a directional telegraph; Dash locks direction; collision with wall or
 player ends Dash early.
+
+**Behavior parameters (the one-line summaries, made precise).** All enemy bullets use a
+base speed `enemyBulletSpeed = 180 px/s`, scaled per floor by §6's `bulletSpeedScale`.
+- **Grub split:** on death on floors ≥ 2 it spawns `2` Maggots at ±`14 px` from its corpse;
+  **split Maggots do not re-split**, and the split is free (already counted in the Grub's
+  own threat, §4.8), so a room's population cannot balloon past its budget.
+- **Spitter:** every `1.8 s`, a `0.3 s` muzzle telegraph then one bullet aimed at the
+  player's *current* position (no lead) — punishes standing still, rewards strafing.
+- **Fly Swarm node:** orbits its anchor at radius `36 px`; its dive commits toward the
+  player's position at dive-start over `0.5 s`, then returns to orbit (read the wind-up,
+  sidestep the commit).
+- **Turret:** the 4-bullet cardinal burst rotates `+22.5°` each volley so the pattern
+  precesses; a patient player rides the rotating gap.
+- **Caster:** its `4 s` teleport picks a destination `≥ 120 px` from the player (drawn from
+  `DropRng`) so it never lands on top of you; the `6`-bullet ring fires `0.2 s` after
+  arrival, evenly spaced.
+- **Brute ground-pound:** when the player is within `80 px`, a `0.5 s` telegraph then a
+  shockwave ring expanding to `140 px` over `0.25 s`, dealing `2` half-hearts (double-tap,
+  §4.6) outside i-frames with `160 px/s` knockback; `2.5 s` cooldown before it can pound
+  again.
 
 **Spawn/destroy:** enemies are instantiated at template anchor points on room entry (room
 not yet "active" — they animate in over 0.3 s, ungated). On death: hit-flash → death
@@ -927,6 +1029,18 @@ All tunables live in a single data record so balance is data-driven and testable
 Difficulty modes (stretch-ready): Easy/Normal/Hard scale `enemyHpScale`, `postHitInvuln`,
 and `dropNothingWeight`.
 
+Concrete v1 modes, latched into `RunState` at `StartRun` (§9.1) so a run's scaling is fixed
+and seed-replayable (§13); a mid-run change applies only to the next run (§14.13):
+
+| Mode | `enemyHpScale` | `postHitInvuln` | `dropNothingWeight` | Also |
+|---|---|---|---|---|
+| Easy | 0.08 /floor | 1.10 s | 35 | `+1` starting container (§4.6) |
+| Normal | 0.12 /floor | 0.80 s | 45 | the default column above |
+| Hard | 0.18 /floor | 0.55 s | 55 | `+1` elite per combat room; no post-boss heal |
+
+Normal reproduces the defaults; the mode only ever moves these knobs, never the seed, so a
+daily seed (§4.10) stays comparable **within** a mode.
+
 ## 13. Technical Notes
 
 - **Performance budget:** target **60 FPS render / 16.7 ms frame**. Per-room worst case:
@@ -1058,6 +1172,32 @@ and `dropNothingWeight`.
   shop slot is emptied; **And** with only `5` coins the purchase is rejected (coins
   unchanged, item remains).
 
+**14.12 — Shop / treasure / boss contents are layout-deterministic and dupe-free.**
+- **Given** two runs with the same `runSeed` in which combat unfolds differently (run A
+  fast, run B slow — different `DropRng` draws),
+- **When** each floor's treasure pedestal, shop slots, and boss reward are generated,
+- **Then** both runs offer the **identical** item ids in identical positions at identical
+  prices (contents ride `LayoutRng`, §4.11, extending §14.2), and **no item id appears
+  twice** across a single run's pedestals/shops/boss rewards.
+
+**14.13 — Difficulty mode latches at `StartRun` and scales the sim.**
+- **Given** the player selects **Hard** in Settings (§9.1),
+- **When** `StartRun` fires,
+- **Then** the run latches `enemyHpScale = 0.18`, `postHitInvuln = 0.55 s`, and
+  `dropNothingWeight = 55` (§12) into `RunState`;
+- **And When** the player switches to **Easy** mid-run,
+- **Then** the **active** run's scaling is unchanged (the switch applies to the next
+  `StartRun` only), preserving seed-replay determinism (§13).
+
+**14.14 — Secret room revealed by bombing an adjacent wall.**
+- **Given** a bomb detonates (§4.4) against a wall segment adjacent to a hidden `Secret`
+  cell (§4.8),
+- **When** the blast resolves,
+- **Then** within the **same step** a door is carved between the two cells, the `Secret`
+  room becomes enterable, and the floor's door graph (`Floor.Graph`, §7.1) updates
+  atomically — no half-open state where a door exists but the adjacency does not (§13
+  edge case).
+
 ## 15. Stretch Goals
 
 Ranked, out of scope for v1:
@@ -1111,6 +1251,10 @@ its acceptance test(s) pass (§14)._
 - 🟥 Half-heart health (red/soul/black), damage resolution & death at `0` (§4.6)
 - 🟥 Player stats recompute: additive-then-multiplicative phases + clamps (§4.5) — AC #3
 - 🟥 Coins/keys/bombs currencies (cap `99`), bomb drop/blast & shop purchase (§4.4, §4.7) — AC #11
+- 🟥 Contact damage on overlap: `contactDmg`, `0.5 s` per-enemy re-tick cap, knockback `90 px/s` (§4.4)
+- 🟥 `SpatialGrid.build 64.0` broadphase for shot↔enemy / bullet↔player queries (§13)
+- 🟥 Heart types: soul/black stacking, black-heart depletion burst, 12-wide display cap, descent persistence (§4.6)
+- 🟥 Bomb chain-detonation + currency cap-overflow waste (`99` cap) (§4.7, §4.4)
 
 ### M4 — Procedural floor generation
 - 🟥 Seed derivation `floorSeed = split(runSeed, floorIndex)` on `LayoutRng` stream (§4.8, §13) — AC #2
@@ -1118,6 +1262,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Special-room assignment: boss/treasure/shop/secret on the placed graph (§4.8)
 - 🟥 Room interior population by template + threat budget `6 + 2*floorIndex` (§4.8)
 - 🟥 Door carving between orthogonally adjacent rooms (§4.8) — AC #1
+- 🟥 Secret / super-secret reveal by bombing an adjacent wall; atomic door-graph update (§4.8, §13) — AC #14
+- 🟥 Floor descent: trapdoor spawns on boss clear, `DescendFloor` regenerates next floor & carries player, drops room state (§7.3, §4.8)
 
 ### M5 — Entities: enemies, bosses & rooms
 - 🟥 Enemy roster + per-enemy state machines (e.g. Charger WindUp→Dash→Recover) (§5.2)
@@ -1125,6 +1271,10 @@ its acceptance test(s) pass (§14)._
 - 🟥 Room-clear gating: seal doors on entry, open + drop-roll on clear (§7.3) — AC #5
 - 🟥 Weighted pickup/drop tables via `DropRng` sub-stream (§4.9)
 - 🟥 Per-floor difficulty ramp: threat budget + enemy HP/bullet scaling (§6, §12)
+- 🟥 Enemy behavior params: Brute ground-pound, bounded Grub split, Spitter/Turret/Caster/Fly patterns, enemy bullet base `180 px/s` (§5.2)
+- 🟥 Obstacles: rock/tinted-rock/pot/spikes/pit collision, destructibles + drop tables via `DropRng`, spikes hazard, pit fly-over (§5.5, §4.1, §4.9)
+- 🟥 Run item pool: treasure pedestal + boss floor-reward from `LayoutRng`, dupe-free per run (§4.11, §5.3) — AC #12
+- 🟥 Shop room: item/consumable slots, `LayoutRng` pricing, key-locked items, no in-floor restock (§4.11, §4.7) — AC #11
 
 ### M6 — Rendering & enemy symbology
 - 🟥 Back-to-front layer draw order (background → HUD → overlays) (§8)
@@ -1137,6 +1287,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Menu stack: cursor wrap, cycler/slider rows, `MenuBack` pop (§9.1)
 - 🟥 Settings apply live + persist to `MetaProfile`; difficulty modes (§9.1, §12)
 - 🟥 Stats & charts screen: KPI tiles + depth histogram + damage-per-floor line (§9.2)
+- 🟥 Difficulty-mode scaling table (Easy/Normal/Hard) latched at `StartRun` (§12, §9.1) — AC #13
 
 ### M8 — Audio
 - 🟥 `AudioEffect` cues per event, `Audio.interpret` → `AudioEvidence.Requested` (§10)
@@ -1146,11 +1297,15 @@ its acceptance test(s) pass (§14)._
 - 🟥 Final-boss (Floor 6) defeat → `Victory` screen + unlock (§11)
 - 🟥 Permadeath at `0` half-hearts → `GameOver`, run discarded (§11) — AC #7
 - 🟥 Run-score tally + end-of-run meta-progression unlock evaluation (§11, §4.10)
+- 🟥 `MetaProfile` JSON persistence: debounced, atomic temp-file+rename, load on boot (§13, §7.5)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 11 acceptance scenarios green (§14)
+- 🟥 All 14 acceptance scenarios green (§14)
 - 🟥 Procedural generation byte-identical for a seed (§14.1) — AC #1
 - 🟥 Layout independent of combat RNG stream (§14.2) — AC #2
+- 🟥 Shop/treasure/boss contents layout-deterministic & dupe-free (§14.12) — AC #12
+- 🟥 Difficulty mode latches at `StartRun` and scales the sim (§14.13) — AC #13
+- 🟥 Secret-room bomb-reveal updates the door graph atomically (§14.14) — AC #14
 - 🟥 Seed + input-log replay is byte-identical given identical actions/timing (§13)
 
 ### Stretch — deferred (post-v1)

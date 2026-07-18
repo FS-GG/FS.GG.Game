@@ -31,6 +31,32 @@ grabs springs and jetpacks for big boosts, and dodges enemies.
 → fall below camera OR killed by enemy → Game Over (show score + best) → restart`. A run is
 short and replayable, typically 1–4 minutes.
 
+**Bounce cadence (the metronome the whole game is built on):** a normal bounce reaches apex in
+`bounceVy / g = 1150 / 2400 ≈ 0.479 s` and takes the same time to fall back to the launch
+height, so the fundamental rhythm is a **~0.958 s up-down cycle**. Every steering decision is
+made inside that window: the player has roughly half a second of rising blindness (the doodle
+sails past platforms it can't land on, 4.3) followed by half a second of falling commitment,
+during which the target platform must already be lined up. A spring stretches the cycle to
+`1900 / 2400 ≈ 0.792 s` up (≈ 1.58 s round trip); a jetpack suspends the metronome entirely for
+`jetpackDuration`. Reading, teaching, and then subverting this cadence is the core skill curve.
+
+**Three nested tension loops** the player is always resolving:
+1. **Alignment loop (~1 s):** steer to put the feet sensor over the next platform top before the
+   fall lands. Horizontal reach in one full cycle at `vxMove` is `520 × 0.958 ≈ 498 px` — about
+   two-thirds of the 720-wide field, so screen-wrap (4.4) is a genuine routing tool, not a gimmick.
+2. **Routing loop (~5–15 s):** chain platforms into a line that also grabs springs/jetpacks and
+   avoids enemies, choosing the *cheaper* of two reachable platforms rather than the nearest.
+3. **Survival loop (whole run):** the camera never descends (4.6), so a single missed alignment
+   that drops the doodle below the last safe platform is usually unrecoverable — there is no
+   catch-up loop, which is what makes a run feel like a held breath.
+
+**Failure-recovery micro-loop:** a fall is not instantly fatal. From apex the doodle has
+`vyMax / g = 1600 / 2400 ≈ 0.667 s` before it hits terminal speed, and death only fires when the
+top edge clears `cameraY + 1280` (11). That grace window — often two or three platform rows of
+vertical slack early in a run when gaps are ~90 px — is where clutch saves happen: steer under a
+lower platform, bounce, and climb back. High up, where gaps approach `maxGap = 230 px`, the same
+window spans barely one row, so the identical mistake is fatal. Difficulty is this shrinking margin.
+
 ## 3. Controls & Input
 Input is **steer-only**; bouncing is automatic. Horizontal movement is a *held* input
 (velocity applied while the key is down), not edge-triggered.
@@ -61,6 +87,20 @@ starts at `worldY = 0` and ascends to increasingly negative `worldY`. Altitude (
 - **Terminal fall velocity `vyMax = 1600 px/s`** (clamp downward speed).
 - Vertical position integrates: `worldY += vy * dt` (with up negative, an upward bounce sets
   `vy` to a large negative value, then gravity decays it back toward 0 and positive).
+- **Integration order per step is fixed** (determinism, 13): first `vy += g * dt`, then clamp to
+  `[-∞, +vyMax]` (only the downward side is clamped — an upward impulse of `-1900` is never
+  clipped), then `worldY += vy * dt`. Applying the half-step-before-and-after (semi-implicit
+  Euler) is *not* used; the spec's apex formulas assume this plain order and the tuning table is
+  fit to it.
+- **Fall phases** the doodle passes through after apex: `vy = 0` at apex → accelerating fall for
+  `vyMax / g ≈ 0.667 s` → terminal fall at a constant `1600 px/s` (≈ 26.7 px/fixed-step, the
+  number that forces swept collision, 4.5/13). A doodle that has been falling ≥ 0.667 s is at
+  terminal speed and covers a `maxGap`-sized gap in `230 / 1600 ≈ 0.144 s` — under nine fixed
+  steps — which is the tunneling budget the sweep must cover.
+- **Apex hang:** near `vy ≈ 0` the doodle spends several ticks at near-zero vertical speed
+  (roughly `|vy| < 240 px/s` for ~0.2 s around apex). This is the natural "floaty top" of each
+  bounce and the window the renderer's squash/stretch relaxes into (8); no special code, it falls
+  out of the integration.
 
 ### 4.3 Auto-bounce (the core rule)
 - Bounce happens **only when the doodle is moving downward** (`vy > 0`) **and** its feet
@@ -71,6 +111,25 @@ starts at `worldY = 0` and ascends to increasingly negative `worldY`. Altitude (
   from below — platforms are **one-way (top-only) colliders**.
 - Apex height of a normal bounce above the platform: `vy² / (2g) = 1150² / 4800 ≈ 275 px`.
   Tune platform vertical spacing against this (see 6.x).
+- **`vy` is *set*, never added:** the impulse assigns `vy = -1150` outright, discarding whatever
+  downward speed the doodle arrived with. Landing at terminal `1600 px/s` and landing at a gentle
+  `400 px/s` produce the identical `-1150` launch — this is what keeps the rhythm fixed and is the
+  single most important rule for the "springy, effortless" feel. The only exceptions that read
+  arrival speed are none; even a stomp (4.9) uses the same fixed `-1150`.
+- **One bounce per contact, per platform:** once a bounce fires on a platform this step, that
+  platform is marked resolved for the doodle until the doodle's feet leave its top band again, so
+  a doodle that momentarily straddles the contact band cannot double-fire on the same surface.
+- **Multi-platform tie-break (same step):** if the swept feet sensor crosses more than one
+  eligible platform top in a single step (possible only when gaps are tighter than one step of
+  travel, e.g. the taught starter cluster), land on the **lowest** eligible top the sensor reaches
+  first on the way down (largest `worldY`, i.e. the one encountered earliest in the downward
+  sweep). This guarantees the doodle never "skips" a platform it physically passed through.
+- **Bounce vs. wrap in the same step:** resolve horizontal wrap (4.4) *before* the collision test,
+  so the landing uses the post-wrap world X (13 edge case). A bounce is never denied because the
+  doodle happened to wrap on the landing step.
+- **State transition:** on any bounce/spring, `State := Rising` and `FacingRight` is left
+  unchanged (facing tracks steer input, not bounce). The doodle re-enters `Falling` the tick `vy`
+  first becomes `> 0` after apex.
 
 ### 4.4 Horizontal movement & screen-wrap
 - **Move speed `vxMove = 520 px/s`** applied directly while a steer key is held (arcade feel,
@@ -80,6 +139,22 @@ starts at `worldY = 0` and ascends to increasingly negative `worldY`. Altitude (
 - **Screen wrap:** the doodle's X wraps horizontally. If `x < -doodleHalfW`, set
   `x = 720 + doodleHalfW`; if `x > 720 + doodleHalfW`, set `x = -doodleHalfW`. The doodle
   visually re-enters from the opposite edge.
+- **Opposing keys:** if both steer keys are held (`InputLeft && InputRight`), target `vx = 0`
+  (they cancel). Neither wins; this avoids a last-key-latch that would desync on rapid taps.
+- **Held vs. pointer conflict:** when both a steer key and the pointer/drag alt-control (3) are
+  active in the same tick, the **keyboard wins** (target `vx` from keys); the pointer target is
+  ignored until no steer key is down. One authority per tick keeps steering deterministic.
+- **Accel smoothing is bounded, not instant:** with `accel = 4000 px/s²`, `vx` reaches full
+  `520 px/s` from rest in `520 / 4000 = 0.13 s` (≈ 8 fixed steps) and reverses direction (from
+  `+520` to `-520`) in `1040 / 4000 = 0.26 s`. This tiny lag is the entire "weight" of the
+  character; raising `accel` toward its config ceiling makes steering feel twitchier, lowering it
+  makes reversals feel sluggish. AC #9's `≈ 520 * dt` per tick holds only once `vx` has ramped in.
+- **Wrap is edge-continuous, not teleport-with-carry:** the horizontal target `vx` and any smoothed
+  `vx` are **preserved** across a wrap (only `x` jumps); a doodle drifting left keeps drifting left
+  after re-entering on the right. Vertical `vy` is untouched by wrap (AC #8).
+- **Wrap does not carry collision state:** the resolved-platform mark (4.3) is cleared by the X jump
+  only if the doodle's feet are no longer over that platform's world X after wrap — normal, since a
+  wrapped doodle is on the far side of the field.
 
 ### 4.5 Collision (one-way platform landing)
 - Doodle collision: an **AABB feet sensor** = bottom 10 px of the doodle, width = doodle width.
@@ -91,6 +166,23 @@ starts at `worldY = 0` and ascends to increasingly negative `worldY`. Altitude (
   tunneling at high `vy`.
 - On land: snap doodle feet to platform top, trigger bounce (4.3) or platform-specific effect
   (4.7), apply platform side-effects (e.g. break).
+- **Horizontal overlap test** uses the doodle's full body width against the platform's full width
+  (both AABBs), not just the feet-sensor center: any overlap of `≥ 1 px` counts, so a doodle
+  landing on the very corner of a platform still bounces (forgiving edges, deliberate).
+- **Snap direction:** on a normal/spring land, feet are snapped **up** to exactly the platform top
+  before applying the impulse, so apex is measured from the surface (4.3 apex numbers assume this).
+  On a breakable contact there is **no snap** — the doodle keeps its swept Y and falls through (4.7).
+- **Moving-platform contact** is evaluated against the platform's position *at the end of this
+  step* (after 4.7 patrol update), so a doodle landing on a platform that slid out from under it
+  correctly misses. Order within Tick: move platforms, then sweep the doodle (7, step 5 vs 3 — the
+  patrol update at step 5 applies to the *next* step's test; within a step, use the platform's
+  current-step position consistently for both draw and collide).
+- **Contact band is one-directional:** the `12 px` band extends **below** the platform top only.
+  A feet sensor whose previous bottom was already below `top + contactBand` (i.e. it was under the
+  platform) never lands — that is a pass-from-below, correctly ignored by the one-way rule (4.3).
+- **Degenerate `dt`:** the sweep is computed from the banked fixed step (`1/60`), never the raw
+  frame `dt`, so a long stall cannot produce a single giant sweep that lands on a platform the
+  doodle should have passed between (13 spiral-of-death guard already caps steps at 4/frame).
 
 ### 4.6 Camera (scroll up, never down)
 - The camera tracks the player so the doodle sits around **40% from the top** of the screen
@@ -107,15 +199,30 @@ All platforms are **96 × 22 px** unless noted. Spawned above the camera as the 
 - **Static** (green) — default. Normal bounce.
 - **Moving** (blue) — translates horizontally at `±90 px/s`, bouncing between screen edges
   (or within a patrol span of 200 px). Normal bounce while moving; doodle does not inherit
-  horizontal velocity.
+  horizontal velocity. Patrol reflects at `patrolMinX`/`patrolMaxX`: on reaching a bound, clamp
+  X to the bound and negate `vx` (no overshoot accumulation, so two runs from the same seed stay
+  phase-locked, 13). A moving platform spawned with its patrol span partly off-screen still
+  reflects at its own bounds, not the screen edge — the span is authoritative. Because the doodle
+  does **not** inherit the platform's `±90 px/s`, a well-timed bounce off a platform sliding
+  *toward* your next target is free horizontal progress you didn't have to steer for; a platform
+  sliding *away* is the read that punishes a late alignment.
 - **Breakable** (brown) — bounces the doodle **zero times**: on contact it **breaks** (plays
   break animation, removed after 0.25 s) and the doodle continues falling through (no impulse).
   Forces the player to find a real platform.
 - **Vanishing/one-shot** (white, *stretch tier*) — gives one normal bounce, then disappears.
 - **Spring platform** (static green with a coil) — on land, instead of the normal impulse,
   apply **`vy = -1900 px/s`** (super bounce; apex ≈ 752 px). ~8% of platforms carry a spring.
+  A spring is a modifier rolled onto a **non-breakable** platform (Static or Moving), never onto
+  a Breakable (12) — a spring you can't bounce on would be a lie. On a Moving+Spring the super
+  bounce still ignores the platform's horizontal velocity. The `≈ 752 px` apex clears roughly
+  `752 / 230 ≈ 3.3` max-gap rows in one shot, so a spring is worth deliberately routing toward:
+  it both saves the ~1 s of a normal cycle and skips the two or three riskiest alignments above it.
 - **Jetpack pickup** (item on/near a platform, not a platform itself) — see 5; grants timed
   thrust.
+- **Spawn spacing of springs/jetpacks:** springs are frequent-but-shallow relief (~8% roll);
+  jetpacks are rare-and-huge. Enforce a **minimum vertical separation of 2500 px between
+  successive jetpacks** so two boosts never chain into a trivialized climb, and never place a
+  jetpack within 1500 px of the run start (the opening must be earned on bounces).
 
 ### 4.8 Spawn density thinning with height
 - Platforms are generated in vertical bands as the camera rises. Maintain a generation cursor
@@ -128,6 +235,23 @@ All platforms are **96 × 22 px** unless noted. Spawned above the camera as the 
 - Each new platform's X is `rand(0, 720 - platformWidth)`, with a constraint that consecutive
   platforms differ in X by at least 40 px (avoid stacking) and at most 360 px (always
   reachable given screen wrap).
+- **Reachability is a hard invariant, not an average.** The generator must never emit a row whose
+  vertical gap to the platform below exceeds the normal apex minus a safety margin: enforce
+  `gap ≤ 275 − reachMargin` with `reachMargin = 45 px`, i.e. an absolute ceiling of **230 px**
+  (why `maxGap` equals it). The `≥ 40 px` / `≤ 360 px` horizontal rule is measured as the
+  *shorter of the direct and wrapped distance* (`min(|dx|, 720 − |dx|)`), so screen-wrap always
+  counts as a legal route to the next platform. A row that would violate either rule is rejected
+  and re-rolled (bounded retries, then the gap is clamped) — a run can be brutally hard but is
+  never mathematically impossible.
+- **Guaranteed-safe insertion:** if a breakable-heavy band would leave the doodle with *no*
+  landable platform in reach (all candidates within one bounce apex are Breakable), force the next
+  platform's kind to Static. This keeps the breakable weight (up to 0.30, 12) from producing an
+  unwinnable wall.
+- **Generation is lazy and one-directional:** platforms are only ever created above
+  `SpawnCursorY` and never below the camera, so the world is unbounded in memory-safe bands.
+  `SpawnCursorY` advances by the just-emitted `gap`; the loop (7, step 7) runs until the cursor is
+  at least 100 px above `cameraY`, guaranteeing a screen-plus-margin of platforms always exists
+  ahead even after a big spring/jetpack launch skips the doodle far up in one step.
 - **Type weights also shift with altitude** (see 12).
 
 ### 4.9 Enemies / obstacles
@@ -139,7 +263,65 @@ All platforms are **96 × 22 px** unless noted. Spawned above the camera as the 
   the enemy is destroyed and the doodle gets a normal bounce off it (treat enemy top as a
   platform for that tick). Springs/jetpacks pass through enemies harmlessly while active
   (*optional*).
+- **Stomp uses the same fixed impulse:** a head-stomp sets `vy = -1150` (normal bounce), not a
+  spring value — killing an enemy is a survival move, not a boost. The enemy's top is treated as a
+  platform top for that single tick and obeys the same swept land test (4.5), so you cannot stomp
+  an enemy while rising into it.
+- **Drift patterns:** an enemy carries `DriftVx` in `0–60 px/s`; it drifts horizontally and
+  reflects at the screen edges like a moving platform (4.7), keeping its `worldY` fixed. Stationary
+  enemies (`DriftVx = 0`) sit as pure alignment hazards; drifting ones force a moving read. Enemies
+  never chase the doodle and never move vertically — the *player's* climb is the only relative
+  motion, preserving the pure-platforming feel.
+- **Spawn placement rule:** an enemy is placed so its body does not overlap any platform's top
+  landing band at spawn (it would create an ambiguous stomp/land), and no two enemies spawn within
+  600 px of vertical separation, so a single steer line is always threadable between them.
+- **Contact resolution order (per tick):** platform land (4.5) is resolved first, then enemy
+  contact. If the same downward step both lands the doodle on a platform *and* would touch an
+  enemy body, the platform bounce wins only when the platform top is reached earlier in the sweep;
+  otherwise the enemy is evaluated (stomp if feet-on-top, else death). This ordering makes a
+  platform tucked just under an enemy a genuine safe route.
+- **Grace on spawn-in:** an enemy that spawns already overlapping the doodle's body (possible after
+  a jetpack skips the doodle into a fresh band) does **not** kill on its first tick; lethal contact
+  requires the overlap to *begin* on a tick the enemy was already present (no "spawned inside you"
+  deaths).
 - **Black hole obstacle** (*stretch*): instant death on overlap regardless of state.
+
+### 4.10 Game feel & juice (tuning that is felt, not scored)
+These are physically small effects with an outsized read on "springiness"; each is deterministic
+and driven off existing state so it survives replay (13).
+- **Squash/stretch coupling:** the renderer's scale-Y 1.15 for 80 ms after a bounce (8) is
+  triggered on the exact tick `vy` flips negative; a spring bounce uses a stronger 1.25 for 100 ms
+  so the eye reads the bigger launch before the height even resolves. This is presentation only —
+  it never touches the sim.
+- **Camera kick / screen shake:** on a spring or jetpack ignition the camera target gets a
+  one-frame downward nudge of 6 px that lerps out over ~0.15 s (a "recoil"), gated by the §9.1
+  **Screen shake** setting. It is applied to the *view* transform, never to `cameraY` itself, so
+  the never-descend invariant (4.6, AC #6) and all scoring stay untouched.
+- **Coyote-free by design:** there is deliberately **no** coyote-time or bounce buffering — the
+  land test is exact (4.5). The forgiveness in this game lives in the `12 px` contact band and the
+  corner-overlap rule (4.5), not in input leniency. Adding input buffering would blur the metronome.
+- **Near-miss telegraphs:** when the doodle's feet pass within `24 px` horizontally of a platform
+  edge without landing (a "just missed it"), emit a small dust particle (6, presentation) — a free
+  legibility cue that the player was close, with zero gameplay effect.
+- **Idle attract bounce:** on the Title screen the doodle loops a normal bounce on a fixed platform
+  using the real physics constants (not a canned animation), so the menu previews the exact cadence
+  the run will feel (9).
+
+### 4.11 System-interaction priority (the one true resolution order)
+When several rules could fire on a single doodle in one fixed step, resolve in this exact order so
+behavior is total and testable (13). Later stages see the state the earlier stages left.
+1. **Input → target `vx`** (4.4, opposing-keys and pointer rules).
+2. **Horizontal integrate + screen-wrap** (4.4) — collision runs on post-wrap X.
+3. **Jetpack override check:** if `State = Jetpack`, set `vy = -2200`, suppress gravity, skip
+   steps 4–6 entirely (no platform land, no enemy death, no stomp — 5), then jump to step 7.
+4. **Gravity integrate + `vyMax` clamp + vertical integrate** (4.2).
+5. **Swept platform land** (4.5): breakable-fall-through > spring > normal, lowest-first tie-break
+   (4.3). A jetpack **pickup** overlapping this step is grabbed here and *supersedes* a same-step
+   normal bounce (you take the boost, not the small hop).
+6. **Enemy resolution** (4.9): platform-first ordering, then stomp-vs-lethal.
+7. **Death check** (11): off-bottom OR unresolved lethal enemy contact → `GameOver`.
+This is why the §13 edge cases resolve as stated: "breakable + spring same tick → breakable wins"
+is step 5's precedence; "jetpack overrides enemy death" is step 3 short-circuiting step 6.
 
 ## 5. Entities / Game Objects
 
@@ -162,6 +344,35 @@ All platforms are **96 × 22 px** unless noted. Spawned above the camera as the 
   resume `Falling`.
 - **Breakable platform:** `Intact → (contact) → Breaking (0.25 s anim) → Removed`.
 - **Enemy:** `Alive → (stomped | off-screen recycled) → Dead`.
+
+**Doodle state-transition table** (drives §4.11 and the renderer):
+
+| From | Event | To | Side effect |
+|---|---|---|---|
+| `Rising` | `vy` crosses `> 0` at apex | `Falling` | begin fall (4.2) |
+| `Falling` | land on platform/enemy-top | `Rising` | set `vy` (4.3/4.9), squash (4.10) |
+| `Falling`/`Rising` | grab Jetpack pickup | `Jetpack` | start `JetpackTimer = 2.2`, flame trail |
+| `Jetpack` | `JetpackTimer` reaches 0 | `Falling` | `vy := 0`, gravity resumes |
+| `Falling` | top edge `> cameraY + 1280` | `Dead` | `GameOver` (11) |
+| `Rising`/`Falling` | lethal enemy body contact | `Dead` | `GameOver` (11) |
+| any | `TogglePause` | *unchanged* | Tick becomes a no-op (7) |
+
+- **`Jetpack` is exclusive:** it cannot be re-entered while active (grabbing a second jetpack
+  mid-thrust **refreshes** `JetpackTimer` to the full 2.2 s rather than stacking velocity — the
+  sustained `vy = -2200` is a ceiling, not additive). It cannot transition to `Rising`/`Falling`
+  via a bounce because steps 4–6 are skipped (4.11).
+- **`Dead` is terminal within a run:** no transition leaves it except `Restart`/`StartGame`
+  building a fresh `Model` (7). A dead doodle stops integrating (its last pose is frozen for the
+  Game Over overlay).
+
+**Enemy lifecycle timers:** a stomped enemy flashes white for 1 frame (8) then is set `Alive =
+false` and removed on the same cull pass; an un-contacted enemy is recycled when it falls below the
+cull line, and *that recycle is the event that increments `monstersDodged`* (9.2).
+
+**Breakable timer:** `BreakTimer` starts at `0.25` on contact and counts down in Tick (step 5);
+the platform is drawn with a progressive crack overlay (8) proportional to `1 − BreakTimer/0.25`,
+then removed at zero. A breakable already `Broken` is inert to further contact (the doodle simply
+falls through empty space).
 
 **Creation/destruction:** platforms/enemies are spawned by the generator above `cameraY`
 (4.8) and **culled** once they fall below `cameraY + 1280 + 100 px` (well off the bottom).
@@ -213,6 +424,30 @@ sketches abbreviate `Geometry.Vec2` rather than opening `Geometry`: e.g.
   - Enemies begin at 3000 px and grow more frequent.
   - Jetpack/spring frequency stays roughly constant (rare relief).
 - **Milestone feedback:** subtle background hue shift every 5000 px of altitude (cosmetic).
+
+**Altitude bands (the felt shape of a run).** Difficulty is continuous (every knob is a function
+of altitude), but it reads as five informal phases a designer can tune and test against:
+
+| Band (altitude px) | Gap | Platform mix | Hazards | Player experience |
+|---|---|---|---|---|
+| 0 – 600 (Tutorial) | 90, fixed | Static only (first ~6 guaranteed) | none | Learn the ~1 s cadence; no failure pressure |
+| 600 – 3000 (Groove) | 90 → ~120 | Static-heavy, Moving rising to ~0.15 | none | Chain bounces, first moving reads, springs appear |
+| 3000 – 6000 (Pressure) | ~120 → ~165 | Moving ~0.2, Breakable entering | Enemies begin (4.9) | First real deaths; stomps and dodges |
+| 6000 – 11,600 (Squeeze) | ~165 → 230 | Static 0.40 / Moving 0.30 / Breakable 0.30 | Enemies frequent | Every alignment matters; springs are lifelines |
+| 11,600+ (Ceiling) | 230, saturated | full mix | densest enemies | Gap is fixed at the reachability limit; pure execution |
+
+- **The Squeeze→Ceiling handoff is the intended skill wall:** once `gap` saturates at `maxGap =
+  230 px` (≈ altitude 11,600, 4.8) nothing gets *harder* mechanically — the numbers stop moving.
+  Beyond that the run is a test of sustained precision, not escalating parameters, which keeps very
+  high scores about the player rather than about a difficulty curve that eventually cheats.
+- **Density stays roughly constant in reach-space:** because both the gap *and* the apex are fixed
+  ceilings, the number of platforms visible on screen falls from ~11 rows early (1280/90 + margin)
+  to ~5 rows high up (1280/230) — the world literally gets emptier as you climb, which is the
+  visual language of altitude.
+- **Relief cadence:** spring frequency and jetpack minimum-separation (4.7) are altitude-invariant,
+  so the *rate* of relief is constant while the *need* for it grows — the intended tightening.
+- **Cosmetic bands never gate play:** the 5000 px hue shift and any parallax (8) are read-only; a
+  fixed-seed run (13) renders identical background state at identical altitudes for snapshot tests.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -481,6 +716,34 @@ representative events (e.g. an auto-bounce on a Static platform requests exactly
 - **Lives/continues:** none. One life per run; instant restart from Game Over.
 - **Best score** persisted across sessions (13).
 
+**Scoring edge cases & resolution:**
+- **Score samples `MaxClimb`, not the doodle's current Y.** A doodle at apex sets a new
+  `MaxClimb`; the subsequent fall never lowers it (AC #5). `Score = floor(-MaxClimb)` is therefore
+  monotonic non-decreasing tick over tick, by construction, no clamp needed.
+- **Sub-pixel altitude** is tracked as `float` `worldY` and only floored *at read time* for
+  display/`Score`, so two runs that reach `-4999.6` vs `-5000.4` show `4999` vs `5000` — the floor
+  is deterministic and replay-stable (13), never a rounding wobble.
+- **A jetpack/spring launch can jump `MaxClimb` by hundreds of px in a few ticks**; the score
+  counter should still read the true `floor(-MaxClimb)` each frame (no eased "count-up"), so the
+  HUD number is always the literal altitude, matching AC #5's exactness.
+- **Optional stomp bonus (`+50`)** — if enabled (12), it adds to a *separate* `bonusScore` that is
+  summed into the displayed total but **does not** feed `MaxClimb`; disabling it must not change
+  altitude-only comparisons or the deterministic layout, so the two are kept orthogonal.
+
+**Death resolution (order is load-bearing, mirrors §4.11 step 7):**
+- Both loss conditions are checked *after* all movement and contact resolution in the tick, so the
+  final `MaxClimb` (and thus `Score`/`Best`) reflects the highest point the doodle actually
+  reached this tick even on the tick it dies.
+- **`FallCause` is set exactly once** at the transition into `GameOver`: `OffBottom` if the
+  top-edge test fired, `Monster` if an unresolved lethal enemy contact fired (9.2). If both are
+  somehow true on one tick, **`Monster` wins** (you were killed before you could fall out).
+- **On the `GameOver` transition:** update `Best` if `Score > Best`, request the `game-over` cue
+  and `new-best` fanfare if applicable (10), stop `bg-loop` music (10), snapshot `RunStats` and
+  fold into `Lifetime` (9.2) — all in that single transition, so a paused or re-entered Game Over
+  screen never double-counts.
+- **A dead doodle scores no further:** Tick is effectively frozen at `GameOver` (only menu Msgs
+  are live), so `MaxClimb` cannot advance post-death.
+
 ## 12. Difficulty & Balancing
 
 | Param | Default | Range | Effect |
@@ -506,6 +769,42 @@ representative events (e.g. an auto-bounce on a Static platform requests exactly
   roll on whatever non-breakable platform is chosen).
 - altitude 6000+: Static 0.40, Moving 0.30, Breakable 0.30 (Spring roll unchanged).
 Weights are data-driven so balancing is config, not code.
+
+**Interpolation rule:** the three base weights are linearly interpolated by
+`t = clamp(altitude / 6000, 0, 1)` between the altitude-0 and altitude-6000 rows, then normalized
+to sum to 1 before sampling. The **Spring roll (0.08)** is a second, independent Bernoulli draw
+applied *after* a non-breakable kind is chosen (4.7), so spring frequency is decoupled from the
+Static/Moving mix and stays constant across the whole climb. All four draws come from the single
+`Rng` value (13), in a fixed order — kind first, then spring roll, then X — so a seed reproduces the
+exact platform stream (AC #12).
+
+**Difficulty presets (extends §9.1).** The three presets scale the *whole tuning envelope*, not
+just gravity, so each is internally coherent rather than one slider yanked:
+
+| Knob | Easy | Normal | Hard |
+|---|---|---|---|
+| `g` | 2000 | 2400 | 2800 |
+| normal apex (derived `bounceVy²/2g`) | ≈ 330 px | ≈ 275 px | ≈ 236 px |
+| `enemyStartAlt` | 6000 | 3000 | 1500 |
+| `gapGrowth` | 0.009 | 0.012 | 0.016 |
+| effective `maxGap` (kept < apex) | 270 | 230 | 200 |
+| Spring weight | 0.11 | 0.08 | 0.05 |
+| Jetpack min-separation | 2200 px | 2500 px | 3000 px |
+
+- **Presets stay self-consistent:** each preset's `maxGap` is re-derived to sit safely under *that
+  preset's* apex (Easy's higher apex tolerates a wider ceiling; Hard's lower apex forces a tighter
+  one), so the reachability invariant (4.8) holds under every difficulty. Lowering `g` on Easy
+  raises apex, which is why Easy can afford both wider gaps *and* more springs and still feel
+  gentle. Hard front-loads enemies and starves relief.
+- **Presets are data, applied live:** switching difficulty in Settings (9.1) swaps the constant set
+  between runs; it never edits code paths, and a fixed seed under a fixed preset is deterministic
+  (13). Changing difficulty mid-run is disallowed (it would break the reachability guarantees baked
+  into already-spawned rows) — the setting takes effect on the next `New Run`.
+- **Two-axis balancing intuition:** vertical difficulty is owned by `g`/`gapGrowth`/`maxGap` (can I
+  *reach* the next platform?); horizontal/attention difficulty is owned by Moving weight, enemy
+  frequency, and `DriftVx` (can I *find and thread* it?). Tuning them independently lets a preset be
+  "twitchy but forgiving" (Easy gaps, Hard enemy start) or the reverse, which is the design surface
+  the presets sample.
 
 ## 13. Technical Notes
 - **Performance budget:** ≤ ~120 active entities (platforms + enemies + pickups + particles)
@@ -607,6 +906,40 @@ Weights are data-driven so balancing is config, not code.
     FPS) using the fixed-timestep accumulator, *Then* the doodle reaches the same `MaxClimb`
     (within ±1 px) over the same elapsed time.
 
+15. **Bounce impulse is fixed, not impact-scaled**
+    *Given* two doodles landing on a Static platform, one at terminal `vy = 1600` and one at
+    `vy = 400`, *When* each land resolves, *Then* both come away with exactly `vy = -1150`
+    (the impulse is *set*, discarding arrival speed, §4.3).
+
+16. **Multi-platform sweep lands on the lowest eligible top**
+    *Given* a single fixed step whose swept feet sensor crosses two eligible platform tops,
+    *When* the land resolves, *Then* the doodle lands on the **lower** platform (largest
+    `worldY`, reached first on the way down) and never skips it (§4.3, §4.5).
+
+17. **Opposing steer keys cancel**
+    *Given* both `InputLeft` and `InputRight` held, *When* ticks run, *Then* target `vx = 0`
+    and the doodle does not drift in either direction (§4.4).
+
+18. **No generated gap exceeds the reachability ceiling**
+    *Given* platforms generated across altitudes 0–20000, *When* each successive gap is
+    measured, *Then* every gap is `≤ 230 px` (strictly under the `≈ 275 px` normal apex), so a
+    reachable platform always exists (§4.8).
+
+19. **Breakable wall forces a Static insertion**
+    *Given* a band where every candidate within one bounce apex is Breakable, *When* the next
+    platform is generated, *Then* its kind is forced to Static so no unlandable wall is emitted
+    (§4.8).
+
+20. **Second jetpack refreshes, does not stack**
+    *Given* the doodle is in `Jetpack` with `vy = -2200`, *When* it grabs a second jetpack
+    mid-thrust, *Then* `JetpackTimer` resets to `2.2 s` and `vy` stays `-2200` (no additive
+    velocity), §5.
+
+21. **Fall cause is set once, Monster wins ties**
+    *Given* a tick on which the doodle both falls below `cameraY + 1280` and makes lethal enemy
+    contact, *When* `GameOver` is entered, *Then* `fallCause = Monster` and it is written exactly
+    once (§9.2, §11).
+
 ## 15. Stretch Goals
 1. **Shooting** — fire upward projectiles to kill enemies that are unsafe to stomp.
 2. **Jetpack & propeller-hat variety** — different boost shapes/durations.
@@ -637,12 +970,19 @@ its acceptance test(s) pass (§14)._
 - 🟥 Held-key steer input `InputLeft`/`InputRight`, applied in `Tick` (§3, §7)
 - 🟥 Velocity-based horizontal move `vxMove = 520 px/s`, optional accel smoothing (§4.4) — AC #9
 - 🟥 Horizontal screen-wrap at `±doodleHalfW`, `vy` unchanged (§4.4) — AC #8
+- 🟥 Opposing keys cancel to `vx = 0`; keyboard wins over pointer per tick (§4.4) — AC #17
+- 🟥 Accel ramp (`0.13 s` to full, `0.26 s` reversal); target `vx` preserved across wrap (§4.4)
 
 ### M2 — Gravity, auto-bounce & one-way collision
 - 🟥 Gravity `g = 2400 px/s²`, terminal `vyMax = 1600`, integrate `worldY` (§4.2)
 - 🟥 Feet-sensor AABB + swept previous→current Y land test, `contactBand = 12 px` (§4.5, §13)
 - 🟥 Auto-bounce `vy = -1150 px/s` only while falling (`vy > 0`) (§4.3) — AC #1
 - 🟥 One-way collider: rising doodle passes through platforms, no bounce (§4.3) — AC #2
+- 🟥 Fixed integration order (gravity → clamp → integrate), fall-phase timing (§4.2)
+- 🟥 Impulse is *set* not impact-scaled; identical `-1150` at any arrival speed (§4.3) — AC #15
+- 🟥 One-bounce-per-contact + lowest-first multi-platform sweep tie-break (§4.3, §4.5) — AC #16
+- 🟥 Corner-overlap forgiveness, one-directional `12 px` band, snap-up before impulse (§4.5)
+- 🟥 Doodle state-transition table `Rising`/`Falling`/`Jetpack`/`Dead` (§5)
 
 ### M3 — Platform types & procedural generation
 - 🟥 `PlatformKind` set: Static / Moving / Breakable / Spring (§4.7)
@@ -650,16 +990,28 @@ its acceptance test(s) pass (§14)._
 - 🟥 Breakable: no bounce, `Breaking` anim, removed after 0.25 s (§4.7, §5) — AC #4
 - 🟥 Vertical gap growth `90 → 230 px` with altitude, reachability constraint (§4.8) — AC #10
 - 🟥 Altitude-interpolated type-weight schedule + spring roll (§12)
+- 🟥 Moving-platform patrol reflect, no horizontal velocity inheritance (§4.7)
+- 🟥 Spring as non-breakable modifier (Static/Moving+Spring), never on Breakable (§4.7)
+- 🟥 Jetpack min-separation `2500 px` + no jetpack within `1500 px` of start (§4.7)
+- 🟥 Hard reachability invariant: no gap `> 230 px`, wrapped-distance horizontal rule (§4.8) — AC #18
+- 🟥 Guaranteed-safe Static insertion when a breakable wall would block (§4.8) — AC #19
+- 🟥 Weight interpolation by `t = alt/6000`, fixed RNG draw order kind→spring→X (§12)
 
 ### M4 — Camera, scoring & death
 - 🟥 Camera lerps up only (`cameraY` never increases), 40%-from-top follow (§4.6) — AC #6
 - 🟥 `MaxClimb` → `Score = floor(-MaxClimb)`, never decreases (§11) — AC #5
 - 🟥 Death when doodle top `> cameraY + 1280` → `GameOver`, update `Best` (§7, §11) — AC #7
+- 🟥 Sub-pixel `float` altitude floored at read-time; monotonic score (§11)
+- 🟥 Death resolution order; `FallCause` set once, `Monster` wins ties (§11, §9.2) — AC #21
+- 🟥 Optional orthogonal `+50` stomp `bonusScore` (does not feed `MaxClimb`) (§11, §12)
 
 ### M5 — Enemies & jetpack
 - 🟥 Enemy spawn from altitude ≥ 3000 px, drift, off-camera cull (§4.9, §5)
 - 🟥 Lethal body contact vs. head-stomp (falling) resolution (§4.9) — AC #11
 - 🟥 Jetpack pickup + `Jetpack` overlay: `vy ≈ -2200` sustained 2.2 s, gravity/bounce suppressed (§5) — AC #13
+- 🟥 Enemy drift/edge-reflect, no vertical chase, `600 px` spawn separation (§4.9)
+- 🟥 Platform-first contact order, stomp uses fixed `-1150`, spawn-in grace (§4.9)
+- 🟥 Jetpack exclusive overlay: second pickup refreshes timer, no velocity stacking (§5) — AC #20
 
 ### M6 — Rendering (Skia)
 - 🟥 World→screen transform `screenY = worldY - cameraY`, cull off-view (§8)
@@ -683,6 +1035,15 @@ its acceptance test(s) pass (§14)._
 - 🟥 All 14 acceptance scenarios green (§14)
 - 🟥 Same seed + identical input → identical `Platforms` (§13) — AC #12
 - 🟥 Frame-rate independence via fixed-timestep accumulator (§13) — AC #14
+- 🟥 Extended scenarios green: impulse/tie-break/steer/reachability/jetpack/fall-cause (§14) — AC #15, #16, #17, #18, #19, #20, #21
+
+### M11 — Game feel, progression shape & resolution order
+- 🟥 Bounce-cadence (~0.958 s) and three-loop tension model validated vs. constants (§2)
+- 🟥 Single system-interaction resolution order (input→wrap→jetpack→gravity→land→enemy→death) (§4.11)
+- 🟥 Squash/stretch + spring-scaled juice; camera-kick recoil gated by Screen-shake setting (§4.10)
+- 🟥 Near-miss dust telegraph + Title attract bounce on real physics (§4.10)
+- 🟥 Altitude bands, reach-space density falloff, altitude-invariant relief cadence (§6)
+- 🟥 Difficulty presets scale the whole envelope, apex-safe `maxGap`, next-run only (§12)
 
 ### Stretch — deferred (post-v1)
 - ⬜ Shooting: upward projectiles to kill unsafe-to-stomp enemies (§15.1)

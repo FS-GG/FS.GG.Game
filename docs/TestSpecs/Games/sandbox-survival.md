@@ -158,9 +158,13 @@ queried from the chunk store (§7.2). Sub-pixel positions are kept as `float32`.
   overlap the target (can't trap yourself in a solid block).
 - Placing decrements the stack by 1. Placing a wall fills the **background layer**;
   placing a block fills the **foreground (solid) layer**.
-- **Doors, torches, platforms, chests, stations** are special placeables with their own
-  footprint and interaction (door = 1×3 toggling solidity; torch = light + non-solid;
-  platform = one-way; chest = 1-tile storage of 20 slots; station = crafting anchor).
+- **Doors, torches, platforms, chests, stations, beds** are special placeables with their
+  own footprint and interaction (door = 1×3 toggling solidity; torch = light + non-solid;
+  platform = one-way; chest = 1-tile storage of 20 slots; station = crafting anchor;
+  bed = 2×1 furniture that registers the player's **respawn anchor** (§4.6) when placed on
+  a solid floor with 2 tiles of headroom). Only **one active bed per player**: placing a
+  new one moves the anchor, and a bed that is destroyed or walled out of its headroom is
+  invalidated (respawn falls back to world spawn).
 
 ### 4.6 Health, hunger, damage
 
@@ -183,6 +187,24 @@ queried from the chunk store (§7.2). Sub-pixel positions are kept as `float32`.
 - Ranged (bow) consumes 1 arrow, fires a projectile entity (`speed 700 px/s`, gravity
   `600 px/s²`, despawn on tile/enemy hit).
 - Enemies have HP, take knockback, and flash white for 0.1 s on hit.
+- **Swing cadence:** a melee swing occupies its full 0.25 s; no new swing starts until it
+  finishes (max 4 swings/s). Each swing carries a **hit-set** so a given enemy is struck
+  **at most once per swing** — overlapping bodies each take one hit, not one per tick. LMB
+  held auto-repeats swings at the cadence.
+- **Knockback dealt to enemies:** `vx = ±260 px/s` away from the player, `vy = -180`; the
+  **Brute resists** (knockback ×0.35 — a scalar multiplier, not a stored field). A hit
+  applies a 0.1 s hit-stun (the white flash) but grants the enemy **no i-frames**, so a
+  fast weapon can stunlock a Slime — intended.
+- **Skeleton ranged:** throws a bone `Projectile` at `speed 320 px/s`, gravity `300 px/s²`,
+  on a **1.6 s** `Cooldown`, lobbed with lead toward the player's predicted X; it holds a
+  **160 px** standoff and backs away if the player closes inside it. The bone deals 7 and
+  despawns on tile/player hit or when `Life` reaches 4 s.
+- **Projectile vs. tile:** every projectile tests its 8×8 AABB against solid tiles each
+  tick and **despawns on the first solid overlap** (no bouncing, no digging). Player arrows
+  additionally despawn on the enemy they strike.
+- **No friendly fire:** projectiles with `FromPlayer = true` never damage the player and
+  enemy projectiles never damage enemies; a melee swing only ever hits the opposing
+  faction.
 
 ### 4.8 Day/night cycle
 
@@ -281,6 +303,23 @@ type Projectile =
 despawn; dropped items created by mining/death/`Q`, destroyed on pickup/despawn/merge;
 projectiles created on attack, destroyed on hit/timeout.
 
+**Enemy loot** — rolled on death with the sim `Rng` (§13); each entry spawns as §4.4 drops
+at the corpse:
+
+| Enemy | Guaranteed | Chance roll |
+|---|---|---|
+| Slime | 1–3 Gel | 5% Health Potion |
+| Crawler | 0–2 Raw Meat | 8% Copper Ore |
+| Bat | — | 40% 1 Gel; 30% 1 Raw Meat |
+| Skeleton | 0–3 Arrow | 25% 2 Coal; 4% Iron Ore |
+| Brute | 3–6 Iron Ore | 20% 1 Gem; 5% Gem cluster (2–4) |
+
+This closes the loop on the two recipe inputs §12 names but never sources: **Gel** feeds the
+Health Potion recipe and **Raw Meat** cooks at the Cookpot into Cooked Meat. The Brute's
+"good loot" (its §5-catalogue note) is the guaranteed Iron Ore plus its Gem roll — the payoff
+for a night-only tank. Because the rolls draw from the ordered-tick sim `Rng`, a recorded
+input replay (§14 AC #14) drops identically.
+
 ## 6. World / Levels / Progression
 
 **Logical resolution:** 1280×720 px. **Tile:** 32×32 px → viewport shows ~40×23 tiles.
@@ -303,6 +342,21 @@ tiles`. Stored in **chunks of 64×64 tiles** → 66×19 ≈ **1254 chunks**.
 **Forest** (default, trees+grass), **Desert** (sand, cacti, deeper to sandstone),
 **Tundra** (snow blocks, ice, slippery friction ×0.5), **Jungle** (dense vines, mud,
 tougher enemies). Biome affects surface tiles, tree type, and a spawn-weight table.
+
+**Per-biome detail** — the biome only reskins the surface band; the depth/ore bands above
+are biome-independent:
+
+| Biome | Surface → sub-surface | Movement effect | Spawn weighting |
+|---|---|---|---|
+| Forest | Grass/Dirt, oak trees | — | baseline (Slime/Crawler/Bat, even) |
+| Desert | Sand → Sandstone, cacti (2 contact dmg) | — | +Skeleton, −Slime |
+| Tundra | Snow/Ice over Dirt | ground friction ×0.5 (accel and braking) — slippery | +Bat, −Crawler |
+| Jungle | Mud/Grass, dense vines (decor) | — | +Crawler; enemy HP ×1.25 |
+
+Biome is selected per surface column by the low-frequency noise (§13 step 1) and **blends
+over a ~12-tile transition** so the boundary reads as a gradient, not a seam. The Tundra
+multiplier stacks on the §4.1 ground constants — accel `1600 → 800`, braking `2000 → 1000
+px/s²` — which is why ice overshoots; walk speed and air control are unchanged.
 
 **Progression / difficulty ramp:** gated by tool tier (§4.3) — you physically cannot reach
 deep ore without crafting up. Difficulty also ramps with `daysSurvived` via the spawn cap
@@ -902,6 +956,24 @@ designer bounds.
 | `magnetRadius` | 64 px | 0–160 | Pickup convenience |
 | `mineToolPowerMult` | 1.0 | 0.5–3 | Mining speed global |
 
+**Difficulty presets** — the §9.1 Settings **Difficulty** row selects one; each overrides a
+slice of the tunables above (unlisted params keep their default, and individual tunables
+stay editable on top of the chosen preset):
+
+| Param | Peaceful | Normal | Hard |
+|---|---|---|---|
+| `baseSpawnCap` | 0 | 6 | 12 |
+| `spawnCapPerDay` | 0 | 1.5 | 2.5 |
+| `hungerDrain` | 0 | 0.5 | 1.0 |
+| `regenRate` | 3.0 | 1.0 | 0.5 |
+| `deathDropPct` | 0 | 0.5 | 1.0 |
+| Brute unlock day | never | 2 | 1 |
+
+Peaceful's `baseSpawnCap 0` floors the §4.9 cap at 0, which suppresses **all** spawns —
+surface-night *and* cave-dark alike, since the cap gates both — and zeroes hunger, giving a
+build/explore mode. Hard front-loads the night-only Brute (§6) to day 1 and nearly doubles
+the ramp slope. Presets apply live (§9.1) and persist to local config (§13).
+
 **Resource / item table (excerpt):**
 
 | Item | Stack | Notes / use |
@@ -915,8 +987,11 @@ designer bounds.
 | Gem | 99 | High-value, jewelry/lighting |
 | Torch | 99 | Light source (place) |
 | Apple / Mushroom | 99 | Food: +20 / +12 hunger |
+| Raw Meat | 99 | Enemy drop (§5); cook at Cookpot → Cooked Meat |
 | Cooked Meat | 99 | Food: +45 hunger |
+| Gel | 99 | Slime/Bat drop (§5); Health Potion + Bed input |
 | Health Potion | 30 | +40 HP instant |
+| Bed | 1 | Place → respawn anchor (§4.5); sleep to skip night (§4.8) |
 | Wood/Stone/Iron Pickaxe | 1 | Tool tiers (§4.3) |
 | Sword (wood→iron) | 1 | Melee, damage 8/14/22 |
 | Bow + Arrow | 1 / 999 | Ranged |
@@ -940,6 +1015,7 @@ designer bounds.
 | Health Potion | 2 Gel + 1 Mushroom | (hand) |
 | Door | 6 Wood | Workbench |
 | Chest | 8 Wood | Workbench |
+| Bed | 15 Wood + 5 Gel | Workbench |
 
 ## 13. Technical Notes
 
@@ -1167,15 +1243,19 @@ its acceptance test(s) pass (§14)._
 - 🟥 Deterministic worldgen pipeline (heightmap/strata/caves/ore/liquids/decor/spawn) pure per-coordinate from `Seed` (§13) — AC #1
 - 🟥 Chunk store: lazy gen, in-place `Tile[4096]` arrays, `Version`/`Dirty`, `WorldEvent` list (§7.1, §7.2)
 - 🟥 Active-set streaming: load/generate/unload around camera, async `ChunkGenerated` (§7.2, §7.5) — AC #13
+- 🟥 Biome regions (Forest/Desert/Tundra/Jungle): surface/sub-surface tiles, oak/cacti/vine decor, Tundra ×0.5 friction, ~12-tile blend, per-biome spawn-weights + Jungle enemy HP ×1.25 (§6)
 
 ### M4 — Survival, combat & day/night
 - 🟥 HP regen, hunger drain/starvation, fall/drowning damage, 0.7 s invuln + knockback (§4.6) — AC #9, #10
 - 🟥 90° melee arc + bow projectiles; enemy HP, knockback, hit flash (§4.7)
+- 🟥 Combat detail: 0.25 s swing cadence + one-hit-per-swing hit-set, enemy hit-stun/knockback (`±260`/`-180`) + Brute ×0.35 resist, Skeleton bone lob (320 px/s, 160 px standoff, 1.6 s), projectile-vs-tile despawn, no friendly fire (§4.7)
 - 🟥 Day/night phases, ambient-light lerp, valid-bed sleep fast-forward (§4.8)
+- 🟥 Bed: craft + place as 2×1 furniture, register single respawn anchor, headroom/validity guard shared with sleep (§4.5, §4.8) — AC #15
 
 ### M5 — Enemy spawning & AI
 - 🟥 Spawn cadence + `cap = 6 + floor(days×1.5)` (≤30), dark/off-screen/floored column rule, despawn (§4.9) — AC #8
 - 🟥 Per-archetype state machine `Idle→Patrol→Chase→Attack→(Flee|Dead)`, greedy-local pathing (§4.9, §5)
+- 🟥 Enemy loot tables rolled on death via sim `Rng`: Gel/Raw Meat/ore/Coal/Gem + Brute good loot, replay-identical (§5, §4.4)
 
 ### M6 — Rendering (Skia)
 - 🟥 Back-to-front layer/draw order; world matrix vs screen-space UI (§8.1)
@@ -1186,6 +1266,8 @@ its acceptance test(s) pass (§14)._
 ### M7 — UI, menus & stats
 - 🟥 HUD: hearts, hunger bar, 10-slot hotbar, clock/day dial, minimap (§9)
 - 🟥 Inventory + crafting panel: recipe availability, craft one/max, drag/split stacks (§9, §12) — AC #5
+- 🟥 Chest storage: `F` opens a 20-slot container, deposit/withdraw, backed by `World.Chests` (§4.5, §7.2) — AC #12
+- 🟥 Data-driven tunables record + Peaceful/Normal/Hard difficulty presets, applied live & persisted (§12, §9.1)
 - 🟥 Menu stack (Title/Settings/Pause/Death), cursor wrap, cycler/slider rows, live + persisted settings (§9.1)
 - 🟥 Stats & charts screen: `RunStats`/`LifetimeStats`, resources histogram + Health-vs-Hunger line (§9.2)
 

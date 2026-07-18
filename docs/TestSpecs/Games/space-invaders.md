@@ -32,6 +32,28 @@ slightly faster → repeat indefinitely (endless, score-chasing).
 → Game Over (formation reaches the cannon line OR lives exhausted) → Score + High Score
 → Restart.
 
+**The self-inflicted clock.** The loop's signature tension is that the player *is* the
+difficulty dial. There is no timer counting down — the acceleration comes entirely from
+your own kills (§4.4). Clearing the bottom rows first (10-pt Octopi) strips the safe,
+slow aliens and leaves the formation thin and frantic; clearing top-down (30-pt Squids
+first) banks points but keeps the march slow and the screen crowded. Neither is "correct":
+the loop rewards a read of your own nerve. A skilled run deliberately paces its kills so
+the final few aliens don't hit their ~62 ms sprint (§4.4) until the player is set up
+directly beneath them.
+
+**Decision cadence.** With one bullet in flight (§4.2) the atomic unit of play is a
+single committed shot: aim, fire, watch it travel, and only then re-plan. At 620 px/s a
+shot crosses the ~500 px from cannon to formation in ~0.8 s, so the player is always
+resolving *the last shot* while positioning for the next — the one-bullet rule is what
+converts a twitch shooter into a rhythm of commitment. The UFO (§4.8) is the deliberate
+rhythm-breaker: spending your single bullet on a streaking bonus target means ~1.5 s with
+no shot covering the descending formation, a real gamble the loop asks you to price.
+
+**The respawn beat.** A cannon hit freezes input for the 1.0 s `PlayerDying` window (§5),
+during which the march, bombs, and UFO keep moving — the world does not pause for your
+death. Respawn drops you back at center x=640 (§11) into whatever the formation has become,
+so losing a life late in a fast wave is punishing precisely because you re-enter mid-sprint.
+
 ## 3. Controls & Input
 Keyboard is primary. Movement is **held** (continuous while down); firing is
 **edge-triggered** (one discrete shot per key-down, subject to cooldown + one-bullet rule).
@@ -57,6 +79,19 @@ All positions in logical pixels on a 1280×720 playfield. Origin top-left, +x ri
 - Horizontal only, on rail at **y = 640** (cannon top), sprite **48×24 px**.
 - Speed: **320 px/s**, no acceleration, no friction (instant start/stop — classic feel).
 - Clamped to `[24, 1256]` for the cannon center x (keeps the 48-wide sprite on screen).
+- Velocity is `(RightDown − LeftDown) · 320` px/s, so the two held-key booleans sum to
+  exactly one of {−320, 0, +320}. Both keys down → **0** (the §3 cancel), matching a
+  neutral stick — not "last key wins".
+- `CannonX` is a **float**; integrate as `CannonX += vel · dt` then clamp, so sub-pixel
+  motion accumulates smoothly and render rounds to the nearest whole pixel for a crisp
+  sprite. A frame at dt = 1/60 s moves the cannon **≈ 5.33 px**; 60 such frames sum to
+  **320 px** (drives AC #1's 1.0 s → +320 px assertion).
+- At a clamp wall the cannon **parks**: holding into the wall pins `CannonX` at 24 or 1256
+  with zero residual velocity, and reversing direction resumes motion on the same frame
+  the opposite key is read (no wind-up, no stickiness).
+- Movement is **live only in `Playing`**. In `PlayerDying`, `WaveCleared`, `Paused`,
+  `Title`, and `GameOver` the held-key booleans are still tracked (so a key held across a
+  respawn resumes correctly) but produce no motion — the cannon is frozen at its last x.
 
 ### 4.2 Player shot ("laser")
 - **One player bullet in flight at a time.** Firing is blocked until the previous bullet
@@ -67,6 +102,22 @@ All positions in logical pixels on a 1280×720 playfield. Origin top-left, +x ri
   (center x, y = 636).
 - Destroyed when: hits an alien, hits a bunker block, hits the UFO, hits an enemy bomb
   (mutual cancel — see 4.6), or y < 0 (top edge).
+- **Muzzle spawn** is at the cannon's *current* center x, y = 636 (4 px above the rail).
+  The bullet then integrates independently of the cannon — moving the cannon after firing
+  does **not** steer the shot in flight.
+- **Cooldown vs one-bullet.** Both gates must clear to fire: `Bullet = None` **and**
+  `FireCooldown ≤ 0`. Because a bullet typically lives longer than 0.30 s, the one-bullet
+  rule is usually the binding constraint; the cooldown only bites after a *fast* clear —
+  e.g. a point-blank kill on a low alien, where the bullet is destroyed almost immediately
+  and the 0.30 s floor prevents machine-gunning (AC #3).
+- **No pierce, no fractional travel skips.** The bullet resolves collisions each tick
+  against its integrated AABB; it does not tunnel between two aliens in a single 16.7 ms
+  step at 620 px/s (≈ 10.3 px/frame, well under the 24 px vertical pitch), so no
+  swept-collision correction is required at v1 speeds.
+- **Single-target resolution.** If an integrated bullet AABB overlaps more than one
+  eligible target in the same tick, it resolves the **lowest (largest-y) alien first** —
+  the one physically nearest the muzzle — awards that alien's points, and is consumed
+  before any farther alien is tested. A bullet never scores two kills in one tick.
 
 ### 4.3 Alien formation
 - Grid **5 rows × 11 columns = 55 aliens**.
@@ -80,6 +131,22 @@ All positions in logical pixels on a 1280×720 playfield. Origin top-left, +x ri
   | Row 0 (top) | "Squid" (small) | 24×24 | **30** |
   | Rows 1–2 | "Crab" (medium) | 32×24 | **20** |
   | Rows 3–4 (bottom) | "Octopus" (large) | 36×24 | **10** |
+
+- **Derived screen position.** An alien never stores an absolute position; its screen x is
+  `FormationX + Col · 48` and screen y is `FormationY + Row · 48`, both offset to center the
+  per-type sprite in its 48×48 cell. Every alien therefore moves for free when the formation
+  origin steps or drops (§4.4, §4.5) — the grid is the single source of truth, aliens are
+  offsets into it.
+- **Living bounding box.** The formation's collision/edge box spans only cells that still
+  hold an Alive or Dying alien. Clearing an entire outer column shrinks the box inward, so a
+  formation with its right columns gone can march further right before an edge bounce (§4.5) —
+  a deliberate consequence a player can exploit to buy horizontal room.
+- **Walk animation.** Each alien holds a 2-frame walk cycle; the frame **toggles on every
+  march step** (§4.4), not on a wall-clock timer, so the whole formation animates in lockstep
+  with its own footfall and the animation visibly speeds up exactly as the march does.
+- **Interior gaps are permanent.** Killed aliens leave holes; survivors do **not** close ranks
+  or re-flow into empty cells. A column emptied from the bottom raises that column's
+  "lowest living alien" (the only bomber, §4.6) to the next survivor up.
 
 ### 4.4 March step & acceleration (the heart)
 The formation moves in **discrete steps**, not continuously. On each step, every living
@@ -96,6 +163,30 @@ shrinks as aliens die — fewer aliens = faster march.
   `waveFactor = 0.92 ^ (wave - 1)` (each wave ~8% faster), clamped so interval ≥ **40 ms**.
 - The march is a *fixed step on a timer*, independent of frame dt; the accumulator
   carries leftover time so timing is deterministic regardless of FPS.
+- **`n` is the live count** — aliens that are Alive **or** Dying (still in the formation),
+  not yet culled to Dead. A Dying alien keeps marching and keeps counting for the 0.18 s of
+  its explosion (§5), so the interval steps down the instant the *next* alien is culled, not
+  the instant it is hit. (§14 AC #6 speaks of aliens "destroyed" = culled to Dead.)
+- **Interval reference points** (wave 1, `waveFactor = 1.0`), for calibration and snapshot
+  tests:
+  | Living `n` | Step interval | Feel |
+  | --- | --- | --- |
+  | 55 | 800 ms | opening crawl |
+  | 41 | ~608 ms | first row down |
+  | 27 | ~417 ms | halfway |
+  | 14 | ~239 ms | tense |
+  | 5 | ~116 ms | scramble |
+  | 1 | ~62 ms | single-alien sprint |
+- **Multiple steps per frame are legal.** At the fastest intervals (≤ 40 ms floor) a single
+  16.7 ms tick can still owe **at most one** step; but on a stalled frame (dt clamped to
+  0.05 s, §7) the accumulator may owe several — drain them in order (§13), running an
+  edge-test before each, so a lag spike never lets the formation skip a wall bounce.
+- **Accumulator resets on wave transition**, not on kills: `StepAccumMs` is zeroed when a
+  new wave's grid is built (§6) so wave 2 opens on a clean 800 ms · `waveFactor` beat rather
+  than inheriting wave 1's banked remainder.
+- **Tempo drives the music.** The `march` track's playback tempo tracks this interval (§10):
+  as `n` falls the 4-note bass loop accelerates in lockstep, which is why the audio *is* the
+  difficulty readout — the player hears the acceleration before reading it.
 
 ### 4.5 Edge detection & drop
 - After the formation *would* step, test the living-alien bounding box against the side
@@ -107,6 +198,20 @@ shrinks as aliens die — fewer aliens = faster march.
 - Only one drop+reverse per step (no double-bounce in a single frame).
 - If, after a drop, the bottom of any living alien reaches **y ≥ 620** (invasion line),
   the game ends immediately (loss — see 11).
+- **Only the wall in the direction of travel is tested.** Moving right, test the living box's
+  right edge against x = 1256; moving left, test the left edge against x = 24. The opposite
+  wall is irrelevant that step, so a narrow surviving column can slide fully across.
+- **The test is predictive.** Edge detection asks *"would this step's +8/−8 px push the box
+  past the wall?"* before committing. On the triggering step the horizontal move is cancelled
+  entirely and replaced by the drop+reverse; the aliens do **not** first nudge into the wall
+  and then bounce — they descend cleanly on the step where contact would occur (AC #7).
+- **Drop applies to the whole formation**, Dying aliens included, via a single change to
+  `FormationY` (+24 px). Because positions are derived (§4.3) no per-alien update is needed.
+- **Invasion is checked after the drop resolves**, before any bomb or bullet in that frame
+  is processed (§13): a drop that crosses y ≥ 620 ends the game with no further collision
+  resolution that frame — you cannot be "saved" by a same-frame kill of the invading alien.
+- **A wall-parked cannon offers no shelter.** The formation descends over the cannon rail;
+  reaching the invasion line is a loss regardless of horizontal alignment with the cannon.
 
 ### 4.6 Alien bombs (enemy fire)
 - Only the **lowest living alien in each column** may drop bombs.
@@ -120,6 +225,27 @@ shrinks as aliens die — fewer aliens = faster march.
 - A bomb is destroyed when: it hits the cannon (player loses a life), hits a bunker block
   (erodes it), hits the player bullet (both cancel — 50% chance the bomb survives in the
   arcade; v1 = always mutual destroy), or y > 720.
+- **Spawn point.** A bomb spawns at the firing alien's center x, at the bottom edge of its
+  sprite, so bombs emerge from beneath the shooter and immediately begin descending — never
+  from inside the formation.
+- **Eligible-column set.** Each of the 11 columns contributes at most its single lowest
+  living alien as a candidate. Emptied columns contribute nothing; a column whose bottom
+  aliens are killed promotes the next survivor up to bomber duty (§4.3). With the formation
+  thinned to a few survivors, only those few columns can fire — sparse formations bomb less.
+- **Per-attempt resolution** (every `bombInterval` = 1.0 s): if `Bombs.Length < maxBombs (3)`,
+  draw one eligible column uniformly (`Rng.nextInt`, §13); roll `pFire`; on success spawn a
+  bomb from that column. On a full bomb list or an empty eligible set the attempt is skipped —
+  it does **not** carry over or fire early.
+- **Type alternation** cycles Straight → ZigZag → Straight … on each *successful* spawn
+  (`Rng.nextBool` seeds the first, §13). v1 may render/behave ZigZag as Straight, but the
+  alternation state still advances so the deterministic stream is stable when §15.1 lands.
+  ZigZag's intended path (deferred): a ±16 px horizontal sway with a 0.25 s half-period,
+  same +y descent — a lateral wobble, never upward.
+- **Bombs do not interact with each other**, the UFO, or the formation; they collide only
+  with the cannon, bunkers, the player bullet, and the bottom edge (y > 720).
+- **Fire is suppressed outside `Playing`** — no drops during `PlayerDying`, `WaveCleared`,
+  `Paused`, or menus — but bombs already in flight keep descending through `PlayerDying`
+  (the world does not stop for the player's death, §2), then are cleared at wave transition.
 
 ### 4.7 Bunkers (destructible cover)
 - **4 bunkers**, evenly spaced along the bottom. Bunker centers at
@@ -134,6 +260,24 @@ shrinks as aliens die — fewer aliens = faster march.
   new wave.
 - Aliens that physically overlap a bunker (after enough drops) erode the cells they pass
   through.
+- **Erosion bite shape.** On impact, mark false every solid cell whose center lies within a
+  **6 px radius** of the impact point — roughly a 3×3-cell cluster (the hit cell plus its
+  4-neighborhood and clipped diagonals). Erosion is one-directional: cells only ever go
+  solid → gone within a wave; nothing regrows mid-wave. A bunker with all cells false is
+  inert — bullets and bombs pass straight through the empty footprint.
+- **Both fire types erode.** A player bullet climbing and an enemy bomb falling each carve
+  the bunker from their own side, so a shared bunker is chewed from top and bottom at once;
+  the classic result is a bunker hollowed to a thin, unreliable shell by mid-wave.
+- **The pre-carved doorway is real geometry.** The bottom-center notch and sloped top
+  corners are cells masked false at init (§5), so a shot can pass *through* the doorway
+  without eroding anything — skilled play fires through existing gaps to preserve cover.
+- **Alien erosion cadence.** A living alien overlapping bunker cells erodes the overlapped
+  solid cells **once per march step** (not per frame), so a descending formation grinds
+  through cover at march tempo rather than instantaneously — cover buys time, not safety.
+- **Impact is resolved against the overlapped bunker only** (§13 AABB pre-filter): a
+  projectile tests the single bunker whose 88×64 footprint it is inside, and against that
+  bunker's solid cells; misses (all overlapped cells already false) do not consume the
+  projectile, so a bullet threading a gap continues to the formation.
 
 ### 4.8 Mystery UFO
 - Spawns from off-screen, traveling horizontally across the top at **y = 80**.
@@ -143,6 +287,64 @@ shrinks as aliens die — fewer aliens = faster march.
 - Scoring on hit: pseudo-random but classic-flavored set
   `{50, 100, 150, 200, 300}` chosen by a seeded table; v1 may use a simple
   `[100;50;150;100;300;...]`-style lookup keyed on the player's cumulative shot count.
+- **One UFO at a time.** While `Ufo` is `Some`, `UfoTimer` does not spawn a second — the
+  timer only re-arms and counts toward the *next* spawn once the current UFO despawns
+  (destroyed or fully off the far edge). The next interval is redrawn in `[20, 30] s`
+  (`Rng.nextInt`, §13).
+- **Spawn side and lane.** Entry side is a coin-flip (`Rng.nextBool`): left→right enters at
+  x just off −24 heading +150 px/s, right→left at x just past 1304 heading −150 px/s, always
+  on the y = 80 lane. It never changes direction and never drops; it crosses in ≈ 8.5 s of
+  clear travel.
+- **Only the player bullet can destroy it.** The UFO is immune to bombs, ignores bunkers,
+  and never collides with the formation (it flies in a lane above everything). A hit despawns
+  it, awards the table value, and re-arms `UfoTimer` (§7 step 7).
+- **Suppression is a spawn gate, not a kill gate.** The `< 8` living-alien rule (§4.8) only
+  blocks *spawning*; a UFO already airborne when the count drops below 8 finishes its pass
+  and remains hittable for full value.
+- **Bonus-table indexing.** The value is `table[ShotCount mod table.Length]` — keyed on the
+  player's cumulative shot count so a fixed seed and fixed input script yield the same UFO
+  value every run (AC #13, AC #17). The 300-pt entry is the coveted "perfect" hit veterans
+  count shots to line up.
+- **Audio.** The `ufo-warble` loop plays while the UFO is on screen and stops on despawn
+  (§10), giving an audible cue to break rhythm and take the gamble (§2).
+
+### 4.9 Collision resolution order & precedence
+Collisions are resolved in a fixed per-tick order (mirroring the §7 `Tick` step list) so
+outcomes are deterministic and never depend on list iteration order:
+
+1. **Player bullet** (§7 step 3), tested in this precedence against its swept AABB:
+   UFO → alien (lowest/nearest first, §4.2) → enemy bomb (mutual cancel, §4.6) → bunker
+   cell → top edge. The first hit consumes the bullet; no second resolution that tick.
+2. **March + invasion** (step 4): a drop crossing y ≥ 620 ends the game *before* bombs are
+   integrated (§4.5), so invasion always wins a same-frame race.
+3. **Bombs** (step 6), each tested: cannon → player bullet (if it survived step 1 and both
+   still overlap) → bunker cell → bottom edge. A bomb hitting the cannon is resolved before
+   that bomb can also erode a bunker — one bomb, one effect.
+
+Ties within a step resolve by the precedence above, never by which entity was spawned
+first. All hitboxes are **axis-aligned rectangles**; overlap is inclusive-edge AABB (a
+1 px shared border counts as contact). A single projectile affects at most one target per
+tick, and score is applied at the moment of resolution, before the projectile is cleared.
+
+### 4.10 Moment-to-moment feel & tuning
+- **Cannon "snap."** Zero accel/friction (§4.1) is intentional: the cannon must feel like a
+  turret slaved to the key, not a vehicle with momentum. Any smoothing here would blunt the
+  dodge, whose whole skill is reading a bomb's fall and stepping out on the exact frame.
+- **Readable bullet travel.** At 620 px/s a shot is on screen ≈ 1.06 s from muzzle to top
+  edge, long enough to *see* a miss sail past and re-aim — the one-bullet rule (§4.2) turns
+  that visible travel time into the core pacing device (§2).
+- **The bomb-dodge window.** A bomb at 220 px/s (wave 1) falls the ~560 px from the
+  formation floor to the cannon rail in ≈ 2.5 s; per added wave (+10 px/s, §4.6) that window
+  tightens by ~0.1 s. A player standing still under a fresh bomb has roughly a cannon-width
+  (48 px → 0.15 s at 320 px/s) of side-step to clear it.
+- **The acceleration cliff.** Because interval is linear in `n` (§4.4) but *feels*
+  exponential, the danger spikes late: the last ~10 aliens cover the 116 ms → 62 ms range,
+  nearly doubling tempo while you have the fewest, most scattered targets. The intended
+  "oh no" moment of every wave lives here.
+- **Bunker economy.** 4 bunkers × ~250 solid cells (post-carve) is a spendable resource with
+  no refund until wave clear (§4.7). Hiding trades cover for time; the balance target is that
+  a cautious player exhausts most cover by the time the wave is cleared, entering the next
+  wave's fresh bunkers (§6) having *earned* the reset.
 
 ## 5. Entities / Game Objects
 
@@ -168,6 +370,27 @@ shrinks as aliens die — fewer aliens = faster march.
 
 ### UFO
 - 0 or 1 active. Properties: pos, vel ±150 px/s, size 48×20, bonusValue.
+
+### Formation (implicit entity)
+- Not a stored object but an emergent one: `FormationX`, `FormationY`, `MarchDir`, and the
+  `Aliens` list *are* the formation. Its living bounding box (§4.3), march tempo (§4.4), and
+  edge behavior (§4.5) are all derived each tick. Killing aliens reshapes this implicit
+  entity — the sole thing the player can act on to change the game's pace.
+
+**Lifecycle notes.**
+- **Cannon** — the `Alive → Hit → Respawn | GameOver` chain (above) runs entirely in the
+  `PlayerDying` phase (§7); input is frozen but the rest of the world integrates, and the
+  0.12 s white flash sprite (§8) fires at the moment of the hit, not at respawn.
+- **Player bullet** — a strict `None`/`Some` singleton; there is no bullet pool, and a new
+  shot cannot exist until the current one resolves to `None` (§4.2). Its removal is what
+  re-opens firing, so bullet lifetime *is* the fire-rate limiter.
+- **Alien** — `Dying of float` counts down 0.18 s of explosion while still marching and
+  still bombing-eligible until culled to `Dead` and removed from the list (§4.3, §4.4).
+  Points are awarded on the `Alive → Dying` transition, not on cull, so score is immediate.
+- **Alien bomb** — capped at 3 live; a bomb is only ever created by the §4.6 attempt and
+  removed on cannon/bunker/bullet/edge contact. No bomb persists across a wave transition.
+- **Bunker block** — the only mutable-in-place entity: a `bool[,]` grid flipped solid→false
+  by erosion, wholesale rebuilt (re-carved) at each wave start (§4.7, §6).
 
 ```fsharp
 type AlienType = Squid | Crab | Octopus       // 30 / 20 / 10 pts
@@ -202,6 +425,33 @@ type Bunker = { OriginX: float; OriginY: float; Cells: bool[,] }  // [22,16]
   - Resets all 4 bunkers to full.
 - Difficulty ramp is therefore two-layered: *within* a wave (kills accelerate the march)
   and *across* waves (lower start, faster steps, deadlier bombs).
+
+**Per-wave progression** (Classic preset; all values derive from §12 tunables):
+
+| Wave | Formation start y | `waveFactor` | 55-alien step | Bomb speed | `pFire` base |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 120 | 1.000 | 800 ms | 220 px/s | 0.35 |
+| 2 | 144 | 0.920 | 736 ms | 230 px/s | 0.40 |
+| 3 | 168 | 0.846 | 677 ms | 240 px/s | 0.45 |
+| 4 | 192 | 0.779 | 623 ms | 250 px/s | 0.50 |
+| 5 | 216 | 0.716 | 573 ms | 260 px/s | 0.55 |
+| 6 | 240 (cap) | 0.659 | 527 ms | 270 px/s | 0.60 |
+| 7+ | 240 (cap) | 0.659^… | shrinking | +10/wave | +0.05/wave, ≤ 0.95 |
+
+- **The start-y cap (y = 240) is the winnability floor.** From wave 6 on the formation always
+  opens at the same height, so the cross-wave ramp continues purely through *tempo* and
+  *bomb pressure*, never by starting the aliens so low the player can't clear a first row
+  before invasion. Waves remain survivable indefinitely in principle; the run ends on skill.
+- **`pFire` climbs but is clamped to 0.95** (§4.6), so even at high waves a fraction of fire
+  attempts whiff — the enemy never achieves perfectly saturated fire.
+- **Inter-wave state.** On `WaveCleared → Playing (Wave+1)`: rebuild the 5×11 grid, re-carve
+  all 4 bunkers, clear `Bombs` and any airborne UFO, zero `StepAccumMs` and `BombTimer`, and
+  redraw `UfoTimer` — but **preserve** `Score`, `Lives`, `HighScore`, `ShotCount`, and
+  `CannonX`. The player carries their position and standing into the fresh formation.
+- **`MarchDir` resets to +1 (rightward)** each wave, so every wave opens with a rightward
+  crawl regardless of which way the previous wave ended.
+- **No level geometry changes across waves** — the same walls, lines, bunker anchors, and UFO
+  lane persist; only the tunables above scale. There are no alternate arenas in v1.
 
 ## 7. State Model (Elmish/MVU)
 
@@ -504,6 +754,31 @@ representative events (e.g. a `KeyDown Space` that fires a shot requests exactly
   advances to the next. The objective is a high score.
 - **High score** persists across sessions (section 13).
 
+**Scoring edge cases & precision.**
+- **Points land on the kill transition**, `Alive → Dying` (§5), so a bullet that strikes an
+  alien in the same tick the cannon is destroyed still scores — resolution order (§4.9)
+  applies the bullet's points before any life-loss bookkeeping.
+- **A bullet in flight during `PlayerDying` still scores.** Death freezes *input*, not the
+  bullet already airborne; it continues to integrate and can kill and bank points while the
+  cannon respawns (§2). This is the one window where the player scores without acting.
+- **UFO points are separate from the extra-life count of kills** and use the §4.8 table, not
+  the 30/20/10 schedule; a UFO hit can be the crossing that trips `extraLifeAt` (§4.8, §11).
+- **Extra life fires exactly once**, on the first tick `Score` crosses `10000` (from below to
+  at-or-above). Awarding it is idempotent — a later score never re-triggers it, and it does
+  not re-arm on a new run's reset unless the run itself crosses the threshold again.
+- **Lives display caps at 4** icons/numeral; the internal `Lives` is likewise capped so a
+  second threshold-style bonus (none exists in v1) could never overflow the HUD.
+- **Display is the low 6 digits.** `Score` is internally unbounded; the HUD shows it
+  zero-padded to 6 digits (§9), and a score ≥ 1,000,000 shows its last six digits — the
+  stored value used for high-score comparison stays full-precision.
+- **High score updates only on `GameOver`**, comparing the run's final `Score` to the stored
+  `HighScore`. Score is monotonic (it only ever increases), so the final score *is* the run's
+  peak — no separate running-max is needed. Ties do not overwrite (`>`, not `≥`), so the
+  earliest run holds a tied record. `NEW HIGH SCORE!` (§9) shows only on a strict beat.
+- **Two simultaneous loss conditions** (a cannon-killing bomb on the same tick a drop crosses
+  the invasion line) resolve to `GameOver` once — invasion is checked first (§4.9), so the
+  game ends there and the bomb hit is not separately processed.
+
 ## 12. Difficulty & Balancing
 Data-driven tunables (load from a config record so balance is editable without code):
 
@@ -528,6 +803,45 @@ Data-driven tunables (load from a config record so balance is editable without c
 | `startLives` | 3 | 1–5 | Starting lives |
 | `extraLifeAt` | 10000 | 0–50000 | Bonus-life score threshold |
 | `formationDropPerWave` | 24 px | 0–48 | Lower start per wave |
+
+**Difficulty presets.** The §9.1 Difficulty setting (Easy · Classic · Insane) selects one
+column of overrides on top of the defaults above; every unlisted tunable keeps its default.
+Classic is the default column (the numbers used throughout this spec). All values stay
+inside each tunable's stated range, so a preset is pure data — no code path branches on it.
+
+| Tunable | Easy | Classic | Insane |
+| --- | --- | --- | --- |
+| `startLives` | 5 | 3 | 2 |
+| `cannonSpeed` | 360 px/s | 320 px/s | 300 px/s |
+| `fireCooldown` | 0.24 s | 0.30 s | 0.34 s |
+| `waveSpeedup` | 0.96 | 0.92 | 0.86 |
+| `stepIntervalMaxMs` | 900 | 800 | 700 |
+| `bombBaseFireP` | 0.25 | 0.35 | 0.50 |
+| `bombSpeed` | 180 px/s | 220 px/s | 280 px/s |
+| `bombSpeedPerWave` | 6 px/s | 10 px/s | 16 px/s |
+| `maxBombs` | 2 | 3 | 4 |
+| `extraLifeAt` | 8000 | 10000 | 15000 |
+
+- **Easy** widens every margin the player controls (more lives, faster cannon, quicker
+  refire, gentler ramp, cheaper extra life) and softens enemy fire — a settling-in preset.
+- **Insane** inverts each: fewer lives, a slower and slower-firing cannon, a steep
+  `waveSpeedup`, denser/faster bombs, and a distant extra life. It never changes *rules*,
+  only numbers, so all §14 acceptance scenarios still hold under any preset (their fixtures
+  pin Classic).
+
+**System interactions worth tuning as a set.**
+- `waveSpeedup` × `stepIntervalMinMs` — a lower `waveSpeedup` reaches the 40 ms interval
+  floor (§4.4) in fewer waves; past that point extra difficulty comes only from bombs and
+  formation height, so pushing `waveSpeedup` down without also raising bomb pressure plateaus.
+- `maxBombs` × `bombInterval` — concurrent cap and cadence together set the *screen bomb
+  density*; raising `maxBombs` while keeping the 1.0 s cadence makes bombs cluster in bursts
+  rather than stream, changing the dodge feel more than either knob alone.
+- `cannonSpeed` × `bombSpeed` — the dodge is only fair while a full cannon-width side-step
+  (§4.10) clears a bomb before it lands; if `bombSpeed` is raised, `cannonSpeed` should track
+  it or the bomb-dodge window collapses below reaction time.
+- `fireCooldown` × the one-bullet rule — cooldown only matters when a bullet clears faster
+  than the cooldown (§4.2); on Easy's 0.24 s the rule is *almost always* the binding limit,
+  on Insane's 0.34 s the cooldown bites after any close-range kill.
 
 ## 13. Technical Notes
 - **Entity budget**: ≤ 55 aliens + 1 bullet + 3 bombs + 1 UFO + 4×(22×16=352) bunker
@@ -600,6 +914,42 @@ Data-driven tunables (load from a config record so balance is editable without c
     (Score→10,010 crossing 10,000), *Then* Lives become 3 exactly once.
 17. **Determinism** — *Given* two runs seeded identically with an identical scripted input
     sequence, *Then* final Score, Wave, and Lives are identical.
+18. **Both-keys cancel** — *Given* Phase=Playing with the cannon mid-rail, *When* `Left` and
+    `Right` are held simultaneously for 0.5 s of ticks, *Then* `CannonX` is unchanged
+    (velocity resolves to 0, §4.1).
+19. **Wall park** — *Given* `Right` held until `CannonX` clamps at 1256, *When* it is held
+    for another 0.5 s then `Left` is pressed, *Then* `CannonX` stays 1256 while pinned and
+    begins decreasing on the first tick `Left` is read (no wind-up, §4.1).
+20. **Single-target bullet** — *Given* a bullet whose swept AABB overlaps two stacked aliens
+    in one tick, *When* the tick resolves, *Then* only the lower (nearest) alien enters
+    `Dying`, only its points are scored, and the bullet is consumed (§4.2, §4.9).
+21. **Bomb concurrency cap** — *Given* 3 bombs already in flight (`maxBombs`), *When* a
+    `bombInterval` attempt succeeds its roll, *Then* no 4th bomb spawns and the attempt is
+    skipped, not deferred (§4.6).
+22. **Bombs fall through death** — *Given* a bomb in flight and the cannon entering
+    `PlayerDying`, *When* ticks advance through the death window, *Then* no *new* bombs drop
+    but the airborne bomb keeps descending and can strike a bunker (§4.6).
+23. **Doorway pass-through** — *Given* a bunker with its center doorway cells carved false,
+    *When* the player bullet travels up through the doorway column, *Then* it erodes nothing
+    and is not consumed, continuing toward the formation (§4.7).
+24. **Alien erosion at march tempo** — *Given* a living alien overlapping solid bunker cells,
+    *When* the formation takes one march step, *Then* the overlapped solid cells erode exactly
+    once for that step (not per frame) (§4.7).
+25. **UFO single instance** — *Given* a UFO airborne, *When* `UfoTimer` would otherwise
+    expire, *Then* no second UFO spawns and the timer re-arms only after the current UFO
+    despawns (§4.8).
+26. **UFO stays hittable under 8** — *Given* a UFO airborne and living aliens dropping below
+    8, *When* the player bullet hits it, *Then* it still awards the table value and despawns
+    (suppression gates spawning only, §4.8).
+27. **Inter-wave carry-over** — *Given* Score/Lives/`CannonX`/`ShotCount` at wave clear,
+    *When* wave N+1 begins, *Then* those four are preserved while the grid, all 4 bunkers,
+    `Bombs`, `StepAccumMs`, and `BombTimer` are reset and `MarchDir` is +1 (§6).
+28. **Difficulty preset applies as data** — *Given* Difficulty=Insane selected in Settings,
+    *When* a new run starts, *Then* `startLives`=2 and the Insane column overrides load, while
+    all rule-based scenarios (#1–#17) still hold (§12, §9.1).
+29. **Invasion wins the tie** — *Given* a tick where a drop crosses y ≥ 620 and a bomb also
+    overlaps the cannon, *When* the tick resolves, *Then* Phase=`GameOver` from invasion and
+    the bomb hit is not separately processed (§4.9, §11).
 
 ## 15. Stretch Goals
 1. **Splitting/zig-zag bombs** with the 50% bullet-survives rule (faithful arcade RNG).
@@ -631,21 +981,39 @@ its acceptance test(s) pass (§14)._
 - 🟥 Held `LeftDown`/`RightDown` + edge-triggered fire/menu keys (§3)
 - 🟥 Cannon movement at 320 px/s, both-keys-held cancels, clamp `[24, 1256]` (§4.1) — AC #1
 - 🟥 One-bullet-in-flight rule + 0.30 s cooldown, muzzle spawn (§4.2) — AC #2, #3
+- 🟥 Both-keys cancel to 0 velocity; float sub-pixel integrate then clamp (§4.1) — AC #18
+- 🟥 Wall-park: clamp holds zero residual velocity, resumes on reverse (§4.1) — AC #19
+- 🟥 Movement live only in `Playing`; held keys tracked but frozen elsewhere (§4.1)
+- 🟥 Single-target bullet: nearest/lowest alien only, no double-kill, no pierce (§4.2) — AC #20
 
 ### M2 — Formation march & acceleration
 - 🟥 Spawn 5×11 grid, per-type sprites/points, box from living aliens (§4.3)
 - 🟥 Discrete 8 px march step; interval `lerp(48→800, n/55)` × `waveFactor` (§4.4) — AC #6
 - 🟥 Edge test vs walls `x=24/1256` → drop 24 px + reverse, one per step (§4.5) — AC #7
 - 🟥 Invasion line `y ≥ 620` ends game immediately (§4.5, §11) — AC #8
+- 🟥 Derived alien screen pos from formation origin + cell offset (§4.3)
+- 🟥 Walk frame toggles per march step; interior gaps stay permanent (§4.3)
+- 🟥 `n` = Alive+Dying live count; `StepAccumMs` zeroed each wave (§4.4)
+- 🟥 Multi-step drain on a stalled frame, edge-test before each step (§4.4, §13)
+- 🟥 Direction-of-travel wall test only; predictive edge, no wall-nudge (§4.5) — AC #7
 
 ### M3 — Enemy bombs & bunkers
 - 🟥 Lowest-column bombs, `pFire` chance, max 3, `bombInterval` cadence (§4.6)
 - 🟥 4 bunkers of 22×16 destructible cells, arch mask, 6 px erosion bite (§4.7) — AC #11
 - 🟥 Bunkers full-reset each new wave (no per-life regen) (§4.7, §6) — AC #12
+- 🟥 Bomb spawns from lowest alien; per-attempt cap skip, not deferred (§4.6) — AC #21
+- 🟥 Straight/ZigZag alternation state advances on each successful spawn (§4.6)
+- 🟥 Fire suppressed outside `Playing`; airborne bombs fall through death (§4.6) — AC #22
+- 🟥 Doorway/carved gaps let a shot pass without eroding or being consumed (§4.7) — AC #23
+- 🟥 Alien overlap erodes bunker cells once per march step (§4.7) — AC #24
+- 🟥 Both fire types erode; empty-footprint bunker is inert pass-through (§4.7)
 
 ### M4 — Mystery UFO
 - 🟥 UFO spawn every 20–30 s, suppressed while `< 8` aliens remain (§4.8) — AC #14
 - 🟥 Bonus-table scoring on bullet hit, despawn off opposite edge (§4.8) — AC #13
+- 🟥 Single UFO instance; `UfoTimer` re-arms only after despawn (§4.8) — AC #25
+- 🟥 Suppression gates spawning only; airborne UFO stays hittable under 8 (§4.8) — AC #26
+- 🟥 Bonus value = `table[ShotCount mod len]`; immune to bombs/bunkers/formation (§4.8)
 
 ### M5 — Collisions, scoring & lives
 - 🟥 Bullet vs alien: `Alive → Dying (0.18 s) → Dead`, per-type points (§4.3, §11) — AC #4, #5
@@ -653,11 +1021,16 @@ its acceptance test(s) pass (§14)._
 - 🟥 Lives reach 0 after a hit → `GameOver`, no respawn (§11) — AC #10
 - 🟥 Extra life at 10,000 pts (once), lives cap at 4 (§11) — AC #16
 - 🟥 Bullet/bomb mutual cancel, no score (§4.6, §13)
+- 🟥 Fixed per-tick collision precedence: bullet → march/invasion → bombs (§4.9)
+- 🟥 Invasion wins a same-frame tie over a cannon-killing bomb (§4.9, §11) — AC #29
+- 🟥 Points on `Alive → Dying`; airborne bullet still scores during `PlayerDying` (§5, §11)
 
 ### M6 — Wave flow & phases
 - 🟥 `Title`/`Playing`/`Paused`/`PlayerDying`/`WaveCleared`/`GameOver` phases (§7)
 - 🟥 `WaveCleared` (1.5 s) → next wave: rebuild grid lower, `0.92^(wave-1)`, deadlier bombs (§6) — AC #15
 - 🟥 `TogglePause` freezes all Tick integration, resumes exact state (§7)
+- 🟥 Inter-wave carry-over: keep score/lives/`CannonX`/`ShotCount`, reset grid/bunkers/timers, `MarchDir`=+1 (§6) — AC #27
+- 🟥 Per-wave ramp: start-y cap y=240, `pFire` clamp 0.95, bomb speed +10/wave (§6)
 
 ### M7 — Rendering (Skia)
 - 🟥 Draw order: bg/starfield, ground, bunkers, aliens, UFO, cannon, bullets, HUD (§8)
@@ -667,6 +1040,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 HUD: 6-digit score, `HI`, `WAVE`, lives icons (§9)
 - 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
 - 🟥 Difficulty/volume/sound/CRT settings apply live + persist (§9.1, §12, §13)
+- 🟥 Easy/Classic/Insane preset columns load as pure data over the §12 defaults (§12) — AC #28
 - 🟥 `MatchStats`/`LifetimeStats` accumulation + snapshot on `GameOver` (§9.2)
 - 🟥 Kills-by-type bar chart + shots fired-vs-hit line chart (§9.2)
 
@@ -676,7 +1050,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `Audio.setMasterVolume` mute/settings toggle, volume clamp `[0,1]` (§10, §9.1)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 17 acceptance scenarios green (§14)
+- 🟥 All 29 acceptance scenarios green (§14)
 - 🟥 Seed + scripted input replay yields identical Score/Wave/Lives (§13) — AC #17
 
 ### Stretch — deferred (post-v1)

@@ -156,6 +156,25 @@ All constants are given in **logical pixels** and **seconds**. The simulation ru
 - Spend Embers at **Vendor (the Tinker)** rooms on: extra mask (Vessel Shards are found,
   but masks assembled here), Bolt damage +, dash cooldown -, map markers, etc.
 
+**Vendor (the Tinker) catalog.** One Tinker nook per explored zone (a persistent NPC
+alcove, never inside a boss arena). Purchases are **permanent**, written to `Save` on
+buy, and priced in Embers; costs escalate per tier so the currency stays meaningful into
+the late game. The Tinker only *assembles* masks — the four **Vessel Shards** for each
+mask must already be found in the world (§4.9); the Tinker converts held shards + Embers
+into the HP bump.
+
+| Upgrade | Effect | Tiers | Ember cost (per tier) | Prereq |
+|---|---|---|---|---|
+| Vessel mask | +10 HP (one mask), max +5 → 100 HP cap (§4.9) | 5 | 120 / 200 / 300 / 450 / 600 | 4 Vessel Shards held per tier |
+| Honed Bolt | Bolt damage 8 → 11 → 14 (§4.7) | 2 | 150 / 350 | Bolt owned |
+| Quick Vent | Dash cooldown 0.35 → 0.28 → 0.22 s (§4.4) | 2 | 200 / 400 | Dash owned |
+| Cartographer | Map shows uncollected pickups + Shade marker (§9.1) | 1 | 250 | — |
+
+A row the player cannot afford (or a mask with fewer than 4 shards held) renders greyed
+— activating it is a no-op with no partial spend, and there are no refunds. Spending is
+the **only** Ember sink; because unspent Embers all ride in the death Shade (above), a
+hoarded balance is real risk, and the Tinker is the intended place to de-risk it.
+
 ### 4.11 Ability gates (lock-and-key)
 Each traversal ability is the key to a class of obstacle:
 - **Double Jump** → clears **128 px** vertical gaps / high ledges.
@@ -195,6 +214,30 @@ Enemy AI types (referenced above):
 - **Ranger** (Slinger): maintains **standoff distance 180–260 px**; strafes; shoots.
 - **Bruiser** (Sentinel): directional defense + charge attack on **240 px** line of
   sight; vulnerable from behind/above.
+
+**Shared enemy behavior (all kinds).** Beyond the per-kind machine, every enemy runs a
+common `EnemyState` shape — `Idle | Alerted | Telegraph | Attacking | Recover | Hurt |
+Dead` — plus these rules:
+- **Hit reaction:** a connecting player hit sets `HitFlashUntil` for **3 frames** (white
+  tint, §8) and applies §4.6 knockback (**160 px/s**, decaying over 0.2 s). Enemies have
+  **no i-frames** — every active hitbox frame can connect, so 3-hit combos and pogo
+  chains land in full. Hitstop (§4.6) freezes the enemy alongside the player for its
+  **3 frames**. Heavy movers (Sentinel) take knockback at **0.4×** so they are not shoved
+  out of a shield read.
+- **Aggro / deaggro:** awareness is per-AI (Ambusher aggro radius **160 px**, Bruiser
+  sight range **240 px**, Ranger standoff **180–260 px**); Patroller and Drifter never
+  "aggro" — the Patroller is oblivious to the player, the Drifter always drifts toward it.
+  An alerted enemy **deaggros** to Idle once the player is beyond **1.5× its aggro
+  radius** or out of view for **2.0 s**, resuming its patrol/hover home path.
+- **Death:** at `Hp ≤ 0` the enemy enters `Dead`, rolls its Embers drop (§5.2 table,
+  ×`emberDropMult`) and requests `enemy-pop` (§10). Death riders fire the same frame:
+  the Floater releases **3 bolts** radially, the Spore Pod bursts its **40 px / 0.5 s**
+  cloud (§5.3). A blow that kills still delivers its pogo/melee riders to the player that
+  frame (§13 edge (e)).
+- **Respawn & persistence:** ordinary enemy defeats are **not** persisted — resting at a
+  Save Vein (§5.3) and re-entering a room both rebuild the room's `SpawnTable` in full.
+  Only **bosses** (`DefeatedBosses`) and **pickups** (`CollectedPickups`) survive in
+  `Save` (§7.1), so re-clearing cleared rooms to farm Embers is intended, not a bug.
 
 ### 5.3 Hazards & interactables
 - **Spike tile:** 16×16, deals **15** + knockback, respawns player at last safe ground
@@ -259,6 +302,16 @@ and Enemy =
 - **Fast-travel:** designated **Vein Gates** (a subset of Save Veins, one per zone)
   form a fast-travel network unlocked as each is visited; map menu lets you warp
   between any visited Vein Gates.
+- **Secret rooms:** a handful of rooms hide behind **breakable wall tiles** —
+  solid-looking tiles flagged destructible that shatter when struck by melee or a Bolt
+  (deeper ones are only reachable by a **Dash** or **pogo** approach). Breaking one opens
+  a passage into an optional pocket room holding a **Vessel Shard**, an **Ember cache**,
+  or a lore tablet (§15.10). Discovery increments `secretsFound` (§9.5) and reveals the
+  pocket on the map. Breakable walls are authored tile metadata (like ability gates,
+  §4.11) and, once shattered, stay open in `Save` (tracked with the door/gate flags,
+  §7.1) so they never re-seal. Roughly one secret per zone is placed behind a *late*
+  ability gate inside an *early* zone, paying off the backtrack loop above rather than
+  gating mainline progress.
 
 ## 7. State Model (Elmish/MVU)
 The state is **layered**: a top `Model` composes `World`, the active `Room`, the
@@ -852,6 +905,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `KeyDown`/`KeyUp` → `Keys` set + edge `Pressed` flags, 6-frame buffer (§3)
 - 🟥 Ground/air accel + friction, turn-around bonus, 240 px/s cap (§4.1) — AC #1
 - 🟥 Analog move axis clamped to -1/0/+1 in v1 (§3)
+- 🟥 Crouch shrinks the player capsule to 20×22 px (§3, §4)
 
 ### M2 — Jump, gravity & assists
 - 🟥 Variable jump height, rise/fall gravity split, apex hang (§4.2) — AC #2
@@ -868,6 +922,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Swept AABB, axis-separated X-then-Y vs solid tile layer (§13)
 - 🟥 Tile-grid broadphase (not `SpatialGrid`) + one-way platforms (§13)
 - 🟥 Room-locked camera clamp + smooth follow with dead-zone (§9.2) — AC #13
+- 🟥 Look-up / crouch vertical camera pan (±80 px) over the dead-zone (§9.2)
 
 ### M5 — Combat, damage & resources
 - 🟥 Melee swing hitbox, 3-hit combo, hitstop, knockback (§4.6) — AC #8
@@ -880,6 +935,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Enemy roster with per-kind state machines (§5.2)
 - 🟥 AI types: Patroller / Ambusher / Drifter / Ranger / Bruiser (§5.2)
 - 🟥 Hazards & interactables: spikes, levers, grapple nodes, pickups (§5.3)
+- 🟥 Shared enemy behavior: hit-flash/knockback (no i-frames), aggro/deaggro, on-death drops & riders (§5.2)
+- 🟥 Spike hazard: HP-loss only, restore to last safe ground, no insta-death (§5.3)
 
 ### M7 — World, rooms, currency & progression
 - 🟥 Tilemap rooms across 6 zones (~40 rooms) joined by door edges (§6)
@@ -887,6 +944,9 @@ its acceptance test(s) pass (§14)._
 - 🟥 Embers currency + recoverable death Shade cache (§4.10) — AC #11
 - 🟥 Save Veins (save/refill/respawn) + Vein Gate fast-travel network (§5.3, §6)
 - 🟥 `Save` JSON persistence, 3 slots, atomic write (§13) — AC #10
+- 🟥 Vendor (the Tinker): Ember shop for masks / Bolt / dash-cooldown / map-markers (§4.10)
+- 🟥 Vessel Shard economy: 4 shards = 1 mask, assembled at the Tinker (§4.9, §4.10)
+- 🟥 Secret rooms behind breakable walls + `secretsFound` tracking (§6, §9.5)
 
 ### M8 — Bosses & win/loss
 - 🟥 Boss A (Warden): 3-phase FSM, threshold `BossPhaseChanged` + roar (§11) — AC #12
