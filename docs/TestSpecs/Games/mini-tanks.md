@@ -915,7 +915,7 @@ point tests (§4.4/§4.5). `Ballistics.step` sub-steps internally where needed.
 `flowField`), `SpatialGrid`, `Resolution` (`pushOut`, `slide`), `Los`, `Fov`, `Visibility`, `Grids`,
 `Ballistics` (`step`, `intercept`, `splash`, `linearFalloff`), `Ai` (`view`, `spotted`, `ghosts`,
 `substream`, `aimError`, `threatField`, `fleeField`, `best`, `due`, `Difficulty`), `Effects`
-(`pipeline`, the `Stage` combinators, `DamageTrace`, `Policy`). The `TankStats → Token` ChannelMap
+(`pipeline`, the `Stage` combinators, `DamageTrace`, `Policy`). The `Tank → Token` ChannelMap
 (§8.1) lives in `FS.GG.Game.Render` because `Symbology` depends on `Scene`; the sim reaches up to
 nothing (ADR-0022). Rendering rotation is `Animation.Transform.toPerspectiveTransform` →
 `Scene.withPerspective`, the only rotation path in the org.
