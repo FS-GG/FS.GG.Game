@@ -1135,3 +1135,82 @@ Ranked, out of scope for v1:
 8. **Map/quest progression**, accessory slots, buff system, fishing.
 9. **Procedural structures** — dungeons, abandoned mineshafts with loot and traps.
 10. **Controller support & remappable bindings.**
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 60 Hz tick via `FixedStep.drain`, banked remainder + ≤5 catch-up guard (§7.5, §13)
+- 🟥 Two seeded streams: hashed-coordinate worldgen noise + sim `Rng` via `Rng.ofSeed` (§13)
+- 🟥 Logical 1280×720, 32 px tile, centered camera transform, `float32` `Vec2` (§6, §8)
+
+### M1 — Movement & tilemap collision
+- 🟥 Walk accel/friction, gravity + terminal, variable-height jump, coyote/buffer, double-jump, step-up (§4.1) — AC #7
+- 🟥 Swept axis-separated AABB (24×46) vs solid tiles, `grounded` from upward correction (§4.2) — AC #6
+- 🟥 One-way platforms (collide only falling) + `S` drop-through (§4.2)
+
+### M2 — Mining, drops & placement
+- 🟥 Tool-power mining with tier gate + red flash, off-tile progress decay, `Ctrl` wall mining (§4.3) — AC #2, #3
+- 🟥 Break → `Air` + `Version`/`Dirty` bump + probabilistic drop tables (§4.3, §4.4) — AC #2
+- 🟥 Dropped-item physics + 64 px magnet pickup, 12 px merge, 300 s despawn (§4.4) — AC #4
+- 🟥 Placement: reach/support/self-overlap validation, foreground vs wall layer, special placeables (§4.5, §3) — AC #11
+
+### M3 — Worldgen, chunk store & streaming
+- 🟥 Deterministic worldgen pipeline (heightmap/strata/caves/ore/liquids/decor/spawn) pure per-coordinate from `Seed` (§13) — AC #1
+- 🟥 Chunk store: lazy gen, in-place `Tile[4096]` arrays, `Version`/`Dirty`, `WorldEvent` list (§7.1, §7.2)
+- 🟥 Active-set streaming: load/generate/unload around camera, async `ChunkGenerated` (§7.2, §7.5) — AC #13
+
+### M4 — Survival, combat & day/night
+- 🟥 HP regen, hunger drain/starvation, fall/drowning damage, 0.7 s invuln + knockback (§4.6) — AC #9, #10
+- 🟥 90° melee arc + bow projectiles; enemy HP, knockback, hit flash (§4.7)
+- 🟥 Day/night phases, ambient-light lerp, valid-bed sleep fast-forward (§4.8)
+
+### M5 — Enemy spawning & AI
+- 🟥 Spawn cadence + `cap = 6 + floor(days×1.5)` (≤30), dark/off-screen/floored column rule, despawn (§4.9) — AC #8
+- 🟥 Per-archetype state machine `Idle→Patrol→Chase→Attack→(Flee|Dead)`, greedy-local pathing (§4.9, §5)
+
+### M6 — Rendering (Skia)
+- 🟥 Back-to-front layer/draw order; world matrix vs screen-space UI (§8.1)
+- 🟥 Chunk surface caching (2048² per chunk), `Version`-invalidation, `PrevPos` interpolation (§8.2, §13)
+- 🟥 Tile atlas + variant hash + 47-mask auto-tiling; lighting multiply overlay / v1 flat ambient (§8.3, §8.5)
+- 🟥 `Enemy → Token` ChannelMap via `FS.GG.UI.Symbology`, `Legibility.score = Clean` (§8.7)
+
+### M7 — UI, menus & stats
+- 🟥 HUD: hearts, hunger bar, 10-slot hotbar, clock/day dial, minimap (§9)
+- 🟥 Inventory + crafting panel: recipe availability, craft one/max, drag/split stacks (§9, §12) — AC #5
+- 🟥 Menu stack (Title/Settings/Pause/Death), cursor wrap, cycler/slider rows, live + persisted settings (§9.1)
+- 🟥 Stats & charts screen: `RunStats`/`LifetimeStats`, resources histogram + Health-vs-Hunger line (§9.2)
+
+### M8 — Audio
+- 🟥 `AudioEffect` cues per event via `Audio.playSfx`/`playMusic`, `Audio.interpret` → `AudioEvidence` (§10)
+- 🟥 Day/Night/Cave music swap, death sting, low-HP heartbeat; `Audio.setMasterVolume` mute clamp `[0,1]` (§10)
+
+### M9 — Progression, death & persistence
+- 🟥 Tier goals T1–T4, softcore/hardcore loss, optional `score` metric (§11)
+- 🟥 Death → `deathDropPct` world drops, respawn at bed/world spawn after 3 s fade, `deaths` increments (§4.6, §11) — AC #15
+- 🟥 Chunk-delta save/load, async write, round-trip guarantee, pristine chunks regen from seed (§13) — AC #12
+
+### M10 — Acceptance & determinism
+- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 Fixed-timestep input-log replay is bit-identical (§7.5, §13) — AC #14
+- 🟥 Worldgen order-independence: same seed → identical tiles, seed-sensitive (§13) — AC #1
+
+### Stretch — deferred (post-v1)
+- ⬜ Full dynamic lighting enabled by default with colored light (§15.1, §4.10, §8.5)
+- ⬜ Liquids simulation — flowing water/lava with pressure (§15.2)
+- ⬜ Bosses & events — summonable boss, blood-moon high-spawn nights (§15.3)
+- ⬜ Background trees/furniture & wiring / logic gates (§15.4)
+- ⬜ NPC villagers that move into valid player-built houses (§15.5)
+- ⬜ More biomes & depth layers — corruption/hallow spread, underworld lava sea (§15.6)
+- ⬜ Multiplayer via the `WorldEvent` stream + chunk deltas (§15.7)
+- ⬜ Map/quest progression, accessory slots, buffs, fishing (§15.8)
+- ⬜ Procedural structures — dungeons, abandoned mineshafts (§15.9)
+- ⬜ Controller support & remappable bindings (§15.10)

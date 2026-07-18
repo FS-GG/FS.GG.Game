@@ -571,3 +571,76 @@ by default.
 5. **Daily seed challenge** — fixed seed of the day, leaderboard by score.
 6. **Alternate birds / skins** (cosmetic palette swaps).
 7. **Gamepad + touch** input parity for handheld/mobile builds.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 60 Hz tick via `FixedStep.drain`, banked remainder (§13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 1280×720 coordinate transform, +Y down, letterbox scaling (§4, §6, §8)
+
+### M1 — Input & flap edge
+- 🟥 Edge-triggered `Space`/`↑`/click flap with key-held de-bounce (§3) — AC #4
+- 🟥 `Esc` → `TogglePause` edge; focus loss auto-pauses (§3, §13)
+- 🟥 Game-over `restartLockoutMs` window ignores restart input (§3) — AC #13
+
+### M2 — Bird physics
+- 🟥 Gravity integration `vy += gravity*dt`, terminal clamp `vyMax` (§4.1) — AC #1, #2
+- 🟥 Flap impulse sets `vy = flapImpulse` (override, no stacking) (§4.2) — AC #3
+- 🟥 Ceiling clamp (non-lethal) + velocity-derived `rotationDeg` (§4.2, §5) — AC #9
+
+### M3 — World scroll & pipe spawning
+- 🟥 Fixed `birdX`; pipes scroll left at `scrollSpeed` (§4.3)
+- 🟥 Pipe-pair spawner every `pipeSpacing` px, off the right edge (§4.4) — AC #10
+- 🟥 Randomized `gapCenterY` in safe band `[180, 460]` via `Rng` (§4.5) — AC #11
+- 🟥 Despawn pairs once fully off the left edge (§4.4)
+
+### M4 — Collisions & scoring
+- 🟥 Inset bird AABB vs. pipe rects → instant death (§4.7) — AC #7
+- 🟥 Ground-strip collision at `groundY` → instant death (§4.7) — AC #8
+- 🟥 Pass-scoring `scored` flag, loop all unpassed pairs (§4.6) — AC #5, #6
+
+### M5 — Phase flow & persistence
+- 🟥 `Ready` / `Playing` / `GameOver` phase transitions (§7)
+- 🟥 Instant-death → `GameOver finalScore`, freeze scroll, cosmetic fall (§4.7, §11)
+- 🟥 `Best = max(Best, finalScore)` persisted to `flappy.best` (§11, §13) — AC #14
+- 🟥 Pause freezes physics, resumes exact state (§7) — AC #15
+
+### M6 — Rendering (Skia)
+- 🟥 Draw order: sky, pipes, ground strip, bird, HUD, overlays (§8)
+- 🟥 Pipe lip caps + parallax ground/cloud scroll (§8)
+- 🟥 Optional collision flash + flap dust particles (§8)
+
+### M7 — UI, menus & settings
+- 🟥 Ready/Playing/Paused/GameOver screens + live score & best HUD (§9)
+- 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
+- 🟥 Difficulty presets + volume/sound/shake settings apply live + persist (§9.1, §12)
+
+### M8 — Stats & charts
+- 🟥 `RunStats`/`LifetimeStats` accumulation + persist, medal tiers (§9.2)
+- 🟥 Score-distribution bars + monotonic best-score-so-far step line (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues (flap/point/hit/die/new-best), `Audio.interpret`, volume clamp `[0,1]` (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 Seed + `Flap`/`Tick` sequence yields byte-identical pipe layout (§13) — AC #12
+
+### Stretch — deferred (post-v1)
+- ⬜ Medals (bronze/silver/gold/platinum at 10/20/30/40) on game-over (§15.1)
+- ⬜ Difficulty ramp via `gapHeightRamp`/`scrollSpeedRamp` (§15.2)
+- ⬜ Day/night theme swap every N points (§15.3)
+- ⬜ Ghost replay of your best run (deterministic RNG) (§15.4)
+- ⬜ Daily seed challenge + score leaderboard (§15.5)
+- ⬜ Alternate birds / skins (cosmetic palette swaps) (§15.6)
+- ⬜ Gamepad + touch input parity (§15.7)

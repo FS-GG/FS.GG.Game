@@ -831,3 +831,92 @@ Ranked, out of scope for v1:
 8. **Controller rumble + dynamic music layers** that intensify in combat.
 9. **New Game+** with remixed enemy placements and a damage modifier.
 10. **Lore tablets** and an in-game bestiary populated by kills.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 60 Hz sim via `FixedStep.drain`, banked accumulator (§7.5, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `simulate` (§13)
+- 🟥 Logical 1280×720 world-space (Y-down) + letterbox scaling (§8)
+
+### M1 — Input & horizontal movement
+- 🟥 `KeyDown`/`KeyUp` → `Keys` set + edge `Pressed` flags, 6-frame buffer (§3)
+- 🟥 Ground/air accel + friction, turn-around bonus, 240 px/s cap (§4.1) — AC #1
+- 🟥 Analog move axis clamped to -1/0/+1 in v1 (§3)
+
+### M2 — Jump, gravity & assists
+- 🟥 Variable jump height, rise/fall gravity split, apex hang (§4.2) — AC #2
+- 🟥 Coyote time (6 frames) allowing a late ground jump (§4.2) — AC #3
+- 🟥 Jump buffering fires on the landing frame (§4.2) — AC #4
+- 🟥 Wall slide + wall jump with reduced-authority arc window (§4.3)
+
+### M3 — Dash, grapple & ability gates
+- 🟥 Dash: 140 px flat dash, i-frames, cooldown, air-dash refresh (§4.4) — AC #6, #15
+- 🟥 Grapple hook fire, node reel, momentum-preserving arc (§4.5)
+- 🟥 `Locked(ability)` room edges re-evaluated on `AbilityAcquired` (§4.11) — AC #5
+
+### M4 — Collision, tiles & camera
+- 🟥 Swept AABB, axis-separated X-then-Y vs solid tile layer (§13)
+- 🟥 Tile-grid broadphase (not `SpatialGrid`) + one-way platforms (§13)
+- 🟥 Room-locked camera clamp + smooth follow with dead-zone (§9.2) — AC #13
+
+### M5 — Combat, damage & resources
+- 🟥 Melee swing hitbox, 3-hit combo, hitstop, knockback (§4.6) — AC #8
+- 🟥 Down-melee pogo bounce + air-dash refresh (§4.6) — AC #9
+- 🟥 Bolt projectile: mana cost, 520 px/s, 4-live cap (§4.7)
+- 🟥 Player damage, hitstun, single `invulnUntil` i-frame timer (§4.8) — AC #7
+- 🟥 Health masks + Veil mana pool + focus heal (§4.9)
+
+### M6 — Entities, enemy AI & hazards
+- 🟥 Enemy roster with per-kind state machines (§5.2)
+- 🟥 AI types: Patroller / Ambusher / Drifter / Ranger / Bruiser (§5.2)
+- 🟥 Hazards & interactables: spikes, levers, grapple nodes, pickups (§5.3)
+
+### M7 — World, rooms, currency & progression
+- 🟥 Tilemap rooms across 6 zones (~40 rooms) joined by door edges (§6)
+- 🟥 `EnterRoom` load: spawn from `SpawnTable` minus collected/defeated (§7.3)
+- 🟥 Embers currency + recoverable death Shade cache (§4.10) — AC #11
+- 🟥 Save Veins (save/refill/respawn) + Vein Gate fast-travel network (§5.3, §6)
+- 🟥 `Save` JSON persistence, 3 slots, atomic write (§13) — AC #10
+
+### M8 — Bosses & win/loss
+- 🟥 Boss A (Warden): 3-phase FSM, threshold `BossPhaseChanged` + roar (§11) — AC #12
+- 🟥 Boss B (Veil Echo): 3-phase mirror FSM, adds & Veil-collapse (§11)
+- 🟥 Win on Veil Echo defeat + core touch; death → Shade, run continues (§11)
+
+### M9 — Rendering, UI, menus & stats
+- 🟥 12-layer back-to-front draw order, `drawAtlas` tiles, per-zone tint (§8)
+- 🟥 i-frame flash, dash ghost trail, hit-flash, screen shake (§8)
+- 🟥 Screens: Title / Playing / Paused / MapOverlay / GameOver / Win (§9.1)
+- 🟥 HUD: health masks, Veil bar, ember count, contextual prompts (§9.3)
+- 🟥 Menu stack, cursor wrap, cycler/slider rows, settings apply live + persist (§9.4)
+- 🟥 World-map overlay with ability-coded locked gates + fast-travel select (§9.1)
+- 🟥 `RunStats`/`LifetimeStats` + items-per-zone histogram + explore-timeline line (§9.5)
+
+### M10 — Audio, acceptance & determinism
+- 🟥 `AudioEffect` cues via `update`, `Audio.interpret` → `AudioEvidence`, clamp `[0,1]` (§10)
+- 🟥 Per-zone music loops + boss themes, `Audio.setMasterVolume` mute (§10)
+- 🟥 Difficulty presets scale `enemyDamageMult`/`hitIFrames` (§12)
+- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 Seed + input-log replay is bit-identical at every frame (§13) — AC #14
+
+### Stretch — deferred (post-v1)
+- ⬜ Charm/relic equippable-modifier system with limited slots (§15.1)
+- ⬜ Render interpolation between sim states for 120/144 Hz smoothness (§15.2)
+- ⬜ Map annotations & player-placed custom markers (§15.3)
+- ⬜ More abilities: super-dash, down-slam, charged bolt (§15.4)
+- ⬜ Boss rush mode unlocked after the ending (§15.5)
+- ⬜ Third optional super-boss behind a fully-explored-map gate (§15.6)
+- ⬜ Speedrun timer + ghost replays (deterministic sim) (§15.7)
+- ⬜ Controller rumble + combat-intensifying dynamic music layers (§15.8)
+- ⬜ New Game+ with remixed enemy placements + damage modifier (§15.9)
+- ⬜ Lore tablets + kill-populated in-game bestiary (§15.10)

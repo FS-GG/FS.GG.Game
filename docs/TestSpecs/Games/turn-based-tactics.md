@@ -1230,3 +1230,94 @@ Ranked, out of scope for v1:
 7. **Replay & "ghost solution"** — record the `Msg` sequence and replay/share optimal
    solutions (trivial given determinism).
 8. **Online asynchronous puzzle leaderboards** ranked by grade/rounds for shared seeds.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold, pure turn-loop, RNG & tile grid
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton; `update` is pure with no real-time rules tick (§7)
+- 🟥 `Phase` DU + `ResolveNextEnemy`-driven, event-driven advance (no timestep) (§7, §13)
+- 🟥 `Rng` seeded per mission via `Rng.ofSeed`, threaded through `Model`, never called in rule logic (§12, §13)
+- 🟥 8×8 tile grid: `Tile = Cell`, terrain types + cover + occupant/hazard per tile (§4.1)
+
+### M1 — Units, stats, traits & rosters
+- 🟥 `Unit` record: `hp/maxHp`, `moveRange`, abilities, `Set<Trait>` (§4.2)
+- 🟥 One move + one ability per turn; move-then-act unless `Mobile` (§4.2)
+- 🟥 Player squad roster (Vanguard, Artillery, Skirmisher, Hornet, Pulsar) (§5.1)
+- 🟥 Enemy roster (Crawler…Behemoth) + props/hazards (Building, spawn vent) (§5.2, §5.3)
+
+### M2 — Turn structure & undo
+- 🟥 Round = Player Phase → Enemy Phase; telegraph step at round start (§4.3)
+- 🟥 Deterministic enemy resolution by ascending `enemyId` (§4.3)
+- 🟥 End-of-round hazard ticks, cooldown ticks, spawn schedule, win/loss check (§4.3)
+- 🟥 Action-history stack: `ConfirmAction` snapshot, `Undo`/`Redo` whole-`Model` swap (§4.8) — AC #2
+- 🟥 `EndTurn` clears history/redo — no undo across the enemy phase (§4.8) — AC #12
+
+### M3 — Movement: pathfinding & reachable tiles
+- 🟥 `Pathfinding.reachable` with `enterCost`/`canEndOn` and `budgetFor` budget scaling (§4.4) — AC #1
+- 🟥 Two-set `Reach`: `Steps` (traversable) vs `Endable` (destinations); path through allies (§4.4) — AC #1
+- 🟥 `previewMove` = `Pathfinding.pathTo` behind the `Endable` membership test (§4.4) — AC #2
+- 🟥 Ranged attack-range recomputed from the previewed destination, minus LoS-blocked tiles (§4.4)
+- 🟥 `Flying` ignores terrain cost (every passable-to-flyer tile costs 1) (§4.4) — AC #14
+- 🟥 Click-to-move flow: `SelectUnit`→`PreviewMove`→`ConfirmAction`; move-after-act rejected (§3, §7) — AC #13
+
+### M4 — Attack resolution & damage
+- 🟥 Validity: range + `Los.lineOfSight`; Mortar ignores LoS (§4.5)
+- 🟥 Hit set from `ab.shape` (Single / Line / Cross / Blast / Radial) anchored at target (§4.5)
+- 🟥 Damage after cover, applied simultaneously; friendly fire possible (§4.5) — AC #3
+- 🟥 Death check after all damage → simultaneous mutual kills both die (§4.5) — AC #11
+- 🟥 Telegraph reconciliation: dead attacker / empty target tile / pushed-out-of-range attacker (§4.5) — AC #7, #8
+
+### M5 — Push / knockback & environmental damage
+- 🟥 Knockback loop; collision damage 1 to shoved unit and to the unit it hits (§4.6) — AC #5
+- 🟥 Push into water/chasm = instant kill; lava burn on entering (§4.6) — AC #4
+- 🟥 `Flying` hovers over hazards; `Massive` immovable; `Armored` cuts declared damage only (§4.6) — AC #14
+- 🟥 No chain propagation in v1: blocked unit stops, both take 1, blocker not re-pushed (§4.6) — AC #5
+
+### M6 — Objectives, win & loss
+- 🟥 `Buildings` + shared Grid Power meter; enemy hits on building tiles drain it (§4.7)
+- 🟥 Grid Power reaching 0 → mission loss (§4.7, §11) — AC #9
+- 🟥 Win: Survival (reach round N, `GridPower > 0`) / Elimination (no enemies, `GridPower > 0`) (§11) — AC #10, #11
+- 🟥 Loss: `GridPower ≤ 0` or all 3 player units dead (§11)
+- 🟥 Score → S/A/B/C grade rewarding preserved grid + environmental/push kills (§11)
+
+### M7 — AI: telegraph generation
+- 🟥 `computeTelegraph`: enumerate positions × abilities × targets, deterministic scoring search (§4.9)
+- 🟥 Weights (building ×5, damage ×3, kill +10), deterministic tie-break, archetype variants (§4.9)
+- 🟥 Fallback: move toward nearest objective/player when no attack is possible (§4.9)
+- 🟥 Round-start telegraph matches enemy-phase execution (§4.9, §4.3) — AC #6
+
+### M8 — Rendering & unit symbology (Skia)
+- 🟥 Draw order: background → terrain → buildings → highlights → telegraphs → units → HUD (§8)
+- 🟥 Telegraph danger overlays: hatched red fill, directional push arrows, damage badges (§8)
+- 🟥 `Unit → Token` ChannelMap via `Symbology.badge`; `klassOf`/`speedTierOf` quantisation (§8.1)
+- 🟥 `Legibility.scoreIn Grammar.Badge` returns `Clean` over the §5 rosters (§8.1)
+
+### M9 — UI, menus, stats & audio
+- 🟥 Screens: Title → Mission Select → Deploy → Play → Mission Result, plus HUD (§9)
+- 🟥 Menu stack: cursor wrap, cycler rows, settings apply live + persist (§9.1)
+- 🟥 `MissionStats`/`LifetimeStats` accumulation + snapshot at `MissionResult` (§9.2)
+- 🟥 Kills-by-enemy-type bar chart + damage dealt-vs-taken line chart (§9.2)
+- 🟥 `AudioEffect` cues per event; `Audio.interpret` record-only; `setMasterVolume` clamp `[0,1]` (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 Seed + `Msg`-sequence replay is bit-for-bit identical (§14) — AC #15
+- 🟥 Edge cases: off-board push, same-tile double push, occupied spawn vent (§13)
+
+### Stretch — deferred (post-v1)
+- ⬜ Chain knockback / momentum transfer (§15.1)
+- ⬜ Unit progression & squad customization (§15.2)
+- ⬜ Multi-step / branching enemy telegraphs (§15.3)
+- ⬜ Procedural mission generation with seed sharing (§15.4)
+- ⬜ Reinforcement timing UI (spawns two rounds ahead) (§15.5)
+- ⬜ More terrain interactions (ice, smoke, conveyors, destructible walls) (§15.6)
+- ⬜ Replay & "ghost solution" sharing (§15.7)
+- ⬜ Online asynchronous puzzle leaderboards (§15.8)

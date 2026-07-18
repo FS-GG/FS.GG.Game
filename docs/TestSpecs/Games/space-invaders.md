@@ -610,3 +610,80 @@ Data-driven tunables (load from a config record so balance is editable without c
 5. **Difficulty presets** (Easy/Classic/Insane) driven entirely by the section-12 table.
 6. **Online high-score leaderboard**.
 7. **Boss wave** every 5th wave (armored alien that takes multiple hits).
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed-step march via `FixedStep.drain marchInterval dt StepAccumMs`, banked remainder (§4.4, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 1280×720 coordinate system + letterbox scaling, origin top-left (§6, §8)
+
+### M1 — Cannon & player fire
+- 🟥 Held `LeftDown`/`RightDown` + edge-triggered fire/menu keys (§3)
+- 🟥 Cannon movement at 320 px/s, both-keys-held cancels, clamp `[24, 1256]` (§4.1) — AC #1
+- 🟥 One-bullet-in-flight rule + 0.30 s cooldown, muzzle spawn (§4.2) — AC #2, #3
+
+### M2 — Formation march & acceleration
+- 🟥 Spawn 5×11 grid, per-type sprites/points, box from living aliens (§4.3)
+- 🟥 Discrete 8 px march step; interval `lerp(48→800, n/55)` × `waveFactor` (§4.4) — AC #6
+- 🟥 Edge test vs walls `x=24/1256` → drop 24 px + reverse, one per step (§4.5) — AC #7
+- 🟥 Invasion line `y ≥ 620` ends game immediately (§4.5, §11) — AC #8
+
+### M3 — Enemy bombs & bunkers
+- 🟥 Lowest-column bombs, `pFire` chance, max 3, `bombInterval` cadence (§4.6)
+- 🟥 4 bunkers of 22×16 destructible cells, arch mask, 6 px erosion bite (§4.7) — AC #11
+- 🟥 Bunkers full-reset each new wave (no per-life regen) (§4.7, §6) — AC #12
+
+### M4 — Mystery UFO
+- 🟥 UFO spawn every 20–30 s, suppressed while `< 8` aliens remain (§4.8) — AC #14
+- 🟥 Bonus-table scoring on bullet hit, despawn off opposite edge (§4.8) — AC #13
+
+### M5 — Collisions, scoring & lives
+- 🟥 Bullet vs alien: `Alive → Dying (0.18 s) → Dead`, per-type points (§4.3, §11) — AC #4, #5
+- 🟥 Bomb/alien hits cannon → `PlayerDying` (1.0 s) → respawn at x=640 (§4.6, §11) — AC #9
+- 🟥 Lives reach 0 after a hit → `GameOver`, no respawn (§11) — AC #10
+- 🟥 Extra life at 10,000 pts (once), lives cap at 4 (§11) — AC #16
+- 🟥 Bullet/bomb mutual cancel, no score (§4.6, §13)
+
+### M6 — Wave flow & phases
+- 🟥 `Title`/`Playing`/`Paused`/`PlayerDying`/`WaveCleared`/`GameOver` phases (§7)
+- 🟥 `WaveCleared` (1.5 s) → next wave: rebuild grid lower, `0.92^(wave-1)`, deadlier bombs (§6) — AC #15
+- 🟥 `TogglePause` freezes all Tick integration, resumes exact state (§7)
+
+### M7 — Rendering (Skia)
+- 🟥 Draw order: bg/starfield, ground, bunkers, aliens, UFO, cannon, bullets, HUD (§8)
+- 🟥 2-frame walk cycle on march step, `Dying` splat glyph, 0.12 s cannon-hit flash (§8)
+
+### M8 — UI, menus & stats
+- 🟥 HUD: 6-digit score, `HI`, `WAVE`, lives icons (§9)
+- 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
+- 🟥 Difficulty/volume/sound/CRT settings apply live + persist (§9.1, §12, §13)
+- 🟥 `MatchStats`/`LifetimeStats` accumulation + snapshot on `GameOver` (§9.2)
+- 🟥 Kills-by-type bar chart + shots fired-vs-hit line chart (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues per event, `Audio.interpret` → `AudioEvidence` (§10)
+- 🟥 `march` music loop on wave start, `stopMusic` on wave end/game over (§10)
+- 🟥 `Audio.setMasterVolume` mute/settings toggle, volume clamp `[0,1]` (§10, §9.1)
+
+### M10 — Acceptance & determinism
+- 🟥 All 17 acceptance scenarios green (§14)
+- 🟥 Seed + scripted input replay yields identical Score/Wave/Lives (§13) — AC #17
+
+### Stretch — deferred (post-v1)
+- ⬜ Splitting/zig-zag bombs with 50% bullet-survives rule (§15.1)
+- ⬜ 2-player alternating mode with separate high scores (§15.2)
+- ⬜ Animated UFO bonus reveal (floating score number) (§15.3)
+- ⬜ Color zones + CRT scanline shader (§15.4)
+- ⬜ Difficulty presets (Easy/Classic/Insane) from the §12 table (§15.5)
+- ⬜ Online high-score leaderboard (§15.6)
+- ⬜ Boss wave every 5th wave (armored multi-hit alien) (§15.7)

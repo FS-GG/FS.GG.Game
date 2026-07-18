@@ -1076,3 +1076,102 @@ Ranked, out-of-scope for v1:
    (grant temporary armor aura).
 8. **Meta-progression:** unlock tower branches/maps across runs; daily seeded challenge.
 9. **Co-op two-warden** mode sharing one economy.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 60 Hz tick via `FixedStep.drainWith`, banked remainder + spiral cap (§4.2, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 1280×720 coordinate transform + letterbox scaling (§4.1, §8)
+- 🟥 Fast-forward doubles steps consumed, dt unchanged (§4.2, §13) — AC #20
+
+### M1 — Board, grid & path
+- 🟥 40×22 tile grid of 32×32 px, `TileKind` fills, `(col,row)`→pixel center (§4.1)
+- 🟥 Fixed-path maps: authored `Waypoint[]` polyline Spawn→Goal (§4.1)
+- 🟥 Maze maps: `distanceField` + `flowField` from Goal via `Pathfinding` (§4.1)
+- 🟥 Three shipped maps: Serpentine, Crossroads, The Labyrinth (§6)
+
+### M2 — Enemies: movement, pathfinding & leaks
+- 🟥 Per-step waypoint follow: snap/advance, `effectiveSpeed` integration (§4.3)
+- 🟥 Ten enemy kinds (hp/speed/armor/resists/fly/bounty/leak) (§5.2)
+- 🟥 Flying enemies straight-line Spawn→Goal, `canHitAir` gate (§4.3)
+- 🟥 Maze re-path: nearest-node rejoin without teleport (§4.3) — AC #13
+- 🟥 Healer aura heals nearby allies 6 hp/s r=60 (§5.2)
+- 🟥 20 lives; leak removes enemy, `lives -= leakCost`, "-1" float (§4.6) — AC #16
+- 🟥 `lives ≤ 0` → GameOver immediately, wave abandoned (§4.6) — AC #17
+
+### M3 — Towers: targeting, firing, damage & status
+- 🟥 Tower table T1 base stats, four kinds (§5.1)
+- 🟥 Per-step cooldown, acquire/validate target, fire (§4.4)
+- 🟥 Targeting modes First/Last/Strongest/Closest, sticky, cycle with `T` (§4.8) — AC #12
+- 🟥 Physical `max(1, dmg-armor)`; elemental resist multiplier + immunity (§4.5) — AC #6, #9
+- 🟥 Slow (strongest wins, no stack), Poison DoT, Stun, Vulnerable (§4.5) — AC #7, #8
+- 🟥 Upgrade trees T1→T2→T3 fork A/B→T4, stat replacement (§5.1)
+
+### M4 — Projectiles & flight
+- 🟥 Projectile model: `pos`/`vel`, Arrow re-homes, Cannon no homing (§4.10, §5.3)
+- 🟥 Cannon splash: linear falloff 100%→50% at edge (§4.10) — AC #10
+- 🟥 Hitscan Tesla chain ×N with `falloff^k` over `chainRange` (§4.10) — AC #11
+- 🟥 Projectile lifetime cap 2.0 s, target-loss despawn (§4.10)
+
+### M5 — Economy & placement validation
+- 🟥 Placement validity: in-grid Buildable, empty, `gold≥k`, not under panel (§4.7) — AC #1, #2, #3
+- 🟥 Maze seal rejection via `Pathfinding.bfs` returning `None` (§4.7) — AC #4
+- 🟥 On valid: deduct gold, create tower, (maze) recompute path (§4.7)
+- 🟥 Bounty on kill, wave-clear bonus, interest `floor(gold*0.08)` cap 40 (§4.9) — AC #5, #14
+- 🟥 Sell refund 70% floored + (maze) re-path (§4.9) — AC #13
+- 🟥 Difficulty tunables config record + Easy/Normal/Hard presets (§12)
+
+### M6 — Waves, win/loss & scoring
+- 🟥 Wave scheduler: `SpawnGroup` timeline + per-group emit cursor (§6)
+- 🟥 20-wave campaign, ramp knobs `hpScale`/count/interval (§6)
+- 🟥 Wave completion → `WaveCleared` 1.5 s → `Building`, bonuses (§4.2, §6) — AC #15
+- 🟥 Phase state machine Building/Combat/Paused/WaveCleared/Victory/GameOver (§4.2, §7)
+- 🟥 Victory on Wave 20 clear with `lives > 0` (§11) — AC #18
+- 🟥 Additive scoring: kills, wave clear, no-leak, victory + difficulty mult (§11)
+
+### M7 — Rendering & enemy symbology
+- 🟥 Layered draw order: terrain, range, towers, enemies, projectiles, FX, HUD, overlays (§8)
+- 🟥 Tile/tower/projectile/beam/explosion draw specs (§8)
+- 🟥 `Enemy → Token` ChannelMap in `FS.GG.Game.Render` (klass/sigil/threat/radius) (§8.1)
+- 🟥 Four ranked sizes, `Speed` pip tiers, `Health` fraction (§8.1)
+- 🟥 Status glyph overlay (slow/poison/stun/vulnerable) — not a Symbology channel (§8.1)
+- 🟥 `Legibility.score` per wave asserts `Verdict = Clean` (§8.1)
+
+### M8 — UI, menus & stats
+- 🟥 Top HUD bar: lives/gold/score, wave x/20 + next-wave preview, phase/interest (§9)
+- 🟥 Build panel + selected-tower inspector (upgrade/targeting/sell/DPS) (§9)
+- 🟥 Menu stack: cursor wrap, cycler/slider rows, Title/Pause/run-end (§9.1)
+- 🟥 Settings apply live + persist (difficulty/volume/grid) (§9.1, §13)
+- 🟥 `RunStats` accumulation + `Lifetime` fold/persist (§9.2)
+- 🟥 Stats screen: KPI tiles, leaks-per-wave bars, economy line chart (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues per event, `Audio.interpret` → `AudioEvidence` (§10)
+- 🟥 Music loops switch on phase transitions incl. boss variant (§10)
+- 🟥 `Audio.setMasterVolume` clamp `[0,1]`, mute toggle (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 20 acceptance scenarios green (§14)
+- 🟥 Seed + input-log replay is bit-identical (§13) — AC #19
+- 🟥 Fixed-step + `SpatialGrid` perf budget under 16.7 ms/frame (§13)
+
+### Stretch — deferred (post-v1)
+- ⬜ Endless/continuous mode + early-call bonus + leaderboard (§15.1)
+- ⬜ Per-tower targeting presets saved across maps + lock-target hotkey (§15.2)
+- ⬜ Hero/abilities: player commander or active spells on cooldown (§15.3)
+- ⬜ More tower types: Poison Sprayer, Buff/Aura, Tar pit (§15.4)
+- ⬜ Maze-building maps as default + destructible blockers + dual lanes (§15.5)
+- ⬜ Map editor exporting `Wave`/grid JSON (§15.6)
+- ⬜ Enemy abilities: burrowers, splitters, shielders (§15.7)
+- ⬜ Meta-progression: branch/map unlocks + daily seeded challenge (§15.8)
+- ⬜ Co-op two-warden mode sharing one economy (§15.9)

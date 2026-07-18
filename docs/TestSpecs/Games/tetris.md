@@ -623,3 +623,78 @@ All scenarios assume a fixed RNG seed and the default tunables unless stated.
 6. **Garbage / versus mode** — sent lines for local or networked 2-player.
 7. **Replays & leaderboards** — record the deterministic input stream; persist top runs.
 8. **Themes & skins** — swappable block palettes and backgrounds.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed-step gravity via `FixedStep.drain`, banked remainder (§7.5, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 10×22 grid (rows 0–19 visible, `y` increasing downward) coordinate system (§4.1)
+
+### M1 — Tetrominoes & spawn
+- 🟥 7 piece kinds + guideline colors; `cellsOf` derives cells from Kind/Pos/Rotation (§4.2, §5.2)
+- 🟥 Spawn centered in columns 3–6, straddling the hidden buffer rows (§4.2) — AC #1
+- 🟥 Spawn-overlap detection feeding top-out (§4.2, §11)
+
+### M2 — Input, movement & DAS
+- 🟥 Edge-triggered vs held key model; key-down/up → `Msg` (§3, §7.5)
+- 🟥 One-cell horizontal shift with wall block at columns 0/9 (§7.3) — AC #2
+- 🟥 DAS 170 ms delay → ARR 50 ms auto-repeat while held (§3, §7.3) — AC #3
+
+### M3 — Gravity, rotation & lock delay
+- 🟥 Per-level gravity step with collision check (§4.3, §6.2) — AC #1
+- 🟥 SRS rotation with 5-offset kick tables (simpler 3-kick fallback allowed) (§4.4) — AC #4
+- 🟥 Soft drop (÷20, +1/cell) and hard drop (instant, +2/cell, immediate lock) (§4.3) — AC #5, #6
+- 🟥 Lock timer 500 ms with 15 move/rotate resets cap (§4.5) — AC #7
+
+### M4 — Line clears, scoring & levels
+- 🟥 Single-scan full-row detection, clear + shift-down collapse (§4.6, §13) — AC #8, #9
+- 🟥 Score by clear count × (level+1) plus soft/hard-drop points (§11) — AC #8, #9
+- 🟥 Level up every 10 lines, gravity interval from the §6.2 curve (§6.2) — AC #10
+
+### M5 — Bag, hold & next queue
+- 🟥 7-bag Fisher–Yates shuffle via `Rng.nextInt`, refill on empty (§4.7) — AC #11
+- 🟥 5-deep next queue, shifts up and reveals a new preview on lock (§4.8) — AC #13
+- 🟥 Hold swap with `holdUsed` flag, once per spawned piece (§4.8) — AC #12
+
+### M6 — Match flow & screens
+- 🟥 Title / Playing / Paused / GameOver phases select the screen (§7.1, §9)
+- 🟥 Top-out on spawn collision → `GameOver`, `HighScore` update (§11) — AC #14
+- 🟥 Pause suspends gravity/timers/input, resumes identical state (§7.3) — AC #15
+
+### M7 — Rendering (Skia)
+- 🟥 Draw order: background, well frame, locked cells, ghost, active, side panels, HUD (§8)
+- 🟥 Beveled rounded-block style + hard-drop ghost projection (§8)
+- 🟥 Optional line-clear white flash before collapse (§8)
+
+### M8 — Menus, settings & stats
+- 🟥 Menu stack with wrapping cursor and cycler/slider rows (§9.1)
+- 🟥 Difficulty / volume / sound / ghost settings apply live + persist (§9.1, §12, §13)
+- 🟥 `MatchStats`/`LifetimeStats` accumulation, KPI tiles + clears/score charts (§9.2)
+
+### M9 — Audio
+- 🟥 Per-event `AudioEffect` cues via `update`, `Audio.interpret` evidence, volume clamp `[0,1]` (§10)
+- 🟥 "Korobeiniki" music on `StartGame`, `stopMusic` on top-out, master-volume mute toggle (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 16 acceptance scenarios green (§14)
+- 🟥 Seed + timestamped input-log replay is identical (§13) — AC #16
+
+### Stretch — deferred (post-v1)
+- ⬜ Ghost piece toggle & hold-to-rotate options (§15.1)
+- ⬜ Line-clear and lock animations, Tetris particle burst (§15.2)
+- ⬜ T-spin detection & bonus scoring (TSS/TSD/TST) (§15.3)
+- ⬜ Back-to-back & combo multipliers (§15.4)
+- ⬜ Marathon / Sprint (40-line) / Ultra (2-min) modes (§15.5)
+- ⬜ Garbage / versus mode (§15.6)
+- ⬜ Replays & leaderboards (§15.7)
+- ⬜ Themes & skins (§15.8)
