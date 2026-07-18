@@ -649,3 +649,84 @@ All tunables live in a single `Config` record so balance is data-driven and test
 7. **Difficulty selects** (rookie/veteran) preloading different `Config` records.
 8. **Touch/trackpad mode:** tap-to-fire mapping for non-mouse devices.
 9. **Per-battery missile-speed differences** (a "fast" central battery) for tactical depth.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & tick loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Variable-`dt` `Tick`, clamped to 0.05 s (no `FixedStep`) (§7, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 1280×720 coordinate system, ground line at `y = 680` (§4.1, §8)
+
+### M1 — Input, crosshair & firing
+- 🟥 Mouse-move → `Crosshair` clamped to `x∈[0,1280]`, `y∈[0,660]` (§4.2) — AC #1
+- 🟥 Edge-triggered fire / force-fire / pause / start-restart keys (§3)
+- 🟥 3 batteries + 6 cities placed on ground, ammo 10 each (§4.8, §4.9, §5.1, §5.2)
+- 🟥 `Fire` auto-selects nearest battery with ammo, spawns counter, ammo −1 (§3, §4.3) — AC #2, #3
+- 🟥 Force-fire `A`/`S`/`D` targets named battery (§3) — AC #14
+- 🟥 Dry click with no ammo → ignored + dry-click cue (§3) — AC #13
+
+### M2 — Counter-missiles & blasts
+- 🟥 Straight-line counter travel at 900 px/s, detonate within 6 px of target (§4.3) — AC #4
+- 🟥 Blast grow/hold/shrink lifecycle, max radius 60 px, ≈1.0 s total (§4.4) — AC #6
+- 🟥 Simultaneous-blast cap of 12 (§4.4, §13)
+
+### M3 — Incoming missiles & collisions
+- 🟥 Incoming spawn at top edge, straight-line to a random alive ground target (§4.5)
+- 🟥 Point-in-circle blast kill → remove + score `25 × mult` (§4.4, §11) — AC #5
+- 🟥 Incoming impact destroys city/battery, no points to player (§4.5, §4.9) — AC #7
+- 🟥 Per-frame collision pass over blasts × incoming (§13)
+
+### M4 — Advanced threats (MIRV, planes, smart bombs)
+- 🟥 MIRV split once at altitude → 2–3 retargeting children (§4.6) — AC #9
+- 🟥 MIRV killed before split spawns no children (§4.6) — AC #10
+- 🟥 Bomber planes cross screen + drop bombs, blast kills for `100 × mult` (§4.7)
+- 🟥 Smart-bomb lateral dodge (≤2), worth `125 × mult` (§4.7)
+
+### M5 — Waves & progression
+- 🟥 Wave spawner: `ToSpawn` budget, `SpawnTimer`/`SpawnInterval` cadence (§6, §7)
+- 🟥 Wave clear → `WaveBonus` tally (surviving cities + unused ammo) × mult (§9, §11) — AC #11
+- 🟥 Wave escalation: count/speed/interval/multiplier ramps + battery reload (§6) — AC #12
+- 🟥 Threat unlocks — MIRVs W3, planes W5, smart bombs W7 (§6)
+
+### M6 — Rendering (Skia)
+- 🟥 Draw order: sky, ground, cities, batteries, trails, blasts, crosshair, HUD (§8, §9)
+- 🟥 Capped-polyline trails + two-color blast flicker (§8)
+
+### M7 — Screens, menus & settings
+- 🟥 `Phase` screen states: Title / Playing / WaveBonus / Paused / GameOver (§7, §9)
+- 🟥 Pause freezes world, resumes exact state (§7) — AC #15
+- 🟥 Game over when all 6 cities are `Rubble` (§4.9, §11) — AC #8
+- 🟥 Menu stack, cursor wrap, cycler/slider rows (§9.1)
+- 🟥 Difficulty presets + volume/scale/shake apply live + persist (§9.1, §12, §13)
+
+### M8 — Stats & charts
+- 🟥 `RunStats`/`LifetimeStats` accumulation + persist (§9.2, §13)
+- 🟥 Interceptions-per-wave bars + cities-remaining step-down line (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues via `Audio.playSfx`/`playMusic`, `Audio.interpret` (§10)
+- 🟥 Master volume clamp `[0,1]`, stop ambient pad on game over (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 16 acceptance scenarios green (§14)
+- 🟥 Seed + input-log replay is identical in `Score`/`Wave`/positions (§13) — AC #16
+
+### Stretch — deferred (post-v1)
+- ⬜ Chain-reaction secondary blasts on enemy kills (§15.1)
+- ⬜ City rebuild bonus every N points (§15.2)
+- ⬜ Combo/streak per-kill scoring (§15.3)
+- ⬜ Persistent leaderboard with initials entry (§15.4)
+- ⬜ Screen shake & particle debris (§15.5)
+- ⬜ Defcon-style background color ramp (§15.6)
+- ⬜ Difficulty select preloading `Config` records (§15.7)
+- ⬜ Touch/trackpad tap-to-fire mode (§15.8)
+- ⬜ Per-battery missile-speed differences (§15.9)

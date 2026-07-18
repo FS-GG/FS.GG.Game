@@ -616,3 +616,80 @@ Weights are data-driven so balancing is config, not code.
 6. **Power-up shield** that absorbs one lethal enemy hit.
 7. **Cosmetic skins** unlocked by best-score milestones.
 8. **Online high-score board** with ghost replay of the run path.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 60 Hz tick via `FixedStep.drainWith`, banked remainder (§7, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 720×1280 portrait frame, `worldY` up = negative (§4.1)
+
+### M1 — Steering & screen-wrap
+- 🟥 Held-key steer input `InputLeft`/`InputRight`, applied in `Tick` (§3, §7)
+- 🟥 Velocity-based horizontal move `vxMove = 520 px/s`, optional accel smoothing (§4.4) — AC #9
+- 🟥 Horizontal screen-wrap at `±doodleHalfW`, `vy` unchanged (§4.4) — AC #8
+
+### M2 — Gravity, auto-bounce & one-way collision
+- 🟥 Gravity `g = 2400 px/s²`, terminal `vyMax = 1600`, integrate `worldY` (§4.2)
+- 🟥 Feet-sensor AABB + swept previous→current Y land test, `contactBand = 12 px` (§4.5, §13)
+- 🟥 Auto-bounce `vy = -1150 px/s` only while falling (`vy > 0`) (§4.3) — AC #1
+- 🟥 One-way collider: rising doodle passes through platforms, no bounce (§4.3) — AC #2
+
+### M3 — Platform types & procedural generation
+- 🟥 `PlatformKind` set: Static / Moving / Breakable / Spring (§4.7)
+- 🟥 Spring super-bounce `vy = -1900 px/s`, apex ≈ 752 px (§4.7) — AC #3
+- 🟥 Breakable: no bounce, `Breaking` anim, removed after 0.25 s (§4.7, §5) — AC #4
+- 🟥 Vertical gap growth `90 → 230 px` with altitude, reachability constraint (§4.8) — AC #10
+- 🟥 Altitude-interpolated type-weight schedule + spring roll (§12)
+
+### M4 — Camera, scoring & death
+- 🟥 Camera lerps up only (`cameraY` never increases), 40%-from-top follow (§4.6) — AC #6
+- 🟥 `MaxClimb` → `Score = floor(-MaxClimb)`, never decreases (§11) — AC #5
+- 🟥 Death when doodle top `> cameraY + 1280` → `GameOver`, update `Best` (§7, §11) — AC #7
+
+### M5 — Enemies & jetpack
+- 🟥 Enemy spawn from altitude ≥ 3000 px, drift, off-camera cull (§4.9, §5)
+- 🟥 Lethal body contact vs. head-stomp (falling) resolution (§4.9) — AC #11
+- 🟥 Jetpack pickup + `Jetpack` overlay: `vy ≈ -2200` sustained 2.2 s, gravity/bounce suppressed (§5) — AC #13
+
+### M6 — Rendering (Skia)
+- 🟥 World→screen transform `screenY = worldY - cameraY`, cull off-view (§8)
+- 🟥 Draw order: background, platforms, pickups, enemies, doodle, particles, HUD (§8)
+- 🟥 Doodle squash/stretch on bounce, facing flip, jetpack flame trail (§8)
+
+### M7 — UI, menus & settings
+- 🟥 `Title`/`Playing`/`Paused`/`GameOver` phase states + screens (§7, §9)
+- 🟥 Menu stack, cursor wrap, cycler/slider rows, Back-pop (§9.1)
+- 🟥 Difficulty presets + volume/shake/scale settings apply live & persist (§9.1, §12, §13)
+
+### M8 — Stats & charts
+- 🟥 `RunStats` accumulation in `Tick`, snapshot + fold to `LifetimeStats`, persist (§9.2, §13)
+- 🟥 Platforms-hit-by-type bar chart + height-over-time line chart, scope toggle (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues per event, `Audio.interpret`, volume clamp `[0,1]` (§10)
+- 🟥 `bg-loop` music start on run / stop at Game Over, `M` mute toggle (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 14 acceptance scenarios green (§14)
+- 🟥 Same seed + identical input → identical `Platforms` (§13) — AC #12
+- 🟥 Frame-rate independence via fixed-timestep accumulator (§13) — AC #14
+
+### Stretch — deferred (post-v1)
+- ⬜ Shooting: upward projectiles to kill unsafe-to-stomp enemies (§15.1)
+- ⬜ Jetpack & propeller-hat boost variety (§15.2)
+- ⬜ Vanishing one-shot platforms & moving-breakable combos (§15.3)
+- ⬜ Daily challenge: shared fixed seed + leaderboard (§15.4)
+- ⬜ Tilt/accelerometer & touch controls (§15.5)
+- ⬜ Power-up shield absorbing one lethal hit (§15.6)
+- ⬜ Cosmetic skins unlocked by best-score milestones (§15.7)
+- ⬜ Online high-score board with ghost replay (§15.8)

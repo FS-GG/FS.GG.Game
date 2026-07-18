@@ -666,3 +666,86 @@ Verifiable Given/When/Then. `dt` steps are `1/60 s` unless noted.
 6. **CRT/vector post-processing** (glow, scanlines, line bloom) via a Skia shader pass.
 7. **Online high-score leaderboard** + replay sharing (leveraging deterministic seeds).
 8. **Screen-clear "smart bomb"** as a rare, limited-use panic button.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 1/60 s tick via `FixedStep.drainWith`, banked remainder (§13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 1280×720 toroidal playfield + collision-safe `Vec2` (§4, §5)
+
+### M1 — Ship movement & input
+- 🟥 Held rotate/thrust + edge-triggered Fire/Hyperspace/Pause/Start keys (§3)
+- 🟥 Rotation 270 deg/s + thrust 220 px/s² along nose vector (§4.1) — AC #1, #4
+- 🟥 Drag `*0.99`/tick + max-speed clamp 600 px/s (§4.1) — AC #2, #3
+- 🟥 Position wrap after integration (§4.6) — AC #5
+
+### M2 — Firing & bullets
+- 🟥 Fire spawns bullet at nose tip, inheriting ship velocity (§4.2) — AC #6
+- 🟥 250 ms cooldown + max 4 concurrent bullets (§4.2) — AC #7, #19
+- 🟥 Bullet 1.1 s lifetime despawn, 2 px hitbox, edge wrap (§4.2) — AC #6
+
+### M3 — Asteroids, waves & world
+- 🟥 Three size classes (radius/speed/points/spin) with baked polygons (§4.3, §5.2)
+- 🟥 Wave spawn `min(4+(n-1),11)` Large at edges, 150 px no-spawn radius (§6)
+- 🟥 Per-wave speed ramp `min(1.6, 1+0.06*(n-1))` (§6)
+- 🟥 Wave-clear check + 2.0 s inter-wave pause → next wave (§6) — AC #13
+
+### M4 — Collisions, splitting & scoring
+- 🟥 Wrap-aware circle-vs-circle collision resolution (§4.4, §4.6)
+- 🟥 Bullet↔asteroid split into 2 children of next size down (§4.3) — AC #8, #9
+- 🟥 Small asteroid removed with no children (§4.3) — AC #10
+- 🟥 Scoring 20/50/100 per size, player bullets only (§11) — AC #9, #10
+
+### M5 — Death, respawn, hyperspace & lives
+- 🟥 Ship↔hazard death: lose life, freeze 1.5 s, center-clear respawn (§4.5) — AC #11
+- 🟥 2.5 s spawn invulnerability with blink render (§4.5) — AC #12
+- 🟥 Hyperspace teleport, zero velocity, 12% bad-warp, 1.0 s cooldown (§4.7) — AC #16
+- 🟥 Extra life every 10,000 pts, `NextExtraLifeAt` advance (§11) — AC #15
+
+### M6 — UFO enemy
+- 🟥 UFO spawn timing (30 s or ≤3 rocks), max 1 at a time (§4.8)
+- 🟥 Large/Small saucer types, horizontal travel + zig-zag jog (§4.8)
+- 🟥 UFO firing every 1.2 s; bullet kills ship, passes through rocks (§4.8, §4.4) — AC #18
+- 🟥 UFO scoring 200 / 1000 (§11) — AC #17
+
+### M7 — Rendering (Skia)
+- 🟥 Vector draw order: background, particles, asteroids, UFO, bullets, ship, HUD (§8)
+- 🟥 Ship triangle + thrust flame; skip draw on invuln blink-off frames (§8)
+- 🟥 Wrap rendering: duplicate bodies straddling edges (§8, §4.6)
+- 🟥 Explosion/thrust particle debris, capped at 200 (§5.5, §8)
+
+### M8 — HUD, menus, stats & screens
+- 🟥 Title/Playing/Paused/GameOver phases + score/lives/wave HUD (§7, §9)
+- 🟥 Menu stack, cursor wrap, cycler/slider rows (§9.1)
+- 🟥 Difficulty presets + volume/CRT settings apply live & persist (§9.1, §12, §13)
+- 🟥 Game Over → Enter restarts fresh run (lives 3, wave 1, score 0) (§11) — AC #14
+- 🟥 Stats screen: `MatchStats`/`LifetimeStats` + kills-by-size & shots-fired-vs-hit charts (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues via `Audio.playSfx`/`playMusic` (§10)
+- 🟥 Heartbeat music loop + `Audio.setMasterVolume` clamp `[0,1]` (§10)
+- 🟥 `Audio.interpret` → `AudioEvidence` for deterministic, hardware-free tests (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 20 acceptance scenarios green (§14)
+- 🟥 Seed + input-log replay: identical spawns & final Score (§13) — AC #20
+
+### Stretch — deferred (post-v1)
+- ⬜ Gamepad support (analog rotate, triggers to fire/thrust) (§15.1)
+- ⬜ Mouse aim mode (rotate toward cursor, click to fire) (§15.2)
+- ⬜ UFO-dropped powerups: spread-shot, shield, rapid-fire (§15.3)
+- ⬜ Two-player co-op (second ship, shared wave, separate lives) (§15.4)
+- ⬜ Asteroid variety: dense 2-hit rocks / 3-way splits (§15.5)
+- ⬜ CRT/vector post-processing (glow, scanlines, line bloom) (§15.6)
+- ⬜ Online high-score leaderboard + replay sharing (§15.7)
+- ⬜ Screen-clear "smart bomb" panic button (§15.8)

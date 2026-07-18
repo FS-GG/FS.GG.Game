@@ -1066,3 +1066,92 @@ Ranked, out of scope for v1:
 8. **Co-op (local 2-player)** twin-stick.
 9. **Render interpolation** between fixed sim steps for ultra-smooth motion at high refresh.
 10. **Mod/data-pack support** — items, enemies, room templates as external data files.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 120 Hz sim via `FixedStep.drainWith`, `MAX_STEPS = 5` guard, banked accumulator (§7.3, §13) — AC #8
+- 🟥 `Rng` (splitmix64) seeded, `LayoutRng`/`DropRng` sub-streams via `Rng.split` (§13)
+- 🟥 Logical 1280×720 coordinate system + world→screen transform (§6, §8)
+
+### M1 — Input & twin-stick control
+- 🟥 `InputState` snapshot + `PressedThisTick` edge set `(currentKeys − previousKeys)` (§3, §7.3)
+- 🟥 Keyboard/mouse + gamepad move & aim, fully decoupled (§3) — AC #9
+- 🟥 Auto-repeat fire cadence + 8-way arrow-aim snap vs 360° analog aim (§3, §4.3)
+
+### M2 — Movement, dodge & shots
+- 🟥 Velocity lerp (`accel`/`friction`) + diagonal normalization, speed clamp (§4.1)
+- 🟥 Axis-separated wall/obstacle sweep, circle hitbox `r = 13` (§4.1)
+- 🟥 Dodge roll: i-frames, velocity impulse, `0.90 s` cooldown, fire lockout (§4.2)
+- 🟥 Stat-derived shots (dmg/fireRate/shotSpeed/range/size) + velocity inheritance (§4.3)
+- 🟥 Multishot `18°` spread fan centered on aim (§4.3) — AC #4
+- 🟥 Shot lifetime/range, bounce, pierce & homing termination (§4.3) — AC #10
+
+### M3 — Combat, health & currency
+- 🟥 Shot→enemy circle overlap: `dmg`, knockback, hit-flash, pierce decrement (§4.4)
+- 🟥 Enemy/bullet→player damage with i-frame + `0.80 s` post-hit invuln gating (§4.4, §4.6) — AC #6
+- 🟥 Half-heart health (red/soul/black), damage resolution & death at `0` (§4.6)
+- 🟥 Player stats recompute: additive-then-multiplicative phases + clamps (§4.5) — AC #3
+- 🟥 Coins/keys/bombs currencies (cap `99`), bomb drop/blast & shop purchase (§4.4, §4.7) — AC #11
+
+### M4 — Procedural floor generation
+- 🟥 Seed derivation `floorSeed = split(runSeed, floorIndex)` on `LayoutRng` stream (§4.8, §13) — AC #2
+- 🟥 Room budget + branching placement walk with bounded re-roll (§4.8)
+- 🟥 Special-room assignment: boss/treasure/shop/secret on the placed graph (§4.8)
+- 🟥 Room interior population by template + threat budget `6 + 2*floorIndex` (§4.8)
+- 🟥 Door carving between orthogonally adjacent rooms (§4.8) — AC #1
+
+### M5 — Entities: enemies, bosses & rooms
+- 🟥 Enemy roster + per-enemy state machines (e.g. Charger WindUp→Dash→Recover) (§5.2)
+- 🟥 Boss phases & data-driven declarative bullet patterns (§5.3)
+- 🟥 Room-clear gating: seal doors on entry, open + drop-roll on clear (§7.3) — AC #5
+- 🟥 Weighted pickup/drop tables via `DropRng` sub-stream (§4.9)
+- 🟥 Per-floor difficulty ramp: threat budget + enemy HP/bullet scaling (§6, §12)
+
+### M6 — Rendering & enemy symbology
+- 🟥 Back-to-front layer draw order (background → HUD → overlays) (§8)
+- 🟥 `Enemy → Token` ChannelMap in `FS.GG.Game.Render`, `Symbology.token` grammar (§8.1)
+- 🟥 Legibility linter assertion pinned to the accepted `Size` channel (§8.1)
+- 🟥 Pooled particles (cap `600`) + room-transition camera slide `0.35 s` (§8)
+
+### M7 — UI, menus & stats
+- 🟥 HUD: hearts row, currency, active-item charge meter, minimap, floor name (§9)
+- 🟥 Menu stack: cursor wrap, cycler/slider rows, `MenuBack` pop (§9.1)
+- 🟥 Settings apply live + persist to `MetaProfile`; difficulty modes (§9.1, §12)
+- 🟥 Stats & charts screen: KPI tiles + depth histogram + damage-per-floor line (§9.2)
+
+### M8 — Audio
+- 🟥 `AudioEffect` cues per event, `Audio.interpret` → `AudioEvidence.Requested` (§10)
+- 🟥 Per-context music loop (one track at a time), volume clamp `[0,1]` + mute (§10)
+
+### M9 — Win/loss & permadeath
+- 🟥 Final-boss (Floor 6) defeat → `Victory` screen + unlock (§11)
+- 🟥 Permadeath at `0` half-hearts → `GameOver`, run discarded (§11) — AC #7
+- 🟥 Run-score tally + end-of-run meta-progression unlock evaluation (§11, §4.10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 11 acceptance scenarios green (§14)
+- 🟥 Procedural generation byte-identical for a seed (§14.1) — AC #1
+- 🟥 Layout independent of combat RNG stream (§14.2) — AC #2
+- 🟥 Seed + input-log replay is byte-identical given identical actions/timing (§13)
+
+### Stretch — deferred (post-v1)
+- ⬜ Active items & charges fully fleshed out with the HUD charge meter (§15.1)
+- ⬜ Item synergy graph — bespoke pairwise synergies (§15.2)
+- ⬜ Sprite/animation atlas replacing primitive shapes (§15.3)
+- ⬜ Daily-seed leaderboard with shareable seeds + online submission (§15.4)
+- ⬜ More floors, bosses & final-floor branching path (§15.5)
+- ⬜ Curse/blessing room modifiers altering a whole floor (§15.6)
+- ⬜ Multiple playable characters with distinct starts (§15.7)
+- ⬜ Local 2-player co-op twin-stick (§15.8)
+- ⬜ Render interpolation between fixed sim steps (§15.9)
+- ⬜ Mod/data-pack support — external item/enemy/template data (§15.10)

@@ -555,3 +555,73 @@ Data-driven tunables (all defined as named constants / a config record):
 6. **Best-of-N matches** and a simple tournament bracket.
 7. **Online two-player** via rollback netcode (deterministic core already supports it).
 8. **Power-ups** (multi-ball, paddle grow/shrink) as an optional arcade variant mode.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed 60 Hz tick via `FixedStep.drain`, banked remainder (§7.5, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 1280×720 coordinate transform + letterbox scaling (§4.1, §8)
+
+### M1 — Paddles & input
+- 🟥 Held-key `KeysDown` set + edge-triggered menu keys (§3)
+- 🟥 Velocity-based paddle movement, wall clamp `[12, 598]` (§4.2)
+- 🟥 Both-keys-held → net-zero movement (§4.2) — AC #3
+
+### M2 — Ball & serve physics
+- 🟥 Constant-velocity ball integration (§4.3)
+- 🟥 Serve telegraph (0.8 s freeze) + angle launch, flat-band exclusion (§4.4) — AC #1
+- 🟥 Top/bottom wall bounce, speed preserved (§4.5) — AC #4
+
+### M3 — Collisions & scoring
+- 🟥 Paddle AABB + contact-offset angle control (§4.6) — AC #5, #6
+- 🟥 Per-hit 5% speed-up, cap at 1100 px/s (§4.6) — AC #7
+- 🟥 No-double-hit guard (moving-away test) (§4.6) — AC #8
+- 🟥 Scoring planes, point pause, serve-to-loser (§4.7) — AC #9
+- 🟥 Sub-step tunneling guard at high speed (§13) — AC #14
+
+### M4 — AI opponent (1P)
+- 🟥 Tracking with dead zone, per-rally aim error, idle recenter (§4.8) — AC #11
+
+### M5 — Match flow & screens
+- 🟥 Title / Playing / Paused / GameOver screen states (§7.1, §9)
+- 🟥 First-to-11 win → `GameOver winner`, physics stop (§11) — AC #10
+- 🟥 Pause freezes world, resumes exact state (§7.3) — AC #12
+
+### M6 — Rendering (Skia)
+- 🟥 Draw order: net, walls, paddles, ball, HUD scores (§8, §9.2)
+- 🟥 Optional goal-flash + paddle-squash effects (§8)
+
+### M7 — Menus & settings
+- 🟥 Menu stack, cursor wrap, cycler/slider rows (§9.5)
+- 🟥 Difficulty presets, volume/CRT settings apply live + persist (§9.5, §12)
+
+### M8 — Stats & charts
+- 🟥 `MatchStats`/`LifetimeStats` accumulation + persist (§9.6)
+- 🟥 Rally-length histogram + score-progression line chart (§9.6)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues, `Audio.interpret`, volume clamp `[0,1]` (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 14 acceptance scenarios green (§14)
+- 🟥 Seed + input-log replay is byte-identical (§13) — AC #13
+
+### Stretch — deferred (post-v1)
+- ⬜ Win-by-2 / deuce scoring (§15.1)
+- ⬜ Mouse & gamepad analog control (§15.2)
+- ⬜ Title-screen difficulty select (§15.3)
+- ⬜ Predictive AI through wall bounces (§15.4)
+- ⬜ Particles & CRT post-effect (§15.5)
+- ⬜ Best-of-N matches / tournament bracket (§15.6)
+- ⬜ Online rollback netcode (§15.7)
+- ⬜ Power-ups arcade variant (§15.8)

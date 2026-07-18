@@ -638,3 +638,87 @@ On death: lose 1 life, respawn at start, reset timer & `MaxRowReached`. **Lives 
 6. **Daily seed challenge** — fixed seed leaderboard using the deterministic RNG.
 7. **Variable canvas / responsive grid** — recompute cell size for non-1280×720 windows.
 8. **Touch/swipe controls** — directional swipes map to hops for mobile.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Variable-`dt` `Tick` subscription, clamped to ≤ 0.05 s (§7, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` as a value (§13)
+- 🟥 Logical 1280×720 grid: 64 px columns, 60 px row pitch, letterbox scaling (§4, §6, §8)
+
+### M1 — Hopping & input
+- 🟥 Edge-triggered `KeyDown` → `Hop`; hold/auto-repeat ignored (§3)
+- 🟥 Grid-snapped hop lerp over `HopDuration` 0.12 s, occupy destination at resolve (§4.1) — AC #1
+- 🟥 Mid-hop input dropped, no buffering in v1 (§4.1) — AC #2
+- 🟥 Wall/edge hop rejection, consumes no time or animation (§3, §4.1) — AC #3
+- 🟥 Per-attempt `MaxRowReached` furthest-row tracking (§4.1, §11)
+
+### M2 — Road & vehicles
+- 🟥 `Vehicle` entities: constant-velocity scroll with toroidal X wrap (§4.2, §5.2)
+- 🟥 Five road lanes with per-lane speed/direction/count/spacing (§4.2, §6)
+- 🟥 Vehicle AABB overlap = instant death (§4.2) — AC #4
+
+### M3 — River, platforms & riding
+- 🟥 Median safe row, frog may rest indefinitely (§4.3)
+- 🟥 `Log`/`TurtleGroup` platform drift with toroidal wrap (§4.4, §5.3, §5.4)
+- 🟥 Drown when a hop resolves on uncovered water (§4.4) — AC #5
+- 🟥 Land `Riding` on a platform whose AABB covers the cell (§4.4) — AC #6
+- 🟥 Velocity inheritance: `WorldX += platform.Vx*dt` while `Riding` (§4.4) — AC #7
+- 🟥 Off-screen ride death (frog center leaves `[0, 1280]`) (§4.4) — AC #8
+
+### M4 — Diving turtles
+- 🟥 Dive cycle `TUp → TSinking → TDown → TRising` phase timer (§4.5)
+- 🟥 Footing removed when fully `Down`; lane 4 dives, lane 2 from level ≥ 2 (§4.5, §6)
+- 🟥 Rider on a fully-submerged turtle drowns (§4.5) — AC #9
+
+### M5 — Home, bonuses & timer
+- 🟥 5 home slots + lethal hedges; hop into empty slot scores home (§4.6) — AC #10
+- 🟥 Hop into occupied slot or hedge = death (§4.6) — AC #11
+- 🟥 Fly bonus in a random empty slot, `FlyDuration` 6 s (§4.7) — AC #12
+- 🟥 Lady-frog rider escort bonus (§4.7, §5.6)
+- 🟥 Per-life `LifeTime` 30 s draining timer, reaching 0 = death (§4.8) — AC #13
+
+### M6 — Scoring, win/loss & progression
+- 🟥 Row / home / time-bonus / fly / lady scoring table (§11)
+- 🟥 Level clear: 5 slots → +1000, spare-life bonus, slots reset, speed ramp cap ×1.6 (§4.6, §6, §11) — AC #14
+- 🟥 Death handler: lose life, respawn, reset timer & `MaxRowReached`; 0 lives → `GameOver` + persist `HighScore` (§7, §11) — AC #15
+- 🟥 Per-tick collision order: move → phases → ride → hop resolve → death → score (§13)
+
+### M7 — Rendering (Skia)
+- 🟥 Background bands + back-to-front draw order (§8)
+- 🟥 Platform / vehicle / frog / bonus sprites, submerging-turtle alpha fade (§8)
+- 🟥 Splash + squash particles, hop scale-pop, death flash (§8)
+- 🟥 HUD overlay: score / level / high score, lives icons, timer bar (§9)
+
+### M8 — Menus & stats
+- 🟥 Menu stack (Title / Settings / Pause / Game Over), cursor wrap, cycler rows (§9.1)
+- 🟥 Difficulty / volume / grid-overlay settings apply live + persist (§9.1, §12, §13)
+- 🟥 `RunStats`/`LifetimeStats` accumulation + persist (§9.2, §13)
+- 🟥 Deaths-by-cause bar + score-by-level line charts (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues per event table, `Audio.interpret`, volume clamp `[0,1]` (§10)
+- 🟥 Looping `arcade-theme` music on `Title`/`Playing`, stop on `GameOver` (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 16 acceptance scenarios green (§14)
+- 🟥 Seed + `Tick`/`Hop` replay is bit-identical (§13) — AC #16
+
+### Stretch — deferred (post-v1)
+- ⬜ Input buffering: queue one hop during an in-progress hop (§15.1)
+- ⬜ Crocodiles: lethal-front/rideable-back log segment + home-slot crocs (§15.2)
+- ⬜ Snake on the median hazard at higher levels (§15.3)
+- ⬜ Otters / divers as additional river hazards (§15.4)
+- ⬜ Two-frog co-op, shared lives on one board (§15.5)
+- ⬜ Daily seed challenge leaderboard via deterministic RNG (§15.6)
+- ⬜ Variable canvas / responsive grid for non-1280×720 windows (§15.7)
+- ⬜ Touch/swipe directional controls for mobile (§15.8)

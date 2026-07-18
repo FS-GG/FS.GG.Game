@@ -669,3 +669,82 @@ Data-driven tunables (defaults shown):
 6. **"Win" mode** — finish all unique layouts twice for a victory screen + ranking.
 7. **Screen-shake & juicier particles**, ball trails scaling with speed.
 8. **Accessibility:** colorblind-safe brick palette toggle, adjustable ball speed.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & game loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Variable-`dt` `Tick` clamped to ≤ 0.05 s, sub-stepped so no ball moves > 7 px/substep (§7.5, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed`, threaded through `Model` (§13)
+- 🟥 Logical 1280×720 coordinate system + host letterbox scaling (§4.1, §8)
+
+### M1 — Paddle & input
+- 🟥 Held left/right + edge-triggered actions; both-held cancels to zero (§3)
+- 🟥 Velocity-based paddle at 620 px/s, wall clamp `x ∈ [16, 1280 − 16 − width]` (§4.2) — AC #14
+- 🟥 Optional mouse-X paddle control, most-recent-source-wins (§3, §4.2)
+
+### M2 — Ball physics & serve
+- 🟥 Constant-speed straight-line ball integration, no gravity/drag (§4.3)
+- 🟥 Serve state: ball stuck on paddle, launch upward on Space/Click (§4.7, §7.3) — AC #1
+- 🟥 Wall bounce reflects normal component, speed preserved exactly (§4.3) — AC #2
+- 🟥 Anti-stall guard nudges `|vy| ≥ 60 px/s`, total speed preserved (§4.3) — AC #13
+
+### M3 — Paddle deflection (skill mechanic)
+- 🟥 Impact-offset angle control, max 60° from vertical, `vy` forced upward (§4.4) — AC #3
+- 🟥 Paddle-velocity "english" (+15% vx), total angle capped at 75° (§4.4)
+
+### M4 — Bricks, collisions & scoring
+- 🟥 Brick grid built from layout (18×8, color/HP/points) (§5.3, §6.1)
+- 🟥 Ball–brick dominant-axis reflection + reposition, single-resolve per substep (§4.5)
+- 🟥 HP decrement; Silver HP 2, Gold indestructible (§4.5) — AC #5, #6
+- 🟥 Per-color scoring, Silver 50×level, Gold 0 (§11) — AC #4
+- 🟥 Speed-ups (every 8 bricks / top-wall / orange-red), cap 620 px/s; tunneling sub-step guard (§4.5, §13)
+
+### M5 — Lives, serving & power-ups
+- 🟥 Lives (start 3); life lost only when last ball exits gutter, re-serve; Game Over at 0 (§4.7) — AC #8, #10
+- 🟥 Bonus life at 20,000 points, once (§4.7, §11) — AC #17
+- 🟥 Capsule drop roll (12%), fall at 140 px/s, collect on paddle overlap, 3-capsule cap (§4.6)
+- 🟥 Sticky / Widen / Laser effects, one-per-category, timed expiry by `ElapsedMs` (§4.6) — AC #11
+- 🟥 Multiball 3-ball ±25° split; life kept until last ball lost (§4.6, §4.7) — AC #9
+- 🟥 Laser bolt spawns, travels up 700 px/s, breaks one brick HP (§4.6, §5.5) — AC #12
+
+### M6 — Levels & progression
+- 🟥 Level clear on last breakable brick → next layout, re-serve after 1.5 s (§7.3, §11) — AC #7
+- 🟥 Four cycling layouts: Classic Wall / Fortress / Checkerboard / Tunnels (§6.2)
+- 🟥 Difficulty ramp: per-level serve speed, drop-chance falloff (§6.3)
+
+### M7 — Rendering (Skia)
+- 🟥 Draw order: background, walls, bricks, capsules, paddle, bolts, balls + trail, HUD (§8)
+- 🟥 Beveled bricks, capsule glyphs, ball motion trail, brick-destruction particles (§8)
+
+### M8 — Screens, menus & stats
+- 🟥 Phase screens: Title / Serve / Playing / Paused / LevelClear / GameOver + HUD (§9)
+- 🟥 Menu stack, cursor wrap, cycler/slider rows; settings apply live + persist (§9.1)
+- 🟥 Pause freezes world & power-up timers, resumes exact state (§7.3, §13) — AC #15
+- 🟥 `MatchStats`/`LifetimeStats` accumulation + KPI tiles, bar & line charts (§9.2)
+
+### M9 — Audio
+- 🟥 `AudioEffect` cues per event, `Audio.interpret` → `AudioEvidence`, volume clamp `[0,1]` (§10)
+- 🟥 Looping `bgm` on Play; stop on Pause/GameOver/Title; `M` mute → `setMasterVolume` (§10)
+
+### M10 — Acceptance & determinism
+- 🟥 All 17 acceptance scenarios green (§14)
+- 🟥 Seed + recorded `Msg`-log replay reproduces Score/Lives/Level/surviving bricks (§13) — AC #16
+
+### Stretch — deferred (post-v1)
+- ⬜ Combo multiplier for consecutive brick hits without a paddle touch (§15.1)
+- ⬜ Persistent power-up loadout & shop between runs (§15.2)
+- ⬜ Boss / moving brick formations that shift horizontally (§15.3)
+- ⬜ Two-player alternating & co-op (two-paddle) modes (§15.4)
+- ⬜ Editor for custom brick layouts (§15.5)
+- ⬜ "Win" mode — finish all unique layouts twice for a victory screen (§15.6)
+- ⬜ Screen-shake, juicier particles, speed-scaled ball trails (§15.7)
+- ⬜ Colorblind-safe brick palette toggle & adjustable ball speed (§15.8)

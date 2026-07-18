@@ -554,3 +554,74 @@ All live in `Config` so balance is data-driven and testable without code changes
 7. **Animated interpolation** — smooth sub-cell head movement between steps for visual
    polish (purely cosmetic; sim stays grid-discrete).
 8. **Replay/ghost** — record input+seed to replay a run.
+
+## 16. Milestone Roadmap
+
+Implementation is sequenced into milestones; each item is a colored checkbox
+tracking its status. Items reference the section that specifies them.
+
+**Legend:** 🟥 Not started · 🟨 In progress · 🟩 Done · ⬜ Deferred (post-v1)
+
+_All items start 🟥 (spec status). Flip an item to 🟨 when work begins and 🟩 once
+its acceptance test(s) pass (§14)._
+
+### M0 — Scaffold & fixed-step loop
+- 🟥 Project scaffold: `Model`/`Msg`/`update`/`view` skeleton (§7)
+- 🟥 Fixed-step stepping via `FixedStep.drainWith`, banked remainder (§7, §13)
+- 🟥 `Rng` value seeded with `Rng.ofSeed 12345UL`, threaded through `Model` (§13)
+- 🟥 32×18 grid, 40 px cells, `(col,row)`→pixel-rect transform (§4.1, §8)
+
+### M1 — Snake stepping & turning
+- 🟥 Discrete one-cell step: prepend head, drop tail unless growing (§4.2) — AC #1
+- 🟥 Four-heading unit vectors, initial heading Right (§4.2)
+- 🟥 Direction queue (capacity 2, FIFO) with 180° reversal guard (§4.3) — AC #4
+- 🟥 Buffer two turns, dequeue one per step in order (§4.3) — AC #5
+
+### M2 — Food, growth & scoring
+- 🟥 Single pellet spawned in a uniformly random unoccupied cell (§4.4) — AC #11
+- 🟥 Eat → `PendingGrowth += 1`, tail retained so body +1 (§4.5) — AC #2
+- 🟥 `+10` score per pellet, respawn food, board-full win check (§4.4, §11)
+- 🟥 Speed ramp: recompute `StepSeconds` down to `minStepSeconds` floor (§4.6) — AC #3
+
+### M3 — Collisions & death
+- 🟥 Wall death when next head cell exits `[0,31]×[0,17]` (§4.7) — AC #6
+- 🟥 Self-collision death with vacating-tail exception (§4.7) — AC #8
+- 🟥 `wrapWalls` mode: wrap edges instead of dying (§4.8) — AC #7
+- 🟥 `HashSet<Cell>` body mirror for O(1) collision/spawn checks (§13)
+
+### M4 — Match flow & screens
+- 🟥 Title / Playing / Paused / GameOver screen states (§7, §9)
+- 🟥 Pause freezes sim and banked accumulator, resumes exact state (§7) — AC #10
+- 🟥 Perfect-game win when snake fills all 576 cells, "PERFECT!" (§11) — AC #12
+- 🟥 High score `max(Score, HighScore)`, persisted per `wrapWalls` mode (§11, §13) — AC #9
+
+### M5 — Rendering (Skia)
+- 🟥 Draw order: background, frame, grid, food, snake body, HUD, overlays (§8)
+- 🟥 Head drawn brighter with eye dots oriented toward heading (§8)
+- 🟥 Title / Pause / GameOver dim panels + centered text (§8, §9)
+
+### M6 — Menus & settings
+- 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
+- 🟥 Difficulty / volume / grid-overlay settings apply live + persist (§9.1, §12, §13)
+
+### M7 — Stats & charts
+- 🟥 `RunStats`/`LifetimeStats` accumulation + persist (§9.2, §13)
+- 🟥 Final-score distribution bars + last-run snake-length line chart (§9.2)
+
+### M8 — Audio
+- 🟥 `AudioEffect` cues: eat, turn, death, high-score, menu-confirm (§10)
+- 🟥 Ambient music loop + `Audio.setMasterVolume` clamp `[0,1]` (§10)
+
+### M9 — Acceptance & determinism
+- 🟥 All 12 acceptance scenarios green (§14)
+- 🟥 Seeded `Rng` value makes food placement + replay reproducible (§13)
+
+### Stretch — deferred (post-v1)
+- ⬜ Obstacles / maze walls (§15.1)
+- ⬜ Multiple food types — golden pellet (§15.2)
+- ⬜ Speed / portal power-ups (§15.3)
+- ⬜ Two-player co-op or versus (§15.4)
+- ⬜ Daily seed challenge leaderboard (§15.5)
+- ⬜ Difficulty presets — Casual / Classic / Frenzy (§15.6)
+- ⬜ Animated sub-cell interpolation (§15.7)
+- ⬜ Replay / ghost from input + seed (§15.8)
