@@ -48,6 +48,18 @@ let tests =
             Expect.equal (List.length (Hex.neighbours h)) 6 "six neighbours"
         }
 
+        test "distance saturates rather than wrapping at extreme coordinates (totality)" {
+            // True distance here is 4e9 > Int32.MaxValue; a truncating cast would wrap to a NEGATIVE
+            // value, silently corrupting distance/astar/lineDraw. Saturation keeps it positive & total.
+            let a = Hex.create 2_000_000_000 0
+            let b = Hex.create -2_000_000_000 0
+            Expect.equal (Hex.distance a b) System.Int32.MaxValue "saturates to Int32.MaxValue, not a negative wrap"
+            Expect.isTrue (Hex.distance a b > 0) "distance is never negative"
+            // lineDraw's length is distance+1; with a wrapped-negative distance it used to return [].
+            // A degenerate same-hex line still works at extreme coordinates.
+            Expect.equal (Hex.lineDraw a a) [ a ] "degenerate line at extreme coords is [a], not []"
+        }
+
         testCase "distance equals max(|dq|,|dr|,|ds|) and neighbours are unit (FsCheck)" <| fun () ->
             let prop (aq: int) (ar: int) (bq: int) (br: int) =
                 let a = hexOf aq ar

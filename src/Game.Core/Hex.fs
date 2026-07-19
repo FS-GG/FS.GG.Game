@@ -35,12 +35,17 @@ module Hex =
 
     // Integer cube distance = (|dq| + |dr| + |ds|) / 2 = max(|dq|, |dr|, |ds|). int64 deltas so a wide
     // coordinate span cannot overflow / throw in `abs` (the same hardening the square Pathfinding
-    // heuristic carries); the result fits `int` because it is at most the max axis delta.
+    // heuristic carries). The max axis delta can itself exceed Int32.MaxValue (coordinates run to
+    // ~±2.1e9), so the int64 result is SATURATED into `int` rather than truncated — truncation would
+    // WRAP a genuine multi-billion distance to a negative value, silently corrupting `distance`, the
+    // `astar` heuristic, and `lineDraw` (which would then emit an empty list). Saturation keeps it
+    // total, positive, and admissible (an underestimate) for the astronomically-far pairs that overflow.
     let distance (a: Hex) (b: Hex) : int =
         let dq = abs (int64 a.Q - int64 b.Q)
         let dr = abs (int64 a.R - int64 b.R)
         let ds = abs (int64 a.S - int64 b.S)
-        int ((dq + dr + ds) / 2L)
+        let d = (dq + dr + ds) / 2L
+        if d > int64 System.Int32.MaxValue then System.Int32.MaxValue else int d
 
     // 60° cube rotations about the origin: right (clockwise) [q,r,s] -> [-s,-q,-r]; left is its inverse
     // [q,r,s] -> [-r,-s,-q]. Six applications are the identity, and one preserves distance to origin.

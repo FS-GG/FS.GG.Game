@@ -52,9 +52,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-001: the invariant test + FsCheck over 1000 random axials assert q+r+s=0 holds by construction (create derives S)."]
@@ -76,9 +76,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-002: distance == max(|dq|,|dr|,|ds|) and distance to each neighbour == 1, over 1000 random pairs (int64 internally, total)."]
@@ -100,9 +100,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-003: six neighbours in fixed directions order; add/subtract/scale laws (subtract (add a b) b = a, scale a 0 = origin) over 1000 cases."]
@@ -124,9 +124,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-004: six rotateRight/rotateLeft applications are the identity, rotateLeft inverts rotateRight, and one rotation preserves origin distance, over 1000 cases."]
@@ -148,9 +148,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-005: range n = 3n(n+1)+1, ring n = 6n (1 at 0), spiral n = range n as sets, and every ring-n hex is exactly n from origin; negative n is empty."]
@@ -172,9 +172,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-006: lineDraw is contiguous, endpoint-inclusive, length distance+1 (concrete + 1000-case FsCheck); round preserves the invariant and is deterministic."]
@@ -196,9 +196,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-007: ofOffset (toOffset h) = h and ofDoubled (toDoubled h) = h over 1000 random hexes (exact integer inverses)."]
@@ -220,9 +220,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["FR-008: Hex.astar/bfs return a shortest hop path (length distance+1 on an open disc), share astar's degenerate contract, and agree on hop count + reachability + determinism over 1000 random blocked discs."]
@@ -244,12 +244,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
-    notes: ["Verification record: the full Game.Core suite is 630/630 green with the new Hex suite included."]
+    notes: ["Verification record: the full Game.Core suite is 640/640 green with the new Hex suite included."]
   - id: EV010
     kind: verification
     subject:
@@ -268,9 +268,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["Verification record: all Hex FsCheck properties (1000 cases each) are green."]
@@ -292,9 +292,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["Verification record: the hex determinism/reachability properties are green."]
@@ -316,9 +316,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["PD-001: Hex = { Q; R; S } with create deriving S; origin; the constructor is the only way to build a hex, so the invariant is total."]
@@ -340,9 +340,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["PD-004: rotateRight [q,r,s] -> [-s,-q,-r] and rotateLeft its inverse; the 6-cycle and distance-preservation properties confirm the cube rotation."]
@@ -364,9 +364,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["PD-006: round resets the largest-error component (ties S,Q,R) preserving the invariant; lineDraw is distance+1 cube-lerp samples through round — deterministic and contiguous."]
@@ -388,9 +388,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["PD-007: odd-r offset and doubled-width converters on the shared Cell; the round-trip property confirms exact integer inverses."]
@@ -412,9 +412,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["PC-001: Tier-1 surface addition — the Hex type + members declared in the new .fsi and recorded in both baselines; the new file joins the compile order; the drift gate stays green."]
@@ -436,9 +436,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["VO-001: the full property suite (invariant, distance/neighbour laws, rotation cycles, cardinalities, line contiguity, converter round-trips, hex-pathfinding optimality) fails before Hex exists and passes after; build clean under warnings-as-errors; both baselines regenerated."]
@@ -460,9 +460,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["VO-002: round/lineDraw determinism and hex-pathfinding byte-identity across runs are green (the FsCheck determinism property re-runs each search and compares)."]
@@ -484,9 +484,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["PM-001 diagnoseOnly: a purely additive new module — nothing removed or renamed — so no consumer migration; plan schemaVersion 1 accepted."]
@@ -508,9 +508,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/hex-019.trx
-      digest: "sha256:1c37feda852541c6ae1bc6ee38249dba1f786d838e1374032bfcec240f60e8eb"
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
       outcome: passed
-      passed: 630
+      passed: 640
       failed: 0
       skipped: 0
     notes: ["GV-001: readiness/019-hex-grid/work-model.json is refreshed by verify/ship from the current sources."]
