@@ -52,9 +52,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["FR-001: the FsCheck differential over 1000 random grids asserts astarStraight's path cost equals astar's; the cross term breaks ties only after f and h, so optimality is untouched."]
@@ -76,9 +76,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["FR-002: validPathNoCut is asserted on every astarStraight result (concrete + differential); it reuses the astarWith reconstruction."]
@@ -100,9 +100,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["FR-003: the astar byte-identity golden pins astar's diagonal and corridor results unchanged; astar passes the constant noTie, ordering identically to the historical (f,h,Col,Row) key — the whole pre-existing astar suite is the guard."]
@@ -124,9 +124,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["FR-004: the straightness test asserts astarStraight's total line-deviation < astar's on an open off-axis query (same cost), and the FsCheck property asserts deviation is never worse over 500 random open grids."]
@@ -148,9 +148,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["FR-005: the determinism golden asserts astarStraight is byte-identical across runs; the cross term is an integer |dx1*dy2 - dx2*dy1| in int64 and (f,h,cross,Col,Row) is a strict total order."]
@@ -172,12 +172,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
-    notes: ["Verification record: the full Game.Core suite is 614/614 green, including the pre-existing astar goldens (byte-identity guard) and the new astarStraight tests."]
+    notes: ["Verification record: the full Game.Core suite is 615/615 green, including the pre-existing astar goldens (byte-identity guard) and the new astarStraight tests."]
   - id: EV007
     kind: verification
     subject:
@@ -196,9 +196,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["Public surface: Pathfinding.astarStraight declared in the .fsi and recorded in the member baseline; astar's baseline line is unchanged."]
@@ -220,9 +220,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["Verification record: the differential and straightness properties are green over 500-1000 random grids."]
@@ -244,9 +244,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["PD-001: astarWith gains a tie parameter folded into the key as (f,h,tie,Col,Row); astar and Landmarks.astar pass the constant noTie, so their output is byte-identical (constant orders identically to the old 4-tuple)."]
@@ -268,9 +268,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["PD-002: astarStraight passes tie c = |dx1*dy2 - dx2*dy1|; because tie sits after f and h, the differential confirms equal cost to astar."]
@@ -292,9 +292,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["PD-002: the cross term is computed in int64 (no overflow over the coordinate span), so astarStraight is total and deterministic on all inputs."]
@@ -316,9 +316,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["PC-001: Tier-1 surface addition — astarStraight lands with the .fsi, both baselines, and tests; astar's baseline line is unchanged; the drift gate stays green."]
@@ -340,9 +340,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["VO-002: the straightness test (deviation strictly less, same cost) and the named determinism golden are green."]
@@ -364,9 +364,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["PM-001 diagnoseOnly: astar is unchanged and astarStraight is purely additive, so no consumer migration is required; plan schemaVersion 1 accepted."]
@@ -388,9 +388,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/straight-018.trx
-      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      digest: "sha256:a332e3b8d7c5e046c124665603b6b3d436760e0f1aa3bf5fe529075b6ddf18f6"
       outcome: passed
-      passed: 614
+      passed: 615
       failed: 0
       skipped: 0
     notes: ["GV-001: readiness/018-pathfinding-straighter-tiebreak/work-model.json is refreshed by verify/ship from the current sources."]

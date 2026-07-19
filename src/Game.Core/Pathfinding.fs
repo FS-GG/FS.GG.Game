@@ -202,17 +202,28 @@ module Pathfinding =
         (goal: Cell)
         : Cell list option =
         // Opt-in A* whose tie-break prefers, among equal-(f,h) frontier nodes, the one nearest the
-        // straight `start -> goal` line: `cross = |dx1*dy2 - dx2*dy1|` (cell-start × goal-start),
-        // int64, zero on the line and larger with perpendicular deviation. It only breaks ties, so the
-        // path has the SAME least cost as `astar` — just straighter, and often found with fewer
-        // expansions. `astar` itself is untouched.
-        let dgx = int64 goal.Col - int64 start.Col
-        let dgy = int64 goal.Row - int64 start.Row
+        // straight `start -> goal` line: `cross = |dx1*dy2 - dx2*dy1|` (cell-start × goal-start), zero
+        // on the line and larger with perpendicular deviation. It only breaks ties, so the path has the
+        // SAME least cost as `astar` — just straighter, and often found with fewer expansions. `astar`
+        // itself is untouched (it passes the constant `noTie`, keeping the frontier key ordering exactly
+        // the historical one).
+        //
+        // The cross-product multiplies TWO coordinate deltas, each up to ~4.3e9 over the module's
+        // advertised unbounded cell space, so the product (~1.8e19) overflows int64 — unlike `octile`,
+        // whose products are delta × a small step weight. Widening the deltas alone is not enough. So it
+        // is computed exactly in `bigint` (which cannot overflow and whose `abs` never throws — the
+        // `abs Int64.MinValue` totality trap `octile` also had to dodge) and then SATURATED into the
+        // int64 tie slot. Saturation only conflates deviations beyond Int64.MaxValue (astronomically far
+        // apart), which then fall through to the `(Col, Row)` tie-break — still a strict total order.
+        let dgx = bigint goal.Col - bigint start.Col
+        let dgy = bigint goal.Row - bigint start.Row
+        let maxTie = bigint System.Int64.MaxValue
 
         let cross (c: Cell) : int64 =
-            let dcx = int64 c.Col - int64 start.Col
-            let dcy = int64 c.Row - int64 start.Row
-            abs (dcx * dgy - dgx * dcy)
+            let dcx = bigint c.Col - bigint start.Col
+            let dcy = bigint c.Row - bigint start.Row
+            let v = abs (dcx * dgy - dgx * dcy)
+            if v > maxTie then System.Int64.MaxValue else int64 v
 
         astarWith (octile neighbourhood goal) cross neighbourhood maxVisited isWalkable start goal
 
@@ -794,7 +805,17 @@ module Pathfinding =
             // Uniform cost over the walkable region (0 = impassable), so each `distanceField` gives the
             // true shortest-path distance from a landmark to every cell — the exact tables ALT needs.
             let cost c = if walk c then 1 else 0
-            let cap = (maxCol - minCol + 1) * (maxRow - minRow + 1) + 1
+            // Cell count over the bounds, in int64 then saturated: a wide per-axis span would overflow
+            // `int` (the same unbounded-space hazard the rest of the module widens against), yielding a
+            // negative cap and a silently empty field. (In practice enumerating `cells` below would
+            // exhaust memory first, but the arithmetic stays honest.)
+            let cap =
+                let n = (int64 maxCol - int64 minCol + 1L) * (int64 maxRow - int64 minRow + 1L) + 1L
+
+                if n > int64 System.Int32.MaxValue then
+                    System.Int32.MaxValue
+                else
+                    int n
 
             let field (from: Cell) : Map<Cell, int> =
                 distanceField neighbourhood cap cost [ from ]

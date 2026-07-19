@@ -1161,6 +1161,25 @@ let straightTests =
             Expect.equal (pathCost s) (pathCost a) "...at the same (optimal) cost"
         }
 
+        test "astarStraight cross-product does not overflow/throw at extreme coordinates (totality)" {
+            // The cross-product multiplies two ~4.3e9 coordinate deltas, which overflows int64 (and can
+            // make `abs` throw). Computed in bigint and saturated, so a far-apart start/goal is total —
+            // mirrors the octile far-goal regression test. The point is that the call RETURNS.
+            let walk = fun _ -> true
+            let big = System.Int32.MaxValue
+            let start = { Col = -big; Row = -big }
+            let goal = { Col = big; Row = big }
+            // Astronomically far ⇒ a small budget reports unreachable, which is the correct total answer.
+            Expect.isNone (Pathfinding.astarStraight FourWay 50 walk start goal) "far goal unreachable within budget — and reached without throwing"
+            // And a genuine short path near extreme coordinates is still optimal.
+            let b = System.Int32.MinValue + 1000
+            let s = { Col = b; Row = b }
+            let g = { Col = b + 3; Row = b }
+            match Pathfinding.astarStraight FourWay 1000 walk s g with
+            | Some p -> Expect.equal (pathCost p) 30 "3 orthogonal steps × baseStep — shortest route at extreme coords"
+            | None -> failtest "expected a path between two near cells at extreme coordinates"
+        }
+
         test "determinism: astarStraight is byte-identical across repeat runs (golden)" {
             let walk = gridWalkable 6 6 (Set.ofList [ (3, 2); (3, 3) ])
             let start = { Col = 0; Row = 0 }
