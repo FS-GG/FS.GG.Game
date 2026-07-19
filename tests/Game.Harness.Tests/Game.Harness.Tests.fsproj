@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <!-- Headless Expecto suite over FS.GG.Game.Harness. Drives a minimal integer-grid Pong reference
+       sim through the real Command frontier — one test file per FR concern; the sim is the fixture. -->
+  <ItemGroup>
+    <Compile Include="PongSim.fs" />
+    <Compile Include="DriverTests.fs" />
+    <Compile Include="BotTests.fs" />
+    <Compile Include="MatrixTests.fs" />
+    <Compile Include="TraceSyntheticTests.fs" />
+    <Compile Include="DependencyTests.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Game.Harness\FS.GG.Game.Harness.fsproj" />
+    <PackageReference Include="Expecto" />
+    <PackageReference Include="FsCheck" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="YoloDev.Expecto.TestSdk" />
+  </ItemGroup>
+
+</Project>

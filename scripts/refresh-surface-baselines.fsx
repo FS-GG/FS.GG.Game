@@ -47,6 +47,7 @@ let repoRoot = Path.GetFullPath(Path.Combine(scriptDir, ".."))
 // Every package → its src project folder (assembly name == package name). One row per committed baseline.
 let packages =
     [ "FS.GG.Game.Core", "Game.Core"
+      "FS.GG.Game.Harness", "Game.Harness"
       "FS.GG.Game.Render", "Game.Render" ]
 
 let binDir proj = Path.Combine(repoRoot, "src", proj, "bin", "Debug", "net10.0")
