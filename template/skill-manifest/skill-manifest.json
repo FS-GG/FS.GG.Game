@@ -101,6 +101,15 @@
       "supplied-by": "template/product-skills/fs-gg-physics/"
     },
     {
+      "id": "fs-gg-playtest",
+      "scope": "product",
+      "sha256": "2ba254ad275f86e2109d432c89b6458aee4bceaab8ed90e940ed8d4d7dc6964c",
+      "mirrored": false,
+      "resolvablePath": ".agents/skills/fs-gg-playtest/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-playtest/"
+    },
+    {
       "id": "fs-gg-visibility",
       "scope": "product",
       "sha256": "08b1dfcd16ffa2059d09c3856ad2b6ddc858cb97c6a4267a490678d33c5fa085",

@@ -1131,8 +1131,9 @@ jobs:
       # The blocks are typechecked against the BUILT assembly, exactly as a product consumer binds to the
       # package — not against the source, and never against a stub. The harness refuses to run if this
       # step did not produce FS.GG.Game.Core.dll.
-      - name: Build FS.GG.Game.Core (the assembly the blocks are typechecked against)
-        run: dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c Debug --no-restore
+      - name: Build FS.GG.Game.Core + FS.GG.Game.Harness (the assemblies the blocks are typechecked against)
+        # Harness is the package fs-gg-playtest teaches; building it also builds Core (its ProjectReference).
+        run: dotnet build src/Game.Harness/FS.GG.Game.Harness.fsproj -c Debug --no-restore
 
       - name: Typecheck every ```fsharp block in the skills and the TestSpecs
         run: |
