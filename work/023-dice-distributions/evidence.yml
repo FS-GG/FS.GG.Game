@@ -52,12 +52,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV001: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-001 / -. Game.Core suite 653/653 green."]
+    notes: ["EV001: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-001 / -. Game.Core suite 667/667 green."]
   - id: EV002
     kind: verification
     subject:
@@ -76,12 +76,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV002: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-002 / PD-002. Game.Core suite 653/653 green."]
+    notes: ["EV002: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-002 / PD-002. Game.Core suite 667/667 green."]
   - id: EV003
     kind: verification
     subject:
@@ -100,12 +100,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV003: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-003 / PD-003. Game.Core suite 653/653 green."]
+    notes: ["EV003: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-003 / PD-003. Game.Core suite 667/667 green."]
   - id: EV004
     kind: verification
     subject:
@@ -124,12 +124,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV004: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-004 / -. Game.Core suite 653/653 green."]
+    notes: ["EV004: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-004 / -. Game.Core suite 667/667 green."]
   - id: EV005
     kind: verification
     subject:
@@ -148,12 +148,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV005: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-005 / -. Game.Core suite 653/653 green."]
+    notes: ["EV005: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-005 / -. Game.Core suite 667/667 green."]
   - id: EV006
     kind: verification
     subject:
@@ -172,12 +172,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV006: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-006 / PD-006. Game.Core suite 653/653 green."]
+    notes: ["EV006: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-006 / PD-006. Game.Core suite 667/667 green."]
   - id: EV007
     kind: verification
     subject:
@@ -196,12 +196,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV007: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 653/653 green."]
+    notes: ["EV007: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
   - id: EV008
     kind: verification
     subject:
@@ -220,12 +220,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV008: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 653/653 green."]
+    notes: ["EV008: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
   - id: EV009
     kind: verification
     subject:
@@ -244,12 +244,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV009: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 653/653 green."]
+    notes: ["EV009: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
   - id: EV010
     kind: verification
     subject:
@@ -268,12 +268,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV010: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-001 / PD-001. Game.Core suite 653/653 green."]
+    notes: ["EV010: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-001 / PD-001. Game.Core suite 667/667 green."]
   - id: EV011
     kind: verification
     subject:
@@ -292,12 +292,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV011: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-004 / PD-004. Game.Core suite 653/653 green."]
+    notes: ["EV011: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-004 / PD-004. Game.Core suite 667/667 green."]
   - id: EV012
     kind: verification
     subject:
@@ -316,12 +316,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV012: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-005 / PD-005. Game.Core suite 653/653 green."]
+    notes: ["EV012: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-005 / PD-005. Game.Core suite 667/667 green."]
   - id: EV013
     kind: verification
     subject:
@@ -340,12 +340,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV013: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001. Game.Core suite 653/653 green."]
+    notes: ["EV013: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001. Game.Core suite 667/667 green."]
   - id: EV014
     kind: verification
     subject:
@@ -364,12 +364,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV014: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001, PD-004. Game.Core suite 653/653 green."]
+    notes: ["EV014: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001, PD-004. Game.Core suite 667/667 green."]
   - id: EV015
     kind: verification
     subject:
@@ -388,12 +388,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV015: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-005, PD-006. Game.Core suite 653/653 green."]
+    notes: ["EV015: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-005, PD-006. Game.Core suite 667/667 green."]
   - id: EV016
     kind: verification
     subject:
@@ -412,12 +412,12 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV016: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 653/653 green."]
+    notes: ["EV016: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
   - id: EV017
     kind: verification
     subject:
@@ -436,11 +436,11 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/dice-023.trx
-      digest: "sha256:b0b5cc7bfb31b8aee89345ee6f39f2731f1445eb1d3b190883a8107a94eab1ac"
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
       outcome: passed
-      passed: 653
+      passed: 667
       failed: 0
       skipped: 0
-    notes: ["EV017: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001. Game.Core suite 653/653 green."]
+    notes: ["EV017: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001. Game.Core suite 667/667 green."]
 lifecycleNotes:
   - "Next lifecycle action: verify."

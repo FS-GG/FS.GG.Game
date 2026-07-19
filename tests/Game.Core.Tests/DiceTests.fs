@@ -78,6 +78,12 @@ let tests =
             Expect.isTrue (abs (empirical - 7.0) < 0.1) (sprintf "empirical mean %f ≈ 7" empirical)
         }
 
+        test "mean does not overflow at high dice counts (bigint numerator regression, FR-004)" {
+            // 22d6: the weights (6^22) fit int64, but the numerator Sum(v*w) = 77 * 6^22 exceeds int64 max
+            // (~1e19), which a plain int64 accumulator would silently wrap. bigint keeps it exact.
+            Expect.isTrue (near (Dice.mean (Dice.repeat 22 (Dice.die 6))) 77.0) "mean of 22d6 is 77 (no int64 overflow)"
+        }
+
         testCase "convolve mean equals the sum of means over random dice (FsCheck)" <| fun () ->
             let prop (aSides: int) (bSides: int) =
                 let a = Dice.die (1 + (abs aSides) % 12)

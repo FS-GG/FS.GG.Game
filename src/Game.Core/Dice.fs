@@ -64,7 +64,12 @@ module Dice =
         if total = 0L then
             0.0
         else
-            let s = d.Weights |> Map.fold (fun acc v w -> acc + int64 v * w) 0L
+            // The numerator `Sum(v*w)` is `mean * total`, which grows FASTER than the weights alone —
+            // for `n`d6 it is ~3.5n * 6^n and crosses int64 max several dice below the ~24-die point at
+            // which the *weights* (6^n) do. So accumulate it in `bigint` (exact, no overflow) and only
+            // then convert to float: `mean`/`variance` are then exact for ANY representable distribution
+            // (the binding limit is `convolve`'s int64 weights, ~24d6, not this sum).
+            let s = d.Weights |> Map.fold (fun acc v w -> acc + bigint v * bigint w) 0I
             float s / float total
 
     let variance (d: Distribution) : float =
