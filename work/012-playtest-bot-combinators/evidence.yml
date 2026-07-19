@@ -1,0 +1,518 @@
+schemaVersion: 1
+workId: 012-playtest-bot-combinators
+stage: evidence
+status: evidenceReady
+sourceSpec: work/012-playtest-bot-combinators/spec.md
+sourceClarifications: work/012-playtest-bot-combinators/clarifications.md
+sourceChecklist: work/012-playtest-bot-combinators/checklist.md
+sourcePlan: work/012-playtest-bot-combinators/plan.md
+sourceTasks: work/012-playtest-bot-combinators/tasks.yml
+sourceAnalysis: readiness/012-playtest-bot-combinators/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/012-playtest-bot-combinators/analysis.json
+    digest: b5bbca1bb22d93b85731e28dff466414b942aad3936437ac9e83a99d39fccbf9
+    schemaVersion: 1
+  - label: checklist
+    path: work/012-playtest-bot-combinators/checklist.md
+    digest: 18f5d5c33fbc0c95c91fe5e7f7ad48ba69acf4756811e0ed47a4291a07632910
+    schemaVersion: 1
+  - label: clarifications
+    path: work/012-playtest-bot-combinators/clarifications.md
+    digest: 314a779aebb2063eda2dbf26abf743479ff5e3accbd46af4caea08906ba5994f
+    schemaVersion: 1
+  - label: plan
+    path: work/012-playtest-bot-combinators/plan.md
+    digest: e71df9b4fc8682ba314195c0ab6d97ee7bde355b5c4499a2bd7e27e06344d214
+    schemaVersion: 1
+  - label: spec
+    path: work/012-playtest-bot-combinators/spec.md
+    digest: bfd60383eea7da614cd6b1beb80386a770181f9f1fc20f960807e582db291483
+    schemaVersion: 1
+  - label: tasks
+    path: work/012-playtest-bot-combinators/tasks.yml
+    digest: eaab8e9ede14e6a3dd831e59d44b10e5a4859a2b15db4b02bb17d99090a2f9fe
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: [FR-001 Bots.sitter issues no command and leaves the generator unchanged.]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["FR-002 Bots.scripted plays frames in order then idles (single-use stateful playback)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["FR-003 Bots.random threads the caller draw; deterministic in the seed."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["FR-004 Bots.chase up/down/idle, no draw, (view,seed)-deterministic, reproduces chaseBot non-tie."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["FR-005 Bots.greedyToward earliest max-scoring move, or [] when empty."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["FR-006 Bots.on projects the wider view to the one the policy reads (fog boundary)."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["FR-007 Bots.sitter yields identical match outcomes to sitterBot; second toy game reuses chase/sitter."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["FR-008 additive+pure; DependencyTests green; baseline regenerated."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 scripted is the sole stateful, single-use combinator; others pure."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 chase idles on tie without drawing; random tie-break is a composition."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: [PD-002 scripted captured playback index emits then idles.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["PD-004 chase reads two axes, up/down/idle, never draws."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV013]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, readiness/surface-baselines/members/FS.GG.Game.Harness.txt, src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 tier-1 additive Bots surface; baseline extended, existing byte-unchanged."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV014]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["PC-002 referenced-assembly set stays Core+BCL; DependencyTests enforces."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 per-combinator unit tests all green (BotCombinatorsTests)."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV016]
+    artifacts: [src/Game.Harness/Bots.fs, src/Game.Harness/Bots.fsi, tests/Game.Harness.Tests/BotCombinatorsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 sitter==sitterBot outcomes; chase==chaseBot non-tie; second toy game reuse."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV017]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["VO-003 DependencyTests green, build clean, baseline regenerated, suite 76/76."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV018]
+    artifacts: [work/012-playtest-bot-combinators/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 additive; nothing removed/renamed; no migration; baseline extended."]
+  - id: EV019
+    kind: generated-view
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-007]
+    obligationRefs: [EV019]
+    artifacts: [readiness/012-playtest-bot-combinators/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: [GV-001 work-model.json refreshes from current sources at verify/ship.]
+  - id: EV020
+    kind: generated-view
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV020]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-bots.trx
+      digest: "sha256:28fd1442c23bc8e9197cd73197ae3129ddca3100ddecfd96b1904cdebc260249"
+      outcome: passed
+      passed: 76
+      failed: 0
+      skipped: 0
+    notes: ["GV-002 surface baseline regenerated from the extended .fsi set; drift gate green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

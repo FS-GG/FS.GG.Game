@@ -19,6 +19,7 @@
     <Compile Include="LawsTests.fs" />
     <Compile Include="ExploreTests.fs" />
     <Compile Include="PropertiesTests.fs" />
+    <Compile Include="BotCombinatorsTests.fs" />
     <Compile Include="DependencyTests.fs" />
     <Compile Include="ReferenceProof.fs" />
     <Compile Include="Program.fs" />

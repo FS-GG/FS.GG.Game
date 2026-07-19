@@ -1,5 +1,11 @@
 FS.GG.Game.Harness.Bot`1.Decide : FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>> [get]
 FS.GG.Game.Harness.Bot`1.new(FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>>)
+FS.GG.Game.Harness.Bots.chase<view>(Tuple<FSharpFunc<view, System.Int32>, FSharpFunc<view, System.Int32>>, FS.GG.Game.Core.Command, FS.GG.Game.Core.Command) : Bot<view>
+FS.GG.Game.Harness.Bots.greedyToward<view>(FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Command, System.Double>>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>) : Bot<view>
+FS.GG.Game.Harness.Bots.on<outer, inner>(FSharpFunc<outer, inner>, Bot<inner>) : Bot<outer>
+FS.GG.Game.Harness.Bots.random<view>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>) : Bot<view>
+FS.GG.Game.Harness.Bots.scripted<view>(Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>) : Bot<view>
+FS.GG.Game.Harness.Bots.sitter<view>() : Bot<view>
 FS.GG.Game.Harness.Counterexample.Script : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
 FS.GG.Game.Harness.Counterexample.Seed : System.UInt64 [get]
 FS.GG.Game.Harness.Counterexample.Step : System.Int32 [get]

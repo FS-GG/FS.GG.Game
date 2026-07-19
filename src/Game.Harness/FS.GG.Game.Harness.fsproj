@@ -43,6 +43,9 @@
          FsCheck reference — FsCheck stays a test-only tool. -->
     <Compile Include="Properties.fsi" />
     <Compile Include="Properties.fs" />
+    <!-- Bots: combinators over Bot<'view> (Phase 4). Pure; depends only on Playable's Bot type. -->
+    <Compile Include="Bots.fsi" />
+    <Compile Include="Bots.fs" />
   </ItemGroup>
 
   <ItemGroup>

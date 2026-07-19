@@ -1,4 +1,5 @@
 FS.GG.Game.Harness.Bot`1
+FS.GG.Game.Harness.Bots
 FS.GG.Game.Harness.Counterexample
 FS.GG.Game.Harness.Driver
 FS.GG.Game.Harness.Explore
