@@ -219,6 +219,28 @@ module Ai =
 /// Public contract module exposed by the FS.GG.Game.Core package.
 /// A difficulty ladder expressed purely as the knob vector. Compare the three: every difference is time or
 /// precision. No stat is touched, and there is no field here with which one could be.
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// An **integer influence map** from strengthed sources (roadmap 3.2) — a thin wrapper over
+    /// `Pathfinding.distanceField`. Each `(source, strength)` contributes `max(0, strength - distance)`
+    /// at every cell, where `distance` is the `distanceField` cost from that source (so influence is
+    /// `strength` at the source and falls off by 1 per `baseStep` of distance, in the same units).
+    /// Contributions combine by **max** — the strongest nearby source dominates — and cells whose
+    /// influence would be `<= 0` are **absent**. Empty `sources` yields an empty map.
+    ///
+    /// Inherits `distanceField`'s `cost` convention (`cost c <= 0` impassable), its `maxVisited` bound,
+    /// and its determinism, so `influenceMap` is a pure, byte-deterministic value.
+    ///
+    /// **Tension recipe.** A friendly-vs-enemy control map is the per-cell difference of two influence
+    /// maps: `tension c = friendly[c] - enemy[c]` (an absent side reads as `0`). Positive tension marks
+    /// friendly-controlled cells, negative enemy-controlled — the caller composes it from two
+    /// `influenceMap` calls.
+    val influenceMap:
+        neighbourhood: Neighbourhood ->
+        maxVisited: int ->
+        cost: (Cell -> int) ->
+        sources: (Cell * int) list ->
+            Map<Cell, int>
+
 [<RequireQualifiedAccess>]
 module Difficulty =
 

@@ -3,6 +3,7 @@ FS.GG.Game.Core.Ai.best<p>(FSharpFunc<p, System.Double>, FSharpFunc<p, System.Va
 FS.GG.Game.Core.Ai.due(System.Int32, System.Int32) : System.Boolean
 FS.GG.Game.Core.Ai.fleeField(FS.GG.Game.Core.Neighbourhood, System.Double, System.Int32, Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Double>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Double>
 FS.GG.Game.Core.Ai.ghosts<T>(TeamView<T>) : FSharpList<Sighting<T>>
+FS.GG.Game.Core.Ai.influenceMap(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Int32>, Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Core.Cell, System.Int32>>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Int32>
 FS.GG.Game.Core.Ai.known<T>(TeamView<T>) : FSharpList<Sighting<T>>
 FS.GG.Game.Core.Ai.spotted<T>(TeamView<T>) : FSharpList<Sighting<T>>
 FS.GG.Game.Core.Ai.substream(FS.GG.Game.Core.Rng, FS.GG.Game.Core.AgentId) : FS.GG.Game.Core.Rng
