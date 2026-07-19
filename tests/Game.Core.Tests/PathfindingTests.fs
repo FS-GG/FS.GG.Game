@@ -1220,3 +1220,87 @@ let straightTests =
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
     ]
+
+// ------------------------------------------------------------------------------------------------
+// Any-angle post-hoc smoothing (work item 021, roadmap 2.2). smooth string-pulls a finished path
+// into a subsequence whose consecutive segments are LOS-clear — deterministically, via integer Los.
+
+[<Tests>]
+let smoothTests =
+    testList "Game.Core Pathfinding smooth (021, FR-001..FR-005)" [
+
+        test "a straight clear path collapses to [start; goal] (FR-003)" {
+            let walk = gridWalkable 6 1 Set.empty
+            let los = Los.lineOfSight walk
+            let path = [ for c in 0..5 -> { Col = c; Row = 0 } ]
+            Expect.equal
+                (Pathfinding.smooth los path)
+                [ { Col = 0; Row = 0 }; { Col = 5; Row = 0 } ]
+                "a fully-visible path smooths to just its endpoints"
+        }
+
+        test "totality: empty and single-cell paths are unchanged (FR-004)" {
+            let los = Los.lineOfSight (fun _ -> true)
+            Expect.equal (Pathfinding.smooth los []) [] "empty ⇒ empty"
+            Expect.equal (Pathfinding.smooth los [ { Col = 2; Row = 2 } ]) [ { Col = 2; Row = 2 } ] "single ⇒ itself"
+        }
+
+        test "smooth keeps the corner it must turn around a wall (FR-002/FR-005)" {
+            // 3×3 with (1,0) and (1,1) blocked: a path (0,0)->(0,1)->(0,2)->(1,2)->(2,2)->(2,1)->(2,0)
+            // around the wall. smoothing keeps only the cells the straight segments can see.
+            let blocked = Set.ofList [ (1, 0); (1, 1) ]
+            let walk = gridWalkable 3 3 blocked
+            let los = Los.lineOfSight walk
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 2; Row = 0 }
+            let path = (Pathfinding.astar FourWay 5000 walk start goal).Value
+            let smoothed = Pathfinding.smooth los path
+            Expect.equal (List.head smoothed) start "starts at start"
+            Expect.equal (List.last smoothed) goal "ends at goal"
+            Expect.isTrue (List.length smoothed <= List.length path) "never longer than the input"
+            // every kept segment is genuinely LOS-clear (no straight line crosses the wall)
+            Expect.isTrue (smoothed |> List.pairwise |> List.forall (fun (a, b) -> los a b)) "every segment is LOS-clear"
+        }
+
+        testCase "smooth is a subsequence with LOS-clear segments, never longer (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 7), ((abs r) % 7))) |> Set.ofList
+                let walk = gridWalkable 7 7 blocked
+                let los = Los.lineOfSight walk
+                let start = { Col = (abs sc) % 7; Row = (abs sr) % 7 }
+                let goal = { Col = (abs gc) % 7; Row = (abs gr) % 7 }
+
+                match Pathfinding.astar FourWay 5000 walk start goal with
+                | None -> true
+                | Some path ->
+                    let smoothed = Pathfinding.smooth los path
+                    let isSubsequence (sub: Cell list) (full: Cell list) =
+                        // every kept cell appears in `full` in order
+                        let rec go s f =
+                            match s, f with
+                            | [], _ -> true
+                            | _, [] -> false
+                            | x :: xs, y :: ys -> if x = y then go xs ys else go s ys
+                        go sub full
+
+                    List.head smoothed = start
+                    && List.last smoothed = goal
+                    && List.length smoothed <= List.length path
+                    && isSubsequence smoothed path
+                    && (smoothed |> List.pairwise |> List.forall (fun (a, b) -> los a b))
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        testCase "determinism: smooth is byte-identical across runs (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 7), ((abs r) % 7))) |> Set.ofList
+                let walk = gridWalkable 7 7 blocked
+                let los = Los.lineOfSight walk
+                let start = { Col = (abs sc) % 7; Row = (abs sr) % 7 }
+                let goal = { Col = (abs gc) % 7; Row = (abs gr) % 7 }
+                match Pathfinding.astar FourWay 5000 walk start goal with
+                | None -> true
+                | Some path -> Pathfinding.smooth los path = Pathfinding.smooth los path
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+    ]
