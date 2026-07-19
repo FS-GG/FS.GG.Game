@@ -17,6 +17,7 @@
     <Compile Include="FixedStepTests.fs" />
     <Compile Include="LoopTests.fs" />
     <Compile Include="PathfindingTests.fs" />
+    <Compile Include="HexTests.fs" />
     <Compile Include="GridsTests.fs" />
     <Compile Include="LosTests.fs" />
     <Compile Include="FovTests.fs" />

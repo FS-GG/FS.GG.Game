@@ -115,6 +115,31 @@ FS.GG.Game.Core.Grids.edgeVertices(FS.GG.Game.Core.Grids+Edge) : Microsoft.FShar
 FS.GG.Game.Core.Grids.vertexCells(FS.GG.Game.Core.Grids+Vertex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.Grids.vertexEdges(FS.GG.Game.Core.Grids+Vertex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Edge>
 FS.GG.Game.Core.Grids.vertexPoint(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Grids+Vertex) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.Hex.Q : System.Int32 [get]
+FS.GG.Game.Core.Hex.R : System.Int32 [get]
+FS.GG.Game.Core.Hex.S : System.Int32 [get]
+FS.GG.Game.Core.Hex.add(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.astar(System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Hex, System.Boolean>, FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>>
+FS.GG.Game.Core.Hex.bfs(System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Hex, System.Boolean>, FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>>
+FS.GG.Game.Core.Hex.create(System.Int32, System.Int32) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.directions : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex> [get]
+FS.GG.Game.Core.Hex.distance(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : System.Int32
+FS.GG.Game.Core.Hex.lineDraw(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>
+FS.GG.Game.Core.Hex.neighbours(FS.GG.Game.Core.Hex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>
+FS.GG.Game.Core.Hex.new(System.Int32, System.Int32, System.Int32)
+FS.GG.Game.Core.Hex.ofDoubled(FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.ofOffset(FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.origin : FS.GG.Game.Core.Hex [get]
+FS.GG.Game.Core.Hex.range(System.Int32) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>
+FS.GG.Game.Core.Hex.ring(System.Int32) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>
+FS.GG.Game.Core.Hex.rotateLeft(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.rotateRight(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.round(System.Double, System.Double, System.Double) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.scale(FS.GG.Game.Core.Hex, System.Int32) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.spiral(System.Int32) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>
+FS.GG.Game.Core.Hex.subtract(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Hex
+FS.GG.Game.Core.Hex.toDoubled(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Cell
+FS.GG.Game.Core.Hex.toOffset(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Cell
 FS.GG.Game.Core.LineMode+Tags.Supercover : System.Int32
 FS.GG.Game.Core.LineMode+Tags.Thin : System.Int32
 FS.GG.Game.Core.Loop.advance<world>(System.Double, FSharpFunc<world, FSharpFunc<System.Double, world>>, System.Double, StepState<world>) : StepState<world>

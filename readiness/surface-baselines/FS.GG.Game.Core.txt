@@ -25,6 +25,7 @@ FS.GG.Game.Core.Grids+EdgeOrientation
 FS.GG.Game.Core.Grids+EdgeOrientation+Tags
 FS.GG.Game.Core.Grids+GridSpec
 FS.GG.Game.Core.Grids+Vertex
+FS.GG.Game.Core.Hex
 FS.GG.Game.Core.LineMode
 FS.GG.Game.Core.LineMode+Tags
 FS.GG.Game.Core.Loop
