@@ -30,6 +30,8 @@
     <Compile Include="Geometry.fs" />
     <Compile Include="Rng.fsi" />
     <Compile Include="Rng.fs" />
+    <Compile Include="Dice.fsi" />
+    <Compile Include="Dice.fs" />
     <Compile Include="FixedStep.fsi" />
     <Compile Include="FixedStep.fs" />
     <!-- The double step buffer, built on FixedStep.drain — hence immediately after it. Simulation,

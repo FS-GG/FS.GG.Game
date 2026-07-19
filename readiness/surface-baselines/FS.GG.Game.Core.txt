@@ -9,9 +9,11 @@ FS.GG.Game.Core.Contact
 FS.GG.Game.Core.ConvexPolygon
 FS.GG.Game.Core.DamageTrace
 FS.GG.Game.Core.Damage`1
+FS.GG.Game.Core.Dice
 FS.GG.Game.Core.Difficulty
 FS.GG.Game.Core.Dir
 FS.GG.Game.Core.Dir+Tags
+FS.GG.Game.Core.Distribution
 FS.GG.Game.Core.Edge
 FS.GG.Game.Core.Edges
 FS.GG.Game.Core.Effects

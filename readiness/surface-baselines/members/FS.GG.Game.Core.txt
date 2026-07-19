@@ -45,6 +45,18 @@ FS.GG.Game.Core.Damage`1.Base : System.Double [get]
 FS.GG.Game.Core.Damage`1.Kind : K [get]
 FS.GG.Game.Core.Damage`1.Source : FS.GG.Game.Core.Source [get]
 FS.GG.Game.Core.Damage`1.new(K, FS.GG.Game.Core.Source, System.Double)
+FS.GG.Game.Core.Dice.advantage(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.constant(System.Int32) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.convolve(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.die(System.Int32) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.disadvantage(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.mean(FS.GG.Game.Core.Distribution) : System.Double
+FS.GG.Game.Core.Dice.outcomes(FS.GG.Game.Core.Distribution) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.Int32, System.Int64>>
+FS.GG.Game.Core.Dice.repeat(System.Int32, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.sample(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Rng) : System.ValueTuple<System.Int32, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Dice.totalWeight(FS.GG.Game.Core.Distribution) : System.Int64
+FS.GG.Game.Core.Dice.uniform(System.Int32, System.Int32) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.variance(FS.GG.Game.Core.Distribution) : System.Double
 FS.GG.Game.Core.Difficulty.AimErrorSigma : System.Double [get]
 FS.GG.Game.Core.Difficulty.ReactionTicks : System.Int32 [get]
 FS.GG.Game.Core.Difficulty.SpotCycleTicks : System.Int32 [get]
