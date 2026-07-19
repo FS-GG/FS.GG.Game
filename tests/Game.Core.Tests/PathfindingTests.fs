@@ -1304,3 +1304,27 @@ let smoothTests =
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
     ]
+
+// ------------------------------------------------------------------------------------------------
+// Bucketed-PQ profiling gate (work item 026, roadmap 3.4). No frontier swap is made — the decision
+// (docs/reference/bucketed-pq-gate.md) defers it per its profiling gate. This smoke test confirms the
+// immutable-Set frontier solves a large search optimally within budget, i.e. it is adequate in practice.
+
+[<Tests>]
+let bucketedPqGateTests =
+    testList "Game.Core Pathfinding bucketed-PQ gate (026, FR-001)" [
+
+        test "bucketed-PQ gate: astar solves a large search optimally within budget (Set frontier is adequate)" {
+            // A 120×120 open grid, corner to corner, EightWay — a large frontier for the immutable Set.
+            let walk = gridWalkable 120 120 Set.empty
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 119; Row = 119 }
+            let path = Pathfinding.astar EightWay 200000 walk start goal
+            match path with
+            | Some p ->
+                Expect.isTrue (validPath walk start goal p) "a valid start..goal path"
+                // shortest EightWay: 119 diagonal steps ⇒ 119 × diagStep(14) = 1666
+                Expect.equal (pathCost p) (119 * 14) "optimal diagonal cost — the Set frontier finds it within budget"
+            | None -> failtest "astar failed to solve the large open search"
+        }
+    ]
