@@ -87,6 +87,9 @@ module Explore =
                                 visited.Add key |> ignore
                                 depthCutoff <- true
 
+                                if visited.Count > config.MaxVisited then
+                                    result <- Some(FindResult.Truncated visited.Count)
+
             match result with
             | Some r -> r
             | None -> if depthCutoff then FindResult.Truncated visited.Count else FindResult.NotFound

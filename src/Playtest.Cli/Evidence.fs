@@ -3,6 +3,7 @@
 /// `Synthetic` proof is disclosed `synthetic: true`; anything else fails closed).
 module FS.GG.Playtest.Evidence
 
+open System.Text.RegularExpressions
 open FS.GG.Playtest.Manifest
 open FS.GG.Playtest.Proofs
 open FS.GG.Playtest.Trx
@@ -18,9 +19,12 @@ type Row =
 
 /// Classify one GP against the run and proof report — the satisfaction rule, made mechanical.
 let rowFor (run: TrxRun) (proofs: Map<string, Provenance>) (evId: string) (fr: GameplayFr) : Row =
-    let contains (id: string) (name: string) = name.Contains id
-    let testedGreen = run.PassedTestNames |> List.exists (contains fr.Id)
-    let testExists = run.AllTestNames |> List.exists (contains fr.Id)
+    // Match the GP id as a whole token, not a substring — otherwise "GP-1" spuriously matches a test
+    // named "...GP-10...". Boundaries: the id must not be flanked by another alphanumeric.
+    let idPattern = "(?<![0-9A-Za-z])" + Regex.Escape fr.Id + "(?![0-9A-Za-z])"
+    let mentions (name: string) = Regex.IsMatch(name, idPattern)
+    let testedGreen = run.PassedTestNames |> List.exists mentions
+    let testExists = run.AllTestNames |> List.exists mentions
     let provenance = proofs |> Map.tryFind fr.Id |> Option.defaultValue Missing
 
     let result, synthetic, note =

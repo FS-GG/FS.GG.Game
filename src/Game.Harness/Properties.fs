@@ -66,16 +66,20 @@ module Properties =
 
     // Generate one random script: a random length in [0, maxLength], then that many random moves.
     let private genScript (moves: Command list list) (maxLength: int) (rng: Rng) : Command list list * Rng =
-        let struct (len, rng1) = Rng.nextInt 0 (max 0 maxLength) rng
-        let mutable r = rng1
-        let frames = ResizeArray<Command list>(len)
+        // An empty alphabet can only generate the empty script — never index into `[]`.
+        match moves with
+        | [] -> [], rng
+        | _ ->
+            let struct (len, rng1) = Rng.nextInt 0 (max 0 maxLength) rng
+            let mutable r = rng1
+            let frames = ResizeArray<Command list>(len)
 
-        for _ in 1..len do
-            let struct (idx, r') = Rng.nextInt 0 (List.length moves - 1) r
-            r <- r'
-            frames.Add(List.item idx moves)
+            for _ in 1..len do
+                let struct (idx, r') = Rng.nextInt 0 (List.length moves - 1) r
+                r <- r'
+                frames.Add(List.item idx moves)
 
-        List.ofSeq frames, r
+            List.ofSeq frames, r
 
     let checkWith
         (config: PropertyConfig)

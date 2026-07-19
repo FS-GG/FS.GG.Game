@@ -114,4 +114,25 @@ let tests =
           <| fun _ ->
               match Trx.parse "<not-a-trx>" (Encoding.UTF8.GetBytes "<not-a-trx>") with
               | Error _ -> ()
-              | Ok _ -> failtest "a TRX with no <Counters> must error" ]
+              | Ok _ -> failtest "a TRX with no <Counters> must error"
+
+          testCase "FR-003 GP id is matched as a whole token, not a substring (GP-1 vs GP-10)"
+          <| fun _ ->
+              // A manifest with unpadded ids and a TRX where only GP-10 passed. GP-1 must NOT be
+              // classified green off the 'GP-10' substring.
+              let mf =
+                  [ { Id = "GP-1"; Facet = "gameplay"; Summary = "a"; CoversAc = [ 1 ] }
+                    { Id = "GP-10"; Facet = "gameplay"; Summary = "b"; CoversAc = [ 10 ] } ]
+              let proofs = [ "GP-1", InputDriven; "GP-10", InputDriven ] |> Map.ofList
+              let trx = trxXml [ "gate GP-10 moves", "Passed" ] 1 0
+              let rows = Evidence.rows (parseTrx trx) proofs mf
+              let resultOf id = (rows |> List.find (fun r -> r.RequirementRefs = [ id ])).Result
+              Expect.equal (resultOf "GP-10") "pass" "GP-10 has a passing test"
+              Expect.notEqual (resultOf "GP-1") "pass" "GP-1 must not borrow GP-10's passing test"
+
+          testCase "FR-004 an all-errored TRX (failed=0, error>0) is not read as passed"
+          <| fun _ ->
+              let trx =
+                  "<?xml version=\"1.0\"?>\n<TestRun xmlns=\"http://microsoft.com/schemas/VisualStudio/TeamTest/2010\">\n  <ResultSummary><Counters passed=\"0\" failed=\"0\" error=\"3\" /></ResultSummary>\n  <Results></Results>\n</TestRun>"
+              let run = parseTrx trx
+              Expect.isGreaterThan run.Failed 0 "error-count runs must not report zero failures" ]

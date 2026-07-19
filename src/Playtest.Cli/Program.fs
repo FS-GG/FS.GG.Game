@@ -60,11 +60,14 @@ let private coverageLint (argv: string[]) : int =
             eprintfn "%s" e
             1
         | Ok mText, Ok pText ->
-            match Manifest.parse mText with
-            | [] ->
+            match Manifest.tryParse mText with
+            | Error e ->
+                eprintfn "coverage-lint: %s" e
+                1
+            | Ok [] ->
                 eprintfn "coverage-lint: manifest %s parsed no GP records" mPath
                 1
-            | manifest ->
+            | Ok manifest ->
                 match Proofs.parse pText with
                 | Error e ->
                     eprintfn "coverage-lint: %s" e
@@ -110,11 +113,14 @@ let private emitEvidence (argv: string[]) : int =
             eprintfn "%s" e
             1
         | Ok mText, Ok pText, Ok tText, Ok tBytes ->
-            match Manifest.parse mText with
-            | [] ->
+            match Manifest.tryParse mText with
+            | Error e ->
+                eprintfn "emit-evidence: %s" e
+                1
+            | Ok [] ->
                 eprintfn "emit-evidence: manifest %s parsed no GP records" mPath
                 1
-            | manifest ->
+            | Ok manifest ->
                 match Proofs.parse pText, Trx.parse tText tBytes with
                 | Error e, _ ->
                     eprintfn "emit-evidence: %s" e

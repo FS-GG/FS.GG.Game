@@ -59,7 +59,13 @@ let parse (xml: string) (bytes: byte[]) : Result<TrxRun, string> =
 
             Ok
                 { Passed = intAttr "passed" counters
-                  Failed = intAttr "failed" counters
+                  // A non-passing run must never read as "passed": count error/timeout/aborted, not
+                  // just the `failed` counter (TRX keeps them separate).
+                  Failed =
+                    (intAttr "failed" counters)
+                    + (intAttr "error" counters)
+                    + (intAttr "timeout" counters)
+                    + (intAttr "aborted" counters)
                   Skipped = (intAttr "notExecuted" counters) + (intAttr "inconclusive" counters)
                   PassedTestNames = passedNames
                   AllTestNames = allNames

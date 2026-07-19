@@ -45,14 +45,27 @@ module Laws =
                   DivergenceStep = Some i
                   Detail = sprintf "two runs of a script diverged at step %d" i }
 
-        // replay: resolving a script's keys and running them through runCommands reproduces runScript.
+        // replay: a captured playthrough replays byte-identically through runCommands (FR-002). Drive a
+        // scripted bot (view ignored) that emits the script's resolved commands, then replay what it
+        // captured — comparing two independently-produced traces (runBot vs runCommands), so a harness
+        // regression that broke Run.Captured faithfulness is caught, not just sim non-determinism.
         let replay =
             sampleScripts
             |> List.tryPick (fun script ->
-                let viaScript = Driver.runScript playable fp script
                 let resolved = script |> List.map (List.choose (Playable.resolve playable))
-                let viaCommands = Driver.runCommands playable fp resolved
-                Trace.firstDivergence viaScript viaCommands |> Option.map (fun (i, _, _) -> i))
+                let position = ref 0
+
+                let scriptedBot =
+                    { Decide =
+                        fun _ rng ->
+                            let i = position.Value
+                            position.Value <- i + 1
+                            let commands = if i < List.length resolved then List.item i resolved else []
+                            struct (commands, rng) }
+
+                let run = Driver.runBot playable (fun w -> w) scriptedBot 0UL (List.length resolved) fp
+                let replayed = Driver.runCommands playable fp run.Captured
+                Trace.firstDivergence run.Trace replayed |> Option.map (fun (i, _, _) -> i))
 
         let replayResult =
             match replay with

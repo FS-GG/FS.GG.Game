@@ -100,4 +100,13 @@ let tests =
 
           testCase "FR-006 a spec with no section-14 yields no ACs (an error at the CLI edge)"
           <| fun _ ->
-              Expect.isEmpty (TestSpec.parseSection14 "# A doc with no section 14\n\nnothing here") "no ACs parsed" ]
+              Expect.isEmpty (TestSpec.parseSection14 "# A doc with no section 14\n\nnothing here") "no ACs parsed"
+
+          testCase "FR-002/006 tryParse fails closed on a malformed manifest line, parse stays lenient"
+          <| fun _ ->
+              let broken = "GP-001 | gameplay | covers=1 | ok\nthis line is broken\n"
+              match Manifest.tryParse broken with
+              | Error _ -> ()
+              | Ok _ -> failtest "a malformed manifest line must be an error, not a silent drop"
+              // The lenient parse keeps only the well-formed record (used for tool round-trip).
+              Expect.equal (Manifest.parse broken |> List.length) 1 "lenient parse skips the broken line" ]
