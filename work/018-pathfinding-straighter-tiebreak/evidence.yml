@@ -1,0 +1,398 @@
+schemaVersion: 1
+workId: 018-pathfinding-straighter-tiebreak
+stage: evidence
+status: evidenceReady
+sourceSpec: work/018-pathfinding-straighter-tiebreak/spec.md
+sourceClarifications: work/018-pathfinding-straighter-tiebreak/clarifications.md
+sourceChecklist: work/018-pathfinding-straighter-tiebreak/checklist.md
+sourcePlan: work/018-pathfinding-straighter-tiebreak/plan.md
+sourceTasks: work/018-pathfinding-straighter-tiebreak/tasks.yml
+sourceAnalysis: readiness/018-pathfinding-straighter-tiebreak/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/018-pathfinding-straighter-tiebreak/analysis.json
+    digest: 6ad9b317e31331573d9bf493f24d7b8f6b363b1c914e348888171475463dcee0
+    schemaVersion: 1
+  - label: checklist
+    path: work/018-pathfinding-straighter-tiebreak/checklist.md
+    digest: d2dfb7d9daa3f66dcf8595723c240364b31f968548b933e9e2d2d1f539f641ee
+    schemaVersion: 1
+  - label: clarifications
+    path: work/018-pathfinding-straighter-tiebreak/clarifications.md
+    digest: d1029cfe3f67dc62f08f535626039cb08bf2dbb1786a6d4154f071509a58106d
+    schemaVersion: 1
+  - label: plan
+    path: work/018-pathfinding-straighter-tiebreak/plan.md
+    digest: b297fdc1be074963c7fc0fd078e3c2dd40c366bc4081696a51f6d87d1f6d45cb
+    schemaVersion: 1
+  - label: spec
+    path: work/018-pathfinding-straighter-tiebreak/spec.md
+    digest: bceb626e029d621f9dd27140b4c2b56ff8f3ea78401c0b28cf8bfa87463a6b8d
+    schemaVersion: 1
+  - label: tasks
+    path: work/018-pathfinding-straighter-tiebreak/tasks.yml
+    digest: e4ec28b4841b878b0798e03ff1247371ee040067f4616f60e8de1665f9e4dddf
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: the FsCheck differential over 1000 random grids asserts astarStraight's path cost equals astar's; the cross term breaks ties only after f and h, so optimality is untouched."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: validPathNoCut is asserted on every astarStraight result (concrete + differential); it reuses the astarWith reconstruction."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: the astar byte-identity golden pins astar's diagonal and corridor results unchanged; astar passes the constant noTie, ordering identically to the historical (f,h,Col,Row) key — the whole pre-existing astar suite is the guard."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: the straightness test asserts astarStraight's total line-deviation < astar's on an open off-axis query (same cost), and the FsCheck property asserts deviation is never worse over 500 random open grids."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: the determinism golden asserts astarStraight is byte-identical across runs; the cross term is an integer |dx1*dy2 - dx2*dy1| in int64 and (f,h,cross,Col,Row) is a strict total order."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [artifacts/testresults/straight-018.trx, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Core suite is 614/614 green, including the pre-existing astar goldens (byte-identity guard) and the new astarStraight tests."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["Public surface: Pathfinding.astarStraight declared in the .fsi and recorded in the member baseline; astar's baseline line is unchanged."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the differential and straightness properties are green over 500-1000 random grids."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/Pathfinding.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["PD-001: astarWith gains a tie parameter folded into the key as (f,h,tie,Col,Row); astar and Landmarks.astar pass the constant noTie, so their output is byte-identical (constant orders identically to the old 4-tuple)."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["PD-002: astarStraight passes tie c = |dx1*dy2 - dx2*dy1|; because tie sits after f and h, the differential confirms equal cost to astar."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/Pathfinding.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["PD-002: the cross term is computed in int64 (no overflow over the coordinate span), so astarStraight is total and deterministic on all inputs."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV012]
+    artifacts: [readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: Tier-1 surface addition — astarStraight lands with the .fsi, both baselines, and tests; astar's baseline line is unchanged; the drift gate stays green."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-005]
+    obligationRefs: [EV013]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: the straightness test (deviation strictly less, same cost) and the named determinism golden are green."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [work/018-pathfinding-straighter-tiebreak/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: astar is unchanged and astarStraight is purely additive, so no consumer migration is required; plan schemaVersion 1 accepted."]
+  - id: EV015
+    kind: generated-view
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV015]
+    artifacts: [readiness/018-pathfinding-straighter-tiebreak/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/straight-018.trx
+      digest: "sha256:1c55c6d7b792098afaf43e274f07b1c1ae4750ca0c83c04901413e3bac24a6ad"
+      outcome: passed
+      passed: 614
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/018-pathfinding-straighter-tiebreak/work-model.json is refreshed by verify/ship from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

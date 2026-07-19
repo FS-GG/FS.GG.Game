@@ -33,6 +33,7 @@ FS.GG.Game.Core.Manifold
 FS.GG.Game.Core.Neighbourhood
 FS.GG.Game.Core.Neighbourhood+Tags
 FS.GG.Game.Core.Pathfinding
+FS.GG.Game.Core.Pathfinding+Landmarks
 FS.GG.Game.Core.Pathfinding+Reach
 FS.GG.Game.Core.Pathfinding+Regions
 FS.GG.Game.Core.Pathfinding+Step

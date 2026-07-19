@@ -72,7 +72,7 @@ module Pathfinding =
     // Admissible integer heuristic toward `goal`: Manhattan (4-way) / octile (8-way), both in `baseStep`
     // units. Admissible because `diagStep <= 2 * baseStep` — a diagonal never costs more than the two
     // orthogonals it replaces — so the estimate can never exceed the true remaining cost.
-    let private heuristic (nb: Neighbourhood) (goal: Cell) (c: Cell) : int64 =
+    let private octile (nb: Neighbourhood) (goal: Cell) (c: Cell) : int64 =
         // int64 deltas, the same hardening `Los`/`Ai` already carry (Los.fs, Ai.inRange), and for the
         // same two reasons: over the module's advertised UNBOUNDED integer cell space, `c.Col - goal.Col`
         // as `int` WRAPS on a far-apart pair (to Int32.MinValue), and `abs` of that then THROWS —
@@ -105,7 +105,15 @@ module Pathfinding =
         elif start = goal then Some(Some [ start ])
         else None
 
-    let astar
+    // The A* engine, parameterised by the admissible heuristic `h` (cell -> estimated remaining cost to
+    // `goal`, in `baseStep` units, as int64). `astar` passes the octile/Manhattan `heuristic`;
+    // `Landmarks.astar` passes `max(octile, ALT)`. A tighter admissible `h` expands fewer nodes but
+    // returns the SAME least cost, so swapping `h` never changes optimality — only the specific
+    // equal-cost path chosen (the frontier tie-break `(f, h, Col, Row)` shifts with `h`) and the number
+    // of expansions. Determinism is unaffected: `h` is integer and total.
+    let private astarWith
+        (h: Cell -> int64)
+        (tie: Cell -> int64)
         (neighbourhood: Neighbourhood)
         (maxVisited: int)
         (isWalkable: Cell -> bool)
@@ -115,21 +123,21 @@ module Pathfinding =
         match trivial maxVisited isWalkable start goal with
         | Some result -> result
         | None ->
-            let h = heuristic neighbourhood goal
-            // Frontier is a Set keyed by the TOTAL order (f, h, Col, Row) — Set.minElement is
+            // Frontier is a Set keyed by the TOTAL order (f, h, tie, Col, Row) — Set.minElement is
             // deterministic, so the pop order (hence the path) is bit-identical across runs/platforms.
-            // f, h and the g-score are int64: `heuristic` returns int64, and g accumulates in int64, so
-            // neither the estimate (wide coordinate span) nor the g-score (long path) can wrap the way
-            // plain `int` did. Unlike `dijkstra`, astar needs no Int32 cap on top of the wider
-            // accumulator — it never truncates g to `int` (it returns the PATH, not a cost), so there is
-            // no narrowing point to overflow at. Col/Row stay `int`: genuine cell coordinates, and the
-            // total order is unaffected by the widening.
+            // f, h, tie and the g-score are int64: `octile` returns int64, g accumulates in int64, and
+            // the `tie` term is int64, so neither the estimate (wide coordinate span) nor the g-score
+            // (long path) can wrap the way plain `int` did. `tie` is a pure function of the cell that
+            // breaks ties AFTER f and h, so it never changes which cost is optimal — `astar` passes a
+            // constant `fun _ -> 0L`, which orders identically to the historical `(f, h, Col, Row)` key
+            // (byte-identical output); `astarStraight` passes the straight-line cross-product deviation.
+            // Col/Row stay `int`: genuine cell coordinates, and the total order is unaffected.
             let h0 = h start
-            let openSet = Set.singleton (h0, h0, start.Col, start.Row)
+            let openSet = Set.singleton (h0, h0, tie start, start.Col, start.Row)
             let gScore = Map.ofList [ start, 0L ]
 
             let rec loop
-                (openSet: Set<int64 * int64 * int * int>)
+                (openSet: Set<int64 * int64 * int64 * int * int>)
                 (gScore: Map<Cell, int64>)
                 (cameFrom: Map<Cell, Cell>)
                 (expansions: int)
@@ -137,9 +145,9 @@ module Pathfinding =
                 if Set.isEmpty openSet || expansions >= maxVisited then
                     None
                 else
-                    let (f, hCur, col, row) = Set.minElement openSet
+                    let (f, hCur, tieCur, col, row) = Set.minElement openSet
                     let current = { Col = col; Row = row }
-                    let openSet = Set.remove (f, hCur, col, row) openSet
+                    let openSet = Set.remove (f, hCur, tieCur, col, row) openSet
 
                     if current = goal then
                         Some(reconstruct cameFrom current)
@@ -156,19 +164,57 @@ module Pathfinding =
                                     | Some existing when existing <= tentative -> (os, gs, cf)
                                     | prior ->
                                         let hn = h n
-                                        // Drop any stale open entry for n (same h, old g) before re-adding.
+                                        let tn = tie n
+                                        // Drop any stale open entry for n (same h/tie, old g) before re-adding.
                                         let os =
                                             match prior with
-                                            | Some oldG -> Set.remove (oldG + hn, hn, n.Col, n.Row) os
+                                            | Some oldG -> Set.remove (oldG + hn, hn, tn, n.Col, n.Row) os
                                             | None -> os
 
-                                        let os = Set.add (tentative + hn, hn, n.Col, n.Row) os
+                                        let os = Set.add (tentative + hn, hn, tn, n.Col, n.Row) os
                                         (os, Map.add n tentative gs, Map.add n current cf))
                                 (openSet, gScore, cameFrom)
 
                         loop openSet gScore cameFrom (expansions + 1)
 
             loop openSet gScore Map.empty 0
+
+    // The zero tie-break — orders identically to the historical `(f, h, Col, Row)` key.
+    let private noTie: Cell -> int64 = fun _ -> 0L
+
+    let astar
+        (neighbourhood: Neighbourhood)
+        (maxVisited: int)
+        (isWalkable: Cell -> bool)
+        (start: Cell)
+        (goal: Cell)
+        : Cell list option =
+        // The shipped A* — the octile/Manhattan heuristic over the shared `astarWith` engine, with the
+        // zero tie-break. Output is byte-identical to before the engine was extracted (the
+        // determinism/differential suite guards it).
+        astarWith (octile neighbourhood goal) noTie neighbourhood maxVisited isWalkable start goal
+
+    let astarStraight
+        (neighbourhood: Neighbourhood)
+        (maxVisited: int)
+        (isWalkable: Cell -> bool)
+        (start: Cell)
+        (goal: Cell)
+        : Cell list option =
+        // Opt-in A* whose tie-break prefers, among equal-(f,h) frontier nodes, the one nearest the
+        // straight `start -> goal` line: `cross = |dx1*dy2 - dx2*dy1|` (cell-start × goal-start),
+        // int64, zero on the line and larger with perpendicular deviation. It only breaks ties, so the
+        // path has the SAME least cost as `astar` — just straighter, and often found with fewer
+        // expansions. `astar` itself is untouched.
+        let dgx = int64 goal.Col - int64 start.Col
+        let dgy = int64 goal.Row - int64 start.Row
+
+        let cross (c: Cell) : int64 =
+            let dcx = int64 c.Col - int64 start.Col
+            let dcy = int64 c.Row - int64 start.Row
+            abs (dcx * dgy - dgx * dcy)
+
+        astarWith (octile neighbourhood goal) cross neighbourhood maxVisited isWalkable start goal
 
     let bfs
         (neighbourhood: Neighbourhood)
@@ -377,7 +423,7 @@ module Pathfinding =
                 | FourWay -> orthoOffsets
                 | EightWay -> orthoOffsets @ diagOffsets
 
-            let h = heuristic neighbourhood goal
+            let h = octile neighbourhood goal
             let cap = maxVisited // per-jump scan cap; see `jump`.
             let h0 = h start
             let openSet = Set.singleton (h0, h0, start.Col, start.Row)
@@ -717,3 +763,120 @@ module Pathfinding =
             match Map.tryFind a regions.Labels, Map.tryFind b regions.Labels with
             | Some la, Some lb -> la = lb
             | _ -> false
+
+    // ---------------------------------------------------------------------------------------------
+    // ALT landmark heuristic (roadmap 1.3, work item 017). Precompute exact integer distances from a
+    // handful of pivot ("landmark") cells; the triangle inequality then gives an admissible heuristic
+    // far tighter than octile on large/open maps, so `Landmarks.astar` — the same A* engine
+    // (`astarWith`) fed `max(octile, ALT)` — expands fewer nodes while returning a path of the SAME
+    // least cost as `astar`. Bounded, because the framework holds no map. Each landmark's table is just
+    // a `distanceField` from that landmark, so there is no new search engine and the determinism
+    // guarantee is inherited. Landmark selection is a pure function of the map (farthest-point
+    // sampling from a fixed seed), so the whole thing is byte-deterministic.
+
+    type Landmarks = private { Tables: Map<Cell, int> list }
+
+    [<RequireQualifiedAccess>]
+    module Landmarks =
+
+        let build (neighbourhood: Neighbourhood) (isWalkable: Cell -> bool) (count: int) (bounds: Cell * Cell) : Landmarks =
+            let (a, b) = bounds
+            let minCol, maxCol = min a.Col b.Col, max a.Col b.Col
+            let minRow, maxRow = min a.Row b.Row, max a.Row b.Row
+
+            let walk c =
+                c.Col >= minCol
+                && c.Col <= maxCol
+                && c.Row >= minRow
+                && c.Row <= maxRow
+                && isWalkable c
+
+            // Uniform cost over the walkable region (0 = impassable), so each `distanceField` gives the
+            // true shortest-path distance from a landmark to every cell — the exact tables ALT needs.
+            let cost c = if walk c then 1 else 0
+            let cap = (maxCol - minCol + 1) * (maxRow - minRow + 1) + 1
+
+            let field (from: Cell) : Map<Cell, int> =
+                distanceField neighbourhood cap cost [ from ]
+
+            let cells =
+                [ for row in minRow..maxRow do
+                      for col in minCol..maxCol -> { Col = col; Row = row } ]
+
+            // Deterministic arg-max: the cell of largest score, ties broken by the total `(Col, Row)`
+            // order — never a hash-set or float tie-break.
+            let pickBest (score: Cell -> int option) : Cell option =
+                cells
+                |> List.fold
+                    (fun best c ->
+                        match score c with
+                        | None -> best
+                        | Some s ->
+                            match best with
+                            | Some(bs, bc) when bs > s || (bs = s && (bc.Col, bc.Row) <= (c.Col, c.Row)) -> best
+                            | _ -> Some(s, c))
+                    None
+                |> Option.map snd
+
+            match cells |> List.tryFind walk with
+            | None -> { Tables = [] }
+            | Some seed ->
+                // Farthest-point sampling: L1 is the cell farthest from a fixed seed; each further
+                // landmark maximises the MINIMUM distance to the landmarks chosen so far (max-min).
+                let seedField = field seed
+
+                let firstScore c =
+                    if walk c then Map.tryFind c seedField else None
+
+                let rec grow (tables: Map<Cell, int> list) (n: int) : Map<Cell, int> list =
+                    if n <= 0 then
+                        List.rev tables
+                    else
+                        // score c = min distance from c to any chosen landmark (None if unreachable
+                        // from one, so it is never chosen — keeps landmarks inside the seed's component).
+                        let score c =
+                            if not (walk c) then
+                                None
+                            else
+                                let ds = tables |> List.map (fun t -> Map.tryFind c t)
+
+                                if List.exists Option.isNone ds then
+                                    None
+                                else
+                                    ds |> List.map Option.get |> List.min |> Some
+
+                        match pickBest score with
+                        | Some c -> grow (field c :: tables) (n - 1)
+                        | None -> List.rev tables
+
+                match (if count <= 0 then None else pickBest firstScore) with
+                | None -> { Tables = [] }
+                | Some l1 -> { Tables = grow [ field l1 ] (count - 1) }
+
+        let heuristic (landmarks: Landmarks) (goal: Cell) (cell: Cell) : int =
+            // max over landmarks L of |d(L, goal) - d(L, cell)|. Admissible by the triangle inequality
+            // over exact shortest-path distances (a landmark that cannot reach both is skipped). Integer
+            // and `baseStep`-scaled, so it plugs straight into the A* frontier with no float.
+            landmarks.Tables
+            |> List.choose (fun t ->
+                match Map.tryFind goal t, Map.tryFind cell t with
+                | Some dg, Some dc -> Some(abs (dg - dc))
+                | _ -> None)
+            |> function
+                | [] -> 0
+                | xs -> List.max xs
+
+        let astar
+            (landmarks: Landmarks)
+            (neighbourhood: Neighbourhood)
+            (maxVisited: int)
+            (isWalkable: Cell -> bool)
+            (start: Cell)
+            (goal: Cell)
+            : Cell list option =
+            // The shared A* engine over `max(octile, ALT)`. Both components are admissible, so their
+            // pointwise maximum is admissible — the path is optimal (same cost as `astar`) and, being
+            // >= octile everywhere, it expands no more nodes than `astar` and strictly fewer where ALT
+            // is tighter.
+            let combined c = max (octile neighbourhood goal c) (int64 (heuristic landmarks goal c))
+            astarWith combined noTie neighbourhood maxVisited isWalkable start goal

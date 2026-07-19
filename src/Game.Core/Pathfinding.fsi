@@ -170,6 +170,31 @@ module Pathfinding =
             Cell list option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// **Opt-in straighter-path A*** — identical to `astar` except that among equal-`(f, h)` frontier
+    /// nodes it prefers the one nearest the straight `start -> goal` line, via an integer cross-product
+    /// tie-break `cross = |dx1*dy2 - dx2*dy1|` (cell−start × goal−start, in int64) folded into the
+    /// ordering key as `(f, h, cross, Col, Row)`. `cross` is zero on the line and grows with
+    /// perpendicular deviation, so the result **hugs the straight line** — fewer needless zig-zags —
+    /// and is often found with fewer expansions.
+    ///
+    /// **Same least cost as `astar`, at zero optimality cost.** The cross term breaks ties only *after*
+    /// `f` and `h`, so it never changes which cost is optimal; where several least-cost paths exist it
+    /// simply selects the straightest. Same `Neighbourhood` (no corner-cutting), same binary
+    /// `isWalkable`, same `maxVisited`-bounds-pops, same endpoint-inclusive `Cell list option`, and the
+    /// same byte-for-byte determinism (the key is a strict integer total order).
+    ///
+    /// **`astar` is unchanged.** This is a separate, opt-in entry point: the bias never alters `astar`'s
+    /// byte-identical output (there the tie term is a constant `0`), so existing consumers migrate only
+    /// if they want the straighter path.
+    val astarStraight:
+        neighbourhood: Neighbourhood ->
+        maxVisited: int ->
+        isWalkable: (Cell -> bool) ->
+        start: Cell ->
+        goal: Cell ->
+            Cell list option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Breadth-first (unweighted) shortest path from `start` to `goal`, same walkability predicate,
     /// neighbourhood, `maxVisited` bound, endpoint-inclusion, and determinism guarantee as `astar`.
     /// Equivalent to `astar` when every move costs the same; offered for callers who want the simplest
@@ -342,3 +367,56 @@ module Pathfinding =
         /// search: this is the guard that turns a failed query from a full `maxVisited` exploration
         /// into a constant-time rejection.
         val sameComponent: regions: Regions -> a: Cell -> b: Cell -> bool
+
+    /// Public contract type exposed by the FS.GG.Game.Core package.
+    /// Precomputed exact distances from a handful of pivot ("landmark") cells over a **bounded** grid —
+    /// the tables behind the ALT (A*, Landmarks, Triangle-inequality) heuristic (see `Landmarks.build`).
+    /// Opaque: each landmark's table is a `distanceField`, and the value carries only what the heuristic
+    /// needs.
+    [<Sealed>]
+    type Landmarks
+
+    /// Public contract module exposed by the FS.GG.Game.Core package.
+    /// The ALT landmark heuristic (roadmap 1.3): build a `Landmarks` once, then use `Landmarks.astar`
+    /// for a path of the **same least cost** as `astar` that A* finds by expanding **fewer nodes** on
+    /// large/open maps — the triangle inequality over exact landmark distances is a far tighter
+    /// admissible estimate than octile. The shipped `astar` is unchanged; `Landmarks.astar` runs the
+    /// same engine with a better heuristic.
+    [<RequireQualifiedAccess>]
+    module Landmarks =
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// Choose `count` landmark cells within the **inclusive** `bounds` (corner order irrelevant) by
+        /// deterministic **farthest-point sampling** — a fixed seed, then each further landmark maximises
+        /// the minimum distance to those already chosen (ties by the total `(Col, Row)` order) — and
+        /// store one `distanceField` per landmark. `isWalkable` is the same predicate `astar` takes; a
+        /// cell outside `bounds` is impassable. Bounds are required because the framework holds no map.
+        /// Pure and byte-deterministic. A `count <= 0`, an all-blocked region, or empty bounds yields a
+        /// `Landmarks` whose heuristic degrades to `0` (so `Landmarks.astar` is then plain `astar`).
+        val build:
+            neighbourhood: Neighbourhood -> isWalkable: (Cell -> bool) -> count: int -> bounds: Cell * Cell -> Landmarks
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// The **admissible** ALT estimate of the remaining cost from `cell` to `goal`, in `baseStep`
+        /// units: `max` over landmarks `L` of `|d(L, goal) - d(L, cell)|` (a landmark that cannot reach
+        /// both is skipped; with no usable landmark it is `0`). Never exceeds the true shortest-path
+        /// distance (triangle inequality), so feeding it to A* preserves optimality. Integer — no float.
+        val heuristic: landmarks: Landmarks -> goal: Cell -> cell: Cell -> int
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// A* over `max(octile, ALT)` — signature-parallel to `astar` with a leading `landmarks`. Both
+        /// heuristic components are admissible, so the maximum is admissible: the returned path has the
+        /// **same least cost** `astar` returns and is valid (start/goal-anchored, `Neighbourhood`-legal,
+        /// no corner-cutting, walkable). Because the heuristic dominates octile, it expands **no more**
+        /// frontier nodes than `astar` and strictly fewer where a landmark tightens the estimate. Same
+        /// `maxVisited`-bounds-pops, degenerate-input, and byte-determinism contract as `astar`; where
+        /// several least-cost paths tie, the specific cells may differ from `astar` (the heuristic shifts
+        /// the tie-break), exactly as any heuristic change does.
+        val astar:
+            landmarks: Landmarks ->
+            neighbourhood: Neighbourhood ->
+            maxVisited: int ->
+            isWalkable: (Cell -> bool) ->
+            start: Cell ->
+            goal: Cell ->
+                Cell list option
