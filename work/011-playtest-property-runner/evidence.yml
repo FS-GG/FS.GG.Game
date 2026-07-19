@@ -1,0 +1,542 @@
+schemaVersion: 1
+workId: 011-playtest-property-runner
+stage: evidence
+status: evidenceReady
+sourceSpec: work/011-playtest-property-runner/spec.md
+sourceClarifications: work/011-playtest-property-runner/clarifications.md
+sourceChecklist: work/011-playtest-property-runner/checklist.md
+sourcePlan: work/011-playtest-property-runner/plan.md
+sourceTasks: work/011-playtest-property-runner/tasks.yml
+sourceAnalysis: readiness/011-playtest-property-runner/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/011-playtest-property-runner/analysis.json
+    digest: 7d64c74607a9488dfab5a25e6b2fd10ece7a97453bc3ec4f10b1ed5307a6742a
+    schemaVersion: 1
+  - label: checklist
+    path: work/011-playtest-property-runner/checklist.md
+    digest: 8d56d442d33ad4df98a664491264df767124bb0b5d22d5235c63de2010e2ac76
+    schemaVersion: 1
+  - label: clarifications
+    path: work/011-playtest-property-runner/clarifications.md
+    digest: e719ea969f7f8f18f79471a13f6c504f6d7f81be2459085e75251423d251a293
+    schemaVersion: 1
+  - label: plan
+    path: work/011-playtest-property-runner/plan.md
+    digest: bcc040fc7b3d07f5098ab94245e946be31e7051e14ea743454fcdc0e613d8445
+    schemaVersion: 1
+  - label: spec
+    path: work/011-playtest-property-runner/spec.md
+    digest: 7120963144ed83016483b4e0f03df8894ad98f404ba1211c4807d0d4b3f6f3ff
+    schemaVersion: 1
+  - label: tasks
+    path: work/011-playtest-property-runner/tasks.yml
+    digest: 42c03b8b058036878432c176688489eb66db8e138af034ab8f6e6aa37d74d0d2
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-001 Properties.check generates valid scripts over the keymap alphabet via Rng.nextInt (PropertiesTests)."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-002 invariant checked at Init and after every fixed step (firstViolation over runCommands frames)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-003 Held with run count when all hold; Falsified counterexample on first violation."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-004 shrink to a minimal counter-script (four MoveNorth) proven on PongSim."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-005 deterministic in the seed: same (seed,config) -> identical result."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-006 config controls runs/length/alphabet; default Runs>=1000; restricted alphabet honoured."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-007 pure Core+BCL, NO FsCheck in the package; DependencyTests green; baseline regenerated."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["FR-008 PongSim playfield/unit-velocity Held >=1000 runs; broken invariant shrunk; FsCheck pairing test."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 pure generation/shrink over Rng in the package; FsCheck test-only."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 invariant at Init + every step; Counterexample.Step 0-based, -1 for Init."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [PD-002 per-step evaluation via firstViolation over the recorded frames.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["PD-005 threaded seeded Rng makes identical (seed,config) reproduce."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV013]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["PD-007 no FsCheck reference in the package; DependencyTests green; baseline regenerated."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003, PD-004, PD-006]
+    obligationRefs: [EV014]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, readiness/surface-baselines/members/FS.GG.Game.Harness.txt, src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 tier-1 additive Properties surface; baseline extended, existing byte-unchanged."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV015]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["PC-002 referenced-assembly set stays Core+BCL (NOT FsCheck); DependencyTests enforces."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-005]
+    obligationRefs: [EV016]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 Held over >=1000 runs + determinism-by-seed proven on PongSim."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-006, PD-008]
+    obligationRefs: [EV017]
+    artifacts: [src/Game.Harness/Properties.fs, src/Game.Harness/Properties.fsi, tests/Game.Harness.Tests/PropertiesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 minimal counter-script, restricted alphabet, and FsCheck >=1000-case pairing."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV018]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["VO-003 DependencyTests green, build clean, baseline regenerated, suite 67/67."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV019]
+    artifacts: [work/011-playtest-property-runner/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 additive; nothing removed/renamed; no migration; baseline extended."]
+  - id: EV020
+    kind: generated-view
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV020]
+    artifacts: [readiness/011-playtest-property-runner/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: [GV-001 work-model.json refreshes from current sources at verify/ship.]
+  - id: EV021
+    kind: generated-view
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV021]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-properties.trx
+      digest: "sha256:ae282cad7b61f9510589b85bd02fa9c29ee5ddb920016370f6c8febf356c62f4"
+      outcome: passed
+      passed: 67
+      failed: 0
+      skipped: 0
+    notes: ["GV-002 surface baseline regenerated from the extended .fsi set; drift gate green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

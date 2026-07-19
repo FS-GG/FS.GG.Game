@@ -1,4 +1,5 @@
 FS.GG.Game.Harness.Bot`1
+FS.GG.Game.Harness.Counterexample
 FS.GG.Game.Harness.Driver
 FS.GG.Game.Harness.Explore
 FS.GG.Game.Harness.ExploreConfig
@@ -16,6 +17,12 @@ FS.GG.Game.Harness.Origin
 FS.GG.Game.Harness.Origin+Tags
 FS.GG.Game.Harness.Playable
 FS.GG.Game.Harness.Playable`2
+FS.GG.Game.Harness.Properties
+FS.GG.Game.Harness.PropertyConfig
+FS.GG.Game.Harness.PropertyResult
+FS.GG.Game.Harness.PropertyResult+Falsified
+FS.GG.Game.Harness.PropertyResult+Held
+FS.GG.Game.Harness.PropertyResult+Tags
 FS.GG.Game.Harness.ReachResult`1
 FS.GG.Game.Harness.Run`1
 FS.GG.Game.Harness.Seat

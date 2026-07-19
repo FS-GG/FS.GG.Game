@@ -38,6 +38,11 @@
          the keystone). Pure; depends on Playable + the per-frame fold. -->
     <Compile Include="Explore.fsi" />
     <Compile Include="Explore.fs" />
+    <!-- Properties: the pure, seeded property runner (Phase 3). Generates valid scripts over the
+         keymap alphabet (reusing Explore.defaultMoves) and checks an invariant at every step; no
+         FsCheck reference — FsCheck stays a test-only tool. -->
+    <Compile Include="Properties.fsi" />
+    <Compile Include="Properties.fs" />
   </ItemGroup>
 
   <ItemGroup>
