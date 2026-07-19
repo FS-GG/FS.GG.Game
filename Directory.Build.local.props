@@ -63,7 +63,7 @@
     <!-- The release tag is authoritative: release.yml packs with -p:Version="$VER" from the tag,
          which overrides this. Keep it equal to the newest released version anyway, so a local
          `dotnet pack` and the feed cannot disagree. -->
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <Authors>FS.GG Contributors</Authors>
     <Company>FS.GG Contributors</Company>
     <RepositoryType>git</RepositoryType>
