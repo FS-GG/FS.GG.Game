@@ -1,0 +1,40 @@
+FS.GG.Game.Harness.Bot`1.Decide : FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>> [get]
+FS.GG.Game.Harness.Bot`1.new(FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>>)
+FS.GG.Game.Harness.Driver.identityFingerprint<world>(world) : world
+FS.GG.Game.Harness.Driver.runBot<world, key, view, f>(Playable<world, key>, FSharpFunc<world, view>, Bot<view>, System.UInt64, System.Int32, FSharpFunc<world, f>) : Run<f>
+FS.GG.Game.Harness.Driver.runCommands<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>) : Trace<f>
+FS.GG.Game.Harness.Driver.runScript<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, FSharpList<FSharpList<key>>) : Trace<f>
+FS.GG.Game.Harness.MatchSetup`2.Apply : FSharpFunc<FS.GG.Game.Harness.Seat, FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>>> [get]
+FS.GG.Game.Harness.MatchSetup`2.Dt : System.Double [get]
+FS.GG.Game.Harness.MatchSetup`2.Init : FSharpFunc<FS.GG.Game.Core.Rng, world> [get]
+FS.GG.Game.Harness.MatchSetup`2.IsOver : FSharpFunc<world, System.Boolean> [get]
+FS.GG.Game.Harness.MatchSetup`2.MaxSteps : System.Int32 [get]
+FS.GG.Game.Harness.MatchSetup`2.Observe : FSharpFunc<FS.GG.Game.Harness.Seat, FSharpFunc<world, view>> [get]
+FS.GG.Game.Harness.MatchSetup`2.Step : FSharpFunc<world, FSharpFunc<System.Double, world>> [get]
+FS.GG.Game.Harness.MatchSetup`2.new(System.Double, FSharpFunc<FS.GG.Game.Core.Rng, world>, FSharpFunc<FS.GG.Game.Harness.Seat, FSharpFunc<world, view>>, FSharpFunc<FS.GG.Game.Harness.Seat, FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>>>, FSharpFunc<world, FSharpFunc<System.Double, world>>, FSharpFunc<world, System.Boolean>, System.Int32)
+FS.GG.Game.Harness.Match`1.A : Bot<view> [get]
+FS.GG.Game.Harness.Match`1.B : Bot<view> [get]
+FS.GG.Game.Harness.Match`1.Seed : System.UInt64 [get]
+FS.GG.Game.Harness.Match`1.new(System.UInt64, Bot<view>, Bot<view>)
+FS.GG.Game.Harness.Matrix.runMatch<world, view, o>(MatchSetup<world, view>, FSharpFunc<world, o>, Match<view>) : o
+FS.GG.Game.Harness.Matrix.runMatrix<world, view, o>(MatchSetup<world, view>, FSharpFunc<world, o>, FSharpList<Match<view>>) : FSharpList<Tuple<Match<view>, o>>
+FS.GG.Game.Harness.Matrix.winRate<o>(FSharpFunc<o, System.Boolean>, FSharpList<o>) : System.Double
+FS.GG.Game.Harness.Origin+Tags.InputDriven : System.Int32
+FS.GG.Game.Harness.Origin+Tags.Synthetic : System.Int32
+FS.GG.Game.Harness.Playable.resolve<world, key>(Playable<world, key>, key) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Command>
+FS.GG.Game.Harness.Playable`2.Apply : FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>> [get]
+FS.GG.Game.Harness.Playable`2.Dt : System.Double [get]
+FS.GG.Game.Harness.Playable`2.Init : world [get]
+FS.GG.Game.Harness.Playable`2.Keymap : FSharpMap<key, FS.GG.Game.Core.Command> [get]
+FS.GG.Game.Harness.Playable`2.Step : FSharpFunc<world, FSharpFunc<System.Double, world>> [get]
+FS.GG.Game.Harness.Playable`2.new(world, FSharpMap<key, FS.GG.Game.Core.Command>, FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>>, FSharpFunc<world, FSharpFunc<System.Double, world>>, System.Double)
+FS.GG.Game.Harness.Run`1.Captured : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
+FS.GG.Game.Harness.Run`1.Trace : Trace<f> [get]
+FS.GG.Game.Harness.Run`1.new(Trace<f>, Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>)
+FS.GG.Game.Harness.Seat+Tags.A : System.Int32
+FS.GG.Game.Harness.Seat+Tags.B : System.Int32
+FS.GG.Game.Harness.Synthetic.trace<world, f>(FSharpFunc<world, f>, FSharpList<world>) : Trace<f>
+FS.GG.Game.Harness.Trace.equalFrames<f>(Trace<f>, Trace<f>) : System.Boolean
+FS.GG.Game.Harness.Trace.frames<f>(Trace<f>) : FSharpList<f>
+FS.GG.Game.Harness.Trace.isSynthetic<f>(Trace<f>) : System.Boolean
+FS.GG.Game.Harness.Trace.origin<f>(Trace<f>) : FS.GG.Game.Harness.Origin

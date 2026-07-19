@@ -1,0 +1,15 @@
+FS.GG.Game.Harness.Bot`1
+FS.GG.Game.Harness.Driver
+FS.GG.Game.Harness.MatchSetup`2
+FS.GG.Game.Harness.Match`1
+FS.GG.Game.Harness.Matrix
+FS.GG.Game.Harness.Origin
+FS.GG.Game.Harness.Origin+Tags
+FS.GG.Game.Harness.Playable
+FS.GG.Game.Harness.Playable`2
+FS.GG.Game.Harness.Run`1
+FS.GG.Game.Harness.Seat
+FS.GG.Game.Harness.Seat+Tags
+FS.GG.Game.Harness.Synthetic
+FS.GG.Game.Harness.Trace
+FS.GG.Game.Harness.Trace`1

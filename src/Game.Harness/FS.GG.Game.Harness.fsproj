@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <IsPackable>true</IsPackable>
+    <PackageId>FS.GG.Game.Harness</PackageId>
+    <AssemblyName>FS.GG.Game.Harness</AssemblyName>
+    <Title>FS.GG.Game.Harness</Title>
+    <Description>Deterministic, headless gameplay test harness on FS.GG.Game.Core. Drives a game's world through the standard Command input frontier — scripted raw-key→keymap→Command, an in-process Bot policy, and a multi-seed bot-vs-bot matrix — folds whole fixed steps, and fingerprints the world trace as a value so a replay is a comparison, not a tolerance check. A typed synthetic-state escape hatch keeps its own evidence self-identifying. Depends on nothing but FS.GG.Game.Core and the BCL.</Description>
+    <PackageTags>fsharp;game;testing;headless;deterministic;gameplay;harness;replay</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Game.Harness.Tests" />
+  </ItemGroup>
+
+  <!-- BCL + FS.GG.Game.Core only (FR-007): reaches up to nothing else — no render/input stack, no
+       keymap type, no I/O. Compile order: Trace (the provenance-carrying comparison surface) first;
+       Playable (the driven-game contract + Bot) next; then the drivers and the matrix that produce
+       Traces; Synthetic (the labeled fallback) last, beside them. Each is generic in the world, so
+       none depends on another beyond the Trace/Playable vocabulary. -->
+  <ItemGroup>
+    <Compile Include="Trace.fsi" />
+    <Compile Include="Trace.fs" />
+    <Compile Include="Playable.fsi" />
+    <Compile Include="Playable.fs" />
+    <Compile Include="Driver.fsi" />
+    <Compile Include="Driver.fs" />
+    <Compile Include="Matrix.fsi" />
+    <Compile Include="Matrix.fs" />
+    <Compile Include="Synthetic.fsi" />
+    <Compile Include="Synthetic.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Core\FS.GG.Game.Core.fsproj" />
+  </ItemGroup>
+
+</Project>
