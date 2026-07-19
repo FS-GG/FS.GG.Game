@@ -1,0 +1,422 @@
+schemaVersion: 1
+workId: 017-pathfinding-alt-landmarks
+stage: evidence
+status: evidenceReady
+sourceSpec: work/017-pathfinding-alt-landmarks/spec.md
+sourceClarifications: work/017-pathfinding-alt-landmarks/clarifications.md
+sourceChecklist: work/017-pathfinding-alt-landmarks/checklist.md
+sourcePlan: work/017-pathfinding-alt-landmarks/plan.md
+sourceTasks: work/017-pathfinding-alt-landmarks/tasks.yml
+sourceAnalysis: readiness/017-pathfinding-alt-landmarks/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/017-pathfinding-alt-landmarks/analysis.json
+    digest: a07483fb4f10091e3c55012dea398ab4682026cd5287eaa68e40e4ad5e10f63b
+    schemaVersion: 1
+  - label: checklist
+    path: work/017-pathfinding-alt-landmarks/checklist.md
+    digest: bac99b3d1d41116f7c1f6ed782856122ca517934e8194a85e872767dead2b350
+    schemaVersion: 1
+  - label: clarifications
+    path: work/017-pathfinding-alt-landmarks/clarifications.md
+    digest: 18eb779c9f4baa2ecedf904088ddc062ba78eb721d10753a248db448bb768483
+    schemaVersion: 1
+  - label: plan
+    path: work/017-pathfinding-alt-landmarks/plan.md
+    digest: 7170500392af61e6865e01cc1ff018c9eac76cc1653bb7c067e72ba44a467313
+    schemaVersion: 1
+  - label: spec
+    path: work/017-pathfinding-alt-landmarks/spec.md
+    digest: 6a55cf761bf2fc4df670657159d09eb6a41c43f120a22523121fcfbadf095158
+    schemaVersion: 1
+  - label: tasks
+    path: work/017-pathfinding-alt-landmarks/tasks.yml
+    digest: 9ae4680faca8d5fdfda1c6a9230d06e70c0b2ead49e33165746b7ecad3b8baa7
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: the FsCheck differential over 1000 random grids asserts Landmarks.astar's path cost equals astar's; the octile heuristic is a lower bound of max(octile, ALT) so optimality is preserved."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: validPathNoCut is asserted on every Landmarks.astar result (concrete + differential); it reuses the astarWith reconstruction, so paths are start/goal-anchored, adjacency-legal, no-corner-cut, walkable."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: the differential's (None,None)/(Some,Some) matrix asserts Landmarks.astar and astar agree on reachability under a generous maxVisited."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: the determinism golden asserts build + Landmarks.astar + heuristic are byte-identical across runs; landmark selection is deterministic farthest-point sampling with a (Col,Row) tie-break."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: the admissibility test (concrete + FsCheck over 500 grids) asserts Landmarks.heuristic goal cell <= the true astar distance for every reachable cell."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["FR-006: the fewer-expansions test uses the minimal-maxVisited-to-solve as an exact pop-count proxy and asserts ALT < astar on a detour map where octile badly underestimates."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["Public surface: Pathfinding.Landmarks (type) and Landmarks.build/heuristic/astar (members) declared in the .fsi and recorded in both baselines; astar's baseline line is unchanged."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [artifacts/testresults/alt-017.trx, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Core suite is 608/608 green; the astar refactor onto the shared astarWith engine is byte-identical (guarded by the pre-existing astar determinism/differential tests)."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: admissibility and differential properties both green over 500-1000 random grids."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["PD-002: build reuses distanceField (uniform cost) per landmark and picks by deterministic max-min farthest-point sampling; the determinism tests confirm the tables and selection are reproducible."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["PD-004: Landmarks.astar's heuristic is max(octile, ALT), dominating octile, so it expands no more nodes than astar and strictly fewer where ALT tightens — the fewer-expansions proxy proves the strict case."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV012]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: Tier-1 surface additions — the Landmarks type and its three members land with the .fsi, both baselines, and tests; the drift gate stays green (4-line additive diff, astar unchanged)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003]
+    obligationRefs: [EV013]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: the differential (equal cost + validity + reachability) and admissibility properties fail before Landmarks exists and pass after; build clean under warnings-as-errors; both baselines regenerated."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-004]
+    obligationRefs: [EV014]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: the named determinism golden asserts byte-identical landmarks/path across runs; the fewer-expansions proxy asserts ALT pops strictly fewer nodes than astar on a detour map."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [work/017-pathfinding-alt-landmarks/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: the astar refactor keeps astar's signature and byte-identical output, and the additions remove/rename nothing, so no consumer migration; plan schemaVersion 1 accepted."]
+  - id: EV016
+    kind: generated-view
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [readiness/017-pathfinding-alt-landmarks/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/alt-017.trx
+      digest: "sha256:1565c269c211d4979ef1d31b16d71221571600ca9505fe9dd2f7e890756a277e"
+      outcome: passed
+      passed: 608
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/017-pathfinding-alt-landmarks/work-model.json is refreshed by verify/ship from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

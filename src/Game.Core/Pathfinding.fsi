@@ -170,12 +170,73 @@ module Pathfinding =
             Cell list option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// **Opt-in straighter-path A*** — identical to `astar` except that among equal-`(f, h)` frontier
+    /// nodes it prefers the one nearest the straight `start -> goal` line, via an integer cross-product
+    /// tie-break `cross = |dx1*dy2 - dx2*dy1|` (cell−start × goal−start, in int64) folded into the
+    /// ordering key as `(f, h, cross, Col, Row)`. `cross` is zero on the line and grows with
+    /// perpendicular deviation, so the result **hugs the straight line** — fewer needless zig-zags —
+    /// and is often found with fewer expansions.
+    ///
+    /// **Same least cost as `astar`, at zero optimality cost.** The cross term breaks ties only *after*
+    /// `f` and `h`, so it never changes which cost is optimal; where several least-cost paths exist it
+    /// simply selects the straightest. Same `Neighbourhood` (no corner-cutting), same binary
+    /// `isWalkable`, same `maxVisited`-bounds-pops, same endpoint-inclusive `Cell list option`, and the
+    /// same byte-for-byte determinism (the key is a strict integer total order).
+    ///
+    /// **`astar` is unchanged.** This is a separate, opt-in entry point: the bias never alters `astar`'s
+    /// byte-identical output (there the tie term is a constant `0`), so existing consumers migrate only
+    /// if they want the straighter path.
+    val astarStraight:
+        neighbourhood: Neighbourhood ->
+        maxVisited: int ->
+        isWalkable: (Cell -> bool) ->
+        start: Cell ->
+        goal: Cell ->
+            Cell list option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Breadth-first (unweighted) shortest path from `start` to `goal`, same walkability predicate,
     /// neighbourhood, `maxVisited` bound, endpoint-inclusion, and determinism guarantee as `astar`.
     /// Equivalent to `astar` when every move costs the same; offered for callers who want the simplest
     /// hop-count path without the A* heuristic. Under `EightWay`, applies the same no-corner-cutting
     /// rule (diagonal only when both shared orthogonals are walkable).
     val bfs:
+        neighbourhood: Neighbourhood ->
+        maxVisited: int ->
+        isWalkable: (Cell -> bool) ->
+        start: Cell ->
+        goal: Cell ->
+            Cell list option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// **Jump Point Search — a grid-specialised `astar` for uniform-cost grids that pops far fewer
+    /// frontier nodes.** Same `Neighbourhood`, same binary `isWalkable`, same `maxVisited` bound, same
+    /// endpoint-inclusive `Cell list option`, and the same byte-for-byte determinism as `astar` — a
+    /// drop-in acceleration. It "jumps" over runs of symmetric intermediate cells (an obstacle-free
+    /// corridor collapses to a single frontier pop) instead of expanding them one at a time.
+    ///
+    /// **Uniform cost only.** Like `astar`, `jps` takes no `cost` function; it minimises `baseStep`
+    /// distance (`baseStep` per orthogonal step, `baseStep * 14 / 10` per diagonal) over walkable
+    /// cells and cannot see terrain weight. For weighted terrain use `reachable`/`distanceField`.
+    ///
+    /// **The result matches `astar` in cost, not necessarily in cells.** `jps` returns a path of the
+    /// **same least cost** `astar` returns and one that is **valid** — `start`-prefixed,
+    /// `goal`-suffixed, every step `Neighbourhood`-legal (diagonals only when both shared orthogonals
+    /// are walkable, no corner-cutting), every cell walkable — and it **agrees with `astar` on
+    /// reachability**. It does **not** promise the identical cell *sequence*: on a grid with several
+    /// least-cost routes, JPS's canonical jumps and `astar`'s `(f, h, Col, Row)` tie-break pick
+    /// different equal-cost paths, and demanding identical cells would mean discarding the pruning that
+    /// is JPS's entire value. What it does promise is byte-identity **across its own runs and
+    /// platforms**, so it is safe inside a deterministic-replay `update`.
+    ///
+    /// **`maxVisited` bounds frontier pops**, the same unit `astar` counts — so a caller swapping `jps`
+    /// for `astar` gives it the same number. Because `jps` pops far fewer nodes, the two reach the
+    /// `None`-on-exhaustion boundary at different query sizes; they agree on the answer (and on
+    /// reachability) whenever the search is **not bounded out** by `maxVisited`, which is the regime a
+    /// caller sizes `maxVisited` for. Total on degenerate input, identically to `astar`: a non-walkable
+    /// `start`/`goal` or `maxVisited <= 0` yields `None`; a walkable `start = goal` yields
+    /// `Some [start]`.
+    val jps:
         neighbourhood: Neighbourhood ->
         maxVisited: int ->
         isWalkable: (Cell -> bool) ->
@@ -271,3 +332,91 @@ module Pathfinding =
         budget: int ->
         start: Cell ->
             Map<Cell, int>
+
+    /// Public contract type exposed by the FS.GG.Game.Core package.
+    /// A connected-component labelling of a **bounded** grid — every maximal walkable region computed
+    /// once by deterministic flood fill (see `Regions.build`). Opaque: the internal region label ids
+    /// are deliberately not exposed, only the boolean `Regions.sameComponent`, so no observable result
+    /// can depend on the labelling order.
+    [<Sealed>]
+    type Regions
+
+    /// Public contract module exposed by the FS.GG.Game.Core package.
+    /// The connected-component early-out (roadmap 1.2): build a `Regions` once, then reject an
+    /// unreachable `start -> goal` in O(1) with `sameComponent` — instead of `astar`/`bfs`/`reachable`
+    /// exhausting `maxVisited` before reporting "no path", which on a map with walls or islands is the
+    /// worst case on every failed query. Connectivity uses the module's own neighbour rule, so it
+    /// **agrees with what `astar`/`bfs` can actually traverse**, including the no-corner-cutting rule.
+    [<RequireQualifiedAccess>]
+    module Regions =
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// Label every maximal walkable region within the **inclusive** `bounds` corner pair (order of
+        /// the two corners is irrelevant — they are normalized per axis). `isWalkable` is the same
+        /// predicate `astar`/`bfs` take; a cell outside `bounds` is treated as unwalkable and belongs
+        /// to no component. Bounds are required because the framework holds no map. Pure and
+        /// deterministic: a fixed row-major scan with a BFS flood under the given `neighbourhood`
+        /// (so `EightWay` inherits the no-corner-cutting rule), and the label ids stay internal.
+        val build: neighbourhood: Neighbourhood -> bounds: Cell * Cell -> isWalkable: (Cell -> bool) -> Regions
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// **O(1)** — true exactly when `a` and `b` are both in-bounds walkable cells joined by a path
+        /// under the region's `neighbourhood`, i.e. it agrees with `astar` reachability over the same
+        /// bounded walkability. Returns false when either cell is out of bounds or not walkable, with
+        /// **no exception for `a = b`** — an unwalkable cell is in no component. Two label lookups, no
+        /// search: this is the guard that turns a failed query from a full `maxVisited` exploration
+        /// into a constant-time rejection.
+        val sameComponent: regions: Regions -> a: Cell -> b: Cell -> bool
+
+    /// Public contract type exposed by the FS.GG.Game.Core package.
+    /// Precomputed exact distances from a handful of pivot ("landmark") cells over a **bounded** grid —
+    /// the tables behind the ALT (A*, Landmarks, Triangle-inequality) heuristic (see `Landmarks.build`).
+    /// Opaque: each landmark's table is a `distanceField`, and the value carries only what the heuristic
+    /// needs.
+    [<Sealed>]
+    type Landmarks
+
+    /// Public contract module exposed by the FS.GG.Game.Core package.
+    /// The ALT landmark heuristic (roadmap 1.3): build a `Landmarks` once, then use `Landmarks.astar`
+    /// for a path of the **same least cost** as `astar` that A* finds by expanding **fewer nodes** on
+    /// large/open maps — the triangle inequality over exact landmark distances is a far tighter
+    /// admissible estimate than octile. The shipped `astar` is unchanged; `Landmarks.astar` runs the
+    /// same engine with a better heuristic.
+    [<RequireQualifiedAccess>]
+    module Landmarks =
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// Choose `count` landmark cells within the **inclusive** `bounds` (corner order irrelevant) by
+        /// deterministic **farthest-point sampling** — a fixed seed, then each further landmark maximises
+        /// the minimum distance to those already chosen (ties by the total `(Col, Row)` order) — and
+        /// store one `distanceField` per landmark. `isWalkable` is the same predicate `astar` takes; a
+        /// cell outside `bounds` is impassable. Bounds are required because the framework holds no map.
+        /// Pure and byte-deterministic. A `count <= 0`, an all-blocked region, or empty bounds yields a
+        /// `Landmarks` whose heuristic degrades to `0` (so `Landmarks.astar` is then plain `astar`).
+        val build:
+            neighbourhood: Neighbourhood -> isWalkable: (Cell -> bool) -> count: int -> bounds: Cell * Cell -> Landmarks
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// The **admissible** ALT estimate of the remaining cost from `cell` to `goal`, in `baseStep`
+        /// units: `max` over landmarks `L` of `|d(L, goal) - d(L, cell)|` (a landmark that cannot reach
+        /// both is skipped; with no usable landmark it is `0`). Never exceeds the true shortest-path
+        /// distance (triangle inequality), so feeding it to A* preserves optimality. Integer — no float.
+        val heuristic: landmarks: Landmarks -> goal: Cell -> cell: Cell -> int
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// A* over `max(octile, ALT)` — signature-parallel to `astar` with a leading `landmarks`. Both
+        /// heuristic components are admissible, so the maximum is admissible: the returned path has the
+        /// **same least cost** `astar` returns and is valid (start/goal-anchored, `Neighbourhood`-legal,
+        /// no corner-cutting, walkable). Because the heuristic dominates octile, it expands **no more**
+        /// frontier nodes than `astar` and strictly fewer where a landmark tightens the estimate. Same
+        /// `maxVisited`-bounds-pops, degenerate-input, and byte-determinism contract as `astar`; where
+        /// several least-cost paths tie, the specific cells may differ from `astar` (the heuristic shifts
+        /// the tie-break), exactly as any heuristic change does.
+        val astar:
+            landmarks: Landmarks ->
+            neighbourhood: Neighbourhood ->
+            maxVisited: int ->
+            isWalkable: (Cell -> bool) ->
+            start: Cell ->
+            goal: Cell ->
+                Cell list option

@@ -783,3 +783,440 @@ let tests =
             Expect.equal (Set.toList zero.Endable) [ start ] "a zero budget settles start alone — standing still"
         }
     ]
+
+// ------------------------------------------------------------------------------------------------
+// Jump Point Search (work item 015, roadmap 1.1). A grid-specialised A* for uniform-cost grids that
+// pops far fewer frontier nodes and returns a path of the SAME least cost as `astar`. The primary
+// correctness net is a DIFFERENTIAL ORACLE against the shipped `astar`: equal cost, a valid path,
+// and agreement on reachability (DEC-001). It does not compare cell sequences — several least-cost
+// paths tie, and JPS's canonical jumps pick a different equal-cost one than astar's tie-break.
+
+// Stricter than `validPath`: also asserts NO CORNER CUTTING — a diagonal step is taken only when
+// both shared orthogonal neighbours are walkable (FR-002).
+let private validPathNoCut (isWalkable: Cell -> bool) (start: Cell) (goal: Cell) (path: Cell list) =
+    validPath isWalkable start goal path
+    && path
+       |> List.pairwise
+       |> List.forall (fun (a, b) ->
+           if a.Col <> b.Col && a.Row <> b.Row then
+               isWalkable { Col = b.Col; Row = a.Row } && isWalkable { Col = a.Col; Row = b.Row }
+           else
+               true)
+
+[<Tests>]
+let jpsTests =
+    testList "Game.Core Pathfinding JPS (015, FR-001..FR-006)" [
+
+        test "jps FourWay jumps a straight corridor to the goal" {
+            let walk = gridWalkable 6 1 Set.empty
+            let path = Pathfinding.jps FourWay 1000 walk { Col = 0; Row = 0 } { Col = 5; Row = 0 }
+            Expect.equal
+                path
+                (Some [ for c in 0..5 -> { Col = c; Row = 0 } ])
+                "start..goal inclusive straight path, cell-by-cell"
+        }
+
+        test "jps EightWay takes the strictly-cheaper diagonal on an open grid" {
+            let walk = gridWalkable 4 4 Set.empty
+            let path = Pathfinding.jps EightWay 1000 walk { Col = 0; Row = 0 } { Col = 3; Row = 3 }
+            let cost = path |> Option.map pathCost
+            Expect.equal cost (Some 42) "three diagonals (14 each) — the least cost, same as astar"
+            Expect.isTrue (validPathNoCut walk { Col = 0; Row = 0 } { Col = 3; Row = 3 } (Option.get path)) "valid"
+        }
+
+        test "jps EightWay refuses to cut the corner past a blocked orthogonal (D5)" {
+            let walk = gridWalkable 3 3 (Set.ofList [ (1, 0) ])
+            let path = Pathfinding.jps EightWay 1000 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            let astar = Pathfinding.astar EightWay 1000 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            Expect.equal (path |> Option.map pathCost) (astar |> Option.map pathCost) "same cost as astar (no corner-cut)"
+            Expect.isTrue (validPathNoCut walk { Col = 0; Row = 0 } { Col = 1; Row = 1 } (Option.get path)) "no corner-cut ⇒ routes around"
+        }
+
+        test "jps routes around a wall with a single gap (FR-002 validity)" {
+            let blocked = Set.ofList [ for r in 0..3 -> (2, r) ]
+            let walk = gridWalkable 5 5 blocked
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 4; Row = 0 }
+            let path = Pathfinding.jps EightWay 5000 walk start goal
+            Expect.isSome path "a path through the gap exists"
+            Expect.isTrue (validPathNoCut walk start goal (Option.get path)) "valid walkable adjacent no-corner-cut path"
+            Expect.isFalse (Option.get path |> List.exists (fun c -> blocked.Contains(c.Col, c.Row))) "never enters the wall"
+        }
+
+        test "jps shares astar's degenerate-input contract (FR-004 totality)" {
+            let walk = gridWalkable 3 3 (Set.ofList [ (0, 0); (2, 2) ])
+            let open3 = gridWalkable 3 3 Set.empty
+            Expect.isNone (Pathfinding.jps FourWay 100 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }) "blocked start ⇒ None"
+            Expect.isNone (Pathfinding.jps FourWay 100 walk { Col = 1; Row = 1 } { Col = 2; Row = 2 }) "blocked goal ⇒ None"
+            Expect.isNone (Pathfinding.jps FourWay 0 open3 { Col = 0; Row = 0 } { Col = 2; Row = 2 }) "maxVisited 0 ⇒ None"
+            Expect.isNone (Pathfinding.jps FourWay -1 open3 { Col = 0; Row = 0 } { Col = 2; Row = 2 }) "negative maxVisited ⇒ None"
+            Expect.equal (Pathfinding.jps EightWay 100 open3 { Col = 1; Row = 1 } { Col = 1; Row = 1 }) (Some [ { Col = 1; Row = 1 } ]) "start = goal ⇒ [start]"
+        }
+
+        test "jps agrees with astar that a walled-off goal is unreachable (FR-003)" {
+            let ring = Set.ofList [ (3, 4); (4, 4); (5, 4); (3, 5); (5, 5); (3, 6); (4, 6); (5, 6) ]
+            let walk = gridWalkable 8 8 ring
+            Expect.isNone (Pathfinding.jps EightWay 5000 walk { Col = 0; Row = 0 } { Col = 4; Row = 5 }) "goal enclosed ⇒ None"
+        }
+
+        test "determinism: jps is byte-identical across repeat runs (golden)" {
+            // FourWay (0,0)->(1,1): two equal-cost routes; the result must still be one stable path.
+            let walk = gridWalkable 2 2 Set.empty
+            let a = Pathfinding.jps FourWay 100 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            let b = Pathfinding.jps FourWay 100 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            Expect.equal a b "identical inputs ⇒ byte-identical path despite the tie"
+            Expect.isTrue (a |> Option.get |> validPathNoCut walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }) "and it is a valid path"
+        }
+
+        test "FR-006: jps reaches the goal on a budget that starves astar (fewer frontier pops)" {
+            // A 20×20 OPEN grid, corner to corner, FourWay. astar's Manhattan heuristic is exact here,
+            // so every cell on the triangle of equal-cost staircases shares one f-value and astar pops
+            // hundreds of them before the goal's tie-break turn comes up. jps collapses each open run
+            // into one jump and reaches the corner in a handful of pops. A `maxVisited` between the two
+            // (30) is Some for jps and None for astar — an observable proxy, over the public API, for
+            // "jps pops strictly fewer frontier nodes" (DEC-002 / FR-006).
+            let walk = gridWalkable 20 20 Set.empty
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 19; Row = 19 }
+            let budget = 30
+            Expect.isSome (Pathfinding.jps FourWay budget walk start goal) "jps jumps there in a handful of pops"
+            Expect.isNone (Pathfinding.astar FourWay budget walk start goal) "astar exhausts the same budget mid-triangle"
+            // With a generous budget both find equal-cost paths.
+            let j = Pathfinding.jps FourWay 5000 walk start goal
+            let a = Pathfinding.astar FourWay 5000 walk start goal
+            Expect.equal (j |> Option.map pathCost) (a |> Option.map pathCost) "equal cost under a generous budget"
+        }
+
+        testCase "differential: jps equals astar in cost + validity + reachability over random grids (FsCheck)" <| fun () ->
+            // The primary correctness oracle (DEC-001). Generous maxVisited so NEITHER is bounded out,
+            // which is the regime the equivalence is asserted over.
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) (eightWay: bool) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 8), ((abs r) % 8))) |> Set.ofList
+                let walk = gridWalkable 8 8 blocked
+                let nb = if eightWay then EightWay else FourWay
+                let start = { Col = (abs sc) % 8; Row = (abs sr) % 8 }
+                let goal = { Col = (abs gc) % 8; Row = (abs gr) % 8 }
+                let j = Pathfinding.jps nb 5000 walk start goal
+                let a = Pathfinding.astar nb 5000 walk start goal
+
+                match j, a with
+                | None, None -> true // agree on unreachable
+                | Some jp, Some ap -> pathCost jp = pathCost ap && validPathNoCut walk start goal jp // equal cost + valid
+                | _ -> false // reachability disagreement is a failure
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        testCase "determinism: jps repeat calls are byte-identical over random grids (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 8), ((abs r) % 8))) |> Set.ofList
+                let walk = gridWalkable 8 8 blocked
+                let start = { Col = (abs sc) % 8; Row = (abs sr) % 8 }
+                let goal = { Col = (abs gc) % 8; Row = (abs gr) % 8 }
+                Pathfinding.jps EightWay 2000 walk start goal = Pathfinding.jps EightWay 2000 walk start goal
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+    ]
+
+// ------------------------------------------------------------------------------------------------
+// Connected-component early-out (work item 016, roadmap 1.2). `Regions.sameComponent` must agree
+// with `astar` reachability over the same bounded walkability — the differential oracle — while
+// answering in O(1) rather than exhausting `maxVisited`.
+
+[<Tests>]
+let regionsTests =
+    testList "Game.Core Pathfinding Regions (016, FR-001..FR-005)" [
+
+        test "sameComponent separates two islands and joins within each (FR-001)" {
+            // 5×3 grid, a full wall at Col=2 splits it into a left and a right island.
+            let blocked = Set.ofList [ for r in 0..2 -> (2, r) ]
+            let walk = gridWalkable 5 3 blocked
+            let regions = Pathfinding.Regions.build FourWay ({ Col = 0; Row = 0 }, { Col = 4; Row = 2 }) walk
+            Expect.isTrue (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 1; Row = 2 }) "same (left) island"
+            Expect.isTrue (Pathfinding.Regions.sameComponent regions { Col = 3; Row = 0 } { Col = 4; Row = 2 }) "same (right) island"
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 4; Row = 0 }) "across the wall ⇒ different components"
+        }
+
+        test "an out-of-bounds or unwalkable cell is in no component — even against itself (FR-002)" {
+            let blocked = Set.ofList [ (1, 1) ]
+            let walk = gridWalkable 3 3 blocked
+            let regions = Pathfinding.Regions.build FourWay ({ Col = 0; Row = 0 }, { Col = 2; Row = 2 }) walk
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 1; Row = 1 } { Col = 1; Row = 1 }) "unwalkable cell: false even against itself"
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 9; Row = 9 } { Col = 0; Row = 0 }) "out-of-bounds ⇒ false"
+            Expect.isTrue (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 0; Row = 0 }) "a walkable cell IS in its own component"
+        }
+
+        test "EightWay connectivity honours no corner-cutting, matching astar (FR-003)" {
+            // (1,0) and (0,1) blocked pen the (0,0) cell diagonally from (1,1): no legal step joins them.
+            let blocked = Set.ofList [ (1, 0); (0, 1) ]
+            let walk = gridWalkable 2 2 blocked
+            let regions = Pathfinding.Regions.build EightWay ({ Col = 0; Row = 0 }, { Col = 1; Row = 1 }) walk
+            let astarJoins = (Pathfinding.astar EightWay 1000 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }).IsSome
+            Expect.equal (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 1; Row = 1 }) astarJoins "no corner-cut ⇒ not connected, exactly as astar"
+            Expect.isFalse astarJoins "and astar agrees they are not joined"
+        }
+
+        test "determinism: Regions yields byte-identical answers across repeat builds (golden)" {
+            let blocked = Set.ofList [ (1, 1); (2, 2) ]
+            let walk = gridWalkable 4 4 blocked
+            let bounds = ({ Col = 0; Row = 0 }, { Col = 3; Row = 3 })
+            let r1 = Pathfinding.Regions.build EightWay bounds walk
+            let r2 = Pathfinding.Regions.build EightWay bounds walk
+            let pairs = [ for a in 0..3 do for b in 0..3 -> ({ Col = a; Row = b }, { Col = b; Row = a }) ]
+            Expect.isTrue
+                (pairs |> List.forall (fun (a, b) -> Pathfinding.Regions.sameComponent r1 a b = Pathfinding.Regions.sameComponent r2 a b))
+                "identical inputs ⇒ identical sameComponent answers"
+        }
+
+        test "sameComponent needs no search bound to reject an unreachable pair (FR-005)" {
+            // No maxVisited is passed to sameComponent at all — the guard is O(1), not a bounded search.
+            let blocked = Set.ofList [ for r in 0..9 -> (5, r) ]
+            let walk = gridWalkable 10 10 blocked
+            let regions = Pathfinding.Regions.build FourWay ({ Col = 0; Row = 0 }, { Col = 9; Row = 9 }) walk
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 9; Row = 9 }) "walled apart ⇒ rejected with no exploration"
+        }
+
+        testCase "differential: sameComponent equals astar reachability over random bounded grids (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (eightWay: bool) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 6), ((abs r) % 6))) |> Set.ofList
+                let walk = gridWalkable 6 6 blocked
+                let nb = if eightWay then EightWay else FourWay
+                let regions = Pathfinding.Regions.build nb ({ Col = 0; Row = 0 }, { Col = 5; Row = 5 }) walk
+                let cells = [ for c in 0..5 do for r in 0..5 -> { Col = c; Row = r } ]
+                cells
+                |> List.forall (fun a ->
+                    cells
+                    |> List.forall (fun b ->
+                        let reaches = (Pathfinding.astar nb 5000 walk a b).IsSome
+                        Pathfinding.Regions.sameComponent regions a b = reaches))
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+        testCase "determinism: Regions is a pure function of its inputs over random terrain (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 7), ((abs r) % 7))) |> Set.ofList
+                let walk = gridWalkable 7 7 blocked
+                let bounds = ({ Col = 0; Row = 0 }, { Col = 6; Row = 6 })
+                let r1 = Pathfinding.Regions.build EightWay bounds walk
+                let r2 = Pathfinding.Regions.build EightWay bounds walk
+                let cells = [ for c in 0..6 do for r in 0..6 -> { Col = c; Row = r } ]
+                cells
+                |> List.forall (fun a -> cells |> List.forall (fun b -> Pathfinding.Regions.sameComponent r1 a b = Pathfinding.Regions.sameComponent r2 a b))
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+    ]
+
+// ------------------------------------------------------------------------------------------------
+// ALT landmark heuristic (work item 017, roadmap 1.3). Landmarks.astar must return an OPTIMAL-cost
+// path (equal cost to astar — the differential oracle), its heuristic must be admissible, and it
+// must expand fewer nodes than plain astar on a detour map. Determinism throughout.
+
+[<Tests>]
+let landmarksTests =
+    testList "Game.Core Pathfinding Landmarks/ALT (017, FR-001..FR-006)" [
+
+        test "Landmarks.astar returns an optimal-cost, valid path (FR-001/FR-002)" {
+            let blocked = Set.ofList [ for r in 0..3 -> (2, r) ]
+            let walk = gridWalkable 5 5 blocked
+            let lm = Pathfinding.Landmarks.build EightWay walk 4 ({ Col = 0; Row = 0 }, { Col = 4; Row = 4 })
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 4; Row = 0 }
+            let j = Pathfinding.Landmarks.astar lm EightWay 5000 walk start goal
+            let a = Pathfinding.astar EightWay 5000 walk start goal
+            Expect.equal (j |> Option.map pathCost) (a |> Option.map pathCost) "same least cost as astar"
+            Expect.isTrue (validPathNoCut walk start goal (Option.get j)) "and a valid no-corner-cut path"
+        }
+
+        test "the ALT heuristic is admissible — never exceeds the true distance (FR-005)" {
+            let blocked = Set.ofList [ (2, 1); (2, 2); (2, 3) ]
+            let walk = gridWalkable 6 6 blocked
+            let bounds = ({ Col = 0; Row = 0 }, { Col = 5; Row = 5 })
+            let lm = Pathfinding.Landmarks.build FourWay walk 4 bounds
+            let goal = { Col = 5; Row = 5 }
+            let cells = [ for c in 0..5 do for r in 0..5 -> { Col = c; Row = r } ]
+            for cell in cells do
+                match Pathfinding.astar FourWay 5000 walk cell goal with
+                | Some p -> Expect.isTrue (Pathfinding.Landmarks.heuristic lm goal cell <= pathCost p) (sprintf "admissible at %A" cell)
+                | None -> () // unreachable: no true distance to bound
+        }
+
+        test "determinism: build + Landmarks.astar are byte-identical across runs (golden)" {
+            let blocked = Set.ofList [ (3, 1); (3, 2); (1, 4) ]
+            let walk = gridWalkable 6 6 blocked
+            let bounds = ({ Col = 0; Row = 0 }, { Col = 5; Row = 5 })
+            let lm1 = Pathfinding.Landmarks.build EightWay walk 5 bounds
+            let lm2 = Pathfinding.Landmarks.build EightWay walk 5 bounds
+            let start = { Col = 0; Row = 5 }
+            let goal = { Col = 5; Row = 0 }
+            Expect.equal (Pathfinding.Landmarks.astar lm1 EightWay 5000 walk start goal) (Pathfinding.Landmarks.astar lm2 EightWay 5000 walk start goal) "identical inputs ⇒ identical path"
+            let cells = [ for c in 0..5 do for r in 0..5 -> { Col = c; Row = r } ]
+            Expect.isTrue (cells |> List.forall (fun c -> Pathfinding.Landmarks.heuristic lm1 goal c = Pathfinding.Landmarks.heuristic lm2 goal c)) "and identical heuristics"
+        }
+
+        test "FR-006: Landmarks.astar expands strictly fewer nodes than astar on a detour map" {
+            // A vertical wall at col 7 (rows 0..13) with a gap at the bottom (row 14) forces a long
+            // detour. octile underestimates the detour badly, so astar fans out on the near side; ALT's
+            // landmark distances price the detour, so it expands fewer nodes. The smallest maxVisited
+            // for which a search returns Some IS its expansion count — an observable pop-count proxy.
+            let wall = Set.ofList [ for r in 0..13 -> (7, r) ]
+            let walk = gridWalkable 15 15 wall
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 14; Row = 0 }
+            let bounds = ({ Col = 0; Row = 0 }, { Col = 14; Row = 14 })
+            let lm = Pathfinding.Landmarks.build FourWay walk 6 bounds
+
+            // Smallest budget for which f returns Some (monotone in budget ⇒ binary search).
+            let firstSolve (f: int -> Cell list option) =
+                let rec go lo hi =
+                    if lo >= hi then lo
+                    else
+                        let mid = (lo + hi) / 2
+                        if (f mid).IsSome then go lo mid else go (mid + 1) hi
+                go 1 4000
+
+            let astarPops = firstSolve (fun b -> Pathfinding.astar FourWay b walk start goal)
+            let altPops = firstSolve (fun b -> Pathfinding.Landmarks.astar lm FourWay b walk start goal)
+            Expect.isLessThan altPops astarPops (sprintf "ALT expands fewer nodes (ALT=%d, astar=%d)" altPops astarPops)
+        }
+
+        testCase "differential: Landmarks.astar equals astar in cost + validity + reachability (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) (eightWay: bool) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 7), ((abs r) % 7))) |> Set.ofList
+                let walk = gridWalkable 7 7 blocked
+                let nb = if eightWay then EightWay else FourWay
+                let lm = Pathfinding.Landmarks.build nb walk 4 ({ Col = 0; Row = 0 }, { Col = 6; Row = 6 })
+                let start = { Col = (abs sc) % 7; Row = (abs sr) % 7 }
+                let goal = { Col = (abs gc) % 7; Row = (abs gr) % 7 }
+                let j = Pathfinding.Landmarks.astar lm nb 5000 walk start goal
+                let a = Pathfinding.astar nb 5000 walk start goal
+                match j, a with
+                | None, None -> true
+                | Some jp, Some ap -> pathCost jp = pathCost ap && validPathNoCut walk start goal jp
+                | _ -> false
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        testCase "admissibility over random grids: heuristic never overestimates (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (gc: int) (gr: int) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 6), ((abs r) % 6))) |> Set.ofList
+                let walk = gridWalkable 6 6 blocked
+                let goal = { Col = (abs gc) % 6; Row = (abs gr) % 6 }
+                let lm = Pathfinding.Landmarks.build EightWay walk 4 ({ Col = 0; Row = 0 }, { Col = 5; Row = 5 })
+                let cells = [ for c in 0..5 do for r in 0..5 -> { Col = c; Row = r } ]
+                cells
+                |> List.forall (fun cell ->
+                    match Pathfinding.astar EightWay 5000 walk cell goal with
+                    | Some p -> Pathfinding.Landmarks.heuristic lm goal cell <= pathCost p
+                    | None -> true)
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+    ]
+
+// ------------------------------------------------------------------------------------------------
+// Straighter-path tie-break (work item 018, roadmap 1.4). astarStraight returns an OPTIMAL-cost path
+// (equal cost to astar) that hugs the straight start→goal line, while astar itself stays
+// byte-identical (the bias is opt-in).
+
+// Total deviation of a path from the straight start→goal line: sum of the integer cross-products.
+let private lineDeviation (start: Cell) (goal: Cell) (path: Cell list) =
+    let dgx = int64 goal.Col - int64 start.Col
+    let dgy = int64 goal.Row - int64 start.Row
+    path
+    |> List.sumBy (fun c -> abs ((int64 c.Col - int64 start.Col) * dgy - dgx * (int64 c.Row - int64 start.Row)))
+
+[<Tests>]
+let straightTests =
+    testList "Game.Core Pathfinding astarStraight (018, FR-001..FR-005)" [
+
+        test "astar output is UNCHANGED by this work item (FR-003 byte-identity golden)" {
+            // These are the exact goldens the shipped astar tests pin; astarStraight must not perturb them.
+            let walk = gridWalkable 4 4 Set.empty
+            Expect.equal
+                (Pathfinding.astar EightWay 1000 walk { Col = 0; Row = 0 } { Col = 3; Row = 3 })
+                (Some [ { Col = 0; Row = 0 }; { Col = 1; Row = 1 }; { Col = 2; Row = 2 }; { Col = 3; Row = 3 } ])
+                "astar's diagonal golden is unchanged"
+            let corridor = gridWalkable 4 1 Set.empty
+            Expect.equal
+                (Pathfinding.astar FourWay 1000 corridor { Col = 0; Row = 0 } { Col = 3; Row = 0 })
+                (Some [ { Col = 0; Row = 0 }; { Col = 1; Row = 0 }; { Col = 2; Row = 0 }; { Col = 3; Row = 0 } ])
+                "astar's corridor golden is unchanged"
+        }
+
+        test "astarStraight returns an optimal-cost, valid path (FR-001/FR-002)" {
+            let walk = gridWalkable 6 5 Set.empty
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 5; Row = 3 }
+            let s = Pathfinding.astarStraight FourWay 5000 walk start goal
+            let a = Pathfinding.astar FourWay 5000 walk start goal
+            Expect.equal (s |> Option.map pathCost) (a |> Option.map pathCost) "same least cost as astar"
+            Expect.isTrue (validPathNoCut walk start goal (Option.get s)) "valid no-corner-cut path"
+        }
+
+        test "FR-004: astarStraight hugs the line — smaller deviation than astar on an open off-axis query" {
+            let walk = gridWalkable 8 6 Set.empty
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 7; Row = 4 }
+            let s = (Pathfinding.astarStraight FourWay 5000 walk start goal).Value
+            let a = (Pathfinding.astar FourWay 5000 walk start goal).Value
+            Expect.isLessThan (lineDeviation start goal s) (lineDeviation start goal a) "astarStraight deviates less from the straight line"
+            Expect.equal (pathCost s) (pathCost a) "...at the same (optimal) cost"
+        }
+
+        test "astarStraight cross-product does not overflow/throw at extreme coordinates (totality)" {
+            // The cross-product multiplies two ~4.3e9 coordinate deltas, which overflows int64 (and can
+            // make `abs` throw). Computed in bigint and saturated, so a far-apart start/goal is total —
+            // mirrors the octile far-goal regression test. The point is that the call RETURNS.
+            let walk = fun _ -> true
+            let big = System.Int32.MaxValue
+            let start = { Col = -big; Row = -big }
+            let goal = { Col = big; Row = big }
+            // Astronomically far ⇒ a small budget reports unreachable, which is the correct total answer.
+            Expect.isNone (Pathfinding.astarStraight FourWay 50 walk start goal) "far goal unreachable within budget — and reached without throwing"
+            // And a genuine short path near extreme coordinates is still optimal.
+            let b = System.Int32.MinValue + 1000
+            let s = { Col = b; Row = b }
+            let g = { Col = b + 3; Row = b }
+            match Pathfinding.astarStraight FourWay 1000 walk s g with
+            | Some p -> Expect.equal (pathCost p) 30 "3 orthogonal steps × baseStep — shortest route at extreme coords"
+            | None -> failtest "expected a path between two near cells at extreme coordinates"
+        }
+
+        test "determinism: astarStraight is byte-identical across repeat runs (golden)" {
+            let walk = gridWalkable 6 6 (Set.ofList [ (3, 2); (3, 3) ])
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 5; Row = 5 }
+            Expect.equal
+                (Pathfinding.astarStraight EightWay 5000 walk start goal)
+                (Pathfinding.astarStraight EightWay 5000 walk start goal)
+                "identical inputs ⇒ byte-identical path"
+        }
+
+        testCase "differential: astarStraight equals astar in cost + validity + reachability (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) (eightWay: bool) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 8), ((abs r) % 8))) |> Set.ofList
+                let walk = gridWalkable 8 8 blocked
+                let nb = if eightWay then EightWay else FourWay
+                let start = { Col = (abs sc) % 8; Row = (abs sr) % 8 }
+                let goal = { Col = (abs gc) % 8; Row = (abs gr) % 8 }
+                let s = Pathfinding.astarStraight nb 5000 walk start goal
+                let a = Pathfinding.astar nb 5000 walk start goal
+                match s, a with
+                | None, None -> true
+                | Some sp, Some ap -> pathCost sp = pathCost ap && validPathNoCut walk start goal sp
+                | _ -> false
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        testCase "astarStraight deviation is never worse than astar's over random open grids (FsCheck)" <| fun () ->
+            // The bias is monotone-good on straightness: on open grids (unique-cost-free ties abound)
+            // astarStraight never deviates more than astar for the same optimal cost.
+            let prop (sc: int) (sr: int) (gc: int) (gr: int) =
+                let walk = gridWalkable 8 8 Set.empty
+                let start = { Col = (abs sc) % 8; Row = (abs sr) % 8 }
+                let goal = { Col = (abs gc) % 8; Row = (abs gr) % 8 }
+                match Pathfinding.astarStraight FourWay 5000 walk start goal, Pathfinding.astar FourWay 5000 walk start goal with
+                | Some s, Some a -> pathCost s = pathCost a && lineDeviation start goal s <= lineDeviation start goal a
+                | None, None -> true
+                | _ -> false
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+    ]
