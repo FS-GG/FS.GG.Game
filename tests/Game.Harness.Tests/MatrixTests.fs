@@ -21,6 +21,10 @@ let tests =
               let results = Matrix.runMatrix matchSetup outcome matches
               Expect.equal (List.length results) (List.length matches) "exactly one outcome per input match"
 
+          testCase "FR-005 an empty match set yields an empty result"
+          <| fun _ ->
+              Expect.isEmpty (Matrix.runMatrix matchSetup outcome []) "no matches => no outcomes"
+
           testCase "FR-005 the runner is deterministic"
           <| fun _ ->
               let r1 = Matrix.runMatrix matchSetup outcome matches |> List.map snd

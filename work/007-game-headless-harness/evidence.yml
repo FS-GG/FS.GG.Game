@@ -52,9 +52,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["FR-001 byte-identical replay; determinism-golden test."]
@@ -76,9 +76,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["FR-002 raw key -> keymap -> Command; unbound token dropped."]
@@ -100,9 +100,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["FR-003 exactly one whole fixed step per frame; no alpha."]
@@ -124,9 +124,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["FR-004 Bot decides from view+Rng only; deterministic in (view", "seed)."]
@@ -148,9 +148,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: [FR-005 runMatrix one-outcome-per-match, order-independent.]
@@ -172,9 +172,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["FR-006 Origin provenance; synthetic self-identifying."]
@@ -196,9 +196,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["FR-007 leaf dependency; reflection test over referenced assemblies."]
@@ -220,9 +220,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["FR-008 runBot capture -> runCommands replay byte-identical."]
@@ -244,9 +244,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: [DEC-001 full-world fingerprint default via identityFingerprint.]
@@ -268,9 +268,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["DEC-002 default keymap; a test may substitute Playable.Keymap."]
@@ -292,9 +292,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["DEC-003 caller outcome projection; world never leaks into runner."]
@@ -316,9 +316,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: [PD-001 Trace.frames is the byte-identity comparison surface.]
@@ -340,9 +340,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["PD-002 Playable.resolve = Map.tryFind; unbound dropped."]
@@ -364,9 +364,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: [PD-005 runMatrix input-order-independent, per-seed.]
@@ -388,9 +388,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["PC-001 new .fsi public surface + committed type baseline."]
@@ -412,9 +412,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: [PC-002 leaf-dependency invariant asserted by reflection test.]
@@ -436,9 +436,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["VO-001 determinism (FR-001)", "capture/replay (FR-008).", "fixed-step (FR-003)"]
@@ -460,9 +460,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["VO-002 keymap/bot/matrix/synthetic (FR-002/004/005/006)."]
@@ -484,9 +484,9 @@ evidence:
     synthetic: false
     observedRun:
       source: artifacts/testresults/harness.trx
-      digest: "sha256:a5ec9183bea1444be8bd20197dcf365889771426b0b93fc3bda8463c1806664b"
+      digest: "sha256:8c9d1638c070d96a24c045bbb0354a79cb4fa0e6e8071ae75d065d91bef16717"
       outcome: passed
-      passed: 20
+      passed: 27
       failed: 0
       skipped: 0
     notes: ["VO-003 leaf dependency reflection (FR-007)."]
