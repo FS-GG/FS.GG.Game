@@ -40,6 +40,10 @@
     <Compile Include="Loop.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
+    <Compile Include="Hex.fsi" />
+    <Compile Include="Hex.fs" />
+    <Compile Include="Edges.fsi" />
+    <Compile Include="Edges.fs" />
     <!-- Grid parts: consumes Cell (Primitives) for faces and Point/Rect (Primitives) for the pixel
          map. Names the edges/vertices between faces, which Pathfinding/Fov/Los cannot. -->
     <Compile Include="Grids.fsi" />

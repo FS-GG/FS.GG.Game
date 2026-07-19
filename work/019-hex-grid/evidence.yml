@@ -1,0 +1,518 @@
+schemaVersion: 1
+workId: 019-hex-grid
+stage: evidence
+status: evidenceReady
+sourceSpec: work/019-hex-grid/spec.md
+sourceClarifications: work/019-hex-grid/clarifications.md
+sourceChecklist: work/019-hex-grid/checklist.md
+sourcePlan: work/019-hex-grid/plan.md
+sourceTasks: work/019-hex-grid/tasks.yml
+sourceAnalysis: readiness/019-hex-grid/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/019-hex-grid/analysis.json
+    digest: a403c3057c01d622b4ef096bfa056151a6ec9825ef517414674ec74526c2a36d
+    schemaVersion: 1
+  - label: checklist
+    path: work/019-hex-grid/checklist.md
+    digest: d0debff92dbf060edb647f278930875ce38c94c5729aeb0de44286d009f4f8f5
+    schemaVersion: 1
+  - label: clarifications
+    path: work/019-hex-grid/clarifications.md
+    digest: 2b31d6c2282aa6539c0bcb5f713d534ec761bfd30cc08a640b6800d09b2c92c9
+    schemaVersion: 1
+  - label: plan
+    path: work/019-hex-grid/plan.md
+    digest: ef53b1dca976d39cfa601900b86aaa878afd3fe367301d8deb198549923872bf
+    schemaVersion: 1
+  - label: spec
+    path: work/019-hex-grid/spec.md
+    digest: c7eb96c6ac4da1fc7cbf627ed6ababd62210e0dcc2f63f7ec0eccd8c6a534a59
+    schemaVersion: 1
+  - label: tasks
+    path: work/019-hex-grid/tasks.yml
+    digest: 7e08bd1ff57190d734f548fa8bd791d2de3e33ff34826a5cc50ba532191b1cd5
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: the invariant test + FsCheck over 1000 random axials assert q+r+s=0 holds by construction (create derives S)."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: distance == max(|dq|,|dr|,|ds|) and distance to each neighbour == 1, over 1000 random pairs (int64 internally, total)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: six neighbours in fixed directions order; add/subtract/scale laws (subtract (add a b) b = a, scale a 0 = origin) over 1000 cases."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: six rotateRight/rotateLeft applications are the identity, rotateLeft inverts rotateRight, and one rotation preserves origin distance, over 1000 cases."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: range n = 3n(n+1)+1, ring n = 6n (1 at 0), spiral n = range n as sets, and every ring-n hex is exactly n from origin; negative n is empty."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-006: lineDraw is contiguous, endpoint-inclusive, length distance+1 (concrete + 1000-case FsCheck); round preserves the invariant and is deterministic."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-007: ofOffset (toOffset h) = h and ofDoubled (toDoubled h) = h over 1000 random hexes (exact integer inverses)."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["FR-008: Hex.astar/bfs return a shortest hop path (length distance+1 on an open disc), share astar's degenerate contract, and agree on hop count + reachability + determinism over 1000 random blocked discs."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [artifacts/testresults/hex-019.trx, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Core suite is 640/640 green with the new Hex suite included."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: all Hex FsCheck properties (1000 cases each) are green."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the hex determinism/reachability properties are green."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/Hex.fs, src/Game.Core/Hex.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["PD-001: Hex = { Q; R; S } with create deriving S; origin; the constructor is the only way to build a hex, so the invariant is total."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["PD-004: rotateRight [q,r,s] -> [-s,-q,-r] and rotateLeft its inverse; the 6-cycle and distance-preservation properties confirm the cube rotation."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["PD-006: round resets the largest-error component (ties S,Q,R) preserving the invariant; lineDraw is distance+1 cube-lerp samples through round — deterministic and contiguous."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/Hex.fs, tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["PD-007: odd-r offset and doubled-width converters on the shared Cell; the round-trip property confirms exact integer inverses."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Hex.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: Tier-1 surface addition — the Hex type + members declared in the new .fsi and recorded in both baselines; the new file joins the compile order; the drift gate stays green."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-008]
+    obligationRefs: [EV017]
+    artifacts: [tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: the full property suite (invariant, distance/neighbour laws, rotation cycles, cardinalities, line contiguity, converter round-trips, hex-pathfinding optimality) fails before Hex exists and passes after; build clean under warnings-as-errors; both baselines regenerated."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006, PD-008]
+    obligationRefs: [EV018]
+    artifacts: [tests/Game.Core.Tests/HexTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: round/lineDraw determinism and hex-pathfinding byte-identity across runs are green (the FsCheck determinism property re-runs each search and compares)."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV019]
+    artifacts: [work/019-hex-grid/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: a purely additive new module — nothing removed or renamed — so no consumer migration; plan schemaVersion 1 accepted."]
+  - id: EV020
+    kind: generated-view
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV020]
+    artifacts: [readiness/019-hex-grid/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/hex-019.trx
+      digest: "sha256:b16cb5f735000629450053c9cc7f8aa8877945c75d62039d33d97e14c2558880"
+      outcome: passed
+      passed: 640
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/019-hex-grid/work-model.json is refreshed by verify/ship from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

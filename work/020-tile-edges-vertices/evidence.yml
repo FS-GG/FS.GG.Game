@@ -1,0 +1,422 @@
+schemaVersion: 1
+workId: 020-tile-edges-vertices
+stage: evidence
+status: evidenceReady
+sourceSpec: work/020-tile-edges-vertices/spec.md
+sourceClarifications: work/020-tile-edges-vertices/clarifications.md
+sourceChecklist: work/020-tile-edges-vertices/checklist.md
+sourcePlan: work/020-tile-edges-vertices/plan.md
+sourceTasks: work/020-tile-edges-vertices/tasks.yml
+sourceAnalysis: readiness/020-tile-edges-vertices/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/020-tile-edges-vertices/analysis.json
+    digest: c2074f6ba2438b6f23f87343666f8285b7845127ddbc122c011f7c737595f1ef
+    schemaVersion: 1
+  - label: checklist
+    path: work/020-tile-edges-vertices/checklist.md
+    digest: 5886ceee2dc318c3ab487d7629b6623ab21f978edd0918730bebd4d32db014f6
+    schemaVersion: 1
+  - label: clarifications
+    path: work/020-tile-edges-vertices/clarifications.md
+    digest: 8f67e417e34338ce92c03e426db6eb2c8a08e6b71d2101f5c2ba029b9a5d6baf
+    schemaVersion: 1
+  - label: plan
+    path: work/020-tile-edges-vertices/plan.md
+    digest: 32cffc97c6228019b5541cf9e0330edd064979b348f393259d4f17c39dc498a8
+    schemaVersion: 1
+  - label: spec
+    path: work/020-tile-edges-vertices/spec.md
+    digest: b3fcf9753b6186f643ec149bace1235a092cce8554d8dad49e9d38e40cda897d
+    schemaVersion: 1
+  - label: tasks
+    path: work/020-tile-edges-vertices/tasks.yml
+    digest: 6eb6d2d48b6bf2e9d72d09d813bb8b783ca9593bde85f2c6560045848dc4fe95
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Edges.fs, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: edgeBetween is order-independent and Some iff adjacent (concrete + 1000-case FsCheck), and edgeOf yields the same canonical edge."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Edges.fs, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: borders returns 4 distinct canonical edges (N,E,S,W) and corners 4 distinct vertices (NW,NE,SW,SE)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Edges.fs, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: the mutual-consistency property over 1000 cells asserts edge in borders(c) => c in edgeCells; vertex in corners(c) => c in vertexCells; edgeEndpoints in corners; vertexEdges' cells within vertexCells."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Edges.fs, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: isEdgePassable is symmetric and a single canonical wall blocks both a->b and b->a; a different edge is unaffected."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Edges.fs, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: the wall-scenario test — a wall between two open cells forces a longer detour that never crosses the wall; a fully-walled goal is None; and empty walls match plain Pathfinding.bfs reachability + hop count over 500 grids."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/Edges.fs, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["FR-006: the determinism property re-runs edge-aware astar and the relationships and asserts byte-identity; all functions are integer, total, and total-order-frontier deterministic."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [artifacts/testresults/edges-020.trx, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Core suite is 639/639 green with the new Edges suite included."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the Edges FsCheck properties (order-independence, mutual consistency, empty-walls parity, determinism) are green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the edge-aware detour and totality tests are green."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/Edges.fs, src/Game.Core/Edges.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["PD-001: Dir/Edge (sorted cell pair)/edgeBetween/edgeOf/edgeCells; adjacency in int64 (far pairs cannot overflow); canonical dedupe by sorting."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/Edges.fs, tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["PD-002: Vertex lattice point; borders/corners in fixed N,E,S,W / NW,NE,SW,SE order — cardinality + distinctness tests confirm."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Edges.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: Tier-1 surface addition — Dir/Edge/Vertex types + Edges members declared in the new .fsi and recorded in both baselines; the new file joins the compile order; the drift gate stays green."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005]
+    obligationRefs: [EV013]
+    artifacts: [tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: the property suite (edge canonicalisation, borders/corners, mutual consistency, isEdgePassable symmetry, wall-scenario, empty-walls parity) fails before Edges exists and passes after; build clean under warnings-as-errors; both baselines regenerated."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV014]
+    artifacts: [tests/Game.Core.Tests/EdgesTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: the named determinism property asserts the relationships and edge-aware search are byte-identical across runs."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [work/020-tile-edges-vertices/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: a purely additive new module — nothing removed or renamed — so no consumer migration; plan schemaVersion 1 accepted."]
+  - id: EV016
+    kind: generated-view
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [readiness/020-tile-edges-vertices/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/edges-020.trx
+      digest: "sha256:02879aade33da0489294f4411d7d1690ca8d036d0a74286d69f87181c8702ab7"
+      outcome: passed
+      passed: 639
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/020-tile-edges-vertices/work-model.json is refreshed by verify/ship from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
