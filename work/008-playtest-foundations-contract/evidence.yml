@@ -1,0 +1,278 @@
+schemaVersion: 1
+workId: 008-playtest-foundations-contract
+stage: evidence
+status: evidenceReady
+sourceSpec: work/008-playtest-foundations-contract/spec.md
+sourceClarifications: work/008-playtest-foundations-contract/clarifications.md
+sourceChecklist: work/008-playtest-foundations-contract/checklist.md
+sourcePlan: work/008-playtest-foundations-contract/plan.md
+sourceTasks: work/008-playtest-foundations-contract/tasks.yml
+sourceAnalysis: readiness/008-playtest-foundations-contract/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/008-playtest-foundations-contract/analysis.json
+    digest: ce0e17398bc7b517598e7fcf431aaa56617e4be1b29d0e060cc428eaeacbc810
+    schemaVersion: 1
+  - label: checklist
+    path: work/008-playtest-foundations-contract/checklist.md
+    digest: 58445bd465654db60bcac3497839ba791dbc7468890c07fae6b7f32232b6a367
+    schemaVersion: 1
+  - label: clarifications
+    path: work/008-playtest-foundations-contract/clarifications.md
+    digest: d89e1a828374daf1ed2808794ec1d73660b4577c1e139e1b7be8f11adf55368b
+    schemaVersion: 1
+  - label: plan
+    path: work/008-playtest-foundations-contract/plan.md
+    digest: 2dee3ba9b839d67d3a6a9a09e69598113aadbe578f24c4e185a56f3bc3cf6665
+    schemaVersion: 1
+  - label: spec
+    path: work/008-playtest-foundations-contract/spec.md
+    digest: 865fdcbc34db2fdbcb188a653a2e9fd90dae666efb4a4416504be8f09f1ad422
+    schemaVersion: 1
+  - label: tasks
+    path: work/008-playtest-foundations-contract/tasks.yml
+    digest: f8c578052014a86fbc2bbf17defd76d47031ea04215619efdd87dfffccffb596
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: [AC-001]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [docs/reference/playtest-tooling-foundations.md, src/Game.Harness/Playable.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["Note §1 pins Playable.Keymap's value-set as the command alphabet, citing Playable.fsi and naming the Phase 2/Phase 3 dependents; consistent with the shipped Playable.fsi surface."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: [AC-002]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [docs/reference/playtest-tooling-foundations.md, src/Game.Harness/Driver.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["Note §2 pins the fingerprint 'world -> 'f (Driver.identityFingerprint / projection) as the canonical visited-set key, naming the Phase 2 dependent; consistent with the shipped Driver.fsi surface."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: [AC-003]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [docs/reference/playtest-tooling-foundations.md, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["Note §3 pins ambient-free determinism as enforced by DependencyTests.fs (IL type-reference scan bans clock/RNG/IO); that suite is green, and the note names the Phase 1/Phase 3 dependents."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: [AC-004]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [docs/reference/playtest-tooling-foundations.md, tests/Game.Harness.Tests/Game.Harness.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["Note §4 pins FsCheck as an already-present PackageReference of Game.Harness.Tests.fsproj, establishing Phase 3 needs no new package; the reference is present in the shipped .fsproj."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: [AC-005]
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [docs/reference/playtest-tooling-foundations.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["FR-005 audit-only: git status shows no .fsi and no readiness/surface-baselines change; only the new docs/reference note was added. Harness suite 40/40 green."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
+    obligationRefs: [EV006]
+    artifacts: [docs/reference/playtest-tooling-foundations.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: no public surface, schema, command, or artifact-layout change — a single reference doc was added under docs/reference; no .fsi, baseline, or .fsproj changed."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV007]
+    artifacts: [docs/reference/playtest-tooling-foundations.md, src/Game.Harness/Driver.fsi, src/Game.Harness/Playable.fsi, tests/Game.Harness.Tests/DependencyTests.fs, tests/Game.Harness.Tests/Game.Harness.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 docConsistency: the note exists and pins all four primitives, each naming a real shipped surface and its downstream Phase dependent; verified by reading the note against the cited .fsi/test/.fsproj."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV008]
+    artifacts: [docs/reference/playtest-tooling-foundations.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 baselineUnchanged: readiness/surface-baselines/ and every published .fsi are byte-identical (no such paths in git status); harness suite 40/40 green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [work/008-playtest-foundations-contract/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:37ea02918f4aefad66a8dff8f9674090ae574b920825ee2690ddbc188065f9df"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: nothing is removed or renamed and no baseline is migrated, so no consumer migration is required; plan schemaVersion 1 accepted."]
+  - id: EV010
+    kind: generated-view
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005]
+    obligationRefs: [EV010]
+    artifacts: [readiness/008-playtest-foundations-contract/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-foundations.trx
+      digest: "sha256:f4d5e3d41c35c05c2eb715051c2bee87fe8b14d6b7be29695e7b4c704afa0112"
+      outcome: passed
+      passed: 40
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: the only generated view affected is readiness/008-.../work-model.json (refreshed by verify/ship from current sources); no surface-baseline view changed (FR-005). Harness suite 40/40 green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
