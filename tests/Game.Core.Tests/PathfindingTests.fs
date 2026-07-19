@@ -916,3 +916,91 @@ let jpsTests =
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
     ]
+
+// ------------------------------------------------------------------------------------------------
+// Connected-component early-out (work item 016, roadmap 1.2). `Regions.sameComponent` must agree
+// with `astar` reachability over the same bounded walkability — the differential oracle — while
+// answering in O(1) rather than exhausting `maxVisited`.
+
+[<Tests>]
+let regionsTests =
+    testList "Game.Core Pathfinding Regions (016, FR-001..FR-005)" [
+
+        test "sameComponent separates two islands and joins within each (FR-001)" {
+            // 5×3 grid, a full wall at Col=2 splits it into a left and a right island.
+            let blocked = Set.ofList [ for r in 0..2 -> (2, r) ]
+            let walk = gridWalkable 5 3 blocked
+            let regions = Pathfinding.Regions.build FourWay ({ Col = 0; Row = 0 }, { Col = 4; Row = 2 }) walk
+            Expect.isTrue (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 1; Row = 2 }) "same (left) island"
+            Expect.isTrue (Pathfinding.Regions.sameComponent regions { Col = 3; Row = 0 } { Col = 4; Row = 2 }) "same (right) island"
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 4; Row = 0 }) "across the wall ⇒ different components"
+        }
+
+        test "an out-of-bounds or unwalkable cell is in no component — even against itself (FR-002)" {
+            let blocked = Set.ofList [ (1, 1) ]
+            let walk = gridWalkable 3 3 blocked
+            let regions = Pathfinding.Regions.build FourWay ({ Col = 0; Row = 0 }, { Col = 2; Row = 2 }) walk
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 1; Row = 1 } { Col = 1; Row = 1 }) "unwalkable cell: false even against itself"
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 9; Row = 9 } { Col = 0; Row = 0 }) "out-of-bounds ⇒ false"
+            Expect.isTrue (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 0; Row = 0 }) "a walkable cell IS in its own component"
+        }
+
+        test "EightWay connectivity honours no corner-cutting, matching astar (FR-003)" {
+            // (1,0) and (0,1) blocked pen the (0,0) cell diagonally from (1,1): no legal step joins them.
+            let blocked = Set.ofList [ (1, 0); (0, 1) ]
+            let walk = gridWalkable 2 2 blocked
+            let regions = Pathfinding.Regions.build EightWay ({ Col = 0; Row = 0 }, { Col = 1; Row = 1 }) walk
+            let astarJoins = (Pathfinding.astar EightWay 1000 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }).IsSome
+            Expect.equal (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 1; Row = 1 }) astarJoins "no corner-cut ⇒ not connected, exactly as astar"
+            Expect.isFalse astarJoins "and astar agrees they are not joined"
+        }
+
+        test "determinism: Regions yields byte-identical answers across repeat builds (golden)" {
+            let blocked = Set.ofList [ (1, 1); (2, 2) ]
+            let walk = gridWalkable 4 4 blocked
+            let bounds = ({ Col = 0; Row = 0 }, { Col = 3; Row = 3 })
+            let r1 = Pathfinding.Regions.build EightWay bounds walk
+            let r2 = Pathfinding.Regions.build EightWay bounds walk
+            let pairs = [ for a in 0..3 do for b in 0..3 -> ({ Col = a; Row = b }, { Col = b; Row = a }) ]
+            Expect.isTrue
+                (pairs |> List.forall (fun (a, b) -> Pathfinding.Regions.sameComponent r1 a b = Pathfinding.Regions.sameComponent r2 a b))
+                "identical inputs ⇒ identical sameComponent answers"
+        }
+
+        test "sameComponent needs no search bound to reject an unreachable pair (FR-005)" {
+            // No maxVisited is passed to sameComponent at all — the guard is O(1), not a bounded search.
+            let blocked = Set.ofList [ for r in 0..9 -> (5, r) ]
+            let walk = gridWalkable 10 10 blocked
+            let regions = Pathfinding.Regions.build FourWay ({ Col = 0; Row = 0 }, { Col = 9; Row = 9 }) walk
+            Expect.isFalse (Pathfinding.Regions.sameComponent regions { Col = 0; Row = 0 } { Col = 9; Row = 9 }) "walled apart ⇒ rejected with no exploration"
+        }
+
+        testCase "differential: sameComponent equals astar reachability over random bounded grids (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (eightWay: bool) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 6), ((abs r) % 6))) |> Set.ofList
+                let walk = gridWalkable 6 6 blocked
+                let nb = if eightWay then EightWay else FourWay
+                let regions = Pathfinding.Regions.build nb ({ Col = 0; Row = 0 }, { Col = 5; Row = 5 }) walk
+                let cells = [ for c in 0..5 do for r in 0..5 -> { Col = c; Row = r } ]
+                cells
+                |> List.forall (fun a ->
+                    cells
+                    |> List.forall (fun b ->
+                        let reaches = (Pathfinding.astar nb 5000 walk a b).IsSome
+                        Pathfinding.Regions.sameComponent regions a b = reaches))
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+        testCase "determinism: Regions is a pure function of its inputs over random terrain (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 7), ((abs r) % 7))) |> Set.ofList
+                let walk = gridWalkable 7 7 blocked
+                let bounds = ({ Col = 0; Row = 0 }, { Col = 6; Row = 6 })
+                let r1 = Pathfinding.Regions.build EightWay bounds walk
+                let r2 = Pathfinding.Regions.build EightWay bounds walk
+                let cells = [ for c in 0..6 do for r in 0..6 -> { Col = c; Row = r } ]
+                cells
+                |> List.forall (fun a -> cells |> List.forall (fun b -> Pathfinding.Regions.sameComponent r1 a b = Pathfinding.Regions.sameComponent r2 a b))
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+    ]

@@ -255,8 +255,12 @@ module Pathfinding =
             true
 
     // Does the STRAIGHT move that arrived at `n` in direction (dx,dy) have a forced neighbour? (Only
-    // straight moves do — see the header.) The perpendiculars to (dx,dy) are (dy,dx) and (-dy,-dx);
-    // `n+e` is forced iff it is walkable while the cell diagonally behind it (`n - d + e`) is blocked.
+    // straight moves do — see the header.) The classic JPS rule: a perpendicular passage `n+e` (`e` one
+    // of the two perpendiculars (dy,dx)/(-dy,-dx)) is walkable while the cell diagonally BEHIND it
+    // (`n - d + e`) is blocked, so a route arriving from behind is forced to turn at `n`. This never
+    // fires on open ground or against the map border (where the blocked `behind` would need `n+e` still
+    // walkable *past* an obstacle), which is exactly why it is safe to use as the "real obstacle turn"
+    // signal a detection jump looks for.
     let private hasForcedStraight (isWalkable: Cell -> bool) (n: Cell) (dx: int) (dy: int) : bool =
         [ (dy, dx); (-dy, -dx) ]
         |> List.exists (fun (ex, ey) ->
@@ -265,17 +269,30 @@ module Pathfinding =
             isWalkable side && not (isWalkable behind))
 
     // Scan from `from` in ONE direction (dx,dy), returning the first jump point reached, or `None` if
-    // the run dead-ends before finding one. A jump point is: the goal; a straight cell with a forced
-    // neighbour; or a diagonal cell from which a straight sub-jump finds a jump point. `cap` bounds the
-    // scan length so the walk is TOTAL even over an unbounded `isWalkable` (e.g. `fun _ -> true` with a
-    // goal off the ray, where there is no edge to stop at): `cap` is set to `maxVisited`, and because
-    // an `astar` search bounded by `maxVisited` pops settles at most `maxVisited` cells, any path it
-    // finds has every straight run <= `maxVisited` long — so a `cap` of `maxVisited` never hides a jump
-    // point on a path `astar` could reach within the same budget.
+    // the run dead-ends before finding one. `cap` bounds the scan length so the walk is TOTAL even over
+    // an unbounded `isWalkable` (e.g. `fun _ -> true` with a goal off the ray, where there is no edge
+    // to stop at): `cap` is set to `maxVisited`, and because an `astar` search bounded by `maxVisited`
+    // pops settles at most `maxVisited` cells, any path it finds has every straight run <= `maxVisited`
+    // long — so a `cap` of `maxVisited` never hides a jump point on a path `astar` could reach within
+    // the same budget.
+    //
+    // `top` distinguishes a *search* jump (`true`, spawned when a popped node is expanded) from a
+    // *detection* jump (`false`, spawned to ask "is there a turn point along this perpendicular?").
+    // Two stop conditions apply only to a top-level jump, and they must NOT apply to a detection jump:
+    //  - GOAL ALIGNMENT (stop at the goal's column moving horizontally / row moving vertically). This
+    //    is what carries a `FourWay` search toward an off-axis goal (no diagonal exists to do it), but
+    //    on open ground a detection jump would find the goal's row/col from *every* cell, making every
+    //    cell a jump point and destroying the corridor pruning — so detection jumps omit it.
+    //  - PERPENDICULAR DETECTION. A `FourWay` straight run has no diagonal to notice that a turn onto a
+    //    perpendicular corridor is forced (e.g. a wall two cells ahead-and-to-the-side). So at each
+    //    cell a top-level straight jump asks whether a one-level detection jump down either
+    //    perpendicular finds a real turn point (a forced neighbour or the goal); if so, this cell is a
+    //    turn point. Detection jumps do NOT recurse into further detection, which bounds it.
     let rec private jump
         (isWalkable: Cell -> bool)
         (goal: Cell)
         (cap: int)
+        (top: bool)
         (dx: int)
         (dy: int)
         (from: Cell)
@@ -291,42 +308,43 @@ module Pathfinding =
                 if n = goal then
                     Some n
                 elif not diagonal then
-                    // Stop at a forced neighbour (an obstacle-driven turn) OR when the run reaches the
-                    // goal's column (moving horizontally) / row (moving vertically) — the target jump
-                    // point that lets the path turn toward the goal. The latter is what makes `jps`
-                    // work under `FourWay`, which has no diagonal to carry it toward an off-axis goal:
-                    // a straight run over open ground never has a forced neighbour, so without a
-                    // goal-aligned stop the search would dead-end. It never fires spuriously on a
-                    // corridor *along* the goal's axis (there the only aligned cell is the goal).
-                    let aligned = (dx <> 0 && n.Col = goal.Col) || (dy <> 0 && n.Row = goal.Row)
-
-                    // Wall dead ahead with an open perpendicular: `n` is the last cell before the wall
-                    // and a mandatory turn point (go around). Under `FourWay` this is the only thing
-                    // that captures a detour whose legs are not goal-aligned — without it a run into a
-                    // head-on wall would just return `None` and strand the turn. On an open corridor a
-                    // wall only appears ahead at the goal, so it never costs the corridor its jump.
+                    // Wall dead ahead with an open perpendicular: `n` is the last cell before the wall,
+                    // a mandatory turn point. Applies at any level — a detection jump must still report
+                    // a turn it finds at a head-on wall.
                     let ahead = { Col = n.Col + dx; Row = n.Row + dy }
 
                     let perpOpen =
                         isWalkable { Col = n.Col + dy; Row = n.Row + dx }
                         || isWalkable { Col = n.Col - dy; Row = n.Row - dx }
 
-                    let wallAhead = not (isWalkable ahead) && perpOpen
+                    // wall-ahead is a top-level-only stop: it fires at the map border too (`ahead` out
+                    // of bounds), which a DETECTION jump must not treat as a turn point or every scan
+                    // would "find" the border and defeat all pruning on a bounded grid.
+                    let wallAhead = top && not (isWalkable ahead) && perpOpen
 
-                    if aligned || wallAhead || hasForcedStraight isWalkable n dx dy then
+                    let aligned =
+                        top && ((dx <> 0 && n.Col = goal.Col) || (dy <> 0 && n.Row = goal.Row))
+
+                    let perpTurn =
+                        top
+                        && ((detect n dy dx).IsSome || (detect n (-dy) (-dx)).IsSome)
+
+                    if wallAhead || aligned || perpTurn || hasForcedStraight isWalkable n dx dy then
                         Some n
                     else
                         go n (budget - 1)
                 else
-                    // Diagonal: `n` is a turn point if either straight component jumps to something.
-                    match go2 dx 0 n with
+                    // Diagonal (EightWay only): `n` is a turn point if a straight DETECTION jump down
+                    // either component finds a jump point.
+                    match detect n dx 0 with
                     | Some _ -> Some n
                     | None ->
-                        match go2 0 dy n with
+                        match detect n 0 dy with
                         | Some _ -> Some n
                         | None -> go n (budget - 1)
 
-        and go2 sx sy node = jump isWalkable goal cap sx sy node
+        // A one-level detection jump (never goal-aligned, never spawns its own detection).
+        and detect (node: Cell) (sx: int) (sy: int) : Cell option = jump isWalkable goal cap false sx sy node
 
         go from cap
 
@@ -390,7 +408,7 @@ module Pathfinding =
                             dirs
                             |> List.fold
                                 (fun (os, gs, cf) (dx, dy) ->
-                                    match jump isWalkable goal cap dx dy current with
+                                    match jump isWalkable goal cap true dx dy current with
                                     | None -> (os, gs, cf)
                                     | Some jp ->
                                         let steps = max (abs (jp.Col - current.Col)) (abs (jp.Row - current.Row))
@@ -635,3 +653,67 @@ module Pathfinding =
                     let (_, col, row) = List.min xs
                     Map.add c { Col = col; Row = row } acc)
             Map.empty
+
+    // ---------------------------------------------------------------------------------------------
+    // Connected-component early-out (roadmap 1.2, work item 016). Label each maximal walkable region
+    // of a BOUNDED grid once by flood fill, then reject an unreachable `start -> goal` in O(1) via
+    // `sameComponent` instead of exhausting `maxVisited` on a failed search. Bounded, because the
+    // framework holds no map. Connectivity reuses the module's own `neighbours`, so it honours the
+    // no-corner-cutting rule under `EightWay` and AGREES with what `astar`/`bfs` can traverse — the
+    // differential oracle against `astar`. Only the boolean is exposed: internal label ids never leak,
+    // so relabeling can never change a result (determinism).
+
+    type Regions = private { Labels: Map<Cell, int> }
+
+    [<RequireQualifiedAccess>]
+    module Regions =
+
+        let build (neighbourhood: Neighbourhood) (bounds: Cell * Cell) (isWalkable: Cell -> bool) : Regions =
+            let (a, b) = bounds
+            let minCol, maxCol = min a.Col b.Col, max a.Col b.Col
+            let minRow, maxRow = min a.Row b.Row, max a.Row b.Row
+            // `walk` is in-bounds AND caller-walkable — the predicate the flood fill and every
+            // connectivity check share, so an out-of-bounds cell is simply never labelled.
+            let walk c =
+                c.Col >= minCol
+                && c.Col <= maxCol
+                && c.Row >= minRow
+                && c.Row <= maxRow
+                && isWalkable c
+
+            // Row-major scan (rows outer, columns inner); flood each still-unlabeled walkable cell with
+            // the next ascending id. The scan order fixes only the internal ids, which never leak.
+            let cells =
+                [ for row in minRow..maxRow do
+                      for col in minCol..maxCol -> { Col = col; Row = row } ]
+
+            let labels =
+                cells
+                |> List.fold
+                    (fun (acc: Map<Cell, int>, next) c ->
+                        if not (walk c) || Map.containsKey c acc then
+                            (acc, next)
+                        else
+                            // Flood the whole component reachable from `c` under the module's neighbour
+                            // rule; the reachable SET is order-independent, so `sameComponent` is stable.
+                            let rec flood (acc: Map<Cell, int>) frontier =
+                                match frontier with
+                                | [] -> acc
+                                | x :: rest ->
+                                    if Map.containsKey x acc then
+                                        flood acc rest
+                                    else
+                                        let acc = Map.add x next acc
+                                        let ns = neighbours neighbourhood walk x |> List.map (fun (struct (n, _)) -> n)
+                                        flood acc (ns @ rest)
+
+                            (flood acc [ c ], next + 1))
+                    (Map.empty, 0)
+                |> fst
+
+            { Labels = labels }
+
+        let sameComponent (regions: Regions) (a: Cell) (b: Cell) : bool =
+            match Map.tryFind a regions.Labels, Map.tryFind b regions.Labels with
+            | Some la, Some lb -> la = lb
+            | _ -> false

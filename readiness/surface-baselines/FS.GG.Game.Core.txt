@@ -34,6 +34,7 @@ FS.GG.Game.Core.Neighbourhood
 FS.GG.Game.Core.Neighbourhood+Tags
 FS.GG.Game.Core.Pathfinding
 FS.GG.Game.Core.Pathfinding+Reach
+FS.GG.Game.Core.Pathfinding+Regions
 FS.GG.Game.Core.Pathfinding+Step
 FS.GG.Game.Core.Physics
 FS.GG.Game.Core.Physics+BodyKind

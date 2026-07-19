@@ -307,3 +307,38 @@ module Pathfinding =
         budget: int ->
         start: Cell ->
             Map<Cell, int>
+
+    /// Public contract type exposed by the FS.GG.Game.Core package.
+    /// A connected-component labelling of a **bounded** grid — every maximal walkable region computed
+    /// once by deterministic flood fill (see `Regions.build`). Opaque: the internal region label ids
+    /// are deliberately not exposed, only the boolean `Regions.sameComponent`, so no observable result
+    /// can depend on the labelling order.
+    [<Sealed>]
+    type Regions
+
+    /// Public contract module exposed by the FS.GG.Game.Core package.
+    /// The connected-component early-out (roadmap 1.2): build a `Regions` once, then reject an
+    /// unreachable `start -> goal` in O(1) with `sameComponent` — instead of `astar`/`bfs`/`reachable`
+    /// exhausting `maxVisited` before reporting "no path", which on a map with walls or islands is the
+    /// worst case on every failed query. Connectivity uses the module's own neighbour rule, so it
+    /// **agrees with what `astar`/`bfs` can actually traverse**, including the no-corner-cutting rule.
+    [<RequireQualifiedAccess>]
+    module Regions =
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// Label every maximal walkable region within the **inclusive** `bounds` corner pair (order of
+        /// the two corners is irrelevant — they are normalized per axis). `isWalkable` is the same
+        /// predicate `astar`/`bfs` take; a cell outside `bounds` is treated as unwalkable and belongs
+        /// to no component. Bounds are required because the framework holds no map. Pure and
+        /// deterministic: a fixed row-major scan with a BFS flood under the given `neighbourhood`
+        /// (so `EightWay` inherits the no-corner-cutting rule), and the label ids stay internal.
+        val build: neighbourhood: Neighbourhood -> bounds: Cell * Cell -> isWalkable: (Cell -> bool) -> Regions
+
+        /// Public contract function exposed by the FS.GG.Game.Core package.
+        /// **O(1)** — true exactly when `a` and `b` are both in-bounds walkable cells joined by a path
+        /// under the region's `neighbourhood`, i.e. it agrees with `astar` reachability over the same
+        /// bounded walkability. Returns false when either cell is out of bounds or not walkable, with
+        /// **no exception for `a = b`** — an unwalkable cell is in no component. Two label lookups, no
+        /// search: this is the guard that turns a failed query from a full `maxVisited` exploration
+        /// into a constant-time rejection.
+        val sameComponent: regions: Regions -> a: Cell -> b: Cell -> bool

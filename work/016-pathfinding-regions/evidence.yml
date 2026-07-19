@@ -1,0 +1,398 @@
+schemaVersion: 1
+workId: 016-pathfinding-regions
+stage: evidence
+status: evidenceReady
+sourceSpec: work/016-pathfinding-regions/spec.md
+sourceClarifications: work/016-pathfinding-regions/clarifications.md
+sourceChecklist: work/016-pathfinding-regions/checklist.md
+sourcePlan: work/016-pathfinding-regions/plan.md
+sourceTasks: work/016-pathfinding-regions/tasks.yml
+sourceAnalysis: readiness/016-pathfinding-regions/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/016-pathfinding-regions/analysis.json
+    digest: d0bc5e92c24a3ea2a6a3eac8f63b6a9e584b53919df0b9c1ec2ad028a26db77c
+    schemaVersion: 1
+  - label: checklist
+    path: work/016-pathfinding-regions/checklist.md
+    digest: e9c7bd8ff3433de1fa412d66710084aa3c49f91e63b37f600c7cbc6a7c7209c7
+    schemaVersion: 1
+  - label: clarifications
+    path: work/016-pathfinding-regions/clarifications.md
+    digest: 52f2d4d9e56b9b1de3c5dde2cb14f09c2ff10dfacb1c16d474bcb388a687fc38
+    schemaVersion: 1
+  - label: plan
+    path: work/016-pathfinding-regions/plan.md
+    digest: 5c5d5da68d574097fac53e4822644ebcfedac57fb7d4457588fc7d2941d6a83e
+    schemaVersion: 1
+  - label: spec
+    path: work/016-pathfinding-regions/spec.md
+    digest: 5fb8135936ea0e20cdbf10da81f4a7f159324b94491558519f7e7b5a0bfd3177
+    schemaVersion: 1
+  - label: tasks
+    path: work/016-pathfinding-regions/tasks.yml
+    digest: a2c166c19d9ff4afe1651510813c8fa919d43ac80b05bce53c93ab014f2cc83e
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: the FsCheck differential over 500 random bounded grids asserts sameComponent a b == (astar a b).IsSome for every cell pair; green."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: the out-of-bounds/unwalkable test pins sameComponent to false for a blocked cell even against itself, and for an off-grid cell — no a=b exception."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: the EightWay no-corner-cutting test asserts sameComponent matches astar exactly (build reuses the module neighbours rule); covered further by the FourWay+EightWay differential."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: the determinism golden and the FsCheck determinism property assert build yields byte-identical sameComponent answers across repeat runs; only the boolean is exposed, so label ids cannot leak."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: sameComponent is two Map.tryFind lookups (no search, no maxVisited); the disconnected-map test rejects an unreachable pair without any search bound."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [artifacts/testresults/regions-016.trx, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Core suite is 602/602 green with the new Regions tests included."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["Public surface: Pathfinding.Regions (type) and Regions.build/sameComponent (members) declared in the .fsi and recorded in both surface baselines; the drift gate stays green."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the Regions determinism property (pure function of inputs over random terrain) is green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/Pathfinding.fs, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["PD-001: Regions.build labels each maximal walkable region by flood fill using the module neighbour rule, so sameComponent agrees with astar reachability by construction."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["PD-004: build is a pure row-major scan + BFS flood assigning ascending internal ids; the determinism tests confirm the exposed boolean is invariant to the labelling order."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV011]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: the FsCheck differential (sameComponent == astar reachability over every pair in 500 random bounded grids) fails before Regions exists and passes after; build clean under warnings-as-errors; both baselines regenerated."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV012]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: Tier-1 surface additions — the Regions type and its two members land with the .fsi, both baselines, and the tests; the surface-baseline-drift gate stays green (3-line additive diff)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV013]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: the named determinism golden asserts build yields byte-identical sameComponent answers across repeat builds over random terrain."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [work/016-pathfinding-regions/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: Regions is purely additive — nothing removed or renamed — so no consumer migration is required; plan schemaVersion 1 accepted."]
+  - id: EV015
+    kind: generated-view
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [readiness/016-pathfinding-regions/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/regions-016.trx
+      digest: "sha256:1a61055da4e62ede24170e265ebade417907d0ac6ceb38490e13d27bce8f742f"
+      outcome: passed
+      passed: 602
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/016-pathfinding-regions/work-model.json is refreshed by verify/ship from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

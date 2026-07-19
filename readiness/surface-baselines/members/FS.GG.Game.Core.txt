@@ -138,6 +138,8 @@ FS.GG.Game.Core.Neighbourhood+Tags.FourWay : System.Int32
 FS.GG.Game.Core.Pathfinding+Reach.Endable : Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell> [get]
 FS.GG.Game.Core.Pathfinding+Reach.Steps : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Pathfinding+Step> [get]
 FS.GG.Game.Core.Pathfinding+Reach.new(Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Pathfinding+Step>, Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell>)
+FS.GG.Game.Core.Pathfinding+Regions.build(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>) : FS.GG.Game.Core.Pathfinding+Regions
+FS.GG.Game.Core.Pathfinding+Regions.sameComponent(FS.GG.Game.Core.Pathfinding+Regions, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : System.Boolean
 FS.GG.Game.Core.Pathfinding+Step.CameFrom : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Cell> [get]
 FS.GG.Game.Core.Pathfinding+Step.Cost : System.Int32 [get]
 FS.GG.Game.Core.Pathfinding+Step.new(System.Int32, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Cell>)
