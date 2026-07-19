@@ -30,6 +30,22 @@
     <Compile Include="Matrix.fs" />
     <Compile Include="Synthetic.fsi" />
     <Compile Include="Synthetic.fs" />
+    <!-- Laws: the reusable metamorphic laws over the drivers/matrix above (Phase 1 of the
+         playtest tooling roadmap). Pure; depends only on Trace/Driver/Matrix/Playable. -->
+    <Compile Include="Laws.fsi" />
+    <Compile Include="Laws.fs" />
+    <!-- Explore: the bounded BFS witness-finder / reachability explorer over a Playable (Phase 2,
+         the keystone). Pure; depends on Playable + the per-frame fold. -->
+    <Compile Include="Explore.fsi" />
+    <Compile Include="Explore.fs" />
+    <!-- Properties: the pure, seeded property runner (Phase 3). Generates valid scripts over the
+         keymap alphabet (reusing Explore.defaultMoves) and checks an invariant at every step; no
+         FsCheck reference — FsCheck stays a test-only tool. -->
+    <Compile Include="Properties.fsi" />
+    <Compile Include="Properties.fs" />
+    <!-- Bots: combinators over Bot<'view> (Phase 4). Pure; depends only on Playable's Bot type. -->
+    <Compile Include="Bots.fsi" />
+    <Compile Include="Bots.fs" />
   </ItemGroup>
 
   <ItemGroup>

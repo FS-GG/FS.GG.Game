@@ -1,0 +1,566 @@
+schemaVersion: 1
+workId: 009-playtest-laws-trace-diff
+stage: evidence
+status: evidenceReady
+sourceSpec: work/009-playtest-laws-trace-diff/spec.md
+sourceClarifications: work/009-playtest-laws-trace-diff/clarifications.md
+sourceChecklist: work/009-playtest-laws-trace-diff/checklist.md
+sourcePlan: work/009-playtest-laws-trace-diff/plan.md
+sourceTasks: work/009-playtest-laws-trace-diff/tasks.yml
+sourceAnalysis: readiness/009-playtest-laws-trace-diff/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/009-playtest-laws-trace-diff/analysis.json
+    digest: d1e1adff37cc3d2b24fd9e0dc45c3a7e6a12e18a1c3894079160b51f74d2a4a7
+    schemaVersion: 1
+  - label: checklist
+    path: work/009-playtest-laws-trace-diff/checklist.md
+    digest: 450254ddce184d7e01356f887c1c05d5e10a409e76689ed369ec77a16766fd90
+    schemaVersion: 1
+  - label: clarifications
+    path: work/009-playtest-laws-trace-diff/clarifications.md
+    digest: 3b386ba0838e1782aa0b4b2680e518e8476363e12ace029c80bfe7695b130e6e
+    schemaVersion: 1
+  - label: plan
+    path: work/009-playtest-laws-trace-diff/plan.md
+    digest: 67cf27832e2f654e94846fa2764779a1d9a158395a4134da93c5b92eb4df20ad
+    schemaVersion: 1
+  - label: spec
+    path: work/009-playtest-laws-trace-diff/spec.md
+    digest: 707727aedf61415f7d42f20fab5e42218c30f893772efb76afb4bf2cc213b6c1
+    schemaVersion: 1
+  - label: tasks
+    path: work/009-playtest-laws-trace-diff/tasks.yml
+    digest: 10df7353325363cf41d43830bb43b71cc11a206ffb46b51813a44073098bdc9f
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-001 determinism law proven on PongSim (LawsTests) and caught on a poisoned Step."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-002 replay law: runScript==runCommands, and a runBot capture replays identically (LawsTests)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-003 fixed-step law: n input frames -> n recorded frames (Laws.check)."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-004 provenance law: every driven trace is Origin.InputDriven (LawsTests)."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-005 matrixOrderIndependent proven permutation-invariant on a Pong matrix (LawsTests)."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Harness/Trace.fs, src/Game.Harness/Trace.fsi, tests/Game.Harness.Tests/TraceDiffTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-006 Trace.firstDivergence: equal->None, content-diff->Some index, prefix/length documented (TraceDiffTests)."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Harness/Trace.fs, src/Game.Harness/Trace.fsi, tests/Game.Harness.Tests/TraceDiffTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-007 Trace.render: stable step-ordered dump, empty renders as the empty string (TraceDiffTests)."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-008 LawResult names its law and carries DivergenceStep on a failing determinism/replay result (LawsTests)."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV009]
+    artifacts: [tests/Game.Harness.Tests/GoldenFile.fs, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-009 golden helper compares/updates in the test project; drift fails with a line index; package stays I/O-free."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-010]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV010]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["FR-010 additive+pure: DependencyTests green (no I/O/clock type), surface baseline regenerated."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001: matrix order-independence is a separate runner from the scripts-only Laws.check (Laws.fsi)."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Harness/Trace.fs, src/Game.Harness/Trace.fsi, tests/Game.Harness.Tests/TraceDiffTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002: Trace.render emits i-prefixed line per frame, empty renders as the empty string (Trace.fs/TraceDiffTests)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["PD-005: Laws.matrixOrderIndependent over MatchSetup/outcome/matches (Laws.fs)."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Harness/Trace.fs, src/Game.Harness/Trace.fsi, tests/Game.Harness.Tests/TraceDiffTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["PD-007: Trace.render step-index prefix aligns with firstDivergence (Trace.fs)."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-005, PD-006, PD-007, PD-008]
+    obligationRefs: [EV015]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/Laws.fsi, src/Game.Harness/Trace.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: tier-1 additive surface (Laws module + 2 Trace fns); baseline extended, existing surface byte-unchanged."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV016]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["PC-002: harness referenced-assembly set stays Core+BCL; DependencyTests enforces it after the additions."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-008]
+    obligationRefs: [EV017]
+    artifacts: [src/Game.Harness/Laws.fs, src/Game.Harness/Laws.fsi, tests/Game.Harness.Tests/LawsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: PongSim proves Laws.check all-pass in <=5 lines and the poisoned-Step catch (LawsTests)."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006, PD-007, PD-009]
+    obligationRefs: [EV018]
+    artifacts: [src/Game.Harness/Trace.fs, src/Game.Harness/Trace.fsi, tests/Game.Harness.Tests/GoldenFile.fs, tests/Game.Harness.Tests/LawsTests.fs, tests/Game.Harness.Tests/TraceDiffTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: firstDivergence/render/matrixOrderIndependent/GoldenFile tests all green."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-010]
+    obligationRefs: [EV019]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["VO-003: DependencyTests green, build clean warnings-as-errors, baseline regenerated, full suite green."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV020]
+    artifacts: [work/009-playtest-laws-trace-diff/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["PM-001: purely additive; nothing removed/renamed; no consumer migration; baseline extended not migrated."]
+  - id: EV021
+    kind: generated-view
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-008]
+    obligationRefs: [EV021]
+    artifacts: [readiness/009-playtest-laws-trace-diff/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: work-model.json refreshes from current sources (rebuilt at verify/ship)."]
+  - id: EV022
+    kind: generated-view
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV022]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-laws.trx
+      digest: "sha256:0d00983807ef8a25867fc94fa6b2df6703a82802d0f91f422723dca0398a1e65"
+      outcome: passed
+      passed: 51
+      failed: 0
+      skipped: 0
+    notes: ["GV-002: surface baseline regenerated from the extended .fsi set; drift gate green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

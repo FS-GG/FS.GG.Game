@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>fsgg-playtest</AssemblyName>
+    <RootNamespace>FS.GG.Playtest</RootNamespace>
+  </PropertyGroup>
+
+  <!-- The fsgg-playtest CLI (Phase 5-6 of the playtest tooling roadmap): a separate, BCL-only tool
+       (NOT the pure package) that reads the TestSpec corpus + a proof report + a TRX. Pure string/file
+       processing; parsing/coverage are pure, I/O is at the Program edge. -->
+  <ItemGroup>
+    <Compile Include="Manifest.fs" />
+    <Compile Include="TestSpec.fs" />
+    <Compile Include="Proofs.fs" />
+    <Compile Include="Coverage.fs" />
+    <Compile Include="Trx.fs" />
+    <Compile Include="Evidence.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+</Project>

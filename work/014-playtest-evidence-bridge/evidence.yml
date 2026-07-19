@@ -1,0 +1,494 @@
+schemaVersion: 1
+workId: 014-playtest-evidence-bridge
+stage: evidence
+status: evidenceReady
+sourceSpec: work/014-playtest-evidence-bridge/spec.md
+sourceClarifications: work/014-playtest-evidence-bridge/clarifications.md
+sourceChecklist: work/014-playtest-evidence-bridge/checklist.md
+sourcePlan: work/014-playtest-evidence-bridge/plan.md
+sourceTasks: work/014-playtest-evidence-bridge/tasks.yml
+sourceAnalysis: readiness/014-playtest-evidence-bridge/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/014-playtest-evidence-bridge/analysis.json
+    digest: 3aad38044bb9a2fb87d7a23599a16404e897ee51c0e1974f232afff63f38545a
+    schemaVersion: 1
+  - label: checklist
+    path: work/014-playtest-evidence-bridge/checklist.md
+    digest: 377c0ad5f9ca8142317076edb7fad772824cedd564ee74f35fa05bfd4469fd8d
+    schemaVersion: 1
+  - label: clarifications
+    path: work/014-playtest-evidence-bridge/clarifications.md
+    digest: cb6f62cc1a7129dcd94f7d8318aaf65be41ac09ea0e596092e0299fb36984079
+    schemaVersion: 1
+  - label: plan
+    path: work/014-playtest-evidence-bridge/plan.md
+    digest: aa1156d7821898ad4c1bf84a98337e3d71cd62e2dbde4e68ff2ba0b9b9fb7bfa
+    schemaVersion: 1
+  - label: spec
+    path: work/014-playtest-evidence-bridge/spec.md
+    digest: 26fd8f7990a8ee5c73c6006fb6359ea2a1d78a744d9ea5d0f3fbd62dda923814
+    schemaVersion: 1
+  - label: tasks
+    path: work/014-playtest-evidence-bridge/tasks.yml
+    digest: 1c6d1f9b1897bfe1f997e0457eb41e9645b56763d11bc0b8e3a38b83bf55ac5d
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-001 Trx.parse extracts pass/fail/skip counts, passed test names, and the sha256 digest."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-002 one evidence row per GP with requirement subject, requirementRefs, ACs, and the observedRun receipt."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-003 InputDriven+passing -> pass & not-synthetic; Synthetic -> synthetic:true (disclosed)."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-004 missing proof/no passing test -> missing; failing test -> fail; never pass & not-synthetic (fail closed)."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-005 emitted document is valid evidence.yml grammar (schemaVersion + evidence rows + observedRun)."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-006 malformed/unreadable TRX/manifest/proofs -> error + non-zero exit."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-007 dogfood: all-InputDriven+passing satisfies; one GP forced synthetic -> synthetic:true, non-satisfying."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [src/Playtest.Cli/FS.GG.Playtest.Cli.fsproj, src/Playtest.Cli/Program.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["FR-008 emit-evidence is a subcommand of FS.GG.Playtest.Cli (BCL-only); Phase 5 subcommands unchanged."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 a GP is tested-green iff a Passed TRX test name contains its id (fail-closed)."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 missing vs fail disposition; synthetic proof is pass+synthetic:true."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV011]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["PD-003 rowFor emits pass&not-synthetic only for InputDriven+green; synthetic disclosed."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["PD-004 not-satisfying rows are missing/fail, never laundered to satisfying."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004, PD-005]
+    obligationRefs: [EV013]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 emit-evidence command + emitted grammar verified by tests; app, no .fsi baseline."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV014]
+    artifacts: [src/Playtest.Cli/FS.GG.Playtest.Cli.fsproj, src/Playtest.Cli/Program.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["PC-002 CLI stays BCL-only (System.Xml.Linq + Cryptography); no Game.Core/Harness reference."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-005]
+    obligationRefs: [EV015]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 TRX parsing + emitted grammar tests green."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-004, PD-007]
+    obligationRefs: [EV016]
+    artifacts: [src/Playtest.Cli/Evidence.fs, src/Playtest.Cli/Trx.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 satisfaction-rule mapping (inputDriven/synthetic/missing/fail) + dogfood proven."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006, PD-008]
+    obligationRefs: [EV017]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/EvidenceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["VO-003 malformed-input errors, BCL-only, Phase 5 unchanged, CLI suite 16/16."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV018]
+    artifacts: [work/014-playtest-evidence-bridge/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 additive subcommand; nothing removed/renamed; no migration."]
+  - id: EV019
+    kind: generated-view
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003]
+    obligationRefs: [EV019]
+    artifacts: [readiness/014-playtest-evidence-bridge/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-evidence.trx
+      digest: "sha256:b46aa5a88bdff15055d6227bef5f72cc874516795d6a6e25403cdfcebe8cae55"
+      outcome: passed
+      passed: 16
+      failed: 0
+      skipped: 0
+    notes: [GV-001 work-model.json refreshes from current sources at verify/ship.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

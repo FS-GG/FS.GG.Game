@@ -1,9 +1,42 @@
 FS.GG.Game.Harness.Bot`1.Decide : FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>> [get]
 FS.GG.Game.Harness.Bot`1.new(FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>>)
+FS.GG.Game.Harness.Bots.chase<view>(Tuple<FSharpFunc<view, System.Int32>, FSharpFunc<view, System.Int32>>, FS.GG.Game.Core.Command, FS.GG.Game.Core.Command) : Bot<view>
+FS.GG.Game.Harness.Bots.greedyToward<view>(FSharpFunc<view, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Command, System.Double>>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>) : Bot<view>
+FS.GG.Game.Harness.Bots.on<outer, inner>(FSharpFunc<outer, inner>, Bot<inner>) : Bot<outer>
+FS.GG.Game.Harness.Bots.random<view>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>) : Bot<view>
+FS.GG.Game.Harness.Bots.scripted<view>(Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>) : Bot<view>
+FS.GG.Game.Harness.Bots.sitter<view>() : Bot<view>
+FS.GG.Game.Harness.Counterexample.Script : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
+FS.GG.Game.Harness.Counterexample.Seed : System.UInt64 [get]
+FS.GG.Game.Harness.Counterexample.Step : System.Int32 [get]
+FS.GG.Game.Harness.Counterexample.new(System.UInt64, Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>, System.Int32)
 FS.GG.Game.Harness.Driver.identityFingerprint<world>(world) : world
 FS.GG.Game.Harness.Driver.runBot<world, key, view, f>(Playable<world, key>, FSharpFunc<world, view>, Bot<view>, System.UInt64, System.Int32, FSharpFunc<world, f>) : Run<f>
 FS.GG.Game.Harness.Driver.runCommands<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>) : Trace<f>
 FS.GG.Game.Harness.Driver.runScript<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, FSharpList<FSharpList<key>>) : Trace<f>
+FS.GG.Game.Harness.Explore.defaultConfig : FS.GG.Game.Harness.ExploreConfig [get]
+FS.GG.Game.Harness.Explore.defaultMoves<world, key>(Playable<world, key>) : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>
+FS.GG.Game.Harness.Explore.findScript<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, FSharpFunc<world, System.Boolean>, System.Int32) : FS.GG.Game.Harness.FindResult
+FS.GG.Game.Harness.Explore.findScriptWith<world, key, f>(FS.GG.Game.Harness.ExploreConfig, Playable<world, key>, FSharpFunc<world, f>, FSharpFunc<world, System.Boolean>, System.Int32) : FS.GG.Game.Harness.FindResult
+FS.GG.Game.Harness.Explore.reachable<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, System.Int32) : ReachResult<f>
+FS.GG.Game.Harness.Explore.reachableWith<world, key, f>(FS.GG.Game.Harness.ExploreConfig, Playable<world, key>, FSharpFunc<world, f>, System.Int32) : ReachResult<f>
+FS.GG.Game.Harness.ExploreConfig.MaxVisited : System.Int32 [get]
+FS.GG.Game.Harness.ExploreConfig.Moves : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>> [get]
+FS.GG.Game.Harness.ExploreConfig.new(Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>>, System.Int32)
+FS.GG.Game.Harness.FindResult+Tags.Found : System.Int32
+FS.GG.Game.Harness.FindResult+Tags.NotFound : System.Int32
+FS.GG.Game.Harness.FindResult+Tags.Truncated : System.Int32
+FS.GG.Game.Harness.LawReport.Results : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.LawResult> [get]
+FS.GG.Game.Harness.LawReport.allPassed(FS.GG.Game.Harness.LawReport) : System.Boolean
+FS.GG.Game.Harness.LawReport.failures(FS.GG.Game.Harness.LawReport) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.LawResult>
+FS.GG.Game.Harness.LawReport.new(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.LawResult>)
+FS.GG.Game.Harness.LawResult.Detail : System.String [get]
+FS.GG.Game.Harness.LawResult.DivergenceStep : Microsoft.FSharp.Core.FSharpOption<System.Int32> [get]
+FS.GG.Game.Harness.LawResult.Law : System.String [get]
+FS.GG.Game.Harness.LawResult.Passed : System.Boolean [get]
+FS.GG.Game.Harness.LawResult.new(System.String, System.Boolean, Microsoft.FSharp.Core.FSharpOption<System.Int32>, System.String)
+FS.GG.Game.Harness.Laws.check<world, key>(Playable<world, key>, FSharpList<FSharpList<FSharpList<key>>>) : FS.GG.Game.Harness.LawReport
+FS.GG.Game.Harness.Laws.matrixOrderIndependent<world, view, o>(MatchSetup<world, view>, FSharpFunc<world, o>, FSharpList<Match<view>>) : FS.GG.Game.Harness.LawResult
 FS.GG.Game.Harness.MatchSetup`2.Apply : FSharpFunc<FS.GG.Game.Harness.Seat, FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>>> [get]
 FS.GG.Game.Harness.MatchSetup`2.Dt : System.Double [get]
 FS.GG.Game.Harness.MatchSetup`2.Init : FSharpFunc<FS.GG.Game.Core.Rng, world> [get]
@@ -28,6 +61,18 @@ FS.GG.Game.Harness.Playable`2.Init : world [get]
 FS.GG.Game.Harness.Playable`2.Keymap : FSharpMap<key, FS.GG.Game.Core.Command> [get]
 FS.GG.Game.Harness.Playable`2.Step : FSharpFunc<world, FSharpFunc<System.Double, world>> [get]
 FS.GG.Game.Harness.Playable`2.new(world, FSharpMap<key, FS.GG.Game.Core.Command>, FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>>, FSharpFunc<world, FSharpFunc<System.Double, world>>, System.Double)
+FS.GG.Game.Harness.Properties.check<world, key>(Playable<world, key>, FSharpFunc<world, System.Boolean>, System.UInt64) : FS.GG.Game.Harness.PropertyResult
+FS.GG.Game.Harness.Properties.checkWith<world, key>(FS.GG.Game.Harness.PropertyConfig, Playable<world, key>, FSharpFunc<world, System.Boolean>, System.UInt64) : FS.GG.Game.Harness.PropertyResult
+FS.GG.Game.Harness.Properties.defaultConfig : FS.GG.Game.Harness.PropertyConfig [get]
+FS.GG.Game.Harness.PropertyConfig.MaxLength : System.Int32 [get]
+FS.GG.Game.Harness.PropertyConfig.Moves : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>> [get]
+FS.GG.Game.Harness.PropertyConfig.Runs : System.Int32 [get]
+FS.GG.Game.Harness.PropertyConfig.new(System.Int32, System.Int32, Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>>)
+FS.GG.Game.Harness.PropertyResult+Tags.Falsified : System.Int32
+FS.GG.Game.Harness.PropertyResult+Tags.Held : System.Int32
+FS.GG.Game.Harness.ReachResult`1.States : FSharpSet<f> [get]
+FS.GG.Game.Harness.ReachResult`1.Truncated : System.Boolean [get]
+FS.GG.Game.Harness.ReachResult`1.new(FSharpSet<f>, System.Boolean)
 FS.GG.Game.Harness.Run`1.Captured : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
 FS.GG.Game.Harness.Run`1.Trace : Trace<f> [get]
 FS.GG.Game.Harness.Run`1.new(Trace<f>, Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>)
@@ -35,6 +80,11 @@ FS.GG.Game.Harness.Seat+Tags.A : System.Int32
 FS.GG.Game.Harness.Seat+Tags.B : System.Int32
 FS.GG.Game.Harness.Synthetic.trace<world, f>(FSharpFunc<world, f>, FSharpList<world>) : Trace<f>
 FS.GG.Game.Harness.Trace.equalFrames<f>(Trace<f>, Trace<f>) : System.Boolean
+FS.GG.Game.Harness.Trace.firstDivergence<f>(Trace<f>, Trace<f>) : FSharpOption<Tuple<System.Int32, f, f>>
 FS.GG.Game.Harness.Trace.frames<f>(Trace<f>) : FSharpList<f>
 FS.GG.Game.Harness.Trace.isSynthetic<f>(Trace<f>) : System.Boolean
 FS.GG.Game.Harness.Trace.origin<f>(Trace<f>) : FS.GG.Game.Harness.Origin
+FS.GG.Game.Harness.Trace.render<f>(FSharpFunc<f, System.String>, Trace<f>) : System.String
+FS.GG.Game.Harness.Witness.Depth : System.Int32 [get]
+FS.GG.Game.Harness.Witness.Script : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
+FS.GG.Game.Harness.Witness.new(Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>, System.Int32)
