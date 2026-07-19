@@ -216,9 +216,6 @@ module Ai =
     /// `best` returns `ValueNone` only for an empty list — never `NaN` by accident.
     val best: score: ('p -> float) -> tie: ('p -> struct (int * int)) -> plans: 'p list -> 'p voption
 
-/// Public contract module exposed by the FS.GG.Game.Core package.
-/// A difficulty ladder expressed purely as the knob vector. Compare the three: every difference is time or
-/// precision. No stat is touched, and there is no field here with which one could be.
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// An **integer influence map** from strengthed sources (roadmap 3.2) — a thin wrapper over
     /// `Pathfinding.distanceField`. Each `(source, strength)` contributes `max(0, strength - distance)`
@@ -240,6 +237,10 @@ module Ai =
         cost: (Cell -> int) ->
         sources: (Cell * int) list ->
             Map<Cell, int>
+
+/// Public contract module exposed by the FS.GG.Game.Core package.
+/// A difficulty ladder expressed purely as the knob vector. Compare the three: every difference is time or
+/// precision. No stat is touched, and there is no field here with which one could be.
 
 [<RequireQualifiedAccess>]
 module Difficulty =
