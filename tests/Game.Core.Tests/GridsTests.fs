@@ -298,3 +298,85 @@ let tests =
             Expect.equal once twice "pure and deterministic"
         }
     ]
+
+// ------------------------------------------------------------------------------------------------
+// AoE / range templates (work item 024, roadmap 3.3): filled disc, outline ring, and Los.line reuse.
+
+module TemplateTests =
+
+    open Expecto
+    open FsCheck
+    open FS.GG.Game.Core
+
+    let private dist2 (a: Cell) (b: Cell) =
+        int64 (a.Col - b.Col) * int64 (a.Col - b.Col) + int64 (a.Row - b.Row) * int64 (a.Row - b.Row)
+
+    [<Tests>]
+    let templateTests =
+        testList "Game.Core Grids templates (024, FR-001..FR-004)" [
+
+            test "disc is exactly the cells within the squared radius (FR-001)" {
+                let center = { Col = 0; Row = 0 }
+                let d = Grids.disc center 3 |> Set.ofList
+                let brute =
+                    [ for dc in -3..3 do
+                          for dr in -3..3 do
+                              if dc * dc + dr * dr <= 9 then { Col = dc; Row = dr } ]
+                    |> Set.ofList
+                Expect.equal d brute "disc = brute-force squared-distance set"
+                Expect.equal (Grids.disc center 0) [ center ] "disc radius 0 = [center]"
+                Expect.equal (Grids.disc center -1) [] "negative radius ⇒ []"
+                Expect.isTrue (Grids.disc center 5 |> List.forall (fun c -> dist2 center c <= 25L)) "every disc cell within r²"
+            }
+
+            test "ring is the midpoint-circle outline at the given radius (FR-002)" {
+                let center = { Col = 10; Row = 10 }
+                let r = Grids.ring center 5
+                Expect.isTrue (r |> List.forall (fun c -> System.Math.Round(sqrt (float (dist2 center c))) = 5.0)) "every ring cell at rounded distance 5"
+                Expect.equal (r |> List.distinct |> List.length) (List.length r) "ring is deduplicated"
+                Expect.equal (Grids.ring center 0) [ center ] "ring radius 0 = [center]"
+                Expect.equal (Grids.ring center -2) [] "negative radius ⇒ []"
+                Expect.isTrue (List.length r >= 4) "a radius-5 ring has several cells"
+            }
+
+            test "ring cells lie on the disc boundary and ring scales (FR-002/FR-003)" {
+                let center = { Col = 0; Row = 0 }
+                // A larger ring: O(radius) cells, all at rounded distance = radius. Exercises the
+                // midpoint circle at scale without materialising a huge disc.
+                let r = Grids.ring center 500
+                Expect.isTrue (r |> List.forall (fun c -> System.Math.Round(sqrt (float (dist2 center c))) = 500.0)) "every radius-500 ring cell at rounded distance 500"
+                Expect.isTrue (List.length r > 100) "the ring has many cells"
+            }
+
+            test "disc and ring are byte-deterministic (FR-003)" {
+                let c = { Col = 3; Row = -2 }
+                Expect.equal (Grids.disc c 7) (Grids.disc c 7) "disc byte-identical"
+                Expect.equal (Grids.ring c 7) (Grids.ring c 7) "ring byte-identical"
+            }
+
+            test "line templates reuse the shipped Los.line (FR-004)" {
+                let a = { Col = 0; Row = 0 }
+                let b = { Col = 5; Row = 2 }
+                let line = Los.line a b
+                Expect.equal (List.head line) a "line starts at a"
+                Expect.equal (List.last line) b "line ends at b"
+                Expect.isTrue
+                    (line |> List.pairwise |> List.forall (fun (x, y) -> abs (x.Col - y.Col) <= 1 && abs (x.Row - y.Row) <= 1))
+                    "line is contiguous (each step adjacent)"
+            }
+
+            testCase "disc matches the brute-force squared-distance set over random radii (FsCheck)" <| fun () ->
+                let prop (cc: int) (cr: int) (rr: int) =
+                    let center = { Col = (cc % 20) - 10; Row = (cr % 20) - 10 }
+                    let radius = (abs rr) % 12
+                    let d = Grids.disc center radius |> Set.ofList
+                    let brute =
+                        [ for dc in -radius..radius do
+                              for dr in -radius..radius do
+                                  if dc * dc + dr * dr <= radius * radius then
+                                      { Col = center.Col + dc; Row = center.Row + dr } ]
+                        |> Set.ofList
+                    d = brute
+
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+        ]
