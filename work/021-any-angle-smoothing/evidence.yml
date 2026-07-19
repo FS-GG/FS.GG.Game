@@ -1,0 +1,374 @@
+schemaVersion: 1
+workId: 021-any-angle-smoothing
+stage: evidence
+status: evidenceReady
+sourceSpec: work/021-any-angle-smoothing/spec.md
+sourceClarifications: work/021-any-angle-smoothing/clarifications.md
+sourceChecklist: work/021-any-angle-smoothing/checklist.md
+sourcePlan: work/021-any-angle-smoothing/plan.md
+sourceTasks: work/021-any-angle-smoothing/tasks.yml
+sourceAnalysis: readiness/021-any-angle-smoothing/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/021-any-angle-smoothing/analysis.json
+    digest: 0e8881afead57fd83e44afb4359564896ac394984c7d2086d0af9236522015ea
+    schemaVersion: 1
+  - label: checklist
+    path: work/021-any-angle-smoothing/checklist.md
+    digest: 8915bf4c28e245493a78e468d769bb0a93bd4dc4109671324899586b80d1d0f3
+    schemaVersion: 1
+  - label: clarifications
+    path: work/021-any-angle-smoothing/clarifications.md
+    digest: 6a8bf28401ce614005ea2074ddf265335da638f340bc32c917f32b17341a287d
+    schemaVersion: 1
+  - label: plan
+    path: work/021-any-angle-smoothing/plan.md
+    digest: b40121fe27912c9b1f182959d310def94da67633253b013f499279f5d0f20b46
+    schemaVersion: 1
+  - label: spec
+    path: work/021-any-angle-smoothing/spec.md
+    digest: c331a9faaaeb26478c13f06aaae00c9eaf231a3246eddb62138578063e849c34
+    schemaVersion: 1
+  - label: tasks
+    path: work/021-any-angle-smoothing/tasks.yml
+    digest: b1f9d9bd5dca3a4ed79780def1f29dfc31dd63736901da4bf6730edabaf8ee9f
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: the FsCheck property over 1000 random grids asserts smooth returns a subsequence of the astar path keeping the original start and goal."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: every consecutive pair of the smoothed path satisfies Los.lineOfSight, asserted concretely (wall corner) and over 1000 random grids."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: never longer than the input (property), and a straight fully-visible path collapses to [start; goal] (concrete)."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: empty ⇒ empty and single ⇒ itself (totality); the determinism property re-runs smooth and asserts byte-identity over 500 grids."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: with losClear = Los.lineOfSight walk, the wall-corner test confirms every kept segment is LOS-clear so no straight segment crosses the wall."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [artifacts/testresults/smooth-021.trx, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Core suite is 645/645 green with the new smooth tests included."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the smooth subsequence/LOS-clear and determinism properties are green over 500-1000 grids."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the totality (empty/single) and straight-collapse cases are green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/Pathfinding.fs, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["PD-001: smooth is a greedy keep-farthest-visible string-pull over the waypoint array, keeping first/last, with a forced-step fallback that keeps it total."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["Public surface: Pathfinding.smooth declared in the .fsi and recorded in the member baseline; the drift gate stays green (one-line additive diff)."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV011]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: the property suite (subsequence + endpoints, LOS-clear segments, never-longer, straight-collapse, safe-around-wall) fails before smooth exists and passes after; build clean under warnings-as-errors; baseline regenerated."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: the named determinism property asserts smooth is byte-identical across runs; the totality cases cover empty/single."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [work/021-any-angle-smoothing/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: purely additive — nothing removed or renamed — so no consumer migration; plan schemaVersion 1 accepted."]
+  - id: EV014
+    kind: generated-view
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [readiness/021-any-angle-smoothing/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/smooth-021.trx
+      digest: "sha256:446ed96655d3ea6d7dbc7d9177f933da6cebf901cce05e366419b62975073bd8"
+      outcome: passed
+      passed: 645
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/021-any-angle-smoothing/work-model.json is refreshed by verify/ship from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

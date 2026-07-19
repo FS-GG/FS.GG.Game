@@ -901,3 +901,44 @@ module Pathfinding =
             // is tighter.
             let combined c = max (octile neighbourhood goal c) (int64 (heuristic landmarks goal c))
             astarWith combined noTie neighbourhood maxVisited isWalkable start goal
+
+    // ---------------------------------------------------------------------------------------------
+    // Any-angle post-hoc smoothing (roadmap 2.2, work item 021). A greedy string-pull over a finished
+    // path: drop the intermediate waypoints wherever a clear line of sight lets you skip them, turning
+    // a jagged cell-by-cell staircase into a shorter run of straight any-angle segments. It layers on
+    // `astar` untouched and uses the caller's INTEGER `losClear` (canonically `Los.lineOfSight`), so
+    // the smoothed path is byte-deterministic — never a float ray.
+    let smooth (losClear: Cell -> Cell -> bool) (path: Cell list) : Cell list =
+        match path with
+        | []
+        | [ _ ] -> path
+        | _ ->
+            let arr = List.toArray path
+            let n = arr.Length
+            let result = System.Collections.Generic.List<Cell>()
+            result.Add arr.[0]
+            // `anchor` is the last kept waypoint; advance `next` while the anchor can see it. When
+            // visibility breaks, commit the farthest visible waypoint and re-anchor there.
+            let mutable anchor = 0
+            let mutable next = 1
+
+            while next < n do
+                if losClear arr.[anchor] arr.[next] then
+                    next <- next + 1
+                elif next - 1 > anchor then
+                    // arr.[next-1] is the farthest visible from the anchor; commit it and re-anchor.
+                    result.Add arr.[next - 1]
+                    anchor <- next - 1
+                else
+                    // Even the immediately-next cell is not visible (only possible when `losClear` does
+                    // not hold between adjacent path cells, e.g. a walk-through-but-opaque tile): fall
+                    // back to the original single step so `smooth` stays total and always progresses.
+                    result.Add arr.[next]
+                    anchor <- next
+                    next <- next + 1
+
+            // Always finish at the goal.
+            if result.[result.Count - 1] <> arr.[n - 1] then
+                result.Add arr.[n - 1]
+
+            List.ofSeq result

@@ -202,6 +202,7 @@ FS.GG.Game.Core.Pathfinding.jps(FS.GG.Game.Core.Neighbourhood, System.Int32, Mic
 FS.GG.Game.Core.Pathfinding.pathTo(FS.GG.Game.Core.Pathfinding+Reach, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>>
 FS.GG.Game.Core.Pathfinding.reachable(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Int32>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, System.Int32, FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Pathfinding+Reach
 FS.GG.Game.Core.Pathfinding.reachableWithin(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Int32>, System.Int32, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Int32>
+FS.GG.Game.Core.Pathfinding.smooth(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.Physics+BodyKind+Tags.Dynamic : System.Int32
 FS.GG.Game.Core.Physics+BodyKind+Tags.Kinematic : System.Int32
 FS.GG.Game.Core.Physics+BodyKind+Tags.Static : System.Int32

@@ -245,6 +245,25 @@ module Pathfinding =
             Cell list option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// **Any-angle post-hoc smoothing of a finished path** (roadmap 2.2): a greedy string-pull that
+    /// drops the intermediate waypoints wherever a clear line of sight lets a unit skip them, turning a
+    /// jagged cell-by-cell staircase (as `astar`/`pathTo` produce) into a shorter run of straight
+    /// any-angle segments. It layers on top of the search — the input is any finished `Cell list` path.
+    ///
+    /// **Integer LOS, byte-deterministic.** `losClear a b` is the caller's line-of-sight test —
+    /// canonically `Los.lineOfSight isTransparent`, an integer Bresenham/supercover check, never a float
+    /// ray — so the smoothed path is byte-identical across runs and platforms.
+    ///
+    /// The result is a **subsequence** of the input (only original waypoints are kept, never a new
+    /// cell), it keeps the original first and last cell, and it is **never longer** than the input — a
+    /// path all of whose cells are visible from the start collapses to `[start; goal]`. Every kept
+    /// consecutive pair `(a, b)` satisfies `losClear a b` (each straight segment is genuinely clear)
+    /// **when `losClear` holds between adjacent path cells**, as it does whenever transparency covers
+    /// walkability; a `losClear` that refuses even an adjacent step falls back to that original step so
+    /// `smooth` stays total. Pure and total: `[]` and a single-cell path are returned unchanged.
+    val smooth: losClear: (Cell -> Cell -> bool) -> path: Cell list -> Cell list
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Multi-source Dijkstra **from the goals outward** — the "Dijkstra map" / integration field. For
     /// every reachable cell it stores the cheapest cost of travelling from that cell to the *nearest*
     /// goal; each goal itself maps to `0`. There is deliberately **no early exit**: when many agents

@@ -46,6 +46,8 @@
     <!-- Bots: combinators over Bot<'view> (Phase 4). Pure; depends only on Playable's Bot type. -->
     <Compile Include="Bots.fsi" />
     <Compile Include="Bots.fs" />
+    <Compile Include="VisibilityPolygon.fsi" />
+    <Compile Include="VisibilityPolygon.fs" />
   </ItemGroup>
 
   <ItemGroup>

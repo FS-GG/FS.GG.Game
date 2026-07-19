@@ -1,0 +1,422 @@
+schemaVersion: 1
+workId: 022-visibility-polygon
+stage: evidence
+status: evidenceReady
+sourceSpec: work/022-visibility-polygon/spec.md
+sourceClarifications: work/022-visibility-polygon/clarifications.md
+sourceChecklist: work/022-visibility-polygon/checklist.md
+sourcePlan: work/022-visibility-polygon/plan.md
+sourceTasks: work/022-visibility-polygon/tasks.yml
+sourceAnalysis: readiness/022-visibility-polygon/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/022-visibility-polygon/analysis.json
+    digest: ecbb22de9e648593f63810e4a30debf4a34603dcfdbb66136d565c6ea51d83dc
+    schemaVersion: 1
+  - label: checklist
+    path: work/022-visibility-polygon/checklist.md
+    digest: 138ae0374b2321072ebe65b5c5eeefb6bcce1f00873e43600feb6514192800f4
+    schemaVersion: 1
+  - label: clarifications
+    path: work/022-visibility-polygon/clarifications.md
+    digest: 7a7553006a4c1b4509d80bb0988068e43f8b03020a223abf48d640c7723884c7
+    schemaVersion: 1
+  - label: plan
+    path: work/022-visibility-polygon/plan.md
+    digest: e072eff564324328219fa7937ab6f561e7751342abeb585d3c9b146aa1615425
+    schemaVersion: 1
+  - label: spec
+    path: work/022-visibility-polygon/spec.md
+    digest: b82c7a77c4163df8f716939c8df7a8f87987a86f81f98d306b2cfb9433676db9
+    schemaVersion: 1
+  - label: tasks
+    path: work/022-visibility-polygon/tasks.yml
+    digest: 520cbf8a5898ddcc292f595fc5e072b1e422a2b6d97e9d62efb3574b81b3f0b8
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: the star-shaped test asserts no returned vertex is occluded by the wall — each is the nearest hit along its ray."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: the point-in-polygon test confirms the origin lies inside the polygon (empty room and with a wall)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: with no interior segments the shoelace area of the polygon is within tolerance of the 10x10 bounds area (the origin sees the whole room)."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: the wall-shadow test — a point directly behind the wall is outside the polygon, a point in open view is inside, and the visible area is below the full room."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-007]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: the reproducibility test asserts identical inputs yield an identical polygon; ordering is by pseudo-angle (quadrant+slope) + distance, never atan2."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["FR-006: totality — origin outside bounds, empty segments, a zero-length segment, and an origin on a corner all return a polygon without throwing (guarded denominators)."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [artifacts/testresults/visibility-022.trx, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Harness suite is 81/81 green, including DependencyTests (no ambient clock/RNG/IO), with the new visibility tests."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the star-shaped, shadow, and area properties are green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the reproducibility and totality cases are green."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, src/Game.Harness/VisibilityPolygon.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["PD-001: polygon adds the bounds edges, casts rays at each endpoint (±epsilon), keeps the nearest hit by ray parameter, and returns the pseudo-angle-ordered hit points."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-001, FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Harness/VisibilityPolygon.fs, tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["PD-004: nearest-hit-per-ray makes every vertex visible (star-shaped) and lets a nearer wall shorten the rays behind it (the shadow) — both asserted."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, readiness/surface-baselines/members/FS.GG.Game.Harness.txt, src/Game.Harness/VisibilityPolygon.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: Tier-1 surface addition — the VisibilityPolygon module declared in the new Harness .fsi and recorded in both Harness baselines; the new file joins the compile order; the drift gate stays green. No change to Game.Core."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV015]
+    artifacts: [tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: the property suite (origin inside, star-shaped, empty-room area, wall shadow) fails before the module exists and passes after; build clean under warnings-as-errors; the Harness baseline regenerated."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-006]
+    obligationRefs: [EV016]
+    artifacts: [tests/Game.Harness.Tests/VisibilityPolygonTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: the reproducibility golden (identical polygon across runs, pseudo-angle order) and the totality cases are green."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV017]
+    artifacts: [work/022-visibility-polygon/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: a purely additive new harness module — nothing removed or renamed — so no consumer migration; plan schemaVersion 1 accepted. Core promotion is an advisory out-of-scope note, not a lifecycle obligation."]
+  - id: EV018
+    kind: generated-view
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV018]
+    artifacts: [readiness/022-visibility-polygon/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/visibility-022.trx
+      digest: "sha256:10c13a2b090db31951a6e73681ae64dd0c0bb76adadff1feb47586896637559a"
+      outcome: passed
+      passed: 81
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/022-visibility-polygon/work-model.json is refreshed by verify/ship from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

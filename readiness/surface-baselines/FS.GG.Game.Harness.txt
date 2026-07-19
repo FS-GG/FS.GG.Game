@@ -31,4 +31,5 @@ FS.GG.Game.Harness.Seat+Tags
 FS.GG.Game.Harness.Synthetic
 FS.GG.Game.Harness.Trace
 FS.GG.Game.Harness.Trace`1
+FS.GG.Game.Harness.VisibilityPolygon
 FS.GG.Game.Harness.Witness
