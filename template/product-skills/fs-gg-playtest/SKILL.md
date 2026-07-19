@@ -179,10 +179,12 @@ taints synthetic evidence down the DAG. So:
 > the real `Command` frontier. A `Synthetic.trace` **discloses** a stand-in and can never close the
 > obligation, no matter how green it looks.
 
-That is the whole reason the hatch is a distinct, typed surface (ADR-0048): the shortcut is available,
-but its cost is visible at the type level and in the evidence record, never silent. Reach for real
-input first; use `Synthetic.trace` only to reach a state that real input genuinely cannot, and expect
-its obligation to read as *disclosed, not satisfied*.
+The hatch is a distinct, typed surface by deliberate design of the harness: the shortcut is available,
+but its cost is visible at the type level and in the evidence record, never silent. The per-FR gate
+that reads that provenance bit and refuses a synthetic pass is ADR-0048's — this package is the
+capability that gate presumes, not the other way round. Reach for real input first; use
+`Synthetic.trace` only to reach a state that real input genuinely cannot, and expect its obligation to
+read as *disclosed, not satisfied*.
 
 ## Package Boundary
 
