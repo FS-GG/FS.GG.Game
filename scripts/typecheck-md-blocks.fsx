@@ -918,6 +918,17 @@ if not (File.Exists coreDll) && not listOnly then
            (dotnet build src/Game.Core/FS.GG.Game.Core.fsproj -c {configuration}). Refusing to \
            typecheck the docs against an assembly that does not exist."
 
+// FS.GG.Game.Harness is a LOCAL project (not a PackageRef): fs-gg-playtest's blocks bind it exactly as
+// a reader's test project does. Referenced against the REAL built assembly for the same reason as Core —
+// a fiction the block typechecks against still shows a green tick, and the tick is what stops anyone
+// looking. Only the skills corpus opens it; the testspecs project carries the reference unused.
+let harnessDll = repoPath $"src/Game.Harness/bin/{configuration}/net10.0/FS.GG.Game.Harness.dll"
+
+if not (File.Exists harnessDll) && not listOnly then
+    fail $"FS.GG.Game.Harness.dll not found at {relative harnessDll} — build it first \
+           (dotnet build src/Game.Harness/FS.GG.Game.Harness.fsproj -c {configuration}). Refusing to \
+           typecheck the docs against an assembly that does not exist."
+
 // ---------------------------------------------------------------------------------------------
 // 3a. The two `Geometry` modules must not collide (#189)
 // ---------------------------------------------------------------------------------------------
@@ -1728,6 +1739,9 @@ let checkCorpus (corpus: Corpus) : int =
   <ItemGroup>
     <Reference Include="FS.GG.Game.Core">
       <HintPath>{coreDll}</HintPath>
+    </Reference>
+    <Reference Include="FS.GG.Game.Harness">
+      <HintPath>{harnessDll}</HintPath>
     </Reference>
 {packages}
   </ItemGroup>
