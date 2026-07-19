@@ -2,14 +2,17 @@ name: release
 
 # Release-only publish for FS.GG.Game (ADR-0022 / P5). Tag-triggered; NEVER a required check and
 # NEVER on push/PR (mirrors the sibling repos' release cadence). Publishes the coherent set
-# FS.GG.Game.Core + FS.GG.Game.Render to the org GitHub Packages feed (nuget.pkg.github.com/FS-GG),
-# then dual-publishes the BYTE-IDENTICAL set to public nuget.org via Trusted Publishing / OIDC
-# (ADR-0012 §1–§5 / ADR-0013 — no stored key). Gated on a full headless build+test first: a set is
-# published only after `verify` is green (publish-before-flip, FR-007).
+# FS.GG.Game.Core + FS.GG.Game.Render + FS.GG.Game.Harness to the org GitHub Packages feed
+# (nuget.pkg.github.com/FS-GG), then dual-publishes the BYTE-IDENTICAL set to public nuget.org via
+# Trusted Publishing / OIDC (ADR-0012 §1–§5 / ADR-0013 — no stored key). Gated on a full headless
+# build+test first: a set is published only after `verify` is green (publish-before-flip, FR-007).
 #
-# First release is 0.1.0-preview.1 (this repo has never published). Both packages share ONE version
-# (the repo-wide <Version> in Directory.Build.local.props); they move as a coherent set. Game.Render
-# depends on Game.Core@same-version + FS.GG.UI.Scene (itself dual-published, ADR-0012/0013).
+# The set shares ONE version (the repo-wide <Version> in Directory.Build.local.props); the packages
+# move together, so every release re-publishes all three at the same version. Game.Render depends on
+# Game.Core@same-version + FS.GG.UI.Scene (itself dual-published, ADR-0012/0013); Game.Harness
+# depends on Game.Core@same-version + the BCL only (WI-6, Game#425). FS.GG.Game.Harness joined the
+# set at 0.6.0 — it is packable and in the slnx as of #423 but landed after the v0.5.1 release, so no
+# published version predates 0.6.0 for it.
 on:
   release:
     types: [published]
@@ -128,10 +131,10 @@ jobs:
         with:
           target: FS.GG.Game.slnx
 
-      # Pack the coherent set. Only FS.GG.Game.Core + FS.GG.Game.Render are IsPackable=true (the two
-      # test projects are IsPackable=false), so packing the whole slnx yields exactly those two
-      # packages, both at $VER — and Game.Render's ProjectReference to Game.Core is emitted as a
-      # package dependency at the same $VER (coherent set).
+      # Pack the coherent set. FS.GG.Game.Core, FS.GG.Game.Render and FS.GG.Game.Harness are
+      # IsPackable=true (the three test projects are IsPackable=false), so packing the whole slnx
+      # yields exactly those three packages, all at $VER — and each ProjectReference to Game.Core
+      # (Render's and Harness's) is emitted as a package dependency at the same $VER (coherent set).
       #
       # `dotnet pack` restores implicitly, and that is left alone deliberately: it re-resolves with
       # -p:Version set, which is how the packed nuspec gets the right dependency version. It now
