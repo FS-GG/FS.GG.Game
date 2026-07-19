@@ -34,6 +34,10 @@
          playtest tooling roadmap). Pure; depends only on Trace/Driver/Matrix/Playable. -->
     <Compile Include="Laws.fsi" />
     <Compile Include="Laws.fs" />
+    <!-- Explore: the bounded BFS witness-finder / reachability explorer over a Playable (Phase 2,
+         the keystone). Pure; depends on Playable + the per-frame fold. -->
+    <Compile Include="Explore.fsi" />
+    <Compile Include="Explore.fs" />
   </ItemGroup>
 
   <ItemGroup>

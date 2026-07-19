@@ -1,5 +1,11 @@
 FS.GG.Game.Harness.Bot`1
 FS.GG.Game.Harness.Driver
+FS.GG.Game.Harness.Explore
+FS.GG.Game.Harness.ExploreConfig
+FS.GG.Game.Harness.FindResult
+FS.GG.Game.Harness.FindResult+Found
+FS.GG.Game.Harness.FindResult+Tags
+FS.GG.Game.Harness.FindResult+Truncated
 FS.GG.Game.Harness.LawReport
 FS.GG.Game.Harness.LawResult
 FS.GG.Game.Harness.Laws
@@ -10,9 +16,11 @@ FS.GG.Game.Harness.Origin
 FS.GG.Game.Harness.Origin+Tags
 FS.GG.Game.Harness.Playable
 FS.GG.Game.Harness.Playable`2
+FS.GG.Game.Harness.ReachResult`1
 FS.GG.Game.Harness.Run`1
 FS.GG.Game.Harness.Seat
 FS.GG.Game.Harness.Seat+Tags
 FS.GG.Game.Harness.Synthetic
 FS.GG.Game.Harness.Trace
 FS.GG.Game.Harness.Trace`1
+FS.GG.Game.Harness.Witness

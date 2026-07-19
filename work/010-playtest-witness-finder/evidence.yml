@@ -1,0 +1,518 @@
+schemaVersion: 1
+workId: 010-playtest-witness-finder
+stage: evidence
+status: evidenceReady
+sourceSpec: work/010-playtest-witness-finder/spec.md
+sourceClarifications: work/010-playtest-witness-finder/clarifications.md
+sourceChecklist: work/010-playtest-witness-finder/checklist.md
+sourcePlan: work/010-playtest-witness-finder/plan.md
+sourceTasks: work/010-playtest-witness-finder/tasks.yml
+sourceAnalysis: readiness/010-playtest-witness-finder/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/010-playtest-witness-finder/analysis.json
+    digest: 78fb16d12262ce474642459aba23e25d405179f3e913a2f5cf031ddfb85e0e0b
+    schemaVersion: 1
+  - label: checklist
+    path: work/010-playtest-witness-finder/checklist.md
+    digest: 53014c4cba67275758a390005861a9aa99ffd87306cf5bd23a0d1475d1e080b0
+    schemaVersion: 1
+  - label: clarifications
+    path: work/010-playtest-witness-finder/clarifications.md
+    digest: 921d51861ac834655a004bfb05dcbad70bd1ba071c512f36e2c4bfd9cd902eae
+    schemaVersion: 1
+  - label: plan
+    path: work/010-playtest-witness-finder/plan.md
+    digest: d1ca0d244087019fc860999d11cc1809df098c53b45face07d39d82a3f66f098
+    schemaVersion: 1
+  - label: spec
+    path: work/010-playtest-witness-finder/spec.md
+    digest: ac276ff7c84f1f84909169de0f42f02651fb76cf70ebaa203e5ab09f44d3253b
+    schemaVersion: 1
+  - label: tasks
+    path: work/010-playtest-witness-finder/tasks.yml
+    digest: 143e6a0de96f8d3a49b608630f1e0b84c35d13635a906dfba05de018797a0f4f
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-001 findScript returns the shortest witness via depth-ordered BFS (ExploreTests)."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-002 witness replays Origin.InputDriven to a goal-satisfying state (ExploreTests)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-003 NotFound on an exhausted finite frontier, distinct from Truncated (ExploreTests toy)."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-004 fail-closed Truncated on visited-cap and depth-cutoff, carrying the visited count."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-005 reachable returns a bounded, deduplicated frontier with a truncation flag."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-006 dedup by fingerprint (projected visited key); the world need not be comparable."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-007 restricted move alphabet honoured; default = empty frame + single keymap commands."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["FR-008 additive+pure; DependencyTests green; surface baseline regenerated."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 FindResult three-case (Found/NotFound/Truncated) + Witness/ReachResult (Explore.fsi)."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 explicit fingerprint visited key; goal predicate reads the whole world."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["PD-004 Truncated is distinct from NotFound (fail-closed #266)."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: [PD-006 the visited set is keyed by fingerprint world.]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV013]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, readiness/surface-baselines/members/FS.GG.Game.Harness.txt, src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 tier-1 additive Explore surface; baseline extended, existing surface byte-unchanged."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV014]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["PC-002 referenced-assembly set stays Core+BCL; DependencyTests enforces it after the addition."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-006, PD-007]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 shortest input-witness (paddle-to-top) + automatic degeneracy reproduction on PongSim."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003, PD-004, PD-005]
+    obligationRefs: [EV016]
+    artifacts: [src/Game.Harness/Explore.fs, src/Game.Harness/Explore.fsi, tests/Game.Harness.Tests/ExploreTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 NotFound/Truncated/reachable cases all proven (ExploreTests)."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV017]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt, src/Game.Harness/FS.GG.Game.Harness.fsproj, tests/Game.Harness.Tests/DependencyTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["VO-003 DependencyTests green, build clean warnings-as-errors, baseline regenerated, suite 61/61."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV018]
+    artifacts: [work/010-playtest-witness-finder/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 additive; nothing removed/renamed; no consumer migration; baseline extended not migrated."]
+  - id: EV019
+    kind: generated-view
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV019]
+    artifacts: [readiness/010-playtest-witness-finder/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["GV-001 work-model.json refreshes from current sources (rebuilt at verify/ship)."]
+  - id: EV020
+    kind: generated-view
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV020]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Harness.txt]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-explore.trx
+      digest: "sha256:29c86a5c60a66385b070ee999d3c209f58a498e6642ad0ea2918ed7760fdc128"
+      outcome: passed
+      passed: 61
+      failed: 0
+      skipped: 0
+    notes: ["GV-002 surface baseline regenerated from the extended .fsi set; drift gate green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

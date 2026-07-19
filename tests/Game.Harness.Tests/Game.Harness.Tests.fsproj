@@ -17,6 +17,7 @@
     <Compile Include="TraceDiffTests.fs" />
     <Compile Include="GoldenFile.fs" />
     <Compile Include="LawsTests.fs" />
+    <Compile Include="ExploreTests.fs" />
     <Compile Include="DependencyTests.fs" />
     <Compile Include="ReferenceProof.fs" />
     <Compile Include="Program.fs" />
