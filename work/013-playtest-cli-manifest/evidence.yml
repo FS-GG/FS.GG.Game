@@ -1,0 +1,518 @@
+schemaVersion: 1
+workId: 013-playtest-cli-manifest
+stage: evidence
+status: evidenceReady
+sourceSpec: work/013-playtest-cli-manifest/spec.md
+sourceClarifications: work/013-playtest-cli-manifest/clarifications.md
+sourceChecklist: work/013-playtest-cli-manifest/checklist.md
+sourcePlan: work/013-playtest-cli-manifest/plan.md
+sourceTasks: work/013-playtest-cli-manifest/tasks.yml
+sourceAnalysis: readiness/013-playtest-cli-manifest/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/013-playtest-cli-manifest/analysis.json
+    digest: 9e465b8577dc41e16673eef4e309ead0c29760f37bff80d2ce36ad966684ee52
+    schemaVersion: 1
+  - label: checklist
+    path: work/013-playtest-cli-manifest/checklist.md
+    digest: 567b06f9b10b97273d2130280f0eaca92838d7dc8d60dcf3418f6797f62e7850
+    schemaVersion: 1
+  - label: clarifications
+    path: work/013-playtest-cli-manifest/clarifications.md
+    digest: 42980a6663d537ed9826741615c36cfc19dcf5b9c2d002c7f128d231dab92e7f
+    schemaVersion: 1
+  - label: plan
+    path: work/013-playtest-cli-manifest/plan.md
+    digest: 6b8a1f0ac54a300df60bf0d698f1dbc8b85d5eeb5319933ae389eab61508d224
+    schemaVersion: 1
+  - label: spec
+    path: work/013-playtest-cli-manifest/spec.md
+    digest: bcf5c4ace87fefc6d61ace447b3eb5980d4dd7d31de9cf17c56c54dd49863dc7
+    schemaVersion: 1
+  - label: tasks
+    path: work/013-playtest-cli-manifest/tasks.yml
+    digest: 746c11baf315258fd8a34dff02cb002ce260d8e546502c9f446454e74f5b65a6
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["FR-001 scaffold-manifest emits one GP-### stub per section-14 AC (snake=17, pong=19), gameplay facet + title."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [FR-002 the line-based manifest round-trips through render/parse.]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [FR-003 coverage-lint marks a cited AC covered iff a citing GP is InputDriven.]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["FR-004 fail closed: synthetic/absent proof never covers; uncovered cited AC -> non-zero exit."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [FR-005 --spec reports the advisory completeness gap without failing.]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["FR-006 malformed/missing manifest/proofs/spec -> error + non-zero exit, never a silent pass."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["FR-007 dogfood: 17/19 stubs; WI-7 Pong manifest fully covered; removed proof -> uncovered AC."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [FS.GG.Game.slnx, src/Playtest.Cli/FS.GG.Playtest.Cli.fsproj, tests/Playtest.Cli.Tests/Playtest.Cli.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["FR-008 separate FS.GG.Playtest.Cli Exe wired into the solution; BCL-only, no simulation."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001 line-based manifest + GP-### <provenance> proof report, hand-parsed, no external serialization."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002 pass/fail over cited ACs; spec-wide gap advisory only."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [PD-002 Manifest.render/parse round-trip.]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["PD-004 fail-closed lint + non-zero exit on any uncovered cited AC."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV013]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [PD-005 --spec advisory completeness gap.]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-003, PD-004, PD-005, PD-006]
+    obligationRefs: [EV014]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 CLI command surface (scaffold-manifest/coverage-lint, flags, exit codes) verified by tests; app, no .fsi baseline."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV015]
+    artifacts: [FS.GG.Game.slnx, src/Playtest.Cli/FS.GG.Playtest.Cli.fsproj, tests/Playtest.Cli.Tests/Playtest.Cli.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["PC-002 both projects added to FS.GG.Game.slnx; CLI references no simulation code."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV016]
+    artifacts: [src/Playtest.Cli/Coverage.fs, src/Playtest.Cli/Manifest.fs, src/Playtest.Cli/Proofs.fs, src/Playtest.Cli/TestSpec.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [VO-001 parse/scaffold/round-trip/coverage tests green.]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005, PD-006, PD-007]
+    obligationRefs: [EV017]
+    artifacts: [src/Playtest.Cli/Program.fs, tests/Playtest.Cli.Tests/CliTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 fail-closed behaviour, advisory gap, malformed-input errors, 17/19 dogfood proven."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV018]
+    artifacts: [FS.GG.Game.slnx, src/Playtest.Cli/FS.GG.Playtest.Cli.fsproj, tests/Playtest.Cli.Tests/Playtest.Cli.Tests.fsproj]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["VO-003 new projects build clean warnings-as-errors, wired in solution, BCL-only, suite 9/9."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV019]
+    artifacts: [work/013-playtest-cli-manifest/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 new tool; nothing removed/renamed; no migration; app so no baseline."]
+  - id: EV020
+    kind: generated-view
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-007]
+    obligationRefs: [EV020]
+    artifacts: [readiness/013-playtest-cli-manifest/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/playtest-cli.trx
+      digest: "sha256:7f70ede1809cbf81def0ee8b325c2a5488bc72c767ca5e0d7284a38447b8c685"
+      outcome: passed
+      passed: 9
+      failed: 0
+      skipped: 0
+    notes: [GV-001 work-model.json refreshes from current sources at verify/ship.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

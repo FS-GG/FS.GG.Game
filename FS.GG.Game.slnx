@@ -3,10 +3,12 @@
     <Project Path="src/Game.Core/FS.GG.Game.Core.fsproj" />
     <Project Path="src/Game.Harness/FS.GG.Game.Harness.fsproj" />
     <Project Path="src/Game.Render/FS.GG.Game.Render.fsproj" />
+    <Project Path="src/Playtest.Cli/FS.GG.Playtest.Cli.fsproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Game.Core.Tests/Game.Core.Tests.fsproj" />
     <Project Path="tests/Game.Harness.Tests/Game.Harness.Tests.fsproj" />
     <Project Path="tests/Game.Render.Tests/Game.Render.Tests.fsproj" />
+    <Project Path="tests/Playtest.Cli.Tests/Playtest.Cli.Tests.fsproj" />
   </Folder>
 </Solution>
