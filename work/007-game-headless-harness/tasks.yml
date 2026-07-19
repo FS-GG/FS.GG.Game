@@ -25,7 +25,7 @@ sources:
     schemaVersion: 1
   - label: plan
     path: work/007-game-headless-harness/plan.md
-    digest: e92b152fdf1a1c7d296394d0d8bdb60bea8e0a2aca35063f8e28febc8cf953bf
+    digest: 078cb76d62a6894ef6440f4c57cf9c1f2af0eb4a56e8b73e3681d0a89eea5064
     schemaVersion: 1
 tasks:
   - id: T001
@@ -235,7 +235,7 @@ tasks:
     dependencies: [T001]
     requirements: []
     decisions: []
-    sourceIds: [GV-001, PD-001]
+    sourceIds: [GV-001, PD-001, PD-008]
     requiredSkills: [deterministic-json]
     requiredEvidence: [EV021]
   - id: T022
