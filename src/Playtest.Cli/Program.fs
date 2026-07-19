@@ -11,6 +11,12 @@ let private readFile (path: string) : Result<string, string> =
     with ex ->
         Error(sprintf "cannot read %s: %s" path ex.Message)
 
+let private readBytes (path: string) : Result<byte[], string> =
+    try
+        Ok(File.ReadAllBytes path)
+    with ex ->
+        Error(sprintf "cannot read %s: %s" path ex.Message)
+
 /// The value after `--name`, if present.
 let private flag (name: string) (argv: string[]) : string option =
     argv
@@ -93,14 +99,55 @@ let private coverageLint (argv: string[]) : int =
         eprintfn "coverage-lint: --manifest <m> and --proofs <p> required"
         2
 
+let private emitEvidence (argv: string[]) : int =
+    match flag "--manifest" argv, flag "--proofs" argv, flag "--trx" argv with
+    | Some mPath, Some pPath, Some tPath ->
+        match readFile mPath, readFile pPath, readFile tPath, readBytes tPath with
+        | Error e, _, _, _
+        | _, Error e, _, _
+        | _, _, Error e, _
+        | _, _, _, Error e ->
+            eprintfn "%s" e
+            1
+        | Ok mText, Ok pText, Ok tText, Ok tBytes ->
+            match Manifest.parse mText with
+            | [] ->
+                eprintfn "emit-evidence: manifest %s parsed no GP records" mPath
+                1
+            | manifest ->
+                match Proofs.parse pText, Trx.parse tText tBytes with
+                | Error e, _ ->
+                    eprintfn "emit-evidence: %s" e
+                    1
+                | _, Error e ->
+                    eprintfn "emit-evidence: %s" e
+                    1
+                | Ok proofs, Ok run ->
+                    let rows = Evidence.rows run proofs manifest
+                    let rendered = Evidence.render tPath run rows
+
+                    match flag "--out" argv with
+                    | Some out ->
+                        File.WriteAllText(out, rendered)
+                        let satisfying = rows |> List.filter (fun r -> r.Result = "pass" && not r.Synthetic) |> List.length
+                        printfn "wrote %d evidence row(s) to %s (%d satisfying)" (List.length rows) out satisfying
+                        0
+                    | None ->
+                        printf "%s" rendered
+                        0
+    | _ ->
+        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required"
+        2
+
 [<EntryPoint>]
 let main argv =
     match Array.toList argv with
     | "scaffold-manifest" :: _ -> scaffoldManifest argv
     | "coverage-lint" :: _ -> coverageLint argv
+    | "emit-evidence" :: _ -> emitEvidence argv
     | cmd :: _ ->
-        eprintfn "unknown command '%s'; expected scaffold-manifest | coverage-lint" cmd
+        eprintfn "unknown command '%s'; expected scaffold-manifest | coverage-lint | emit-evidence" cmd
         2
     | [] ->
-        eprintfn "usage: fsgg-playtest <scaffold-manifest|coverage-lint> [flags]"
+        eprintfn "usage: fsgg-playtest <scaffold-manifest|coverage-lint|emit-evidence> [flags]"
         2

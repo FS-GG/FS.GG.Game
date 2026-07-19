@@ -10,6 +10,7 @@
        dogfooded on the real docs/TestSpecs corpus. -->
   <ItemGroup>
     <Compile Include="CliTests.fs" />
+    <Compile Include="EvidenceTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
