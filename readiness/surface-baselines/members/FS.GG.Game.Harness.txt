@@ -85,6 +85,7 @@ FS.GG.Game.Harness.Trace.frames<f>(Trace<f>) : FSharpList<f>
 FS.GG.Game.Harness.Trace.isSynthetic<f>(Trace<f>) : System.Boolean
 FS.GG.Game.Harness.Trace.origin<f>(Trace<f>) : FS.GG.Game.Harness.Origin
 FS.GG.Game.Harness.Trace.render<f>(FSharpFunc<f, System.String>, Trace<f>) : System.String
+FS.GG.Game.Harness.VisibilityPolygon.polygon(FS.GG.Game.Core.Point, FS.GG.Game.Core.Rect, Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Core.Point, FS.GG.Game.Core.Point>>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Point>
 FS.GG.Game.Harness.Witness.Depth : System.Int32 [get]
 FS.GG.Game.Harness.Witness.Script : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
 FS.GG.Game.Harness.Witness.new(Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>, System.Int32)
