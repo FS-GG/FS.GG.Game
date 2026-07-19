@@ -184,6 +184,42 @@ module Pathfinding =
             Cell list option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// **Jump Point Search — a grid-specialised `astar` for uniform-cost grids that pops far fewer
+    /// frontier nodes.** Same `Neighbourhood`, same binary `isWalkable`, same `maxVisited` bound, same
+    /// endpoint-inclusive `Cell list option`, and the same byte-for-byte determinism as `astar` — a
+    /// drop-in acceleration. It "jumps" over runs of symmetric intermediate cells (an obstacle-free
+    /// corridor collapses to a single frontier pop) instead of expanding them one at a time.
+    ///
+    /// **Uniform cost only.** Like `astar`, `jps` takes no `cost` function; it minimises `baseStep`
+    /// distance (`baseStep` per orthogonal step, `baseStep * 14 / 10` per diagonal) over walkable
+    /// cells and cannot see terrain weight. For weighted terrain use `reachable`/`distanceField`.
+    ///
+    /// **The result matches `astar` in cost, not necessarily in cells.** `jps` returns a path of the
+    /// **same least cost** `astar` returns and one that is **valid** — `start`-prefixed,
+    /// `goal`-suffixed, every step `Neighbourhood`-legal (diagonals only when both shared orthogonals
+    /// are walkable, no corner-cutting), every cell walkable — and it **agrees with `astar` on
+    /// reachability**. It does **not** promise the identical cell *sequence*: on a grid with several
+    /// least-cost routes, JPS's canonical jumps and `astar`'s `(f, h, Col, Row)` tie-break pick
+    /// different equal-cost paths, and demanding identical cells would mean discarding the pruning that
+    /// is JPS's entire value. What it does promise is byte-identity **across its own runs and
+    /// platforms**, so it is safe inside a deterministic-replay `update`.
+    ///
+    /// **`maxVisited` bounds frontier pops**, the same unit `astar` counts — so a caller swapping `jps`
+    /// for `astar` gives it the same number. Because `jps` pops far fewer nodes, the two reach the
+    /// `None`-on-exhaustion boundary at different query sizes; they agree on the answer (and on
+    /// reachability) whenever the search is **not bounded out** by `maxVisited`, which is the regime a
+    /// caller sizes `maxVisited` for. Total on degenerate input, identically to `astar`: a non-walkable
+    /// `start`/`goal` or `maxVisited <= 0` yields `None`; a walkable `start = goal` yields
+    /// `Some [start]`.
+    val jps:
+        neighbourhood: Neighbourhood ->
+        maxVisited: int ->
+        isWalkable: (Cell -> bool) ->
+        start: Cell ->
+        goal: Cell ->
+            Cell list option
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Multi-source Dijkstra **from the goals outward** — the "Dijkstra map" / integration field. For
     /// every reachable cell it stores the cheapest cost of travelling from that cell to the *nearest*
     /// goal; each goal itself maps to `0`. There is deliberately **no early exit**: when many agents

@@ -783,3 +783,136 @@ let tests =
             Expect.equal (Set.toList zero.Endable) [ start ] "a zero budget settles start alone — standing still"
         }
     ]
+
+// ------------------------------------------------------------------------------------------------
+// Jump Point Search (work item 015, roadmap 1.1). A grid-specialised A* for uniform-cost grids that
+// pops far fewer frontier nodes and returns a path of the SAME least cost as `astar`. The primary
+// correctness net is a DIFFERENTIAL ORACLE against the shipped `astar`: equal cost, a valid path,
+// and agreement on reachability (DEC-001). It does not compare cell sequences — several least-cost
+// paths tie, and JPS's canonical jumps pick a different equal-cost one than astar's tie-break.
+
+// Stricter than `validPath`: also asserts NO CORNER CUTTING — a diagonal step is taken only when
+// both shared orthogonal neighbours are walkable (FR-002).
+let private validPathNoCut (isWalkable: Cell -> bool) (start: Cell) (goal: Cell) (path: Cell list) =
+    validPath isWalkable start goal path
+    && path
+       |> List.pairwise
+       |> List.forall (fun (a, b) ->
+           if a.Col <> b.Col && a.Row <> b.Row then
+               isWalkable { Col = b.Col; Row = a.Row } && isWalkable { Col = a.Col; Row = b.Row }
+           else
+               true)
+
+[<Tests>]
+let jpsTests =
+    testList "Game.Core Pathfinding JPS (015, FR-001..FR-006)" [
+
+        test "jps FourWay jumps a straight corridor to the goal" {
+            let walk = gridWalkable 6 1 Set.empty
+            let path = Pathfinding.jps FourWay 1000 walk { Col = 0; Row = 0 } { Col = 5; Row = 0 }
+            Expect.equal
+                path
+                (Some [ for c in 0..5 -> { Col = c; Row = 0 } ])
+                "start..goal inclusive straight path, cell-by-cell"
+        }
+
+        test "jps EightWay takes the strictly-cheaper diagonal on an open grid" {
+            let walk = gridWalkable 4 4 Set.empty
+            let path = Pathfinding.jps EightWay 1000 walk { Col = 0; Row = 0 } { Col = 3; Row = 3 }
+            let cost = path |> Option.map pathCost
+            Expect.equal cost (Some 42) "three diagonals (14 each) — the least cost, same as astar"
+            Expect.isTrue (validPathNoCut walk { Col = 0; Row = 0 } { Col = 3; Row = 3 } (Option.get path)) "valid"
+        }
+
+        test "jps EightWay refuses to cut the corner past a blocked orthogonal (D5)" {
+            let walk = gridWalkable 3 3 (Set.ofList [ (1, 0) ])
+            let path = Pathfinding.jps EightWay 1000 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            let astar = Pathfinding.astar EightWay 1000 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            Expect.equal (path |> Option.map pathCost) (astar |> Option.map pathCost) "same cost as astar (no corner-cut)"
+            Expect.isTrue (validPathNoCut walk { Col = 0; Row = 0 } { Col = 1; Row = 1 } (Option.get path)) "no corner-cut ⇒ routes around"
+        }
+
+        test "jps routes around a wall with a single gap (FR-002 validity)" {
+            let blocked = Set.ofList [ for r in 0..3 -> (2, r) ]
+            let walk = gridWalkable 5 5 blocked
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 4; Row = 0 }
+            let path = Pathfinding.jps EightWay 5000 walk start goal
+            Expect.isSome path "a path through the gap exists"
+            Expect.isTrue (validPathNoCut walk start goal (Option.get path)) "valid walkable adjacent no-corner-cut path"
+            Expect.isFalse (Option.get path |> List.exists (fun c -> blocked.Contains(c.Col, c.Row))) "never enters the wall"
+        }
+
+        test "jps shares astar's degenerate-input contract (FR-004 totality)" {
+            let walk = gridWalkable 3 3 (Set.ofList [ (0, 0); (2, 2) ])
+            let open3 = gridWalkable 3 3 Set.empty
+            Expect.isNone (Pathfinding.jps FourWay 100 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }) "blocked start ⇒ None"
+            Expect.isNone (Pathfinding.jps FourWay 100 walk { Col = 1; Row = 1 } { Col = 2; Row = 2 }) "blocked goal ⇒ None"
+            Expect.isNone (Pathfinding.jps FourWay 0 open3 { Col = 0; Row = 0 } { Col = 2; Row = 2 }) "maxVisited 0 ⇒ None"
+            Expect.isNone (Pathfinding.jps FourWay -1 open3 { Col = 0; Row = 0 } { Col = 2; Row = 2 }) "negative maxVisited ⇒ None"
+            Expect.equal (Pathfinding.jps EightWay 100 open3 { Col = 1; Row = 1 } { Col = 1; Row = 1 }) (Some [ { Col = 1; Row = 1 } ]) "start = goal ⇒ [start]"
+        }
+
+        test "jps agrees with astar that a walled-off goal is unreachable (FR-003)" {
+            let ring = Set.ofList [ (3, 4); (4, 4); (5, 4); (3, 5); (5, 5); (3, 6); (4, 6); (5, 6) ]
+            let walk = gridWalkable 8 8 ring
+            Expect.isNone (Pathfinding.jps EightWay 5000 walk { Col = 0; Row = 0 } { Col = 4; Row = 5 }) "goal enclosed ⇒ None"
+        }
+
+        test "determinism: jps is byte-identical across repeat runs (golden)" {
+            // FourWay (0,0)->(1,1): two equal-cost routes; the result must still be one stable path.
+            let walk = gridWalkable 2 2 Set.empty
+            let a = Pathfinding.jps FourWay 100 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            let b = Pathfinding.jps FourWay 100 walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }
+            Expect.equal a b "identical inputs ⇒ byte-identical path despite the tie"
+            Expect.isTrue (a |> Option.get |> validPathNoCut walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }) "and it is a valid path"
+        }
+
+        test "FR-006: jps reaches the goal on a budget that starves astar (fewer frontier pops)" {
+            // A 20×20 OPEN grid, corner to corner, FourWay. astar's Manhattan heuristic is exact here,
+            // so every cell on the triangle of equal-cost staircases shares one f-value and astar pops
+            // hundreds of them before the goal's tie-break turn comes up. jps collapses each open run
+            // into one jump and reaches the corner in a handful of pops. A `maxVisited` between the two
+            // (30) is Some for jps and None for astar — an observable proxy, over the public API, for
+            // "jps pops strictly fewer frontier nodes" (DEC-002 / FR-006).
+            let walk = gridWalkable 20 20 Set.empty
+            let start = { Col = 0; Row = 0 }
+            let goal = { Col = 19; Row = 19 }
+            let budget = 30
+            Expect.isSome (Pathfinding.jps FourWay budget walk start goal) "jps jumps there in a handful of pops"
+            Expect.isNone (Pathfinding.astar FourWay budget walk start goal) "astar exhausts the same budget mid-triangle"
+            // With a generous budget both find equal-cost paths.
+            let j = Pathfinding.jps FourWay 5000 walk start goal
+            let a = Pathfinding.astar FourWay 5000 walk start goal
+            Expect.equal (j |> Option.map pathCost) (a |> Option.map pathCost) "equal cost under a generous budget"
+        }
+
+        testCase "differential: jps equals astar in cost + validity + reachability over random grids (FsCheck)" <| fun () ->
+            // The primary correctness oracle (DEC-001). Generous maxVisited so NEITHER is bounded out,
+            // which is the regime the equivalence is asserted over.
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) (eightWay: bool) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 8), ((abs r) % 8))) |> Set.ofList
+                let walk = gridWalkable 8 8 blocked
+                let nb = if eightWay then EightWay else FourWay
+                let start = { Col = (abs sc) % 8; Row = (abs sr) % 8 }
+                let goal = { Col = (abs gc) % 8; Row = (abs gr) % 8 }
+                let j = Pathfinding.jps nb 5000 walk start goal
+                let a = Pathfinding.astar nb 5000 walk start goal
+
+                match j, a with
+                | None, None -> true // agree on unreachable
+                | Some jp, Some ap -> pathCost jp = pathCost ap && validPathNoCut walk start goal jp // equal cost + valid
+                | _ -> false // reachability disagreement is a failure
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        testCase "determinism: jps repeat calls are byte-identical over random grids (FsCheck)" <| fun () ->
+            let prop (blockedRaw: (int * int) list) (sc: int) (sr: int) (gc: int) (gr: int) =
+                let blocked = blockedRaw |> List.map (fun (c, r) -> (((abs c) % 8), ((abs r) % 8))) |> Set.ofList
+                let walk = gridWalkable 8 8 blocked
+                let start = { Col = (abs sc) % 8; Row = (abs sr) % 8 }
+                let goal = { Col = (abs gc) % 8; Row = (abs gr) % 8 }
+                Pathfinding.jps EightWay 2000 walk start goal = Pathfinding.jps EightWay 2000 walk start goal
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+    ]

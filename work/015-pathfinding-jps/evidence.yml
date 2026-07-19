@@ -1,0 +1,422 @@
+schemaVersion: 1
+workId: 015-pathfinding-jps
+stage: evidence
+status: evidenceReady
+sourceSpec: work/015-pathfinding-jps/spec.md
+sourceClarifications: work/015-pathfinding-jps/clarifications.md
+sourceChecklist: work/015-pathfinding-jps/checklist.md
+sourcePlan: work/015-pathfinding-jps/plan.md
+sourceTasks: work/015-pathfinding-jps/tasks.yml
+sourceAnalysis: readiness/015-pathfinding-jps/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/015-pathfinding-jps/analysis.json
+    digest: fc0db33749639ff70316b0e9a8e1e2be732ccbf2ed6ebe94ada8a5bf76b038ec
+    schemaVersion: 1
+  - label: checklist
+    path: work/015-pathfinding-jps/checklist.md
+    digest: 33488122e8e3cb861095bc93819db32b3aca290755084c2872992b659c020d79
+    schemaVersion: 1
+  - label: clarifications
+    path: work/015-pathfinding-jps/clarifications.md
+    digest: ad34163cdb20468762ba10ef68e7ffe362305d45fe6495aceb18b6c90d400a90
+    schemaVersion: 1
+  - label: plan
+    path: work/015-pathfinding-jps/plan.md
+    digest: bdf2c6219ca467ca2f164b200bf5dd351a790c9eeb775aed45a14bc008ed3fc6
+    schemaVersion: 1
+  - label: spec
+    path: work/015-pathfinding-jps/spec.md
+    digest: 67520d4c0efa0c76840a55b994fc9ce55933d4134895708ff344d78c4bae988e
+    schemaVersion: 1
+  - label: tasks
+    path: work/015-pathfinding-jps/tasks.yml
+    digest: e2b04d416bfda57821618efbbbaa80c067a72a4aac4e8c08dc8ca6b62ad6e567
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["FR-001: the FsCheck differential over 1000 random grids asserts jps's path cost equals astar's whenever astar finds a path within budget; green."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-004, PD-005]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["FR-002: validPathNoCut (start/goal-anchored, adjacency-legal, walkable, no-corner-cut) is asserted on every jps result in the concrete and FsCheck differential tests; interpolate stitches jump points into a contiguous cell path."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["FR-003: the differential test's (None,None)/(Some,Some) matrix asserts jps and astar agree on reachability under a generous maxVisited; the walled-off-goal test pins the None case."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["FR-004: the degenerate-input test pins jps to astar's contract — blocked start/goal => None, maxVisited<=0 => None, start=goal => Some [start] — via the shared trivial guard."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["FR-005: the determinism golden and the FsCheck determinism property assert jps is byte-identical across repeat runs over random grids (integer costs, the same total (f,h,Col,Row) frontier order as astar, fixed direction lists)."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["FR-006: the fewer-pops test — jps=Some, astar=None at maxVisited 30 on a 20x20 open grid — is the observable public-API proxy for jps popping strictly fewer frontier nodes than astar."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["Public surface: Pathfinding.jps declared in the .fsi and recorded in the member surface baseline; the baseline diff is exactly the one jps line (no other surface drift)."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [artifacts/testresults/jps-015.trx, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["Verification record: the full Game.Core suite is 595/595 green with the new JPS tests included; no regression to the existing tests."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/Pathfinding.fs, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["PD-001: jps declared signature-parallel to astar, reusing trivial/heuristic/the (f,h,Col,Row) int64 frontier so cost-optimality is inherited from A* over the pruned successor graph."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-002, FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["PD-003: the jump scan (stepOk / hasForcedStraight / goal-alignment / wall-ahead stops, with a maxVisited scan cap for totality) is exercised by the differential and totality tests."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-003, FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/Pathfinding.fs, tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["PD-008: maxVisited bounds frontier pops (same unit as astar); the fewer-pops proxy and reachability-agreement tests cover FR-006 and FR-003 respectively."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV012]
+    artifacts: [readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/Pathfinding.fsi]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: Tier-1 surface addition — .fsi, member baseline, and tests land together; the surface-baseline-drift gate stays green (regenerated, one-line diff)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV013]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: the FsCheck differential (equal cost + validity + reachability agreement over 1000 random grids/queries) fails before jps exists and passes after; build clean under warnings-as-errors."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007, PD-008]
+    obligationRefs: [EV014]
+    artifacts: [tests/Game.Core.Tests/PathfindingTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: the named determinism golden asserts run-to-run byte-identity; the fewer-pops test asserts jps pops strictly fewer nodes than astar on an open map."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [work/015-pathfinding-jps/plan.md]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 diagnoseOnly: jps is purely additive — nothing removed or renamed — so no consumer migration is required; plan schemaVersion 1 accepted."]
+  - id: EV016
+    kind: generated-view
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [readiness/015-pathfinding-jps/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/jps-015.trx
+      digest: "sha256:33bf7f8774428873f59261e64183aef50edfd8224580580aec3953077c54176a"
+      outcome: passed
+      passed: 595
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/015-pathfinding-jps/work-model.json is refreshed by verify/ship from the current sources; no surface-baseline view beyond the one jps member line changed."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

@@ -215,6 +215,210 @@ module Pathfinding =
             loop [ start ] [] Map.empty (Set.singleton start) 0
 
     // ---------------------------------------------------------------------------------------------
+    // Jump Point Search (JPS): a grid-specialised A* for UNIFORM-cost grids (roadmap 1.1, work item
+    // 015). It "jumps" over runs of symmetric intermediate cells, popping far fewer frontier nodes
+    // than plain `astar` while returning a path of the SAME least cost. It shares astar's open-set,
+    // its total `(f, h, Col, Row)` order, its int64 g/heuristic, and its `trivial` degenerate-input
+    // contract — the only thing that differs is successor generation, which is the jump/prune step.
+    //
+    // DETERMINISM: costs are integer, the frontier order is the same total order `astar` uses
+    // (`Set.minElement` is deterministic), and the direction lists (`orthoOffsets`/`diagOffsets`) are
+    // fixed — no float and no hash-iteration influences the result, so `jps` is byte-identical across
+    // runs and platforms.
+    //
+    // jps↔astar CONTRACT (DEC-001): `jps` returns a path of EQUAL COST to `astar`'s (both are optimal
+    // on a uniform grid), that path is VALID, and the two AGREE on reachability. It does NOT promise
+    // the identical cell SEQUENCE: on a grid with several least-cost paths, JPS's canonical jumps and
+    // astar's tie-break pick different equal-cost routes, and demanding identical cells would mean
+    // discarding the pruning that is JPS's whole point.
+    //
+    // NO CORNER CUTTING reshapes the classic rules. A diagonal step needs both shared orthogonals
+    // open (as `neighbours` enforces), so the corner-cutting forced neighbours never arise — a
+    // DIAGONAL move has no forced neighbours here, and stops only at the goal, a dead end, or when a
+    // straight sub-jump finds something. A STRAIGHT move in direction d has a forced neighbour at the
+    // perpendicular cell `n+e` exactly when `n+e` is walkable but the cell diagonally behind it
+    // (`n - d + e`) is blocked: that obstacle is the only thing that makes reaching `n+e` require
+    // turning at `n` rather than earlier on the run, and it is the one place a straight jump must stop.
+
+    // A step from `c` in direction (dx,dy) is legal iff the target is walkable and — for a diagonal —
+    // both shared orthogonal neighbours are walkable (the module's no-corner-cutting rule, identical
+    // to `neighbours`).
+    let private stepOk (isWalkable: Cell -> bool) (c: Cell) (dx: int) (dy: int) : bool =
+        let t = { Col = c.Col + dx; Row = c.Row + dy }
+
+        if not (isWalkable t) then
+            false
+        elif dx <> 0 && dy <> 0 then
+            isWalkable { Col = c.Col + dx; Row = c.Row }
+            && isWalkable { Col = c.Col; Row = c.Row + dy }
+        else
+            true
+
+    // Does the STRAIGHT move that arrived at `n` in direction (dx,dy) have a forced neighbour? (Only
+    // straight moves do — see the header.) The perpendiculars to (dx,dy) are (dy,dx) and (-dy,-dx);
+    // `n+e` is forced iff it is walkable while the cell diagonally behind it (`n - d + e`) is blocked.
+    let private hasForcedStraight (isWalkable: Cell -> bool) (n: Cell) (dx: int) (dy: int) : bool =
+        [ (dy, dx); (-dy, -dx) ]
+        |> List.exists (fun (ex, ey) ->
+            let side = { Col = n.Col + ex; Row = n.Row + ey }
+            let behind = { Col = n.Col - dx + ex; Row = n.Row - dy + ey }
+            isWalkable side && not (isWalkable behind))
+
+    // Scan from `from` in ONE direction (dx,dy), returning the first jump point reached, or `None` if
+    // the run dead-ends before finding one. A jump point is: the goal; a straight cell with a forced
+    // neighbour; or a diagonal cell from which a straight sub-jump finds a jump point. `cap` bounds the
+    // scan length so the walk is TOTAL even over an unbounded `isWalkable` (e.g. `fun _ -> true` with a
+    // goal off the ray, where there is no edge to stop at): `cap` is set to `maxVisited`, and because
+    // an `astar` search bounded by `maxVisited` pops settles at most `maxVisited` cells, any path it
+    // finds has every straight run <= `maxVisited` long — so a `cap` of `maxVisited` never hides a jump
+    // point on a path `astar` could reach within the same budget.
+    let rec private jump
+        (isWalkable: Cell -> bool)
+        (goal: Cell)
+        (cap: int)
+        (dx: int)
+        (dy: int)
+        (from: Cell)
+        : Cell option =
+        let diagonal = dx <> 0 && dy <> 0
+
+        let rec go (c: Cell) (budget: int) : Cell option =
+            if budget <= 0 || not (stepOk isWalkable c dx dy) then
+                None
+            else
+                let n = { Col = c.Col + dx; Row = c.Row + dy }
+
+                if n = goal then
+                    Some n
+                elif not diagonal then
+                    // Stop at a forced neighbour (an obstacle-driven turn) OR when the run reaches the
+                    // goal's column (moving horizontally) / row (moving vertically) — the target jump
+                    // point that lets the path turn toward the goal. The latter is what makes `jps`
+                    // work under `FourWay`, which has no diagonal to carry it toward an off-axis goal:
+                    // a straight run over open ground never has a forced neighbour, so without a
+                    // goal-aligned stop the search would dead-end. It never fires spuriously on a
+                    // corridor *along* the goal's axis (there the only aligned cell is the goal).
+                    let aligned = (dx <> 0 && n.Col = goal.Col) || (dy <> 0 && n.Row = goal.Row)
+
+                    // Wall dead ahead with an open perpendicular: `n` is the last cell before the wall
+                    // and a mandatory turn point (go around). Under `FourWay` this is the only thing
+                    // that captures a detour whose legs are not goal-aligned — without it a run into a
+                    // head-on wall would just return `None` and strand the turn. On an open corridor a
+                    // wall only appears ahead at the goal, so it never costs the corridor its jump.
+                    let ahead = { Col = n.Col + dx; Row = n.Row + dy }
+
+                    let perpOpen =
+                        isWalkable { Col = n.Col + dy; Row = n.Row + dx }
+                        || isWalkable { Col = n.Col - dy; Row = n.Row - dx }
+
+                    let wallAhead = not (isWalkable ahead) && perpOpen
+
+                    if aligned || wallAhead || hasForcedStraight isWalkable n dx dy then
+                        Some n
+                    else
+                        go n (budget - 1)
+                else
+                    // Diagonal: `n` is a turn point if either straight component jumps to something.
+                    match go2 dx 0 n with
+                    | Some _ -> Some n
+                    | None ->
+                        match go2 0 dy n with
+                        | Some _ -> Some n
+                        | None -> go n (budget - 1)
+
+        and go2 sx sy node = jump isWalkable goal cap sx sy node
+
+        go from cap
+
+    // Cells strictly AFTER `a`, up to and including `b`, one unit step at a time along the
+    // monodirectional (orthogonal or diagonal) segment `a -> b`. Used to expand a jump-point chain back
+    // into the contiguous cell-by-cell path FR-002 requires.
+    let private interpolate (a: Cell) (b: Cell) : Cell list =
+        let sx = sign (b.Col - a.Col)
+        let sy = sign (b.Row - a.Row)
+        let steps = max (abs (b.Col - a.Col)) (abs (b.Row - a.Row))
+        [ for k in 1..steps -> { Col = a.Col + sx * k; Row = a.Row + sy * k } ]
+
+    let jps
+        (neighbourhood: Neighbourhood)
+        (maxVisited: int)
+        (isWalkable: Cell -> bool)
+        (start: Cell)
+        (goal: Cell)
+        : Cell list option =
+        match trivial maxVisited isWalkable start goal with
+        | Some result -> result
+        | None ->
+            // Every legal move direction is expanded from each popped jump point and then JUMPED — no
+            // direction is pruned. Pruning directions is where a JPS bug would drop the optimal path;
+            // collapsing straight runs into single jumps is what makes `jps` pop fewer nodes than
+            // `astar` (FR-006). Optimality is preserved because no direction `astar` would take is
+            // withheld, and the jump STOP condition is complete for no-corner-cutting grids.
+            let dirs =
+                match neighbourhood with
+                | FourWay -> orthoOffsets
+                | EightWay -> orthoOffsets @ diagOffsets
+
+            let h = heuristic neighbourhood goal
+            let cap = maxVisited // per-jump scan cap; see `jump`.
+            let h0 = h start
+            let openSet = Set.singleton (h0, h0, start.Col, start.Row)
+            let gScore = Map.ofList [ start, 0L ]
+
+            let rec loop
+                (openSet: Set<int64 * int64 * int * int>)
+                (gScore: Map<Cell, int64>)
+                (cameFrom: Map<Cell, Cell>)
+                (expansions: int)
+                : Cell list option =
+                if Set.isEmpty openSet || expansions >= maxVisited then
+                    None
+                else
+                    let (f, hCur, col, row) = Set.minElement openSet
+                    let current = { Col = col; Row = row }
+                    let openSet = Set.remove (f, hCur, col, row) openSet
+
+                    if current = goal then
+                        // Stitch the jump-point chain (start..goal) into the contiguous cell path.
+                        let chain = reconstruct cameFrom current
+                        let stitched = chain |> List.pairwise |> List.collect (fun (a, b) -> interpolate a b)
+                        Some(List.head chain :: stitched)
+                    else
+                        let g = gScore.[current]
+
+                        let (openSet, gScore, cameFrom) =
+                            dirs
+                            |> List.fold
+                                (fun (os, gs, cf) (dx, dy) ->
+                                    match jump isWalkable goal cap dx dy current with
+                                    | None -> (os, gs, cf)
+                                    | Some jp ->
+                                        let steps = max (abs (jp.Col - current.Col)) (abs (jp.Row - current.Row))
+
+                                        let segCost =
+                                            int64 steps * int64 (if dx <> 0 && dy <> 0 then diagStep else baseStep)
+
+                                        let tentative = g + segCost
+
+                                        match Map.tryFind jp gs with
+                                        | Some existing when existing <= tentative -> (os, gs, cf)
+                                        | prior ->
+                                            let hj = h jp
+                                            // Drop any stale open entry for jp (old g) before re-adding.
+                                            let os =
+                                                match prior with
+                                                | Some oldG -> Set.remove (oldG + hj, hj, jp.Col, jp.Row) os
+                                                | None -> os
+
+                                            let os = Set.add (tentative + hj, hj, jp.Col, jp.Row) os
+                                            (os, Map.add jp tentative gs, Map.add jp current cf))
+                                (openSet, gScore, cameFrom)
+
+                        loop openSet gScore cameFrom (expansions + 1)
+
+            loop openSet gScore Map.empty 0
+
+    // ---------------------------------------------------------------------------------------------
     // Many-to-one navigation: Dijkstra maps / flow fields.
     // (docs/reports/2026-07-05-game-logic-pathfinding-navigation-design.md §6, §7)
     //
