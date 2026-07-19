@@ -148,3 +148,18 @@ module Grids =
     /// saturates there (unchecked float→int conversion); the grid is not a bounded structure, so this
     /// is a coordinate far outside any playable field rather than a condition to raise on.
     val cellAt: spec: GridSpec -> p: Point -> Cell
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// A **filled disc** AoE template — every cell whose integer squared Euclidean distance to `center`
+    /// is `<= radius^2`, in row-major scan order (rows outer, columns inner). `disc c 0 = [c]`; a
+    /// negative radius yields `[]`. Integer and total: the squared-distance comparison is computed in
+    /// int64, so even a very large radius does not overflow. Use for blast radii; for line templates
+    /// use `Los.line`.
+    val disc: center: Cell -> radius: int -> Cell list
+
+    /// Public contract function exposed by the FS.GG.Game.Core package.
+    /// A **ring outline** range template — the integer midpoint-circle around `center`, a thin
+    /// (~1-cell-thick) rasterized circle, deduplicated and sorted by `(Col, Row)` for a fixed
+    /// deterministic order. Every returned cell sits at rounded Euclidean distance `radius` from
+    /// `center`. `ring c 0 = [c]`; a negative radius yields `[]`. Pure integer arithmetic — no float.
+    val ring: center: Cell -> radius: int -> Cell list

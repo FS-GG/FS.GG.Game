@@ -417,3 +417,85 @@ let tests =
             Expect.equal (Difficulty.clamp once) once "idempotent"
         }
     ]
+
+// ------------------------------------------------------------------------------------------------
+// Influence map (work item 025, roadmap 3.2): a thin integer linear-falloff wrapper over
+// distanceField, combined by max, plus the friendly-vs-enemy tension recipe.
+
+module InfluenceMapTests =
+
+    open Expecto
+    open FsCheck
+    open FS.GG.Game.Core
+
+    // Open bounded grid cost: 1 inside w×h, 0 (impassable) outside.
+    let private gridCost (w: int) (h: int) (c: Cell) =
+        if c.Col >= 0 && c.Col < w && c.Row >= 0 && c.Row < h then 1 else 0
+
+    [<Tests>]
+    let influenceTests =
+        testList "Game.Core Ai influenceMap (025, FR-001..FR-004)" [
+
+            test "single source falls off linearly by baseStep (FR-001)" {
+                let cost = gridCost 11 11
+                let s = { Col = 5; Row = 5 }
+                let m = Ai.influenceMap FourWay 5000 cost [ (s, 50) ]
+                Expect.equal (Map.tryFind s m) (Some 50) "source cell = strength"
+                Expect.equal (Map.tryFind { Col = 6; Row = 5 } m) (Some 40) "one tile away: strength - baseStep"
+                Expect.equal (Map.tryFind { Col = 9; Row = 5 } m) (Some 10) "four tiles away: strength - 4*baseStep"
+                Expect.isFalse (Map.containsKey { Col = 10; Row = 5 } m) "five tiles (influence 0) is absent"
+                Expect.isTrue (m |> Map.forall (fun _ v -> v > 0)) "no non-positive influence is stored"
+            }
+
+            test "multiple sources combine by max (FR-002)" {
+                let cost = gridCost 11 11
+                let m = Ai.influenceMap FourWay 5000 cost [ ({ Col = 0; Row = 0 }, 30); ({ Col = 10; Row = 0 }, 50) ]
+                // (9,0) is 10 tiles from src1 (absent there) and 1 tile from src2 -> 40.
+                Expect.equal (Map.tryFind { Col = 9; Row = 0 } m) (Some 40) "nearest strong source dominates"
+                // (1,0) is 1 tile from src1 -> 20, and 9 tiles from src2 -> 50-90 <=0 absent -> 20.
+                Expect.equal (Map.tryFind { Col = 1; Row = 0 } m) (Some 20) "src1 contribution where src2 does not reach"
+            }
+
+            test "empty sources yield an empty map (FR-003)" {
+                Expect.equal (Ai.influenceMap FourWay 5000 (gridCost 5 5) []) Map.empty "no sources ⇒ empty"
+            }
+
+            test "tension recipe: friendly minus enemy marks control (FR-004)" {
+                let cost = gridCost 11 11
+                let friendly = Ai.influenceMap FourWay 5000 cost [ ({ Col = 0; Row = 0 }, 60) ]
+                let enemy = Ai.influenceMap FourWay 5000 cost [ ({ Col = 10; Row = 0 }, 60) ]
+                let tension c =
+                    (Map.tryFind c friendly |> Option.defaultValue 0) - (Map.tryFind c enemy |> Option.defaultValue 0)
+                Expect.isTrue (tension { Col = 1; Row = 0 } > 0) "near the friendly source ⇒ positive tension"
+                Expect.isTrue (tension { Col = 9; Row = 0 } < 0) "near the enemy source ⇒ negative tension"
+            }
+
+            testCase "influenceMap equals the brute-force per-source max over random sources (FsCheck)" <| fun () ->
+                let prop (srcsRaw: (int * int * int) list) =
+                    let cost = gridCost 7 7
+                    let sources =
+                        srcsRaw
+                        |> List.map (fun (c, r, st) -> ({ Col = (abs c) % 7; Row = (abs r) % 7 }, 5 + (abs st) % 60))
+                    let m = Ai.influenceMap FourWay 5000 cost sources
+                    // brute force: per cell, max over sources of max(0, strength - distanceField[source])
+                    let fields = sources |> List.map (fun (s, st) -> (st, Pathfinding.distanceField FourWay 5000 cost [ s ]))
+                    let cells = [ for cc in 0..6 do for rr in 0..6 -> { Col = cc; Row = rr } ]
+                    cells
+                    |> List.forall (fun cell ->
+                        let brute =
+                            fields
+                            |> List.choose (fun (st, f) -> Map.tryFind cell f |> Option.map (fun d -> st - d))
+                            |> List.filter (fun v -> v > 0)
+                            |> function [] -> None | vs -> Some(List.max vs)
+                        Map.tryFind cell m = brute)
+
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+
+            testCase "influenceMap is byte-deterministic over random sources (FsCheck)" <| fun () ->
+                let prop (srcsRaw: (int * int * int) list) =
+                    let cost = gridCost 7 7
+                    let sources = srcsRaw |> List.map (fun (c, r, st) -> ({ Col = (abs c) % 7; Row = (abs r) % 7 }, 5 + (abs st) % 60))
+                    Ai.influenceMap FourWay 5000 cost sources = Ai.influenceMap FourWay 5000 cost sources
+
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 200, prop)
+        ]

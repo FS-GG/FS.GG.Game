@@ -1,0 +1,374 @@
+schemaVersion: 1
+workId: 024-line-circle-templates
+stage: evidence
+status: evidenceReady
+sourceSpec: work/024-line-circle-templates/spec.md
+sourceClarifications: work/024-line-circle-templates/clarifications.md
+sourceChecklist: work/024-line-circle-templates/checklist.md
+sourcePlan: work/024-line-circle-templates/plan.md
+sourceTasks: work/024-line-circle-templates/tasks.yml
+sourceAnalysis: readiness/024-line-circle-templates/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/024-line-circle-templates/analysis.json
+    digest: 36880ad98630693ff82e165d4c88df06393d3cdcc30cf619253f6c05339a4be9
+    schemaVersion: 1
+  - label: checklist
+    path: work/024-line-circle-templates/checklist.md
+    digest: 18efe47200b6eb8405929dc7f131c64911a6d6adb969d5f8998851cca238b060
+    schemaVersion: 1
+  - label: clarifications
+    path: work/024-line-circle-templates/clarifications.md
+    digest: ad40af7ab6b614e13c7daf4290c84c826cd7837d6102873514f424fb28fc6b59
+    schemaVersion: 1
+  - label: plan
+    path: work/024-line-circle-templates/plan.md
+    digest: 31f32ea18e53e1971e812347fbaeb90d70cd0732c7872f509ae957761ed07adc
+    schemaVersion: 1
+  - label: spec
+    path: work/024-line-circle-templates/spec.md
+    digest: 5d9c51aa299be907ce51b66b3a8a109859259716bb64d4001eff972c01da7d93
+    schemaVersion: 1
+  - label: tasks
+    path: work/024-line-circle-templates/tasks.yml
+    digest: 6387d1a69ee5c5571a157726950997dca59914f19237c81cf983645684bed735
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV001: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs FR-001 / -. Game.Core 659/659 green."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV002: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs FR-002 / -. Game.Core 659/659 green."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV003: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs FR-003 / PD-003. Game.Core 659/659 green."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV004: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs FR-004 / PD-004. Game.Core 659/659 green."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV005: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / -. Game.Core 659/659 green."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV006: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / -. Game.Core 659/659 green."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV007: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / -. Game.Core 659/659 green."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV008: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs FR-001 / PD-001. Game.Core 659/659 green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV009: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs FR-002 / PD-002. Game.Core 659/659 green."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV010: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / PD-001. Game.Core 659/659 green."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV011: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / PD-001, PD-002. Game.Core 659/659 green."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV012: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / PD-003. Game.Core 659/659 green."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV013: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / -. Game.Core 659/659 green."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/Grids.fs, tests/Game.Core.Tests/GridsTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/templates-024.trx
+      digest: "sha256:ad4cf1de8b1a187bd23d4b378eec7c73fd95590b1d87320b9240f440e694d540"
+      outcome: passed
+      passed: 659
+      failed: 0
+      skipped: 0
+    notes: ["EV014: satisfied by the Grids templates suite (disc = brute-force squared-distance set incl. 500-case FsCheck, ring midpoint-circle on-boundary + dedup, totality radius 0/negative, determinism, overflow-safe int64, Los.line reuse); refs - / PD-001. Game.Core 659/659 green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

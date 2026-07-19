@@ -130,3 +130,57 @@ module Grids =
                 0
 
         { Col = col; Row = row }
+
+    // ---------------------------------------------------------------------------------------------
+    // AoE / range TEMPLATES (roadmap 3.3, work item 024). A filled `disc` (blast radius) and an outline
+    // `ring` (range ring). Line templates reuse the shipped `Los.line`, so none is added here.
+
+    // Every cell whose integer squared Euclidean distance to `center` is <= radius^2, in row-major scan
+    // order. The squared-distance test is int64 so a large radius cannot wrap. radius 0 => [center];
+    // negative => [].
+    let disc (center: Cell) (radius: int) : Cell list =
+        if radius < 0 then
+            []
+        else
+            let r2 = int64 radius * int64 radius
+
+            [ for dr in -radius..radius do
+                  for dc in -radius..radius do
+                      if int64 dc * int64 dc + int64 dr * int64 dr <= r2 then
+                          { Col = center.Col + dc; Row = center.Row + dr } ]
+
+    // The integer midpoint-circle OUTLINE around `center` (a thin, ~1-cell-thick rasterized circle),
+    // deduplicated and sorted by (Col, Row) for a fixed deterministic order. radius 0 => [center];
+    // negative => [].
+    let ring (center: Cell) (radius: int) : Cell list =
+        if radius < 0 then
+            []
+        elif radius = 0 then
+            [ center ]
+        else
+            let pts = System.Collections.Generic.HashSet<Cell>()
+            let add dc dr = pts.Add { Col = center.Col + dc; Row = center.Row + dr } |> ignore
+
+            let mutable x = radius
+            let mutable y = 0
+            let mutable err = 1 - radius
+
+            while x >= y do
+                // the eight octant reflections of (x, y)
+                add x y
+                add y x
+                add -x y
+                add -y x
+                add x -y
+                add y -x
+                add -x -y
+                add -y -x
+                y <- y + 1
+
+                if err < 0 then
+                    err <- err + 2 * y + 1
+                else
+                    x <- x - 1
+                    err <- err + 2 * (y - x) + 1
+
+            pts |> Seq.sortBy (fun c -> struct (c.Col, c.Row)) |> List.ofSeq

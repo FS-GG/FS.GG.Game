@@ -3,6 +3,7 @@ FS.GG.Game.Core.Ai.best<p>(FSharpFunc<p, System.Double>, FSharpFunc<p, System.Va
 FS.GG.Game.Core.Ai.due(System.Int32, System.Int32) : System.Boolean
 FS.GG.Game.Core.Ai.fleeField(FS.GG.Game.Core.Neighbourhood, System.Double, System.Int32, Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Double>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Double>
 FS.GG.Game.Core.Ai.ghosts<T>(TeamView<T>) : FSharpList<Sighting<T>>
+FS.GG.Game.Core.Ai.influenceMap(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Int32>, Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Core.Cell, System.Int32>>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Int32>
 FS.GG.Game.Core.Ai.known<T>(TeamView<T>) : FSharpList<Sighting<T>>
 FS.GG.Game.Core.Ai.spotted<T>(TeamView<T>) : FSharpList<Sighting<T>>
 FS.GG.Game.Core.Ai.substream(FS.GG.Game.Core.Rng, FS.GG.Game.Core.AgentId) : FS.GG.Game.Core.Rng
@@ -45,6 +46,18 @@ FS.GG.Game.Core.Damage`1.Base : System.Double [get]
 FS.GG.Game.Core.Damage`1.Kind : K [get]
 FS.GG.Game.Core.Damage`1.Source : FS.GG.Game.Core.Source [get]
 FS.GG.Game.Core.Damage`1.new(K, FS.GG.Game.Core.Source, System.Double)
+FS.GG.Game.Core.Dice.advantage(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.constant(System.Int32) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.convolve(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.die(System.Int32) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.disadvantage(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.mean(FS.GG.Game.Core.Distribution) : System.Double
+FS.GG.Game.Core.Dice.outcomes(FS.GG.Game.Core.Distribution) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.Int32, System.Int64>>
+FS.GG.Game.Core.Dice.repeat(System.Int32, FS.GG.Game.Core.Distribution) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.sample(FS.GG.Game.Core.Distribution, FS.GG.Game.Core.Rng) : System.ValueTuple<System.Int32, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Dice.totalWeight(FS.GG.Game.Core.Distribution) : System.Int64
+FS.GG.Game.Core.Dice.uniform(System.Int32, System.Int32) : FS.GG.Game.Core.Distribution
+FS.GG.Game.Core.Dice.variance(FS.GG.Game.Core.Distribution) : System.Double
 FS.GG.Game.Core.Difficulty.AimErrorSigma : System.Double [get]
 FS.GG.Game.Core.Difficulty.ReactionTicks : System.Int32 [get]
 FS.GG.Game.Core.Difficulty.SpotCycleTicks : System.Int32 [get]
@@ -128,10 +141,12 @@ FS.GG.Game.Core.Grids.cellCenter(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core
 FS.GG.Game.Core.Grids.cellCorners(FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Vertex>
 FS.GG.Game.Core.Grids.cellEdges(FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Edge>
 FS.GG.Game.Core.Grids.cellRect(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Rect
+FS.GG.Game.Core.Grids.disc(FS.GG.Game.Core.Cell, System.Int32) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.Grids.edgeCells(FS.GG.Game.Core.Grids+Edge) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.Grids.edgeMidpoint(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Grids+Edge) : FS.GG.Game.Core.Point
 FS.GG.Game.Core.Grids.edgeSegment(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Grids+Edge) : System.Tuple<FS.GG.Game.Core.Point, FS.GG.Game.Core.Point>
 FS.GG.Game.Core.Grids.edgeVertices(FS.GG.Game.Core.Grids+Edge) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Vertex>
+FS.GG.Game.Core.Grids.ring(FS.GG.Game.Core.Cell, System.Int32) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.Grids.vertexCells(FS.GG.Game.Core.Grids+Vertex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.Grids.vertexEdges(FS.GG.Game.Core.Grids+Vertex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Grids+Edge>
 FS.GG.Game.Core.Grids.vertexPoint(FS.GG.Game.Core.Grids+GridSpec, FS.GG.Game.Core.Grids+Vertex) : FS.GG.Game.Core.Point

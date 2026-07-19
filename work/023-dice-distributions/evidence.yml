@@ -1,0 +1,446 @@
+schemaVersion: 1
+workId: 023-dice-distributions
+stage: evidence
+status: evidenceReady
+sourceSpec: work/023-dice-distributions/spec.md
+sourceClarifications: work/023-dice-distributions/clarifications.md
+sourceChecklist: work/023-dice-distributions/checklist.md
+sourcePlan: work/023-dice-distributions/plan.md
+sourceTasks: work/023-dice-distributions/tasks.yml
+sourceAnalysis: readiness/023-dice-distributions/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/023-dice-distributions/analysis.json
+    digest: 5479cea735b193503242df735f4510f026cdab296713d3719b358bf757b5af24
+    schemaVersion: 1
+  - label: checklist
+    path: work/023-dice-distributions/checklist.md
+    digest: 6b1e26abf0144f015ebe16aea3cd97ed0901dbc4cd91b6071a6c5eb93774cb76
+    schemaVersion: 1
+  - label: clarifications
+    path: work/023-dice-distributions/clarifications.md
+    digest: a3a1422294c298a39fc265e4d1e84f61857a09f7c8736ac394423e98808c1ad8
+    schemaVersion: 1
+  - label: plan
+    path: work/023-dice-distributions/plan.md
+    digest: 90379b97781a0bc321d31bfe6ce0a992cc0341fd178f06e8eb75f6bacedd2504
+    schemaVersion: 1
+  - label: spec
+    path: work/023-dice-distributions/spec.md
+    digest: e108ffe08d37c60e801eab533de5f91af0bc54d9f4ca4f81f792a901ce6e2c8c
+    schemaVersion: 1
+  - label: tasks
+    path: work/023-dice-distributions/tasks.yml
+    digest: b67ef6a6d688e4d9a3e0802188e7c545a32c876fcbd9b3ee68d035da84276e9c
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV001: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-001 / -. Game.Core suite 667/667 green."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV002: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-002 / PD-002. Game.Core suite 667/667 green."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV003: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-003 / PD-003. Game.Core suite 667/667 green."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV004: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-004 / -. Game.Core suite 667/667 green."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV005: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-005 / -. Game.Core suite 667/667 green."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV006: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-006 / PD-006. Game.Core suite 667/667 green."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV007: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV008: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV009: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV010: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-001 / PD-001. Game.Core suite 667/667 green."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV011: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-004 / PD-004. Game.Core suite 667/667 green."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV012: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs FR-005 / PD-005. Game.Core suite 667/667 green."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV013: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001. Game.Core suite 667/667 green."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-004]
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV014: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001, PD-004. Game.Core suite 667/667 green."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV015: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-005, PD-006. Game.Core suite 667/667 green."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV016: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / -. Game.Core suite 667/667 green."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV017]
+    artifacts: [src/Game.Core/Dice.fs, tests/Game.Core.Tests/DiceTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: artifacts/testresults/dice-023.trx
+      digest: "sha256:a1abada5992c91c0be4bbe4a98bd4b647ebf94381bd1540ab17cfc1360bfc28f"
+      outcome: passed
+      passed: 667
+      failed: 0
+      skipped: 0
+    notes: ["EV017: satisfied by the Dice property suite (constructors, convolution=sum distribution, advantage/disadvantage=max/min, exact d6 moments, seeded sample determinism + empirical convergence); refs - / PD-001. Game.Core suite 667/667 green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

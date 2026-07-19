@@ -281,6 +281,35 @@ module Ai =
             ValueNone
         |> ValueOption.map (fun (plan, _, _) -> plan)
 
+    // ---------------------------------------------------------------------------------------------
+    // Influence map (roadmap 3.2, work item 025). A thin wrapper over `Pathfinding.distanceField`: an
+    // integer linear-falloff influence map from strengthed sources, combined by max. No new engine.
+    let influenceMap
+        (neighbourhood: Neighbourhood)
+        (maxVisited: int)
+        (cost: Cell -> int)
+        (sources: (Cell * int) list)
+        : Map<Cell, int> =
+        sources
+        |> List.fold
+            (fun acc (s, strength) ->
+                // One distance field per source; the contribution falls off 1 per baseStep of distance.
+                let field = Pathfinding.distanceField neighbourhood maxVisited cost [ s ]
+
+                field
+                |> Map.fold
+                    (fun m cell dist ->
+                        let infl = strength - dist
+
+                        if infl > 0 then
+                            match Map.tryFind cell m with
+                            | Some existing when existing >= infl -> m
+                            | _ -> Map.add cell infl m
+                        else
+                            m)
+                    acc)
+            Map.empty
+
 [<RequireQualifiedAccess>]
 module Difficulty =
 
