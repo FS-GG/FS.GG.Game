@@ -30,6 +30,10 @@
     <Compile Include="Matrix.fs" />
     <Compile Include="Synthetic.fsi" />
     <Compile Include="Synthetic.fs" />
+    <!-- Laws: the reusable metamorphic laws over the drivers/matrix above (Phase 1 of the
+         playtest tooling roadmap). Pure; depends only on Trace/Driver/Matrix/Playable. -->
+    <Compile Include="Laws.fsi" />
+    <Compile Include="Laws.fs" />
   </ItemGroup>
 
   <ItemGroup>

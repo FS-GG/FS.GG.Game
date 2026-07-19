@@ -49,6 +49,23 @@ module Trace =
     /// assertion in value form.
     val equalFrames: a: Trace<'f> -> b: Trace<'f> -> bool when 'f: equality
 
+    /// Public contract function exposed by the FS.GG.Game.Harness package.
+    /// The first step index at which two traces' frame sequences diverge, with the two differing
+    /// frames — `Some (i, a_i, b_i)` — or `None` when neither trace diverges within the common prefix
+    /// (equal traces, or one a strict prefix of the other). Turns a failing determinism/replay law
+    /// from "two lists were not equal" into "diverged at step i". Those laws compare equal-length
+    /// traces (same script), so content divergence is the reported case; a pure length difference
+    /// (equal prefix, unequal length) yields `None` and is owned by the fixed-step law, not this
+    /// function — see the `Laws` module.
+    val firstDivergence: a: Trace<'f> -> b: Trace<'f> -> (int * 'f * 'f) option when 'f: equality
+
+    /// Public contract function exposed by the FS.GG.Game.Harness package.
+    /// A stable, step-ordered, deterministic dump of a trace's frames: one line per frame,
+    /// `"<i>: " + show frame`, joined by `\n`; the empty trace renders as the empty string. The
+    /// step-index prefix lines up with `firstDivergence` indices, so a probe-free look at a trace and
+    /// a divergence report agree on step numbering.
+    val render: show: ('f -> string) -> trace: Trace<'f> -> string
+
     /// Construct a trace with an explicit provenance. **Internal**: only the driver (which stamps
     /// `Origin.InputDriven`) and the synthetic hatch (`Origin.Synthetic`) may call it, so the
     /// provenance bit stays unforgeable from outside the package.

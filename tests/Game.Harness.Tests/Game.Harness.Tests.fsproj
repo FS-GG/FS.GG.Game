@@ -14,6 +14,9 @@
     <Compile Include="BotTests.fs" />
     <Compile Include="MatrixTests.fs" />
     <Compile Include="TraceSyntheticTests.fs" />
+    <Compile Include="TraceDiffTests.fs" />
+    <Compile Include="GoldenFile.fs" />
+    <Compile Include="LawsTests.fs" />
     <Compile Include="DependencyTests.fs" />
     <Compile Include="ReferenceProof.fs" />
     <Compile Include="Program.fs" />

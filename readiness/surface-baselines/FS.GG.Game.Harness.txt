@@ -1,5 +1,8 @@
 FS.GG.Game.Harness.Bot`1
 FS.GG.Game.Harness.Driver
+FS.GG.Game.Harness.LawReport
+FS.GG.Game.Harness.LawResult
+FS.GG.Game.Harness.Laws
 FS.GG.Game.Harness.MatchSetup`2
 FS.GG.Game.Harness.Match`1
 FS.GG.Game.Harness.Matrix
