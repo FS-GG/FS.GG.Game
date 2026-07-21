@@ -16,3 +16,9 @@ let corners : Grids.Vertex list = Grids.cellCorners c
 let c : Cell = { Col = 3; Row = 2 }
 let wall : Grids.Edge = { Col = 4; Row = 2; Orientation = Grids.Vertical }
 let corners : Grids.Vertex list = Grids.cellCorners c
+
+//#block 6 "let wall  = Edges.edgeBetween { Col = 3; Row = 2 } { Col = 4; Row = 2 }   // Some edge — the cells are adjacent"
+// Thin-wall routing (the Edges module): the route endpoints and walkability predicate are the reader's.
+let isWalkable (_c: Cell) = true
+let start : Cell = { Col = 0; Row = 0 }
+let goal : Cell = { Col = 5; Row = 5 }

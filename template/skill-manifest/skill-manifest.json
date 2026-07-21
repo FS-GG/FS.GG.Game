@@ -40,7 +40,7 @@
     {
       "id": "fs-gg-effects",
       "scope": "product",
-      "sha256": "9a7d2a9d65d27f57631f21947e7e05845fbee5be9117d5ff57f3d0677ad3f112",
+      "sha256": "85816888a88eb7f073ea02cfe3ff3be2d075eae8f77356b2772de20a6b113d87",
       "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-effects/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
@@ -58,7 +58,7 @@
     {
       "id": "fs-gg-grids",
       "scope": "product",
-      "sha256": "2dc48ac33c5c8f58b469924baf955887f93c9e494c8836a862076198cb7f00b7",
+      "sha256": "bda8b1bde799114506d63f98f6ecb351e13782517f3c054476d63aee5a6cea85",
       "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-grids/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",

@@ -364,7 +364,7 @@ Roll at the point of use by threading the `Rng`, and **write the advanced genera
 `Model`** — the same discipline as every other draw:
 
 ```fsharp
-let rollBase (kind: 'K) (dist: Dice.Distribution) (model: Model) : Damage<'K> * Model =
+let rollBase (kind: 'K) (dist: Distribution) (model: Model) : Damage<'K> * Model =
     let struct (rolled, rng') = Dice.sample dist model.Rng
     { Kind = kind; Source = Source.Declared; Base = float rolled }, { model with Rng = rng' }
 ```

@@ -30,7 +30,19 @@ let cached : Map<Cell, float> = Map.empty
 let cost (_c: Cell) = 1
 let threatCells : Cell list = []
 
-//#block 6 "type Plan ="
+//#block 6 "let friendly = Ai.influenceMap FourWay 4096 cost [ for u in allies   -> u.Cell, u.Control ]"
+// Influence/control maps: each unit is a source; `cost` is the same navigation cost the flee field uses.
+type Combatant = { Cell: Cell; Control: int }
+let cost (_c: Cell) = 1
+let allies : Combatant list = []
+let hostiles : Combatant list = []
+
+//#block 7 "let tension (c: Cell) : int ="
+// Tension is the caller's per-cell difference of two influence maps.
+let friendly : Map<Cell, int> = Map.empty
+let enemy : Map<Cell, int> = Map.empty
+
+//#block 8 "type Plan ="
 //#rec
 // Plan enumeration + the total tie-break. `Ability` and the scoring terms are the game's. The
 // scoring functions take the block's OWN `Plan` type, declared below them — hence //#rec.

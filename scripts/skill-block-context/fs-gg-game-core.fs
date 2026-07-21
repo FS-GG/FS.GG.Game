@@ -1,8 +1,8 @@
 // Typecheck fixtures for fs-gg-game-core (see scripts/typecheck-md-blocks.fsx).
 //
 // Each //#block N section is prepended to block N of the SKILL.md inside a `module rec`, so a
-// binding here MAY forward-reference a type the block itself declares below it (block 6's `creeps`
-// is exactly that). Blocks 2, 3, 4 and 7 are self-contained and need no section.
+// binding here MAY forward-reference a type the block itself declares below it (block 7's `creeps`
+// is exactly that). Blocks 2, 3, 5 and 8 are self-contained and need no section.
 //
 // These bindings stand in for the reader's world. Keep them the SHAPE the prose promises — a
 // binding that is wrong in a way the block cannot see (say, an `enemies` whose `Pos` is already a
@@ -17,7 +17,14 @@ let dtSeconds = 1.0 / 144.0
 let model = {| Sim = Loop.init { Tick = 0 } |}
 let lerpWorld (_previous: World) (current: World) (_t: float) : World = current
 
-//#block 5 "let grid = SpatialGrid.build 32.0 [ for e in enemies -> simPoint e.Pos, e.Id ]"
+//#block 4 "let reach = Pathfinding.reachable FourWay 4096 cost canEndOn (Pathfinding.budgetFor unit.Move) unit.Cell"
+// The weighted move-range one-liner: `cost`/`canEndOn` are the game's predicates, `unit` the reader's.
+type Mover = { Cell: Cell; Move: int }
+let cost (_c: Cell) = 1
+let canEndOn (_c: Cell) = true
+let unit : Mover = { Cell = { Col = 0; Row = 0 }; Move = 4 }
+
+//#block 6 "let grid = SpatialGrid.build 32.0 [ for e in enemies -> simPoint e.Pos, e.Id ]"
 // Spatial queries. `enemies` positions are stored in the scaffold's collision-safe Vec2 — that is
 // the whole premise of the section, and it is what forces the `simPoint` crossing the block
 // teaches. Giving `Pos` a sim `Point` here would make the block typecheck for the wrong reason.
@@ -25,7 +32,7 @@ type Enemy = { Id: int; Pos: Geometry.Vec2 }
 let enemies : Enemy list = []
 let blast : Geometry.Vec2 = { Vx = 64.0; Vy = 48.0 }
 
-//#block 6 "type Creep = { Pos: Geometry.Vec2; Hp: int }"
+//#block 7 "type Creep = { Pos: Geometry.Vec2; Hp: int }"
 //#rec
 // The grid-sim recipe (the #132 defect lived here). `creeps` FORWARD-REFERENCES `Creep`, which the
 // block declares — legal because the generated unit is a `module rec`. Binding it any other way

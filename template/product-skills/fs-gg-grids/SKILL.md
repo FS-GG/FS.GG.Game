@@ -161,7 +161,7 @@ and keep the two straight — the converters are **exact inverses**:
 ```fsharp
 open FS.GG.Game.Core
 
-let h    = Hex.create 2 -1                     // cube; S = -1, derived — an off-plane hex cannot exist
+let h    = Hex.create 2 (-1)                   // cube; S = -1, derived — an off-plane hex cannot exist
 let cell = Hex.toOffset h                      // odd-r offset Cell for storage (ofOffset is its inverse)
 // let cell = Hex.toDoubled h                  // …or doubled-width, if that suits your map (ofDoubled inverts)
 
