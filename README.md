@@ -1,7 +1,89 @@
 # FS.GG.Game
 
-The FS-GG platform's game-simulation component and its new **bottom layer**. Extracted from the
-render core per **[ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md)**.
+A render-independent, deterministic game-simulation library for .NET — the physics, pathfinding,
+visibility, and AI substrate a game's logic is built on, with zero dependency on any render stack.
+
+## What it can do
+
+- Run a **deterministic, replayable** simulation — a seeded value-type PRNG (`Rng`) and a
+  pure fixed-timestep loop (`Loop`/`FixedStep`) so a run reproduces byte-for-byte.
+- **Detect and resolve collisions** — AABB / circle / convex-polygon overlap, containment and
+  swept tests, plus an opt-in mini rigid-body physics engine over the arcade default.
+- **Navigate grids** — A* / BFS pathfinding, distance/flow fields, and reachability over a
+  walkability predicate *you* supply (the framework holds no map).
+- **Compute visibility** — grid line-of-sight and shadowcast field-of-view, plus continuous-space
+  exact LOS and angular-sweep visibility polygons against arbitrary occluders.
+- **Drive projectile weapons** — a swept advance that cannot tunnel, lead / intercept solves, and
+  splash queries with a caller-chosen falloff.
+- **Model decisions and damage** — a fog-of-war AI vocabulary (team views, decaying sightings) and
+  a cover / armor / damage effects pipeline generic in the damage kind.
+
+## Acquire
+
+Every `FS.GG.*` package is **public on [nuget.org](https://www.nuget.org) and restores with no
+credential** ([ADR-0039][adr-0039]). `FS.GG.Game.Core` and `FS.GG.Game.Render` are **published** —
+add the entry package:
+
+```sh
+dotnet add package FS.GG.Game.Core
+```
+
+`FS.GG.Game.Core` is the BCL-only simulation core and all you need for the quick start below; add
+`FS.GG.Game.Render` when you want to project sim state onto `FS.GG.UI.Scene`. The full package map
+is in the [package table](#packages) below.
+
+## Quick start
+
+Consume `FS.GG.Game.Core` as a plain library. Create a console app, add the package, and drop this
+into `Program.fs` — a seeded generator replays the same rolls on every machine:
+
+```fsharp
+open FS.GG.Game.Core
+
+// A seeded, value-type PRNG: the same seed replays the same rolls on every machine.
+let start = Rng.ofSeed 42UL
+
+// Roll a six-sided die three times, threading the advanced generator through each draw.
+let rolls, _ =
+    [ 1..3 ]
+    |> List.mapFold (fun g _ ->
+        let struct (roll, next) = Rng.nextInt 1 6 g
+        roll, next) start
+
+rolls |> List.iteri (fun i roll -> printfn "roll %d -> %d" (i + 1) roll)
+```
+
+Run it with `dotnet run` and you should see, on any machine:
+
+```text
+roll 1 -> 2
+roll 2 -> 1
+roll 3 -> 1
+```
+
+That is the whole determinism contract in six lines: `Rng` is a value you thread, not a shared
+mutable `System.Random`, so a model that holds one replays exactly. (This is a *library-consumption*
+quick start; for authoring a game against the repo's SDD lifecycle, see the
+[TestSpec tutorial](docs/TestSpecTutorial.md) under **Go deeper**.)
+
+## Go deeper
+
+- [TestSpec tutorial](docs/TestSpecTutorial.md) — the repo's SDD-lifecycle getting-started guide for
+  authoring a game against `FS.GG.Game`.
+- [`docs/`](docs/) — module design reports and reference material for the simulation surface.
+- Related components: [`FS.GG.Rendering`](https://github.com/FS-GG/FS.GG.Rendering) (the `FS.GG.UI.Scene`
+  target `FS.GG.Game.Render` projects onto) and [`FS.GG.Audio`](https://github.com/FS-GG/FS.GG.Audio).
+
+## Where this sits
+
+`FS.GG.Game` is a render-independent bottom-layer sibling of the rendering stack ([ADR-0022][adr-0022]):
+`Game.Core` reaches up to nothing, and `Game.Render` reaches *up* to `FS.GG.UI.Scene`. See the
+[platform vocabulary (ADR-0020)][adr-0020] and [`docs/architecture.md`][arch] for how the whole
+platform fits together.
+
+---
+
+<!-- Everything below the fold: for people hacking on the component itself. -->
 
 ## Packages
 
@@ -78,3 +160,8 @@ builds, warnings-as-errors.
 
 Per ADR-0022 this repo is developed with **`fsgg-sdd`** as its dev lifecycle (the dogfood),
 **coexisting** with Spec Kit `specs/` history — not replacing it.
+
+[adr-0020]: https://github.com/FS-GG/.github/blob/main/docs/adr/0020-platform-workspace-component-vocabulary.md
+[adr-0022]: https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md
+[adr-0039]: https://github.com/FS-GG/.github/blob/main/docs/adr/0039-nuget-org-is-the-read-path.md
+[arch]: https://github.com/FS-GG/.github/blob/main/docs/architecture.md
