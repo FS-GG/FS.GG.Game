@@ -14,7 +14,7 @@
       "id": "fs-gg-audio",
       "scope": "product",
       "sha256": "e9fff88a3be86c2d95829357ffc180e3c53c18f2872b4f84e792de5a24f73bb7",
-      "mirrored": true,
+      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-audio/SKILL.md",
       "materializes-when": "profile in [app, sample-pack, game]",
       "supplied-by": "template/product-skills/fs-gg-audio/"
@@ -50,7 +50,7 @@
       "id": "fs-gg-game-core",
       "scope": "product",
       "sha256": "2502d7b197ea432a5d3178fe353d14fdaeb6a1ab9a798280af7c843126f534c2",
-      "mirrored": true,
+      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-game-core/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-game-core/"
@@ -77,7 +77,7 @@
       "id": "fs-gg-model-swap",
       "scope": "product",
       "sha256": "720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26",
-      "mirrored": true,
+      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-model-swap/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-model-swap/"
@@ -86,7 +86,7 @@
       "id": "fs-gg-persistence",
       "scope": "product",
       "sha256": "9461822e5c282f0cac37aa0a88720fbb910319a6571d74bbcb1119eeb48530fb",
-      "mirrored": true,
+      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-persistence/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-persistence/"
