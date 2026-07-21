@@ -61,6 +61,10 @@ module Ai =
 
     val best: score: ('p -> float) -> tie: ('p -> struct (int * int)) -> plans: 'p list -> 'p voption
 
+    val influenceMap:
+        neighbourhood: Neighbourhood -> maxVisited: int -> cost: (Cell -> int) -> sources: (Cell * int) list ->
+            Map<Cell, int>
+
 module Difficulty =
     val easy: Difficulty
     val normal: Difficulty
@@ -146,7 +150,7 @@ Recomputing a threat map per agent per tick is the default mistake. Schedule wit
 | 1 Threat map | every 15 ticks, and on terrain-version bump | `Ai.threatField` over a coarse, downsampled grid. |
 | 2 Posture | on transition | Your FSM: `Patrol → Advance → Engage → Reposition → Retreat`. |
 | 3 Positioning | every 30 ticks, or on version bump | `Pathfinding.astar` with `cost = terrainCost + ThreatWeight × danger`. |
-| 4 Aiming | every tick | Solve the intercept (`Ballistics.lead`), clamp the traverse, add `Ai.aimError`. |
+| 4 Aiming | every tick | Solve the intercept (`Ballistics.intercept`), clamp the traverse, add `Ai.aimError`. |
 
 ```fsharp
 let threat =
@@ -174,6 +178,40 @@ let step = Pathfinding.flowField FourWay (flee |> Map.map (fun _ v -> int (v * 1
 
 `Pathfinding` deliberately does not ship a `fleeField`: the `-1.2` is a tuning constant, and tuning is
 game policy. That separation is the entire reason this skill exists as a layer above the substrate.
+
+## Territory control is an influence map — and tension is two of them
+
+A threat map answers *"where is it dangerous?"*. The dual question — *"who **controls** this ground?"* —
+is an **influence map**, and `Ai.influenceMap` is the integer primitive for it. Each `(source, strength)`
+stamps `max(0, strength − distance)` onto every cell, where `distance` is the `Pathfinding.distanceField`
+cost from that source: full `strength` where the unit stands, falling off one point per `baseStep`.
+Sources combine by **max** — the nearest strong source owns a cell, contributions do **not** pile up — and
+any cell that nets `<= 0` is simply **absent** from the map.
+
+```fsharp
+open FS.GG.Game.Core
+
+// Each unit is an influence source scaled by how much ground it projects. Same `cost` map both sides.
+let friendly = Ai.influenceMap FourWay 4096 cost [ for u in allies   -> u.Cell, u.Control ]
+let enemy    = Ai.influenceMap FourWay 4096 cost [ for u in hostiles -> u.Cell, u.Control ]
+```
+
+**Tension is the per-cell difference of two influence maps**, and it is the caller's to compose — `Ai`
+ships the primitive, not the policy of which two armies to subtract:
+
+```fsharp
+// Positive = friendly-held, negative = enemy-held, near zero = the contested front. An ABSENT side reads
+// as 0, so a cell only one army can reach is fully that army's.
+let tension (c: Cell) : int =
+    (Map.tryFind c friendly |> Option.defaultValue 0) - (Map.tryFind c enemy |> Option.defaultValue 0)
+```
+
+The contested band (tension near zero) is the line to hold or flank; a deep negative pocket *behind* your
+own front is a raider that slipped through. `influenceMap` inherits `distanceField`'s `cost` convention
+(`cost c <= 0` is impassable), its `maxVisited` bound, and its byte-determinism — integer throughout, no
+float to tie-break — so a control map is replay-identical. It is the same Dijkstra substrate as the flee
+field above, read for a different question: `distanceField` measures *how far*, `influenceMap` turns that
+into *how much*, and `threatField` sums danger — three views of one grid, none of them a bespoke map.
 
 ## Scoring needs a total tie-break
 
@@ -216,6 +254,8 @@ accident — and a fully tied plan keeps the incumbent, so the result is stable 
 - **Iterating agents out of a `Map`.** Sort by `AgentId` first.
 - **Storing durations as float seconds.** `ReactionTicks` and `SpotCycleTicks` are tick counts.
 - **Summing a threat map in caller order.** `Ai.threatField` canonicalises for you — do not re-sum yourself.
+- **Summing influence sources instead of maxing.** `Ai.influenceMap` combines by `max` — the strongest
+  nearby source owns a cell. Add the contributions yourself and ten weak units out-control one strong one.
 - **Recomputing the threat map every tick, per agent.** It is per-team, and it is on a cadence.
 - **Making a hard AI hit harder.** Give it less time. See the knob table.
 - **A scoring function with no tie-break tail.** The plan will not survive a replay.

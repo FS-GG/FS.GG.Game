@@ -1,6 +1,6 @@
 ---
 name: fs-gg-effects
-description: Turn a hit into a number in a generated FS.GG.UI product — a named, ordered damage pipeline with an observable early exit, per-effect stacking policies, and discrete grid pushes that report why they stopped.
+description: Turn a hit into a number in a generated FS.GG.UI product — dice-rolled damage distributions, a named ordered mitigation pipeline with an observable early exit, per-effect stacking policies, and discrete grid pushes that report why they stopped.
 ---
 
 # Effects Capability
@@ -28,6 +28,9 @@ The signatures you consume are bundled with this product:
   grid displacement.
 - `docs/api-surface/Game.Core/Ballistics.fsi` — `splash`, the region operator that most often feeds
   `Effects.applyAll`.
+- `docs/api-surface/Game.Core/Dice.fsi` — the opaque `Distribution` and its roll algebra
+  (`die`/`uniform`/`constant`, `convolve`/`repeat`, `advantage`/`disadvantage`, `mean`/`variance`,
+  `sample`) — where the `Damage.Base` this pipeline mitigates is *rolled*.
 
 All helpers are **total**: no input — not a `NaN` `Base`, not a hostile `Stage`, not an infinite
 falloff multiplier — can put a `NaN` in a `DamageTrace`.
@@ -327,9 +330,56 @@ Any `world -> ('T * float) list` is a region operator. A Tesla chain's scalar is
 which `applyAll` consumes without noticing the difference. A blast that kills whatever it contains uses
 a uniform `fun _ -> 1.0` and an **empty** pipeline.
 
+## Rolling the `Base`: `Dice` distributions
+
+`Damage<'K>.Base` is a number you *built* — and the moment a weapon rolls it (`3d6 + 2`, a crit's
+`advantage`, a loot value), that roll has to be **deterministic** or the replay diverges the first time
+anything random is dealt. `Dice` is the integer distribution algebra for it, and `sample` threads the
+same seeded `Rng` [[fs-gg-game-core]] keeps in your `Model` — no ambient generator, no `System.Random`.
+
+Build a `Distribution` from the primitives and combine it. The type is **opaque** and every weight is a
+positive `int64`, so it is golden-testable by structural equality and a convolution of many dice cannot
+overflow its weights:
+
+```fsharp
+open FS.GG.Game.Core
+
+let d6      = Dice.die 6                                // uniform 1..6 (die n = uniform 1 n)
+let dmg     = Dice.convolve (Dice.repeat 3 d6) (Dice.constant 2)   // 3d6 + 2: sum outcomes, multiply weights
+let critish = Dice.advantage d6 d6                     // roll two d6, keep the HIGHER (disadvantage keeps lower)
+```
+
+- `constant v` / `uniform lo hi` / `die sides` — the sources.
+- `convolve a b` — the **sum** `X + Y`, associative and commutative (`mean` adds, weights multiply).
+  `repeat n d` convolves `d` with itself `n` times (`repeat 0 = constant 0`; a negative `n` reads as `0`).
+- `advantage a b` / `disadvantage a b` — `max` / `min` of two rolls; `advantage` never lowers the mean,
+  `disadvantage` never raises it.
+
+`mean` and `variance` are **exact** — accumulated in `bigint` and converted once — so a table's average is
+right even past the ~22-d6 point where a naïve `Σ(v·w)` numerator overflows `int64` while the weights are
+still representable. That is the trap: a distribution you *can* build whose mean comes back garbage. Use
+these to **balance on paper** — compare two weapons' `mean` and spread without ever sampling.
+
+Roll at the point of use by threading the `Rng`, and **write the advanced generator back into the
+`Model`** — the same discipline as every other draw:
+
+```fsharp
+let rollBase (kind: 'K) (dist: Distribution) (model: Model) : Damage<'K> * Model =
+    let struct (rolled, rng') = Dice.sample dist model.Rng
+    { Kind = kind; Source = Source.Declared; Base = float rolled }, { model with Rng = rng' }
+```
+
+`sample` is deterministic given the seed and returns `struct(int * Rng)`; an empty distribution rolls
+`(0, rng)` as a documented total fallback. The `Base` it produces is exactly what `pipeline` / `applyAll`
+then mitigates — **`Dice` is the *before*, this module's stages are the *after*.** Crits, elemental split,
+and stat mods live in *how you build the `Distribution`* (a crit is `advantage`, not a post-mitigation
+multiply), so they stay upstream of armor and out of the pipeline.
+
 ## Determinism
 
 - `pipeline` is a left fold over a `list`. No dictionary iteration, no sort, no `dt`, no clock.
+- `Dice` is pure integer weights and a seeded `sample`; a scripted seed reproduces a byte-identical roll,
+  and `mean`/`variance` read the distribution without touching the `Rng` at all.
 - **Permutation invariance is structural.** `Stage.Run` is handed one target, the `Damage`, and the
   running amount — there is no world parameter, so a stage *cannot* observe another target. `applyAll`
   is a `List.map` of a pure function, so the result multiset cannot depend on `SpatialGrid` insertion
@@ -360,6 +410,14 @@ a uniform `fun _ -> 1.0` and an **empty** pipeline.
 - **Using `>` in `Strongest`.** A second tower of the same type stops re-upping its slow.
 - **`Resolution.knockback` for water.** It cannot express *enter and stop*. Use `push` with `Stop`.
 - **Reducing collision or environmental damage by cover.** Gate the stage with `gatedBy [ Source.Declared ]`.
+- **Rolling `Base` off a `System.Random` or a re-used input `Rng`.** Use `Dice.sample` and write the
+  returned `Rng` back into the `Model`; a shared mutable generator, or drawing again from the input `Rng`,
+  breaks replay exactly as it does for any other draw.
+- **Modelling a crit as a post-mitigation multiply.** A crit belongs *upstream* in the `Distribution`
+  (`Dice.advantage`, a bigger die), not after armor — put it downstream and it multiplies the number armor
+  already shrank, the same reordering bug as applying `Vulnerable` after `subtract`.
+- **Hand-summing a distribution's average.** `Dice.mean` accumulates in `bigint`; a hand-rolled `Σ(v·w)`
+  over a large `repeat`/`convolve` overflows `int64` and reports a garbage mean for a valid distribution.
 
 ## Build Commands
 
@@ -379,7 +437,7 @@ product's `readiness/` paths. Do not copy framework readiness reports into the p
 
 `Effects`, `Source`, `Damage<'K>`, `Stage<'T,'K>`, and `DamageTrace` live in `FS.GG.Game.Core`
 (referenced only on the `game`/`sample-pack` profiles), as do `Resolution.push` and its `CellStep` /
-`PushStop` / `Push` types. `FS.GG.Game.Core` is the BCL-only bottom layer — it depends on nothing and
+`PushStop` / `Push` types, and the `Dice` `Distribution` algebra that rolls the `Base`. `FS.GG.Game.Core` is the BCL-only bottom layer — it depends on nothing and
 pulls in no viewer, layout, or widget machinery. `Effects` is generic in both the target and the damage
 kind, so it reaches up to nothing at all, not even `Primitives`. Keep HP, death, healing, and the damage
 numbers floating over the enemy's head in your `Model` and `fs-gg-scene`.

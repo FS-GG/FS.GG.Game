@@ -4,7 +4,7 @@
     {
       "id": "fs-gg-ai",
       "scope": "product",
-      "sha256": "612033dce3082b76d861efcb5c15a32fbb56ee98b176c3a8d251587a5298062f",
+      "sha256": "07d9adfa2eef0d04d3da6adac500191d952ab350b16221ee0fdec0768acefa38",
       "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-ai/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
@@ -40,7 +40,7 @@
     {
       "id": "fs-gg-effects",
       "scope": "product",
-      "sha256": "8f4b369b19904223d51a2ab338445c90f249f4ce93aa615a89da8cd7330d180b",
+      "sha256": "85816888a88eb7f073ea02cfe3ff3be2d075eae8f77356b2772de20a6b113d87",
       "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-effects/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
@@ -49,7 +49,7 @@
     {
       "id": "fs-gg-game-core",
       "scope": "product",
-      "sha256": "91eaeb4ae6c2e62cf9d36bdc3d185ce6b37f2e0281fd7650ab28a65ddc3741e5",
+      "sha256": "2502d7b197ea432a5d3178fe353d14fdaeb6a1ab9a798280af7c843126f534c2",
       "mirrored": true,
       "resolvablePath": ".agents/skills/fs-gg-game-core/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
@@ -58,7 +58,7 @@
     {
       "id": "fs-gg-grids",
       "scope": "product",
-      "sha256": "11bebf8b402c8f4d7da5f32eda6f4620398d5c61bb01a23486756607388f3d12",
+      "sha256": "bda8b1bde799114506d63f98f6ecb351e13782517f3c054476d63aee5a6cea85",
       "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-grids/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",

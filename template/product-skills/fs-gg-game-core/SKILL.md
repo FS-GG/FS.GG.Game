@@ -24,8 +24,10 @@ The signatures you consume are bundled with this product:
   `docs/api-surface/Game.Core/Loop.fsi` — the `Rng` value type, the `FixedStep` accumulator drain, and the
   `Loop` double step buffer built on it. Also `FS.GG.Game.Core`, same profiles.
 - `docs/api-surface/Game.Core/Pathfinding.fsi` and `docs/api-surface/Game.Core/SpatialGrid.fsi` — deterministic
-  grid `Pathfinding` (A*/BFS over a walkability predicate) and the uniform `SpatialGrid` for range/splash
-  queries. Also `FS.GG.Game.Core`, same profiles — reuse these instead of hand-rolling BFS/A* or bucketing.
+  grid `Pathfinding` (A*/BFS/JPS, weighted `reachable` move-range, Dijkstra `distanceField`/`flowField`, ALT
+  `Landmarks`, connectivity `Regions`, and any-angle `smooth`, all over a walkability predicate) and the
+  uniform `SpatialGrid` for range/splash queries. Also `FS.GG.Game.Core`, same profiles — reuse these
+  instead of hand-rolling BFS/A* or bucketing.
 
 The rest of the simulation substrate ships in the same package, each with a skill that teaches it:
 `Resolution` ([[fs-gg-game:fs-gg-collision]]), `Grids` ([[fs-gg-game:fs-gg-grids]]), `Los` ([[fs-gg-game:fs-gg-line-drawing]]), `Visibility`
@@ -197,15 +199,110 @@ let onScreen (bounds: Rect list) : Rect list =
 
 ## Pathfinding
 
-`Pathfinding` routes an agent across a tile grid over a **walkability predicate you supply** (`Cell -> bool`
-IS the map — the framework holds no grid state). It is **deterministic**: integer move costs and a total
-frontier order make the path byte-identical across runs, so it is safe inside a replayed `update` — no
-hand-rolled BFS/A*, no tie-break footgun.
+`Pathfinding` routes and reasons over a tile grid using a **predicate you supply** (`Cell -> bool` IS the
+map — the framework holds no grid state). Everything here is **deterministic**: integer costs and a total
+frontier key `(f, h, Col, Row)` make every result byte-identical across runs and platforms, so it is safe
+inside a replayed `update` — no hand-rolled BFS/A*, no `Dictionary`-frontier tie-break footgun.
 
-- `Pathfinding.astar neighbourhood maxVisited isWalkable start goal` — cost-optimal path, `Some [start;…;goal]`
-  (endpoints included) or `None`. `FourWay`/`EightWay`; `EightWay` costs 10 orthogonal / 14 diagonal and
-  refuses to cut a wall corner. `maxVisited` bounds the search so an unreachable goal terminates.
-- `Pathfinding.bfs …` — same shape, unweighted (hop-minimal) path.
+### Costs speak `baseStep` units — and this trap is silent
+
+Every cost and `budget` here is in **`baseStep` units**, not tiles: an orthogonal move costs `baseStep`, a
+diagonal `baseStep * 14 / 10` (an integer √2, so equal-cost ties can never leak through float equality). A
+caller whose game speaks *movement points* (a unit with "4 move") **must scale in with `budgetFor`**:
+
+```fsharp
+let reach = Pathfinding.reachable FourWay 4096 cost canEndOn (Pathfinding.budgetFor unit.Move) unit.Cell
+```
+
+Hand a raw `moveRange` in as a `budget` and it **fails silently and totally**: every step costs at least
+`baseStep`, so a budget of `4` settles only the start and the "move range" highlights the one tile the unit
+stands on. Nothing throws. Scaling back *out* (`Cost / baseStep`) truncates — fine for a display label,
+never to re-derive a budget.
+
+### Which search — pick before you write a line
+
+| You want… | Call | Notes |
+| --- | --- | --- |
+| Shortest path, unweighted terrain | `astar` / `bfs` | Binary `isWalkable`; minimises `baseStep` distance, not terrain cost. |
+| The same, far faster on big uniform maps | `jps` | Jump Point Search — **uniform cost only** (no `cost` fn). |
+| The same, hugging the straight line | `astarStraight` | Opt-in; same least cost, ties prefer the straighter route. |
+| The same, fewer expansions on large/open maps | `Landmarks.astar` | ALT heuristic; build the landmark tables once. |
+| A weighted move-range highlight **and** its paths | `reachable` + `pathTo` | The turn-based-tactics answer; costs both in one search. |
+| Distance from a set of goals, for many agents | `distanceField` → `flowField` | A Dijkstra/integration field; roll downhill with `flowField`. |
+| "Can start even reach goal?" in O(1) | `Regions.build` + `sameComponent` | Reject a walled-off query without exhausting `maxVisited`. |
+| Straighten a finished path to any-angle | `smooth` | Post-hoc string-pull over your LOS. |
+
+`maxVisited` bounds every search (max frontier pops), so an unreachable goal terminates rather than
+scanning the unbounded cell space.
+
+### A*, JPS, and the two acceleration paths
+
+`astar neighbourhood maxVisited isWalkable start goal` returns the cost-optimal `Some [start; …; goal]`
+(endpoints included) or `None`. `EightWay` refuses to **cut a wall corner** (a diagonal needs both shared
+orthogonals walkable); `FourWay` is orthogonal-only. `bfs` is the same shape, hop-minimal.
+
+`jps` is a **drop-in acceleration** for the *uniform-cost* case — it pops far fewer nodes by jumping over
+runs of forced-free cells. Same arguments as `astar`, and a path of the **same least cost** — but **not
+necessarily the same cells**: where several least-cost routes tie, JPS's canonical jumps and `astar`'s
+`(f,h,Col,Row)` tie-break pick different equal-cost paths. That is the pruning working, not a bug; JPS is
+still byte-identical across its *own* runs. It has no `cost` function, so for weighted terrain reach for
+`reachable`/`distanceField` — never `jps`.
+
+`Landmarks` is the other accelerator: `Landmarks.build` picks pivot cells by deterministic farthest-point
+sampling and stores an exact distance table per landmark, then `Landmarks.astar` searches over
+`max(octile, ALT)` — **same least cost** as `astar`, strictly fewer expansions where a landmark tightens
+the estimate. Worth it on large, open maps queried many times.
+
+`astarStraight` is the cosmetic accelerator: identical cost to `astar`, but among equal-`(f,h)` nodes it
+prefers the one nearest the straight start→goal line (an integer cross-product folded into the key). Plain
+`astar` is left **byte-identical** — migrate only if you want the straighter look.
+
+### Weighted move-range: `reachable`, and why `Steps` and `Endable` differ
+
+`reachable neighbourhood maxVisited cost canEndOn budget start` is the turn-based-tactics move range: a
+Dijkstra from `start` capped at `budget`, keeping predecessors so the highlight and every path come from
+**one** search. Two predicates drive it — `cost c` (the price to *enter* `c`; `cost c <= 0` means
+impassable) and `canEndOn c` (may a unit *stop* here) — and they answer different questions, which is why
+the result carries two sets:
+
+- `reach.Steps` — every settled cell, **including pass-through-only ones**. Reconstruct paths from this
+  with `pathTo reach dest`.
+- `reach.Endable` — the subset a unit may legally **stop** on. This is the highlight, and the only set you
+  offer a destination from.
+
+They differ by exactly `canEndOn` (an ally-occupied tile is traversable but not endable). Highlight from
+`Endable`, reconstruct the route from `Steps`, and "path *through* an ally without stopping on them" works
+for free. **Do not** compose a separate `reachableWithin` + `astar` for this — they answer different
+questions and the unit walks a route it cannot afford.
+
+### Fields for flocks and AI
+
+`distanceField neighbourhood maxVisited cost goals` floods **outward from the goals**, mapping each cell to
+its cheapest cost to the nearest goal (each goal `0`). Build it once; any number of agents then roll
+downhill — `flowField neighbourhood field` turns it into one arrow per cell (its strictly-lowest
+neighbour; a goal or local minimum is *absent*, meaning "arrived/stuck"). **Pass `flowField` the same
+`neighbourhood` that built the field** — it can't be checked, and widening `FourWay`→`EightWay` offers
+diagonals whose cost was never priced in. This is the substrate the threat, flee, and influence maps in
+[[fs-gg-game:fs-gg-ai]] are built on. (`reachableWithin` is the forward dual — a cost map from `start` with
+no predecessors — when you want reachability but not the paths.)
+
+### Any-angle smoothing
+
+`smooth losClear path` is a post-hoc string-pull: it drops intermediate waypoints wherever your line-of-
+sight test (`losClear`, canonically `Los.lineOfSight` from [[fs-gg-game:fs-gg-line-drawing]]) lets a unit
+skip them, turning a jagged grid staircase into straight any-angle segments. The result is a
+**subsequence** of the input (never a cell that wasn't on the path), keeps the endpoints, and is never
+longer; a fully-visible path collapses to `[start; goal]`. Because `losClear` is an integer grid test the
+smoothed path stays byte-deterministic — do **not** smooth with a float raycast.
+
+### The unbounded-grid overflow rule
+
+The predicate is the map, so the coordinate space is **unbounded `int`** — there is no wall to clamp
+against, and any cost accumulation or cross-product is therefore computed **wide (`int64`/`bigint`) and
+saturated**, never thrown: `budgetFor` saturates to `Int32.MaxValue` rather than wrapping negative, a path
+cost past `Int32.MaxValue` reads as unreachable, and `astarStraight`'s cross-product is taken in `bigint`.
+Hold your **own** `cost` function to the same discipline — a `cost` that can overflow `int` wraps to a
+*negative* (impassable) cell and silently walls off your map.
 
 ```fsharp
 open FS.GG.Game.Core
@@ -331,6 +428,12 @@ let ageEffects (active: Map<EffectKind, Effect>) : Map<EffectKind, Effect> =
 - **Hand-rolled BFS/A* with a non-deterministic tie-break.** Iterating a `Dictionary`/`HashSet` frontier
   leaks iteration order into the path and breaks replay. Use `Pathfinding.astar`/`bfs` — the tie-break is
   a total order over cells, so identical inputs give a byte-identical path.
+- **Passing a raw movement range as `budget`.** Costs are in `baseStep` units; a raw "4 move" settles only
+  the start cell. Scale it in with `Pathfinding.budgetFor` — the failure is silent, not an exception.
+- **Reaching for `jps` on weighted terrain.** `jps` is uniform-cost only (it takes no `cost` function). For
+  weighted terrain use `reachable`/`distanceField`; `jps` would ignore your terrain weights entirely.
+- **Filtering `reach.Steps` down to `Endable` before reconstructing a path.** `pathTo` needs the full
+  `Steps` (it routes *through* non-endable cells); guard the destination against `Endable` separately.
 - **O(n²) proximity scans.** Don't test every entity against every other; `SpatialGrid.query`/`queryRadius`
   buckets them for range/splash lookups.
 - **Ignoring the returned generator.** `Rng.nextInt`/`nextFloat`/`split` return `struct(value, next)`;

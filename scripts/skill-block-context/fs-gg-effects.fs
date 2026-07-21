@@ -110,3 +110,7 @@ let blast : Geometry.Vec2 = { Vx = 100.0; Vy = 100.0 }
 let pipeline : Stage<Enemy, Kind> list = []
 let applyDamage (_e: Enemy) (_amount: float) = ()
 let applyRider (_e: Enemy) = ()
+
+//#block 14 "let rollBase (kind: 'K) (dist: Distribution) (model: Model) : Damage<'K> * Model ="
+// The Model holds the seeded Rng (fs-gg-game-core's storage rule); the roll threads and returns it.
+type Model = { Rng: Rng }
