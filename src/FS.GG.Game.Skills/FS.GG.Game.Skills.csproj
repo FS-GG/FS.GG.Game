@@ -56,8 +56,11 @@
     <IsPackable>true</IsPackable>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>FS.GG.Game.Skills</PackageId>
-    <!-- Own version cadence — NOT the repo-wide 0.7.1 coherent set. First release: 0.1.0. -->
-    <Version>0.1.0</Version>
+    <!-- Own version cadence — NOT the repo-wide 0.7.1 coherent set. First release: 0.1.0.
+         0.2.0 (minor/additive, FS.GG.Game#454): the four ADR-0022 P4 rows
+         fs-gg-{audio,game-core,model-swap,persistence} flipped mirrored:true → false, so they now
+         satisfy the derive predicate and grow the packed set by four (ADR-0063 owner-sourced delivery). -->
+    <Version>0.2.0</Version>
 
     <Description>FS.GG.Game's owner-authored mirrored:false product skill bytes (e.g. fs-gg-playtest, fs-gg-ai) as one versioned artifact, with template/skill-manifest/skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the skills into a scaffold's skill roots at scaffold time (ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <PackageTags>fsgg;game;skills;product;scaffold;dotnet</PackageTags>
