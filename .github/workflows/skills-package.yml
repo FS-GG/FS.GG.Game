@@ -1,0 +1,66 @@
+# FS.GG.Game.Skills gate (ADR-0062, ADR-0063, ADR-0014; FS.GG.Game#449/#451). Packs the product-skills
+# package and proves it derives from template/skill-manifest/skill-manifest.json, packs every
+# `mirrored: false` `scope: product` member + the manifest, content-addresses each SKILL.md against its
+# recorded sha256, and fails LOUD on a byte that does not match. The logic lives in
+# src/FS.GG.Game.Skills/verify-package.sh — nothing executes a workflow, so this gate CALLS the script
+# rather than hand-rolling the checks in YAML (#724). Mirrors .github's drivers-package.yml, one repo over.
+#
+# Triggers on the package sources AND on the product-skill sources the package derives from (the authored
+# SKILL.md bodies under template/product-skills/**, and the manifest that names them + records their
+# digests). An edit to any of those changes what the package ships, so the derive/content-address contract
+# is re-proven. This gate is additive: it stands alongside gate.yml's skill-manifest-drift job (which keeps
+# the manifest current vs the bytes) and does not replace it.
+
+name: skills-package
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Game.Skills/**"
+      - "template/product-skills/**"
+      - "template/skill-manifest/skill-manifest.json"
+      - ".github/workflows/skills-package.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Game.Skills/**"
+      - "template/product-skills/**"
+      - "template/skill-manifest/skill-manifest.json"
+      - ".github/workflows/skills-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skills-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify the game-skills package (derive, pack, content-address, fail-loud)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: "10.0.x"
+          # No NuGet cache, deliberately — the locked restore below resolves into a fresh, cold package
+          # folder by construction (ADR-0006); a setup-dotnet cache would be pure overhead here.
+          cache: false
+
+      # Locked restore — a silent dependency substitution fails here rather than changing what the gate
+      # ran against (ADR-0006). The package has no dependencies today (its lockfile is empty), so this is
+      # cheap; it arms the enforcement the moment one is ever added. Uses the same shared action gate.yml
+      # does, so the enforcement is defined in exactly one place.
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: src/FS.GG.Game.Skills/FS.GG.Game.Skills.csproj
+
+      - name: Verify the game-skills package (derive, pack, content-address, fail-loud)
+        run: bash src/FS.GG.Game.Skills/verify-package.sh
