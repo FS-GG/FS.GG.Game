@@ -95,6 +95,14 @@ let packageId = "FS.GG.UI.Template"
 let fragmentPath = "content/template/fragments/vec2/src/Product/Vec2.fs"
 let target = "scripts/skill-block-context/_scaffold.fs"
 
+// `scripts/generated-paths` roster contract (ADR-0044 / .github#498): one `kind<TAB>path<TAB>marker`
+// row — EMPTY marker names a whole file nobody authors (this scaffold is regenerated from the pinned
+// FS.GG.UI.Template, never hand-edited), so `verify-paths` may subtract it. Answered HERE, before the
+// package is restored/built below, so `--list` is cheap.
+if argv |> Array.contains "--list" then
+    printfn "scaffold-context\t%s\t" target
+    exit 0
+
 // ---------------------------------------------------------------------------------------------
 // 1. The pinned version — read from the repo's central pin, never invented
 // ---------------------------------------------------------------------------------------------

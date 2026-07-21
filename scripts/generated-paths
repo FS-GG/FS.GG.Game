@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# The GENERATED, CI-GATED artifacts of this repo — derived by asking each generator, never declared
+# (ADR-0044, .github#498). Mirrors FS-GG/.github's scripts/generated-paths: the interface `verify-paths`
+# consumes is the DEFAULT output — one repo-relative path per line — which the fsgg-coord engine reads and
+# subtracts from its drift report.
+#
+#   scripts/generated-paths           # the SUBTRACTABLE set: one repo-relative path per line
+#   scripts/generated-paths --all     # every row every generator emits: kind<TAB>path<TAB>marker
+#   scripts/generated-paths --roster  # the generators themselves, one `--list` invocation per line
+#
+# WHAT THIS IS FOR. `intra-repo-parallel-work` §1 tells a worker NOT to reserve a generated, CI-gated
+# artifact in their `Paths:` touch-set: nobody authors it, so a collision there is a rebase, not a
+# decision (#309). Having told them that, `verify-paths` then reported the regenerated file as DRIFT —
+# `undeclared (review)`, exit 3 — correctly, and forever. This repo's own case is
+# `template/skill-manifest/skill-manifest.json`: every worker who touches
+# `scripts/generate-skill-manifest.fsx` regenerates it and gets that spurious line (FS.GG.Game#457,
+# found under #454). A signal that fires on the behaviour the protocol MANDATES is one workers learn to
+# skip past, and the one time it means a real overrun nobody reads it (#498). This command is the list
+# `verify-paths` subtracts so that stops happening.
+#
+# WHY DERIVED, AND NOT A LIST SOMEBODY KEEPS. A repo-level list of ARTIFACTS (a `.fsgg/generated-paths`
+# ignore file, or a `Generated:` line per issue) is a second copy of a fact each generator already
+# holds, and it fails OPEN: a stale entry silently suppresses a REAL drift finding — a gate reporting
+# green over a subject it can no longer see (the #266 family), introduced by the very change meant to
+# make drift reporting trustworthy. So the generator is asked what it emits, because emitting it is what
+# it does — an import cannot drift by construction.
+#
+# THE ONE THING STILL WRITTEN BY HAND IS THE ROSTER BELOW — AND ITS FAILURE DIRECTION IS THE WHOLE
+# ARGUMENT. A roster of GENERATORS is not a roster of ARTIFACTS:
+#
+#   * Forget an ARTIFACT (the declined ignore-file) and drift on it is silently suppressed. Fail-open,
+#     and invisible.
+#   * Forget a GENERATOR here and its artifacts are simply not subtracted — a worker sees the expected
+#     drift line they see today. Fail-closed, and the failure is NOISE, which someone eventually
+#     complains about. #498 is that complaint.
+#
+# So the copy that remains is the one whose staleness cannot hide.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+
+ALL=""
+ROSTER=""
+case "${1:-}" in
+  --all)    ALL=1 ;;
+  --roster) ROSTER=1 ;;
+  "") ;;
+  *) echo "::error::unknown argument: $1 (expected --all, --roster, or nothing)" >&2; exit 2 ;;
+esac
+
+# THE ROSTER — every generator, as the exact argv that asks it what it emits. Each answers `--list` with
+# `kind<TAB>path<TAB>marker` rows and touches nothing.
+#
+#   generate-skill-manifest.fsx    -> template/skill-manifest/skill-manifest.json   (gate.yml --check)
+#   refresh-surface-baselines.fsx  -> readiness/surface-baselines/**.txt            (gate.yml regen+diff)
+#   generate-scaffold-context.fsx  -> scripts/skill-block-context/_scaffold.fs       (gate.yml --check)
+#   list-lockfiles                 -> **/packages.lock.json                          (locked-restore)
+#
+# The `dotnet fsi` entries carry a startup cost the .github roster (shell/python) does not; it is bounded
+# by the engine's own 30s timeout on this whole script, and each `--list` exits before its generator does
+# any restore/build, so the roster is cheap in practice (~1s each, no network).
+#
+# TO ADD A GENERATOR: add its `--list` invocation here. It must answer in format, exit 0, and touch
+# nothing.
+GENERATORS=(
+  "dotnet fsi scripts/generate-skill-manifest.fsx --list"
+  "dotnet fsi scripts/refresh-surface-baselines.fsx --list"
+  "dotnet fsi scripts/generate-scaffold-context.fsx --list"
+  "scripts/list-lockfiles --list"
+)
+
+# `--roster` exists so a GATE could read this array by ASKING for it, rather than parsing bash. A tool
+# that re-derives its own subject list is the second copy again, one level up.
+if [ -n "$ROSTER" ]; then
+  printf '%s\n' "${GENERATORS[@]}"
+  exit 0
+fi
+
+[ "${#GENERATORS[@]}" -gt 0 ] || {
+  echo "::error::generated-paths: the roster is EMPTY — refusing to answer 'nothing is generated', which is not the same fact." >&2
+  exit 2
+}
+
+# Ask one generator. FAILS CLOSED, LOUDLY: a generator that errors, or that answers nothing, contributes
+# NOTHING to the subtraction and says so on stderr — it must never be read as "this generator emits no
+# artifacts", because the two are opposite facts and only one of them is safe. #498's own acceptance
+# turns on this: an empty or absent `--list` must leave drift reported exactly as it is today, never
+# subtract everything. That is the #266 shape aimed at this very command, so it is the one condition this
+# script refuses to get wrong.
+ask() {
+  local inv="$1" out err rc=0
+  err="$(mktemp "${TMPDIR:-/tmp}/generated-paths.err.XXXXXX")"
+  # Word-split deliberately: the roster holds argv, not a path.
+  # shellcheck disable=SC2086
+  out="$(cd "$HERE" && $inv 2>"$err")" || rc=$?
+
+  if [ "$rc" -ne 0 ]; then
+    # The generator's OWN reason, not just its exit code — a warning nobody can act on is a warning
+    # nobody reads.
+    echo "::warning::generated-paths: '$inv' exited $rc — its artifacts are NOT subtracted (drift on them stays reported)." >&2
+    sed 's/^/  | /' "$err" >&2
+    rm -f "$err"
+    return 0
+  fi
+  rm -f "$err"
+  if [ -z "$out" ]; then
+    echo "::warning::generated-paths: '$inv' listed nothing — its artifacts are NOT subtracted." >&2
+    return 0
+  fi
+  printf '%s\n' "$out"
+}
+
+rows() { local g; for g in "${GENERATORS[@]}"; do ask "$g"; done; }
+
+if [ -n "$ALL" ]; then
+  rows
+  exit 0
+fi
+
+# THE SUBTRACTABLE SET IS THE EMPTY-MARKER ROWS, AND THAT DISTINCTION IS LOAD-BEARING — dropping it
+# would build the fail-open this whole design refuses.
+#
+# A row with a MARKER names a generated REGION inside a file somebody else authored — that file IS
+# authored, so #309's rule never applied to it, and drift on it is a true finding. An EMPTY marker names
+# a whole file that nobody authors (the manifest, the baselines, `_scaffold.fs`, a lockfile). That is
+# #309's authorship test, and it is exactly the set that may be subtracted.
+#
+# A row must have EXACTLY three fields to be read at all, and that strictness is the point rather than
+# tidiness. `NF >= 2` is a fail-open: a two-field row has no third field, so `$3 == ""` is vacuously true
+# and the path is subtracted — which is precisely what a REGION generator that dropped its marker column
+# would emit. So: three fields, or the row is not believed — warned about, and NOT subtracted.
+rows | awk -F'\t' '
+  NF != 3 {
+    printf "::warning::generated-paths: malformed row (%d field(s), want 3) — NOT subtracted: %s\n", NF, $0 > "/dev/stderr"
+    next
+  }
+  $2 == "" { next }
+  $3 == "" { print $2 }
+' | LC_ALL=C sort -u

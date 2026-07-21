@@ -53,6 +53,17 @@ let packages =
 let binDir proj = Path.Combine(repoRoot, "src", proj, "bin", "Debug", "net10.0")
 let binDirs = packages |> List.map (snd >> binDir)
 
+// `scripts/generated-paths` roster contract (ADR-0044 / .github#498): one `kind<TAB>path<TAB>marker`
+// row per emitted path — TWO files per package (types + members), EMPTY marker (a whole file nobody
+// authors, the set `verify-paths` may subtract). Derived from `packages` so it cannot drift from what
+// `write` below actually emits, and answered BEFORE `restoredAssemblies ()` runs so `--list` needs
+// nothing built or restored.
+if Environment.GetCommandLineArgs() |> Array.contains "--list" then
+    for (packageName, _) in packages do
+        printfn "surface-baseline\treadiness/surface-baselines/%s.txt\t" packageName
+        printfn "surface-baseline\treadiness/surface-baselines/members/%s.txt\t" packageName
+    exit 0
+
 // Third-party dependencies are NOT copied into a library project's bin/ (only executables and test
 // projects get the full closure), yet a public signature may name one — `Adapter` returns
 // FS.GG.UI.Scene types. Reflecting over a member forces the runtime to resolve them, so read the
