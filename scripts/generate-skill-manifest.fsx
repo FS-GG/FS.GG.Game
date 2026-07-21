@@ -40,6 +40,20 @@ let repoRoot =
 let repoPath (rel: string) =
     Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar))
 
+/// The single generated artifact this script emits, repo-relative and named ONCE — so `--list` below
+/// and the writer at the foot cannot disagree about it (ADR-0044: derive the path from the generator,
+/// never keep a second copy of it).
+let manifestRel = "template/skill-manifest/skill-manifest.json"
+
+// `scripts/generated-paths` roster contract (ADR-0044 / .github#498): one `kind<TAB>path<TAB>marker`
+// row per emitted path — an EMPTY marker names a whole file nobody authors, which is the set
+// `verify-paths` may subtract from its drift report (a worker who touches this generator regenerates
+// the manifest, and §1 told them NOT to reserve it, so drift on it is a rebase, not a decision).
+// Answered HERE, before a single SKILL.md body is read, so the roster call stays cheap.
+if Environment.GetCommandLineArgs() |> Array.contains "--list" then
+    printfn "skill-manifest\t%s\t" manifestRel
+    exit 0
+
 /// ADR-0022 §6: is FS.GG.Rendering REQUIRED to ship a byte-identical copy of this body?
 /// (FS.GG.Game#280)
 ///
@@ -184,7 +198,7 @@ let manifestJson =
 
     sprintf "{\n  \"schemaVersion\": 1,\n  \"skills\": [\n%s\n  ]\n}\n" entries
 
-let manifestPath = repoPath "template/skill-manifest/skill-manifest.json"
+let manifestPath = repoPath manifestRel
 let check = Environment.GetCommandLineArgs() |> Array.contains "--check"
 
 if check then
