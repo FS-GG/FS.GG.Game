@@ -1,0 +1,212 @@
+name: release-skills
+
+# Publishes FS.GG.Game.Skills — FS.GG.Game's owner-authored `mirrored: false` product-skill bytes as one
+# versioned artifact (ADR-0062 substrate / ADR-0063 owner-repo byte source / ADR-0014 content-addressed
+# verify; FS.GG.Game#449/#451) — to the org GitHub Packages feed and public nuget.org. This is a SEPARATE
+# release workflow, deliberately NOT folded into release.yml: FS.GG.Game.Skills carries its OWN version
+# cadence (starts 0.1.0), not the FS.GG.Game.Core/Render/Harness coherent set. It is absent from
+# FS.GG.Game.slnx and packed only here, so release.yml's coherent-set packing never touches it and this
+# never packs the coherent set.
+#
+# WHY THIS PUBLISH IS LOAD-BEARING. Nothing consumes the game-skills bytes until they are on a feed. Once
+# published, FS.GG.SDD.Cli pins FS.GG.Game.Skills at a version, restores it at build time (online), and
+# materializes each `mirrored: false` product skill into a scaffold's skill roots at scaffold time
+# (offline), verifying each against the manifest sha256 (ADR-0014). This publish unblocks the feed-side of
+# FS.GG.SDD#623 (ADR-0037 publish-before-flip: the SDD materializer cannot pin a delivered artifact until
+# this publish makes one exist).
+#
+# NUGET.ORG IS NOT OPTIONAL FOR REACH. The SDD CLI restores FS.GG.* from PUBLIC nuget.org (the org GitHub
+# Packages feed needs a credential even to read — ADR-0039). A package that exists only on the org feed
+# cannot be consumed by the CLI. So this dual-publishes (ADR-0012 org feed + nuget.org; ADR-0013 OIDC
+# Trusted Publishing, no stored key) the BYTE-IDENTICAL .nupkg — no re-pack.
+#
+# Version is the EVALUATED csproj <Version> (msbuild -getProperty), never a grep and never pinned in this
+# header. The pushed tag is a COHERENCE CHECK against it, never the source of truth. The package ships
+# STABLE (no -preview): the shared Renovate preset sets ignoreUnstable=true, so a prerelease would be
+# invisible to the fabric that is supposed to carry it — refuse rather than ship it silently.
+#
+# Release by pushing a tag `skills/v<version>` matching the csproj <Version>; or run manually
+# (workflow_dispatch) with publish=true. A manual run with publish=false is a pack-only dry run.
+#
+# ⚠ THE nuget.org POLICY IS BOUND TO BOTH THIS WORKFLOW'S FILENAME AND THE PACKAGE ID. An org-owner has
+# created a Trusted Publishing policy for: Repository Owner `FS-GG` · Repository `FS.GG.Game` · Workflow
+# file `release-skills.yml` · package `FS.GG.Game.Skills` (owner Paradigma11). Renaming either afterwards
+# invalidates the token exchange (see .github#624). Until the policy exists, NuGet/login fail-closes with a
+# 401 — the correct direction: never a silent no-op, never a half-published set.
+
+on:
+  push:
+    tags: ['skills/v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Push to the feeds (false = pack-only dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-skills-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack & publish FS.GG.Game.Skills
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Restrict to the canonical repo: fork tags/dispatch never run this (no fork secret exposure).
+    if: github.repository == 'FS-GG/FS.GG.Game'
+    # Least-privilege: only this job gains packages: write, and the org-feed push uses the run-scoped
+    # GITHUB_TOKEN, never a PAT. id-token: write mints the GitHub OIDC token for nuget.org Trusted
+    # Publishing (ADR-0013).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Resolve version + publish decision
+        id: v
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          proj=src/FS.GG.Game.Skills/FS.GG.Game.Skills.csproj
+          version="$(dotnet msbuild "$proj" -getProperty:Version | tr -d '[:space:]')"
+          if [ -z "$version" ]; then
+            echo "::error::could not read <Version> from $proj (build defect); refusing to publish."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # A `-preview` package would be INVISIBLE to the shared Renovate preset (ignoreUnstable: true),
+          # so the SDD CLI would never be bumped — defeating the point of shipping it as a package. Refuse.
+          case "$version" in
+            *-*) echo "::error::version '$version' is a prerelease. The org's Renovate preset sets ignoreUnstable=true, so consumers would never see it. Publish a stable 0.x version."; exit 1 ;;
+          esac
+
+          if [ "$EVENT" = "push" ]; then
+            # The tag is a coherence check against the evaluated version, never the source of truth.
+            tag_version="${REF#skills/v}"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::tag $REF ($tag_version) does not match csproj <Version> ($version)."
+              exit 1
+            fi
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$DISPATCH_PUBLISH" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Locked restore (cold), via the same shared action the gate uses — a silent dependency
+      # substitution fails here rather than changing what gets published (ADR-0006).
+      - name: Restore (locked, cold)
+        uses: ./.github/actions/locked-restore
+        with:
+          target: src/FS.GG.Game.Skills/FS.GG.Game.Skills.csproj
+
+      # THE PACKAGE IS NEVER PUBLISHED UNVERIFIED. verify-package.sh is the gate: it proves the packed set
+      # derives from template/skill-manifest/skill-manifest.json, packs every `mirrored: false` product
+      # member + the manifest, and fails loud on a byte that does not match its recorded sha256 (the
+      # ADR-0014 record the SDD CLI verifies against at scaffold time). A publish that skipped it would ship
+      # the package without the evidence it works.
+      - name: Verify — derive, pack, content-address, fail-loud
+        run: bash src/FS.GG.Game.Skills/verify-package.sh
+
+      - name: Pack
+        run: dotnet pack src/FS.GG.Game.Skills/FS.GG.Game.Skills.csproj -c Release -o artifacts/packages
+
+      # A PACKAGE THAT PACKS BUT DOES NOT RESOLVE FROM A REAL RESTORE is the failure mode here. The step
+      # above packs the nupkg; this drives it the way the SDD CLI will — a throwaway consumer with a real
+      # PackageReference, so NuGet's auto-import of build/FS.GG.Game.Skills.props is exercised against the
+      # actual .nupkg and the game-skills content is proven reachable at $(FsggGameSkillsContentDir).
+      - name: Smoke — a real consumer restores the package and can reach the game-skills content
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          # ABSOLUTE source path, and it has to be: a NuGet source in a config resolves RELATIVE TO THAT
+          # FILE. --configfile makes NuGet use ONLY this file, so the runner's global packageSourceMapping
+          # cannot filter the local feed out (the reason a naive local-feed restore 404s).
+          cat > "$work/isolated.config" <<CFG
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources><clear /><add key="local" value="${{ github.workspace }}/artifacts/packages" /></packageSources>
+          </configuration>
+          CFG
+          # Quoted delimiter: the shell expands nothing inside. The one dynamic value —
+          # ${{ steps.v.outputs.version }} — is an Actions expression, substituted when the runner renders
+          # this run-script (before any shell runs), so it lands regardless of quoting; every $(…) below is
+          # a literal MSBuild property, kept verbatim.
+          cat > "$work/Consumer.csproj" <<'CSPROJ'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net10.0</TargetFramework>
+              <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              <IncludeBuildOutput>false</IncludeBuildOutput>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="FS.GG.Game.Skills" Version="${{ steps.v.outputs.version }}" />
+            </ItemGroup>
+            <!-- Prove build/FS.GG.Game.Skills.props imported and the packed content is reachable. -->
+            <Target Name="AssertSkillsBytes" AfterTargets="Build">
+              <Error Condition="'$(FsggGameSkillsContentDir)' == ''" Text="build/FS.GG.Game.Skills.props did not import — FsggGameSkillsContentDir is empty" />
+              <Error Condition="!Exists('$(FsggGameSkillsContentDir)/skill-manifest.json')" Text="restored package has no game-skills/skill-manifest.json at $(FsggGameSkillsContentDir)" />
+              <Message Importance="high" Text="FS.GG.Game.Skills: game-skills content reachable at $(FsggGameSkillsContentDir)" />
+            </Target>
+          </Project>
+          CSPROJ
+          dotnet restore "$work/Consumer.csproj" --configfile "$work/isolated.config"
+          dotnet build   "$work/Consumer.csproj" -c Release --no-restore
+          echo "packaged game-skills: a real consumer restore reached skill-manifest.json at the content root" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push to org GitHub Packages feed
+        if: steps.v.outputs.push == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Game.Skills.*.nupkg" \
+            --source https://nuget.pkg.github.com/FS-GG/index.json \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      # nuget.org dual-publish (ADR-0012/0013). Pushes the BYTE-IDENTICAL org-feed .nupkg, no re-pack, AFTER
+      # the org-feed push (gated ordering, ADR-0012 §4). NuGet/login mints a single-use key from the org's
+      # Trusted Publishing policy for THIS workflow (release-skills.yml) + FS.GG.Game.Skills; until that
+      # policy exists it 401s and fails the release loud. Same user fallback as release.yml.
+      - name: NuGet login (OIDC → short-lived nuget.org key)
+        if: steps.v.outputs.push == 'true'
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+
+      - name: Push byte-identical package to nuget.org
+        if: steps.v.outputs.push == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Game.Skills.*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+            --skip-duplicate
+
+      - name: Summary
+        run: |
+          {
+            echo "### FS.GG.Game.Skills ${{ steps.v.outputs.version }}"
+            if [ "${{ steps.v.outputs.push }}" = "true" ]; then
+              echo "Published \`FS.GG.Game.Skills\` **${{ steps.v.outputs.version }}** to the org feed + nuget.org."
+            else
+              echo "Pack-only dry run — nothing pushed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
