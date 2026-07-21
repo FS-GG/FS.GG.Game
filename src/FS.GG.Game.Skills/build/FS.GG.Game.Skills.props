@@ -1,0 +1,27 @@
+<Project>
+
+  <!--
+    FS.GG.Game.Skills consumer handle (ADR-0062, ADR-0063, ADR-0014; FS.GG.Game#449). Auto-imported by
+    NuGet from the package's build/ folder when a project references FS.GG.Game.Skills.
+
+    This package ships product skill BYTES, not a materialize step: the materialize is the SDD CLI's, in
+    F#, at scaffold time (ADR-0063 — the scaffold materializer sources owner-repo bytes from a pinned,
+    content-addressed channel; offline at scaffold time, so the CLI embeds the bytes it restored online at
+    build time). All this file does is expose WHERE the packed content is, so the consumer's build can
+    locate it without hard-coding a NuGet-cache path.
+
+    $(FsggGameSkillsContentDir) points at the package's content root, which holds:
+      skill-manifest.json         the delivered set + per-skill sha256 (ADR-0014 verify record)
+      skills/<id>/SKILL.md         the bytes for each `mirrored: false` `scope: product` row
+
+    The consumer reads skill-manifest.json, and for each `mirrored: false` product row whose
+    `materializes-when` predicate holds, lays skills/<id>/SKILL.md into the scaffold's skill roots,
+    verifying the bytes against the row's sha256 (the load-bearing half — a package reference is not a
+    file on disk). The `mirrored: true` rows the manifest also lists carry NO bytes here: they reach a
+    scaffold through FS.GG.Rendering's mirror (ADR-0022 §6).
+  -->
+  <PropertyGroup>
+    <FsggGameSkillsContentDir Condition="'$(FsggGameSkillsContentDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../game-skills'))</FsggGameSkillsContentDir>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,109 @@
+<!--
+  FS.GG.Game.Skills — FS.GG.Game's OWNER-authored `mirrored: false` PRODUCT skill bytes as ONE versioned
+  package (ADR-0062 substrate / ADR-0063 owner-repo byte source / ADR-0014 content-addressed verify).
+  FS.GG.Game#449, closing the byte-SOURCE gap under FS.GG.SDD#622 / FS-GG/.github#1308.
+
+  WHAT THIS DELIVERS. FS.GG.Game owns a `scope: product` skill class whose bytes live at
+  template/product-skills/<id>/SKILL.md. The `mirrored: false` subset (ADR-0022 §6: no FS.GG.Rendering
+  mirror) has no channel that carries it to a scaffold. This package IS that channel: it publishes those
+  bytes + template/skill-manifest/skill-manifest.json as a versioned artifact the SDD CLI pins, restores
+  at build time (online), and materializes into a scaffold's skill roots at scaffold time (offline), with
+  the ADR-0014 content-addressed sha256 as the integrity guarantee.
+
+  WHY A SIBLING PACKAGE OWNED BY FS.GG.Game — NOT an expanded .github FS.GG.Drivers (#449's decision).
+  FS.GG.Drivers is definitionally the `.github`-authored driver bytes; a `fs-gg-game`-owned product skill
+  is not `.github`-authored and cannot ride it without a FROZEN COPY of these bytes in .github — the exact
+  restatement ADR-0058 forbids, ADR-0062 replaces, and ADR-0063 rules out ("a new owner-repo skill needs
+  its skills.yml row and nothing else — no new provider, no frozen copy"). So FS.GG.Game publishes its own
+  owner bytes, reusing .github's FS.GG.Drivers SUBSTRATE (ADR-0063) one repo over.
+
+  NO CONSUMER MATERIALIZE TARGET, DELIBERATELY. This package ships only build/FS.GG.Game.Skills.props — a
+  stable handle to the packed content ($(FsggGameSkillsContentDir)) — because the MATERIALIZE is the SDD
+  CLI's, in F#, at scaffold time (ADR-0063). A package reference is not a materialized file (ADR-0014); the
+  materialize step lives downstream (FS.GG.SDD#623).
+
+  DERIVED, NOT RESTATED (ADR-0058). This project packs no committed list of skills. stage-skills.py reads
+  template/skill-manifest/skill-manifest.json — the ONE authored source, emitted by
+  scripts/generate-skill-manifest.fsx — and stages exactly its `mirrored: false` `scope: product` rows at
+  pack time. A skill added/retired in the generator needs no edit here.
+
+  IDENTITY IS FOREVER (ADR-0003): PackageId FS.GG.Game.Skills is the product identity — never renamed in
+  place. It is NOT part of the FS.GG.Game.Core/Render/Harness coherent set (its version cadence is its
+  own), so it is deliberately absent from FS.GG.Game.slnx and carries its own <Version> below.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A content-only package: it ships product skill bytes + a content handle, no assembly. Drop the
+       repo-wide FSharp.Core reference (Directory.Build.local.props adds it to every project for the F#
+       source projects) — this project compiles nothing, so it needs no dependency and its lockfile stays
+       empty, exactly like .github's FS.GG.Drivers. -->
+  <ItemGroup>
+    <PackageReference Remove="FSharp.Core" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- A TFM is still required for `dotnet pack`; net10.0 matches the repo's global.json floor.
+         IncludeBuildOutput false means no lib/ folder is produced or packed. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- No assembly is produced, so there is no public surface to document or baseline. Turn off the
+         repo-wide doc-file/package-validation/api-surface expectations that assume a compiled project. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnablePackageValidation>false</EnablePackageValidation>
+
+    <IsPackable>true</IsPackable>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <PackageId>FS.GG.Game.Skills</PackageId>
+    <!-- Own version cadence — NOT the repo-wide 0.7.1 coherent set. First release: 0.1.0. -->
+    <Version>0.1.0</Version>
+
+    <Description>FS.GG.Game's owner-authored mirrored:false product skill bytes (e.g. fs-gg-playtest, fs-gg-ai) as one versioned artifact, with template/skill-manifest/skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the skills into a scaffold's skill roots at scaffold time (ADR-0062, ADR-0063; ADR-0014 verify).</Description>
+    <PackageTags>fsgg;game;skills;product;scaffold;dotnet</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/FS-GG/FS.GG.Game/tree/main/src/FS.GG.Game.Skills</PackageProjectUrl>
+
+    <!-- NU5128: a package with no lib/ref assembly and no dependencies. That is exactly what a
+         content-only skills package IS (SuppressDependenciesWhenPacking above), not a defect. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+
+    <!-- Where the skill bytes are staged before packing: under obj/ (gitignored), regenerated every
+         pack, so the derived set is never committed and cannot go stale. BaseIntermediateOutputPath (obj/)
+         is resolved in the SDK props imported ABOVE this body; IntermediateOutputPath is not set until the
+         SDK targets run (after the body), so using it here would evaluate empty and stage into src/. -->
+    <SkillsStagingDir>$(BaseIntermediateOutputPath)skills-staging</SkillsStagingDir>
+  </PropertyGroup>
+
+  <!-- Consumer-imported handle to the packed content (no materialize logic — that is the SDD CLI's),
+       packed at the well-known build/ path NuGet auto-imports. README.md is packed to the package root
+       (PackageReadmeFile) by the repo-wide ItemGroup in Directory.Build.local.props — do NOT re-add it
+       here or NuGet raises NU5118 (duplicate /README.md). -->
+  <ItemGroup>
+    <None Include="build/FS.GG.Game.Skills.props" Pack="true" PackagePath="build/" />
+  </ItemGroup>
+
+  <!-- Derive the packed skill set from template/skill-manifest/skill-manifest.json at pack time, then add
+       the staged files as package content. TargetsForTfmSpecificContentInPackage is NuGet's supported
+       hook for COMPUTED package content — items added here land in the nupkg without being static <None>
+       globs (which MSBuild evaluates before StageSkills could have written anything). -->
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddSkillsContent</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="StageSkills" BeforeTargets="Pack">
+    <Exec Command="python3 &quot;$(MSBuildProjectDirectory)/stage-skills.py&quot; &quot;$(SkillsStagingDir)&quot;" />
+  </Target>
+
+  <Target Name="AddSkillsContent" DependsOnTargets="StageSkills">
+    <ItemGroup>
+      <_SkillsStaged Include="$(SkillsStagingDir)/**/*" />
+      <!-- Constant folder PackagePath: NuGet appends each glob item's RecursiveDir-relative path
+           (skill-manifest.json, skills/fs-gg-playtest/SKILL.md, …) under game-skills/. -->
+      <TfmSpecificPackageFile Include="@(_SkillsStaged)">
+        <PackagePath>game-skills/</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+
+</Project>
