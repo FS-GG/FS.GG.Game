@@ -89,4 +89,23 @@
     <Compile Include="Physics.fs" />
   </ItemGroup>
 
+  <!-- Pack-time completeness gate (FS.GG.Game#462). The packed api-surface (Directory.Build.local.props
+       packs every `**/*.fsi` here into the nupkg's api-surface/, which scaffolded products vendor
+       VERBATIM) must stay COMPLETE and faithful to the compiled surface, or a milestone downstream
+       silently vendors a subset — the FS.GG.SDD#644 gap. scripts/check-packed-api-surface.sh asserts
+       (1) every module/type the surface baseline says the assembly exports is DECLARED in some packed
+       `.fsi`, and (2) the packed `.fsi` set equals this project's <Compile> list (no stray uncompiled
+       file shipping as authoritative surface, no compiled module dropped from the pack). It reads the
+       checked-in, drift-gated baselines — no build or reflection — so it is cheap enough to run on
+       every build. Hung on Build so it gates BOTH ordinary CI builds and the release `dotnet pack`
+       (which builds first): a missing/malformed module fails here rather than surfacing as a
+       scaffolded-product gap. Non-Windows (the gate is bash, releases run on Linux); skipped only when
+       the baseline oracle is absent, which gate.yml's surface-baseline-drift job independently reds. -->
+  <Target Name="CheckPackedApiSurface"
+          AfterTargets="Build"
+          Condition="'$(OS)' != 'Windows_NT' And Exists('$(MSBuildProjectDirectory)/../../readiness/surface-baselines/members/FS.GG.Game.Core.txt')">
+    <Exec Command="bash &quot;$(MSBuildProjectDirectory)/../../scripts/check-packed-api-surface.sh&quot;"
+          WorkingDirectory="$(MSBuildProjectDirectory)/../.." />
+  </Target>
+
 </Project>
