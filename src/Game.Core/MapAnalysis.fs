@@ -170,3 +170,36 @@ module MapAnalysis =
             [ for i in 0 .. n - 1 do
                   if isAp.[i] then
                       cells.[i] ]
+
+    // ---------------------------------------------------------------------------------------------
+    // M10 — path & flow metrics. Unweighted BFS hop distances — the topological "how many steps across",
+    // distinct from Pathfinding.distanceField's baseStep/√2 movement cost.
+    // ---------------------------------------------------------------------------------------------
+
+    /// Level BFS hop distances from a `Floor` `start` over `floorNeighbours`; empty when `start` is not floor.
+    let private bfsHops (neighbourhood: Neighbourhood) (map: TileMap) (start: Cell) : Dictionary<Cell, int> =
+        let dist = Dictionary<Cell, int>()
+
+        if MapGen.get map start = ValueSome Floor then
+            dist.[start] <- 0
+            let queue = Queue<Cell>()
+            queue.Enqueue start
+
+            while queue.Count > 0 do
+                let c = queue.Dequeue()
+
+                for n in floorNeighbours neighbourhood map c do
+                    if not (dist.ContainsKey n) then
+                        dist.[n] <- dist.[c] + 1
+                        queue.Enqueue n
+
+        dist
+
+    let isolation (neighbourhood: Neighbourhood) (map: TileMap) (cell: Cell) : int =
+        let dist = bfsHops neighbourhood map cell
+        // `max` over the BFS levels is commutative, so Dictionary enumeration order does not reach the result.
+        if dist.Count = 0 then 0 else Seq.max dist.Values
+
+    let diameter (neighbourhood: Neighbourhood) (map: TileMap) : int =
+        floorCells map
+        |> List.fold (fun acc c -> max acc (isolation neighbourhood map c)) 0

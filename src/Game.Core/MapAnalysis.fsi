@@ -46,3 +46,15 @@ module MapAnalysis =
     /// **iterative** DFS (Tarjan), so a long single-cell-wide corridor cannot overflow the stack — total on
     /// any shape.
     val articulationPoints: neighbourhood: Neighbourhood -> map: TileMap -> Cell list
+
+    /// The eccentricity of `cell` — the maximum **unweighted hop distance** (BFS, each `neighbourhood` step =
+    /// 1) from `cell` to any `Floor` cell reachable from it. 0 when `cell` is not `Floor` or has no reachable
+    /// neighbour. This is a topological hop count, distinct from `Pathfinding.distanceField`'s `baseStep`/√2
+    /// movement cost. Total.
+    val isolation: neighbourhood: Neighbourhood -> map: TileMap -> cell: Cell -> int
+
+    /// The diameter of `map` under `neighbourhood` — the longest shortest-path (in unweighted hops) between
+    /// any two `Floor` cells in the same component, i.e. the map's critical-path length. Equals the maximum
+    /// over all `Floor` cells of `isolation`. 0 for an empty-floor or single-cell map. O(V²); a build/validate
+    /// -time metric, not a per-tick one. Total.
+    val diameter: neighbourhood: Neighbourhood -> map: TileMap -> int

@@ -1,0 +1,398 @@
+schemaVersion: 1
+workId: 036-mapanalysis-path-metrics
+stage: evidence
+status: evidenceReady
+sourceSpec: work/036-mapanalysis-path-metrics/spec.md
+sourceClarifications: work/036-mapanalysis-path-metrics/clarifications.md
+sourceChecklist: work/036-mapanalysis-path-metrics/checklist.md
+sourcePlan: work/036-mapanalysis-path-metrics/plan.md
+sourceTasks: work/036-mapanalysis-path-metrics/tasks.yml
+sourceAnalysis: readiness/036-mapanalysis-path-metrics/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/036-mapanalysis-path-metrics/analysis.json
+    digest: c860daca1fbbda7a9812d44ff68b675dd20ea119772bd8534bec74f6725684fd
+    schemaVersion: 1
+  - label: checklist
+    path: work/036-mapanalysis-path-metrics/checklist.md
+    digest: 9d849d67f4b58ab06feb7c306cf6e1e2c391f47e7d94ed9cabd659d80ca44e33
+    schemaVersion: 1
+  - label: clarifications
+    path: work/036-mapanalysis-path-metrics/clarifications.md
+    digest: 0a000b80969fd98b59fe4d13eed07b9bf8b033afcff82bebcb205de8c200bbe2
+    schemaVersion: 1
+  - label: plan
+    path: work/036-mapanalysis-path-metrics/plan.md
+    digest: b12e56a44611ba94c45e306e71baea8e51976e94a19ac31dce959756f3e0cf51
+    schemaVersion: 1
+  - label: spec
+    path: work/036-mapanalysis-path-metrics/spec.md
+    digest: 4e9428d85422ea74d7d52dba654aa295a47db8f05d56db598ed1fb20bb0f0295
+    schemaVersion: 1
+  - label: tasks
+    path: work/036-mapanalysis-path-metrics/tasks.yml
+    digest: a7c34c71d4d21e5f09128ea505949a4724f7cee1224b5f8038e41eb6b4f548ae
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/036-mapanalysis-path-metrics/test-reports/m10.trx
+      digest: "sha256:aebd82e858e63b0800fa8845622fae77af436a89fada441e45d032f01443159c"
+      outcome: passed
+      passed: 711
+      failed: 0
+      skipped: 0
+    notes: ["isolation/diameter (unweighted BFS hop metrics) implemented; diameter=max-isolation property + corridor exact value + totality covered; observed via m10.trx."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

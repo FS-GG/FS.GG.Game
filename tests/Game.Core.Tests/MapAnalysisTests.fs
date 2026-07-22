@@ -185,4 +185,51 @@ let tests =
                   MapAnalysis.articulationPoints FourWay m |> ignore
                   MapAnalysis.articulationPoints EightWay m |> ignore
                   true
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+
+          // ---- M10: path & flow metrics ----
+
+          testCase "isolation / diameter — a straight corridor of k cells has diameter k-1"
+          <| fun () ->
+              let corridor (k: int) : TileMap = { Width = k; Height = 1; Cells = Array.create k Floor }
+              Expect.equal (MapAnalysis.diameter FourWay (corridor 10)) 9 "10-cell corridor diameter is 9"
+              Expect.equal (MapAnalysis.isolation FourWay (corridor 10) (cell 0 0)) 9 "isolation of an end is 9"
+              Expect.equal (MapAnalysis.isolation FourWay (corridor 10) (cell 5 0)) 5 "isolation of the middle is 5"
+              // a non-floor cell and an empty map both measure 0
+              Expect.equal (MapAnalysis.isolation FourWay (corridor 10) (cell 0 (-1))) 0 "off-map cell => 0"
+              Expect.equal (MapAnalysis.diameter FourWay (MapGen.filled 4 4 Wall)) 0 "no floor => 0"
+
+          testCase "diameter — an L-bend measures the path around the corner"
+          <| fun () ->
+              // an L: 3 across the top, then 2 down the right — 4 hops end to end
+              let m =
+                  tileMapOf
+                      [ [ 1; 1; 1 ]
+                        [ 0; 0; 1 ]
+                        [ 0; 0; 1 ] ]
+              Expect.equal (MapAnalysis.diameter FourWay m) 4 "L-shape diameter follows the bend"
+
+          testCase "diameter equals the max over floor cells of isolation (FsCheck)"
+          <| fun () ->
+              let prop (s: uint64) =
+                  let w, h = 14, 10
+                  let m = randomMap w h (s % 100000UL)
+                  let byIsolation =
+                      [ for row in 0 .. h - 1 do
+                            for col in 0 .. w - 1 do
+                                if m.Cells.[row * w + col] = Floor then MapAnalysis.isolation FourWay m (cell col row) ]
+                      |> function
+                          | [] -> 0
+                          | xs -> List.max xs
+                  MapAnalysis.diameter FourWay m = byIsolation
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 200, prop)
+
+          testCase "MapAnalysis M10 totality — degenerate maps never throw (FsCheck)"
+          <| fun () ->
+              let prop (w: int) (h: int) (s: uint64) (cc: int) (cr: int) =
+                  let m = randomMap (max 0 (w % 9)) (max 0 (h % 9)) (s % 100000UL)
+                  MapAnalysis.isolation EightWay m (cell (cc % 12 - 6) (cr % 12 - 6)) |> ignore
+                  MapAnalysis.diameter FourWay m |> ignore
+                  MapAnalysis.diameter EightWay m |> ignore
+                  true
               Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop) ]
