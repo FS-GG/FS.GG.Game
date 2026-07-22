@@ -487,59 +487,36 @@ Blast flicker via two-color alternation. No camera (fixed view). Redraw strategy
 - **Game Over:** "GAME OVER", final score, NEW HIGH SCORE banner if beaten,
   "Click / Enter to restart".
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause,
-Game Over). Each menu is a vertical list of rows with a cursor, so one small update
-handler serves them all and navigation is identical everywhere.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start a fresh run at Wave 1 (StartGame)
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Rookie · Veteran · Elite ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Screen shake   ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Missile Command uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart Run
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**MISSILE COMMAND**) as the title label, with
+  **Start** (a fresh run at Wave 1), **Config**, and **Exit**.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes. The **Game Over** card offers **Play Again** — the arcade "insert
+  coin" framing that re-runs `init` from Wave 1 (there are no true continues, §11; high score is
+  carried over, §13) — and View Stats over the same shell.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions) via the
+    `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings persist via
+    `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    `Config` preset — Rookie/Veteran/Elite preload different tunable records: a larger
+    `blastMaxRadius` and slower `baseIncomingSpeed` for Rookie, tighter for Elite), **Master
+    volume**/**Sound** (route to `Audio.setMasterVolume`, §10, clamped `[0,1]`), and **Screen
+    shake** (toggles the §15 impact-juice effect). The menu, Esc routing, display settings, and
+    rebind screen come from the shell.
 
-Game Over ─┬─ Play Again ──── insert-coin restart; high score carried over (§13)
-           ├─ View Stats ─── Stats & Charts (§9.2)
-           └─ Title
-```
-
-The run always ends the same way — when all six cities are `Rubble` (§4.9). There are
-no true continues (§11), so **Play Again** is the arcade "insert coin" framing: it
-re-runs `init` from Wave 1 rather than resuming the lost run.
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑` decrements, `↓` increments, both **wrap**.
-- `Enter`/`Space`/left-click activates the current row; `Esc`/`P` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §9 overlay style: the selected row is highlighted (inverted), and
-  non-selected rows draw `#ECEFF1` on the dim overlay at 28 px mono.
-
-**Msg additions** (extend §7 Msg):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space/click on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12
-`Config` preset (Rookie/Veteran/Elite preload different tunable records — a larger
-`blastMaxRadius` and slower `baseIncomingSpeed` for Rookie, tighter for Elite);
-**Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped `[0,1]`);
-**Screen shake** toggles the §15 impact-juice effect.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Missile Command
+does **not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Missile Command-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
@@ -964,8 +941,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 `Phase` screen states: Title / Playing / WaveBonus / Paused / GameOver (§7, §9)
 - 🟥 Pause freezes world, resumes exact state (§7) — AC #15
 - 🟥 Game over when all 6 cities are `Rubble` (§4.9, §11) — AC #8
-- 🟥 Menu stack, cursor wrap, cycler/slider rows (§9.1)
-- 🟥 Difficulty presets + volume/scale/shake apply live + persist (§9.1, §12, §13)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, screen shake) apply live + persist (§9.1, §12, §13)
 - 🟥 Rookie/Veteran/Elite `Config` presets applied at init only, inert mid-run (§9.1, §12) — AC #21
 - 🟥 Defensive collapse plays out to Game Over, no shortcut when batteries lost (§11)
 

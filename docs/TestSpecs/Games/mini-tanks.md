@@ -738,60 +738,35 @@ Victory / Defeat, Stats & Charts (§9.2).
   ticks and ghosts as `Suspected` ticks (§8.1), the objective marker, and the match clock.
 - **Objective banner:** capture progress / escort distance / enemies remaining, per rule (§11).
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, run-end). Each
-menu is a vertical list of rows with a cursor, so one small update handler serves them all and
-navigation is identical everywhere; the world/HUD render only under the Play screen.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start a skirmish on the selected map + rules + difficulty
-       ├─ Loadout ───────── pick the player vehicle (Lynx · Cavalier · Bastion · Adder · Sabot, §5.1)
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Match rules    ◄ Elimination · Capture · Escort ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Aim assist     ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Mini Tanks uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart Match
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**MINI TANKS**) as the title label, with
+  **Start**, **Config**, and **Exit**. The **Loadout** picker (player vehicle — Lynx · Cavalier ·
+  Bastion · Adder · Sabot, §5.1) and the map + rules select sit alongside Start.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes. The **run-end** card (Victory / Defeat per the §11 outcome) offers
+  Rematch/Retry and View Stats over the same shell.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions) via the
+    `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings persist via
+    `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12 AI
+    knob preset), **Match rules** (the §11 objective), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`), and **Aim assist** (toggles the
+    `Ballistics.intercept` lead marker, §4.4). The menu, Esc routing, display settings, and rebind
+    screen come from the shell.
 
-Run end ─┬─ Victory (objective met / enemy team eliminated — §11)
-         │     ├─ Rematch
-         │     ├─ View Stats ── Stats & Charts (§9.2)
-         │     └─ Title
-         └─ Defeat  (player team eliminated / objective lost / clock — §11)
-               ├─ Retry
-               ├─ View Stats ── Stats & Charts (§9.2)
-               └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack; on Play, `Esc` opens Pause.
-- **Cycler/slider rows** (Difficulty, Match rules, Master volume, Sound, Window scale, Aim assist):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- The run-end menu presents the **Victory** or **Defeat** branch per the §11 outcome; both share the
-  nav handler and only their row list differs.
-
-**Msg additions** (extend §7 `Msg`):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12 AI knob preset;
-**Match rules** picks the §11 objective; **Master volume**/**Sound** route to `Audio.setMasterVolume`
-(§10, clamped `[0,1]`); **Aim assist** toggles the `Ballistics.intercept` lead marker (§4.4).
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Mini Tanks does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts** screen
+(§9.2) is a Mini Tanks-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last match** and **lifetime** play. It reads a `BattleStats` snapshot
@@ -1231,10 +1206,10 @@ its acceptance test(s) pass (§14)._
 - 🟥 In-play HUD: health arc, reload meter (tick int), ammo counts, module pips (§9)
 - 🟥 Objective banner: capture progress / escort distance / enemies remaining per rule (§9, §11)
 - 🟥 Minimap with fog, `Confirmed`/`Suspected` ticks, objective + clock (§9)
-- 🟥 Menu stack: cursor wrap, cycler/slider rows, Title/Pause/run-end (§9.1)
-- 🟥 Loadout screen: pick the player vehicle from the roster (§5.1, §9.1)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Loadout screen: pick the player vehicle from the roster, alongside Start (§5.1, §9.1)
 - 🟥 Screen state machine: Title → Play → Victory/Defeat → Stats → restart/title (§2, §9.1)
-- 🟥 Settings apply live + persist (difficulty/rules/volume/aim assist) (§9.1, §13)
+- 🟥 Game-specific Config rows over the shell (difficulty/rules/volume/aim assist) apply live + persist (§9.1, §13)
 - 🟥 `BattleStats`/`LifetimeStats` accumulation + fold/persist (§9.2)
 - 🟥 Stats screen: KPI tiles, shot-outcome + damage-by-zone charts (§9.2)
 
