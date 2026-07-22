@@ -1,6 +1,8 @@
 FS.GG.Game.Core.AgentId
 FS.GG.Game.Core.Ai
 FS.GG.Game.Core.Ballistics
+FS.GG.Game.Core.BspParams
+FS.GG.Game.Core.CaveParams
 FS.GG.Game.Core.Cell
 FS.GG.Game.Core.Circle
 FS.GG.Game.Core.Command
@@ -23,8 +25,12 @@ FS.GG.Game.Core.Effects+Policy`1+Stacks
 FS.GG.Game.Core.Effects+Policy`1+Strongest
 FS.GG.Game.Core.Effects+Policy`1+Tags
 FS.GG.Game.Core.FixedStep
+FS.GG.Game.Core.FloorLayout
+FS.GG.Game.Core.FloorParams
+FS.GG.Game.Core.FloorRoom
 FS.GG.Game.Core.Fov
 FS.GG.Game.Core.Geometry
+FS.GG.Game.Core.Grid`1
 FS.GG.Game.Core.Grids
 FS.GG.Game.Core.Grids+Edge
 FS.GG.Game.Core.Grids+EdgeOrientation
@@ -37,8 +43,10 @@ FS.GG.Game.Core.LineMode+Tags
 FS.GG.Game.Core.Loop
 FS.GG.Game.Core.Los
 FS.GG.Game.Core.Manifold
+FS.GG.Game.Core.MapGen
 FS.GG.Game.Core.Neighbourhood
 FS.GG.Game.Core.Neighbourhood+Tags
+FS.GG.Game.Core.NoiseParams
 FS.GG.Game.Core.Pathfinding
 FS.GG.Game.Core.Pathfinding+Landmarks
 FS.GG.Game.Core.Pathfinding+Reach
@@ -64,6 +72,7 @@ FS.GG.Game.Core.ProjectileStep+Struck
 FS.GG.Game.Core.ProjectileStep+Tags
 FS.GG.Game.Core.RayHit
 FS.GG.Game.Core.Rect
+FS.GG.Game.Core.Region
 FS.GG.Game.Core.Resolution
 FS.GG.Game.Core.Resolution+CellStep
 FS.GG.Game.Core.Resolution+CellStep+Tags
@@ -73,6 +82,10 @@ FS.GG.Game.Core.Resolution+PushStop+Blocked
 FS.GG.Game.Core.Resolution+PushStop+Stopped
 FS.GG.Game.Core.Resolution+PushStop+Tags
 FS.GG.Game.Core.Rng
+FS.GG.Game.Core.Room
+FS.GG.Game.Core.RoomGraph
+FS.GG.Game.Core.RoomKind
+FS.GG.Game.Core.RoomKind+Tags
 FS.GG.Game.Core.Sighting`1
 FS.GG.Game.Core.Source
 FS.GG.Game.Core.Source+Tags
@@ -85,6 +98,8 @@ FS.GG.Game.Core.StageResult+Tags
 FS.GG.Game.Core.Stage`2
 FS.GG.Game.Core.StepState`1
 FS.GG.Game.Core.TeamView`1
+FS.GG.Game.Core.Tile
+FS.GG.Game.Core.Tile+Tags
 FS.GG.Game.Core.Vertex
 FS.GG.Game.Core.Visibility
 FS.GG.Game.Core.Visibility+Segment

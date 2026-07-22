@@ -1,0 +1,374 @@
+schemaVersion: 1
+workId: 028-mapgen-cellular-caves
+stage: evidence
+status: evidenceReady
+sourceSpec: work/028-mapgen-cellular-caves/spec.md
+sourceClarifications: work/028-mapgen-cellular-caves/clarifications.md
+sourceChecklist: work/028-mapgen-cellular-caves/checklist.md
+sourcePlan: work/028-mapgen-cellular-caves/plan.md
+sourceTasks: work/028-mapgen-cellular-caves/tasks.yml
+sourceAnalysis: readiness/028-mapgen-cellular-caves/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/028-mapgen-cellular-caves/analysis.json
+    digest: d219a2778168f08182ef32a0254a174318e00db6c50c654715078b03d2e0f090
+    schemaVersion: 1
+  - label: checklist
+    path: work/028-mapgen-cellular-caves/checklist.md
+    digest: 3c4aba75cb8eb58d552204478a56168174fc4b34e5d4d8ff8f529cbdb10688c3
+    schemaVersion: 1
+  - label: clarifications
+    path: work/028-mapgen-cellular-caves/clarifications.md
+    digest: 5869d8d44acb1afda669027fd5e67f30b7cf162537a4f8ce668e5f6a9b7b3b83
+    schemaVersion: 1
+  - label: plan
+    path: work/028-mapgen-cellular-caves/plan.md
+    digest: 24a4a0858a6e4cb9c2e827387cc2d53fb4fa17facc387f989980fb61d40c9bee
+    schemaVersion: 1
+  - label: spec
+    path: work/028-mapgen-cellular-caves/spec.md
+    digest: 454fce707a843711cae96b35820fc0335562a689cd378078fa581b0a48a41ecf
+    schemaVersion: 1
+  - label: tasks
+    path: work/028-mapgen-cellular-caves/tasks.yml
+    digest: 602d3251d293529ab5e6617272fbcea3d8a240300dda89dc59fd962c5e1e37ce
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["caves: random-fill + smoothing + wall border + connect; covered by the border/floor test."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/MapGen.fs, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["4-5 Moore smoothing (OOB=wall); covered by the caves single-region test."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/MapGen.fs, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["single-cavern connectivity via connect; covered by the traversability test."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: [byte-identity for a seed via the M1 determinismHarness.]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["totality: clamp size/params; degenerate input never throws (FsCheck)."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: [AC-004 determinism scenario covered by the caves determinism test.]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: [AC-005 totality scenario covered by the caves totality test.]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/MapGen.fs, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["PD-003: exactly one floor region + bfs-traversable."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: [PD-001 caves pipeline implemented.]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV010]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["VO-001 unit tests (border, 4-5 rule, single region) pass."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005]
+    obligationRefs: [EV011]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["VO-002 determinism + traversability + totality suites pass."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["PC-001 surface baselines updated additively (CaveParams + MapGen.caves)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: ["PM-001 additive surface; no migration."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [readiness/028-mapgen-cellular-caves/work-model.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/028-mapgen-cellular-caves/test-reports/caves.trx
+      digest: "sha256:f16559f500d35cc6af83560eba5c701c6e8f5eec24c503c157194f18b895a344"
+      outcome: passed
+      passed: 680
+      failed: 0
+      skipped: 0
+    notes: [GV-001 work-model refreshes from current sources.]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

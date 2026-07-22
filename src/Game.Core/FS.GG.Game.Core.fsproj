@@ -50,6 +50,12 @@
          map. Names the edges/vertices between faces, which Pathfinding/Fov/Los cannot. -->
     <Compile Include="Grids.fsi" />
     <Compile Include="Grids.fs" />
+    <!-- Procedural map generation substrate: the dense Grid<'T> container, Tile/TileMap/Region, total
+         addressing, and the flood-fill connectivity toolkit. Consumes Cell (Primitives), Neighbourhood
+         (Pathfinding), and the seeded Rng. The family generators (caves/BSP/room-graph/maze-noise-scatter)
+         layer on top of it. -->
+    <Compile Include="MapGen.fsi" />
+    <Compile Include="MapGen.fs" />
     <!-- Sight layer: consumes Cell (Primitives) and the same `Cell -> bool` predicate shape. -->
     <Compile Include="Los.fsi" />
     <Compile Include="Los.fs" />

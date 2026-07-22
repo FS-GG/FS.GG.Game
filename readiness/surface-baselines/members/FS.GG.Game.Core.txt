@@ -16,6 +16,14 @@ FS.GG.Game.Core.Ballistics.inverseSquareFalloff(System.Double) : Microsoft.FShar
 FS.GG.Game.Core.Ballistics.linearFalloff(System.Double) : Microsoft.FSharp.Core.FSharpFunc<System.Double, System.Double>
 FS.GG.Game.Core.Ballistics.splash<T>(FS.GG.Game.Core.Point, System.Double, Microsoft.FSharp.Core.FSharpFunc<System.Double, System.Double>, FSharpFunc<T, FS.GG.Game.Core.Point>, SpatialGrid<T>) : FSharpList<Tuple<T, System.Double>>
 FS.GG.Game.Core.Ballistics.step(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Point, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Point, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>>>, System.Double, FS.GG.Game.Core.Projectile) : FS.GG.Game.Core.ProjectileStep
+FS.GG.Game.Core.BspParams.MaxLeaf : System.Int32 [get]
+FS.GG.Game.Core.BspParams.MinLeaf : System.Int32 [get]
+FS.GG.Game.Core.BspParams.RoomPadding : System.Int32 [get]
+FS.GG.Game.Core.BspParams.new(System.Int32, System.Int32, System.Int32)
+FS.GG.Game.Core.CaveParams.Neighbourhood : FS.GG.Game.Core.Neighbourhood [get]
+FS.GG.Game.Core.CaveParams.SmoothingPasses : System.Int32 [get]
+FS.GG.Game.Core.CaveParams.WallChance : System.Double [get]
+FS.GG.Game.Core.CaveParams.new(System.Double, System.Int32, FS.GG.Game.Core.Neighbourhood)
 FS.GG.Game.Core.Cell.Col : System.Int32 [get]
 FS.GG.Game.Core.Cell.Row : System.Int32 [get]
 FS.GG.Game.Core.Cell.new(System.Int32, System.Int32)
@@ -108,6 +116,17 @@ FS.GG.Game.Core.Effects.tickEffects<E>(FSharpList<Active<E>>) : FSharpList<Activ
 FS.GG.Game.Core.FixedStep.defaultMaxFrameTime : System.Double [get]
 FS.GG.Game.Core.FixedStep.drain(System.Double, System.Double, System.Double) : System.ValueTuple<System.Int32, System.Double>
 FS.GG.Game.Core.FixedStep.drainWith(System.Double, System.Double, System.Double, System.Double) : System.ValueTuple<System.Int32, System.Double>
+FS.GG.Game.Core.FloorLayout.Adjacency : System.Tuple<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell>[] [get]
+FS.GG.Game.Core.FloorLayout.Rooms : FS.GG.Game.Core.FloorRoom[] [get]
+FS.GG.Game.Core.FloorLayout.new(FS.GG.Game.Core.FloorRoom[], System.Tuple<FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell>[])
+FS.GG.Game.Core.FloorParams.MaxRooms : System.Int32 [get]
+FS.GG.Game.Core.FloorParams.RoomCount : System.Int32 [get]
+FS.GG.Game.Core.FloorParams.SpecialRooms : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.RoomKind> [get]
+FS.GG.Game.Core.FloorParams.new(System.Int32, System.Int32, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.RoomKind>)
+FS.GG.Game.Core.FloorRoom.Cell : FS.GG.Game.Core.Cell [get]
+FS.GG.Game.Core.FloorRoom.Kind : FS.GG.Game.Core.RoomKind [get]
+FS.GG.Game.Core.FloorRoom.TemplateId : System.Int32 [get]
+FS.GG.Game.Core.FloorRoom.new(FS.GG.Game.Core.Cell, FS.GG.Game.Core.RoomKind, System.Int32)
 FS.GG.Game.Core.Fov.fov(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell, System.Int32) : Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.Geometry.aabbContact(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Rect) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Contact>
 FS.GG.Game.Core.Geometry.center(FS.GG.Game.Core.Rect) : FS.GG.Game.Core.Point
@@ -124,6 +143,10 @@ FS.GG.Game.Core.Geometry.segmentAabbHit(FS.GG.Game.Core.Point, FS.GG.Game.Core.P
 FS.GG.Game.Core.Geometry.segmentCircleHit(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.Circle) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>
 FS.GG.Game.Core.Geometry.segmentPolygonHit(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.ConvexPolygon) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>
 FS.GG.Game.Core.Geometry.sweptIntersects(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Point, FS.GG.Game.Core.Rect) : System.Boolean
+FS.GG.Game.Core.Grid`1.Cells : T[] [get]
+FS.GG.Game.Core.Grid`1.Height : System.Int32 [get]
+FS.GG.Game.Core.Grid`1.Width : System.Int32 [get]
+FS.GG.Game.Core.Grid`1.new(System.Int32, System.Int32, T[])
 FS.GG.Game.Core.Grids+Edge.Col : System.Int32 [get]
 FS.GG.Game.Core.Grids+Edge.Orientation : FS.GG.Game.Core.Grids+EdgeOrientation [get]
 FS.GG.Game.Core.Grids+Edge.Row : System.Int32 [get]
@@ -193,8 +216,27 @@ FS.GG.Game.Core.Manifold.Normal : FS.GG.Game.Core.Point [get]
 FS.GG.Game.Core.Manifold.PointCount : System.Int32 [get]
 FS.GG.Game.Core.Manifold.Points : FS.GG.Game.Core.Point[] [get]
 FS.GG.Game.Core.Manifold.new(System.Int32, System.Int32, FS.GG.Game.Core.Point, System.Double, FS.GG.Game.Core.Point[], System.Int32, System.Int32)
+FS.GG.Game.Core.MapGen.bspDungeon(System.Int32, System.Int32, FS.GG.Game.Core.BspParams, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.RoomGraph, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.MapGen.caves(System.Int32, System.Int32, FS.GG.Game.Core.CaveParams, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.MapGen.classify<T>(FSharpList<Tuple<System.Int32, T>>, FS.GG.Game.Core.Grid<System.Int32>) : Grid<T>
+FS.GG.Game.Core.MapGen.connect(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Rng, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.MapGen.filled<T>(System.Int32, System.Int32, T) : Grid<T>
+FS.GG.Game.Core.MapGen.floorLayout(FS.GG.Game.Core.FloorParams, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.FloorLayout, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.MapGen.floorSeed(System.UInt64, System.Int32) : System.UInt64
+FS.GG.Game.Core.MapGen.get<T>(Grid<T>, FS.GG.Game.Core.Cell) : FSharpValueOption<T>
+FS.GG.Game.Core.MapGen.heightField(System.Int32, System.Int32, FS.GG.Game.Core.NoiseParams, FS.GG.Game.Core.Rng) : FS.GG.Game.Core.Grid<System.Int32>
+FS.GG.Game.Core.MapGen.inBounds<T>(Grid<T>, FS.GG.Game.Core.Cell) : System.Boolean
+FS.GG.Game.Core.MapGen.largestRegion(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Core.FSharpValueOption<FS.GG.Game.Core.Region>
+FS.GG.Game.Core.MapGen.maze(System.Int32, System.Int32, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.MapGen.poissonScatter(FS.GG.Game.Core.Grid<System.Boolean>, System.Int32, FS.GG.Game.Core.Rng) : System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.MapGen.regions(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Region>
+FS.GG.Game.Core.MapGen.set<T>(Grid<T>, FS.GG.Game.Core.Cell, T) : Grid<T>
 FS.GG.Game.Core.Neighbourhood+Tags.EightWay : System.Int32
 FS.GG.Game.Core.Neighbourhood+Tags.FourWay : System.Int32
+FS.GG.Game.Core.NoiseParams.Frequency : System.Double [get]
+FS.GG.Game.Core.NoiseParams.Octaves : System.Int32 [get]
+FS.GG.Game.Core.NoiseParams.Persistence : System.Double [get]
+FS.GG.Game.Core.NoiseParams.new(System.Int32, System.Double, System.Double)
 FS.GG.Game.Core.Pathfinding+Landmarks.astar(FS.GG.Game.Core.Pathfinding+Landmarks, FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Core.FSharpOption<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>>
 FS.GG.Game.Core.Pathfinding+Landmarks.build(FS.GG.Game.Core.Neighbourhood, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, System.Int32, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Pathfinding+Landmarks
 FS.GG.Game.Core.Pathfinding+Landmarks.heuristic(FS.GG.Game.Core.Pathfinding+Landmarks, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Cell) : System.Int32
@@ -268,6 +310,9 @@ FS.GG.Game.Core.Rect.Width : System.Double [get]
 FS.GG.Game.Core.Rect.X : System.Double [get]
 FS.GG.Game.Core.Rect.Y : System.Double [get]
 FS.GG.Game.Core.Rect.new(System.Double, System.Double, System.Double, System.Double)
+FS.GG.Game.Core.Region.Cells : FS.GG.Game.Core.Cell[] [get]
+FS.GG.Game.Core.Region.Id : System.Int32 [get]
+FS.GG.Game.Core.Region.new(System.Int32, FS.GG.Game.Core.Cell[])
 FS.GG.Game.Core.Resolution+CellStep+Tags.Block : System.Int32
 FS.GG.Game.Core.Resolution+CellStep+Tags.Enter : System.Int32
 FS.GG.Game.Core.Resolution+CellStep+Tags.Stop : System.Int32
@@ -289,6 +334,18 @@ FS.GG.Game.Core.Rng.nextFloat(FS.GG.Game.Core.Rng) : System.ValueTuple<System.Do
 FS.GG.Game.Core.Rng.nextInt(System.Int32, System.Int32, FS.GG.Game.Core.Rng) : System.ValueTuple<System.Int32, FS.GG.Game.Core.Rng>
 FS.GG.Game.Core.Rng.ofSeed(System.UInt64) : FS.GG.Game.Core.Rng
 FS.GG.Game.Core.Rng.split(FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Rng, FS.GG.Game.Core.Rng>
+FS.GG.Game.Core.Room.Bounds : FS.GG.Game.Core.Rect [get]
+FS.GG.Game.Core.Room.Id : System.Int32 [get]
+FS.GG.Game.Core.Room.new(System.Int32, FS.GG.Game.Core.Rect)
+FS.GG.Game.Core.RoomGraph.Corridors : System.Tuple<System.Int32, System.Int32>[] [get]
+FS.GG.Game.Core.RoomGraph.Rooms : FS.GG.Game.Core.Room[] [get]
+FS.GG.Game.Core.RoomGraph.new(FS.GG.Game.Core.Room[], System.Tuple<System.Int32, System.Int32>[])
+FS.GG.Game.Core.RoomKind+Tags.Boss : System.Int32
+FS.GG.Game.Core.RoomKind+Tags.Normal : System.Int32
+FS.GG.Game.Core.RoomKind+Tags.Secret : System.Int32
+FS.GG.Game.Core.RoomKind+Tags.Shop : System.Int32
+FS.GG.Game.Core.RoomKind+Tags.Start : System.Int32
+FS.GG.Game.Core.RoomKind+Tags.Treasure : System.Int32
 FS.GG.Game.Core.Sighting`1.Agent : FS.GG.Game.Core.AgentId [get]
 FS.GG.Game.Core.Sighting`1.LastSeenTick : System.Int32 [get]
 FS.GG.Game.Core.Sighting`1.Position : FS.GG.Game.Core.Point [get]
@@ -312,6 +369,8 @@ FS.GG.Game.Core.StepState`1.Accumulator : System.Double [get]
 FS.GG.Game.Core.StepState`1.Current : world [get]
 FS.GG.Game.Core.StepState`1.Previous : world [get]
 FS.GG.Game.Core.StepState`1.new(world, world, System.Double)
+FS.GG.Game.Core.Tile+Tags.Floor : System.Int32
+FS.GG.Game.Core.Tile+Tags.Wall : System.Int32
 FS.GG.Game.Core.Vertex.VCol : System.Int32 [get]
 FS.GG.Game.Core.Vertex.VRow : System.Int32 [get]
 FS.GG.Game.Core.Vertex.new(System.Int32, System.Int32)
