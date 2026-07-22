@@ -219,12 +219,16 @@ FS.GG.Game.Core.Manifold.new(System.Int32, System.Int32, FS.GG.Game.Core.Point, 
 FS.GG.Game.Core.MapAnalysis.articulationPoints(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.MapAnalysis.borderOpenings(FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.MapAnalysis.componentCount(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : System.Int32
+FS.GG.Game.Core.MapAnalysis.coverage(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>, System.Int32) : System.Double
 FS.GG.Game.Core.MapAnalysis.deadEnds(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.MapAnalysis.diameter(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : System.Int32
+FS.GG.Game.Core.MapAnalysis.fairness(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>, FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.Cell, System.Int32>
 FS.GG.Game.Core.MapAnalysis.isConnected(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : System.Boolean
 FS.GG.Game.Core.MapAnalysis.isolation(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.Cell) : System.Int32
 FS.GG.Game.Core.MapAnalysis.reachable(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.MapAnalysis.spacing(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>) : System.ValueTuple<System.Int32, System.Double>
 FS.GG.Game.Core.MapAnalysis.stranded(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.MapAnalysis.validate(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Rule>, FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : FS.GG.Game.Core.Report
 FS.GG.Game.Core.MapGen.bspDungeon(System.Int32, System.Int32, FS.GG.Game.Core.BspParams, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.RoomGraph, FS.GG.Game.Core.Rng>
 FS.GG.Game.Core.MapGen.caves(System.Int32, System.Int32, FS.GG.Game.Core.CaveParams, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.Rng>
 FS.GG.Game.Core.MapGen.classify<T>(FSharpList<Tuple<System.Int32, T>>, FS.GG.Game.Core.Grid<System.Int32>) : Grid<T>
@@ -322,6 +326,13 @@ FS.GG.Game.Core.Rect.new(System.Double, System.Double, System.Double, System.Dou
 FS.GG.Game.Core.Region.Cells : FS.GG.Game.Core.Cell[] [get]
 FS.GG.Game.Core.Region.Id : System.Int32 [get]
 FS.GG.Game.Core.Region.new(System.Int32, FS.GG.Game.Core.Cell[])
+FS.GG.Game.Core.Report.BorderOpenings : System.Int32 [get]
+FS.GG.Game.Core.Report.ComponentCount : System.Int32 [get]
+FS.GG.Game.Core.Report.Connected : System.Boolean [get]
+FS.GG.Game.Core.Report.Diameter : System.Int32 [get]
+FS.GG.Game.Core.Report.Failures : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Core.Report.Passed : System.Boolean [get]
+FS.GG.Game.Core.Report.new(System.Boolean, Microsoft.FSharp.Collections.FSharpList<System.String>, System.Boolean, System.Int32, System.Int32, System.Int32)
 FS.GG.Game.Core.Resolution+CellStep+Tags.Block : System.Int32
 FS.GG.Game.Core.Resolution+CellStep+Tags.Enter : System.Int32
 FS.GG.Game.Core.Resolution+CellStep+Tags.Stop : System.Int32
@@ -355,6 +366,11 @@ FS.GG.Game.Core.RoomKind+Tags.Secret : System.Int32
 FS.GG.Game.Core.RoomKind+Tags.Shop : System.Int32
 FS.GG.Game.Core.RoomKind+Tags.Start : System.Int32
 FS.GG.Game.Core.RoomKind+Tags.Treasure : System.Int32
+FS.GG.Game.Core.Rule+Tags.Connected : System.Int32
+FS.GG.Game.Core.Rule+Tags.MaxComponents : System.Int32
+FS.GG.Game.Core.Rule+Tags.MaxDiameter : System.Int32
+FS.GG.Game.Core.Rule+Tags.MinBorderOpenings : System.Int32
+FS.GG.Game.Core.Rule+Tags.MinDiameter : System.Int32
 FS.GG.Game.Core.Sighting`1.Agent : FS.GG.Game.Core.AgentId [get]
 FS.GG.Game.Core.Sighting`1.LastSeenTick : System.Int32 [get]
 FS.GG.Game.Core.Sighting`1.Position : FS.GG.Game.Core.Point [get]

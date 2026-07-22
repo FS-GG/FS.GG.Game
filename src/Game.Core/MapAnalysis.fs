@@ -2,6 +2,21 @@ namespace FS.GG.Game.Core
 
 open System.Collections.Generic
 
+type Rule =
+    | Connected
+    | MinDiameter of int
+    | MaxDiameter of int
+    | MinBorderOpenings of int
+    | MaxComponents of int
+
+type Report =
+    { Passed: bool
+      Failures: string list
+      Connected: bool
+      ComponentCount: int
+      Diameter: int
+      BorderOpenings: int }
+
 [<RequireQualifiedAccess>]
 module MapAnalysis =
 
@@ -203,3 +218,107 @@ module MapAnalysis =
     let diameter (neighbourhood: Neighbourhood) (map: TileMap) : int =
         floorCells map
         |> List.fold (fun acc c -> max acc (isolation neighbourhood map c)) 0
+
+    // ---------------------------------------------------------------------------------------------
+    // M11 — distribution, fairness & the validation battery (the keystone). `spacing` is geometric
+    // (Manhattan on a point set); `fairness`/`coverage` are traversal (BFS hops over the map).
+    // ---------------------------------------------------------------------------------------------
+
+    /// Level BFS hop distances seeded from every floor `start` at 0 — the multi-source hop field.
+    let private bfsHopsMulti (neighbourhood: Neighbourhood) (map: TileMap) (starts: Cell list) : Dictionary<Cell, int> =
+        let dist = Dictionary<Cell, int>()
+        let queue = Queue<Cell>()
+
+        for s in starts do
+            if MapGen.get map s = ValueSome Floor && not (dist.ContainsKey s) then
+                dist.[s] <- 0
+                queue.Enqueue s
+
+        while queue.Count > 0 do
+            let c = queue.Dequeue()
+
+            for n in floorNeighbours neighbourhood map c do
+                if not (dist.ContainsKey n) then
+                    dist.[n] <- dist.[c] + 1
+                    queue.Enqueue n
+
+        dist
+
+    let spacing (points: Cell list) : struct (int * float) =
+        let pts = List.toArray points
+
+        if pts.Length < 2 then
+            struct (0, 0.0)
+        else
+            let manhattan (a: Cell) (b: Cell) = abs (a.Col - b.Col) + abs (a.Row - b.Row)
+
+            // each point's nearest-other-point distance; min/mean are commutative so index order is safe
+            let nearest =
+                [ for i in 0 .. pts.Length - 1 ->
+                      [ for j in 0 .. pts.Length - 1 do
+                            if j <> i then
+                                manhattan pts.[i] pts.[j] ]
+                      |> List.min ]
+
+            struct (List.min nearest, (List.sumBy float nearest) / float nearest.Length)
+
+    let fairness
+        (spawns: Cell list)
+        (resources: Cell list)
+        (neighbourhood: Neighbourhood)
+        (map: TileMap)
+        : Map<Cell, int> =
+        let field = bfsHopsMulti neighbourhood map resources
+
+        spawns
+        |> List.choose (fun s ->
+            match field.TryGetValue s with
+            | true, d -> Some(s, d)
+            | _ -> None)
+        |> Map.ofList
+
+    let coverage (neighbourhood: Neighbourhood) (map: TileMap) (points: Cell list) (radius: int) : float =
+        match floorCells map with
+        | [] -> 0.0
+        | floors ->
+            let field = bfsHopsMulti neighbourhood map points
+
+            let covered =
+                floors
+                |> List.filter (fun c ->
+                    match field.TryGetValue c with
+                    | true, d -> d <= radius
+                    | _ -> false)
+                |> List.length
+
+            float covered / float (List.length floors)
+
+    let validate (rules: Rule list) (neighbourhood: Neighbourhood) (map: TileMap) : Report =
+        // The measured facts, computed once and reported whether or not the map passes.
+        let connected = isConnected neighbourhood map
+        let comps = componentCount neighbourhood map
+        let diam = diameter neighbourhood map
+        let borders = borderOpenings map |> List.length
+
+        // Failures in rule-list order — one reason string per violated rule.
+        let failures =
+            rules
+            |> List.choose (fun rule ->
+                match rule with
+                | Rule.Connected ->
+                    if connected then None else Some "not connected: floor is in multiple components"
+                | Rule.MinDiameter n ->
+                    if diam >= n then None else Some(sprintf "diameter %d below required minimum %d" diam n)
+                | Rule.MaxDiameter n ->
+                    if diam <= n then None else Some(sprintf "diameter %d above allowed maximum %d" diam n)
+                | Rule.MinBorderOpenings n ->
+                    if borders >= n then None else Some(sprintf "border openings %d below required minimum %d" borders n)
+                | Rule.MaxComponents n ->
+                    if comps <= n then None else Some(sprintf "components %d above allowed maximum %d" comps n))
+
+        { Passed = List.isEmpty failures
+          Failures = failures
+          Connected = connected
+          ComponentCount = comps
+          Diameter = diam
+          BorderOpenings = borders }

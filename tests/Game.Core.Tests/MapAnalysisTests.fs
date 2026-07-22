@@ -232,4 +232,76 @@ let tests =
                   MapAnalysis.diameter FourWay m |> ignore
                   MapAnalysis.diameter EightWay m |> ignore
                   true
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+
+          // ---- M11: distribution, fairness & validate ----
+
+          testCase "spacing — min & mean nearest-neighbour Manhattan; < 2 points is (0, 0.0)"
+          <| fun () ->
+              // three points: (0,0),(3,0),(3,4) — nearest-neighbour Manhattan = 3, 3, 4 -> min 3, mean 10/3
+              let struct (mn, mean) = MapAnalysis.spacing [ cell 0 0; cell 3 0; cell 3 4 ]
+              Expect.equal mn 3 "min nearest-neighbour spacing"
+              Expect.floatClose Accuracy.high mean (10.0 / 3.0) "mean nearest-neighbour spacing"
+              Expect.equal (MapAnalysis.spacing [ cell 0 0 ]) (struct (0, 0.0)) "single point => (0,0.0)"
+
+          testCase "fairness — each spawn maps to its nearest-resource hop distance; unreachable omitted"
+          <| fun () ->
+              // corridor with a resource at the left end; two spawns, plus one stranded across a wall
+              let m =
+                  tileMapOf
+                      [ [ 1; 1; 1; 1; 0; 1 ] ]
+              let f = MapAnalysis.fairness [ cell 0 0; cell 3 0; cell 5 0 ] [ cell 0 0 ] FourWay m
+              Expect.equal (Map.tryFind (cell 0 0) f) (Some 0) "spawn on the resource is 0 away"
+              Expect.equal (Map.tryFind (cell 3 0) f) (Some 3) "spawn 3 cells along is 3 away"
+              Expect.equal (Map.tryFind (cell 5 0) f) None "spawn across the wall reaches no resource"
+
+          testCase "coverage — fraction of floor within a radius of a point"
+          <| fun () ->
+              let m = tileMapOf [ [ 1; 1; 1; 1; 1 ] ] // 5-cell corridor
+              // from the centre (2,0), radius 1 covers (1,0),(2,0),(3,0) = 3 of 5
+              Expect.floatClose Accuracy.high (MapAnalysis.coverage FourWay m [ cell 2 0 ] 1) (3.0 / 5.0) "radius 1 covers 3/5"
+              Expect.floatClose Accuracy.high (MapAnalysis.coverage FourWay m [ cell 2 0 ] 10) 1.0 "big radius covers all"
+              Expect.floatClose Accuracy.high (MapAnalysis.coverage FourWay m [] 1) 0.0 "no points => 0.0"
+
+          testCase "validate — a good map passes; a disconnected map fails with the connectivity reason"
+          <| fun () ->
+              let rules = [ Connected; MinDiameter 3; MinBorderOpenings 1 ]
+              let good = tileMapOf [ [ 1; 1; 1; 1; 1 ]; [ 1; 1; 1; 1; 1 ] ]
+              let goodReport = MapAnalysis.validate rules FourWay good
+              Expect.isTrue goodReport.Passed "connected 5x2 map passes"
+              Expect.equal goodReport.Failures [] "no failures"
+              Expect.isTrue goodReport.Connected "report facts populated"
+
+              let bad = tileMapOf [ [ 1; 1; 0; 1; 1 ]; [ 1; 1; 0; 1; 1 ] ]
+              let badReport = MapAnalysis.validate rules FourWay bad
+              Expect.isFalse badReport.Passed "disconnected map fails"
+              Expect.isTrue (badReport.Failures |> List.exists (fun s -> s.Contains "not connected")) "connectivity reason present"
+              Expect.equal badReport.ComponentCount 2 "report shows 2 components"
+
+          testCase "validate — failures appear in rule-list order"
+          <| fun () ->
+              // a tiny 1x1 floor: not big, one component; MaxDiameter 0 holds, MinDiameter 5 fails, MinBorderOpenings 3 fails
+              let m = tileMapOf [ [ 1 ] ]
+              let report = MapAnalysis.validate [ MinDiameter 5; MinBorderOpenings 3 ] FourWay m
+              Expect.equal (List.length report.Failures) 2 "two rules violated"
+              Expect.isTrue ((List.item 0 report.Failures).Contains "diameter") "first failure is the diameter rule"
+              Expect.isTrue ((List.item 1 report.Failures).Contains "border openings") "second failure is the border rule"
+
+          testCase "validate — worked produce -> validate loop over a generated cave passes sane rules"
+          <| fun () ->
+              let p: CaveParams = { WallChance = 0.45; SmoothingPasses = 5; Neighbourhood = FourWay }
+              let struct (cave, _) = MapGen.caves 48 32 p (Rng.ofSeed 11UL)
+              let report = MapAnalysis.validate [ Connected; MinDiameter 5 ] FourWay cave
+              Expect.isTrue report.Passed "a connected cave with a reasonable diameter validates"
+
+          testCase "MapAnalysis M11 totality — degenerate inputs never throw (FsCheck)"
+          <| fun () ->
+              let prop (w: int) (h: int) (s: uint64) (r: int) =
+                  let m = randomMap (max 0 (w % 9)) (max 0 (h % 9)) (s % 100000UL)
+                  let pts = [ cell (w % 6) (h % 6); cell 0 0 ]
+                  MapAnalysis.spacing pts |> ignore
+                  MapAnalysis.fairness pts [ cell 1 1 ] FourWay m |> ignore
+                  MapAnalysis.coverage EightWay m pts (r % 5 - 1) |> ignore
+                  MapAnalysis.validate [ Connected; MinDiameter (r % 7); MaxComponents (r % 4) ] FourWay m |> ignore
+                  true
               Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop) ]

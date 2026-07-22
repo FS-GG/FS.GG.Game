@@ -159,8 +159,31 @@ let areas     = MapAnalysis.componentCount FourWay level        // number of sep
 reach — the analysis layer and the routing layer never disagree. Use the **same `Neighbourhood`** you route
 with. For the component *list* (not just the count), reach for `MapGen.regions`.
 
-*Chokepoints, path/flow metrics, distribution & fairness, the `validate` battery, and tactical shape are the
-remaining `MapAnalysis` machinery (design doc Part II §11).*
+**Chokepoints & shape.** `borderOpenings` lists the map's entrances/exits, `deadEnds` its tips, and
+`articulationPoints` its bottleneck cells (the ones whose removal splits the map — iterative Tarjan, total on
+any shape). `isolation`/`diameter` measure size as unweighted hop counts (the critical-path length).
+
+## Validate — the keystone loop
+
+`MapAnalysis.validate` runs the analyses against a `Rule` set and returns a `Report` with accept/reject **and
+the reasons** — so an agent can loop *produce → validate → re-produce* until the map is good:
+
+```fsharp
+let rules = [ Connected; MinDiameter 20; MinBorderOpenings 2; MaxComponents 1 ]
+let report = MapAnalysis.validate rules FourWay level
+if not report.Passed then
+    printfn "rejected: %s" (String.concat "; " report.Failures)   // ...regenerate with a new seed, else ship it
+// distribution/fairness measures feed richer rules a caller checks alongside validate:
+let struct (minGap, meanGap) = MapAnalysis.spacing spawns      // are spawns spread out?
+let access = MapAnalysis.fairness spawns loot FourWay level     // each spawn's nearest-loot hop distance
+let covered = MapAnalysis.coverage FourWay level spawns 8       // fraction of floor within 8 of a spawn
+```
+
+`Rule` is a closed set (`Connected`, `MinDiameter`/`MaxDiameter`, `MinBorderOpenings`, `MaxComponents`), so
+`validate` is total and its `Failures` are deterministic (one reason per violated rule, in rule order). A
+bespoke check runs alongside `validate` and combines results — the battery stays predictable.
+
+*Tactical shape (exposure, cover, killzones) is the remaining `MapAnalysis` machinery (design doc Part II §11).*
 
 ## Common pitfalls
 

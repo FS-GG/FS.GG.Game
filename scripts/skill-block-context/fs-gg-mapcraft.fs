@@ -30,3 +30,9 @@ let cave: TileMap = MapGen.filled 64 64 Floor
 //#block 6 "let reached   = MapAnalysis.reachable FourWay 4096 isFloor { Col = 1; Row = 1 }   // Set<Cell> reachable from a start"
 // Analyze: an existing map to ask reachability/connectivity of (any producer would do).
 let level: TileMap = MapGen.filled 48 32 Floor
+
+//#block 7 "let rules = [ Connected; MinDiameter 20; MinBorderOpenings 2; MaxComponents 1 ]"
+// Validate: a map to check, plus spawn/loot point sets for the fairness measures.
+let level: TileMap = MapGen.filled 48 32 Floor
+let spawns: Cell list = [ { Col = 1; Row = 1 }; { Col = 40; Row = 28 } ]
+let loot: Cell list = [ { Col = 20; Row = 16 } ]

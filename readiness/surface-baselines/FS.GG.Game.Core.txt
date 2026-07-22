@@ -74,6 +74,7 @@ FS.GG.Game.Core.ProjectileStep+Tags
 FS.GG.Game.Core.RayHit
 FS.GG.Game.Core.Rect
 FS.GG.Game.Core.Region
+FS.GG.Game.Core.Report
 FS.GG.Game.Core.Resolution
 FS.GG.Game.Core.Resolution+CellStep
 FS.GG.Game.Core.Resolution+CellStep+Tags
@@ -87,6 +88,12 @@ FS.GG.Game.Core.Room
 FS.GG.Game.Core.RoomGraph
 FS.GG.Game.Core.RoomKind
 FS.GG.Game.Core.RoomKind+Tags
+FS.GG.Game.Core.Rule
+FS.GG.Game.Core.Rule+MaxComponents
+FS.GG.Game.Core.Rule+MaxDiameter
+FS.GG.Game.Core.Rule+MinBorderOpenings
+FS.GG.Game.Core.Rule+MinDiameter
+FS.GG.Game.Core.Rule+Tags
 FS.GG.Game.Core.Sighting`1
 FS.GG.Game.Core.Source
 FS.GG.Game.Core.Source+Tags

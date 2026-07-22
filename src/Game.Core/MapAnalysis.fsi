@@ -1,5 +1,29 @@
 namespace FS.GG.Game.Core
 
+/// Public contract type exposed by the FS.GG.Game.Core package.
+/// A validation constraint for `MapAnalysis.validate` (M11). A closed set of the common map-quality rules —
+/// `Connected` (all floor is one component), `MinDiameter`/`MaxDiameter` (critical-path length bounds),
+/// `MinBorderOpenings` (at least N entrances/exits), and `MaxComponents` (at most N separate floor areas).
+type Rule =
+    | Connected
+    | MinDiameter of int
+    | MaxDiameter of int
+    | MinBorderOpenings of int
+    | MaxComponents of int
+
+/// Public contract type exposed by the FS.GG.Game.Core package.
+/// The result of `MapAnalysis.validate` (M11): `Passed` is true with an empty `Failures` iff every `Rule`
+/// held; otherwise `Failures` carries one reason string per violated rule, in rule-list order. The measured
+/// facts (`Connected`/`ComponentCount`/`Diameter`/`BorderOpenings`) are always populated, so a caller can
+/// read them whether or not it passed.
+type Report =
+    { Passed: bool
+      Failures: string list
+      Connected: bool
+      ComponentCount: int
+      Diameter: int
+      BorderOpenings: int }
+
 /// Public contract module exposed by the FS.GG.Game.Core package.
 /// Producer-agnostic analysis over a map — a `TileMap`, or (like `Pathfinding`) a `Cell -> bool`
 /// walkability predicate. The analysis half of the `fs-gg-mapcraft` construction pipeline
@@ -58,3 +82,22 @@ module MapAnalysis =
     /// over all `Floor` cells of `isolation`. 0 for an empty-floor or single-cell map. O(V²); a build/validate
     /// -time metric, not a per-tick one. Total.
     val diameter: neighbourhood: Neighbourhood -> map: TileMap -> int
+
+    /// The minimum and mean nearest-neighbour **Manhattan** distance of `points` (a geometric spread measure
+    /// of a point set, independent of any map). Fewer than two points ⇒ `struct (0, 0.0)`. Total.
+    val spacing: points: Cell list -> struct (int * float)
+
+    /// Each `spawn` that can reach a `resource` mapped to its nearest-resource **hop distance** (BFS over the
+    /// map's corner-cut-aware adjacency under `neighbourhood`) — a spread of these values tells a designer
+    /// whether spawns are treated fairly. A spawn that reaches no resource is omitted. Total.
+    val fairness: spawns: Cell list -> resources: Cell list -> neighbourhood: Neighbourhood -> map: TileMap -> Map<Cell, int>
+
+    /// The fraction of `Floor` cells within `radius` hops of some cell in `points` (BFS over the map's
+    /// corner-cut-aware adjacency). 0.0 when there is no floor or no point. Total.
+    val coverage: neighbourhood: Neighbourhood -> map: TileMap -> points: Cell list -> radius: int -> float
+
+    /// Run `rules` against `map` under `neighbourhood` and return a `Report` — the keystone of the
+    /// produce → analyze → **validate** → re-produce loop. `Passed` is true with empty `Failures` iff every
+    /// rule holds; otherwise one reason string per violated rule in rule-list order. The measured facts are
+    /// always populated. Total; deterministic.
+    val validate: rules: Rule list -> neighbourhood: Neighbourhood -> map: TileMap -> Report

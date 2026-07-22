@@ -76,7 +76,7 @@
     {
       "id": "fs-gg-mapcraft",
       "scope": "product",
-      "sha256": "055272bb54aa91bd59c71ed4e6780a3594c24c57800d6e0513dc766e9f746bdd",
+      "sha256": "9922b61a1b45d3b2f5453032fdbc8443d9781426f5a3362aa2cbc248e4cab2fe",
       "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-mapcraft/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
