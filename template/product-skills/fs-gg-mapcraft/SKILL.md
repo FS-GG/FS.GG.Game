@@ -1,16 +1,36 @@
 ---
-name: fs-gg-mapgen
-description: Generate maps and levels deterministically in a generated FS.GG.UI product — cellular-automata caves, BSP room-and-corridor dungeons, Isaac-style room-graph floors, mazes, value-noise heightmaps, and Poisson scatter — over the `MapGen` module in FS.GG.Game.Core, all byte-identical for a seed.
+name: fs-gg-mapcraft
+description: Construct and validate the logical map a game simulates over — produce it (procedural generation, or bring your own), then analyze it (reachability, chokepoints, path metrics, fairness, tactical shape) and validate it against rules — deterministically, over the `MapGen` and `MapAnalysis` modules in FS.GG.Game.Core.
 ---
 
-# Procedural Map Generation Capability
+# Map Construction & Analysis Capability
 
 ## Scope
 
-Use this skill to **generate the logical map a game simulates over** — wall/floor caverns, structured
-dungeons, roguelike floor graphs, mazes, noise worlds, and scattered content — all **byte-identical for a
-seed**. It is one Core module, `MapGen`, built on the seeded `Rng`, with a shared substrate and five
-generator families:
+Use this skill to **construct the logical map a game simulates over** — as a pipeline, not just a generator:
+
+```
+produce  →  analyze  →  validate  →  (iterate)
+```
+
+- **Produce** — a `TileMap`/`RoomGraph`/`FloorLayout`. The producer is *your choice*: procedural generation
+  (the `MapGen` module — caves, dungeons, floors, mazes, noise, scatter), a hand-authored level, or a map an
+  agent draws room by room. Procedural generation is **one producer**, not the whole capability.
+- **Analyze** — the producer-agnostic `MapAnalysis` machinery every map-builder needs regardless of how the
+  map was made: reachability & connectivity, entrances/exits & chokepoints, path & flow metrics,
+  distribution & fairness, and the static tactical shape (exposure, cover, killzones). *Delivered across
+  milestones M8–M12 — see the design doc; the generation surface below ships today.*
+- **Validate** — the keystone: run the analyses against your rules and get accept/reject *with reasons*, so
+  you can loop **produce → validate → re-produce** until the map is good.
+
+Everything here is **pure, total, and deterministic** — safe to call from a replayed simulation step — and
+operates over *any* map (a `TileMap`, or, like `Pathfinding`, a `Cell -> bool` walkability predicate), not
+only `MapGen` output. **Render-tier work stays out**: texturing, autotiling, and mesh smoothing belong to the
+render adapter. This skill materializes for the `game` and `sample-pack` profiles.
+
+### The generation producer (`MapGen`) — shipping today
+
+One Core module, `MapGen`, built on the seeded `Rng`, with a shared substrate and five generator families:
 
 - **Substrate** — `Grid<'T>` (dense, row-major, addressed by `Cell`), `Tile`/`TileMap`, `Region`, total
   addressing (`filled`/`inBounds`/`get`/`set`), and connectivity (`regions`/`largestRegion`/`connect`).
@@ -18,10 +38,6 @@ generator families:
 - **Dungeons** (`bspDungeon`) — BSP rooms + corridors, with a `RoomGraph`.
 - **Floors** (`floorLayout`/`floorSeed`) — Isaac-style branching-walk room graphs with special rooms.
 - **Maze / noise / scatter** (`maze`, `heightField`+`classify`, `poissonScatter`).
-
-Everything here is **pure, total, and deterministic** — so it is safe to call from a replayed simulation
-step. **Render-tier work stays out**: texturing, autotiling, and mesh smoothing of the logical map belong to
-the render adapter, not here. This skill materializes for the `game` and `sample-pack` profiles.
 
 ## Public Contract
 
@@ -123,6 +139,69 @@ let struct (spawns, rng2) = MapGen.poissonScatter mask 5 rng1           // cells
 `classify` maps each cell to the value of the highest `threshold <= its height` (lowest band below all; an
 empty table yields an empty grid). `poissonScatter` returns mask-eligible cells at least `minDist` apart, via
 integer rejection sampling (no trig).
+
+## Analyze — reachability & connectivity (`MapAnalysis`)
+
+The `MapAnalysis` module answers the questions every map-builder asks *after* producing a map — and it works
+over **any** map, because `reachable` takes a `Cell -> bool` predicate (the map *is* the predicate, as in
+`Pathfinding`), not only a `MapGen` output:
+
+```fsharp
+// The producer is your choice; here a generated cave, but the analysis is producer-agnostic.
+let isFloor (c: Cell) = MapGen.get level c = ValueSome Floor
+let reached   = MapAnalysis.reachable FourWay 4096 isFloor { Col = 1; Row = 1 }   // Set<Cell> reachable from a start
+let connected = MapAnalysis.isConnected FourWay level          // is the whole floor one region?
+let stray     = MapAnalysis.stranded FourWay { Col = 1; Row = 1 } level           // floor cells cut off from (1,1)
+let areas     = MapAnalysis.componentCount FourWay level        // number of separate floor areas
+```
+
+`reachable` is built on `Pathfinding.distanceField`, so its set is **exactly** what `Pathfinding.bfs` can
+reach — the analysis layer and the routing layer never disagree. Use the **same `Neighbourhood`** you route
+with. For the component *list* (not just the count), reach for `MapGen.regions`.
+
+**Chokepoints & shape.** `borderOpenings` lists the map's entrances/exits, `deadEnds` its tips, and
+`articulationPoints` its bottleneck cells (the ones whose removal splits the map — iterative Tarjan, total on
+any shape). `isolation`/`diameter` measure size as unweighted hop counts (the critical-path length).
+
+## Validate — the keystone loop
+
+`MapAnalysis.validate` runs the analyses against a `Rule` set and returns a `Report` with accept/reject **and
+the reasons** — so an agent can loop *produce → validate → re-produce* until the map is good:
+
+```fsharp
+let rules = [ Connected; MinDiameter 20; MinBorderOpenings 2; MaxComponents 1 ]
+let report = MapAnalysis.validate rules FourWay level
+if not report.Passed then
+    printfn "rejected: %s" (String.concat "; " report.Failures)   // ...regenerate with a new seed, else ship it
+// distribution/fairness measures feed richer rules a caller checks alongside validate:
+let struct (minGap, meanGap) = MapAnalysis.spacing spawns      // are spawns spread out?
+let access = MapAnalysis.fairness spawns loot FourWay level     // each spawn's nearest-loot hop distance
+let covered = MapAnalysis.coverage FourWay level spawns 8       // fraction of floor within 8 of a spawn
+```
+
+`Rule` is a closed set (`Connected`, `MinDiameter`/`MaxDiameter`, `MinBorderOpenings`, `MaxComponents`), so
+`validate` is total and its `Failures` are deterministic (one reason per violated rule, in rule order). A
+bespoke check runs alongside `validate` and combines results — the battery stays predictable.
+
+## Tactical shape — static, not live enemies
+
+`MapAnalysis` also measures the **static tactical shape** of a map — a property of geometry alone, computable
+at build time with no units present, over a caller-supplied `hasLos: Cell -> Cell -> bool` oracle (as [[fs-gg-ai]]
+takes one):
+
+```fsharp
+let hasLos (a: Cell) (b: Cell) = Los.lineOfSight (fun c -> MapGen.get level c = ValueSome Floor) a b
+let exposure = MapAnalysis.exposureMap hasLos level    // per cell: how many other cells can see it (open killing ground)
+let cover    = MapAnalysis.coverMap level              // per cell: how many of its 8 sides are wall (protection)
+let killers  = MapAnalysis.killzones hasLos 12 level    // long mutual sightlines (>= 12 Chebyshev apart)
+```
+
+**This is deliberately not [[fs-gg-ai]].** `Ai.threatField`/`influenceMap` are the *dynamic* answer — "given
+THESE live enemies, where is it dangerous / who controls this ground *this tick*". `MapAnalysis`'s tactical
+functions are the *static priors* — the shape of the map itself, which a builder validates and places on, and
+which `Ai` then consumes per tick with real sources layered on. Substrate here; policy there.
+
+*This completes the `fs-gg-mapcraft` analysis machinery.*
 
 ## Common pitfalls
 

@@ -26,3 +26,17 @@ let floorIndex: int = 0
 // Maze/noise/scatter: the seed stream, and an existing `cave` map to draw the scatter mask from.
 let rng: Rng = Rng.ofSeed 1UL
 let cave: TileMap = MapGen.filled 64 64 Floor
+
+//#block 6 "let reached   = MapAnalysis.reachable FourWay 4096 isFloor { Col = 1; Row = 1 }   // Set<Cell> reachable from a start"
+// Analyze: an existing map to ask reachability/connectivity of (any producer would do).
+let level: TileMap = MapGen.filled 48 32 Floor
+
+//#block 7 "let rules = [ Connected; MinDiameter 20; MinBorderOpenings 2; MaxComponents 1 ]"
+// Validate: a map to check, plus spawn/loot point sets for the fairness measures.
+let level: TileMap = MapGen.filled 48 32 Floor
+let spawns: Cell list = [ { Col = 1; Row = 1 }; { Col = 40; Row = 28 } ]
+let loot: Cell list = [ { Col = 20; Row = 16 } ]
+
+//#block 8 "let hasLos (a: Cell) (b: Cell) = Los.lineOfSight (fun c -> MapGen.get level c = ValueSome Floor) a b"
+// Tactical shape: a map to measure exposure/cover/killzones over.
+let level: TileMap = MapGen.filled 48 32 Floor

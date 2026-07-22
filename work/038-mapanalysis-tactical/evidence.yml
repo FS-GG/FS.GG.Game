@@ -1,0 +1,398 @@
+schemaVersion: 1
+workId: 038-mapanalysis-tactical
+stage: evidence
+status: evidenceReady
+sourceSpec: work/038-mapanalysis-tactical/spec.md
+sourceClarifications: work/038-mapanalysis-tactical/clarifications.md
+sourceChecklist: work/038-mapanalysis-tactical/checklist.md
+sourcePlan: work/038-mapanalysis-tactical/plan.md
+sourceTasks: work/038-mapanalysis-tactical/tasks.yml
+sourceAnalysis: readiness/038-mapanalysis-tactical/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/038-mapanalysis-tactical/analysis.json
+    digest: 3a6a94d83b199c83b1f9ff1bd1cd2644a0c311cd50fa1976ed133536419d3ec8
+    schemaVersion: 1
+  - label: checklist
+    path: work/038-mapanalysis-tactical/checklist.md
+    digest: 2ae3466b8e66c92785e7865e4d16bd3dc78775eb224497ec710a27cb830d4cae
+    schemaVersion: 1
+  - label: clarifications
+    path: work/038-mapanalysis-tactical/clarifications.md
+    digest: 71228eb2d70d63620a54f9d56e2d2fe516e83e0135bf0a16f31cb00023e1e2d8
+    schemaVersion: 1
+  - label: plan
+    path: work/038-mapanalysis-tactical/plan.md
+    digest: a7902f441993c0a983bf85e64180ae251c1855a647009ed27077d10c2345c6b3
+    schemaVersion: 1
+  - label: spec
+    path: work/038-mapanalysis-tactical/spec.md
+    digest: 743a5fb7ce64e7929f9824dac88d844363a71b6c55808b95be84c077deb49898
+    schemaVersion: 1
+  - label: tasks
+    path: work/038-mapanalysis-tactical/tasks.yml
+    digest: 418323595dcf6be9eb794a10994665bc0acb258b820b22ee42085140f3520f09
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/038-mapanalysis-tactical/test-reports/m12.trx
+      digest: "sha256:a91e5599e84c3cbc0f18de0e10e58d32bd213661d6742946612788ff6a6bd30b"
+      outcome: passed
+      passed: 723
+      failed: 0
+      skipped: 0
+    notes: ["exposureMap/coverMap/killzones (static tactical shape, caller hasLos oracle) implemented; exposure-symmetry property + cover/killzone fixtures + totality covered; observed via m12.trx."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

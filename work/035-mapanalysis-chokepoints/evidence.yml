@@ -1,0 +1,398 @@
+schemaVersion: 1
+workId: 035-mapanalysis-chokepoints
+stage: evidence
+status: evidenceReady
+sourceSpec: work/035-mapanalysis-chokepoints/spec.md
+sourceClarifications: work/035-mapanalysis-chokepoints/clarifications.md
+sourceChecklist: work/035-mapanalysis-chokepoints/checklist.md
+sourcePlan: work/035-mapanalysis-chokepoints/plan.md
+sourceTasks: work/035-mapanalysis-chokepoints/tasks.yml
+sourceAnalysis: readiness/035-mapanalysis-chokepoints/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/035-mapanalysis-chokepoints/analysis.json
+    digest: 5699df2af958ab2df71d072a09fae0af290aa555f87403b16bafe45c8ae4d780
+    schemaVersion: 1
+  - label: checklist
+    path: work/035-mapanalysis-chokepoints/checklist.md
+    digest: 4750703199677807ce6a6f1086bcf6cf2db0274ea606798f3b64d011861f41bd
+    schemaVersion: 1
+  - label: clarifications
+    path: work/035-mapanalysis-chokepoints/clarifications.md
+    digest: 980a3dcb6d0758357d7804c2d5ae183b701d2c20a86a5deda2235a1ddcf69239
+    schemaVersion: 1
+  - label: plan
+    path: work/035-mapanalysis-chokepoints/plan.md
+    digest: 775168d2f4eef146ea7d1ddce1c7d96cbd5dc89b0298d9c0091a8cc0cb6d28a1
+    schemaVersion: 1
+  - label: spec
+    path: work/035-mapanalysis-chokepoints/spec.md
+    digest: b7f254c253b82bf9d8383a986d800f2b9b016f1e34eecfd8e7e7656394b14f1d
+    schemaVersion: 1
+  - label: tasks
+    path: work/035-mapanalysis-chokepoints/tasks.yml
+    digest: be746c8e4d238bf33e14bec0913c01fc674a4959e0e80a6f93d182e1b5f437d9
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/035-mapanalysis-chokepoints/test-reports/m9.trx
+      digest: "sha256:0df9cfb6b728319cce06394f4d3d6c95b3ccd5358c82845713f4f9109465b317"
+      outcome: passed
+      passed: 707
+      failed: 0
+      skipped: 0
+    notes: ["borderOpenings/deadEnds/articulationPoints (iterative Tarjan) implemented; verified against the remove-and-recount oracle + a 5000-cell corridor totality test; observed via m9.trx."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
