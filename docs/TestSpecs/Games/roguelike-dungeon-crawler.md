@@ -813,59 +813,39 @@ for every consumer that opens the module.
 
 Formatting: counts are right-aligned 2 digits (`07`, `99`). Time as `M:SS`.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Meta-progression, Settings,
-Pause, Game Over, Victory). Each menu is a vertical list of rows with a cursor, so one small
-update handler serves them all and navigation is identical everywhere.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ New Run ─────────── StartRun (fresh seed) → Playing (§7.3)
-       ├─ Continue ────────── only shown while a run is in progress (Run = Some)
-       ├─ Daily Seed ──────── StartRun (Some dailySeed) — shared/ranked seed (§4.10)
-       ├─ Meta-progression ── Hub / unlock progress (§4.10)
-       ├─ Stats ───────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Screen shake   ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Hollow Depths uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Abandon Run ────── discard the run (permadeath, §4.10) → Title
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**HOLLOW DEPTHS**) as the title label, with
+  **Start**, **Config**, and **Exit**. The run-management entries — **New Run** (fresh seed),
+  **Continue** (only while `Run = Some`), **Daily Seed** (shared/ranked seed) and
+  **Meta-progression** (hub / unlock progress) — are game-specific rows shown alongside Start
+  (§4.10).
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes. **Abandon Run** (discard the run, permadeath, §4.10) is a
+  game-specific pause row, and the Game Over / Victory screen adds **Retry Seed** (§4.10).
+- **Config / Settings**, all applied live and persisted (to the `MetaProfile` config file, §13)
+  across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions — move, aim,
+    fire, dodge, active item, bomb, interact) via the `Controls.KeyRebind` UI over the
+    `KeyboardInput.Keymap` mechanism; bindings persist via `KeymapCodec` (JSON), beside this
+    game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    mode — Easy / Normal / Hard, scaling `enemyHpScale`, `postHitInvuln`, `dropNothingWeight`),
+    **Master volume**/**Sound** (route to `Audio.setMasterVolume`, §10, clamped `[0,1]`, muting
+    requests `0.0`), and **Screen shake** (toggles the §8 optional bomb/boss-hit shake). The
+    menu, Esc routing, display settings, and rebind screen come from the shell.
 
-Game Over / Victory ─┬─ New Run ──────── fresh seed, back to Floor 1
-                     ├─ Retry Seed ───── re-launch the same runSeed (§4.10)
-                     ├─ View Stats ───── Stats & Charts (§9.2)
-                     └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §9 Title selector style: the selected row is inverted (white box,
-  black text); non-selected rows are `#FFFFFF` on the dim overlay.
-
-**Msg additions** (extend §7.2):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to the `MetaProfile` config file (§13): **Difficulty**
-selects the §12 mode (Easy/Normal/Hard scaling `enemyHpScale`, `postHitInvuln`, and
-`dropNothingWeight`); **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10,
-clamped `[0,1]`, muting requests `0.0`); **Screen shake** toggles the §8 optional
-bomb/boss-hit shake.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Hollow Depths
+does **not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Hollow-Depths-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a snapshot
@@ -1284,8 +1264,8 @@ its acceptance test(s) pass (§14)._
 
 ### M7 — UI, menus & stats
 - 🟥 HUD: hearts row, currency, active-item charge meter, minimap, floor name (§9)
-- 🟥 Menu stack: cursor wrap, cycler/slider rows, `MenuBack` pop (§9.1)
-- 🟥 Settings apply live + persist to `MetaProfile`; difficulty modes (§9.1, §12)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific rows over the shell (run management, difficulty mode, volume/sound, screen shake) apply live + persist to `MetaProfile` (§9.1, §12, §13)
 - 🟥 Stats & charts screen: KPI tiles + depth histogram + damage-per-floor line (§9.2)
 - 🟥 Difficulty-mode scaling table (Easy/Normal/Hard) latched at `StartRun` (§12, §9.1) — AC #13
 
