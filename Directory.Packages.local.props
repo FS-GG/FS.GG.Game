@@ -33,7 +33,7 @@
     <!-- The coordination kit as a versioned package (ADR-0062, .github#1262). Referenced by
          .config/kit/FS.GG.Kit.receiver.proj, which materializes the kit onto disk; Renovate bumps
          this pin and kit-materialize.yml refreshes the committed kit on that PR. -->
-    <PackageVersion Include="FS.GG.Kit" Version="0.1.0" />
+    <PackageVersion Include="FS.GG.Kit" Version="0.2.2" />
     <PackageVersion Include="FS.GG.UI.Scene" Version="0.10.0" />
     <PackageVersion Include="FS.GG.UI.KeyboardInput" Version="0.10.0" />
   </ItemGroup>
