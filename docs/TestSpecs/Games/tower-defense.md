@@ -781,62 +781,34 @@ range circle + footprint highlight, hover tooltips (enemy: hp/armor/resists; tow
 
 Formatting: gold/score thousands-separated; timers `M:SS`; DPS to 1 decimal.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Map Select, Settings, Stats,
-Pause, run-end). Each menu is a vertical list of rows with a cursor, so one small update
-handler serves them all and navigation is identical everywhere; the board/HUD (§9) render
-only under the Play screen.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start a run on the selected map + difficulty
-       ├─ Map Select ────── choose Serpentine · Crossroads · The Labyrinth (§6)
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Build grid     ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Bulwark uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same menu/start
+screen and settings every FS.GG game shares — rather than a bespoke per-game menu. The game
+supplies only its **name**, its **key→command map** (the rebindable actions from §3 Controls),
+and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart Run
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**BULWARK: TOWER DEFENSE**) as the title
+  label, with **Start**, **Config**, and **Exit**. Map selection (Serpentine · Crossroads · The
+  Labyrinth, §6) sits alongside Start.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes. (During placement, `Esc` first cancels the pending placement per §3.)
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions — tower-type
+    select, upgrade, choose branch, sell, cycle targeting, start wave, fast-forward, build-grid
+    toggle, pause) via the `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism;
+    bindings persist via `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    preset — Easy / Normal / Hard), **Master volume**/**Sound** (route to `Audio.setMasterVolume`,
+    §10, clamped `[0,1]`), and **Build grid** (toggles the §3 grid overlay). The menu, Esc
+    routing, display settings, and rebind screen come from the shell.
 
-Run end ─┬─ Victory  (Wave 20 cleared, lives > 0 — §11)
-         │     ├─ Next Map ────── advance to the next campaign map (§6)
-         │     ├─ Replay Map
-         │     ├─ View Stats ──── Stats & Charts (§9.2)
-         │     └─ Title
-         └─ Defeat   (lives reach 0 — §4.6)
-               ├─ Retry ───────── restart this map, same difficulty
-               ├─ View Stats ──── Stats & Charts (§9.2)
-               └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**); on the
-  Play screen `Esc` opens Pause (§3) rather than popping.
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Build grid): `←`/`→`
-  change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- The run-end menu presents the **Victory** or **Defeat** branch per the §11 outcome; both
-  share the cursor/nav handler and only their row list differs.
-
-**Msg additions** (extend §7 Msg):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12 preset
-(Easy `350/30/…`, Normal `250/20/…`, Hard `180/12/…`); **Master volume**/**Sound** route to
-`Audio.setMasterVolume` (§10, clamped `[0,1]`); **Build grid** toggles the §3 grid overlay.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Bulwark does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Bulwark-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `RunStats`
@@ -1265,8 +1237,8 @@ its acceptance test(s) pass (§14)._
 ### M8 — UI, menus & stats
 - 🟥 Top HUD bar: lives/gold/score, wave x/20 + next-wave preview, phase/interest (§9)
 - 🟥 Build panel + selected-tower inspector (upgrade/targeting/sell/DPS) (§9)
-- 🟥 Menu stack: cursor wrap, cycler/slider rows, Title/Pause/run-end (§9.1)
-- 🟥 Settings apply live + persist (difficulty/volume/grid) (§9.1, §13)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, build grid) apply live + persist (§9.1, §12)
 - 🟥 `RunStats` accumulation + `Lifetime` fold/persist (§9.2)
 - 🟥 Stats screen: KPI tiles, leaks-per-wave bars, economy line chart (§9.2)
 - 🟥 Hover tooltips: enemy hp/armor/resists, tower stats (§9)

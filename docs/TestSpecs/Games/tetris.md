@@ -520,56 +520,34 @@ animation timer) before collapsing — optional in v1 but specified for polish.
 - `HIGH` — session/persisted high score.
 - **Hold** label above the hold panel; **Next** label above the queue panel.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
-Over). Each menu is a vertical list of rows with a cursor, so one small update handler
-serves them all and navigation is identical everywhere. The §7.1 `Phase` still selects the
-active screen; the cursor and submenu stack live alongside it.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start a new descent at the selected difficulty's start level
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Ghost piece    ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Tetris uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same menu/start
+screen and settings every FS.GG game shares — rather than a bespoke per-game menu. The game
+supplies only its **name**, its **key→command map** (the rebindable actions from §3 Controls),
+and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart ───────── new descent, fresh 7-bag (§4.7)
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**TETRIS**) as the title label, with
+  **Start**, **Config**, and **Exit**.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions — move
+    left/right, soft drop, rotate CW/CCW, hard drop, hold, pause) via the `Controls.KeyRebind`
+    UI over the `KeyboardInput.Keymap` mechanism; bindings persist via `KeymapCodec` (JSON),
+    beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    preset — Easy / Normal / Hard, selecting the §6.2 `startLevel`), **Master volume**/**Sound**
+    (route to `Audio.setMasterVolume`, §10, clamped `[0,1]`), and **Ghost piece** (toggles the
+    §8 landing-projection outline, stretch §15.1). The menu, Esc routing, display settings, and
+    rebind screen come from the shell.
 
-Game Over ─┬─ Retry ─────── new descent with reset board + a freshly shuffled bag
-           ├─ View Stats ── Stats & Charts (§9.2)
-           └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑` decrement, `↓` increment, both **wrap** around
-  the ends of the list.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Ghost piece):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §9 title style: the selected row is inverted (white box, black text);
-  non-selected rows are `#FFFFFF` on the `#101018` background, monospace.
-
-**Msg additions** (extend §7.2):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12
-`startLevel` preset (Easy `0` · Normal `5` · Hard `9`), which sets the initial gravity from
-the §6.2 curve; **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped
-`[0,1]`); **Ghost piece** toggles the §8 landing-projection outline (stretch §15.1).
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Tetris does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Tetris-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `MatchStats`
@@ -963,8 +941,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Optional line-clear white flash before collapse (§8)
 
 ### M8 — Menus, settings & stats
-- 🟥 Menu stack with wrapping cursor and cycler/slider rows (§9.1)
-- 🟥 Difficulty / volume / sound / ghost settings apply live + persist (§9.1, §12, §13)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, ghost piece) apply live + persist (§9.1, §12)
 - 🟥 Difficulty presets Easy/Normal/Hard → startLevel 0/5/9 first-gravity map (§12)
 - 🟥 `MatchStats`/`LifetimeStats` accumulation, KPI tiles + clears/score charts (§9.2)
 
