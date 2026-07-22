@@ -1,0 +1,470 @@
+schemaVersion: 1
+workId: 029-mapgen-bsp-dungeons
+stage: evidence
+status: evidenceReady
+sourceSpec: work/029-mapgen-bsp-dungeons/spec.md
+sourceClarifications: work/029-mapgen-bsp-dungeons/clarifications.md
+sourceChecklist: work/029-mapgen-bsp-dungeons/checklist.md
+sourcePlan: work/029-mapgen-bsp-dungeons/plan.md
+sourceTasks: work/029-mapgen-bsp-dungeons/tasks.yml
+sourceAnalysis: readiness/029-mapgen-bsp-dungeons/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/029-mapgen-bsp-dungeons/analysis.json
+    digest: 7fae0d04e059559deb47521371696eff04f1e051ab35e77898be1655f8ec80dc
+    schemaVersion: 1
+  - label: checklist
+    path: work/029-mapgen-bsp-dungeons/checklist.md
+    digest: 74d8c3eead127dd3db2a7a8197717c5a764dd2395671af7acad3c51ff01e94fc
+    schemaVersion: 1
+  - label: clarifications
+    path: work/029-mapgen-bsp-dungeons/clarifications.md
+    digest: e4a74a125936a3ca17390a006b46027493aef6218aec76d323d6518533ca6814
+    schemaVersion: 1
+  - label: plan
+    path: work/029-mapgen-bsp-dungeons/plan.md
+    digest: c503bd93be470f018d96fa4985c97edfcc4cf5501e6d2cd515ec70af826e5433
+    schemaVersion: 1
+  - label: spec
+    path: work/029-mapgen-bsp-dungeons/spec.md
+    digest: dddba9ac8f0c0230e659d13d2f89882316673ac01df9be52336c927af8c6ec99
+    schemaVersion: 1
+  - label: tasks
+    path: work/029-mapgen-bsp-dungeons/tasks.yml
+    digest: e1e9079d0cec3f6c47cf48c218ae845e16755001afbdb693036d75a37e1560ab
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004, PD-005, PD-006]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV017]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV018]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/029-mapgen-bsp-dungeons/test-reports/bsp.trx
+      digest: "sha256:a2790caf7fbc989f6ad9a72ff577134f2dd1dc22b3e1301d0871098cea1f2af9"
+      outcome: passed
+      passed: 684
+      failed: 0
+      skipped: 0
+    notes: ["BSP dungeon (bspDungeon) + RoomGraph implemented and covered by the MapGen suite; observed via bsp.trx."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

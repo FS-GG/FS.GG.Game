@@ -1,0 +1,198 @@
+schemaVersion: 1
+work:
+  id: 032-mapgen-skill-finalize
+  title: "Mapgen Skill Finalize"
+  stage: tasks
+  status: tasksReady
+  sourceSpec: work/032-mapgen-skill-finalize/spec.md
+  sourceClarifications: work/032-mapgen-skill-finalize/clarifications.md
+  sourceChecklist: work/032-mapgen-skill-finalize/checklist.md
+  sourcePlan: work/032-mapgen-skill-finalize/plan.md
+  publicOrToolFacingImpact: true
+
+sources:
+  - label: spec
+    path: work/032-mapgen-skill-finalize/spec.md
+    digest: dd73171da9e1eae3c9889e1dcddd1622155f15c72e0df89e989d24e67c50bc7a
+    schemaVersion: 1
+  - label: clarifications
+    path: work/032-mapgen-skill-finalize/clarifications.md
+    digest: 741a70fa880445c245899a62f494d73015579ebab9a5699fe6529c6ad27a5cd4
+    schemaVersion: 1
+  - label: checklist
+    path: work/032-mapgen-skill-finalize/checklist.md
+    digest: ab85efef3c94d98191a2f3a69bf38ad7f5c7ba81276bdbcf83e4232bf80c7feb
+    schemaVersion: 1
+  - label: plan
+    path: work/032-mapgen-skill-finalize/plan.md
+    digest: b406f4e8282b0e3e4432d30585368f6aad4bea0588ff4e6e715cca98bbdf4c68
+    schemaVersion: 1
+tasks:
+  - id: T001
+    title: Implement requirement FR-001
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-001]
+    decisions: []
+    sourceIds: [AC-001, FR-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV001]
+  - id: T002
+    title: Implement requirement FR-002
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-002]
+    decisions: []
+    sourceIds: [AC-002, FR-002, PD-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV002]
+  - id: T003
+    title: Implement requirement FR-003
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-003]
+    decisions: []
+    sourceIds: [AC-003, FR-003, PD-003]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV003]
+  - id: T004
+    title: Implement requirement FR-004
+    status: pending
+    owner: sdd
+    dependencies: []
+    requirements: [FR-004]
+    decisions: []
+    sourceIds: [AC-004, FR-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV004]
+  - id: T005
+    title: Implement clarification decision DEC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-001]
+    sourceIds: [DEC-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV005]
+  - id: T006
+    title: Implement clarification decision DEC-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: [DEC-002]
+    sourceIds: [DEC-002]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV006]
+  - id: T007
+    title: Implement plan decision PD-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-001, DEC-001, FR-001, PD-001]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV007]
+  - id: T008
+    title: Implement plan decision PD-004
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [AC-004, DEC-002, DEC-003, FR-004, PD-004]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV008]
+  - id: T009
+    title: Implement plan decision PD-005
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [CR-005, PD-005]
+    requiredSkills: [fsharp, implementation]
+    requiredEvidence: [EV009]
+  - id: T010
+    title: Update contract surface PC-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PD-002]
+    requiredSkills: [fsharp]
+    requiredEvidence: [EV010]
+  - id: T011
+    title: Record verification evidence VO-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-001, PD-002, PD-003, VO-001]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV011]
+  - id: T012
+    title: Record verification evidence VO-002
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PD-004, VO-002]
+    requiredSkills: [automated-tests, readiness-evidence]
+    requiredEvidence: [EV012]
+  - id: T013
+    title: Handle migration posture PM-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [PC-001, PM-001]
+    requiredSkills: [schema-versioning]
+    requiredEvidence: [EV013]
+  - id: T014
+    title: Refresh generated view impact GV-001
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [GV-001, PD-001]
+    requiredSkills: [deterministic-json]
+    requiredEvidence: [EV014]
+  - id: T015
+    title: Keep accepted deferral DEC-003 visible
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [DEC-003]
+    requiredSkills: [traceability]
+    requiredEvidence: [EV015]
+  - id: T016
+    title: Keep accepted deferral CR-005 visible
+    status: pending
+    owner: sdd
+    dependencies: [T001]
+    requirements: []
+    decisions: []
+    sourceIds: [CR-005]
+    requiredSkills: [traceability]
+    requiredEvidence: [EV016]
+acceptedDeferrals:
+  - "CR-005"
+  - "DEC-003"
+findings: []
+advisoryNotes:
+  - "Optional Governance pointers remain compatibility facts only."
+lifecycleNotes:
+  - "Next lifecycle action: fsgg-sdd analyze --work 032-mapgen-skill-finalize."

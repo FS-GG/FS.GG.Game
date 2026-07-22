@@ -1,0 +1,614 @@
+schemaVersion: 1
+workId: 027-mapgen-substrate
+stage: evidence
+status: evidenceReady
+sourceSpec: work/027-mapgen-substrate/spec.md
+sourceClarifications: work/027-mapgen-substrate/clarifications.md
+sourceChecklist: work/027-mapgen-substrate/checklist.md
+sourcePlan: work/027-mapgen-substrate/plan.md
+sourceTasks: work/027-mapgen-substrate/tasks.yml
+sourceAnalysis: readiness/027-mapgen-substrate/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/027-mapgen-substrate/analysis.json
+    digest: 2884bc812e50c7f59d9aaab99a6ffd9a3cc75415d3ab17b1d2a60211efc39998
+    schemaVersion: 1
+  - label: checklist
+    path: work/027-mapgen-substrate/checklist.md
+    digest: 94c173bbb42f8ffe164b538ab0c60ea362faf1f25f56853b483f5dc342222003
+    schemaVersion: 1
+  - label: clarifications
+    path: work/027-mapgen-substrate/clarifications.md
+    digest: bd102502b7350d0a6d35481d99f552d67821ce45e750a6d2f5748a57b19b49c2
+    schemaVersion: 1
+  - label: plan
+    path: work/027-mapgen-substrate/plan.md
+    digest: cec0556e3226b027a481a209da9800ed60c0bbf0ae9a8d30e34f1ed2f4f9dba4
+    schemaVersion: 1
+  - label: spec
+    path: work/027-mapgen-substrate/spec.md
+    digest: 075255b7dea91dd0fa270064b388b17bbb7c7deb22f50159f74c7c8675579e4b
+    schemaVersion: 1
+  - label: tasks
+    path: work/027-mapgen-substrate/tasks.yml
+    digest: d7e9a08f9cdf5dad91f5462380b874d747072877b04d92d06dba0e03e6ce79d8
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["Grid<`T> + filled/inBounds/get(voption)/set(no-op OOB) implemented and covered by the totality/get-set test."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["regions flood-fill with row-major Cells and ascending-by-first-cell Id; covered by the region-labelling test."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["largestRegion (most cells, tie->lowest Id, ValueNone on no floor); covered by the largest-region test."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["connect carves nearest-pair L-corridors joining every region to the largest; covered by the connect test."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV005]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["Determinism harness (FsCheck 200): build+connect twice per seed is byte-identical; seed+1 differs."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["Traversability harness (FsCheck 100): after connect, Pathfinding.bfs reaches every floor cell."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-007]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-007]
+    obligationRefs: [EV007]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["Totality property (FsCheck 300): degenerate dims and OOB never throw."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-008]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV008]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["MapGen.fsi authored; both Core surface baselines refreshed (additive: Grid`1/Tile/TileMap/Region/MapGen)."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV009]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["fs-gg-mapgen SKILL.md skeleton + generator catalog row + regenerated manifest; --check passes."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/MapGen.fs, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["DEC-001: regions/largestRegion/connect take an explicit Neighbourhood; no hidden default."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/MapGen.fs, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["DEC-002: nearest cell pair (min squared dist, tie->smallest (from,to)) carved as an axis-then-axis L."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV012]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/skill-manifest/skill-manifest.json, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["DEC-003: the fs-gg-mapgen row is live (profile in [game, sample-pack], mirrored:false) from M1."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, src/Game.Core/MapGen.fsi, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["DEC-004: Grid<`T> is generic (TileMap = Grid<Tile>); the generic type is baselined."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/MapGen.fs, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["PD-002: regions labelling order implemented and tested."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/MapGen.fs, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["PD-004: connect corridor carving implemented and tested."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: [FR-009]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV016]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["PD-009: skill home (SKILL.md + catalog row + regenerated manifest) added."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV017]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["PC-001: surface baselines updated in lockstep with MapGen.fsi; drift is exactly the additions."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV018]
+    artifacts: [template/skill-manifest/skill-manifest.json, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["PC-002: skill-manifest.json gains the fs-gg-mapgen row with its SKILL.md sha256."]
+  - id: EV019
+    kind: verification
+    subject:
+      type: task
+      id: T019
+    taskRefs: [T019]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV019]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["VO-001: unit tests (grid primitives, region order, largest-region tie-break, connect) pass."]
+  - id: EV020
+    kind: verification
+    subject:
+      type: task
+      id: T020
+    taskRefs: [T020]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005, PD-006, PD-007]
+    obligationRefs: [EV020]
+    artifacts: [tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["VO-002: determinism/traversability/totality property suites pass."]
+  - id: EV021
+    kind: verification
+    subject:
+      type: task
+      id: T021
+    taskRefs: [T021]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-008]
+    obligationRefs: [EV021]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, readiness/surface-baselines/members/FS.GG.Game.Core.txt]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["VO-003: both Core surface baselines byte-match the built surface (drift gate clean)."]
+  - id: EV022
+    kind: verification
+    subject:
+      type: task
+      id: T022
+    taskRefs: [T022]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-009]
+    obligationRefs: [EV022]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["VO-004: generate-skill-manifest.fsx --check exits 0 with the fs-gg-mapgen row present."]
+  - id: EV023
+    kind: verification
+    subject:
+      type: task
+      id: T023
+    taskRefs: [T023]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV023]
+    artifacts: [readiness/surface-baselines/FS.GG.Game.Core.txt, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["PM-001: purely additive public surface; nothing removed/renamed; no consumer migration."]
+  - id: EV024
+    kind: verification
+    subject:
+      type: task
+      id: T024
+    taskRefs: [T024]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV024]
+    artifacts: [readiness/027-mapgen-substrate/work-model.json, tests/Game.Core.Tests/MapGenTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/027-mapgen-substrate/test-reports/mapgen.trx
+      digest: "sha256:52f04109e2891ae6e0cd2cb455b1bef88841154b2e82295321ce0dbe7f12030e"
+      outcome: passed
+      passed: 676
+      failed: 0
+      skipped: 0
+    notes: ["GV-001: readiness/027-mapgen-substrate/work-model.json refreshes from the current sources."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

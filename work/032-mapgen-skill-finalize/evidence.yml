@@ -1,0 +1,419 @@
+schemaVersion: 1
+workId: 032-mapgen-skill-finalize
+stage: evidence
+status: evidenceReady
+sourceSpec: work/032-mapgen-skill-finalize/spec.md
+sourceClarifications: work/032-mapgen-skill-finalize/clarifications.md
+sourceChecklist: work/032-mapgen-skill-finalize/checklist.md
+sourcePlan: work/032-mapgen-skill-finalize/plan.md
+sourceTasks: work/032-mapgen-skill-finalize/tasks.yml
+sourceAnalysis: readiness/032-mapgen-skill-finalize/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/032-mapgen-skill-finalize/analysis.json
+    digest: d25a4d6dbd1fda1b8d4139858c9af6509c9f4b587d30650c3ead9d16031e6cc3
+    schemaVersion: 1
+  - label: checklist
+    path: work/032-mapgen-skill-finalize/checklist.md
+    digest: ab85efef3c94d98191a2f3a69bf38ad7f5c7ba81276bdbcf83e4232bf80c7feb
+    schemaVersion: 1
+  - label: clarifications
+    path: work/032-mapgen-skill-finalize/clarifications.md
+    digest: 741a70fa880445c245899a62f494d73015579ebab9a5699fe6529c6ad27a5cd4
+    schemaVersion: 1
+  - label: plan
+    path: work/032-mapgen-skill-finalize/plan.md
+    digest: b406f4e8282b0e3e4432d30585368f6aad4bea0588ff4e6e715cca98bbdf4c68
+    schemaVersion: 1
+  - label: spec
+    path: work/032-mapgen-skill-finalize/spec.md
+    digest: dd73171da9e1eae3c9889e1dcddd1622155f15c72e0df89e989d24e67c50bc7a
+    schemaVersion: 1
+  - label: tasks
+    path: work/032-mapgen-skill-finalize/tasks.yml
+    digest: dae70f2b6709f7fd297e8980815638954745c904079bec3f582c50e1342ed1b4
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV004]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV007]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV008]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV009
+    kind: deferral
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV009]
+    artifacts: [docs/reports/2026-07-22-procedural-map-generation-design.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The .github org registry row (owner: fs-gg-game, fs-gg-mapgen; registry = manifest = bytes) is a change in another repo (FS-GG/.github), reconciled from this repo regenerated skill-manifest.json — the same follow-up class as fs-gg-effects/#330 and fs-gg-physics/#328."
+    owner: fs-gg-game maintainer
+    scope: "Add the owner: fs-gg-game fs-gg-mapgen row to FS-GG/.github registry/skills.yml, reconciled from skill-manifest.json."
+    laterLifecycleVisibility: "Recorded in the design doc cross-repo follow-up section and this deferral; file via the cross-repo-coordination protocol."
+    notes: ["Cross-repo .github registry reconcile — recorded, not auto-filed (another repo owns it)."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV010]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003]
+    obligationRefs: [EV011]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV012]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV013]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV014]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV016]
+    artifacts: [scripts/generate-skill-manifest.fsx, template/product-skills/fs-gg-mapgen/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/032-mapgen-skill-finalize/test-reports/finalize.trx
+      digest: "sha256:08112565007ed6a489618b040baaa36bbd30d54d349cbfab6dcf5131abf8f575"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Full teaching SKILL.md finalized; manifest regenerated (--check green) and every [[ref]] resolves (check-skill-refs green)."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
