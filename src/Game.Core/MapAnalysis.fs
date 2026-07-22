@@ -362,14 +362,17 @@ module MapAnalysis =
         |> Map.ofList
 
     let killzones (hasLos: Cell -> Cell -> bool) (minLength: int) (map: TileMap) : (Cell * Cell) list =
-        let floors = floorCells map |> List.toArray // row-major, so index order is Cell order
+        let floors = floorCells map |> List.toArray
         let chebyshev (a: Cell) (b: Cell) = max (abs (a.Col - b.Col)) (abs (a.Row - b.Row))
 
-        // i < j over the row-major array yields `a < b` pairs already in canonical (a, b) order.
+        // Row-major i<j is NOT the same as `Cell`-order a<b: `Cell` compares (Col, Row), so a cross-row pair
+        // can be row-major-ordered yet Col-out-of-order. Canonicalise each pair to (min, max) under Cell
+        // comparison, then sort by (a, b) — so the contract's "canonical a<b, in (a, b) order" actually holds.
         [ for i in 0 .. floors.Length - 1 do
               for j in i + 1 .. floors.Length - 1 do
                   let a = floors.[i]
                   let b = floors.[j]
 
                   if chebyshev a b >= minLength && hasLos a b then
-                      (a, b) ]
+                      if a <= b then (a, b) else (b, a) ]
+        |> List.sortBy (fun (a, b) -> struct (a.Col, a.Row, b.Col, b.Row))

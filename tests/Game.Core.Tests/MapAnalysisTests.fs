@@ -366,6 +366,20 @@ let tests =
               // with a minLength beyond the corridor, no killzones
               Expect.equal (MapAnalysis.killzones (losOracle corridor) 20 corridor) [] "no pair reaches minLength 20"
 
+          testCase "killzones — every pair is canonical a<=b under Cell order, even across rows (FsCheck)"
+          <| fun () ->
+              // regression: row-major i<j is NOT Cell order (Cell compares Col then Row), so a multi-row map
+              // must still emit pairs with a <= b. Use a fully-open map so cross-row pairs actually appear.
+              let prop (w: int) (h: int) (ml: int) =
+                  let ww = 2 + (abs w) % 5
+                  let hh = 2 + (abs h) % 5
+                  let m: TileMap = { Width = ww; Height = hh; Cells = Array.create (ww * hh) Floor }
+                  let kz = MapAnalysis.killzones (fun _ _ -> true) (1 + (abs ml) % 3) m
+                  // every pair canonical, and the whole list sorted by (a,b)
+                  (kz |> List.forall (fun (a, b) -> a <= b))
+                  && (kz = List.sortBy (fun (a, b) -> struct (a.Col, a.Row, b.Col, b.Row)) kz)
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 200, prop)
+
           testCase "MapAnalysis M12 totality — degenerate maps never throw (FsCheck)"
           <| fun () ->
               let prop (w: int) (h: int) (s: uint64) (ml: int) =
