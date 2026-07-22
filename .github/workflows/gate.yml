@@ -306,6 +306,33 @@ jobs:
       - name: Behavioural test suite (baseline + .fsi fixture in, exit code + subject claim out)
         run: scripts/test-check-fsi-doc-surface.sh
 
+  # Tests for the packed-api-surface completeness gate (FS.GG.Game#462). The gate itself
+  # (scripts/check-packed-api-surface.sh) is already live in CI + release via a Build-time MSBuild
+  # AfterTargets target in FS.GG.Game.Core.fsproj — a missing/malformed packed `.fsi` fails the build
+  # and the release `dotnet pack`. What that wiring does NOT do is RUN the checker's 34-assertion
+  # behavioural suite on every PR, so the suite was verified only locally. This job closes that: it is
+  # the same argument as fsi-doc-surface-tests / pin-coherence-tests above — the failure that matters is
+  # not the checker going red, it is the checker reading NOTHING (a moved baseline, a re-shaped member
+  # line, an unparseable `<Compile>` list) and reporting that in GREEN, which is byte-for-byte
+  # indistinguishable from "the packed surface is complete". The suite demands a red for each of those,
+  # pins the legitimate `type X` + `module X` companion pattern as GREEN, and pins the zero-match family
+  # (FS-GG/.github#266) so a completeness claim over a surface nobody could read cannot pass.
+  #
+  # Separate job = distinct signal, as everywhere in this file: a red HERE means the gate itself is
+  # broken, a different fact — and a different reader — from "the packed surface is actually incomplete"
+  # (which the Build-time target reddens). Hermetic: baseline pair + `.fsi` fixtures + a synthesised
+  # fsproj in a temp dir; no build, no network, no token.
+  packed-api-surface-tests:
+    name: Packed-api-surface gate tests (scripts/check-packed-api-surface.sh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Behavioural test suite (baseline + .fsi + fsproj fixture in, exit code + subject claim out)
+        run: scripts/test-check-packed-api-surface.sh
+
   # Sync-not-fork drift gate (shared-build-config contract, ADR-0006). The three managed build-config
   # files (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json) must stay
   # byte-identical to the org source of truth in FS-GG/.github dist/dotnet/. A hand-edit to a managed
