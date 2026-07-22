@@ -128,7 +128,7 @@
        gate-only, these can never reach a packed artefact, so the NU5104 stable-only rule that binds
        the render edge does not bind them; they are on the current stable regardless. -->
   <ItemGroup Label="Gate-only — packages the published skills teach (no project references these)">
-    <PackageVersion Include="FS.GG.Audio.Core" Version="0.2.0" />
+    <PackageVersion Include="FS.GG.Audio.Core" Version="0.4.0" />
     <PackageVersion Include="FS.GG.Audio.Host" Version="0.2.0" />
     <PackageVersion Include="FS.GG.UI.Canvas" Version="0.10.0" />
     <PackageVersion Include="FS.GG.UI.Controls.Elmish" Version="0.10.0" />
