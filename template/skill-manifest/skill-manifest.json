@@ -74,13 +74,13 @@
       "supplied-by": "template/product-skills/fs-gg-line-drawing/"
     },
     {
-      "id": "fs-gg-mapgen",
+      "id": "fs-gg-mapcraft",
       "scope": "product",
-      "sha256": "e907574950786a713196545141338a635d85e8b340262b8eec1fecf1cc091907",
+      "sha256": "d8d02a7e246ee8ead7641b86fed3a477f08cfe5af208d9649f44758b74baeabb",
       "mirrored": false,
-      "resolvablePath": ".agents/skills/fs-gg-mapgen/SKILL.md",
+      "resolvablePath": ".agents/skills/fs-gg-mapcraft/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
-      "supplied-by": "template/product-skills/fs-gg-mapgen/"
+      "supplied-by": "template/product-skills/fs-gg-mapcraft/"
     },
     {
       "id": "fs-gg-model-swap",

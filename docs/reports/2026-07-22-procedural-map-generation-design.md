@@ -1,9 +1,15 @@
-# Design — Procedural map generation (`MapGen`)
+# Design — Map construction & analysis (`fs-gg-mapcraft`)
 
-- **Date:** 2026-07-22
+- **Date:** 2026-07-22 (Part I); extended 2026-07-22 (Part II — the `fs-gg-mapcraft` reframing)
 - **Owner:** `FS.GG.Game` (FS.GG.Game.Core)
-- **Status:** Design proposal (pre-charter). A `MapGen` module for `FS.GG.Game.Core` plus a new
-  `fs-gg-mapgen` product skill, delivered as a small epic of SDD work items.
+- **Status:** Part I (MapGen generators, milestones M1–M6) shipped and merged (FS.GG.Game#474). Part II
+  (the `fs-gg-mapcraft` reframing + `MapAnalysis` machinery, milestones M7–M12) is the active roadmap —
+  see [Part II](#part-ii--map-construction--analysis-the-fs-gg-mapcraft-reframing).
+- **Reframing note:** the capability is **map construction**, not merely generation. Procedural generation
+  is *one producer* of a map; the analysis + validation machinery is **producer-agnostic** and shared by
+  every map-building agent (procedural, authored, or agent-drawn). The skill is renamed `fs-gg-mapgen` →
+  `fs-gg-mapcraft` (M7) to reflect this; `MapGen` (produce) and the new `MapAnalysis` (analyze/validate)
+  are the modules under it.
 - **Scope:** A comprehensive, general, **byte-identical deterministic** procedural map/level generator
   covering four algorithm families — cellular-automata caves, BSP room-and-corridor dungeons,
   room-graph (branching-walk) floors, and maze + value-noise heightmap + scatter — over a shared tile
@@ -267,3 +273,109 @@ follow-up class as `fs-gg-effects` (FS-GG/.github#328) and `fs-gg-physics` (FS-G
 - Consuming specs: `docs/TestSpecs/Games/roguelike-dungeon-crawler.md` §4.8, §14.1;
   `docs/TestSpecs/Games/sandbox-survival.md` (worldgen pipeline).
 - Placement precedent: `docs/reports/2026-07-19-redblobgames-algorithm-incorporation-roadmap.md` §1.3, §3.5.
+
+---
+
+# Part II — Map construction & analysis (the `fs-gg-mapcraft` reframing)
+
+## 8. Why generation is only half the capability
+
+Part I built generators. But an agent building a map — however it builds it — asks the same battery of
+questions afterwards, and *reinvents the machinery to answer them* every time:
+
+- Are all areas reachable, or did I strand a region?
+- Where are the entrances/exits, and which cells are the chokepoints?
+- How long is the critical path from start to exit? Is the map too small / too sprawling?
+- Is the loot / spawn distribution *fair* — does every start have comparable access to resources?
+- What is the tactical shape — where is it exposed, where is there cover, where are the killzones?
+
+None of this is specific to *procedural* maps. A hand-authored level, or a map an agent draws room by
+room, needs the identical analysis. So the capability is **map construction as a pipeline** —
+`produce → analyze → validate → iterate` — where the producer varies (procedural / authored / agentic)
+but the **analysis + validation layer is producer-agnostic and shared**. That layer is `MapAnalysis`,
+and the skill that teaches the whole pipeline is `fs-gg-mapcraft`.
+
+The keystone is **validation**: a battery that runs the analyses and returns accept/reject *with reasons*,
+so an agent can loop `generate → validate → regenerate` (or `edit → validate → fix`) until the map meets
+its rules. Every map-building agent hand-rolls that loop today; `MapAnalysis.validate` is it, once.
+
+## 9. `MapAnalysis` — producer-agnostic, predicate-general
+
+Analysis operates over **any map**, not just `MapGen` output. Following `Pathfinding`'s discipline — *the
+`Cell -> bool` predicate IS the map* — the core functions take either a `TileMap` or a walkability
+predicate + a cell domain, so they serve authored and agent-built maps too. All pure, total, deterministic,
+integer, BCL-only, over `Cell`/`Neighbourhood`/`Pathfinding`, and (for the tactical layer) a caller-supplied
+`hasLos: Cell -> Cell -> bool` oracle exactly as `Ai` takes one.
+
+```fsharp
+namespace FS.GG.Game.Core
+
+[<RequireQualifiedAccess>]
+module MapAnalysis =
+
+    // M8 — reachability & connectivity
+    val reachable    : Neighbourhood -> isWalkable: (Cell -> bool) -> start: Cell -> maxVisited: int -> Set<Cell>
+    val components   : Neighbourhood -> TileMap -> Region list          // predicate-general components
+    val isConnected  : Neighbourhood -> TileMap -> bool
+    val stranded     : Neighbourhood -> from: Cell -> TileMap -> Cell list   // reachable-in-principle but not from `from`
+
+    // M9 — entrances/exits & chokepoints
+    val borderOpenings    : TileMap -> Cell list                        // floor cells on the map border
+    val deadEnds          : Neighbourhood -> TileMap -> Cell list
+    val articulationPoints: Neighbourhood -> TileMap -> Cell list       // bottlenecks whose removal splits the map
+
+    // M10 — path & flow metrics
+    val distanceField : Neighbourhood -> TileMap -> sources: Cell list -> Map<Cell, int>   // multi-source BFS
+    val diameter      : Neighbourhood -> TileMap -> int                 // longest shortest-path = critical path length
+    val isolation     : Neighbourhood -> TileMap -> Cell -> int         // farthest reachable distance from a cell
+
+    // M11 — distribution, fairness & the validation report (the keystone)
+    val spacing   : points: Cell list -> struct (int * float)           // min & mean nearest-neighbour spacing
+    val fairness  : spawns: Cell list -> resources: Cell list -> Neighbourhood -> TileMap -> Map<Cell, int>  // per-spawn nearest-resource cost
+    val coverage  : Neighbourhood -> TileMap -> points: Cell list -> radius: int -> float   // fraction of floor within `radius`
+    type Rule     = { /* connected? min/max diameter? min entrances? min spawn spacing? ... */ }
+    type Report   = { Passed: bool; Failures: string list; Connected: bool; Diameter: int; Entrances: int (* … *) }
+    val validate  : Rule list -> Neighbourhood -> TileMap -> Report
+
+    // M12 — tactical analysis (STATIC map shape; NOT live enemies — that is `Ai`)
+    val exposureMap : hasLos: (Cell -> Cell -> bool) -> TileMap -> Map<Cell, int>   // how many floor cells can see each cell
+    val coverMap    : TileMap -> Map<Cell, int>                          // adjacent-wall cover directions per floor cell
+    val killzones   : hasLos: (Cell -> Cell -> bool) -> TileMap -> (Cell * Cell) list   // long mutual-sightline pairs
+```
+
+### The tactical layer vs `Ai` — the boundary that keeps them from duplicating
+
+`Ai.threatField`/`influenceMap` answer *"given THESE live enemies, where is it dangerous / who controls
+this ground THIS tick"* — dynamic, keyed on actual units. `MapAnalysis`'s tactical functions answer *"what
+is the tactical SHAPE of this map"* — static, a function of geometry alone (exposure, cover, killzones),
+computable at build time with no enemies present. They compose: a map-builder validates/places using the
+static shape; `Ai` consumes the same geometry per tick with real sources layered on. This is the identical
+substrate-vs-policy split the `Ai` skill already draws — `MapAnalysis` is more substrate, `Ai` is policy.
+
+## 10. Part II determinism & placement
+
+Same contract as Part I: pure, total, byte-deterministic (integer, fixed-order iteration, no hash-set
+enumeration into output), BCL-only, Core-resident. `MapAnalysis` reuses `Pathfinding`'s `Neighbourhood`/BFS
+and (for tactical) a caller-supplied `hasLos` oracle — it adds no float path. It is *read-only over maps*:
+it never mutates a map, so it composes behind any producer.
+
+## 11. The Part II roadmap
+
+Six milestones. M7 (rename) is the gate; M8–M12 add `MapAnalysis` and depend on M7 + the shipped substrate;
+they are largely independent of each other (parallelizable), with M11's `validate` consuming M8–M10.
+
+| # | Work item (`work/<id>`) | Depends | Exit criteria |
+|---|---|---|---|
+| M7 | `mapcraft-rename` | — | Retire the `fs-gg-mapgen` skill id, introduce `fs-gg-mapcraft` (construction+analysis framing; generation is one section); manifest regenerated; cross-repo registry request updated (FS-GG/.github#1355); design doc reflects it. No `MapGen` source change. |
+| M8 | `mapanalysis-reachability` | M7 | `MapAnalysis` module + `reachable`/`components`/`isConnected`/`stranded` over a `TileMap` or a `Cell -> bool` predicate; determinism + correctness suite; surface baseline. |
+| M9 | `mapanalysis-chokepoints` | M8 | `borderOpenings`/`deadEnds`/`articulationPoints`; a bridge/articulation algorithm with a documented deterministic order; tests on known fixtures. |
+| M10 | `mapanalysis-path-metrics` | M8 | `distanceField`/`diameter`/`isolation`; multi-source BFS; diameter = longest shortest-path; determinism tests. |
+| M11 | `mapanalysis-fairness-validate` | M8–M10 | `spacing`/`fairness`/`coverage` + the `Rule`/`Report` `validate` battery driving generate→validate→regenerate; worked example against a `MapGen` cave/dungeon. |
+| M12 | `mapanalysis-tactical` | M8 | `exposureMap`/`coverMap`/`killzones` over a caller `hasLos` oracle; the static-shape-vs-`Ai`-policy boundary documented; determinism tests. |
+
+**Milestone exit:** `fs-gg-mapcraft` teaches the full pipeline — produce a map (procedural via `MapGen`, or
+bring your own `TileMap`), analyze it (reachability, chokepoints, path metrics, fairness, tactical shape),
+and validate it against rules — all byte-identical for a seed, over one Core surface, for every
+map-building agent.
+
+Each item flows the full SDD lifecycle (charter → ship), as Part I did.

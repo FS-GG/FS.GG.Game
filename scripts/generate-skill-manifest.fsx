@@ -149,13 +149,13 @@ let catalog =
       "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]", NotMirrored
       "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]", NotMirrored
       "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]", NotMirrored
-      // fs-gg-mapgen (FS.GG.Game#027 / M1 of the procedural map generation design) is, like fs-gg-ai and
-      // fs-gg-ballistics, NOT a migration: the org registry had no map-generation skill, so it has no
-      // FS.GG.Rendering counterpart to stay byte-identical with. It originates here because the seeded,
-      // integer, byte-deterministic MapGen substrate sits in FS.GG.Game.Core. The .github registry/
-      // skills.yml must gain this as a NEW owner:fs-gg-game row (registry = manifest = bytes), an M6
-      // cross-repo follow-up like fs-gg-effects/fs-gg-physics before it.
-      "fs-gg-mapgen", "template/product-skills/fs-gg-mapgen/SKILL.md", "profile in [game, sample-pack]", NotMirrored
+      // fs-gg-mapcraft (FS.GG.Game map construction & analysis; renamed from fs-gg-mapgen in M7,
+      // work/033) is, like fs-gg-ai and fs-gg-ballistics, NOT a migration: the org registry had no
+      // map-construction skill, so it has no FS.GG.Rendering counterpart. It originates here because the
+      // seeded MapGen generators + the producer-agnostic MapAnalysis machinery sit in FS.GG.Game.Core.
+      // The .github registry/skills.yml gains this as a NEW owner:fs-gg-game row (registry = manifest =
+      // bytes) — the cross-repo follow-up FS-GG/.github#1355 (originally filed as fs-gg-mapgen, renamed).
+      "fs-gg-mapcraft", "template/product-skills/fs-gg-mapcraft/SKILL.md", "profile in [game, sample-pack]", NotMirrored
       "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]", NotMirrored
       "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]", NotMirrored
       "fs-gg-playtest", "template/product-skills/fs-gg-playtest/SKILL.md", "profile in [game, sample-pack]", NotMirrored

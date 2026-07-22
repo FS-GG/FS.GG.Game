@@ -1,0 +1,467 @@
+schemaVersion: 1
+workId: 033-mapcraft-rename
+stage: evidence
+status: evidenceReady
+sourceSpec: work/033-mapcraft-rename/spec.md
+sourceClarifications: work/033-mapcraft-rename/clarifications.md
+sourceChecklist: work/033-mapcraft-rename/checklist.md
+sourcePlan: work/033-mapcraft-rename/plan.md
+sourceTasks: work/033-mapcraft-rename/tasks.yml
+sourceAnalysis: readiness/033-mapcraft-rename/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/033-mapcraft-rename/analysis.json
+    digest: c708a0348130e6b019203551e4e3c7bbfcaacc9461f9924b69f832110f30afc1
+    schemaVersion: 1
+  - label: checklist
+    path: work/033-mapcraft-rename/checklist.md
+    digest: 6baad55f76377366ef6ebc4784d9a5fcb0a78c6a8f2244fbb6c76559978023e8
+    schemaVersion: 1
+  - label: clarifications
+    path: work/033-mapcraft-rename/clarifications.md
+    digest: dc6bd8fcc5ce8fc3ac27e29923166fa251fb2c9aefb3f3379ffdc4a89d092455
+    schemaVersion: 1
+  - label: plan
+    path: work/033-mapcraft-rename/plan.md
+    digest: 81f181d00eb73baa09c5043c0d7abae25d293b5744ebd821be8ff6bfea516bb0
+    schemaVersion: 1
+  - label: spec
+    path: work/033-mapcraft-rename/spec.md
+    digest: 90c1e7bd758cfc506d16ba09c7841e87bccfb0da2131103868d543a278f25af4
+    schemaVersion: 1
+  - label: tasks
+    path: work/033-mapcraft-rename/tasks.yml
+    digest: 1871d28e26e374399b627b68db71d0b20dc0ab286ad225c365203e7b6431a1c7
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV002]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV008]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV009]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV010]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV011
+    kind: deferral
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV011]
+    artifacts: [template/product-skills/fs-gg-mapcraft/SKILL.md]
+    sourceRefs: []
+    result: deferred
+    synthetic: false
+    rationale: "The .github registry row rename (fs-gg-mapgen -> fs-gg-mapcraft; registry = manifest = bytes) is another repo change (FS-GG/.github#1355). This repo posted the revised row on the issue; the row itself is reconciled there."
+    owner: fs-gg-game maintainer
+    scope: "Add the fs-gg-mapcraft owner: fs-gg-game row to FS-GG/.github registry/skills.yml."
+    laterLifecycleVisibility: "Posted as a comment on FS-GG/.github#1355; resolved in that repo."
+    notes: ["Cross-repo registry row rename — comment posted on #1355; resolved in FS-GG/.github."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV012]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002, PD-003, PD-004]
+    obligationRefs: [EV013]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV014]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV017
+    kind: verification
+    subject:
+      type: task
+      id: T017
+    taskRefs: [T017]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV017]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+  - id: EV018
+    kind: verification
+    subject:
+      type: task
+      id: T018
+    taskRefs: [T018]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV018]
+    artifacts: [scripts/generate-skill-manifest.fsx, scripts/skill-block-context/fs-gg-mapcraft.fs, template/product-skills/fs-gg-mapcraft/SKILL.md, template/skill-manifest/skill-manifest.json]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/033-mapcraft-rename/test-reports/rename.trx
+      digest: "sha256:c4a2901a43588e5f9e464482b0cf3bcc3513cccee5750535de2b4a4749a8b949"
+      outcome: passed
+      passed: 695
+      failed: 0
+      skipped: 0
+    notes: ["Skill renamed to fs-gg-mapcraft; SKILL.md reframed to produce->analyze->validate; manifest regenerated (--check green), skill-refs + md-block typecheck green."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
