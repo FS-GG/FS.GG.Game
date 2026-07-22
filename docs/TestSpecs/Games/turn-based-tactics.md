@@ -861,63 +861,35 @@ overlay accessible from Play.
 **Mission Result:** win/lose, turns taken, Grid Power remaining, units lost, and a
 letter grade (§11), with `Next`/`Retry`.
 
-### 9.1 Menu system (detailed)
-Every non-play screen (Title, Settings, Stats, Pause, Mission Result) is driven by a single
-**menu stack** of vertical rows with a cursor, so one small update handler serves them all
-and navigation is identical everywhere. The board's mouse-first input (§3) is unchanged;
-the menu overlay is keyboard-driven.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Continue Campaign ─ resume at the highest unlocked mission (§6/§13)
-       ├─ New Campaign ────── fresh 4-mission run from Mission 1 (`NewGame`)
-       ├─ Load ────────────── pick a saved campaign slot (§13)
-       ├─ Stats ───────────── Stats & Charts screen (§9.2)
-       ├─ Settings ────────┬─ Difficulty        ◄ Recruit · Veteran · Commander ►
-       │                   ├─ Master volume     ◄ 0 – 100 ►
-       │                   ├─ Sound             ◄ On · Off ►
-       │                   ├─ Window scale      ◄ 1× · 2× · Fit ►
-       │                   ├─ Grid coordinates  ◄ On · Off ►   (→ §3 `ToggleGridLabels`)
-       │                   └─ Back
-       └─ Quit
+Breachpoint Tactics uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu. The
+game supplies only its **name**, its **key→command map** (the rebindable actions from §3 Controls),
+and its play `update`/`view`; the shell provides everything below.
 
-Pause (from Play, §3 `OpenPause`) ─┬─ Resume
-                                   ├─ Restart Mission ─ (`RestartMission`, §7)
-                                   ├─ Threat overlay   ◄ On · Off ►  (→ §3 `ToggleThreatOverlay`)
-                                   ├─ Settings ──────── (same submenu; returns to Pause)
-                                   └─ Quit to Title
+- **Main menu / start screen** — the game's name (**BREACHPOINT TACTICS**) as the title label,
+  with **Start**, **Config**, and **Exit**. Campaign entry (Continue · New Campaign · Load, §6/§13)
+  sits alongside Start.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions — select/cycle
+    unit, arm ability, preview/confirm/cancel, undo/redo, end turn, threat overlay, grid labels,
+    pause) via the `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings
+    persist via `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    preset — Recruit / Veteran / Commander), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`, `0` mutes), and **Grid coordinates** / **Threat
+    overlay** (drive the §3/§7 `ToggleGridLabels` / `ToggleThreatOverlay` flags). The menu, Esc
+    routing, display settings, and rebind screen come from the shell.
 
-Mission Result ─┬─ Next Mission ── on Victory (`NextMission`); becomes Retry Mission on Defeat
-                ├─ Restart Mission ─ (`RestartMission`; re-seeds the board, §2/§13)
-                ├─ View Stats ──── Stats & Charts (§9.2)
-                └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`↓` move it and **wrap** top↔bottom.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**) — in
-  Play, `Esc` still opens Pause (§3), and inside a menu it steps back one level.
-- **Cycler rows** (Difficulty, Master volume, Sound, Window scale, Grid coordinates, Threat
-  overlay): `←`/`→` change the value **in place**; the row shows a right-aligned `◄ value ►`
-  widget. The top-of-stack menu is the only one that receives input.
-- Rendering reuses the §9 HUD style (panels + inverted selected row); the danger/telegraph
-  overlays underneath are frozen while a menu is open.
-
-**Msg additions** (extend the §7 `Msg` DU):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler row (←/→)
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings **apply live and persist** to local config (§13). **Difficulty** selects the §12
-tunable preset — *Recruit* eases `gridPowerStart` / `enemiesPerWave` / the AI weights
-(`aiBuildingWeight`, `aiKillBonus`), *Veteran* is the §12 defaults, *Commander* tightens
-them; **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped `[0,1]`,
-`0` mutes); **Grid coordinates** and **Threat overlay** drive the §3/§7 `ToggleGridLabels`
-and `ToggleThreatOverlay` flags directly.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Breachpoint
+Tactics does **not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats &
+charts** screen (§9.2) is a Breachpoint-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last mission** and **lifetime/campaign** play. It reads a
@@ -1387,7 +1359,8 @@ its acceptance test(s) pass (§14)._
 ### M9 — UI, menus, stats & audio
 - 🟥 Screens: Title → Mission Select → Deploy → Play → Mission Result, plus HUD (§9)
 - 🟥 Deploy step: pick 3 distinct roster units onto player-spawn tiles, full HP / cooldowns clear (§6, §9)
-- 🟥 Menu stack: cursor wrap, cycler rows, settings apply live + persist (§9.1)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, grid coordinates, threat overlay) apply live + persist (§9.1, §12)
 - 🟥 Difficulty presets (Recruit / Veteran / Commander): modifier layer over §6 values + AI weights (§12, §9.1)
 - 🟥 `MissionStats`/`LifetimeStats` accumulation + snapshot at `MissionResult` (§9.2)
 - 🟥 Kills-by-enemy-type bar chart + damage dealt-vs-taken line chart (§9.2)
