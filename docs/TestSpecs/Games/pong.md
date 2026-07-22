@@ -448,53 +448,32 @@ to render (title overlay, HUD, pause dim, game-over panel).
   1P) at 64 px, final score "11 – 7" at 48 px below.
 - Hint: "SPACE — Rematch   ESC — Title" at 24 px.
 
-### 9.5 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
-Over). Each menu is a vertical list of rows with a cursor, so one small update handler
-serves them all and navigation is identical everywhere.
+### 9.5 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start match in the selected mode (1P/2P)
-       ├─ Stats ─────────── Stats & Charts screen (§9.6)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ CRT effect     ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Pong uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same menu/start
+screen and settings every FS.GG game shares — rather than a bespoke per-game menu. The game
+supplies only its **name**, its **key→command map** (the rebindable actions from §3 Controls),
+and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**PONG**) as the title label, with
+  **Start**, **Config**, and **Exit**. Mode selection (1P/2P, §9.1) sits alongside Start.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions) via the
+    `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings persist via
+    `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    AI preset — Easy / Normal / Hard), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`), and **CRT effect** (toggles the §8 optional
+    post-effect). The menu, Esc routing, display settings, and rebind screen come from the shell.
 
-Game Over ─┬─ Rematch
-           ├─ View Stats ── Stats & Charts (§9.6)
-           └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, CRT): `←`/`→`
-  change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §9.1 selector style: the selected row is inverted (white box, black
-  text); non-selected rows are `#FFFFFF` on black at 28 px.
-
-**Msg additions** (extend §7.2):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.6)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12 AI
-preset (Easy `420/90`, Normal `520/45`, Hard `640/15`); **Master volume**/**Sound** route to
-`Audio.setMasterVolume` (§10, clamped `[0,1]`); **CRT** toggles the §8 optional post-effect.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Pong does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.6) is a Pong-specific screen reached as a Config/menu row.
 
 ### 9.6 Stats & charts screen
 The Stats screen visualizes **the last match** and **lifetime** play. It reads a `Stats`
@@ -825,8 +804,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Static geometry: wall/goal planes + cosmetic non-collide net (§5.4)
 
 ### M7 — Menus & settings
-- 🟥 Menu stack, cursor wrap, cycler/slider rows (§9.5)
-- 🟥 Difficulty presets, volume/CRT settings apply live + persist (§9.5, §12)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.5)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, CRT effect) apply live + persist (§9.5, §12)
 
 ### M8 — Stats & charts
 - 🟥 `MatchStats`/`LifetimeStats` accumulation + persist (§9.6)

@@ -530,59 +530,33 @@ optimization needed for v1.
 - **Game Over:** scrim + "GAME OVER", final score, "NEW HIGH SCORE!" if beaten, "PRESS
   ENTER" to return to title.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
-Over). Each menu is a vertical list of rows with a cursor, so one small update handler
-serves them all and navigation is identical everywhere; the reused row style is the §9
-Title/overlay look (selected row inverted, non-selected `#FFFFFF` on the `#101018` scrim).
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── build Level 1, 3 lives, enter Serve (§7.3 StartGame)
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Casual · Standard · Expert ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Colorblind assist  ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Breakout uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart ───────── new run: fresh 3 lives, Level 1
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**BREAKOUT**) as the title label, with
+  **Start**, **Config**, and **Exit**.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions) via the
+    `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings persist via
+    `KeymapCodec` (JSON), beside this game's other saved config (§13, `breakout.highscore`).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (a §12
+    tunable preset — Casual / Standard / Expert), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`; Sound Off matches the `M` mute of §3), and
+    **Colorblind assist** (swaps the §6.1 brick palette for the §8 colorblind-safe variant).
+    The menu, Esc routing, display settings, and rebind screen come from the shell.
 
-Game Over ─┬─ New Game ──── run ended at 0 lives; start a fresh 3-life run (no continues, §11)
-           ├─ View Stats ── Stats & Charts (§9.2)
-           └─ Quit to Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑` decrements, `↓` increments, both **wrap** around
-  the ends.
-- `Enter`/`Space` activates the current row; `Esc`/`Backspace` (or `P` from Pause) pops the
-  stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Colorblind assist):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §9 Title-screen selector style: the selected row is inverted, the
-  rest are `#FFFFFF` at HUD text size on the standard 60% black scrim.
-
-**Msg additions** (extend §7.2, over the game's `Key` type):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc/Backspace/P — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13, beside `breakout.highscore`):
-**Difficulty** selects a §12 tunable preset — Casual `ballBaseSpeed 300 / paddleWidth 120 /
-dropChance 16% / lives 5`, Standard the §12 defaults, Expert `420 / 88 / 8% / 2`;
-**Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped `[0,1]`; Sound Off
-is volume `0.0`, matching the `M` mute toggle of §3); **Colorblind assist** swaps the §6.1
-brick palette for the §8 colorblind-safe variant.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Breakout does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Breakout-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a stats
@@ -981,7 +955,8 @@ its acceptance test(s) pass (§14)._
 
 ### M8 — Screens, menus & stats
 - 🟥 Phase screens: Title / Serve / Playing / Paused / LevelClear / GameOver + HUD (§9)
-- 🟥 Menu stack, cursor wrap, cycler/slider rows; settings apply live + persist (§9.1)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, colorblind assist) apply live + persist (§9.1, §12)
 - 🟥 Pause freezes world & power-up timers, resumes exact state (§7.3, §13) — AC #15
 - 🟥 `MatchStats`/`LifetimeStats` accumulation + KPI tiles, bar & line charts (§9.2)
 
