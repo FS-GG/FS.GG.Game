@@ -26,3 +26,7 @@ let floorIndex: int = 0
 // Maze/noise/scatter: the seed stream, and an existing `cave` map to draw the scatter mask from.
 let rng: Rng = Rng.ofSeed 1UL
 let cave: TileMap = MapGen.filled 64 64 Floor
+
+//#block 6 "let reached   = MapAnalysis.reachable FourWay 4096 isFloor { Col = 1; Row = 1 }   // Set<Cell> reachable from a start"
+// Analyze: an existing map to ask reachability/connectivity of (any producer would do).
+let level: TileMap = MapGen.filled 48 32 Floor

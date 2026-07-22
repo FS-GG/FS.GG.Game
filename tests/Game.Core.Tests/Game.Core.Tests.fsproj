@@ -22,6 +22,7 @@
     <Compile Include="EdgesTests.fs" />
     <Compile Include="GridsTests.fs" />
     <Compile Include="MapGenTests.fs" />
+    <Compile Include="MapAnalysisTests.fs" />
     <Compile Include="LosTests.fs" />
     <Compile Include="FovTests.fs" />
     <Compile Include="SpatialGridTests.fs" />

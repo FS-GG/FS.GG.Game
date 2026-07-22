@@ -1,0 +1,422 @@
+schemaVersion: 1
+workId: 034-mapanalysis-reachability
+stage: evidence
+status: evidenceReady
+sourceSpec: work/034-mapanalysis-reachability/spec.md
+sourceClarifications: work/034-mapanalysis-reachability/clarifications.md
+sourceChecklist: work/034-mapanalysis-reachability/checklist.md
+sourcePlan: work/034-mapanalysis-reachability/plan.md
+sourceTasks: work/034-mapanalysis-reachability/tasks.yml
+sourceAnalysis: readiness/034-mapanalysis-reachability/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/034-mapanalysis-reachability/analysis.json
+    digest: 71d90d09419f51476d179144e4f7de6ce8e21cb207c5b2eb37e8dc7c27f7b9a3
+    schemaVersion: 1
+  - label: checklist
+    path: work/034-mapanalysis-reachability/checklist.md
+    digest: 9d72838be0bc48441e00506c03c87ac1506bfd46bec5a260ab44f192713a3a86
+    schemaVersion: 1
+  - label: clarifications
+    path: work/034-mapanalysis-reachability/clarifications.md
+    digest: fa366bf409697fa8cfcb5164e2d4928b28454bac4052510b86f6f8908912f312
+    schemaVersion: 1
+  - label: plan
+    path: work/034-mapanalysis-reachability/plan.md
+    digest: 97ed050c6f5e70489eed17d6fdad2d0373c0ea5801a01d880ee60566bd7a1a54
+    schemaVersion: 1
+  - label: spec
+    path: work/034-mapanalysis-reachability/spec.md
+    digest: 218f2cfba8ddf0d8fdeff39b3ff1a6ce0b27d6c3c68ee99c1448315bf710ae72
+    schemaVersion: 1
+  - label: tasks
+    path: work/034-mapanalysis-reachability/tasks.yml
+    digest: f31bbfc6de7ffa7bafa0f024588ccb462ed4681033959c6062012ae68e7d5d45
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV001]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: [FR-006]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-006]
+    obligationRefs: [EV006]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV008]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV009]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: [FR-005]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-005]
+    obligationRefs: [EV010]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV011]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002, PD-003, PD-004, PD-005]
+    obligationRefs: [EV012]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-006]
+    obligationRefs: [EV013]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV015]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+  - id: EV016
+    kind: verification
+    subject:
+      type: task
+      id: T016
+    taskRefs: [T016]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV016]
+    artifacts: [src/Game.Core/MapAnalysis.fs, src/Game.Core/MapAnalysis.fsi, template/product-skills/fs-gg-mapcraft/SKILL.md, tests/Game.Core.Tests/MapAnalysisTests.fs]
+    sourceRefs: []
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/034-mapanalysis-reachability/test-reports/m8.trx
+      digest: "sha256:a94c7bb2748b4c3e9ad22ff4e709ead9884918469b14ce3332bbdabc917dda77"
+      outcome: passed
+      passed: 702
+      failed: 0
+      skipped: 0
+    notes: ["MapAnalysis reachability/connectivity (reachable/stranded/isConnected/componentCount) implemented; router-consistency + determinism + totality covered by the MapAnalysis suite; observed via m8.trx."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."

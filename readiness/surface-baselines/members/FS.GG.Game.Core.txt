@@ -216,6 +216,10 @@ FS.GG.Game.Core.Manifold.Normal : FS.GG.Game.Core.Point [get]
 FS.GG.Game.Core.Manifold.PointCount : System.Int32 [get]
 FS.GG.Game.Core.Manifold.Points : FS.GG.Game.Core.Point[] [get]
 FS.GG.Game.Core.Manifold.new(System.Int32, System.Int32, FS.GG.Game.Core.Point, System.Double, FS.GG.Game.Core.Point[], System.Int32, System.Int32)
+FS.GG.Game.Core.MapAnalysis.componentCount(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : System.Int32
+FS.GG.Game.Core.MapAnalysis.isConnected(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : System.Boolean
+FS.GG.Game.Core.MapAnalysis.reachable(FS.GG.Game.Core.Neighbourhood, System.Int32, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Cell, System.Boolean>, FS.GG.Game.Core.Cell) : Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.Cell>
+FS.GG.Game.Core.MapAnalysis.stranded(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Cell, FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Cell>
 FS.GG.Game.Core.MapGen.bspDungeon(System.Int32, System.Int32, FS.GG.Game.Core.BspParams, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.RoomGraph, FS.GG.Game.Core.Rng>
 FS.GG.Game.Core.MapGen.caves(System.Int32, System.Int32, FS.GG.Game.Core.CaveParams, FS.GG.Game.Core.Rng) : System.ValueTuple<FS.GG.Game.Core.Grid<FS.GG.Game.Core.Tile>, FS.GG.Game.Core.Rng>
 FS.GG.Game.Core.MapGen.classify<T>(FSharpList<Tuple<System.Int32, T>>, FS.GG.Game.Core.Grid<System.Int32>) : Grid<T>

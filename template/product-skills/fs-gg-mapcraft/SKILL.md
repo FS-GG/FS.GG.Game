@@ -140,6 +140,28 @@ let struct (spawns, rng2) = MapGen.poissonScatter mask 5 rng1           // cells
 empty table yields an empty grid). `poissonScatter` returns mask-eligible cells at least `minDist` apart, via
 integer rejection sampling (no trig).
 
+## Analyze — reachability & connectivity (`MapAnalysis`)
+
+The `MapAnalysis` module answers the questions every map-builder asks *after* producing a map — and it works
+over **any** map, because `reachable` takes a `Cell -> bool` predicate (the map *is* the predicate, as in
+`Pathfinding`), not only a `MapGen` output:
+
+```fsharp
+// The producer is your choice; here a generated cave, but the analysis is producer-agnostic.
+let isFloor (c: Cell) = MapGen.get level c = ValueSome Floor
+let reached   = MapAnalysis.reachable FourWay 4096 isFloor { Col = 1; Row = 1 }   // Set<Cell> reachable from a start
+let connected = MapAnalysis.isConnected FourWay level          // is the whole floor one region?
+let stray     = MapAnalysis.stranded FourWay { Col = 1; Row = 1 } level           // floor cells cut off from (1,1)
+let areas     = MapAnalysis.componentCount FourWay level        // number of separate floor areas
+```
+
+`reachable` is built on `Pathfinding.distanceField`, so its set is **exactly** what `Pathfinding.bfs` can
+reach — the analysis layer and the routing layer never disagree. Use the **same `Neighbourhood`** you route
+with. For the component *list* (not just the count), reach for `MapGen.regions`.
+
+*Chokepoints, path/flow metrics, distribution & fairness, the `validate` battery, and tactical shape are the
+remaining `MapAnalysis` machinery (design doc Part II §11).*
+
 ## Common pitfalls
 
 - **Reusing the input `Rng`.** Thread the returned one, or every draw repeats.

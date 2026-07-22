@@ -93,6 +93,11 @@
          first-class default, and neither module knows the other. -->
     <Compile Include="Physics.fsi" />
     <Compile Include="Physics.fs" />
+    <!-- Producer-agnostic map analysis (fs-gg-mapcraft's analyze/validate half). Consumes Cell/Neighbourhood,
+         Pathfinding (distanceField/bfs), and MapGen (Grid/TileMap/regions). The analysis layer over any map,
+         however produced. -->
+    <Compile Include="MapAnalysis.fsi" />
+    <Compile Include="MapAnalysis.fs" />
   </ItemGroup>
 
   <!-- Pack-time completeness gate (FS.GG.Game#462). The packed api-surface (Directory.Build.local.props
