@@ -448,6 +448,17 @@ let ageEffects (active: Map<EffectKind, Effect>) : Map<EffectKind, Effect> =
   `let posOf x = x.Pos` makes F# infer the *last-declared* record for `x`, so the helper silently
   type-checks against the wrong type. Annotate the parameter — `let posOf (c: Creep) = c.Pos` — at every
   such `.Pos` (or `.Id`, `.Hp`, …) access shared by two consumer records.
+- **DU *case* names colliding — the same look-alike hazard one level over the record clashes above.**
+  Just as F# binds a bare `{ X = … }` to the last record in scope, it binds a **bare union case** to the
+  **most-recently-defined** case of that name — silently, until a type error two lines later. So a
+  `RoomType.Boss` declared after `EnemyKind.Boss` makes `spawnEnemy id Boss` bind the wrong union, and a
+  `match`/`fold` over `EnemyKind` that names bare `Boss` folds the wrong case. It bites consumer-vs-consumer
+  (`Poison` as both `DamageType` and `StatusEffect`; `Frost` as both `TowerKind` and `DamageType`) and
+  consumer-vs-framework (`Symbology.Faction.Enemy` vs a model `Enemy`; `TileKind.Path` vs
+  `FS.GG.UI.Scene.Path`). The fix is the record fix one level up: **annotate the `match`/`fold` parameter's
+  type** (`let describe (k: EnemyKind) = match k with …`) **and qualify any case whose bare name is shared
+  by another in-scope DU** — write `EnemyKind.Boss`, not `Boss` — whether the twin is yours or a
+  framework's.
 - **`=` read as a named argument inside a call/tuple.** In argument position, `Some (id, dmg, id = primary.Id)`
   parses `id = primary.Id` as the *named argument* `id`, not the boolean equality you meant (and usually
   fails to compile with a confusing message). Wrap the equality in parens to force the comparison:
