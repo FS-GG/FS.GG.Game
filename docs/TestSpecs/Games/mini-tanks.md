@@ -18,7 +18,9 @@ shoots — and that split is the whole game. Where a shell lands on your hull de
 penetrates, so angling your thick front plate at the enemy while your turret tracks a target is the
 core skill. What *you* can see is not what your *gun* can reach, and neither is what your *team* can
 see, so line-of-sight, field-of-view, and spotting are three different questions you play against at
-once. Walls stop shells until they don't, and the wall that falls opens a firing lane nobody planned.
+once. Permanent walls carve the chokepoints you fight around, while a destructible brick wall or a forest
+belt is cover only until an HE round or a charging hull clears it — and the gap that opens a firing
+lane and a new sightline is one nobody planned.
 The core verb is **penetrate**: read the bearing, angle the hull, lead the shot, and defeat armor by
 geometry rather than by luck. v1 ships **single-player skirmish** against AI teams across three match
 rules (Elimination / Capture / Escort), plus a headless **balance harness** that plays every 5×5
@@ -117,9 +119,10 @@ numbers.
 
 ### 4.3 Driving and terrain
 - Speed is `SpeedFwd`/`SpeedRev` m/s, reached through `Accel` (m/s²); no instant velocity.
-- Terrain modulates movement through the material table (§6.1): `BlocksMovement` tiles are walls;
-  `Rubble` is passable but slow (0.5× speed); `Trees` with `CrushMass = Some 40.0` are driven through
-  only by a hull whose `MassTonnes ≥ 40` (§4.13), otherwise they block.
+- Terrain modulates movement through the material table (§6.1): `Wall` tiles are impassable (and block
+  sight + shells, §4.14); `Rubble` is passable but slow (0.5× speed); a standing `Forest` tile with
+  `CrushMass = Some 40.0` is driven through only by a hull whose `MassTonnes ≥ 40` (§4.13), otherwise it
+  blocks like a wall until felled.
 - Tank-vs-tank and tank-vs-wall overlaps resolve with `Resolution.pushOut` along the
   minimum-translation vector (also the fix for rubble appearing under a tank, §6.2).
 
@@ -153,8 +156,12 @@ heavy's shell at range. `FS.GG.Game.Core.Ballistics` carries the flight model di
   `Ballistics.intercept shooter speed target targetVelocity`, which returns the aim point that makes a
   shell of that muzzle speed meet a moving target — `None` when the target simply outruns the shell.
 - **Terrain march:** a direct shell marches the tile grid with `Los.supercover` between its endpoints,
-  stopping at the first tile whose material `BlocksShells`. HEAT **detonates on that first blocking
-  tile** (§4.7). This is the same integer traversal the perception layer uses (§4.10) — written once.
+  **stopping at the first tile whose material `BlocksShells`** (a Wall, Brick building, bunker, or
+  sandbag line, §6.1) — the projectile↔terrain contact of §4.14. HEAT **detonates on that first
+  blocking tile** (§4.7). A non-blocking but *destructible* tile it crosses — a standing **Forest** or
+  a bush — does not stop the round, but the round **deposits its §4.9 tile-damage as it passes**, so
+  gunfire whittles (and eventually clears) a treeline even though the shell flies on through. This is
+  the same integer traversal the perception layer uses (§4.10) — written once.
 - **Indirect fire** (`Sabot` howitzer, `MuzzleMps = 0.0`): the shell is not traced through terrain. It
   is *fired*, and after `flightTicks` it *lands* at the aimpoint and splashes (`Ballistics.splash` with
   `Ballistics.linearFalloff`). It genuinely ignores occluders because it arcs over them — the honest
@@ -259,14 +266,20 @@ table (§4.7), not a separate system:
 | Round | Tile damage | Note |
 |---|---|---|
 | HE | full `Damage` to the tile | the demolition round — one `Sabot` HE (500) levels a 300-HP Brick tile |
-| AP / APCR | ~15 % of `Damage` | kinetic rounds punch a hole, they do not demolish |
+| AP / APCR | ~15 % of `Damage` | kinetic rounds punch a hole, they do not demolish; on a non-blocking destructible (Forest, bush) the round **deposits this and flies on** (§4.4) |
 | HEAT | detonation `Damage` on the **first** blocking tile (§4.7), then stops | the shaped charge spends itself on the wall it hits |
+| HE splash | full splash `Damage` to **every** tile in the blast (`Ballistics.splash`, §4.4), Forest included | the demolition answer to a treeline — one round clears a gap |
 | Crush (§4.13) | `Material.MaxHp` (instant) on a `CrushMass`-eligible tile | the treeline falls under the hull, it is not whittled |
 
+A tile is thus felled three ways — **gunfire** (a passing round's kinetic chip), **explosions** (HE
+splash levels it in one), and **ramming** (a heavy crushes it, §4.13) — and a **Wall** (§6.1) is felled
+by *none* of them: it is permanent, off the ladder entirely (§4.14).
+
 Representative `MaxHp`: Brick **300**, Concrete bunker **3000** (the 10× of §6.1 — roughly six `Sabot`
-HE), Sandbags **150**, Bushes **40**, Trees **60**. Tuned so an HE tank opens a firing lane in one or
-two shots while a bunker stays cover for the whole match — the destructible-versus-permanent split of
-§6.1 is these thresholds, not a boolean.
+HE), Sandbags **150**, Bushes **40**, Forest **60**; a **Wall** has no `MaxHp` on this ladder — it is
+permanent (§6.1, §4.14). Tuned so an HE tank opens a firing lane in one or two shots and a single HE
+round clears a forest tile, while a bunker stays cover for the whole match — the
+destructible-versus-permanent split of §6.1 is these thresholds, not a boolean.
 
 ### 4.10 LOS, field of view, and spotting are three different things
 Conflating these is the classic bug. The game needs all three, at three layers, each backed by a Core
@@ -282,6 +295,18 @@ Do **not** build FOV by running LOS to every cell in radius — it is slow and p
 vision artifacts. `Fov.fov` is the symmetric answer. The continuous `canShoot` gun-line uses
 `Visibility.isVisible muzzle target segments` against the occluder segments the tile grid yields
 through `Grids.edgeSegment` (§7.1).
+
+**What blocks LOS is the sight mask, read off each tile's *current* phase.** The `isTransparent :
+Cell -> bool` passed to `Los`/`Fov` is `fun cell -> not (materialAt cell).BlocksSight`, where
+`materialAt` resolves the tile's phase-adjusted material (§6.1/§4.9): a **Wall** and a **standing
+Forest** tile are opaque (`BlocksSight = true`), while **sandbags**, **water**, and — critically — a
+**destroyed** forest tile (stepped to `Rubble`/`Open`) are transparent. So felling a forest belt or
+dropping a Brick wall does not just open a driving lane, it **opens the sightline through it**: the
+next `Fov.fov` recompute (triggered by the `Terrain.Version` bump, §6.2) sees the cell as transparent
+and vision flows through where it could not a tick earlier. Walls and standing forest are the two
+sightline-breakers a map is authored around (§4.14, §6); everything else you can either see over or
+shoot around. This is the same `isTransparent` traversal the shell terrain-march (§4.4) and the spot
+check (§4.10.2) share — one blocking model, three consumers.
 
 #### 4.10.1 `canSee` and `canShoot` are not the same cast
 They differ in **origin** (the commander's optic vs the gun muzzle — different points on a tank whose
@@ -330,6 +355,73 @@ Below ~2 m/s closing the term rounds to a nudge, so parking against an ally is h
 pinning a tracked (`Immobilized`) light against a wall, though, is a kill in a few taps. Crush
 drive-through (§4.9) resolves before the collision term, so ploughing a treeline never registers as a
 ram.
+
+### 4.14 Terrain is three masks and four contacts (walls, forest, and the blocking model)
+Terrain does its tactical work through **three independent blocking masks** — movement, sight, shells —
+each read off a tile's *current* `Material` and `TileState` (§6.1/§4.9), and through **four collision
+contacts** the sim resolves every tick. Making both first-class is what turns a flat arena into cover,
+chokepoints, and sightlines that a falling wall or a burning forest reopens. Two materials carry the
+headline behaviour, and the rest of §6.1 fills in the corners.
+
+- **Wall — permanent, blocks everything.** A Wall blocks **movement, sight, and shells** and is **not on
+  the destruction ladder at all**: `CrushMass = None` and the §4.9 tile-damage pipeline **no-ops** on it
+  (its `TileState` is pinned `Intact`), so no shell, splash, or ram ever mutates it. Walls are the
+  *skeleton* of a map — they draw the chokepoints, break the long sightline, and give a hull-down angle
+  that is still there at minute five. This is the one piece of cover a player can plan around without
+  watching it erode, which is exactly why it is distinct from the **Brick building** (a *destructible*
+  wall) and the **Concrete bunker** (destructible only under sustained `Sabot` HE) of §6.1.
+- **Forest — destroyable cover-and-screen.** A standing Forest tile blocks **movement and sight** but
+  **not shells** (`BlocksShells = false`): it is a wall to a hull and to an eye, and a curtain — not a
+  stopper — to a round. It clears **three ways**, and clearing it **opens both the lane and the
+  sightline** (§4.10): (1) **ramming/crush** — a hull whose `MassTonnes ≥ CrushMass` (`Some 40.0`)
+  ploughs through, felling the tile to `Open` in one pass (§4.13); a lighter hull is stopped dead.
+  (2) **gunfire** — a direct round crossing the tile deposits its §4.9 tile-damage and flies on (§4.4),
+  whittling the stand shot by shot. (3) **explosions** — one HE splash (`Ballistics.splash`, §4.4)
+  levels every forest tile in the blast. The instant a forest tile steps past its phase threshold to
+  `Rubble`/`Open`, its effective `BlocksSight`/`BlocksMovement` flip to false and the perception masks
+  recompute open on the next `Terrain.Version` mismatch (§6.2) — **destroying the forest clears the LOS
+  through it**, the most tactically interesting terrain event in the game after a wall falling.
+
+**The blocking matrix (the three masks).** Movement, sight, and shell blocking are three *separate*
+flags on the same tile (§6.1), so each material is a different, deliberate piece of cover:
+
+| Material | Blocks move | Blocks sight | Blocks shells | Cleared by |
+|---|---|---|---|---|
+| **Wall** | ✔ | ✔ | ✔ | **nothing — permanent** |
+| Brick building | ✔ | ✔ | ✔ | HE/AP over its HP → Rubble → Open |
+| Concrete bunker | ✔ | ✔ | ✔ | sustained `Sabot` HE only (≈6 rounds) |
+| **Forest** | ✔ | ✔ | ✖ | gunfire chip · HE splash · crush → Open |
+| Sandbags | ✔ | ✖ | ✔ | HE/AP over its HP |
+| Bushes | ✖ | ✔ | ✖ | gunfire chip · HE splash |
+| Water / ditch | ✔ | ✖ | ✖ | — (terrain) |
+| Rubble | ✖ | ✖ | ✖ | — (already cleared, passable-slow) |
+
+**Line of sight** is computed by the Core perception surface, never hand-rolled: `Los.lineOfSight
+isTransparent a b` (integer DDA) for a discrete segment, `Fov.fov isTransparent origin radius`
+(symmetric shadowcasting) for a tank's whole view set, and the continuous `Visibility.isVisible muzzle
+target segments` gun-line — all parameterised by the phase-aware sight mask of §4.10 (Wall and standing
+Forest opaque; destroyed Forest, sandbags, water transparent). LOS/FOV feed **targeting** (the gun-line
+`canShoot`), **spotting** (§4.10.2), **fog of war** (§8 layer 2), and **AI perception** (the AI reads
+its `TeamView`, never the model — §7.2/§8, AC #17). One mask, four consumers.
+
+**Collision detection** is four contacts, all on the Core geometry/resolution surface (§13) — never a
+tile-index eyeballing:
+
+| Contact | Broad → narrow phase | Resolution |
+|---|---|---|
+| **tank ↔ wall** | `SpatialGrid` → hull OBB vs the wall's `Grids.cellRect` | `Resolution.pushOut` along the min-translation vector — the hull never enters the tile, forward motion halts (AC #25) |
+| **tank ↔ forest** | same OBB-vs-cell test against a *standing* forest tile | `MassTonnes ≥ CrushMass` → crush-through to `Open` (−1 m/s momentum, §4.13); else `pushOut`, blocked like a wall (AC #25) |
+| **projectile ↔ terrain** | `Los.supercover` march of the shell segment (§4.4) | stop + resolve on the first `BlocksShells` tile; **pass through** forest/bushes depositing §4.9 tile-damage; HEAT detonates on the first blocker (§4.7) |
+| **tank ↔ tank** | `SpatialGrid.queryRadius` → hull-OBB overlap | `Resolution.slide`/`pushOut` separates the bodies + the §4.13 mass-scaled collision-damage term |
+
+**Interesting layouts fall out of the masks.** Because the four cover types block *different* things,
+a map author gets real tactical vocabulary: **walls** cut the board into chokepoints and cover
+corridors that force the flank of §5.1 and never move; **forest belts** screen an approach until
+someone burns or ploughs a gap — turning one HE round or one `Bastion` charge into a *permanent* map
+change nobody planned; **sandbag lines** give a firing step with no concealment; **bush patches** give
+ambush concealment with no protection. The three v1 maps (§6) lean on these differently — *Rubble Row*
+on walls + brick for close chokepoints, *Two Ridges* on forest belts breaking a long sightline, *The
+Yards* mixing all four around the capture cell.
 
 ## 5. Entities / Game Objects
 Positions and velocities use the scaffold's collision-safe `Geometry.Vec2` (`Vx`/`Vy`) so a model
@@ -440,11 +532,23 @@ type Shell =
       LifeTicks: uint64 }           // remaining flight budget; artillery lands at 0
 ```
 
-### 5.3 Terrain and smoke
+### 5.3 Terrain, walls, forest, and smoke
 The hull/turret/track OBBs are **render-time constants** derived at the geometry boundary from
 `HullHeading`/`TurretHeading` via `Geometry.obbPolygon` — the model stores headings, not polygons, so
-nothing here carries `Width`/`Height` labels. Smoke is a short-lived disc of `Suspected`-vision
-occlusion (§4.11) tracked alongside the terrain; it mutates the *sight* mask only.
+nothing here carries `Width`/`Height` labels.
+
+**Walls and forest are `Tile`s, not entities.** There is no `Wall` or `Forest` record: a wall tile and
+a forest tile are the same `Tile = { Material; Hp; Phase }` (§6.1) with a different `MaterialId` and a
+different row of the §6.1 material table — so "add a wall" is a tile-array edit in map data (§6), never
+a new type or a new code path. A **Wall** tile is one whose material blocks move+sight+shells with
+`CrushMass = None` and is pinned off the destruction ladder (§4.14); a **Forest** tile is one whose
+material blocks move+sight (not shells) with `CrushMass = Some 40.0` and full phase-stepping (§4.9).
+The three masks and the crush rule are *data on the material*, which is why walls, forest, sandbags,
+and bushes are one system, not four (§4.14).
+
+Smoke is a short-lived disc of `Suspected`-vision occlusion (§4.11) tracked alongside the terrain; it
+mutates the *sight* mask only — the one dynamic sightline-breaker on a board whose walls and forest are
+otherwise tile-fixed.
 
 ## 6. World / Levels / Progression
 **Map:** 128 m × 128 m over a 64×64 grid of 2 m tiles (§4.1), authored per map. There are **no
@@ -485,11 +589,12 @@ type Terrain =
 
 | Material | Movement | Sight | Shells | Notes |
 |---|---|---|---|---|
+| **Wall** | ✔ | ✔ | ✔ | **Permanent** — blocks all three, `CrushMass = None`, off the destruction ladder (§4.14); the map skeleton |
 | Brick building | ✔ | ✔ | ✔ | The main destructible. Intact → Rubble → Open |
-| Concrete bunker | ✔ | ✔ | ✔ | 10× HP; effectively permanent cover |
+| Concrete bunker | ✔ | ✔ | ✔ | 10× HP; destructible only under sustained `Sabot` HE — effectively permanent cover |
 | Sandbags | ✔ | ✖ | ✔ | **Cover without concealment** — shoot over, hide behind nothing |
 | Bushes | ✖ | ✔ | ✖ | **Concealment without cover** — the exact inverse; kills HEAT (§4.7) |
-| Trees | ✔ | ✔ | ✖ | `CrushMass = Some 40.0` — Bastion drives through, Lynx does not |
+| **Forest** | ✔ | ✔ | ✖ | **Destroyable cover-and-screen** — `CrushMass = Some 40.0` (Bastion ploughs, Lynx stopped); gunfire/HE also fell it → `Open`, clearing LOS (§4.14) |
 | Water / ditch | ✔ | ✖ | ✖ | Blocks movement only |
 | Rubble | ✖ | ✖ | ✖ | Passable, slow; what a building becomes |
 
@@ -1108,6 +1213,25 @@ Verifiable Given/When/Then. Seeds fixed; headings in radians, distances in metre
     `tokenOf`, *when* `Legibility.score` runs, *then* `Verdict = Clean`, and a hand check confirms the
     `Lynx`/`Sabot` pair is separated by `Threat` (§8.1).
 
+23. **LOS is blocked by a wall and by standing forest.** *Given* two tanks with a **Wall** tile (or a
+    **standing Forest** tile) lying on the segment between them, *when* `Los.lineOfSight isTransparent a
+    b` runs over the sight mask (§4.10/§4.14), *then* it returns false and neither can spot the other;
+    *given* the same pair with only **sandbags** between them (`BlocksSight = false`), *then* LOS
+    returns true — you see over cover. Wall and standing forest are opaque; sandbags are not.
+
+24. **Destroying the forest clears the line of sight.** *Given* a standing **Forest** tile blocking LOS
+    between two tanks, *when* an HE splash (or a `Bastion` crush, §4.13, or enough passing gunfire, §4.4)
+    steps that tile to `Open` and bumps `Terrain.Version`, *then* the phase-aware `isTransparent` mask
+    now reports the cell transparent, `Fov.fov`/`Los.lineOfSight` recompute on the version mismatch
+    (§6.2), and the spot that failed a tick earlier now succeeds — clearing the forest opened the
+    sightline, not luck.
+
+25. **Collision blocks movement (tank ↔ wall, tank ↔ forest).** *Given* a tank driving into a **Wall**
+    tile, *when* the step resolves the tank↔wall contact (§4.14), *then* `Resolution.pushOut` keeps the
+    hull out of the tile and forward motion halts; *given* a `Lynx` (12 t) driving into a standing
+    **Forest** tile (`CrushMass = Some 40`), *then* it is stopped the same way, while a `Bastion` (60 t)
+    crushes through to `Open` and loses ~1 m/s of momentum (§4.13) — the mask blocks, the mass decides.
+
 ## 15. Stretch Goals
 Ranked, out of scope for v1:
 1. **Elevation & hull-down** — a coarse height layer (0/1/2) so a tank can park behind a rise with only
@@ -1167,14 +1291,18 @@ its acceptance test(s) pass (§14)._
 
 ### M4 — Perception: LOS, FOV & spotting
 - 🟥 `Los.lineOfSight` gun/spot casts over `BlocksShells`/`BlocksSight` masks (§4.10) — AC #12
+- 🟥 Phase-aware sight mask: Wall + standing Forest opaque, sandbags/water/destroyed-Forest transparent (§4.10, §4.14) — AC #23
 - 🟥 `Fov.fov` symmetric shadowcasting per-team fog (§4.10)
 - 🟥 Spot cycle (`Ai.due`) + camo roll; `canSee` ≠ `canShoot` origins (§4.10) — AC #10
 - 🟥 Last-known ghost via `Ai.view`/`Sighting`, `Confirmed`→`Suspected` decay (§4.10.2) — AC #11
 - 🟥 Smoke dynamic sight occluder, not shell-blocking (§4.11) — AC #13
 
-### M5 — Terrain, ramming & new v1 mechanics
+### M5 — Terrain, LOS, collision, ramming & new v1 mechanics
 - 🟥 Material table + `Tile`/`TileState` destruction Intact→Rubble→Open (§6.1, §4.9)
+- 🟥 **Wall** material: permanent block-move+sight+shells, `CrushMass = None`, off the destruction ladder (§6.1, §4.14)
+- 🟥 **Destroyable Forest**: blocks move+sight, felled by gunfire chip / HE splash / crush → `Open`, clearing LOS + lane (§4.9, §4.14) — AC #24
 - 🟥 Per-tile `Hp`/phase thresholds + shell/HE/crush tile-damage model, representative `MaxHp` (§4.9)
+- 🟥 Four collision contacts: tank↔wall, tank↔forest, projectile↔terrain, tank↔tank via `Resolution.pushOut`/`slide` + `Los.supercover` (§4.14) — AC #25
 - 🟥 `Terrain.Version` bump on mutation; consumers recompute on mismatch (§6.2) — AC #15
 - 🟥 Ammo count + shell selection chambers on next reload (§4.12) — AC #19
 - 🟥 Ramming momentum + `CrushMass` drive-through by mass (§4.13) — AC #14
