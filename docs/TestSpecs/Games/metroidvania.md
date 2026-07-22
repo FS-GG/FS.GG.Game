@@ -517,66 +517,37 @@ tile layers batched via `drawAtlas`. No dirty-rect in v1 (full clear is cheap at
 - **Bottom-center (contextual):** "Press E" prompts at Save Veins/levers.
 - **Mini-map (corner, optional toggle):** 180×120 px room minimap.
 
-### 9.4 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Load, Settings, Stats, Pause,
-Death, Win). Each menu is a vertical list of rows with a cursor, so one small update handler
-serves them all and navigation is identical everywhere. Because this game is save-file based
-(3 slots, §13), the Title menu leads with **Continue / Load / New Game**, and the in-run
-Pause menu exposes **Map / Inventory** (the §9.1 Tab overlay) alongside **Stats**.
+### 9.4 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Continue ────────── resume the most-recent save slot
-       ├─ Load ────────────── pick a save slot (3 slots, §13) ► SelectSlot
-       ├─ New Game ────────── start a fresh save (seeded Rng, §13)
-       ├─ Stats ───────────── Stats & Charts screen (§9.5)
-       ├─ Settings ──────┬─ Difficulty     ◄ Story · Normal · Veteran ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Screen shake   ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Hollowveil uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Map / Inventory ── world map + owned abilities (the §9.1 Tab overlay)
-       ├─ Stats ──────────── Stats & Charts (§9.5)
-       ├─ Settings ───────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**HOLLOWVEIL**) as the title label, with
+  **Start**, **Config**, and **Exit**. Because this game is save-file based (3 slots, §13),
+  save management (**Continue / Load / New Game**, `SelectSlot`) sits alongside Start; each Load
+  row previews that slot's completion %, playtime, and best clear time.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions) via the
+    `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings persist via
+    `KeymapCodec` (JSON), beside this game's other saved config (§13, stored separately from the
+    save slot).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    mode preset — Story `0.5 / 90`, Normal `1.0 / 60`, Veteran `1.5 / 40`,
+    `enemyDamageMult / hitIFrames`), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`), and **Screen shake** (toggles the §8 shake
+    offset). The menu, Esc routing, display settings, and rebind screen come from the shell.
 
-Death ─┬─ Respawn ────────── reload at last Save Vein (Shade dropped, §4.10)
-       ├─ Load ──────────── revert to a save slot
-       └─ Quit to Title
-
-Win ───┬─ View Stats ─────── Stats & Charts (§9.5)
-       ├─ Continue ───────── free-roam the cleared save
-       └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- **Load** rows are the three save slots (`SelectSlot`), each previewing that slot's
-  completion %, playtime, and best clear time; `Enter` loads the highlighted slot.
-- Rendering reuses the §9.1 selector style: the selected row is inverted; non-selected rows
-  render at 28 px over the dimmed (§8) world/title background.
-
-**Msg additions** (extend §7.2):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.5)
-    | SelectSlot of slot:int         // choose a save slot on the Load menu
-```
-These compose with the existing `NewGame`/`LoadGame`/`QuitToTitle`/`TogglePause`/`ToggleMap`
-(§7.2). Settings apply live and persist to local config (§13, stored separately from the save
-slot): **Difficulty** selects the §12 mode preset (Story `0.5 / 90`, Normal `1.0 / 60`,
-Veteran `1.5 / 40` — `enemyDamageMult / hitIFrames`); **Master volume**/**Sound** route to
-`Audio.setMasterVolume` (§10, clamped `[0,1]`); **Screen shake** toggles the §8 shake offset.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Hollowveil does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **world map / inventory**
+overlay (§9.1, Tab) and the **Stats & charts** screen (§9.5) are Hollowveil-specific screens
+reached in-game and as a Config/menu row respectively.
 
 ### 9.5 Stats & charts screen
 The Stats screen visualizes **the current run** and **lifetime** play across all slots. It
@@ -958,7 +929,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 i-frame flash, dash ghost trail, hit-flash, screen shake (§8)
 - 🟥 Screens: Title / Playing / Paused / MapOverlay / GameOver / Win (§9.1)
 - 🟥 HUD: health masks, Veil bar, ember count, contextual prompts (§9.3)
-- 🟥 Menu stack, cursor wrap, cycler/slider rows, settings apply live + persist (§9.4)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.4)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, screen shake) + save-slot management apply live + persist (§9.4, §12, §13)
 - 🟥 World-map overlay with ability-coded locked gates + fast-travel select (§9.1)
 - 🟥 `RunStats`/`LifetimeStats` + items-per-zone histogram + explore-timeline line (§9.5)
 
