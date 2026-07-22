@@ -494,59 +494,37 @@ car death. Font: a clean monospace/bitmap font, white `#FFFFFF`, sizes 16–48 p
 - **Timer bar:** bottom-right, draining green→yellow→red bar representing `LifeTimer /
   LifeTime`, ~300 px wide.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
-Over). Each menu is a vertical list of rows with a cursor, so one small update handler
-serves them all and navigation is identical everywhere — the frog's in-play hop keys (§3)
-are edge-triggered and unaffected; menus reuse the same arrow keys purely to move a cursor.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start a new run (level 1, 3 lives, selected difficulty)
-       ├─ Stats ─────────── Stats & charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Grid overlay   ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Frogger uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart run
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**FROGGER**) as the title label, with
+  **Start**, **Config**, and **Exit**. The run-end path keeps the classic arcade framing: the
+  panel shows the run's final score, the high score, and the depleted lives row (§9 bottom
+  strip), then offers **Continue** — the insert-coin gesture that starts a fresh run at level 1
+  with lives back to 3.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes. The frog's in-play hop keys (§3) are edge-triggered and
+  unaffected — the shell's menu cursor keys are only live while a menu is open.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions — hop up, down,
+    left, right) via the `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism;
+    bindings persist via `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    preset — Easy `Lives 5 / LifeTime 45 / mult +0.08`, Normal `3 / 30 / +0.12`, Hard
+    `2 / 20 / +0.18`), **Master volume**/**Sound** (route to `Audio.setMasterVolume`, §10,
+    clamped `[0,1]`), and **Grid overlay** (toggles the §8 cell-gridline draw that helps read
+    hops). The menu, Esc routing, display settings, and rebind screen come from the shell.
 
-Game Over ─┬─ Continue ──── insert-coin restart: a fresh run at level 1, lives back to 3
-           ├─ View Stats ── Stats & charts (§9.2)
-           └─ Title
-```
-
-The Game Over panel keeps the classic arcade framing: it shows the run's final score, the
-high score, and the depleted lives row (§9 bottom strip), then offers **Continue** — the
-insert-coin gesture that starts a fresh run — over View Stats and Title.
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
-- **Cycler rows** (Difficulty, Master volume, Sound, Window scale, Grid overlay): `←`/`→`
-  change the value **in place**; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §8 HUD font: the selected row is highlighted (inverted box, dark
-  text); non-selected rows are `#FFFFFF` at 28 px over the title/pause/game-over scrim.
-
-**Msg additions** (extend §7 `Msg`):
-```fsharp
-    | MenuUp | MenuDown              // move cursor on the active menu (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 : cycle a settings value in place
-    | MenuActivate                   // Enter/Space — activate the current row
-    | MenuBack                       // Esc — pop the menu stack (Back)
-    | OpenStats | CloseStats         // enter / leave the Stats & charts screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12
-preset (Easy `Lives 5 / LifeTime 45 / mult +0.08`, Normal `3 / 30 / +0.12`, Hard
-`2 / 20 / +0.18`); **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10,
-clamped `[0,1]`); **Grid overlay** toggles the §8 cell-gridline draw that helps read hops.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Frogger does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Frogger-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `RunStats`
@@ -942,8 +920,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 HUD overlay: score / level / high score, lives icons, timer bar (§9)
 
 ### M8 — Menus & stats
-- 🟥 Menu stack (Title / Settings / Pause / Game Over), cursor wrap, cycler rows (§9.1)
-- 🟥 Difficulty / volume / grid-overlay settings apply live + persist (§9.1, §12, §13)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, grid overlay) apply live + persist (§9.1, §12, §13)
 - 🟥 `RunStats`/`LifetimeStats` accumulation + persist (§9.2, §13)
 - 🟥 Deaths-by-cause bar + score-by-level line charts (§9.2)
 - 🟥 Difficulty presets re-parameterize the tuning table; rules stay preset-invariant (§9.1, §12)

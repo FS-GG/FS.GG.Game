@@ -386,60 +386,38 @@ fading over 150 ms) on collision; small feather/dust particles on flap (≤ 6 pa
 - **Best score:** small, top-right `(1180, 24)`, format `BEST 000` (right-aligned).
 - All text horizontally centered on its anchor unless noted.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play surface (the Ready/title screen, Settings,
-Stats, Pause, and the run-end panel). Each menu is a vertical list of rows with a cursor, so
-one small update handler serves them all and navigation is identical everywhere. Because the
-game is one-button in play (§3), the menus add cursor keys that are only live while a menu is
-open — they never interfere with the edge-triggered `Flap`.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Ready ─┬─ Play ──────────── begin a run (first flap launches the bird)
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Screen shake   ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Flappy Bird uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Retry ─────────── abandon this run, return to Ready
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**FLAPPY BIRD**) as the title label, with
+  **Start**, **Config**, and **Exit**. The game is endless with no lives, so the run-end path
+  uses **Retry framing** (§11): the primary action spins up a brand-new run rather than
+  resuming, and stays greyed until the `restartLockoutMs` window (§12) elapses, matching the
+  anti-misclick lockout in §3.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes. The play surface is one-button (§3) — the shell's menu cursor
+  keys are only live while a menu is open and never interfere with the edge-triggered `Flap`.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 action — Flap) via the
+    `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings persist via
+    `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    tunable preset — Easy `gapHeight 240 / scrollSpeed 150`, Normal `200 / 180`, Hard
+    `170 / 210` with the optional `*Ramp` enabled), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`, `0` = silence), and **Screen shake** (toggles
+    the §8 optional collision-flash/shake effect). The menu, Esc routing, display settings, and
+    rebind screen come from the shell.
 
-Game Over ─┬─ Retry ─────── start a fresh run (endless — no lives, no continues)
-           ├─ View Stats ── Stats & Charts (§9.2)
-           └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑` decrements, `↓` increments, and both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- The run-end panel uses **Retry framing** (§11): there are no lives, so the primary row is
-  **Retry**, which spins up a brand-new run rather than resuming; it stays greyed until the
-  `restartLockoutMs` window (§12) elapses, matching the anti-misclick lockout in §3.
-- Rendering reuses the §9 overlay style: the selected row is highlighted (inverted panel,
-  dark text); non-selected rows are `#FFFFFF` on the dimmed playfield.
-
-**Msg additions** (extend §7 `Msg`):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12
-tunable preset (Easy `gapHeight 240 / scrollSpeed 150`, Normal `200 / 180`, Hard `170 / 210`
-with the optional `*Ramp` enabled); **Master volume**/**Sound** route to
-`Audio.setMasterVolume` (§10, clamped `[0,1]`, `0` = silence); **Screen shake** toggles the
-§8 optional collision-flash/shake effect.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Flappy Bird
+does **not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Flappy Bird-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a stats snapshot
@@ -834,8 +812,8 @@ its acceptance test(s) pass (§14)._
 
 ### M7 — UI, menus & settings
 - 🟥 Ready/Playing/Paused/GameOver screens + live score & best HUD (§9)
-- 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
-- 🟥 Difficulty presets + volume/sound/shake settings apply live + persist (§9.1, §12)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, screen shake) apply live + persist (§9.1, §12)
 - 🟥 Difficulty preset applies its constants (Easy/Normal/Hard) at run start (§9.1, §12) — AC #19
 
 ### M8 — Stats & charts
