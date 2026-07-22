@@ -397,56 +397,34 @@ Draw order (back to front):
 - Dim panel + centered "GAME OVER", "Score: NNNN", "Best: NNNN", and "Press Enter to
   Restart". If a new best was set, show "NEW BEST!" above the score in `#E5484D`.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
-Over). Each menu is a vertical list of rows with a cursor, so one small update handler
-serves them all and navigation is identical everywhere.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start a run (current Walls mode & Difficulty)
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Casual · Classic · Frenzy ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ Grid overlay   ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Snake uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same menu/start
+screen and settings every FS.GG game shares — rather than a bespoke per-game menu. The game
+supplies only its **name**, its **key→command map** (the rebindable actions from §3 Controls),
+and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart run
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**SNAKE**) as the title label, with
+  **Start**, **Config**, and **Exit**. The Walls **Death**/**Wrap** mode toggle (§4.8) sits
+  alongside Start and continues to key the per-mode save file (§13).
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 turn / pause / start
+    actions) via the `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism;
+    bindings persist via `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    preset — Casual / Classic / Frenzy), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`), and **Grid overlay** (toggles the §8
+    optional grid layer). The menu, Esc routing, display settings, and rebind screen come from
+    the shell.
 
-Game Over ─┬─ Retry ──────── new run, same Walls mode & Difficulty (single life)
-           ├─ View Stats ── Stats & Charts (§9.2)
-           └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Grid overlay):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §9 overlay style: the selected row is inverted (bright box, dark
-  text); non-selected rows are `#E6EDF3` on the dimmed field at 24 px.
-
-**Msg additions** (extend §7 Msg):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 (←/→) on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12
-preset (Casual = no accel `stepDecrement 0`, Classic = defaults, Frenzy = faster caps —
-lower `baseStepSeconds`/`minStepSeconds`, cf. §15 stretch 6); **Master volume**/**Sound**
-route to `Audio.setMasterVolume` (§10, clamped `[0,1]`); **Grid overlay** toggles the §8
-optional grid layer. The Walls **Death**/**Wrap** mode stays a Title-screen toggle (`M`,
-§9) and continues to key the per-mode save file (§13).
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Snake does
+**not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Snake-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
@@ -807,8 +785,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Title / Pause / GameOver dim panels + centered text (§8, §9)
 
 ### M6 — Menus & settings
-- 🟥 Menu stack, cursor wrap, cycler/slider `◄ value ►` rows (§9.1)
-- 🟥 Difficulty / volume / grid-overlay settings apply live + persist (§9.1, §12, §13)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, grid overlay) apply live + persist (§9.1, §12, §13)
 - 🟥 Difficulty presets as `Config` points: Casual / Classic / Frenzy (§12) — AC #15
 - 🟥 Board-size scaling from `Cols`×`Rows` alone (win, spawn, coverage) (§12)
 

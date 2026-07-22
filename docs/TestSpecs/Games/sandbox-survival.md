@@ -757,58 +757,37 @@ Drag to move/split stacks; trash slot bottom-right.
 **Tooltips:** hovering a slot/recipe shows name, stats (tool power, damage, hunger
 restore), and required station.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Death).
-Each menu is a vertical list of rows with a cursor, so one small update handler serves them
-all and navigation is identical everywhere; the underlying world sim is paused while any
-menu is on top.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Continue ────────── resume the most recent saved world (§13)
-       ├─ Load World ──────── slot list; loads a saved world (§13)
-       ├─ New World ───────── seed field → StartNewWorld (§7.3)
-       ├─ Stats ──────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty       ◄ Peaceful · Normal · Hard ►
-       │                 ├─ Master volume    ◄ 0 – 100 ►
-       │                 ├─ Sound            ◄ On · Off ►
-       │                 ├─ Window scale     ◄ 1× · 2× · Fit ►
-       │                 ├─ Colorblind assist ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Hollowreach uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Save World ─────── flush chunk deltas (§13), stay in world
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Save & Quit to Title
+- **Main menu / start screen** — the game's name (**HOLLOWREACH**) as the title label, with
+  **Start**, **Config**, and **Exit**. The world-management entries — **Continue** (most recent
+  save), **Load World** (slot list) and **New World** (seed field → `StartNewWorld`, §7.3) — are
+  game-specific rows shown alongside Start (§13).
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell — the world sim is paused while any menu is on top; `Esc` again resumes. **Save World**
+  (flush chunk deltas, §13) and **Save & Quit** are game-specific pause rows; the **Death**
+  screen adds **Respawn** (softcore, §4.6) and **New World**.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions) via the
+    `Controls.KeyRebind` UI over the `KeyboardInput.Keymap` mechanism; bindings persist via
+    `KeymapCodec` (JSON), beside this game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    tunables preset — Peaceful `baseSpawnCap 0`/`hungerDrain 0`, Normal `6`/`0.5`, Hard
+    `12`/`1.0`), **Master volume**/**Sound** (route to `Audio.setMasterVolume`, §10, clamped
+    `[0,1]`), and **Colorblind assist** (swaps the §8.4 ore/tier palette for a CVD-safe
+    variant). The menu, Esc routing, display settings, and rebind screen come from the shell.
 
-Death ─┬─ Respawn ────────── softcore: at bed/spawn with item-loss rules (§4.6)
-       ├─ View Stats ─────── Stats & Charts (§9.2)
-       ├─ New World ──────── abandon this run, seed a fresh world
-       └─ Quit to Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Colorblind assist):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rows reuse the §9 panel style: the selected row is inverted (white box, black text);
-  non-selected rows are `#FFFFFF` on the dimmed world at 28 px.
-
-**Msg additions** (extend §7.3):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12
-tunables preset (Peaceful `baseSpawnCap 0`/`hungerDrain 0`, Normal `6`/`0.5`, Hard
-`12`/`1.0`); **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped
-`[0,1]`); **Colorblind assist** swaps the §8.4 ore/tier palette for a CVD-safe variant.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Hollowreach
+does **not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Hollowreach-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `RunStats`
@@ -1268,7 +1247,8 @@ its acceptance test(s) pass (§14)._
 - 🟥 Inventory + crafting panel: recipe availability, craft one/max, drag/split stacks (§9, §12) — AC #5
 - 🟥 Chest storage: `F` opens a 20-slot container, deposit/withdraw, backed by `World.Chests` (§4.5, §7.2) — AC #12
 - 🟥 Data-driven tunables record + Peaceful/Normal/Hard difficulty presets, applied live & persisted (§12, §9.1)
-- 🟥 Menu stack (Title/Settings/Pause/Death), cursor wrap, cycler/slider rows, live + persisted settings (§9.1)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific rows over the shell (Continue/Load/New/Save World, difficulty preset, volume/sound, colorblind assist) apply live + persist (§9.1, §12, §13)
 - 🟥 Stats & charts screen: `RunStats`/`LifetimeStats`, resources histogram + Health-vs-Hunger line (§9.2)
 
 ### M8 — Audio
