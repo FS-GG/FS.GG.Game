@@ -101,3 +101,21 @@ module MapAnalysis =
     /// rule holds; otherwise one reason string per violated rule in rule-list order. The measured facts are
     /// always populated. Total; deterministic.
     val validate: rules: Rule list -> neighbourhood: Neighbourhood -> map: TileMap -> Report
+
+    /// The **static** exposure of `map` (M12): each `Floor` cell mapped to the number of *other* `Floor` cells
+    /// that can see it, via the caller's `hasLos: Cell -> Cell -> bool` oracle. High exposure is open killing
+    /// ground; low exposure is sheltered. A property of geometry alone, computable with no units present —
+    /// distinct from `Ai.threatField` (the dynamic, enemy-keyed answer). Under a symmetric `hasLos`, exposure
+    /// is symmetric. O(V²); a build/analyze-time metric. Total (given a total `hasLos`).
+    val exposureMap: hasLos: (Cell -> Cell -> bool) -> map: TileMap -> Map<Cell, int>
+
+    /// The cover of `map` (M12): each `Floor` cell mapped to the number of its 8 neighbouring positions that
+    /// are `Wall` or off-map (0..8) — the directions it is protected from. Needs no line-of-sight oracle.
+    /// Total.
+    val coverMap: map: TileMap -> Map<Cell, int>
+
+    /// The killzones of `map` (M12): the canonical `(a, b)` pairs (`a < b`) of `Floor` cells that can see each
+    /// other (`hasLos a b`) and are at least `minLength` apart in **Chebyshev** (king-move) distance — the
+    /// long open sightlines a designer wants to break up or defend. Returned in `(a, b)` order. Total (given a
+    /// total `hasLos`).
+    val killzones: hasLos: (Cell -> Cell -> bool) -> minLength: int -> map: TileMap -> (Cell * Cell) list

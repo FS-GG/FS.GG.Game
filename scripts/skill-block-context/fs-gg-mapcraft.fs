@@ -36,3 +36,7 @@ let level: TileMap = MapGen.filled 48 32 Floor
 let level: TileMap = MapGen.filled 48 32 Floor
 let spawns: Cell list = [ { Col = 1; Row = 1 }; { Col = 40; Row = 28 } ]
 let loot: Cell list = [ { Col = 20; Row = 16 } ]
+
+//#block 8 "let hasLos (a: Cell) (b: Cell) = Los.lineOfSight (fun c -> MapGen.get level c = ValueSome Floor) a b"
+// Tactical shape: a map to measure exposure/cover/killzones over.
+let level: TileMap = MapGen.filled 48 32 Floor

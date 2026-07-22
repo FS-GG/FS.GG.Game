@@ -322,3 +322,54 @@ module MapAnalysis =
           ComponentCount = comps
           Diameter = diam
           BorderOpenings = borders }
+
+    // ---------------------------------------------------------------------------------------------
+    // M12 — static tactical shape. Geometry-only priors (exposure, cover, killzones), computable with no
+    // units present — distinct from Ai.threatField/influenceMap, which are the dynamic, enemy-keyed answer.
+    // Line-of-sight is a caller-supplied `hasLos` oracle, exactly as Ai takes one.
+    // ---------------------------------------------------------------------------------------------
+
+    let exposureMap (hasLos: Cell -> Cell -> bool) (map: TileMap) : Map<Cell, int> =
+        let floors = floorCells map |> List.toArray
+
+        [ for c in floors ->
+              let seenBy = floors |> Array.filter (fun d -> d <> c && hasLos c d) |> Array.length
+              (c, seenBy) ]
+        |> Map.ofList
+
+    let coverMap (map: TileMap) : Map<Cell, int> =
+        let w = map.Width
+        let h = map.Height
+        let isWallOrOff col row = not (col >= 0 && row >= 0 && col < w && row < h && map.Cells.[row * w + col] = Floor)
+
+        let offsets =
+            [| struct (-1, -1)
+               struct (0, -1)
+               struct (1, -1)
+               struct (-1, 0)
+               struct (1, 0)
+               struct (-1, 1)
+               struct (0, 1)
+               struct (1, 1) |]
+
+        [ for c in floorCells map ->
+              let cover =
+                  offsets
+                  |> Array.filter (fun (struct (dc, dr)) -> isWallOrOff (c.Col + dc) (c.Row + dr))
+                  |> Array.length
+
+              (c, cover) ]
+        |> Map.ofList
+
+    let killzones (hasLos: Cell -> Cell -> bool) (minLength: int) (map: TileMap) : (Cell * Cell) list =
+        let floors = floorCells map |> List.toArray // row-major, so index order is Cell order
+        let chebyshev (a: Cell) (b: Cell) = max (abs (a.Col - b.Col)) (abs (a.Row - b.Row))
+
+        // i < j over the row-major array yields `a < b` pairs already in canonical (a, b) order.
+        [ for i in 0 .. floors.Length - 1 do
+              for j in i + 1 .. floors.Length - 1 do
+                  let a = floors.[i]
+                  let b = floors.[j]
+
+                  if chebyshev a b >= minLength && hasLos a b then
+                      (a, b) ]

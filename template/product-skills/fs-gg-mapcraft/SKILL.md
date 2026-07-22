@@ -183,7 +183,25 @@ let covered = MapAnalysis.coverage FourWay level spawns 8       // fraction of f
 `validate` is total and its `Failures` are deterministic (one reason per violated rule, in rule order). A
 bespoke check runs alongside `validate` and combines results — the battery stays predictable.
 
-*Tactical shape (exposure, cover, killzones) is the remaining `MapAnalysis` machinery (design doc Part II §11).*
+## Tactical shape — static, not live enemies
+
+`MapAnalysis` also measures the **static tactical shape** of a map — a property of geometry alone, computable
+at build time with no units present, over a caller-supplied `hasLos: Cell -> Cell -> bool` oracle (as [[fs-gg-ai]]
+takes one):
+
+```fsharp
+let hasLos (a: Cell) (b: Cell) = Los.lineOfSight (fun c -> MapGen.get level c = ValueSome Floor) a b
+let exposure = MapAnalysis.exposureMap hasLos level    // per cell: how many other cells can see it (open killing ground)
+let cover    = MapAnalysis.coverMap level              // per cell: how many of its 8 sides are wall (protection)
+let killers  = MapAnalysis.killzones hasLos 12 level    // long mutual sightlines (>= 12 Chebyshev apart)
+```
+
+**This is deliberately not [[fs-gg-ai]].** `Ai.threatField`/`influenceMap` are the *dynamic* answer — "given
+THESE live enemies, where is it dangerous / who controls this ground *this tick*". `MapAnalysis`'s tactical
+functions are the *static priors* — the shape of the map itself, which a builder validates and places on, and
+which `Ai` then consumes per tick with real sources layered on. Substrate here; policy there.
+
+*This completes the `fs-gg-mapcraft` analysis machinery.*
 
 ## Common pitfalls
 

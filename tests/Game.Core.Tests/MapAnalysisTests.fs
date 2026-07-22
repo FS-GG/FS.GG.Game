@@ -304,4 +304,76 @@ let tests =
                   MapAnalysis.coverage EightWay m pts (r % 5 - 1) |> ignore
                   MapAnalysis.validate [ Connected; MinDiameter (r % 7); MaxComponents (r % 4) ] FourWay m |> ignore
                   true
-              Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop) ]
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+
+          // ---- M12: static tactical shape ----
+
+          // A line-of-sight oracle over a map, canonicalised so it is symmetric by construction.
+          let losOracle (m: TileMap) : Cell -> Cell -> bool =
+              let transparent c = MapGen.get m c = ValueSome Floor
+              fun a b ->
+                  let x, y = if a <= b then a, b else b, a
+                  Los.lineOfSight transparent x y
+
+          testCase "coverMap — a boxed-in cell has cover 8; an open-room centre has cover 0"
+          <| fun () ->
+              // centre floor cell surrounded by wall
+              let boxed =
+                  tileMapOf
+                      [ [ 0; 0; 0 ]
+                        [ 0; 1; 0 ]
+                        [ 0; 0; 0 ] ]
+              Expect.equal (Map.find (cell 1 1) (MapAnalysis.coverMap boxed)) 8 "boxed cell has cover from all 8"
+              let room = tileMapOf [ [ 1; 1; 1 ]; [ 1; 1; 1 ]; [ 1; 1; 1 ] ]
+              Expect.equal (Map.find (cell 1 1) (MapAnalysis.coverMap room)) 0 "open-room centre has no cover"
+              Expect.equal (Map.find (cell 0 0) (MapAnalysis.coverMap room)) 5 "a room corner has 5 off-map/wall sides"
+
+          testCase "exposureMap — in an open room every cell sees every other"
+          <| fun () ->
+              let room = tileMapOf [ [ 1; 1; 1 ]; [ 1; 1; 1 ]; [ 1; 1; 1 ] ]
+              let exposure = MapAnalysis.exposureMap (losOracle room) room
+              // 9 cells, each sees the other 8 (open room, LOS clear)
+              Expect.isTrue (exposure |> Map.forall (fun _ v -> v = 8)) "every cell sees the other 8"
+
+          testCase "exposureMap — symmetric under a symmetric hasLos (FsCheck)"
+          <| fun () ->
+              let prop (s: uint64) =
+                  let m = randomMap 12 9 (s % 100000UL)
+                  let los = losOracle m
+                  let exposure = MapAnalysis.exposureMap los m
+                  // symmetry: for every ordered floor pair, los c d ⇒ each is counted by the other.
+                  // Sum of exposures must equal 2× the number of visible unordered pairs.
+                  let floors =
+                      [ for row in 0 .. 8 do
+                            for col in 0 .. 11 do
+                                if m.Cells.[row * 12 + col] = Floor then cell col row ]
+                  let visiblePairs =
+                      [ for i in 0 .. List.length floors - 1 do
+                            for j in i + 1 .. List.length floors - 1 do
+                                if los (List.item i floors) (List.item j floors) then 1 ]
+                      |> List.sum
+                  let sumExposure = exposure |> Map.fold (fun acc _ v -> acc + v) 0
+                  sumExposure = 2 * visiblePairs
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 120, prop)
+
+          testCase "killzones — a long open corridor is a killzone; a short map has none"
+          <| fun () ->
+              let corridor: TileMap = { Width = 10; Height = 1; Cells = Array.create 10 Floor }
+              let kz = MapAnalysis.killzones (losOracle corridor) 6 corridor
+              // the ends (0,0)-(9,0) are 9 apart with clear LOS => a killzone pair
+              Expect.isTrue (List.contains (cell 0 0, cell 9 0) kz) "corridor ends form a killzone"
+              Expect.isTrue (kz |> List.forall (fun (a, b) -> a <= b)) "pairs are canonical a<=b"
+              // with a minLength beyond the corridor, no killzones
+              Expect.equal (MapAnalysis.killzones (losOracle corridor) 20 corridor) [] "no pair reaches minLength 20"
+
+          testCase "MapAnalysis M12 totality — degenerate maps never throw (FsCheck)"
+          <| fun () ->
+              let prop (w: int) (h: int) (s: uint64) (ml: int) =
+                  let m = randomMap (max 0 (w % 8)) (max 0 (h % 8)) (s % 100000UL)
+                  let los = losOracle m
+                  MapAnalysis.exposureMap los m |> ignore
+                  MapAnalysis.coverMap m |> ignore
+                  MapAnalysis.killzones los (ml % 6 - 1) m |> ignore
+                  MapAnalysis.killzones (fun _ _ -> false) 1 m |> ignore
+                  true
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 250, prop) ]
