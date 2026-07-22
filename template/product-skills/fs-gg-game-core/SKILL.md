@@ -421,6 +421,196 @@ let ageEffects (active: Map<EffectKind, Effect>) : Map<EffectKind, Effect> =
         if e'.TicksLeft > 0 then Map.add kind e' acc else acc)
 ```
 
+## Combat, AI, and dice surfaces (the owner-sourced Game.Core home)
+
+`FS.GG.Game.Core` also ships four **decision-and-combat** modules — `Dice`, `Ballistics`, `Effects`, and
+`Ai`/`Difficulty` — and this skill is their **owner-sourced surface home**: the canonical per-`val`
+documentation lives here (it is what the `game`/`sample-pack` profiles reach), while the dedicated skills
+below teach each in depth. Every function here is **pure, total, and deterministic** — no wall clock, no
+ambient RNG, no `Map`/`HashSet` iteration order escaping a result — so all of it is safe to call from a
+replayed `update`. Reach for these instead of hand-rolling combat math; they are the authoritative
+implementations, not starting points to copy.
+
+### Dice / damage distributions (`Dice`)
+
+`Dice` is **exact integer distribution math** — build a distribution, combine distributions, and read
+moments *analytically* rather than by sampling, so a weapon's balance is a value you can golden-test.
+`Dice.constant v` is the single-outcome `{ v -> 1 }`; `Dice.die sides` and `Dice.uniform lo hi` are the
+primitives; `Dice.convolve a b` is the **sum** of two independent rolls (`2d6 = convolve (die 6) (die 6)`);
+and `Dice.advantage a b` / `Dice.disadvantage a b` are roll-twice-keep-the-`max`/`min`. Read a built
+distribution back with `Dice.outcomes` (the `(outcome, weight)` pairs) and `Dice.totalWeight`, and read its
+spread exactly with `Dice.variance` (paired with `mean`). `Dice` has **no dedicated skill** — this section
+is its documentation.
+
+```fsharp
+open FS.GG.Game.Core
+
+// A 2d6+3 attack as an EXACT integer distribution — no Monte-Carlo run to balance the weapon.
+let twoD6Plus3 : Distribution =
+    Dice.convolve (Dice.die 6) (Dice.die 6)
+    |> Dice.convolve (Dice.constant 3)
+
+let table : (int * int64) list = Dice.outcomes twoD6Plus3   // (outcome, weight), ascending
+let weight : int64 = Dice.totalWeight twoD6Plus3
+let spread : float = Dice.variance twoD6Plus3               // exact, paired with `mean`
+
+// A d20 check with (dis)advantage is the max/min of two independent rolls.
+let d20 = Dice.die 20
+let checkHigh = Dice.advantage d20 d20
+let checkLow = Dice.disadvantage d20 d20
+let loot = Dice.uniform 1 4                                 // flat 1..4
+```
+
+### Ballistics: lead solves and splash ([[fs-gg-game:fs-gg-ballistics]])
+
+The one non-negotiable rule — *a fast round is a segment, never a point* — and the swept `step` that
+enforces it live in [[fs-gg-game:fs-gg-ballistics]]. The other three surfaces are here: `Ballistics.intercept`
+is the lead solve (where to aim a `speed`-unit round so it meets a target drifting at constant velocity —
+`ValueSome` the interception point, or `ValueNone` when none exists); `Ballistics.linearFalloff edgeScale`
+and `Ballistics.inverseSquareFalloff k` are the two **falloff curves** (linear rim-scaling versus
+centre-concentrated), each a `float -> float` over the normalised distance `d ∈ [0,1]`; and
+`Ballistics.splash` pairs every item within `radius` of a centre with its multiplier under a caller-chosen
+falloff, over a `SpatialGrid` broad phase.
+
+```fsharp
+open FS.GG.Game.Core
+
+let shooter : Point = { X = 0.0; Y = 0.0 }
+let target : Point = { X = 100.0; Y = 0.0 }
+let targetVel : Point = { X = 0.0; Y = 20.0 }
+
+// Lead the target: the point to aim a 600 u/s round at so it intercepts (ValueNone if impossible).
+let aimPoint : Point voption = Ballistics.intercept shooter 600.0 target targetVel
+
+// Two curves that play very differently for the SAME radius — the curve is a balance lever.
+let linear = Ballistics.linearFalloff 0.5              // 100% centre, 50% at the rim
+let concentrated = Ballistics.inverseSquareFalloff 3.0 // most of the damage near the centre
+
+// Splash over a SpatialGrid; `position` MUST agree with how the grid was built.
+type Foe = { Id: int; At: Point }
+let grid = SpatialGrid.build 32.0 [ for f in ([] : Foe list) -> f.At, f ]
+let splashed : (Foe * float) list =
+    Ballistics.splash { X = 50.0; Y = 0.0 } 48.0 concentrated (fun f -> f.At) grid
+```
+
+### Effects: the mitigation pipeline and status stacking ([[fs-gg-game:fs-gg-effects]])
+
+`Effects` is the **mitigation** layer — what an already-built, already-transported hit becomes once armor,
+cover, resistances, and immunities have had their say — plus the status-effect list. Assemble a pipeline
+from `Stage`s in the sanctioned order *amplify → resist → subtract → floor*: `Effects.amplify` (the
+`Vulnerable` multiplier, runs first), `Effects.resist` (elemental resistance that **`Halt`s** at full
+immunity rather than multiplying to a floorable `0.0`), `Effects.floorAt` (the game-defining minimum, runs
+last and never after a `Halt`), `Effects.immuneWhen` (a categorical immunity reading the whole `Damage`),
+and `Effects.gatedBy` (run a stage only for certain `Source`s — the combinator that makes cover mean
+"against declared attacks" and lets a `Source.Periodic` poison tick bypass armor). Run one hit with
+`Effects.pipeline`, or a whole region with `Effects.applyAll` (which **seeds** each target at the transport
+multiplier, putting falloff *before* mitigation by construction). Status durations are tick counts, never
+seconds: apply under a `Policy` with `Effects.applyEffect`, and age every active by one fixed step with
+`Effects.tickEffects` (which is the shipped replacement for the hand-rolled `applyEffect`/`ageEffects` fold
+sketched under *Deterministic status-effect stacking* above — reach for the module).
+
+```fsharp
+open FS.GG.Game.Core
+
+type Unit = { Armor: float; Frost: float; Ghost: bool }
+type Kind = Physical | Frost
+
+// The mitigation pipeline, in the order the module's docs write down. Armor is GATED to declared
+// attacks, so a poison tick (Source.Periodic) walks past it.
+let stages : Stage<Unit, Kind> list =
+    [ Effects.amplify (fun _ -> 0.0)
+      Effects.immuneWhen (fun u (d: Damage<Kind>) -> u.Ghost && d.Kind = Physical)
+      Effects.resist (fun u k -> match k with | Frost -> u.Frost | Physical -> 0.0)
+      Effects.gatedBy [ Source.Declared ] (Effects.subtract (fun u _ -> u.Armor))
+      Effects.floorAt 1.0 ]
+
+let target = { Armor = 6.0; Frost = 0.25; Ghost = false }
+let hit : Damage<Kind> = { Kind = Frost; Source = Source.Declared; Base = 30.0 }
+
+let trace : DamageTrace = Effects.pipeline stages target hit                 // single-target swing
+let areaTargets : (Unit * float) list = [ target, 1.0 ]
+let traces : (Unit * DamageTrace) list = Effects.applyAll stages hit areaTargets  // the whole blast
+```
+
+```fsharp
+open FS.GG.Game.Core
+
+// Status effects are the SHIPPED stacking layer — key actives by kind (the caller does this, `'E` is
+// opaque here), apply under a policy, and age one fixed step at a time.
+type Debuff = { Slow: int }
+
+let poison : Effects.Policy<Debuff> = Effects.Stacks 3                       // additive, capped at 3
+let incoming : Effects.Active<Debuff> = { Effect = { Slow = 20 }; TicksRemaining = 90 }
+let actives : Effects.Active<Debuff> list = []
+
+let stacked = Effects.applyEffect poison incoming actives
+let aged = Effects.tickEffects stacked                                       // decrement, drop expired
+```
+
+### AI: fog-limited perception, difficulty knobs, and decision fields ([[fs-gg-game:fs-gg-ai]])
+
+`Ai` is a thin, pure **vocabulary** for the decision layer, not a behaviour-tree framework. Build a
+fog-limited `TeamView` with `Ai.view`, then read it — never the world model — with `Ai.viewTick`,
+`Ai.spotted` (visible now), `Ai.ghosts` (decaying last-known positions — shooting at these is *correct*),
+`Ai.known` (both, ascending by `AgentId`), and `Ai.tryFind`. Give each agent a decorrelated RNG with
+`Ai.substream` (keyed on **identity**, so a death cannot shift another agent's rolls), draw a Gaussian aim
+error with `Ai.aimError` (`sigma` is a difficulty knob, not a stat), and gate expensive layers by cadence
+with `Ai.due`. The decision *fields* are `Ai.threatField` (danger summed over sources — the weighting lives
+here in policy, not in `Pathfinding`), `Ai.fleeField` (a scaled, re-relaxed distance field you roll downhill
+with `Pathfinding.flowField`), and `Ai.influenceMap` (an integer influence map whose per-cell difference is
+a friendly-vs-enemy tension map); pick among candidate plans under a **total** order with `Ai.best`.
+`Difficulty` is a knob *vector*, never a stat multiplier — every field takes time or precision away —
+laddered as `Difficulty.easy`, `Difficulty.normal`, and `Difficulty.hard`.
+
+```fsharp
+open FS.GG.Game.Core
+
+// One team's fog-limited knowledge at the current tick — built from raw sightings, read back as sightings.
+let sightings : Sighting<int> list = []
+let view = Ai.view 120 30 sightings
+
+let now = Ai.viewTick view
+let seenNow = Ai.spotted view          // visible now
+let memories = Ai.ghosts view          // decaying last-known — shoot at these
+let everything = Ai.known view         // spotted ++ ghosts, ascending by AgentId
+let oneFoe = Ai.tryFind (AgentId 7) view
+
+// Per-agent RNG keyed on identity, then a difficulty-scaled aim error off it.
+let agentRng = Ai.substream (Rng.ofSeed 42UL) (AgentId 7)
+let struct (deviation, _rng') = Ai.aimError 0.05 agentRng
+
+let runThreatThisTick = Ai.due 15 now  // cadence gate: the threat map every 15 ticks, not per-agent-per-tick
+```
+
+```fsharp
+open FS.GG.Game.Core
+
+let cells : Cell list = [ for c in 0..7 do for r in 0..7 -> { Col = c; Row = r } ]
+let hasLos (_a: Cell) (_b: Cell) = true
+
+// Threat map: danger summed over sources; the WEIGHTING is policy, so it lives here, not in Pathfinding.
+let threat = Ai.threatField hasLos [ ({ Col = 4; Row = 4 }, 12.0, 5) ] cells
+
+// A flee field is a scaled, re-relaxed distance field — roll downhill with Pathfinding.flowField.
+let flee = Ai.fleeField EightWay (-1.2) 8 threat
+
+// An integer influence map; a friendly-vs-enemy tension map is the per-cell difference of two of these.
+let cost (_c: Cell) = 1
+let influence = Ai.influenceMap EightWay 4096 cost [ ({ Col = 0; Row = 0 }, 10) ]
+
+// Pick the best plan under a TOTAL order: highest score, then the tie tuple, then earliest in the list.
+type Plan = { Score: float; Tie: struct (int * int) }
+let chosen = Ai.best (fun p -> p.Score) (fun p -> p.Tie) ([] : Plan list)
+```
+
+```fsharp
+open FS.GG.Game.Core
+
+// Difficulty is a knob VECTOR — time and precision, never a stat multiplier.
+let ladder : Difficulty list = [ Difficulty.easy; Difficulty.normal; Difficulty.hard ]
+let hardSigma = Difficulty.hard.AimErrorSigma
+```
+
 ## Common pitfalls
 
 - **Mutable `System.Random` in the `Model`.** Breaks determinism and structural equality; use the
