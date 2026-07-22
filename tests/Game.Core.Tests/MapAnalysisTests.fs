@@ -115,4 +115,74 @@ let tests =
                   MapAnalysis.isConnected FourWay m |> ignore
                   MapAnalysis.componentCount EightWay m |> ignore
                   true
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+
+          // ---- M9: entrances/exits & chokepoints ----
+
+          testCase "borderOpenings / deadEnds — border floor and single-neighbour cells, row-major"
+          <| fun () ->
+              // a plus-shaped floor with an opening on the top border
+              let m =
+                  tileMapOf
+                      [ [ 0; 1; 0 ]
+                        [ 1; 1; 1 ]
+                        [ 0; 1; 0 ] ]
+              Expect.equal (MapAnalysis.borderOpenings m) [ cell 1 0; cell 0 1; cell 2 1; cell 1 2 ] "border floor cells row-major"
+              // the four arm tips are dead-ends (one floor neighbour each), the centre is not
+              Expect.equal (MapAnalysis.deadEnds FourWay m) [ cell 1 0; cell 0 1; cell 2 1; cell 1 2 ] "arm tips are dead-ends"
+
+          testCase "articulationPoints — a dumbbell's corridor cells are chokepoints; an open room has none"
+          <| fun () ->
+              // two 2x2 rooms joined by a 1-wide, 2-long corridor
+              let dumbbell =
+                  tileMapOf
+                      [ [ 1; 1; 0; 0; 1; 1 ]
+                        [ 1; 1; 1; 1; 1; 1 ]
+                        [ 1; 1; 0; 0; 1; 1 ] ]
+              let aps = MapAnalysis.articulationPoints FourWay dumbbell |> Set.ofList
+              Expect.isTrue (Set.contains (cell 2 1) aps) "corridor cell (2,1) is a chokepoint"
+              Expect.isTrue (Set.contains (cell 3 1) aps) "corridor cell (3,1) is a chokepoint"
+              Expect.isFalse (Set.contains (cell 0 0) aps) "a room-corner is not a chokepoint"
+              // a fully open room has no articulation points
+              let room = tileMapOf [ [ 1; 1; 1 ]; [ 1; 1; 1 ]; [ 1; 1; 1 ] ]
+              Expect.equal (MapAnalysis.articulationPoints FourWay room) [] "an open room has no chokepoints"
+
+          testCase "articulationPoints — equals the remove-and-recount oracle (FsCheck)"
+          <| fun () ->
+              let prop (s: uint64) =
+                  let w, h = 14, 11
+                  let m = randomMap w h (s % 100000UL)
+                  let aps = MapAnalysis.articulationPoints FourWay m |> Set.ofList
+                  // oracle: a floor cell is an articulation point iff walling it raises the component count
+                  let baseCount = MapAnalysis.componentCount FourWay m
+                  let allFloor =
+                      [ for row in 0 .. h - 1 do
+                            for col in 0 .. w - 1 do
+                                if m.Cells.[row * w + col] = Floor then cell col row ]
+                  allFloor
+                  |> List.forall (fun c ->
+                      let walled = MapGen.set m c Wall
+                      let rises = MapAnalysis.componentCount FourWay walled > baseCount
+                      Set.contains c aps = rises)
+              Check.One(Config.QuickThrowOnFailure.WithMaxTest 150, prop)
+
+          testCase "articulationPoints — a many-thousand-cell corridor completes (iterative, no stack overflow)"
+          <| fun () ->
+              // a single-row corridor 5000 cells long: recursion would overflow; iterative DFS must not
+              let len = 5000
+              let cells = Array.create len Floor
+              let corridor: TileMap = { Width = len; Height = 1; Cells = cells }
+              let aps = MapAnalysis.articulationPoints FourWay corridor
+              // every interior cell of a path is an articulation point; the two ends are not
+              Expect.equal (List.length aps) (len - 2) "all interior corridor cells are chokepoints"
+
+          testCase "MapAnalysis M9 totality — degenerate maps never throw (FsCheck)"
+          <| fun () ->
+              let prop (w: int) (h: int) (s: uint64) =
+                  let m = randomMap (max 0 (w % 9)) (max 0 (h % 9)) (s % 100000UL)
+                  MapAnalysis.borderOpenings m |> ignore
+                  MapAnalysis.deadEnds EightWay m |> ignore
+                  MapAnalysis.articulationPoints FourWay m |> ignore
+                  MapAnalysis.articulationPoints EightWay m |> ignore
+                  true
               Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop) ]

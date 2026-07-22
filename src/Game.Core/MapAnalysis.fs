@@ -1,5 +1,7 @@
 namespace FS.GG.Game.Core
 
+open System.Collections.Generic
+
 [<RequireQualifiedAccess>]
 module MapAnalysis =
 
@@ -49,3 +51,122 @@ module MapAnalysis =
 
     let componentCount (neighbourhood: Neighbourhood) (map: TileMap) : int =
         MapGen.regions neighbourhood map |> List.length
+
+    // ---------------------------------------------------------------------------------------------
+    // M9 — entrances/exits & chokepoints.
+    // ---------------------------------------------------------------------------------------------
+
+    /// The in-bounds `Floor` neighbours of `c` under `neighbourhood`, rejecting corner-cut diagonals under
+    /// `EightWay` — the same adjacency `MapGen.regions` and the router use, in a fixed offset order.
+    let private floorNeighbours (neighbourhood: Neighbourhood) (map: TileMap) (c: Cell) : Cell list =
+        let w = map.Width
+        let h = map.Height
+        let isFloor col row = col >= 0 && row >= 0 && col < w && row < h && map.Cells.[row * w + col] = Floor
+
+        let offsets =
+            match neighbourhood with
+            | FourWay -> [| struct (0, -1); struct (-1, 0); struct (1, 0); struct (0, 1) |]
+            | EightWay ->
+                [| struct (-1, -1)
+                   struct (0, -1)
+                   struct (1, -1)
+                   struct (-1, 0)
+                   struct (1, 0)
+                   struct (-1, 1)
+                   struct (0, 1)
+                   struct (1, 1) |]
+
+        [ for struct (dc, dr) in offsets do
+              let nc = c.Col + dc
+              let nr = c.Row + dr
+
+              let cornerCut =
+                  neighbourhood = EightWay
+                  && dc <> 0
+                  && dr <> 0
+                  && not (isFloor (c.Col + dc) c.Row && isFloor c.Col (c.Row + dr))
+
+              if isFloor nc nr && not cornerCut then
+                  { Col = nc; Row = nr } ]
+
+    let borderOpenings (map: TileMap) : Cell list =
+        let w = map.Width
+        let h = map.Height
+
+        if w <= 0 || h <= 0 then
+            []
+        else
+            [ for row in 0 .. h - 1 do
+                  for col in 0 .. w - 1 do
+                      if
+                          (col = 0 || row = 0 || col = w - 1 || row = h - 1)
+                          && map.Cells.[row * w + col] = Floor
+                      then
+                          { Col = col; Row = row } ]
+
+    let deadEnds (neighbourhood: Neighbourhood) (map: TileMap) : Cell list =
+        floorCells map
+        |> List.filter (fun c -> List.length (floorNeighbours neighbourhood map c) = 1)
+
+    let articulationPoints (neighbourhood: Neighbourhood) (map: TileMap) : Cell list =
+        let cells = floorCells map |> List.toArray // row-major
+        let n = cells.Length
+
+        if n = 0 then
+            []
+        else
+            let indexOf = Dictionary<Cell, int>()
+            cells |> Array.iteri (fun i c -> indexOf.[c] <- i)
+            let adj = cells |> Array.map (fun c -> floorNeighbours neighbourhood map c |> List.map (fun nc -> indexOf.[nc]) |> List.toArray)
+
+            let disc = Array.create n -1
+            let low = Array.zeroCreate<int> n
+            let isAp = Array.create n false
+            let mutable timer = 0
+
+            // Iterative Tarjan: an explicit frame stack (node, parent, cursor into adj[node]) replaces the
+            // call stack, so a corridor of any length cannot overflow. Row-major roots keep it deterministic.
+            for root in 0 .. n - 1 do
+                if disc.[root] < 0 then
+                    let mutable rootChildren = 0
+                    let stack = Stack<struct (int * int * int ref)>()
+                    disc.[root] <- timer
+                    low.[root] <- timer
+                    timer <- timer + 1
+                    stack.Push(struct (root, -1, ref 0))
+
+                    while stack.Count > 0 do
+                        let struct (u, parent, cursor) = stack.Peek()
+
+                        if cursor.Value < adj.[u].Length then
+                            let v = adj.[u].[cursor.Value]
+                            cursor.Value <- cursor.Value + 1
+
+                            if disc.[v] < 0 then
+                                // tree edge
+                                if u = root then
+                                    rootChildren <- rootChildren + 1
+
+                                disc.[v] <- timer
+                                low.[v] <- timer
+                                timer <- timer + 1
+                                stack.Push(struct (v, u, ref 0))
+                            elif v <> parent then
+                                // back edge
+                                low.[u] <- min low.[u] disc.[v]
+                        else
+                            // finished u: fold its low into its parent and apply the non-root AP rule
+                            stack.Pop() |> ignore
+
+                            if parent >= 0 then
+                                low.[parent] <- min low.[parent] low.[u]
+
+                                if parent <> root && low.[u] >= disc.[parent] then
+                                    isAp.[parent] <- true
+
+                    if rootChildren > 1 then
+                        isAp.[root] <- true
+
+            [ for i in 0 .. n - 1 do
+                  if isAp.[i] then
+                      cells.[i] ]

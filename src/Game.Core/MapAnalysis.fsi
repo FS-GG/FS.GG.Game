@@ -31,3 +31,18 @@ module MapAnalysis =
     /// The number of connected `Floor` components of `map` under `neighbourhood` — the count of
     /// `MapGen.regions` (which is the component list itself). Total; an empty-floor map has 0 components.
     val componentCount: neighbourhood: Neighbourhood -> map: TileMap -> int
+
+    /// The `Floor` cells on the map's outer ring (`col = 0`, `col = Width-1`, `row = 0`, or `row = Height-1`),
+    /// in row-major order — a map's entrances/exits, where it meets the outside. Neighbourhood-independent.
+    /// Total.
+    val borderOpenings: map: TileMap -> Cell list
+
+    /// The `Floor` cells with exactly one `Floor` neighbour under `neighbourhood` (no corner-cutting under
+    /// `EightWay`), in row-major order — the map's dead-ends. Total.
+    val deadEnds: neighbourhood: Neighbourhood -> map: TileMap -> Cell list
+
+    /// The chokepoints of `map` under `neighbourhood` — exactly the `Floor` cells whose removal increases the
+    /// floor component count (graph articulation points / cut vertices), in row-major order. Implemented with
+    /// **iterative** DFS (Tarjan), so a long single-cell-wide corridor cannot overflow the stack — total on
+    /// any shape.
+    val articulationPoints: neighbourhood: Neighbourhood -> map: TileMap -> Cell list
