@@ -553,57 +553,36 @@ y-down on screen.
 - **Game Over:** dim overlay, "Game Over" 64 px centered, final **Score** and **Best** below,
   "Press Space to Restart". If a new best, show "New Best!" badge.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Run
-Over). Each menu is a vertical list of rows with a cursor, so one small update handler serves
-them all and navigation is identical everywhere. The game is endless with no lives, so the
-death screen is framed as **Run Over** and its primary action is **New Run**, not a life-loss
-continue.
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ New Run ─────────── seed a fresh run and start climbing (§7 StartGame)
-       ├─ Stats ──────────── Stats & Charts screen (§9.2)
-       ├─ Settings ───────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                  ├─ Master volume  ◄ 0 – 100 ►
-       │                  ├─ Sound          ◄ On · Off ►
-       │                  ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                  ├─ Screen shake   ◄ On · Off ►
-       │                  └─ Back
-       └─ Quit
+Doodle Jump uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart Run
-       ├─ Settings ───────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**DOODLE JUMP**) as the title label, with
+  **Start**, **Config**, and **Exit**. The game is endless with no lives, so the death path is
+  framed as **Run Over** with a fresh **New Run** rather than a life-loss continue.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions — steer
+    left/right, and the stretch shoot) via the `Controls.KeyRebind` UI over the
+    `KeyboardInput.Keymap` mechanism; bindings persist via `KeymapCodec` (JSON), beside this
+    game's other saved config (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (the §12
+    preset — Easy `g 2000 / enemyStartAlt 6000`, Normal `g 2400 / enemyStartAlt 3000`, Hard
+    `g 2800 / enemyStartAlt 1500`, with `gapGrowth`/spring weight scaled to match), **Master
+    volume**/**Sound** (route to `Audio.setMasterVolume`, §10, clamped `[0,1]`, mirroring the
+    `M` mute toggle), and **Screen shake** (toggles the §8 spring/jetpack camera-kick effect).
+    The menu, Esc routing, display settings, and rebind screen come from the shell.
 
-Run Over ─┬─ New Run ──────── seed and start a fresh climb
-          ├─ View Stats ───── Stats & Charts (§9.2)
-          └─ Title
-```
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- Rendering reuses the §9 Title style: the selected row is inverted/highlighted; non-selected
-  rows are drawn plain over the dimmed scene.
-
-**Msg additions** (extend the §7 `Msg` type):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects the §12 preset
-(Easy `g 2000 / enemyStartAlt 6000`, Normal `g 2400 / enemyStartAlt 3000`, Hard
-`g 2800 / enemyStartAlt 1500`, with `gapGrowth`/spring weight scaled to match);
-**Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped `[0,1]`, mirroring
-the `M` mute toggle); **Screen shake** toggles the §8 spring/jetpack camera-kick effect.
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Doodle Jump
+does **not** re-specify menu-stack/cursor/settings machinery of its own. The **Stats & charts**
+screen (§9.2) is a Doodle Jump-specific screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
@@ -1020,8 +999,8 @@ its acceptance test(s) pass (§14)._
 
 ### M7 — UI, menus & settings
 - 🟥 `Title`/`Playing`/`Paused`/`GameOver` phase states + screens (§7, §9)
-- 🟥 Menu stack, cursor wrap, cycler/slider rows, Back-pop (§9.1)
-- 🟥 Difficulty presets + volume/shake/scale settings apply live & persist (§9.1, §12, §13)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, screen shake) apply live & persist (§9.1, §12, §13)
 
 ### M8 — Stats & charts
 - 🟥 `RunStats` accumulation in `Tick`, snapshot + fold to `LifetimeStats`, persist (§9.2, §13)

@@ -616,59 +616,38 @@ every tick (immediate mode); no dirty-rect optimization needed at these entity c
 - **Game Over screen:** centered `GAME OVER` (48 px), final score, high score,
   `PRESS ENTER TO RESTART`.
 
-### 9.1 Menu system (detailed)
-A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause,
-Game Over). Each menu is a vertical list of rows with a cursor, so one small update
-handler serves them all and navigation is identical everywhere. Rows render in the §8
-vector/monospace HUD font; the selected row is inverted (bright box, black text).
+### 9.1 Menu & configuration — the shared game shell
 
-**Menu tree**
-```
-Title ─┬─ Play ──────────── start a new run (lives=3, wave 1, RNG reseeded — §7 StartGame)
-       ├─ Stats ─────────── Stats & Charts screen (§9.2)
-       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
-       │                 ├─ Master volume  ◄ 0 – 100 ►
-       │                 ├─ Sound          ◄ On · Off ►
-       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
-       │                 ├─ CRT glow       ◄ On · Off ►
-       │                 └─ Back
-       └─ Quit
+Asteroids uses the **generic FS.GG game shell** (FS-GG/FS.GG.Rendering#991) — the same
+menu/start screen and settings every FS.GG game shares — rather than a bespoke per-game menu.
+The game supplies only its **name**, its **key→command map** (the rebindable actions from §3
+Controls), and its play `update`/`view`; the shell provides everything below.
 
-Pause ─┬─ Resume
-       ├─ Restart Run
-       ├─ Settings ──────── (same submenu; returns to Pause)
-       └─ Quit to Title
+- **Main menu / start screen** — the game's name (**ASTEROIDS**) as the title label, with
+  **Start**, **Config**, and **Exit**. The Title-screen `Enter`-to-start of §9 is preserved as
+  a shortcut for **Start**.
+- **`Esc` from gameplay** opens the pause menu (Resume · Config · Exit to menu) over the same
+  shell; `Esc` again resumes.
+- **Config / Settings**, all applied live and persisted across restarts:
+  - **Screen resolution** and **fullscreen** (windowed / borderless / fullscreen), driven
+    through the SkiaViewer window-behavior + `LogicalCanvas` letterbox seam.
+  - **Key rebinding** — the player remaps this game's controls (the §3 actions — rotate,
+    thrust, fire, hyperspace) via the `Controls.KeyRebind` UI over the `KeyboardInput.Keymap`
+    mechanism; bindings persist via `KeymapCodec` (JSON), beside this game's other saved config
+    (§13).
+  - Game-specific rows are added as extra Config rows over the shell: **Difficulty** (a §12
+    tunable preset — Easy `startLives 5 / ufoFireInterval 2.0 / astSpeedScalePerWave 0.04`,
+    Normal `3 / 1.2 / 0.06`, Hard `2 / 0.8 / 0.10`), **Master volume**/**Sound** (route to
+    `Audio.setMasterVolume`, §10, clamped `[0,1]`, `0.0` = mute), and **CRT glow** (toggles the
+    optional vector-glow post-pass, §8 draw order / §15 stretch). The menu, Esc routing, display
+    settings, and rebind screen come from the shell.
 
-Game Over ─┬─ New Run ────── reset to 3 lives, wave 1, score 0 (§7 StartGame)
-           ├─ View Stats ── Stats & Charts (§9.2)
-           └─ Title
-```
-
-Asteroids has **no continues** (§11), so a lost run cannot be resumed: the run-end menu
-offers a fresh **New Run** (the arcade "insert-coin" restart) rather than a Continue, and
-the surviving-lives count only ever matters mid-run in the HUD (§9).
-
-**Navigation model**
-- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
-- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
-- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, CRT glow):
-  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
-- The Title-screen `Enter`-to-start of §9 is preserved as a shortcut for the **Play** row.
-
-**Msg additions** (extend §7 `Msg`):
-```fsharp
-    | MenuUp | MenuDown              // move cursor (wraps)
-    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
-    | MenuActivate                   // Enter/Space on the current row
-    | MenuBack                       // Esc — pop the menu stack
-    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
-```
-
-Settings apply live and persist to local config (§13): **Difficulty** selects a §12 tunable
-preset (Easy `startLives 5 / ufoFireInterval 2.0 / astSpeedScalePerWave 0.04`; Normal
-`3 / 1.2 / 0.06`; Hard `2 / 0.8 / 0.10`); **Master volume**/**Sound** route to
-`Audio.setMasterVolume` (§10, clamped `[0,1]`, `0.0` = mute); **CRT glow** toggles the
-optional vector-glow post-pass (§8 draw order / §15 stretch).
+The shell is pointer- and keyboard-navigable over the interactive Controls host (the
+`fs-gg-skiaviewer` "game → pointer host" recipe). It is a shared dependency, so Asteroids does
+**not** re-specify menu-stack/cursor/settings machinery of its own. Asteroids has **no
+continues** (§11), so the run-end path offers a fresh **New Run** (the arcade "insert-coin"
+restart) rather than a Continue. The **Stats & charts** screen (§9.2) is an Asteroids-specific
+screen reached as a Config/menu row.
 
 ### 9.2 Stats & charts screen
 The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
@@ -1128,8 +1107,8 @@ its acceptance test(s) pass (§14)._
 
 ### M8 — HUD, menus, stats & screens
 - 🟥 Title/Playing/Paused/GameOver phases + score/lives/wave HUD (§7, §9)
-- 🟥 Menu stack, cursor wrap, cycler/slider rows (§9.1)
-- 🟥 Difficulty presets + volume/CRT settings apply live & persist (§9.1, §12, §13)
+- 🟥 Adopt the generic FS.GG game shell (FS-GG/FS.GG.Rendering#991): main menu (title + Start/Config/Exit), Esc pause routing, Settings with screen resolution + fullscreen, and in-game key rebinding of the §3 controls, persisted — the game provides its name + key→command map + play update/view; the shell provides the rest, no bespoke menu system (§9.1)
+- 🟥 Game-specific Config rows over the shell (difficulty preset, volume/sound, CRT glow) apply live & persist (§9.1, §12, §13)
 - 🟥 Game Over → Enter restarts fresh run (lives 3, wave 1, score 0) (§11) — AC #14
 - 🟥 Stats screen: `MatchStats`/`LifetimeStats` + kills-by-size & shots-fired-vs-hit charts (§9.2)
 - 🟥 Difficulty preset overlay (Easy/Normal/Hard tunables) applied at `StartGame` (§9.1, §12)
