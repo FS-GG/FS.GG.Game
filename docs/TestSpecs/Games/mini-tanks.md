@@ -150,7 +150,7 @@ heavy's shell at range. `FS.GG.Game.Core.Ballistics` carries the flight model di
 - **Direct fire** (AP/APCR/HEAT and the autocannon): `Ballistics.step cast dt shell` advances the
   shell and reports the nearest hit, where `cast` is the swept segment test (§5). The broad phase is
   `SpatialGrid.queryRadius` over tank AABBs (rebuilt each tick — free at ≤16 tanks); the narrow phase
-  is the five-OBB cast of §4.5. Swept, not point tests: a 1200 m/s APCR round covers 20 m in one tick
+  is the four-OBB cast of §4.5. Swept, not point tests: a 1200 m/s APCR round covers 20 m in one tick
   and would tunnel through a 6 m tank — `sweptIntersects` exists precisely for this.
 - **Leading a target:** the AI (and an optional aim assist) solve the intercept with
   `Ballistics.intercept shooter speed target targetVelocity`, which returns the aim point that makes a
@@ -168,9 +168,9 @@ heavy's shell at range. `FS.GG.Game.Core.Ballistics` carries the flight model di
   model in a game with no third dimension.
 
 ### 4.5 Which zone got hit is a geometry question, not a bearing question
-A tank is **five convex bodies**: the hull OBB, the turret OBB, and two thin track OBBs flanking the
+A tank is **four convex bodies**: the hull OBB, the turret OBB, and two thin track OBBs flanking the
 hull. Build them with `Geometry.obbPolygon centre halfExtents rotation` — hull and tracks at
-`HullHeading`, turret at `TurretHeading`. Cast the shell's segment against all five with
+`HullHeading`, turret at `TurretHeading`. Cast the shell's segment against all four with
 `Geometry.segmentPolygonHit` and take the nearest hit. **The edge you entered through *is* the zone:**
 a rectangle's four edges are exactly front / left / right / rear, so there is no angle bucketing and no
 `if bearing < 45°` magic constant — and the turret's zones fall out of its own independent rotation for
@@ -192,7 +192,7 @@ number: it records what each stage did, which is exactly the hit-indicator narra
 
 | # | Stage | Rule |
 |---|---|---|
-| 1 | **Locate** | Nearest of the five OBB casts → `(part, faceNormal, θ, distance)` (§4.5). |
+| 1 | **Locate** | Nearest of the four OBB casts → `(part, faceNormal, θ, distance)` (§4.5). |
 | 2 | **Track absorb** | Hit a track? The track eats the shell — module damage, **zero hull damage** — unless caliber ≥ 2× track armor (overmatch). This is why brawlers aim at tracks. |
 | 3 | **Ricochet** | `θ > shell.RicochetDeg` (AP 70°, APCR 75°, HEAT 85°, HE never) **and** `caliber < 2× nominal` → deflect, zero damage. Overmatch forbids ricochet: a big enough shell cannot skip off a thin enough plate. |
 | 4 | **Normalization** | `caliber ≥ 3× nominal` → reduce θ toward the normal by a constant. Big gun, thin plate: the shell bites. |
@@ -1109,7 +1109,7 @@ point tests (§4.4/§4.5). `Ballistics.step` sub-steps internally where needed.
 nothing (ADR-0022). Rendering rotation is `Animation.Transform.toPerspectiveTransform` →
 `Scene.withPerspective`, the only rotation path in the org.
 
-**Performance budget:** target 60 FPS / 16.7 ms. Worst case ~16 tanks (80 OBBs), ~64 shells, one 64×64
+**Performance budget:** target 60 FPS / 16.7 ms. Worst case ~16 tanks (64 OBBs), ~64 shells, one 64×64
 terrain array. Hot loops are ballistics narrow-phase and the spot cycle; `SpatialGrid` buckets both,
 and the spot cycle runs every `spotCycleTicks`, not every tick. Copying a 64×64 `Tile[]` per mutation
 (16 KB) is fine for a shell or two; copy-on-write **8×8 chunking** is the mitigation for an HE barrage —
@@ -1135,7 +1135,7 @@ Verifiable Given/When/Then. Seeds fixed; headings in radians, distances in metre
    target requires turning the hull.
 
 3. **Zone is the edge entered, by geometry.** *Given* a shell segment crossing a tank's **left** hull
-   edge, *when* `segmentPolygonHit` resolves against the five OBBs, *then* the located part is the left
+   edge, *when* `segmentPolygonHit` resolves against the four OBBs, *then* the located part is the left
    hull face (not a bearing bucket), and `RayHit.Normal` is that edge's outward normal.
 
 4. **Ricochet on a steep angle, and zero hull damage.** *Given* an AP round (ricochet 70°) striking a
@@ -1275,7 +1275,7 @@ its acceptance test(s) pass (§14)._
 
 ### M2 — Ballistics & hit zones
 - 🟥 Shells as entities; swept advance via `Ballistics.step` + `sweptIntersects` broad phase (§4.4)
-- 🟥 Five-OBB build (`obbPolygon`) + `segmentPolygonHit` nearest-hit zone location (§4.5) — AC #3
+- 🟥 Four-OBB build (`obbPolygon`) + `segmentPolygonHit` nearest-hit zone location (§4.5) — AC #3
 - 🟥 Terrain march (`Los.supercover`) stopping at first `BlocksShells` tile (§4.4)
 - 🟥 Indirect artillery: fire → land at aimpoint → `Ballistics.splash` linear falloff (§4.4) — AC #16
 - 🟥 Lead solver `Ballistics.intercept` for AI + aim assist (§4.4)
