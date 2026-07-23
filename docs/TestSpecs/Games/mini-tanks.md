@@ -1182,9 +1182,10 @@ Verifiable Given/When/Then. Seeds fixed; headings in radians, distances in metre
     Some 40`), *then* it drives through; *given* a `Lynx` (12 t), *then* the trees block it. On tank
     contact, the heavier tank shoves the lighter and deals mass-scaled collision damage.
 
-15. **Terrain `Version` invalidates caches.** *Given* an `astar` route that fails across an intact wall,
-    *when* an HE round opens the wall (bumping `Terrain.Version`), *then* the same query now succeeds and
-    the previously cached path is recomputed **because** the version changed, not by luck.
+15. **Terrain `Version` invalidates caches.** *Given* an `astar` route that fails across an intact
+    **Brick** blocker, *when* an HE round reduces the Brick tile to `Open` (bumping `Terrain.Version`),
+    *then* the same query now succeeds and the previously cached path is recomputed **because** the
+    version changed, not by luck.
 
 16. **Artillery arcs over occluders.** *Given* a `Sabot` firing indirect at an aimpoint behind a wall,
     *when* `flightTicks` elapse, *then* the round lands at the aimpoint and splashes with linear falloff,
