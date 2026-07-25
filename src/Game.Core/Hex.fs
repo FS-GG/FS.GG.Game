@@ -126,20 +126,55 @@ module Hex =
                   round fq fr fs ]
 
     // Offset (odd-r horizontal layout: odd rows shifted right) and doubled (doubled-width) storage
-    // converters, on the shared integer `Cell`. Each pair is an EXACT inverse — `ofOffset (toOffset h)
-    // = h` and `ofDoubled (toDoubled h) = h` — so a rectangular map can store hexes in `Cell` form and
-    // convert to cube for the algorithms. The `- (row &&& 1)` term is always even, so the `/ 2` is
-    // exact (no truncation) for negative coordinates too.
+    // converters, on the shared integer `Cell`. Intermediates are widened to int64 and every destination
+    // coordinate is checked before narrowing: an unrepresentable Cell/Hex throws OverflowException
+    // instead of silently wrapping. The `- (row &&& 1)` term is always even, so the `/ 2` is exact (no
+    // truncation) for negative coordinates too.
+    let private narrowCoordinate (conversion: string) (axis: string) (value: int64) : int =
+        if value < int64 System.Int32.MinValue || value > int64 System.Int32.MaxValue then
+            raise (
+                System.OverflowException(
+                    $"{conversion}: {axis} coordinate {value} is outside the Int32 storage domain."
+                )
+            )
+
+        int value
+
+    let private createChecked (conversion: string) (q: int64) (r: int64) : Hex =
+        let s = -q - r
+
+        { Q = narrowCoordinate conversion "Q" q
+          R = narrowCoordinate conversion "R" r
+          S = narrowCoordinate conversion "S" s }
+
     let toOffset (h: Hex) : Cell =
-        { Col = h.Q + (h.R - (h.R &&& 1)) / 2
+        let row = int64 h.R
+        let col = int64 h.Q + (row - (row &&& 1L)) / 2L
+
+        { Col = narrowCoordinate "Hex.toOffset" "Col" col
           Row = h.R }
 
     let ofOffset (c: Cell) : Hex =
-        create (c.Col - (c.Row - (c.Row &&& 1)) / 2) c.Row
+        let row = int64 c.Row
+        let q = int64 c.Col - (row - (row &&& 1L)) / 2L
+        createChecked "Hex.ofOffset" q row
 
-    let toDoubled (h: Hex) : Cell = { Col = 2 * h.Q + h.R; Row = h.R }
+    let toDoubled (h: Hex) : Cell =
+        let col = 2L * int64 h.Q + int64 h.R
 
-    let ofDoubled (c: Cell) : Hex = create ((c.Col - c.Row) / 2) c.Row
+        { Col = narrowCoordinate "Hex.toDoubled" "Col" col
+          Row = h.R }
+
+    let ofDoubled (c: Cell) : Hex =
+        let row = int64 c.Row
+        let delta = int64 c.Col - row
+
+        if delta % 2L <> 0L then
+            invalidArg
+                (nameof c)
+                $"Hex.ofDoubled: Col - Row must be even, but Col={c.Col} and Row={c.Row}."
+
+        createChecked "Hex.ofDoubled" (delta / 2L) row
 
     // Walk the cameFrom chain from `goal` back to the start, yielding start..goal inclusive.
     let private reconstruct (cameFrom: Map<Hex, Hex>) (goal: Hex) : Hex list =
