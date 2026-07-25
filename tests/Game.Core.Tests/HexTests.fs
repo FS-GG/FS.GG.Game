@@ -146,6 +146,130 @@ let tests =
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
 
+        test "offset/doubled converters check every Int32 boundary pair instead of wrapping" {
+            let edge =
+                [ System.Int32.MinValue
+                  System.Int32.MinValue + 1
+                  -1
+                  0
+                  1
+                  System.Int32.MaxValue - 1
+                  System.Int32.MaxValue ]
+
+            let succeeds (f: unit -> 'T) =
+                try
+                    f () |> ignore
+                    true
+                with
+                | :? System.OverflowException
+                | :? System.ArgumentException -> false
+
+            let fitsInt32 (value: int64) =
+                value >= int64 System.Int32.MinValue && value <= int64 System.Int32.MaxValue
+
+            for col in edge do
+                for row in edge do
+                    let cell = { Col = col; Row = row }
+                    let row64 = int64 row
+                    let offsetQ = int64 col - (row64 - (row64 &&& 1L)) / 2L
+                    let offsetS = -offsetQ - row64
+                    let offsetRepresentable = fitsInt32 offsetQ && fitsInt32 offsetS
+                    let offsetSucceeded = succeeds (fun () -> Hex.ofOffset cell)
+
+                    Expect.equal
+                        offsetSucceeded
+                        offsetRepresentable
+                        $"offset boundary pair ({col}, {row}) has the documented domain"
+
+                    if offsetSucceeded then
+                        Expect.equal
+                            (cell |> Hex.ofOffset |> Hex.toOffset)
+                            cell
+                            $"offset boundary pair ({col}, {row}) round-trips"
+
+                    let doubledDelta = int64 col - row64
+                    let doubledQ = doubledDelta / 2L
+                    let doubledS = -doubledQ - row64
+
+                    let doubledRepresentable =
+                        doubledDelta % 2L = 0L && fitsInt32 doubledQ && fitsInt32 doubledS
+
+                    let doubledSucceeded = succeeds (fun () -> Hex.ofDoubled cell)
+
+                    Expect.equal
+                        doubledSucceeded
+                        doubledRepresentable
+                        $"doubled boundary pair ({col}, {row}) has the documented domain"
+
+                    if doubledSucceeded then
+                        Expect.equal
+                            (cell |> Hex.ofDoubled |> Hex.toDoubled)
+                            cell
+                            $"doubled boundary pair ({col}, {row}) round-trips"
+
+            let validExtremeHexes =
+                [ { Q = System.Int32.MaxValue
+                    R = 1
+                    S = System.Int32.MinValue }
+                  { Q = System.Int32.MinValue
+                    R = -1
+                    S = System.Int32.MaxValue }
+                  { Q = System.Int32.MaxValue
+                    R = 0
+                    S = -System.Int32.MaxValue }
+                  { Q = System.Int32.MinValue + 1
+                    R = 0
+                    S = System.Int32.MaxValue } ]
+
+            for h in validExtremeHexes do
+                if succeeds (fun () -> Hex.toOffset h) then
+                    Expect.equal (h |> Hex.toOffset |> Hex.ofOffset) h $"offset extreme {h} round-trips"
+
+                if succeeds (fun () -> Hex.toDoubled h) then
+                    Expect.equal (h |> Hex.toDoubled |> Hex.ofDoubled) h $"doubled extreme {h} round-trips"
+
+            let maxOffset =
+                { Q = System.Int32.MaxValue - 1
+                  R = 2
+                  S = System.Int32.MinValue }
+
+            let minOffset =
+                { Q = System.Int32.MinValue
+                  R = 1
+                  S = System.Int32.MaxValue }
+
+            let maxDoubled =
+                { Q = 1_073_741_823
+                  R = 1
+                  S = -1_073_741_824 }
+
+            let minDoubled =
+                { Q = -1_073_741_824
+                  R = 0
+                  S = 1_073_741_824 }
+
+            Expect.equal (Hex.toOffset maxOffset).Col System.Int32.MaxValue "max offset Col is exact"
+            Expect.equal (Hex.toOffset minOffset).Col System.Int32.MinValue "min offset Col is exact"
+            Expect.equal (Hex.toDoubled maxDoubled).Col System.Int32.MaxValue "max doubled Col is exact"
+            Expect.equal (Hex.toDoubled minDoubled).Col System.Int32.MinValue "min doubled Col is exact"
+
+            Expect.throwsT<System.OverflowException>
+                (fun () -> Hex.toOffset validExtremeHexes.[1] |> ignore)
+                "negative offset overflow is explicit"
+
+            Expect.throwsT<System.OverflowException>
+                (fun () -> Hex.toDoubled validExtremeHexes.[0] |> ignore)
+                "positive doubled overflow is explicit"
+
+            Expect.throwsT<System.OverflowException>
+                (fun () -> Hex.toDoubled validExtremeHexes.[1] |> ignore)
+                "negative doubled overflow is explicit"
+
+            Expect.throwsT<System.ArgumentException>
+                (fun () -> Hex.ofDoubled { Col = 0; Row = 1 } |> ignore)
+                "an odd doubled coordinate is rejected instead of truncated"
+        }
+
         test "Hex.astar/bfs find a shortest hop path on an open disc (FR-008)" {
             let walk = disc 6
             let start = Hex.create -3 0

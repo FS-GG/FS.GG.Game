@@ -81,19 +81,24 @@ module Hex =
     val lineDraw: a: Hex -> b: Hex -> Hex list
 
     /// Convert a hex to **odd-r offset** storage (odd rows shifted right), on the shared integer `Cell`
-    /// (`Col`/`Row`). Exact inverse of `ofOffset`.
+    /// (`Col`/`Row`). Exact inverse of `ofOffset` when the destination coordinates fit `Int32`; throws
+    /// `OverflowException` rather than wrapping when `Q + floor(R/2)` is outside that storage domain.
     val toOffset: h: Hex -> Cell
 
-    /// Recover a hex from its **odd-r offset** `Cell`. Exact inverse of `toOffset` — `ofOffset (toOffset
-    /// h) = h` for every hex.
+    /// Recover a hex from its **odd-r offset** `Cell`. Exact inverse of `toOffset` when the derived
+    /// `Q` and `S` coordinates fit `Int32`; otherwise throws `OverflowException`. The representable
+    /// domain is precisely the cells for which both `Col - floor(Row/2)` and
+    /// `-Col - ceil(Row/2)` are in the `Int32` range.
     val ofOffset: c: Cell -> Hex
 
     /// Convert a hex to **doubled-width** storage on the shared integer `Cell`. Exact inverse of
-    /// `ofDoubled`.
+    /// `ofDoubled` when `2*Q + R` fits `Int32`; otherwise throws `OverflowException` rather than
+    /// wrapping.
     val toDoubled: h: Hex -> Cell
 
-    /// Recover a hex from its **doubled-width** `Cell`. Exact inverse of `toDoubled` — `ofDoubled
-    /// (toDoubled h) = h` for every hex.
+    /// Recover a hex from its **doubled-width** `Cell`. Exact inverse of `toDoubled` for cells where
+    /// `Col - Row` is even and the derived cube coordinates fit `Int32`. An odd difference throws
+    /// `ArgumentException`; an unrepresentable cube coordinate throws `OverflowException`.
     val ofDoubled: c: Cell -> Hex
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
