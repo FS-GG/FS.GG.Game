@@ -2,6 +2,7 @@ FS.GG.Game.Harness.Bot`1
 FS.GG.Game.Harness.Bots
 FS.GG.Game.Harness.Counterexample
 FS.GG.Game.Harness.Driver
+FS.GG.Game.Harness.ExpectedWorkload`1
 FS.GG.Game.Harness.Explore
 FS.GG.Game.Harness.ExploreConfig
 FS.GG.Game.Harness.FindResult
@@ -33,3 +34,14 @@ FS.GG.Game.Harness.Trace
 FS.GG.Game.Harness.Trace`1
 FS.GG.Game.Harness.VisibilityPolygon
 FS.GG.Game.Harness.Witness
+FS.GG.Game.Harness.Workload
+FS.GG.Game.Harness.WorkloadAdapter`3
+FS.GG.Game.Harness.WorkloadBudget
+FS.GG.Game.Harness.WorkloadClass
+FS.GG.Game.Harness.WorkloadClass+Tags
+FS.GG.Game.Harness.WorkloadCost
+FS.GG.Game.Harness.WorkloadKind
+FS.GG.Game.Harness.WorkloadKind+Tags
+FS.GG.Game.Harness.WorkloadObservation
+FS.GG.Game.Harness.WorkloadRun`1
+FS.GG.Game.Harness.WorkloadVerdict
