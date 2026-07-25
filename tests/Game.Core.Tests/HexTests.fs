@@ -14,6 +14,8 @@ let private hexOf (q: int) (r: int) = Hex.create ((q % 20) - 10) ((r % 20) - 10)
 // Walkable iff within `n` steps of origin (a bounded open hex disc), for terminating pathfinding.
 let private disc (n: int) (h: Hex) = Hex.distance Hex.origin h <= n
 
+let private cubeSum (h: Hex) = int64 h.Q + int64 h.R + int64 h.S
+
 let private validHexPath (isWalkable: Hex -> bool) (start: Hex) (goal: Hex) (path: Hex list) =
     match path with
     | [] -> false
@@ -29,15 +31,44 @@ let tests =
 
         test "create keeps the cube invariant q+r+s=0 (FR-001)" {
             let h = Hex.create 2 -5
-            Expect.equal (h.Q + h.R + h.S) 0 "invariant holds"
+            Expect.equal (cubeSum h) 0L "invariant holds without Int32 wraparound"
             Expect.equal h.S 3 "S = -q - r"
             Expect.equal Hex.origin (Hex.create 0 0) "origin is (0,0,0)"
         }
 
+        test "complete cube construction rejects off-plane triples (FR-001)" {
+            Expect.isEmpty (typeof<Hex>.GetConstructors()) "Hex exposes no public record constructor"
+            let valid = Hex.tryCreateCube 2 -5 3
+            Expect.equal valid (Some(Hex.create 2 -5)) "an on-plane triple constructs the same Hex"
+            Expect.equal (Hex.tryCreateCube 2 -5 4) None "an off-plane triple is rejected"
+
+            Expect.equal
+                (Hex.tryCreateCube System.Int32.MaxValue System.Int32.MaxValue 2)
+                None
+                "validation widens the sum instead of accepting an overflowing Int32 total"
+
+            Expect.throwsT<System.OverflowException>
+                (fun () -> Hex.create System.Int32.MaxValue System.Int32.MaxValue |> ignore)
+                "axial construction rejects an unrepresentable S axis instead of wrapping"
+
+            let edge = Hex.create System.Int32.MaxValue 1
+
+            Expect.throwsT<System.OverflowException>
+                (fun () -> Hex.add edge edge |> ignore)
+                "arithmetic cannot wrap an axis into an off-plane Hex"
+
+            Expect.throwsT<System.OverflowException>
+                (fun () -> Hex.rotateRight edge |> ignore)
+                "rotation cannot negate Int32.MinValue into an off-plane Hex"
+        }
+
         testCase "create is always on-plane over random axials (FsCheck)" <| fun () ->
             let prop (q: int) (r: int) =
-                let h = Hex.create q r
-                h.Q + h.R + h.S = 0
+                try
+                    let h = Hex.create q r
+                    cubeSum h = 0L
+                with :? System.OverflowException ->
+                    true
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
 
@@ -76,7 +107,7 @@ let tests =
                 Hex.subtract (Hex.add a b) b = a
                 && Hex.scale a 0 = Hex.origin
                 && Hex.add a Hex.origin = a
-                && (let s = Hex.scale a 3 in s.Q + s.R + s.S = 0)
+                && (let s = Hex.scale a 3 in cubeSum s = 0L)
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
 
@@ -122,7 +153,7 @@ let tests =
 
         test "round preserves the invariant and is deterministic (FR-006)" {
             let h = Hex.round 0.6 -1.2 0.6
-            Expect.equal (h.Q + h.R + h.S) 0 "rounded hex is on-plane"
+            Expect.equal (cubeSum h) 0L "rounded hex is on-plane"
             Expect.equal (Hex.round 1.0 2.0 -3.0) (Hex.create 1 2) "an exact cube rounds to itself"
             Expect.equal (Hex.round 0.4 0.4 -0.8) (Hex.round 0.4 0.4 -0.8) "deterministic"
         }
@@ -208,18 +239,10 @@ let tests =
                             $"doubled boundary pair ({col}, {row}) round-trips"
 
             let validExtremeHexes =
-                [ { Q = System.Int32.MaxValue
-                    R = 1
-                    S = System.Int32.MinValue }
-                  { Q = System.Int32.MinValue
-                    R = -1
-                    S = System.Int32.MaxValue }
-                  { Q = System.Int32.MaxValue
-                    R = 0
-                    S = -System.Int32.MaxValue }
-                  { Q = System.Int32.MinValue + 1
-                    R = 0
-                    S = System.Int32.MaxValue } ]
+                [ Hex.create System.Int32.MaxValue 1
+                  Hex.create System.Int32.MaxValue 0
+                  Hex.create (System.Int32.MinValue + 1) 0
+                  Hex.create -1_073_741_824 -1 ]
 
             for h in validExtremeHexes do
                 if succeeds (fun () -> Hex.toOffset h) then
@@ -228,25 +251,10 @@ let tests =
                 if succeeds (fun () -> Hex.toDoubled h) then
                     Expect.equal (h |> Hex.toDoubled |> Hex.ofDoubled) h $"doubled extreme {h} round-trips"
 
-            let maxOffset =
-                { Q = System.Int32.MaxValue - 1
-                  R = 2
-                  S = System.Int32.MinValue }
-
-            let minOffset =
-                { Q = System.Int32.MinValue
-                  R = 1
-                  S = System.Int32.MaxValue }
-
-            let maxDoubled =
-                { Q = 1_073_741_823
-                  R = 1
-                  S = -1_073_741_824 }
-
-            let minDoubled =
-                { Q = -1_073_741_824
-                  R = 0
-                  S = 1_073_741_824 }
+            let maxOffset = Hex.create (System.Int32.MaxValue - 1) 2
+            let minOffset = Hex.create System.Int32.MinValue 1
+            let maxDoubled = Hex.create 1_073_741_823 1
+            let minDoubled = Hex.create -1_073_741_824 0
 
             Expect.equal (Hex.toOffset maxOffset).Col System.Int32.MaxValue "max offset Col is exact"
             Expect.equal (Hex.toOffset minOffset).Col System.Int32.MinValue "min offset Col is exact"
@@ -254,15 +262,11 @@ let tests =
             Expect.equal (Hex.toDoubled minDoubled).Col System.Int32.MinValue "min doubled Col is exact"
 
             Expect.throwsT<System.OverflowException>
-                (fun () -> Hex.toOffset validExtremeHexes.[1] |> ignore)
-                "negative offset overflow is explicit"
-
-            Expect.throwsT<System.OverflowException>
                 (fun () -> Hex.toDoubled validExtremeHexes.[0] |> ignore)
                 "positive doubled overflow is explicit"
 
             Expect.throwsT<System.OverflowException>
-                (fun () -> Hex.toDoubled validExtremeHexes.[1] |> ignore)
+                (fun () -> Hex.toDoubled validExtremeHexes.[3] |> ignore)
                 "negative doubled overflow is explicit"
 
             Expect.throwsT<System.ArgumentException>

@@ -184,7 +184,6 @@ FS.GG.Game.Core.Hex.directions : Microsoft.FSharp.Collections.FSharpList<FS.GG.G
 FS.GG.Game.Core.Hex.distance(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : System.Int32
 FS.GG.Game.Core.Hex.lineDraw(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>
 FS.GG.Game.Core.Hex.neighbours(FS.GG.Game.Core.Hex) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Hex>
-FS.GG.Game.Core.Hex.new(System.Int32, System.Int32, System.Int32)
 FS.GG.Game.Core.Hex.ofDoubled(FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Hex
 FS.GG.Game.Core.Hex.ofOffset(FS.GG.Game.Core.Cell) : FS.GG.Game.Core.Hex
 FS.GG.Game.Core.Hex.origin : FS.GG.Game.Core.Hex [get]
@@ -198,6 +197,7 @@ FS.GG.Game.Core.Hex.spiral(System.Int32) : Microsoft.FSharp.Collections.FSharpLi
 FS.GG.Game.Core.Hex.subtract(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Hex
 FS.GG.Game.Core.Hex.toDoubled(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Cell
 FS.GG.Game.Core.Hex.toOffset(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Cell
+FS.GG.Game.Core.Hex.tryCreateCube(System.Int32, System.Int32, System.Int32) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Hex>
 FS.GG.Game.Core.LineMode+Tags.Supercover : System.Int32
 FS.GG.Game.Core.LineMode+Tags.Thin : System.Int32
 FS.GG.Game.Core.Loop.advance<world>(System.Double, FSharpFunc<world, FSharpFunc<System.Double, world>>, System.Double, StepState<world>) : StepState<world>

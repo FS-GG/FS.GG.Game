@@ -2,14 +2,26 @@ namespace FS.GG.Game.Core
 
 /// Public contract type exposed by the FS.GG.Game.Core package.
 /// A hexagonal-grid coordinate in **cube** form. The three axes satisfy the invariant `Q + R + S = 0`,
-/// held **by construction** — the only way to build a `Hex` is `Hex.create` (or `Hex.origin` / the
-/// arithmetic/converter functions), which always derives `S = -Q - R`, so an off-plane hex cannot
-/// exist. Cube is the algorithm-friendly form (distance, rotation, lines are trivial); store hexes in
-/// offset/doubled `Cell` form with the converters and run algorithms in cube. Integer, `[<Struct>]`,
-/// structural equality — a stable key for the search frontier and set/map bookkeeping. The axial
-/// coordinate is simply `(Q, R)`.
+/// held **by construction** — record construction is private, and the public factories reject or
+/// avoid off-plane triples. Cube is the algorithm-friendly form (distance, rotation, lines are
+/// trivial); store hexes in offset/doubled `Cell` form with the converters and run algorithms in cube.
+/// `Q`, `R`, and `S` remain readable accessors. Integer, `[<Struct>]`, structural equality — a stable
+/// key for the search frontier and set/map bookkeeping. The axial coordinate is simply `(Q, R)`.
 [<Struct>]
-type Hex = { Q: int; R: int; S: int }
+type Hex =
+    private
+        { q: int
+          r: int
+          s: int }
+
+    /// The cube Q axis.
+    member Q: int
+
+    /// The cube R axis.
+    member R: int
+
+    /// The cube S axis.
+    member S: int
 
 /// Public contract module exposed by the FS.GG.Game.Core package.
 /// The hexagonal-grid module (roadmap 2.1): integer cube coordinates with distance, neighbours,
@@ -25,16 +37,24 @@ module Hex =
     val origin: Hex
 
     /// Build a cube hex from its axial `(q, r)`, deriving `s = -q - r` so `q + r + s = 0` holds by
-    /// construction. The only primitive constructor.
+    /// construction. Throws `OverflowException` when the derived S axis is outside the Int32 domain.
     val create: q: int -> r: int -> Hex
 
-    /// Componentwise hex addition (vector sum). Preserves the cube invariant.
+    /// Validate a complete cube-coordinate triple. Returns `Some Hex` exactly when `q + r + s = 0`;
+    /// otherwise returns `None`. Use this at deserialization and other boundaries that receive all
+    /// three axes independently.
+    val tryCreateCube: q: int -> r: int -> s: int -> Hex option
+
+    /// Componentwise hex addition (vector sum). Preserves the cube invariant; throws
+    /// `OverflowException` when an output axis is outside the Int32 domain.
     val add: a: Hex -> b: Hex -> Hex
 
-    /// Componentwise hex subtraction (`a - b`). `subtract (add a b) b = a`.
+    /// Componentwise hex subtraction (`a - b`). `subtract (add a b) b = a` when the intermediate
+    /// coordinates are representable; otherwise throws `OverflowException`.
     val subtract: a: Hex -> b: Hex -> Hex
 
-    /// Scale a hex vector by an integer factor. `scale h 0 = origin`.
+    /// Scale a hex vector by an integer factor. `scale h 0 = origin`; throws `OverflowException` when
+    /// an output axis is outside the Int32 domain.
     val scale: h: Hex -> k: int -> Hex
 
     /// The six cube unit directions in a **fixed documented order** (index 0 = +Q/−R, rotating
@@ -50,11 +70,12 @@ module Hex =
     val distance: a: Hex -> b: Hex -> int
 
     /// Rotate a hex 60° clockwise about the origin (`[q,r,s] -> [-s,-q,-r]`). Six applications are the
-    /// identity; one preserves `distance` to the origin.
+    /// identity; one preserves `distance` to the origin. Throws `OverflowException` when negating an
+    /// `Int32.MinValue` axis would leave the coordinate domain.
     val rotateRight: h: Hex -> Hex
 
     /// Rotate a hex 60° counter-clockwise about the origin (`[q,r,s] -> [-r,-s,-q]`) — the inverse of
-    /// `rotateRight`.
+    /// `rotateRight`, with the same overflow behavior.
     val rotateLeft: h: Hex -> Hex
 
     /// All hexes within `n` steps of the origin — cardinality `3n(n+1)+1`, in a fixed order (q outer, r
