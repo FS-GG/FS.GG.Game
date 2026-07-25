@@ -14,6 +14,14 @@ FS.GG.Game.Harness.Driver.identityFingerprint<world>(world) : world
 FS.GG.Game.Harness.Driver.runBot<world, key, view, f>(Playable<world, key>, FSharpFunc<world, view>, Bot<view>, System.UInt64, System.Int32, FSharpFunc<world, f>) : Run<f>
 FS.GG.Game.Harness.Driver.runCommands<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>) : Trace<f>
 FS.GG.Game.Harness.Driver.runScript<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, FSharpList<FSharpList<key>>) : Trace<f>
+FS.GG.Game.Harness.ExpectedWorkload`1.Budget : FS.GG.Game.Harness.WorkloadBudget [get]
+FS.GG.Game.Harness.ExpectedWorkload`1.Class : FS.GG.Game.Harness.WorkloadClass [get]
+FS.GG.Game.Harness.ExpectedWorkload`1.Definition : System.String [get]
+FS.GG.Game.Harness.ExpectedWorkload`1.Frames : FSharpList<FSharpList<key>> [get]
+FS.GG.Game.Harness.ExpectedWorkload`1.Id : System.String [get]
+FS.GG.Game.Harness.ExpectedWorkload`1.Kind : FS.GG.Game.Harness.WorkloadKind [get]
+FS.GG.Game.Harness.ExpectedWorkload`1.WarmupFrames : FSharpList<FSharpList<key>> [get]
+FS.GG.Game.Harness.ExpectedWorkload`1.new(System.String, System.String, FS.GG.Game.Harness.WorkloadKind, FS.GG.Game.Harness.WorkloadClass, FSharpList<FSharpList<key>>, FSharpList<FSharpList<key>>, FS.GG.Game.Harness.WorkloadBudget)
 FS.GG.Game.Harness.Explore.defaultConfig : FS.GG.Game.Harness.ExploreConfig [get]
 FS.GG.Game.Harness.Explore.defaultMoves<world, key>(Playable<world, key>) : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>
 FS.GG.Game.Harness.Explore.findScript<world, key, f>(Playable<world, key>, FSharpFunc<world, f>, FSharpFunc<world, System.Boolean>, System.Int32) : FS.GG.Game.Harness.FindResult
@@ -89,3 +97,55 @@ FS.GG.Game.Harness.VisibilityPolygon.polygon(FS.GG.Game.Core.Point, FS.GG.Game.C
 FS.GG.Game.Harness.Witness.Depth : System.Int32 [get]
 FS.GG.Game.Harness.Witness.Script : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
 FS.GG.Game.Harness.Witness.new(Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>, System.Int32)
+FS.GG.Game.Harness.Workload.evaluateCost(FS.GG.Game.Harness.WorkloadBudget, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.WorkloadCost>) : FS.GG.Game.Harness.WorkloadVerdict
+FS.GG.Game.Harness.Workload.renderArtifact(System.String, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.WorkloadObservation>) : System.String
+FS.GG.Game.Harness.Workload.run<world, key, fingerprint>(WorkloadAdapter<world, key, fingerprint>, ExpectedWorkload<key>) : WorkloadRun<fingerprint>
+FS.GG.Game.Harness.WorkloadAdapter`3.Fingerprint : FSharpFunc<world, fingerprint> [get]
+FS.GG.Game.Harness.WorkloadAdapter`3.ObserveCost : FSharpFunc<world, FS.GG.Game.Harness.WorkloadCost> [get]
+FS.GG.Game.Harness.WorkloadAdapter`3.Playable : Playable<world, key> [get]
+FS.GG.Game.Harness.WorkloadAdapter`3.new(Playable<world, key>, FSharpFunc<world, fingerprint>, FSharpFunc<world, FS.GG.Game.Harness.WorkloadCost>)
+FS.GG.Game.Harness.WorkloadBudget.MaximumAiWorkUnits : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadBudget.MaximumCatchUpSteps : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadBudget.MaximumPathfindingWorkUnits : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadBudget.MaximumPerceptionWorkUnits : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadBudget.MaximumSceneNodes : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadBudget.MaximumStaticBlockerBuilds : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadBudget.P95Ms : System.Double [get]
+FS.GG.Game.Harness.WorkloadBudget.P99Ms : System.Double [get]
+FS.GG.Game.Harness.WorkloadBudget.new(System.Double, System.Double, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32)
+FS.GG.Game.Harness.WorkloadClass+Tags.NormalExpected : System.Int32
+FS.GG.Game.Harness.WorkloadClass+Tags.WorstExpected : System.Int32
+FS.GG.Game.Harness.WorkloadCost.AiWorkUnits : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.CatchUpSteps : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.EntityCount : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.InterpolatedMovingEntityCount : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.MovingEntityCount : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.PathfindingWorkUnits : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.PerceptionWorkUnits : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.SceneNodeCount : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.SimulationSteps : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.StaticBlockerBuilds : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.StaticBlockerQueries : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadCost.new(System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32)
+FS.GG.Game.Harness.WorkloadKind+Tags.CombatAndEffects : System.Int32
+FS.GG.Game.Harness.WorkloadKind+Tags.Idle : System.Int32
+FS.GG.Game.Harness.WorkloadKind+Tags.MaximumExpectedActors : System.Int32
+FS.GG.Game.Harness.WorkloadKind+Tags.MaximumVisibilityAndFog : System.Int32
+FS.GG.Game.Harness.WorkloadKind+Tags.MovementAndAiming : System.Int32
+FS.GG.Game.Harness.WorkloadObservation.Class : FS.GG.Game.Harness.WorkloadClass [get]
+FS.GG.Game.Harness.WorkloadObservation.Definition : System.String [get]
+FS.GG.Game.Harness.WorkloadObservation.Kind : FS.GG.Game.Harness.WorkloadKind [get]
+FS.GG.Game.Harness.WorkloadObservation.MaximumCost : FS.GG.Game.Harness.WorkloadCost [get]
+FS.GG.Game.Harness.WorkloadObservation.P50Ms : System.Double [get]
+FS.GG.Game.Harness.WorkloadObservation.P95Ms : System.Double [get]
+FS.GG.Game.Harness.WorkloadObservation.P99Ms : System.Double [get]
+FS.GG.Game.Harness.WorkloadObservation.SampleFrames : System.Int32 [get]
+FS.GG.Game.Harness.WorkloadObservation.Verdict : FS.GG.Game.Harness.WorkloadVerdict [get]
+FS.GG.Game.Harness.WorkloadObservation.WorkloadId : System.String [get]
+FS.GG.Game.Harness.WorkloadObservation.new(System.String, System.String, FS.GG.Game.Harness.WorkloadKind, FS.GG.Game.Harness.WorkloadClass, System.Int32, System.Double, System.Double, System.Double, FS.GG.Game.Harness.WorkloadCost, FS.GG.Game.Harness.WorkloadVerdict)
+FS.GG.Game.Harness.WorkloadRun`1.Observation : FS.GG.Game.Harness.WorkloadObservation [get]
+FS.GG.Game.Harness.WorkloadRun`1.Trace : Trace<fingerprint> [get]
+FS.GG.Game.Harness.WorkloadRun`1.new(Trace<fingerprint>, FS.GG.Game.Harness.WorkloadObservation)
+FS.GG.Game.Harness.WorkloadVerdict.Passed : System.Boolean [get]
+FS.GG.Game.Harness.WorkloadVerdict.Reasons : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Harness.WorkloadVerdict.new(System.Boolean, Microsoft.FSharp.Collections.FSharpList<System.String>)

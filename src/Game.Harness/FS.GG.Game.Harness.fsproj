@@ -26,6 +26,8 @@
     <Compile Include="Playable.fs" />
     <Compile Include="Driver.fsi" />
     <Compile Include="Driver.fs" />
+    <Compile Include="Workload.fsi" />
+    <Compile Include="Workload.fs" />
     <Compile Include="Matrix.fsi" />
     <Compile Include="Matrix.fs" />
     <Compile Include="Synthetic.fsi" />

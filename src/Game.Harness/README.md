@@ -18,6 +18,9 @@ Depends on nothing but `FS.GG.Game.Core` and the BCL — no render/input stack, 
   be driven by the harness.
 - **`Driver`** — the drivers that produce a `Run<'f>`: scripted raw-key → keymap → `Command` input
   folded over whole fixed steps, and an in-process bot policy driving the same `Command` frontier.
+- **`Workload`** — named expected-workload scripts and a product cost adapter. It keeps Release-only
+  timing and bounded work observations separate from the deterministic `Trace`, and renders the
+  generated scaffold's performance-evidence shape.
 - **`Matrix`** — the multi-seed, bot-vs-bot match matrix. `Seat`, `MatchSetup<'world,'view>` and
   `Match<'view>` set up a seeded field of matches so a policy is exercised across many seeds, not one.
 - **`Synthetic`** — the typed synthetic-state escape hatch: a *labeled* fallback that keeps its own
@@ -25,9 +28,9 @@ Depends on nothing but `FS.GG.Game.Core` and the BCL — no render/input stack, 
 
 ## Guarantees
 
-Headlessly testable — zero Skia, zero Scene, no wall-clock. It drives only through `Game.Core`'s
-device-free `Command` vocabulary and advances only by whole fixed steps, so identical input replays
-byte-identically across runs and the trace fingerprint is a stable value to diff against.
+Headlessly testable — zero Skia and zero Scene. It drives only through `Game.Core`'s device-free
+`Command` vocabulary and whole fixed steps, so identical input replays byte-identically. The optional
+`Workload.run` clock feeds only `WorkloadObservation`; it never contaminates trace frames.
 
 House style: `.fsi` is the sole public surface; `net10.0`; `-preview` channel.
 See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) and [ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md).
