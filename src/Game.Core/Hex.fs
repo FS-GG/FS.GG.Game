@@ -1,35 +1,88 @@
 namespace FS.GG.Game.Core
 
 [<Struct>]
-type Hex = { Q: int; R: int; S: int }
+type Hex =
+    private
+        { q: int
+          r: int
+          s: int }
+
+    member this.Q = this.q
+    member this.R = this.r
+    member this.S = this.s
 
 [<RequireQualifiedAccess>]
 module Hex =
 
-    // The origin hex. Every hex satisfies the cube invariant q + r + s = 0 (see `create`).
-    let origin: Hex = { Q = 0; R = 0; S = 0 }
+    let private narrowCoordinate (conversion: string) (axis: string) (value: int64) : int =
+        if value < int64 System.Int32.MinValue || value > int64 System.Int32.MaxValue then
+            raise (
+                System.OverflowException(
+                    $"{conversion}: {axis} coordinate {value} is outside the Int32 storage domain."
+                )
+            )
 
-    // The ONLY constructor: `s` is derived so the invariant q + r + s = 0 holds by construction and a
-    // caller can never build an off-plane hex.
-    let create (q: int) (r: int) : Hex = { Q = q; R = r; S = -q - r }
+        int value
+
+    // Every internal construction path comes through this widened boundary. It prevents arithmetic
+    // operations from wrapping one axis and manufacturing the off-plane values that sealing the public
+    // record representation is intended to make impossible.
+    let private createCubeChecked (conversion: string) (q: int64) (r: int64) (s: int64) : Hex =
+        if q + r + s <> 0L then
+            invalidArg conversion $"{conversion}: cube coordinates must satisfy Q + R + S = 0."
+
+        { q = narrowCoordinate conversion "Q" q
+          r = narrowCoordinate conversion "R" r
+          s = narrowCoordinate conversion "S" s }
+
+    // The ONLY axial constructor: `s` is derived in int64 so the invariant cannot be satisfied merely
+    // by Int32 wraparound.
+    let create (q: int) (r: int) : Hex =
+        let q64 = int64 q
+        let r64 = int64 r
+        createCubeChecked "Hex.create" q64 r64 (-q64 - r64)
+
+    // Boundary factory for callers that receive all three cube axes independently. Widen before
+    // summing so an overflowing Int32 addition cannot make an off-plane triple appear valid.
+    let tryCreateCube (q: int) (r: int) (s: int) : Hex option =
+        if int64 q + int64 r + int64 s = 0L then
+            Some { q = q; r = r; s = s }
+        else
+            None
+
+    // The origin hex. Every hex satisfies the cube invariant q + r + s = 0 (see `create`).
+    let origin: Hex = create 0 0
 
     let add (a: Hex) (b: Hex) : Hex =
-        { Q = a.Q + b.Q; R = a.R + b.R; S = a.S + b.S }
+        createCubeChecked
+            "Hex.add"
+            (int64 a.Q + int64 b.Q)
+            (int64 a.R + int64 b.R)
+            (int64 a.S + int64 b.S)
 
     let subtract (a: Hex) (b: Hex) : Hex =
-        { Q = a.Q - b.Q; R = a.R - b.R; S = a.S - b.S }
+        createCubeChecked
+            "Hex.subtract"
+            (int64 a.Q - int64 b.Q)
+            (int64 a.R - int64 b.R)
+            (int64 a.S - int64 b.S)
 
-    let scale (h: Hex) (k: int) : Hex = { Q = h.Q * k; R = h.R * k; S = h.S * k }
+    let scale (h: Hex) (k: int) : Hex =
+        createCubeChecked
+            "Hex.scale"
+            (int64 h.Q * int64 k)
+            (int64 h.R * int64 k)
+            (int64 h.S * int64 k)
 
     // The six cube unit directions in a FIXED order (index 0 = +Q/−R, rotating clockwise). The order
     // is documented and load-bearing: `neighbours`, `ring`, and `spiral` all enumerate in it.
     let directions: Hex list =
-        [ { Q = 1; R = 0; S = -1 }
-          { Q = 1; R = -1; S = 0 }
-          { Q = 0; R = -1; S = 1 }
-          { Q = -1; R = 0; S = 1 }
-          { Q = -1; R = 1; S = 0 }
-          { Q = 0; R = 1; S = -1 } ]
+        [ { q = 1; r = 0; s = -1 }
+          { q = 1; r = -1; s = 0 }
+          { q = 0; r = -1; s = 1 }
+          { q = -1; r = 0; s = 1 }
+          { q = -1; r = 1; s = 0 }
+          { q = 0; r = 1; s = -1 } ]
 
     let neighbours (h: Hex) : Hex list = directions |> List.map (add h)
 
@@ -49,8 +102,11 @@ module Hex =
 
     // 60° cube rotations about the origin: right (clockwise) [q,r,s] -> [-s,-q,-r]; left is its inverse
     // [q,r,s] -> [-r,-s,-q]. Six applications are the identity, and one preserves distance to origin.
-    let rotateRight (h: Hex) : Hex = { Q = -h.S; R = -h.Q; S = -h.R }
-    let rotateLeft (h: Hex) : Hex = { Q = -h.R; R = -h.S; S = -h.Q }
+    let rotateRight (h: Hex) : Hex =
+        createCubeChecked "Hex.rotateRight" (-int64 h.S) (-int64 h.Q) (-int64 h.R)
+
+    let rotateLeft (h: Hex) : Hex =
+        createCubeChecked "Hex.rotateLeft" (-int64 h.R) (-int64 h.S) (-int64 h.Q)
 
     // All hexes within `n` steps of the origin (cardinality 3n(n+1)+1), q outer / r inner — a fixed
     // deterministic order. Negative `n` yields the empty list.
@@ -102,10 +158,14 @@ module Hex =
             create (int rq) (int rr)
         elif dq >= dr then
             // reset Q
-            { Q = -(int rr) - (int rs); R = int rr; S = int rs }
+            let r = int64 (int rr)
+            let s = int64 (int rs)
+            createCubeChecked "Hex.round" (-r - s) r s
         else
             // reset R
-            { Q = int rq; R = -(int rq) - (int rs); S = int rs }
+            let q = int64 (int rq)
+            let s = int64 (int rs)
+            createCubeChecked "Hex.round" q (-q - s) s
 
     // A contiguous hex line from `a` to `b`, endpoints included, of length `distance a b + 1` (each
     // consecutive pair adjacent). Deterministic: `distance+1` cube-lerp samples fed through `round`,
@@ -130,22 +190,8 @@ module Hex =
     // coordinate is checked before narrowing: an unrepresentable Cell/Hex throws OverflowException
     // instead of silently wrapping. The `- (row &&& 1)` term is always even, so the `/ 2` is exact (no
     // truncation) for negative coordinates too.
-    let private narrowCoordinate (conversion: string) (axis: string) (value: int64) : int =
-        if value < int64 System.Int32.MinValue || value > int64 System.Int32.MaxValue then
-            raise (
-                System.OverflowException(
-                    $"{conversion}: {axis} coordinate {value} is outside the Int32 storage domain."
-                )
-            )
-
-        int value
-
     let private createChecked (conversion: string) (q: int64) (r: int64) : Hex =
-        let s = -q - r
-
-        { Q = narrowCoordinate conversion "Q" q
-          R = narrowCoordinate conversion "R" r
-          S = narrowCoordinate conversion "S" s }
+        createCubeChecked conversion q r (-q - r)
 
     let toOffset (h: Hex) : Cell =
         let row = int64 h.R
