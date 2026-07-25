@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="PongSim.fs" />
     <Compile Include="DriverTests.fs" />
+    <Compile Include="WorkloadTests.fs" />
     <Compile Include="BotTests.fs" />
     <Compile Include="MatrixTests.fs" />
     <Compile Include="TraceSyntheticTests.fs" />

@@ -248,6 +248,12 @@ accident — and a fully tied plan keeps the incumbent, so the result is stable 
 
 ## Common pitfalls
 
+- **Deterministic but unbounded AI.** Give threat, flee, perception, and pathfinding searches explicit
+  windows/work caps, report their units through `WorkloadAdapter`, and exercise normal plus
+  maximum-expected actor workloads. A MiniTank-shaped flee search stays inside its declared local
+  window instead of rescanning the map per actor.
+- **Rebuilding immutable perception inputs per agent.** Preindex static sight/projectile blockers
+  once and query the shared index. Reject a fixture whose `StaticBlockerBuilds` grows with actors.
 - **Passing the model to `decide` "just for pathfinding".** Pass a `TeamView` and a cost function.
 - **Drawing from the root `Rng`.** Use `Ai.substream root agent.Id`, always.
 - **Splitting the RNG down a sorted agent list.** Keyed on position; breaks when an agent dies.

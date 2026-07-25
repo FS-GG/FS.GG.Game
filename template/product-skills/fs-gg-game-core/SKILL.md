@@ -613,6 +613,15 @@ let hardSigma = Difficulty.hard.AimErrorSigma
 
 ## Common pitfalls
 
+- **Treating 60 Hz simulation as proof of 60 FPS presentation.** `FixedStep` bounds the simulation
+  march, not input + AI + projection + scene construction. Define Release-only expected workloads
+  and report catch-up, AI/perception/pathfinding work, actors, and scene cost outside the trace.
+- **Repeated static-blocker scans or open-ended search.** Preindex terrain/sight/shell blockers and
+  declare explicit AI/pathfinding work caps; maximum-content fixtures must fail when either grows
+  without the declared bound.
+- **Interpolating only the player.** Every continuously moving actor needs stable identity and a
+  previous/current presentation pair: enemies, projectiles, convoy units, spawned actors, and future
+  movers included. Unequal moving/interpolated counts are a failed workload.
 - **Mutable `System.Random` in the `Model`.** Breaks determinism and structural equality; use the
   value-type `Rng` and thread its returned state.
 - **Hand-rolled BFS/A* with a non-deterministic tie-break.** Iterating a `Dictionary`/`HashSet` frontier

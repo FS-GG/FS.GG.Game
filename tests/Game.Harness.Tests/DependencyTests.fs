@@ -28,12 +28,12 @@ let private referencedTypes () : (string * string) list =
           let tr = md.GetTypeReference(handle)
           md.GetString(tr.Namespace), md.GetString(tr.Name) ]
 
-// A referenced type that would let determinism leak: I/O, networking, a wall clock, ambient RNG, or a
-// process/environment probe.
+// A referenced type that would let determinism leak: I/O, networking, an ambient civil clock/RNG, or
+// a process/environment probe. Workload observations deliberately use monotonic Stopwatch timing,
+// but elapsed values never enter Trace frames.
 let private isForbidden (ns: string, name: string) : bool =
     ns.StartsWith("System.IO")
     || ns.StartsWith("System.Net")
-    || (ns = "System.Diagnostics" && name = "Stopwatch")
     || (ns = "System"
         && (name = "DateTime"
             || name = "DateTimeOffset"
@@ -78,12 +78,12 @@ let tests =
 
               Expect.isEmpty forbidden (sprintf "no render/input stack allowed; found: %A" forbidden)
 
-          testCase "FR-007 the harness references no I/O, networking, or wall-clock type"
+          testCase "FR-007 the harness references no I/O, networking, ambient clock, or RNG type"
           <| fun _ ->
-              // The teeth of "performs no I/O and no wall-clock read": scan the IL type references,
+              // Scan the IL type references; monotonic workload timing is the one deliberate clock.
               // since all of these fold into System.Runtime and are invisible to GetReferencedAssemblies.
               let forbidden = referencedTypes () |> List.filter isForbidden
 
               Expect.isEmpty
                   forbidden
-                  (sprintf "the harness must reference no I/O / networking / clock / ambient-RNG type; found: %A" forbidden) ]
+                  (sprintf "the harness must reference no I/O / networking / ambient-clock / ambient-RNG type; found: %A" forbidden) ]

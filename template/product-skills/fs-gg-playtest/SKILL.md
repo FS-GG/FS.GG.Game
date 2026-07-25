@@ -186,10 +186,30 @@ capability that gate presumes, not the other way round. Reach for real input fir
 `Synthetic.trace` only to reach a state that real input genuinely cannot, and expect its obligation to
 read as *disclosed, not satisfied*.
 
+## Prove the expected frame workload, not only the simulation frequency
+
+A fixed 60 Hz `Playable` proves deterministic simulation cadence. It does **not** prove that input,
+AI/perception/pathfinding, presentation projection, and scene construction fit inside a 60 FPS frame.
+Define all five `ExpectedWorkload` kinds: idle, movement+aiming, combat+effects, maximum
+visibility/fog, and maximum expected actors. Drive them through `Workload.run` with real raw-key
+frames. Assert determinism on `run.Trace`; run timing verdicts in Release and publish
+`Workload.renderArtifact` beside the scaffold performance evidence.
+
+A MiniTank-shaped adapter reports fixed/catch-up steps, bounded AI/perception/pathfinding work,
+actors, scene nodes, static-blocker builds/queries, and moving versus interpolated-moving actors.
+The accepted shape preindexes sight/shell blockers once, bounds threat/flee search to its declared
+window, emits row-run fog/minimap geometry, reuses static grid/terrain scene subtrees, and
+interpolates player, enemies, shells, convoy, and every future mover by stable identity. Keep a
+deliberately naive fixture: repeated terrain scans, unbounded search, per-cell fog nodes, or one
+missing interpolated mover must fail.
+
+Never put elapsed milliseconds in the fingerprint. Timing varies; `Trace.equalFrames` must not.
+
 ## Package Boundary
 
-The harness depends only on `FS.GG.Game.Core` and the BCL — no render/input stack, no keymap type, no
-I/O, no wall clock. Keep your `Playable.Apply`/`Step` pure and thread the seeded `Rng`; the moment a
+The harness depends only on `FS.GG.Game.Core` and the BCL — no render/input stack, no keymap type, and
+no I/O. Only `Workload.run` reads a monotonic clock, outside the trace; keep `Playable.Apply`/`Step`
+pure and thread the seeded `Rng`. The moment a
 step reads a clock or an ambient RNG, replay dies and the FR gate is right to reject it. The keymap the
 scripted driver folds through is *your* game's own binding (author it beside your input handling); the
 harness never learns a device — mapping a real device to a `Command` is the render layer's job

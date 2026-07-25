@@ -165,6 +165,12 @@ opaque* (you occupy the cell you stand in), `radius = 0` yields exactly `Set.sin
 
 ## Common pitfalls
 
+- **Scanning terrain independently for every observer.** Build the static opacity/blocker index once,
+  then share it across sight, shell, fog, and minimap passes. The maximum-visibility workload rejects
+  repeated builds.
+- **One scene node per fog/minimap cell.** Coalesce adjacent cells into row runs (or another bounded
+  representation), reuse static terrain/grid subtrees, and declare a maximum-scene-node budget.
+  A deterministic mask with thousands of nodes can still miss 60 FPS.
 - **Building a region by looping a predicate.** Running `Los.lineOfSight` or `Visibility.isVisible`
   to every cell/point in radius is the slow path *and* the buggy (asymmetric, artifact-ridden) path.
   Use `Fov.fov` (discrete) or `Visibility.polygon` (continuous) — they compute the whole region once.
