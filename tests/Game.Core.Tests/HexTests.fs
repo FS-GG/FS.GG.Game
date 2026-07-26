@@ -6,10 +6,51 @@ module Game.Core.Tests.HexTests
 
 open Expecto
 open FsCheck
+open FsCheck.FSharp
 open FS.GG.Game.Core
 
 // A hex whose axial (q,r) come from small ints — always on-plane via Hex.create.
 let private hexOf (q: int) (r: int) = Hex.create ((q % 20) - 10) ((r % 20) - 10)
+
+// Keep three boundary classes explicit. A single broad int generator mostly exercises ordinary values
+// and almost never reaches the representation edges or a deliberately invalid complete cube triple.
+let private ordinaryValidHexGen: Gen<Hex> =
+    gen {
+        let! q = Gen.choose (-10_000, 10_000)
+        let! r = Gen.choose (-10_000, 10_000)
+        return Hex.create q r
+    }
+
+let private extremeValidCubeGen: Gen<int * int * int> =
+    Gen.elements
+        [ System.Int32.MaxValue, 1, System.Int32.MinValue
+          System.Int32.MaxValue, System.Int32.MinValue, 1
+          System.Int32.MinValue, System.Int32.MaxValue, 1
+          System.Int32.MinValue, 1, System.Int32.MaxValue
+          System.Int32.MinValue + 1, 0, System.Int32.MaxValue
+          0, System.Int32.MinValue + 1, System.Int32.MaxValue
+          System.Int32.MaxValue, 0, -System.Int32.MaxValue
+          0, System.Int32.MaxValue, -System.Int32.MaxValue ]
+
+let private malformedCubeGen: Gen<int * int * int> =
+    let wraparoundTraps =
+        // The first two sum to zero in unchecked Int32 arithmetic but not in the widened contract.
+        [ System.Int32.MaxValue, System.Int32.MaxValue, 2
+          System.Int32.MinValue, System.Int32.MinValue, 0
+          0, 0, 1
+          System.Int32.MaxValue, 0, System.Int32.MaxValue
+          System.Int32.MinValue, 0, System.Int32.MinValue ]
+
+    let arbitraryOffPlane =
+        gen {
+            let! q = Gen.choose (-1_000_000, 1_000_000)
+            let! r = Gen.choose (-1_000_000, 1_000_000)
+            let! s = Gen.choose (-1_000_000, 1_000_000)
+            return q, r, s
+        }
+        |> Gen.filter (fun (q, r, s) -> int64 q + int64 r + int64 s <> 0L)
+
+    Gen.frequency [ 3, Gen.elements wraparoundTraps; 7, arbitraryOffPlane ]
 
 // Walkable iff within `n` steps of origin (a bounded open hex disc), for terminating pathfinding.
 let private disc (n: int) (h: Hex) = Hex.distance Hex.origin h <= n
@@ -71,6 +112,62 @@ let tests =
                     true
 
             Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        testCase "ordinary-valid generator preserves construction and arithmetic laws (FsCheck)" <| fun () ->
+            let prop =
+                Prop.forAll
+                    (Arb.fromGen ordinaryValidHexGen)
+                    (fun h ->
+                        cubeSum h = 0L
+                        && Hex.tryCreateCube h.Q h.R h.S = Some h
+                        && Hex.add h Hex.origin = h
+                        && Hex.subtract h h = Hex.origin
+                        && Hex.scale h 0 = Hex.origin)
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        testCase "extreme-valid generator constructs exact boundary triples (FsCheck)" <| fun () ->
+            let prop =
+                Prop.forAll
+                    (Arb.fromGen extremeValidCubeGen)
+                    (fun (q, r, s) ->
+                        match Hex.tryCreateCube q r s with
+                        | None -> false
+                        | Some h ->
+                            h.Q = q
+                            && h.R = r
+                            && h.S = s
+                            && cubeSum h = 0L
+                            && Hex.create q r = h
+                            && Hex.distance h h = 0
+                            && Hex.add h Hex.origin = h
+                            && Hex.subtract h h = Hex.origin
+                            && Hex.scale h 0 = Hex.origin)
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+
+        testCase "malformed generator is rejected using a widened cube sum (FsCheck)" <| fun () ->
+            let prop =
+                Prop.forAll
+                    (Arb.fromGen malformedCubeGen)
+                    (fun (q, r, s) ->
+                        int64 q + int64 r + int64 s <> 0L
+                        && Hex.tryCreateCube q r s = None)
+
+            Check.One(Config.QuickThrowOnFailure.WithMaxTest 1000, prop)
+
+        test "the sealed public representation exposes read-only axes only" {
+            let publicProperties = typeof<Hex>.GetProperties()
+            Expect.isEmpty (typeof<Hex>.GetConstructors()) "there is no public representation constructor"
+
+            Expect.equal
+                (publicProperties |> Array.map _.Name |> Set.ofArray)
+                (set [ "Q"; "R"; "S" ])
+                "only axes are public"
+
+            Expect.isTrue (publicProperties |> Array.forall (fun property -> not property.CanWrite)) "public axes are read-only"
+            Expect.isEmpty (typeof<Hex>.GetFields()) "no public representation fields leak"
+        }
 
         test "distance is the cube distance and is 1 to each neighbour (FR-002)" {
             Expect.equal (Hex.distance (Hex.create 0 0) (Hex.create 3 -1)) 3 "cube distance"
