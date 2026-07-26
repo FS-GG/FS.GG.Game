@@ -33,16 +33,22 @@ For `production-journey` coverage:
 2. Drive `JourneyEvent.Start`, menu actions, key up/down, pointer/aim, `Interact`, pause/resume,
    `FixedTick`, and declared deterministic `EffectResult` values as the scenario needs.
 3. Set a positive `MaxSteps` and a terminal predicate. Exhaustion is a failed receipt containing the
-   final-fingerprint and captured-input digests.
-4. Replay a scripted or seeded-policy capture and compare `Trace.frames`. Only `Journey.runScript`
-   and `Journey.runPolicy` produce `Origin.ProductionJourney` and an opaque `JourneyReceipt`.
-5. Add a public parameterless `IProductionJourneyProof` implementation to the product's proof
-   assembly. Its `Run` method calls the journey runner over the imported production composition and
-   returns the opaque receipt in memory. Pass that DLL to `fsgg-playtest` with
-   `--journey-proof-assembly`; the CLI loads and executes it and accepts no JSON receipt or caller
-   key. The manifest row must say `requires=production-journey`. A hand-authored
-   `productionJourney` token, a simulation trace, a stale/modified receipt, or a green TRX without
-   the matching receipt fails closed.
+   final-fingerprint and captured-input digests. A terminal predicate already true at boot also
+   fails: zero production events are not a journey.
+4. Replay a scripted or seeded-policy capture and compare `Trace.frames`. Exportable proofs call
+   `Journey.runScriptWithIdentity` or `Journey.runPolicyWithIdentity` with stable non-empty input and
+   terminal-predicate identities; the legacy runners remain replay helpers, not schema-v1 issuers.
+5. Add a public parameterless `IProductionJourneyProofV1` implementation to the product's proof
+   assembly. Its route/scenario/input/terminal declarations are matched to the opaque receipt after
+   `Run` executes the imported production composition. Pass that DLL to `fsgg-playtest` with
+   `--journey-proof-assembly` and explicitly allowlist the producer composition DLL with
+   `--journey-authority-assembly`; critical composition functions, proof metadata, and the opaque
+   receipt must identify that exact assembly name/module version. The CLI accepts no JSON receipt or
+   caller key. For `emit-evidence`, pass `--journey-report-out <junit.xml>`: this is generated output
+   from the same in-memory proof execution, never a caller report input, and it must resolve to a
+   different canonical path than `--out`. The manifest row must say
+   `requires=production-journey`. A hand-authored `productionJourney` token, simulation trace,
+   stale/modified receipt, or caller-supplied TRX/JUnit fails closed.
 
 An unbound displayed action must return `JourneyDispatch.Unbound "Action name"`. The runner then
 reports the production wiring gap instead of silently treating the event as a no-op.

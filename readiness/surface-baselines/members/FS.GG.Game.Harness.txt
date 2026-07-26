@@ -36,8 +36,15 @@ FS.GG.Game.Harness.FindResult+Tags.NotFound : System.Int32
 FS.GG.Game.Harness.FindResult+Tags.Truncated : System.Int32
 FS.GG.Game.Harness.IProductionJourneyProof.Run() : FS.GG.Game.Harness.JourneyReceipt
 FS.GG.Game.Harness.IProductionJourneyProof.TestId : System.String [get]
+FS.GG.Game.Harness.IProductionJourneyProofV1.CompositionAuthority : System.String [get]
+FS.GG.Game.Harness.IProductionJourneyProofV1.InputIdentity : System.String [get]
+FS.GG.Game.Harness.IProductionJourneyProofV1.RouteId : System.String [get]
+FS.GG.Game.Harness.IProductionJourneyProofV1.ScenarioId : System.String [get]
+FS.GG.Game.Harness.IProductionJourneyProofV1.TerminalPredicateIdentity : System.String [get]
 FS.GG.Game.Harness.Journey.runPolicy<model, key, pointer, menu, effectResult, message, fingerprint>(ProductionJourney<model, key, pointer, menu, effectResult, message, fingerprint>, JourneyPolicy<model, JourneyEvent<key, pointer, menu, effectResult>>, System.UInt64) : JourneyRun<model, JourneyEvent<key, pointer, menu, effectResult>, fingerprint>
+FS.GG.Game.Harness.Journey.runPolicyWithIdentity<model, key, pointer, menu, effectResult, message, fingerprint>(System.String, System.String, ProductionJourney<model, key, pointer, menu, effectResult, message, fingerprint>, JourneyPolicy<model, JourneyEvent<key, pointer, menu, effectResult>>, System.UInt64) : JourneyRun<model, JourneyEvent<key, pointer, menu, effectResult>, fingerprint>
 FS.GG.Game.Harness.Journey.runScript<model, key, pointer, menu, effectResult, message, fingerprint>(ProductionJourney<model, key, pointer, menu, effectResult, message, fingerprint>, FSharpList<JourneyEvent<key, pointer, menu, effectResult>>) : JourneyRun<model, JourneyEvent<key, pointer, menu, effectResult>, fingerprint>
+FS.GG.Game.Harness.Journey.runScriptWithIdentity<model, key, pointer, menu, effectResult, message, fingerprint>(System.String, System.String, ProductionJourney<model, key, pointer, menu, effectResult, message, fingerprint>, FSharpList<JourneyEvent<key, pointer, menu, effectResult>>) : JourneyRun<model, JourneyEvent<key, pointer, menu, effectResult>, fingerprint>
 FS.GG.Game.Harness.JourneyDispatch`1+Tags.Mapped : System.Int32
 FS.GG.Game.Harness.JourneyDispatch`1+Tags.Unbound : System.Int32
 FS.GG.Game.Harness.JourneyEvent`4+Tags.EffectResult : System.Int32
@@ -53,8 +60,10 @@ FS.GG.Game.Harness.JourneyInputKind+Tags.FixedScript : System.Int32
 FS.GG.Game.Harness.JourneyInputKind+Tags.SeededPolicy : System.Int32
 FS.GG.Game.Harness.JourneyPolicy`2.DecideEvents : FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>> [get]
 FS.GG.Game.Harness.JourneyPolicy`2.new(FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>>)
+FS.GG.Game.Harness.JourneyReceipt.compositionAuthority(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.initialFingerprintDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.inputDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.inputIdentity(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.inputKind(FS.GG.Game.Harness.JourneyReceipt) : FS.GG.Game.Harness.JourneyInputKind
 FS.GG.Game.Harness.JourneyReceipt.maxSteps(FS.GG.Game.Harness.JourneyReceipt) : System.Int32
 FS.GG.Game.Harness.JourneyReceipt.origin(FS.GG.Game.Harness.JourneyReceipt) : FS.GG.Game.Harness.Origin
@@ -67,6 +76,7 @@ FS.GG.Game.Harness.JourneyReceipt.schemaVersion(FS.GG.Game.Harness.JourneyReceip
 FS.GG.Game.Harness.JourneyReceipt.scriptDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.steps(FS.GG.Game.Harness.JourneyReceipt) : System.Int32
 FS.GG.Game.Harness.JourneyReceipt.terminalFingerprintDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.terminalPredicateIdentity(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.terminalPredicateReached(FS.GG.Game.Harness.JourneyReceipt) : System.Boolean
 FS.GG.Game.Harness.JourneyReceipt.testId(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.traceDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String

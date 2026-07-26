@@ -7,6 +7,12 @@ open FS.GG.Game.Reference
 
 let productionAdapter = Composition.adapter
 let productionScript = Composition.script
+let runScript adapter script =
+    Journey.runScriptWithIdentity
+        Composition.inputIdentity
+        Composition.terminalPredicateIdentity
+        adapter
+        script
 
 [<Tests>]
 let tests =
@@ -14,7 +20,7 @@ let tests =
         "ProductionJourney"
         [ testCase "boots the shipped reference composition and proves start, pause, progression, sealed-door refusal, and terminal outcome"
           <| fun _ ->
-              let run = Journey.runScript productionAdapter productionScript
+              let run = runScript productionAdapter productionScript
               let frames = Trace.frames run.Trace
 
               Expect.equal (Trace.origin run.Trace) Origin.ProductionJourney "journey provenance is runner-issued"
@@ -25,6 +31,14 @@ let tests =
                   "the issuing runner is named"
               Expect.equal (JourneyReceipt.origin run.Receipt) Origin.ProductionJourney "the receipt carries the production origin"
               Expect.equal (JourneyReceipt.inputKind run.Receipt) JourneyInputKind.FixedScript "the fixed script route is explicit"
+              Expect.equal
+                  (JourneyReceipt.inputIdentity run.Receipt)
+                  Composition.inputIdentity
+                  "the fixed script definition is identified"
+              Expect.equal
+                  (JourneyReceipt.terminalPredicateIdentity run.Receipt)
+                  Composition.terminalPredicateIdentity
+                  "the terminal predicate is identified"
               Expect.isFalse
                   (System.String.IsNullOrWhiteSpace(JourneyReceipt.runnerVersion run.Receipt))
                   "the issuing runner version is present"
@@ -58,12 +72,22 @@ let tests =
                           index <- index + 1
                           struct ([ event ], rng) }
 
-              let generated = Journey.runPolicy productionAdapter policy 73UL
-              let replay = Journey.runScript productionAdapter generated.Captured
+              let generated =
+                  Journey.runPolicyWithIdentity
+                      "boot-to-vault-exit/policy-v1"
+                      Composition.terminalPredicateIdentity
+                      productionAdapter
+                      policy
+                      73UL
+              let replay = runScript productionAdapter generated.Captured
               Expect.equal
                   (JourneyReceipt.inputKind generated.Receipt)
                   JourneyInputKind.SeededPolicy
                   "a seeded policy is distinct from its fixed-script replay"
+              Expect.equal
+                  (JourneyReceipt.inputIdentity generated.Receipt)
+                  "boot-to-vault-exit/policy-v1"
+                  "the seeded policy definition is identified"
               Expect.notEqual
                   (JourneyReceipt.inputDigest generated.Receipt)
                   (JourneyReceipt.inputDigest replay.Receipt)
@@ -102,7 +126,7 @@ let tests =
 
           testCase "exhaustion fails with final-fingerprint and captured-input digests instead of hanging"
           <| fun _ ->
-              let run = Journey.runScript productionAdapter [ JourneyEvent.Start; JourneyEvent.FixedTick ]
+              let run = runScript productionAdapter [ JourneyEvent.Start; JourneyEvent.FixedTick ]
 
               match JourneyReceipt.result run.Receipt with
               | JourneyResult.Failed reason ->
@@ -120,11 +144,11 @@ let tests =
           testCase "length-framed script digests distinguish embedded newlines from event boundaries"
           <| fun _ ->
               let one =
-                  Journey.runScript
+                  runScript
                       { productionAdapter with EncodeEvent = fun _ -> "a\nb" }
                       [ JourneyEvent.Start ]
               let two =
-                  Journey.runScript
+                  runScript
                       { productionAdapter with
                           EncodeEvent =
                               function
@@ -139,9 +163,9 @@ let tests =
 
           testCase "byte-divergent replay fingerprints produce a different trace binding"
           <| fun _ ->
-              let original = Journey.runScript productionAdapter productionScript
+              let original = runScript productionAdapter productionScript
               let divergent =
-                  Journey.runScript
+                  runScript
                       { productionAdapter with
                           EncodeFingerprint = fun fingerprint -> "divergent:" + sprintf "%A" fingerprint }
                       productionScript
@@ -149,4 +173,61 @@ let tests =
               Expect.notEqual
                   (JourneyReceipt.traceDigest original.Receipt)
                   (JourneyReceipt.traceDigest divergent.Receipt)
-                  "serialized trace provenance is bound to the exact encoded replay bytes" ]
+                  "serialized trace provenance is bound to the exact encoded replay bytes"
+
+          testCase "a terminal-at-boot adapter cannot mint a passing empty-script receipt"
+          <| fun _ ->
+              let terminalBoot =
+                  { productionAdapter with
+                      Boot =
+                        fun () ->
+                            { productionAdapter.Boot() with
+                                Screen = Composition.Screen.Won } }
+              let run = Journey.runScript terminalBoot []
+
+              match JourneyReceipt.result run.Receipt with
+              | JourneyResult.Failed reason ->
+                  Expect.stringContains reason "already satisfied at boot" "the non-journey is refused explicitly"
+                  Expect.equal (JourneyReceipt.steps run.Receipt) 0 "no production event was executed"
+              | JourneyResult.Passed -> failtest "terminal-at-boot must not mint a passing journey receipt"
+
+          testCase "schema-v1 issuance refuses empty route, scenario, input, test, and terminal identities"
+          <| fun _ ->
+              let mustThrow name action =
+                  Expect.throws action (sprintf "empty %s identity must be refused before execution" name)
+
+              mustThrow "route" (fun () ->
+                  Journey.runScriptWithIdentity
+                      Composition.inputIdentity
+                      Composition.terminalPredicateIdentity
+                      { productionAdapter with RouteId = "" }
+                      productionScript
+                  |> ignore)
+              mustThrow "scenario" (fun () ->
+                  Journey.runScriptWithIdentity
+                      Composition.inputIdentity
+                      Composition.terminalPredicateIdentity
+                      { productionAdapter with ScenarioId = " " }
+                      productionScript
+                  |> ignore)
+              mustThrow "test" (fun () ->
+                  Journey.runScriptWithIdentity
+                      Composition.inputIdentity
+                      Composition.terminalPredicateIdentity
+                      { productionAdapter with TestId = "" }
+                      productionScript
+                  |> ignore)
+              mustThrow "input" (fun () ->
+                  Journey.runScriptWithIdentity
+                      ""
+                      Composition.terminalPredicateIdentity
+                      productionAdapter
+                      productionScript
+                  |> ignore)
+              mustThrow "terminal" (fun () ->
+                  Journey.runScriptWithIdentity
+                      Composition.inputIdentity
+                      ""
+                      productionAdapter
+                      productionScript
+                  |> ignore) ]

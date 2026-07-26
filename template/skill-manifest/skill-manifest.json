@@ -112,7 +112,7 @@
     {
       "id": "fs-gg-playtest",
       "scope": "product",
-      "sha256": "7696eaf6020f47606828a65942e5b5f7b74dd970bfe7261e022b21879f4918a6",
+      "sha256": "f070f0719dde93b55d1a41ea8aa881b90e41cd20a20e558771d87ef3fe28f642",
       "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-playtest/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",

@@ -3,7 +3,8 @@
 module FS.GG.Playtest.JourneyReceiptExport
 
 open System
-open System.Text.RegularExpressions
+open System.Security.Cryptography
+open System.Text
 open FS.GG.Game.Core
 open FS.GG.Game.Harness
 open FS.GG.Playtest.Proofs
@@ -12,49 +13,124 @@ open FS.GG.Playtest.Trx
 /// Schema v1 binds runner-issued journey facts to one exact passing test and its report bytes.
 type BoundReceipt =
     { Receipt: JourneyReceipt
+      ExecutionId: string
+      ReceiptBindingDigest: string
       TestName: string
       ReportSource: string
-      ReportDigest: string }
+      ReportDigest: string
+      ReportPassed: int }
 
-let private mentions (testId: string) (name: string) =
-    let pattern = "(?<![0-9A-Za-z])" + Regex.Escape testId + "(?![0-9A-Za-z])"
-    Regex.IsMatch(name, pattern)
+type GeneratedReport =
+    { Bytes: byte[]
+      Receipts: Map<string, BoundReceipt> }
 
-/// Bind every validated receipt to exactly one passing test in this report. Missing, failed, or
-/// ambiguous identities fail closed; a report-level digest is always the digest of the supplied
-/// bytes, so a stale or byte-divergent report produces a different binding.
-let bind
+let private digestParts (values: string list) =
+    let builder = StringBuilder()
+
+    for value in values do
+        builder.Append(Encoding.UTF8.GetByteCount value).Append(':').Append(value) |> ignore
+
+    builder.ToString()
+    |> Encoding.UTF8.GetBytes
+    |> SHA256.HashData
+    |> Convert.ToHexString
+    |> fun value -> value.ToLowerInvariant()
+
+let private receiptBindingDigest executionId receipt =
+    let origin =
+        match JourneyReceipt.origin receipt with
+        | Origin.ProductionJourney -> "production-journey"
+        | Origin.InputDriven -> "input-driven"
+        | Origin.Synthetic -> "synthetic"
+    let inputKind =
+        match JourneyReceipt.inputKind receipt with
+        | JourneyInputKind.FixedScript -> "fixed-script"
+        | JourneyInputKind.SeededPolicy -> "seeded-policy"
+    let outcome =
+        match JourneyReceipt.result receipt with
+        | JourneyResult.Passed -> "passed"
+        | JourneyResult.Failed reason -> "failed:" + reason
+
+    digestParts
+        [ executionId
+          string (JourneyReceipt.schemaVersion receipt)
+          JourneyReceipt.runnerIdentity receipt
+          JourneyReceipt.runnerVersion receipt
+          JourneyReceipt.compositionAuthority receipt
+          origin
+          JourneyReceipt.routeId receipt
+          JourneyReceipt.scenarioId receipt
+          JourneyReceipt.testId receipt
+          inputKind
+          JourneyReceipt.inputIdentity receipt
+          JourneyReceipt.inputDigest receipt
+          JourneyReceipt.scriptDigest receipt
+          JourneyReceipt.traceDigest receipt
+          JourneyReceipt.initialFingerprintDigest receipt
+          JourneyReceipt.terminalFingerprintDigest receipt
+          JourneyReceipt.terminalPredicateIdentity receipt
+          (JourneyReceipt.terminalPredicateReached receipt).ToString().ToLowerInvariant()
+          outcome
+          string (JourneyReceipt.maxSteps receipt)
+          string (JourneyReceipt.steps receipt) ]
+
+let private xmlEscape (value: string) =
+    System.Security.SecurityElement.Escape value
+
+/// Generate a JUnit report and its receipt bindings from the same in-memory proof executions. The
+/// report is output, never input: a stale or fabricated caller report therefore cannot be upgraded
+/// into production provenance.
+let generate
     (reportSource: string)
-    (run: TrxRun)
     (proofs: Map<string, ValidatedJourneyProof>)
-    : Result<Map<string, BoundReceipt>, string> =
-    proofs
-    |> Map.fold
-        (fun state testId proof ->
-            match state with
-            | Error error -> Error error
-            | Ok bound ->
-                let allMatches = run.AllTestNames |> List.filter (mentions testId)
-                let passingMatches = run.PassedTestNames |> List.filter (mentions testId)
+    : GeneratedReport =
+    let properties, cases =
+        proofs
+        |> Map.toList
+        |> List.map (fun (testId, proof) ->
+            let binding = receiptBindingDigest proof.ExecutionId proof.Receipt
 
-                match allMatches, passingMatches with
-                | [], _ ->
-                    Error(sprintf "production journey receipt %s has no matching test in the observed report" testId)
-                | _, [] ->
-                    Error(sprintf "production journey receipt %s is bound to a non-passing test" testId)
-                | _, [ testName ] when allMatches = [ testName ] ->
-                    Ok(
-                        Map.add
-                            testId
-                            { Receipt = proof.Receipt
-                              TestName = testName
-                              ReportSource = reportSource
-                              ReportDigest = run.Digest }
-                            bound
-                    )
-                | _ ->
-                    Error(sprintf "production journey receipt %s matches more than one observed test" testId))
-        (Ok Map.empty)
+            [ sprintf
+                  "    <property name=\"fsgg.%s.executionId\" value=\"%s\" />"
+                  (xmlEscape testId)
+                  (xmlEscape proof.ExecutionId)
+              sprintf
+                  "    <property name=\"fsgg.%s.receiptBinding\" value=\"sha256:%s\" />"
+                  (xmlEscape testId)
+                  binding ],
+            sprintf
+                "  <testcase classname=\"%s\" name=\"%s\" />"
+                (xmlEscape (JourneyReceipt.routeId proof.Receipt))
+                (xmlEscape testId))
+        |> List.unzip
+
+    let reportText =
+        String.concat
+            "\n"
+            ([ "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+               sprintf
+                   "<testsuite name=\"fsgg-playtest.production-journeys\" tests=\"%d\" failures=\"0\">"
+                   proofs.Count
+               "  <properties>" ]
+             @ List.concat properties
+             @ [ "  </properties>" ]
+             @ cases
+             @ [ "</testsuite>"; "" ])
+    let bytes = Encoding.UTF8.GetBytes reportText
+    let reportDigest = Trx.digest bytes
+    let receipts =
+        proofs
+        |> Map.map (fun testId proof ->
+            { Receipt = proof.Receipt
+              ExecutionId = proof.ExecutionId
+              ReceiptBindingDigest = receiptBindingDigest proof.ExecutionId proof.Receipt
+              TestName = testId
+              ReportSource = reportSource
+              ReportDigest = reportDigest
+              ReportPassed = proofs.Count })
+
+    { Bytes = bytes
+      Receipts = receipts }
 
 let private yamlString (value: string) =
     "\""
@@ -85,6 +161,7 @@ let renderYaml (indent: string) (bound: BoundReceipt) : string list =
       indent + "runner:"
       indent + "  identity: " + yamlString (JourneyReceipt.runnerIdentity receipt)
       indent + "  version: " + yamlString (JourneyReceipt.runnerVersion receipt)
+      indent + "compositionAuthority: " + yamlString (JourneyReceipt.compositionAuthority receipt)
       indent
       + "origin: "
       + (match JourneyReceipt.origin receipt with
@@ -94,14 +171,18 @@ let renderYaml (indent: string) (bound: BoundReceipt) : string list =
       indent + "routeId: " + yamlString (JourneyReceipt.routeId receipt)
       indent + "scenarioId: " + yamlString (JourneyReceipt.scenarioId receipt)
       indent + "testId: " + yamlString (JourneyReceipt.testId receipt)
+      indent + "executionId: " + yamlString bound.ExecutionId
+      indent + "receiptBinding: " + digest bound.ReceiptBindingDigest
       indent + "input:"
       indent + "  kind: " + inputKind
+      indent + "  identity: " + yamlString (JourneyReceipt.inputIdentity receipt)
       indent + "  digest: " + digest (JourneyReceipt.inputDigest receipt)
       indent + "replayDigest: " + digest (JourneyReceipt.scriptDigest receipt)
       indent + "traceDigest: " + digest (JourneyReceipt.traceDigest receipt)
       indent + "initialFingerprint: " + digest (JourneyReceipt.initialFingerprintDigest receipt)
       indent + "terminalFingerprint: " + digest (JourneyReceipt.terminalFingerprintDigest receipt)
       indent + "terminalPredicate:"
+      indent + "  identity: " + yamlString (JourneyReceipt.terminalPredicateIdentity receipt)
       indent
       + "  reached: "
       + ((JourneyReceipt.terminalPredicateReached receipt).ToString().ToLowerInvariant())

@@ -40,6 +40,35 @@ let private allInputDriven (frs: GameplayFr list) =
 
 let private journeyProofAssembly = typeof<ProductionJourneyProof>.Assembly.Location
 
+[<Sealed>]
+type ExternalConstructedJourneyProof() =
+    let adapter =
+        { Composition.adapter with
+            Boot = fun () -> Composition.adapter.Boot()
+            MapEvent = fun event model -> Composition.adapter.MapEvent event model
+            Update = fun message model -> Composition.adapter.Update message model
+            FixedTick = fun model -> Composition.adapter.FixedTick model
+            ApplyEffectResult = fun effect model -> Composition.adapter.ApplyEffectResult effect model
+            IsTerminal = fun model -> Composition.adapter.IsTerminal model }
+
+    interface IProductionJourneyProofV1 with
+        member _.CompositionAuthority =
+            let assembly = typeof<ExternalConstructedJourneyProof>.Assembly
+            let name = assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+            name + "/" + assembly.ManifestModule.ModuleVersionId.ToString("N")
+        member _.RouteId = adapter.RouteId
+        member _.ScenarioId = adapter.ScenarioId
+        member _.InputIdentity = Composition.inputIdentity
+        member _.TerminalPredicateIdentity = Composition.terminalPredicateIdentity
+        member _.TestId = adapter.TestId
+        member _.Run() =
+            (Journey.runScriptWithIdentity
+                Composition.inputIdentity
+                Composition.terminalPredicateIdentity
+                adapter
+                Composition.script)
+                .Receipt
+
 [<Tests>]
 let tests =
     testList
@@ -140,7 +169,11 @@ let tests =
               | Error _ -> ()
               | Ok _ -> failtest "a hand-authored productionJourney token must be refused"
 
-              match Proofs.loadJourneyProofs journeyProofAssembly with
+              match
+                  Proofs.loadJourneyProofsWithAuthority
+                      journeyProofAssembly
+                      journeyProofAssembly
+              with
               | Error e -> failtestf "executable runner proof must validate: %s" e
               | Ok proofs ->
                   Expect.isTrue (Coverage.lint required proofs None |> Coverage.passed) "validated receipt satisfies"
@@ -150,6 +183,20 @@ let tests =
               Expect.isNone
                   (Proofs.parseProvenance "productionJourney")
                   "the text proof grammar has no production token"
+
+          testCase "an external proof cannot self-author an allowlisted production composition"
+          <| fun _ ->
+              let testAssembly = typeof<ExternalConstructedJourneyProof>.Assembly.Location
+
+              match Proofs.loadJourneyReceipts testAssembly with
+              | Error error ->
+                  Expect.stringContains error "without an explicit producer authority" "the convenience loader fails closed"
+              | Ok _ -> failtest "a public convenience loader must not self-authorize its proof assembly"
+
+              match Proofs.loadJourneyReceiptsWithAuthority testAssembly journeyProofAssembly with
+              | Error error ->
+                  Expect.stringContains error "not the allowlisted producer" "the authority mismatch is explicit"
+              | Ok _ -> failtest "an externally composed adapter must not mint production provenance"
 
           testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
           <| fun _ ->
@@ -219,6 +266,7 @@ let tests =
                              "--manifest"; manifestPath
                              "--proofs"; proofsPath
                              assemblyFlag; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
                              "--critic"; criticPath |]
 
                   let row disposition =
@@ -251,6 +299,7 @@ let tests =
                   let proofsPath = Path.Combine(directory, "proofs.txt")
                   let criticPath = Path.Combine(directory, "critic.txt")
                   let trxPath = Path.Combine(directory, "journey.trx")
+                  let journeyReportPath = Path.Combine(directory, "journey.junit.xml")
                   let outputPath = Path.Combine(directory, "evidence.yml")
                   let manifest =
                       [ { Id = "GP-JOURNEY-001"
@@ -261,8 +310,8 @@ let tests =
                   let trx =
                       """<?xml version="1.0"?>
 <TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
-  <ResultSummary><Counters passed="1" failed="0" /></ResultSummary>
-  <Results><UnitTestResult testName="gate GP-JOURNEY-001 production journey" outcome="Passed" /></Results>
+  <ResultSummary><Counters passed="0" failed="1" /></ResultSummary>
+  <Results><UnitTestResult testName="unrelated stale caller test" outcome="Failed" /></Results>
 </TestRun>"""
 
                   File.WriteAllText(manifestPath, Manifest.render manifest)
@@ -273,6 +322,80 @@ let tests =
                   )
                   File.WriteAllText(trxPath, trx)
 
+                  let missingGeneratedReport =
+                      FS.GG.Playtest.Program.main
+                          [| "emit-evidence"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             "--trx"; trxPath
+                             "--journey-proof-assembly"; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
+                             "--critic"; criticPath
+                             "--out"; outputPath |]
+                  Expect.equal
+                      missingGeneratedReport
+                      1
+                      "production evidence fails closed without a generated same-execution report output"
+
+                  File.WriteAllText(outputPath, "preserve-existing-evidence")
+                  let equivalentOutputPath = Path.Combine(directory, ".", "evidence.yml")
+                  let aliasedReport =
+                      FS.GG.Playtest.Program.main
+                          [| "emit-evidence"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             "--trx"; trxPath
+                             "--journey-proof-assembly"; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
+                             "--critic"; criticPath
+                             "--journey-report-out"; equivalentOutputPath
+                             "--out"; outputPath |]
+                  Expect.equal aliasedReport 1 "canonical report/evidence path aliases fail closed"
+                  Expect.equal
+                      (File.ReadAllText outputPath)
+                      "preserve-existing-evidence"
+                      "alias rejection happens before either artifact is written"
+
+                  if not (OperatingSystem.IsWindows()) then
+                      let danglingAliasPath = Path.Combine(directory, "dangling-evidence.yml")
+                      File.CreateSymbolicLink(danglingAliasPath, journeyReportPath) |> ignore
+                      let danglingAlias =
+                          FS.GG.Playtest.Program.main
+                              [| "emit-evidence"
+                                 "--manifest"; manifestPath
+                                 "--proofs"; proofsPath
+                                 "--trx"; trxPath
+                                 "--journey-proof-assembly"; journeyProofAssembly
+                                 "--journey-authority-assembly"; journeyProofAssembly
+                                 "--critic"; criticPath
+                                 "--journey-report-out"; journeyReportPath
+                                 "--out"; danglingAliasPath |]
+                      Expect.equal danglingAlias 1 "a dangling output symlink to the report fails closed"
+                      Expect.isFalse
+                          (File.Exists journeyReportPath)
+                          "dangling-alias rejection happens before the report target is created"
+
+                      let chainEvidencePath = Path.Combine(directory, "chain-evidence.yml")
+                      let intermediateLinkPath = Path.Combine(directory, "intermediate-link")
+                      let reportLinkPath = Path.Combine(directory, "report-link")
+                      File.CreateSymbolicLink(intermediateLinkPath, chainEvidencePath) |> ignore
+                      File.CreateSymbolicLink(reportLinkPath, intermediateLinkPath) |> ignore
+                      let chainedAlias =
+                          FS.GG.Playtest.Program.main
+                              [| "emit-evidence"
+                                 "--manifest"; manifestPath
+                                 "--proofs"; proofsPath
+                                 "--trx"; trxPath
+                                 "--journey-proof-assembly"; journeyProofAssembly
+                                 "--journey-authority-assembly"; journeyProofAssembly
+                                 "--critic"; criticPath
+                                 "--journey-report-out"; reportLinkPath
+                                 "--out"; chainEvidencePath |]
+                      Expect.equal chainedAlias 1 "a two-hop dangling report chain to evidence fails closed"
+                      Expect.isFalse
+                          (File.Exists chainEvidencePath)
+                          "recursive link rejection happens before the final evidence target is created"
+
                   let exitCode =
                       FS.GG.Playtest.Program.main
                           [| "emit-evidence"
@@ -280,18 +403,26 @@ let tests =
                              "--proofs"; proofsPath
                              "--trx"; trxPath
                              "--journey-proof-assembly"; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
                              "--critic"; criticPath
+                             "--journey-report-out"; journeyReportPath
                              "--out"; outputPath |]
 
                   Expect.equal exitCode 0 "the validated receipt/report pair emits evidence"
                   let output = File.ReadAllText outputPath
                   Expect.stringContains output "journeyReceipt:" "the typed receipt is embedded"
                   Expect.stringContains output "schemaVersion: 1" "the receipt schema is versioned"
+                  Expect.stringContains output "result: pass" "the generated proof, not caller TRX, classifies the row"
                   Expect.stringContains output "testId: \"GP-JOURNEY-001\"" "the proof identity is bound"
+                  Expect.isTrue (File.Exists journeyReportPath) "the same-execution JUnit is generated"
                   Expect.stringContains
                       output
-                      (sprintf "digest: \"sha256:%s\"" (Trx.digest (File.ReadAllBytes trxPath)))
-                      "the receipt is bound to the exact TRX bytes"
+                      (sprintf "digest: \"sha256:%s\"" (Trx.digest (File.ReadAllBytes journeyReportPath)))
+                      "the receipt is bound to the generated same-execution JUnit bytes"
+                  Expect.notEqual
+                      (Trx.digest (File.ReadAllBytes journeyReportPath))
+                      (Trx.digest (File.ReadAllBytes trxPath))
+                      "the caller TRX cannot stand in for the journey execution report"
               finally
                   Directory.Delete(directory, true)
 

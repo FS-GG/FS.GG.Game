@@ -10,6 +10,7 @@ FS.GG.Game.Harness.FindResult+Found
 FS.GG.Game.Harness.FindResult+Tags
 FS.GG.Game.Harness.FindResult+Truncated
 FS.GG.Game.Harness.IProductionJourneyProof
+FS.GG.Game.Harness.IProductionJourneyProofV1
 FS.GG.Game.Harness.Journey
 FS.GG.Game.Harness.JourneyDispatch`1
 FS.GG.Game.Harness.JourneyDispatch`1+Mapped
