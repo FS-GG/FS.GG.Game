@@ -1068,6 +1068,13 @@ avoid falling through); save during low memory (stream chunk deltas, don't hold 
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Worldgen determinism (seed).**
    **Given** a new world created with seed `12345`,
    **When** I read the `TileType` at tile `(2100, 350)` and at `(2100, 350)` again after
@@ -1176,6 +1183,65 @@ avoid falling through); save during low memory (stream chunk deltas, don't hold 
     **Then** after a 3 s fade the player respawns at the bed with full HP, 50% of dropped
     items appear as recoverable world drops at the death site, and `deaths` increments.
 
+16. **Doors toggle collision and preserve support.**
+    **Given** a valid placed 1×3 door, **When** Interact is pressed in range, **Then** all
+    door cells atomically change from solid/closed to passable/open without consuming the
+    door item; pressing again restores solidity only if it would not overlap the player.
+
+17. **Bed validity controls sleep and respawn.**
+    **Given** a supported bed with headroom, **When** placed, **Then** it becomes the sole
+    respawn anchor; a newer bed replaces it. Destroying its support/headroom invalidates it.
+    At night, Interact with no nearby enemy advances to next dawn; with an enemy inside
+    480 px it does nothing.
+
+18. **Inventory merge, split, full, and world-drop behavior.**
+    **Given** partial, full, and empty stack fixtures, **When** pickup/shift-split/`Q` occurs,
+    **Then** counts are conserved, stacks never exceed their item maximum, zero-count stacks
+    disappear, and overflow/full-inventory items remain as world drops rather than vanishing.
+
+19. **Mining target changes decay progress and cannot duplicate drops.**
+    **Given** a half-mined tile, **When** aim leaves it, **Then** progress decays at `2×H/s`;
+    returning resumes only the remaining progress. If two break causes coincide, exactly one
+    tile mutation, version increment, and drop roll occurs.
+
+20. **Melee cadence and hit-set.**
+    **Given** held attack and two overlapping enemies, **When** one 0.25 s swing resolves,
+    **Then** each enemy is damaged at most once, knockback/hitstun uses its archetype modifier,
+    and no second swing starts early; held input begins the next swing only at cadence.
+
+21. **Bow ammo, projectile ownership, and first-hit cleanup.**
+    **Given** one arrow and a target behind a solid tile, **When** the bow fires, **Then** one
+    arrow is consumed and one projectile spawns; it is removed at the first tile hit without
+    damaging the enemy. In a clear fixture it damages the first enemy once, never the player,
+    and is removed.
+
+22. **Every v1 enemy archetype executes its state machine.**
+    **Given** controlled fixtures for Slime, Crawler, Bat, Skeleton, and Brute, **When** their
+    range, obstruction, light, and cooldown triggers occur, **Then** movement/attack/flee,
+    damage, knockback resistance, and projectile behavior match §4.9/§5, and death rolls loot
+    once.
+
+23. **Day rollover and sleep increment progression once.**
+    **Given** time just before 1.0, **When** it wraps naturally or valid sleep advances it,
+    **Then** Day/DaysSurvived increment once, time becomes the documented dawn value, spawn
+    cap/difficulty derive from the new day, and no skipped fixed step duplicates the rollover.
+
+24. **Drop merge, pickup rejection, and despawn conserve items.**
+    **Given** identical nearby drops, **When** merge resolves, **Then** one entity contains
+    their total count; a full inventory leaves it in-world, and only reaching the 300 s lifetime
+    removes it. Pickup and despawn on the same step follow §7.5 ordering exactly once.
+
+25. **Crafting station proximity gates recipes.**
+    **Given** ingredients for a station-gated recipe, **When** no required station is in range,
+    **Then** crafting is rejected without consuming inputs; entering range enables it, and one
+    craft consumes/produces exactly the recipe quantities even if the input is held.
+
+26. **Pause and UI panels freeze gameplay; restart/new-world clears it.**
+    **Given** mining, attacks, enemies, projectiles, hunger, day time, and drops in flight,
+    **When** Inventory or Paused UI is open, **Then** gameplay does not advance; starting a new
+    world clears all prior chunks/entities/inventory/timers and derives state only from the new
+    seed and selected mode.
+
 ## 15. Stretch Goals
 
 Ranked, out of scope for v1:
@@ -1261,7 +1327,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Chunk-delta save/load, async write, round-trip guarantee, pristine chunks regen from seed (§13) — AC #12
 
 ### M10 — Acceptance & determinism
-- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 All 26 acceptance scenarios green (§14)
 - 🟥 Fixed-timestep input-log replay is bit-identical (§7.5, §13) — AC #14
 - 🟥 Worldgen order-independence: same seed → identical tiles, seed-sensitive (§13) — AC #1
 

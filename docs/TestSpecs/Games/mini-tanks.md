@@ -1124,6 +1124,13 @@ the last-known point (indirect rounds still splash); rubble appearing under a ta
 hit resolves track absorb first (stage 2); pen at the `5× nominal` clamp does not produce infinities.
 
 ## 14. Acceptance Criteria (test scenarios)
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 Verifiable Given/When/Then. Seeds fixed; headings in radians, distances in metres.
 
 1. **Hull and turret are independent.** *Given* a stationary tank at `HullHeading = 0`, *when* the
@@ -1232,6 +1239,34 @@ Verifiable Given/When/Then. Seeds fixed; headings in radians, distances in metre
     hull out of the tile and forward motion halts; *given* a `Lynx` (12 t) driving into a standing
     **Forest** tile (`CrushMass = Some 40`), *then* it is stopped the same way, while a `Bastion` (60 t)
     crushes through to `Open` and loses ~1 m/s of momentum (§4.13) — the mask blocks, the mass decides.
+
+26. **Direct shell flight, nearest hit, and expiry.** *Given* a direct shell crosses a terrain
+    tile and a tank in one fixed step, *when* ballistics resolves, *then* only the nearest impact
+    is applied and the shell is removed; a shell reaching its range/lifetime bound without impact
+    is removed without damage.
+
+27. **Shell-type behavior is distinct.** *Given* AP, HE, and HEAT rounds against the same authored
+    fixtures, *when* each impacts, *then* AP follows penetration, HE applies its documented splash
+    and terrain damage, and HEAT follows first-blocker/shaped-charge rules; ammo decreases only
+    for the fired kind.
+
+28. **Module damage changes vehicle capability.** *Given* healthy tracks, engine, gun, and turret
+    modules, *when* each receives the documented disabling hit, *then* only its specified movement,
+    firing, reload, or traverse capability is impaired for the specified duration/state; repair
+    restores it without restoring hull HP.
+
+29. **Capture objective progresses, contests, and wins.** *Given* an eligible tank in the capture
+    zone, *when* objective ticks advance, *then* capture progresses at the configured rate; an
+    enemy contest freezes/resets it per §11, leaving the zone stops contribution, and reaching the
+    threshold selects the correct winner exactly once.
+
+30. **Escort and clock endings use the ordered step.** *Given* an escort objective or expiring
+    match clock, *when* its terminal condition coincides with lethal damage, *then* §7.2 ordering
+    produces the documented winner and emits only one terminal transition.
+
+31. **Pause and match restart isolate state.** *Given* shells, smoke, spotting ghosts, reloads,
+    and objective progress in flight, *when* paused, *then* none advance; restarting rebuilds map,
+    teams, ammo, caches, RNG streams, and objective/clock state from the selected match config.
 
 ## 15. Stretch Goals
 Ranked, out of scope for v1:
@@ -1351,7 +1386,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Golden replay: `SceneCodec` per-tick hash, seed+tape reproducible (§13) — AC #20
 - 🟥 Headless 5×5 × 200-seed balance harness, 35–65 % band + counter arrows (§12) — AC #21
 - 🟥 Optional Governance gate binding the balance + legibility harnesses (§12)
-- 🟥 All 22 acceptance scenarios green (§14)
+- 🟥 All 31 acceptance scenarios green (§14)
 
 ### Stretch — deferred (post-v1)
 - ⬜ Elevation & hull-down (height layer across LOS/FOV/pathfinding/render) (§15.1)

@@ -815,6 +815,13 @@ just gravity, so each is internally coherent rather than one slider yanked:
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Auto-bounce on falling contact**
    *Given* the doodle is falling (`vy > 0`) and its feet sensor overlaps a Static platform top
    within the contact band, *When* a `Tick` is processed, *Then* `vy` becomes `-1150 px/s` and
@@ -919,6 +926,19 @@ just gravity, so each is internally coherent rather than one slider yanked:
     contact, *When* `GameOver` is entered, *Then* `fallCause = Monster` and it is written exactly
     once (§9.2, §11).
 
+22. **Moving platform carries before launch.** **Given** the doodle is standing on a horizontal
+    moving platform, **when** fixed steps advance, **then** the doodle inherits the platform's
+    displacement without drifting through it; after auto-bounce, platform motion no longer drags
+    the airborne doodle.
+
+23. **One-shot platform effects do not repeat.** **Given** a spring, breakable platform, or
+    jetpack is contacted across multiple overlapping frames, **when** contact resolves, **then**
+    its launch/removal/pickup transition fires exactly once.
+
+24. **Restart resets procedural state.** **Given** GameOver at altitude H with generated platforms,
+    enemies, and active effects, **when** Restart is pressed, **then** score, camera, player,
+    entities, effects, and generator cursor match a fresh run for the selected seed.
+
 ## 15. Stretch Goals
 1. **Shooting** — fire upward projectiles to kill enemies that are unsafe to stomp.
 2. **Jetpack & propeller-hat variety** — different boost shapes/durations.
@@ -1011,7 +1031,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `bg-loop` music start on run / stop at Game Over, `M` mute toggle (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 14 acceptance scenarios green (§14)
+- 🟥 All 24 acceptance scenarios green (§14)
 - 🟥 Same seed + identical input → identical `Platforms` (§13) — AC #12
 - 🟥 Frame-rate independence via fixed-timestep accumulator (§13) — AC #14
 - 🟥 Extended scenarios green: impulse/tie-break/steer/reachability/jetpack/fall-cause (§14) — AC #15, #16, #17, #18, #19, #20, #21

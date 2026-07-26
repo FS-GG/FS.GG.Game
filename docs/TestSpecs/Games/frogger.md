@@ -742,6 +742,13 @@ every level, so all pressure funnels into the ten hazard rows between them.
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Grid hop up.** *Given* the frog is `Idle` at start cell (9, 11) *When* `Hop Up` is
    dispatched and `HopDuration` elapses via `Tick`s *Then* the frog is `Idle` at cell
    (9, 10) and score increased by +10 (new furthest row).
@@ -828,6 +835,22 @@ every level, so all pressure funnels into the ten hazard rows between them.
     new furthest row *When* the hop resolves *Then* on that single tick the award is +10 (new
     row) + 50 (home) + 80 (⌊8.4⌋ × 10 time bonus) + 200 (fly) + 200 (lady) + 1000 (clear) +
     200 (2 spare lives × 100) = +1740, with no value double-counted.
+
+22. **Death resets only the life.** *Given* two occupied homes, score S, and 3 lives, *when* the
+    frog is hit by a vehicle, *then* lives become 2 and the frog/timer reset after the death pause,
+    while homes, level, and score remain unchanged.
+
+23. **Lady-frog carry and delivery.** *Given* the lady frog is riding a log, *when* the player
+    shares that platform and then reaches an empty home, *then* she attaches once, follows the
+    player, awards the §4.7 bonus once, and is removed for the rest of that life.
+
+24. **Traffic and platform wrap preserve cadence.** *Given* a vehicle, log, or turtle group leaves
+    its lane bound, *when* it wraps, *then* its spacing and velocity are preserved and it cannot
+    collide with or support the frog twice in the same step.
+
+25. **Pause and restart state boundaries.** *Given* active traffic and timer, *when* paused, *then*
+    neither advances; *given* GameOver, *when* Restart is pressed, *then* level, homes, lives,
+    score, hazards, bonuses, and timer match a fresh run while HighScore persists.
 
 ## 15. Stretch Goals
 1. **Input buffering** — queue one hop during an in-progress hop for smoother play.
@@ -931,7 +954,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Looping `arcade-theme` music on `Title`/`Playing`, stop on `GameOver` (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 21 acceptance scenarios green (§14)
+- 🟥 All 25 acceptance scenarios green (§14)
 - 🟥 Seed + `Tick`/`Hop` replay is bit-identical (§13) — AC #16
 
 ### Stretch — deferred (post-v1)

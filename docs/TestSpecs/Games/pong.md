@@ -663,6 +663,13 @@ the intra-rally speed curve (§6). In 1P the sole asymmetry is that the right pa
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Serve telegraph & launch.** *Given* a fresh match has started, *when* the serve
    begins, *then* the ball sits frozen at (640, 360) for 0.8 s (±1 frame) and *then*
    launches at 420 px/s with `|θ| ∈ [8°, 35°]` toward `ServeTo`.
@@ -736,6 +743,22 @@ the intra-rally speed curve (§6). In 1P the sole asymmetry is that the right pa
 19. **Rally reaches the cap deterministically.** *Given* `serveSpeed = 420` and `hitSpeedUp =
     1.05`, *when* a rally sustains 20 paddle hits, *then* ball speed is clamped to 1100 px/s by the
     20th hit (never exceeding it) and integration uses 3 sub-steps per step at that speed (§13).
+
+20. **Point pause is non-interactive.** *Given* a point has just been scored, *when* paddle input
+    and ticks arrive during `PointPause`, *then* the ball remains absent/frozen, paddle behavior
+    follows §4.7, no second point can score, and exactly one serve begins when the timer expires.
+
+21. **Two-player controls are isolated.** *Given* 2P mode, *when* only the left player's keys are
+    held, *then* only the left paddle moves; right-player keys move only the right paddle and no AI
+    update overrides it. In 1P mode, player-two input cannot steer the AI paddle.
+
+22. **Scoring planes are symmetric.** *Given* mirrored ball states crossing the left and right
+    scoring planes, *when* each resolves, *then* the opposite player gains exactly one point,
+    rally counters reset, and the next serve targets the player who conceded.
+
+23. **Restart produces a clean match.** *Given* GameOver after a long rally, *when* Restart is
+    pressed, *then* scores, paddles, ball, serve direction/timer, rally hits, aces, accumulator,
+    and held/edge input state match a fresh match using the selected mode and difficulty.
 
 ## 15. Stretch Goals
 1. **Win-by-2 / deuce** scoring above 10–10.
@@ -815,7 +838,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `AudioEffect` cues, `Audio.interpret`, volume clamp `[0,1]` (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 14 acceptance scenarios green (§14)
+- 🟥 All 23 acceptance scenarios green (§14)
 - 🟥 Seed + input-log replay is byte-identical (§13) — AC #13
 
 ### Stretch — deferred (post-v1)

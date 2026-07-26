@@ -884,6 +884,13 @@ above, applied at `StartGame`). Everything not listed keeps its default:
   bodies miss hits.
 
 ## 14. Acceptance Criteria (test scenarios)
+
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
 Verifiable Given/When/Then. `dt` steps are `1/60 s` unless noted.
 
 1. **Thrust accelerates along heading.**
@@ -1018,6 +1025,20 @@ Verifiable Given/When/Then. `dt` steps are `1/60 s` unless noted.
     And given a Large UFO, the fired directions are uniformly distributed with no bias toward the
     ship.
 
+28. **Hyperspace cooldown and unsafe arrival.** *Given* hyperspace is available, *when* it is
+    pressed, *then* the ship moves to the seeded destination and the cooldown starts; repeated
+    presses during cooldown do nothing. If the deterministic danger roll selects failure, exactly
+    one life is lost and normal respawn invulnerability begins.
+
+29. **Wave spawn is safe.** *Given* a wave starts or the ship respawns, *when* initial positions
+    are chosen, *then* no asteroid overlaps the ship safety radius, entity IDs are unique, and no
+    collision is resolved until the documented grace window ends.
+
+30. **Title, restart, and pause transitions.** *Given* Title, *when* Start is pressed, *then* a
+    fresh wave-1 run is created; *given* GameOver, *when* Restart is pressed, *then* score, lives,
+    wave, entities, and timers reset; while Paused, physics, spawn, and cooldown timers do not
+    advance.
+
 ## 15. Stretch Goals
 1. **Gamepad support** (analog rotate via stick, triggers to fire/thrust).
 2. **Mouse aim mode** (rotate ship toward cursor, click to fire).
@@ -1120,7 +1141,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `Audio.interpret` → `AudioEvidence` for deterministic, hardware-free tests (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 20 acceptance scenarios green (§14)
+- 🟥 All 30 acceptance scenarios green (§14)
 - 🟥 Seed + input-log replay: identical spawns & final Score (§13) — AC #20
 
 ### Stretch — deferred (post-v1)

@@ -635,6 +635,13 @@ scale linearly with `Score` and clamp:
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Gravity pulls the bird down.**
    GIVEN a `Playing` model with `bird.y = 360`, `bird.vy = 0`
    WHEN one `Tick(1/60)` is applied with no `Flap`
@@ -745,6 +752,18 @@ scale linearly with `Score` and clamp:
     THEN `gapHeight` clamps at `130 px` and never goes lower; AND already-spawned pipes keep the
     geometry they had at spawn.
 
+21. **Ready-to-playing transition.** **Given** the Ready screen, **when** one flap edge arrives,
+    **then** the phase becomes Playing, exactly one flap impulse is applied, and pipe scrolling and
+    spawn timing begin on that step; ticks before that input cannot score or kill the bird.
+
+22. **Pipe lifecycle is exact.** **Given** a pipe pair enters from the right, **when** it crosses
+    the score plane and later leaves the left cleanup bound, **then** it scores at most once and is
+    removed once, without changing the order or IDs of remaining pairs.
+
+23. **Restart is a clean attempt.** **Given** GameOver with a non-zero score, **when** restart
+    lockout has elapsed and Restart is pressed, **then** the bird, score, pipes, spawn timer, and
+    near-miss state reset while BestScore persists.
+
 ## 15. Stretch Goals
 1. **Medals** (bronze/silver/gold/platinum at score thresholds 10/20/30/40) on game-over.
 2. **Difficulty ramp** — enable `gapHeightRamp`/`scrollSpeedRamp` for an escalating mode.
@@ -824,7 +843,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `AudioEffect` cues (flap/point/hit/die/new-best), `Audio.interpret`, volume clamp `[0,1]` (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 All 23 acceptance scenarios green (§14)
 - 🟥 Seed + `Flap`/`Tick` sequence yields byte-identical pipe layout (§13) — AC #12
 - 🟥 New scenarios green: near-miss, flap apex, ready-bob, difficulty preset, ramp floor (§4.8, §4.9, §5, §9.1, §12) — AC #16, #17, #18, #19, #20
 

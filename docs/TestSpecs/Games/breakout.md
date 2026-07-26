@@ -765,6 +765,13 @@ value degrades gracefully instead of crashing a run.
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Launch from serve** — *Given* the game is in `Serve` with a ball stuck to a centered
    paddle, *When* the player presses Space, *Then* the phase becomes `Playing` and the ball
    has speed ≈ 360 px/s with `vy < 0` (upward).
@@ -871,6 +878,19 @@ value degrades gracefully instead of crashing a run.
     `((n − 1) mod 4)` of Classic Wall / Fortress / Checkerboard / Tunnels with no RNG draw, and
     is identical across runs (§6.2, §6.3).
 
+27. **Each v1 power-up applies and expires.** *Given* a collected Widen, Slow, Sticky, Laser, or
+    Multiball capsule, *when* it resolves, *then* only its §4.6 state change occurs; timed effects
+    return to baseline at expiry, and replacing an active timed effect follows the documented
+    refresh rule rather than stacking accidentally.
+
+28. **Brick contact is single-resolution.** *Given* one ball sweep overlaps a brick seam or remains
+    overlapping after correction, *when* collision resolves, *then* exactly one brick hit, one
+    score event, and one reflection occur for that contact.
+
+29. **Restart creates a clean run.** *Given* GameOver after power-ups and level progression, *when*
+    Restart is pressed, *then* lives, score, level, paddle, balls, bricks, capsules, lasers, and
+    effect timers equal a fresh seeded game.
+
 ## 15. Stretch Goals
 1. **Combo multiplier** — consecutive brick hits without a paddle touch increase a score
    multiplier (rewards tunnel-trap play).
@@ -965,7 +985,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Looping `bgm` on Play; stop on Pause/GameOver/Title; `M` mute → `setMasterVolume` (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 17 acceptance scenarios green (§14)
+- 🟥 All 29 acceptance scenarios green (§14)
 - 🟥 Seed + recorded `Msg`-log replay reproduces Score/Lives/Level/surviving bricks (§13) — AC #16
 
 ### Stretch — deferred (post-v1)

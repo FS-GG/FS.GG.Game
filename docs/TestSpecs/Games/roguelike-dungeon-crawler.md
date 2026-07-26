@@ -1065,10 +1065,17 @@ daily seed (§4.10) stays comparable **within** a mode.
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+>
 > All scenarios drive `stepSim`/generation as pure functions; assertions are on resulting
 > `Model`. "Tick N times" means N fixed sim steps of `1/120 s`.
 
-**14.1 — Procedural generation is deterministic for a seed.**
+1. **Procedural generation is deterministic for a seed.**
 - **Given** `runSeed = 0xC0FFEE` and `floorIndex = 1`,
 - **When** the floor is generated twice independently,
 - **Then** both produce an identical room graph: same room count, same set of grid cells,
@@ -1076,14 +1083,14 @@ daily seed (§4.10) stays comparable **within** a mode.
   and identical per-room enemy lists (type + spawn position). A byte-for-byte serialization
   of the two floors is equal.
 
-**14.2 — Layout is independent of combat RNG.**
+2. **Layout is independent of combat RNG.**
 - **Given** two runs with the same `runSeed`,
 - **When** in run A the player clears rooms quickly and in run B slowly (different numbers
   of `DropRng` draws),
 - **Then** the **floor layout and enemy placement are identical** across both runs
   (because layout uses `LayoutRng`, a separate stream). Drops may differ; layout may not.
 
-**14.3 — Item stat modifier stacks correctly.**
+3. **Item stat modifier stacks correctly.**
 - **Given** a player with base `dmg = 3.5` who picks up *Cracked Lens* (`Add dmg +1.0`)
   then *Polyphemus Shard* (`Mul dmg +1.0`, i.e. ×2),
 - **When** `PlayerStats` is recomputed (additives first, then multiplicatives),
@@ -1091,14 +1098,14 @@ daily seed (§4.10) stays comparable **within** a mode.
   yields the **same** result (`9.0`), proving order-independence of the additive/multiplic-
   ative phases.
 
-**14.4 — Multishot + spread produces the right projectiles.**
+4. **Multishot + spread produces the right projectiles.**
 - **Given** a player with `multishot = 3`, aim vector pointing right (`(1,0)`), `spreadDeg
   = 18`,
 - **When** the player fires once,
 - **Then** exactly 3 `Shot`s spawn with velocity directions at `−9°, 0°, +9°` from the aim
   vector (within `0.01°`), each with the player's `shotSpeed`.
 
-**14.5 — Room-clear gating opens doors only when cleared.**
+5. **Room-clear gating opens doors only when cleared.**
 - **Given** the player enters an uncleared combat room with 4 enemies (doors auto-seal to
   `LockedClear`),
 - **When** fewer than all enemies are dead,
@@ -1107,7 +1114,7 @@ daily seed (§4.10) stays comparable **within** a mode.
 - **Then** within the same step `Room.Cleared` becomes `true`, all doors transition to
   `Open`, and a room-clear drop is rolled from `DropRng`.
 
-**14.6 — Damage applies and i-frames protect.**
+6. **Damage applies and i-frames protect.**
 - **Given** a player with `6` half-hearts and no active invuln, touching an enemy bullet,
 - **When** the collision is resolved,
 - **Then** health becomes `5` half-hearts, `PostHitInvulnUntil = SimTime + 0.80`, and
@@ -1117,7 +1124,7 @@ daily seed (§4.10) stays comparable **within** a mode.
 - **And Given** the player instead activates a dodge roll, **When** a bullet overlaps
   during the `0.40 s` i-frame window, **Then** no damage is applied.
 
-**14.7 — Permadeath ends the run and evaluates unlocks.**
+7. **Permadeath ends the run and evaluates unlocks.**
 - **Given** a player at `1` half-heart who takes a `1`-damage hit (no invuln),
 - **When** the step resolves,
 - **Then** half-hearts reach `0`, `Screen` becomes `GameOver` with a populated
@@ -1125,7 +1132,7 @@ daily seed (§4.10) stays comparable **within** a mode.
   `RunStats`; **And** if `RunStats.bestFloor ≥ 3` and *Cracked Lens* was not yet unlocked,
   the resulting `MetaProfile.unlockedItems` now contains it and a `SaveProfile` is emitted.
 
-**14.8 — Fixed-timestep accumulator advances the sim correctly.**
+8. **Fixed-timestep accumulator advances the sim correctly.**
 - **Given** `Accumulator = 0` and `FIXED_DT = 1/120`,
 - **When** a `Tick 0.033` (≈ 1/30 s) is processed,
 - **Then** exactly `4` sim steps run (`floor((1/30) / (1/120)) = 4`) and `Accumulator` holds
@@ -1133,26 +1140,26 @@ daily seed (§4.10) stays comparable **within** a mode.
 - **And When** a single `Tick 1.0` arrives (huge stall), **Then** at most `MAX_STEPS = 5`
   steps run and the remainder is clamped (no spiral of death).
 
-**14.9 — Input: twin-stick decoupling.**
+9. **Input: twin-stick decoupling.**
 - **Given** the player holds `A` (move left) and the mouse cursor is to the player's right,
 - **When** firing,
 - **Then** the player's velocity points left while spawned shots travel right (move and aim
   are independent); shots inherit `0.25×` the leftward velocity as the documented offset.
 
-**14.10 — Shot lifetime/range terminates projectiles.**
+10. **Shot lifetime/range terminates projectiles.**
 - **Given** a shot with `shotSpeed = 420`, `range = 1.6 s`, `bounce = 0`, `pierce = 0`,
 - **When** it travels unobstructed,
 - **Then** it is destroyed when `Age > 1.6 s` (≈ `672 px` traveled), or earlier on leaving
   room bounds; and a shot with `pierce = 2` is destroyed after hitting its `3rd` enemy.
 
-**14.11 — Currency & shop purchase.**
+11. **Currency & shop purchase.**
 - **Given** a player with `10` coins in a shop, standing on an item priced `7¢`,
 - **When** the player presses Interact (edge-triggered),
 - **Then** coins become `3`, the item is added to `Player.Items`, stats recompute, and the
   shop slot is emptied; **And** with only `5` coins the purchase is rejected (coins
   unchanged, item remains).
 
-**14.12 — Shop / treasure / boss contents are layout-deterministic and dupe-free.**
+12. **Shop / treasure / boss contents are layout-deterministic and dupe-free.**
 - **Given** two runs with the same `runSeed` in which combat unfolds differently (run A
   fast, run B slow — different `DropRng` draws),
 - **When** each floor's treasure pedestal, shop slots, and boss reward are generated,
@@ -1160,7 +1167,7 @@ daily seed (§4.10) stays comparable **within** a mode.
   prices (contents ride `LayoutRng`, §4.11, extending §14.2), and **no item id appears
   twice** across a single run's pedestals/shops/boss rewards.
 
-**14.13 — Difficulty mode latches at `StartRun` and scales the sim.**
+13. **Difficulty mode latches at `StartRun` and scales the sim.**
 - **Given** the player selects **Hard** in Settings (§9.1),
 - **When** `StartRun` fires,
 - **Then** the run latches `enemyHpScale = 0.18`, `postHitInvuln = 0.55 s`, and
@@ -1169,7 +1176,7 @@ daily seed (§4.10) stays comparable **within** a mode.
 - **Then** the **active** run's scaling is unchanged (the switch applies to the next
   `StartRun` only), preserving seed-replay determinism (§13).
 
-**14.14 — Secret room revealed by bombing an adjacent wall.**
+14. **Secret room revealed by bombing an adjacent wall.**
 - **Given** a bomb detonates (§4.4) against a wall segment adjacent to a hidden `Secret`
   cell (§4.8),
 - **When** the blast resolves,
@@ -1177,6 +1184,72 @@ daily seed (§4.10) stays comparable **within** a mode.
   room becomes enterable, and the floor's door graph (`Floor.Graph`, §7.1) updates
   atomically — no half-open state where a door exists but the adjacency does not (§13
   edge case).
+
+15. **Open door traversal is bidirectional and lands at the matching doorway.**
+- **Given** adjacent rooms A and B have reciprocal `Open` doors,
+- **When** the player crosses A's east doorway,
+- **Then** `CurrentRoom = B`, B is marked visited/revealed, and the player enters at B's
+  west doorway without retaining overlap with the transition trigger;
+- **And When** the player returns through B's west door, **Then** A is re-entered with its
+  cleared state, pickups, and destroyed obstacles preserved.
+
+16. **Locked doors consume exactly one key and remain unlocked.**
+- **Given** a `LockedKey` door and one key, **When** the player interacts at that door,
+- **Then** keys become zero, both reciprocal door records become `Open`, and traversal is
+  allowed; re-entering never consumes another key;
+- **And Given** zero keys, **When** Interact is pressed, **Then** neither door state nor
+  room changes and the cost prompt remains available.
+
+17. **Boss door seals the encounter and opens only on boss death.**
+- **Given** the player enters a live boss room through its always-enterable boss door,
+- **When** room activation completes, **Then** every exit becomes `BossSealed`;
+- **And When** ordinary adds die but the boss remains alive, **Then** exits stay sealed;
+- **And When** the boss dies, **Then** exits open and exactly one reward pedestal and one
+  trapdoor spawn.
+
+18. **Trapdoor descent carries run state and replaces floor state.**
+- **Given** the boss is dead and the player interacts with the trapdoor,
+- **When** `DescendFloor` resolves, **Then** `FloorIndex` increments, the next seeded floor
+  is generated, the player starts in its START room, and stats/items/health/coins/keys/
+  bombs persist, while rooms, enemies, bullets, pickups, doors, and room-clear state do not.
+
+19. **Bomb spend, fuse, blast, and chain detonation are single-resolution.**
+- **Given** two bombs and no active bomb, **When** Drop Bomb is pressed once, **Then** one
+  bomb entity spawns and currency becomes one;
+- **And When** its fuse elapses, **Then** one explosion applies each eligible damage/
+  obstacle effect once; a second bomb inside the blast detonates that step, but neither
+  bomb can explode again on a later step.
+
+20. **Pickup caps and health ordering follow the resource rules.**
+- **Given** each currency at 98, **When** a +3 pickup is collected, **Then** it caps at 99;
+- **Given** red, soul, and black hearts, **When** damage is applied, **Then** black is
+  consumed before soul before red, each depleted black heart emits one 10-damage room
+  burst, and healing/temporary-heart pickups never exceed their documented caps.
+
+21. **Enemy and boss state machines respect cadence and ownership.**
+- **Given** fixtures for every v1 enemy and boss phase, **When** their trigger ranges and
+  timers are crossed, **Then** each performs its documented wind-up/attack/recover or
+  emitter transition at the configured cadence; enemy bullets cannot damage enemies,
+  player shots cannot damage the player, and a dead actor emits no later attack.
+
+22. **Obstacles use distinct collision and destruction rules.**
+- **Given** rock, tinted rock, pot, spikes, and pit fixtures, **When** the player, shots,
+  and a bomb interact with each, **Then** movement/shot blocking, contact damage,
+  destruction, and at-most-one drop match §5.5; a shot and bomb resolving together cannot
+  double-destroy or double-roll the same obstacle.
+
+23. **Fire cadence, roll commitment, bounce, and homing terminate safely.**
+- **Given** held fire, **When** fixed steps advance, **Then** shots spawn only at the
+  effective fire-rate cadence; no shot spawns during roll commitment;
+- **And Given** bounce, pierce, and homing modifiers, **Then** wall/enemy counters decrement
+  once per contact, homing turns no faster than its cap, and range expiry still removes
+  every shot.
+
+24. **Pause and restart isolate all simulation state.**
+- **Given** enemies, bullets, fuses, cooldowns, banners, and room transition in progress,
+  **When** paused, **Then** none advance;
+- **And Given** GameOver, **When** a new run starts, **Then** all run/floor/entity/input/
+  accumulator state equals a fresh run for that seed while only `MetaProfile` persists.
 
 ## 15. Stretch Goals
 
@@ -1280,7 +1353,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `MetaProfile` JSON persistence: debounced, atomic temp-file+rename, load on boot (§13, §7.5)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 14 acceptance scenarios green (§14)
+- 🟥 All 24 acceptance scenarios green (§14)
 - 🟥 Procedural generation byte-identical for a seed (§14.1) — AC #1
 - 🟥 Layout independent of combat RNG stream (§14.2) — AC #2
 - 🟥 Shop/treasure/boss contents layout-deterministic & dupe-free (§14.12) — AC #12

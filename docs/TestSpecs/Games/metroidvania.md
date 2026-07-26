@@ -752,6 +752,13 @@ Normal (1.0 / 60), Veteran (1.5 / 40).
   insufficient mana — no-op, no animation.
 
 ## 14. Acceptance Criteria (test scenarios)
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 All scenarios run the deterministic fixed-step sim (seed fixed). "frame" = 1/60 s.
 
 1. **Run acceleration reaches cap.**
@@ -841,6 +848,53 @@ All scenarios run the deterministic fixed-step sim (seed fixed). "frame" = 1/60 
     WHEN 60 frames pass,
     THEN exactly **one** dash fires (on the press edge), not a dash every frame;
     AND a second dash only fires after the **0.35 s** cooldown AND a new press edge.
+
+16. **Wall slide and wall jump.**
+    GIVEN the airborne player is falling against a valid wall while holding toward it,
+    WHEN fixed steps advance, THEN fall speed is clamped to the §4.3 slide speed;
+    AND WHEN Jump is pressed, THEN the player receives the documented up-and-away impulse,
+    detaches from that wall, and cannot immediately re-trigger from the same contact.
+
+17. **Grapple attach, obstruction, and release.**
+    GIVEN Grapple is owned and a valid anchor is in range with a clear cast,
+    WHEN Grapple is pressed, THEN the tether attaches and constrains motion by the §4.5 rules;
+    GIVEN a solid tile blocks the cast or the anchor is out of range, THEN no attachment occurs;
+    AND releasing Grapple removes the constraint while preserving the resulting velocity.
+
+18. **Bolt spends mana and hits once.**
+    GIVEN enough mana and an enemy in the bolt path, WHEN Fire is pressed, THEN exactly one
+    bolt spawns, the documented mana cost is deducted once, and the first valid hit damages the
+    enemy and removes the bolt; with insufficient mana, no bolt or mana change occurs.
+
+19. **Mana regeneration respects its delay and cap.**
+    GIVEN mana below MaxMana immediately after spending it, WHEN fewer than the §4.9 delay
+    frames elapse, THEN mana is unchanged; afterward it regenerates at the configured rate and
+    never exceeds MaxMana. Taking damage or spending mana resets only the documented delay.
+
+20. **Ember upgrade purchase is atomic.**
+    GIVEN the player interacts with a purchasable upgrade while carrying enough Embers,
+    WHEN the purchase resolves, THEN Embers are deducted once and the corresponding permanent
+    stat changes once; with insufficient Embers, neither currency nor stats change.
+
+21. **Hazards and enemy archetypes execute their contracts.**
+    GIVEN each v1 hazard/enemy in the controlled fixture, WHEN its trigger condition occurs,
+    THEN its §5 damage, movement, attack, and cooldown transition occurs; contact persisting
+    across frames cannot bypass player i-frames or create duplicate death rewards.
+
+22. **Room transition preserves world progress.**
+    GIVEN a cleared room with a collected pickup and a defeated non-respawning enemy, WHEN the
+    player exits and later re-enters, THEN the room remains cleared, the pickup and enemy remain
+    absent, the player enters at the matching doorway, and transient projectiles are gone.
+
+23. **Boss defeat opens progression exactly once.**
+    GIVEN the active boss takes lethal damage, WHEN the frame resolves, THEN its death reward
+    and exit/progression gate are created once and the boss no longer attacks; revisiting the room
+    cannot award a second reward.
+
+24. **Pause, map, and restart boundaries.**
+    GIVEN active physics and cooldowns, WHEN Pause or Map mode is entered, THEN simulation state
+    does not advance; GIVEN a confirmed new game, THEN transient world state resets while only
+    explicitly persisted save/profile fields survive.
 
 ## 15. Stretch Goals
 Ranked, out of scope for v1:
@@ -938,7 +992,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `AudioEffect` cues via `update`, `Audio.interpret` → `AudioEvidence`, clamp `[0,1]` (§10)
 - 🟥 Per-zone music loops + boss themes, `Audio.setMasterVolume` mute (§10)
 - 🟥 Difficulty presets scale `enemyDamageMult`/`hitIFrames` (§12)
-- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 All 24 acceptance scenarios green (§14)
 - 🟥 Seed + input-log replay is bit-identical at every frame (§13) — AC #14
 
 ### Stretch — deferred (post-v1)
