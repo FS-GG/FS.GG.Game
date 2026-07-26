@@ -18,6 +18,10 @@ Depends on nothing but `FS.GG.Game.Core` and the BCL — no render/input stack, 
   be driven by the harness.
 - **`Driver`** — the drivers that produce a `Run<'f>`: scripted raw-key → keymap → `Command` input
   folded over whole fixed steps, and an in-process bot policy driving the same `Command` frontier.
+- **`Journey`** — the stronger boot-to-outcome route. A `ProductionJourney` starts from a product's
+  real boot function, drives timestamp-free host events through production mapping/update/tick/effect
+  seams, and emits an opaque, bounded `JourneyReceipt`. Its `Origin.ProductionJourney` provenance is
+  distinct from `Playable`'s simulation/component evidence.
 - **`Workload`** — named expected-workload scripts and a product cost adapter. It keeps Release-only
   timing and bounded work observations separate from the deterministic `Trace`, and renders the
   generated scaffold's performance-evidence shape.

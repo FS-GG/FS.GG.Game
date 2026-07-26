@@ -4,8 +4,8 @@
 /// thing WI-8 must be able to trust before it flips the gameplay gate to block-on-ship: that the whole
 /// per-FR obligation chain is **green on a reference game**, end to end and *non-synthetically*.
 ///
-/// The reference sim is the integer-grid `PongSim` fixture (the "Pong" TestSpec, `docs/TestSpecs/Games/
-/// pong.md`). Each `GameplayFr` below is a gameplay requirement of that game, classified with the
+/// The lower evidence level is the integer-grid `PongSim` fixture (the "Pong" TestSpec,
+/// `docs/TestSpecs/Games/pong.md`). Each `GameplayFr` below is a simulation/component requirement,
 /// `gameplay` facet (the ADR-0048 classifier, made explicit here as data), cross-referenced to the
 /// TestSpec acceptance criteria it covers, and **satisfied by an `Origin.InputDriven` trace** — a world
 /// driven through the real `Command` frontier (raw key -> keymap -> `Command` -> fixed step), never the
@@ -13,17 +13,17 @@
 /// non-synthetic `InputDriven` trace (the chain is green); the other asserts that the *same frames*,
 /// laundered through `Synthetic.trace`, are refused — provenance the gate reads, not the frame values.
 ///
-/// Every scenario's initial world is a constructed `Pong` state ("Given the ball strikes the paddle at
-/// its centre, when ...", exactly as the TestSpec ACs are phrased) driven through `PongSim.step` by the
-/// real driver. Constructing a *starting* state is standard test setup; it is the synthetic hatch —
-/// hand-built *frame sequences* fed to `Synthetic.trace` — that the satisfaction rule forbids, and this
-/// file never uses it to satisfy an FR.
+/// Those constructed Pong states prove helpers and simulation behavior only. The separate
+/// `ProductionJourney` gate below starts from `JourneyTests.boot`, traverses the reference product's
+/// actual raw-event mapping/update/tick/effect seams, and reaches a terminal outcome. Only that
+/// runner-issued receipt is user-facing boot-to-outcome evidence.
 module Game.Harness.Tests.ReferenceProof
 
 open Expecto
 open FS.GG.Game.Core
 open FS.GG.Game.Harness
 open Game.Harness.Tests.PongSim
+open Game.Harness.Tests.JourneyTests
 
 // ---------------------------------------------------------------------------------------------------
 // The classified gameplay-FR manifest: the reference game's requirements, the `gameplay` facet, and
@@ -269,6 +269,13 @@ let tests =
               Expect.isFalse (Trace.isSynthetic real) "the driven proof is non-synthetic"
               Expect.isTrue (Trace.isSynthetic laundered) "the laundered copy is disclosed as synthetic"
               Expect.notEqual (Trace.origin real) (Trace.origin laundered) "provenance is not derived from the frames"
+
+          testCase "gate: the reference obligation chain includes a runner-issued boot-to-outcome production journey"
+          <| fun _ ->
+              let journey = Journey.runScript (productionAdapter true) productionScript
+              Expect.equal (Trace.origin journey.Trace) Origin.ProductionJourney "the stronger evidence level is distinct"
+              Expect.equal (JourneyReceipt.result journey.Receipt) JourneyResult.Passed "boot-to-outcome reaches its terminal predicate"
+              Expect.equal (JourneyReceipt.testId journey.Receipt) "GP-JOURNEY-001" "receipt binds the scenario to its test identity"
 
           testCase "manifest: gameplay-FR coverage is total and every FR names a TestSpec acceptance criterion"
           <| fun _ ->

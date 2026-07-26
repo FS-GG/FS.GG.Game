@@ -1,6 +1,9 @@
 module Playtest.Cli.Tests.CliTests
 
 open System.IO
+open System
+open System.Security.Cryptography
+open System.Text
 open Expecto
 open FS.GG.Playtest
 open FS.GG.Playtest.Manifest
@@ -21,19 +24,49 @@ let private specPath (name: string) = Path.Combine(repoRoot, "docs", "TestSpecs"
 
 // A WI-7-style Pong manifest (the CoversAc mirror ReferenceProof.fs GP-001..GP-010).
 let private wi7Manifest: GameplayFr list =
-    [ { Id = "GP-001"; Facet = "gameplay"; Summary = "replay"; CoversAc = [ 13 ] }
-      { Id = "GP-002"; Facet = "gameplay"; Summary = "keymap route"; CoversAc = [ 2; 3 ] }
-      { Id = "GP-003"; Facet = "gameplay"; Summary = "paddle clamp"; CoversAc = [ 2 ] }
-      { Id = "GP-004"; Facet = "gameplay"; Summary = "ball on field"; CoversAc = [ 4 ] }
-      { Id = "GP-005"; Facet = "gameplay"; Summary = "wall bounce"; CoversAc = [ 4 ] }
-      { Id = "GP-006"; Facet = "gameplay"; Summary = "deflection"; CoversAc = [ 5; 15 ] }
-      { Id = "GP-007"; Facet = "gameplay"; Summary = "no double hit"; CoversAc = [ 8 ] }
-      { Id = "GP-008"; Facet = "gameplay"; Summary = "scoring"; CoversAc = [ 9 ] }
-      { Id = "GP-009"; Facet = "gameplay"; Summary = "serve"; CoversAc = [ 1; 16 ] }
-      { Id = "GP-010"; Facet = "gameplay"; Summary = "match"; CoversAc = [ 10; 13 ] } ]
+    [ { Id = "GP-001"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "replay"; CoversAc = [ 13 ] }
+      { Id = "GP-002"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "keymap route"; CoversAc = [ 2; 3 ] }
+      { Id = "GP-003"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "paddle clamp"; CoversAc = [ 2 ] }
+      { Id = "GP-004"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "ball on field"; CoversAc = [ 4 ] }
+      { Id = "GP-005"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "wall bounce"; CoversAc = [ 4 ] }
+      { Id = "GP-006"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "deflection"; CoversAc = [ 5; 15 ] }
+      { Id = "GP-007"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "no double hit"; CoversAc = [ 8 ] }
+      { Id = "GP-008"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "scoring"; CoversAc = [ 9 ] }
+      { Id = "GP-009"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "serve"; CoversAc = [ 1; 16 ] }
+      { Id = "GP-010"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "match"; CoversAc = [ 10; 13 ] } ]
 
 let private allInputDriven (frs: GameplayFr list) =
     frs |> List.map (fun fr -> fr.Id, InputDriven) |> Map.ofList
+
+let private journeyReceipt testId route =
+    let script = String.replicate 64 "a"
+    let trace = String.replicate 64 "b"
+    let payload =
+        String.concat
+            "\n"
+            [ "production-journey-v1"
+              route
+              "boot-to-terminal"
+              testId
+              script
+              trace
+              "pass"
+              ""
+              "12"
+              "32" ]
+    let integrity =
+        payload
+        |> Encoding.UTF8.GetBytes
+        |> SHA256.HashData
+        |> Convert.ToHexString
+        |> fun s -> s.ToLowerInvariant()
+    sprintf
+        """{"schemaVersion":1,"kind":"production-journey","routeId":"%s","scenarioId":"boot-to-terminal","testId":"%s","scriptDigest":"sha256:%s","traceDigest":"sha256:%s","result":"pass","failure":"","steps":12,"maxSteps":32,"integrity":"sha256:%s"}"""
+        route
+        testId
+        script
+        trace
+        integrity
 
 [<Tests>]
 let tests =
@@ -117,6 +150,55 @@ let tests =
           testCase "FR-006 a spec with no section-14 yields no ACs (an error at the CLI edge)"
           <| fun _ ->
               Expect.isEmpty (TestSpec.parseSection14 "# A doc with no section 14\n\nnothing here") "no ACs parsed"
+
+          testCase "production-journey coverage accepts only a validated runner receipt"
+          <| fun _ ->
+              let required =
+                  [ { Id = "GP-001"
+                      Facet = "gameplay"
+                      RequiredEvidence = EvidenceLevel.ProductionJourney
+                      Summary = "boot to outcome"
+                      CoversAc = [ 1 ] } ]
+
+              Expect.isFalse
+                  (Coverage.lint required (Map [ "GP-001", InputDriven ]) None |> Coverage.passed)
+                  "a simulation/component trace cannot satisfy a user-facing journey"
+
+              match Proofs.parse "GP-001 productionJourney" with
+              | Error _ -> ()
+              | Ok _ -> failtest "a hand-authored productionJourney token must be refused"
+
+              match Proofs.parseJourneyReceipts (journeyReceipt "GP-001" "game/production-root") with
+              | Error e -> failtestf "runner receipt must validate: %s" e
+              | Ok proofs ->
+                  Expect.isTrue (Coverage.lint required proofs None |> Coverage.passed) "validated receipt satisfies"
+
+          testCase "forged or stale production-journey receipts fail closed"
+          <| fun _ ->
+              let forged =
+                  journeyReceipt "GP-001" "game/production-root"
+                  |> fun json -> json.Replace("game/production-root", "test-only/adapter")
+
+              match Proofs.parseJourneyReceipts forged with
+              | Error e -> Expect.stringContains e "forged or stale" "integrity mismatch is actionable"
+              | Ok _ -> failtest "a modified receipt must not validate"
+
+          testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
+          <| fun _ ->
+              let critic =
+                  "AC-001 | supported | checkpoints=0,6,11 | terminal=Screen=Won | route=JourneyTests.productionAdapter | reason=observed"
+              Expect.stringContains critic "| supported |" "the independent assessment may support the behavior"
+
+              let required =
+                  [ { Id = "GP-001"
+                      Facet = "gameplay"
+                      RequiredEvidence = EvidenceLevel.ProductionJourney
+                      Summary = "boot to outcome"
+                      CoversAc = [ 1 ] } ]
+
+              Expect.isFalse
+                  (Coverage.lint required Map.empty None |> Coverage.passed)
+                  "without a validated runner receipt, critic support cannot turn the gate green"
 
           testCase "FR-002/006 tryParse fails closed on a malformed manifest line, parse stays lenient"
           <| fun _ ->

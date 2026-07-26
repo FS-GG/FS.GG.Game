@@ -61,8 +61,10 @@
          fs-gg-{audio,game-core,model-swap,persistence} flipped mirrored:true → false, so they now
          satisfy the derive predicate and grow the packed set by four (ADR-0063 owner-sourced delivery).
          0.4.0 (minor/additive, FS.GG.Game#505): four packaged product skills gain the expected-workload
-         and performance guidance merged in #488; the content-addressed manifest advances with them. -->
-    <Version>0.4.0</Version>
+         and performance guidance merged in #488; the content-addressed manifest advances with them.
+         0.5.0 (minor/additive, FS.GG.Game#507): fs-gg-playtest distinguishes simulation proofs from
+         runner-issued, critic-reviewed production journeys. -->
+    <Version>0.5.0</Version>
 
     <Description>FS.GG.Game's owner-authored mirrored:false product skill bytes (e.g. fs-gg-playtest, fs-gg-ai) as one versioned artifact, with template/skill-manifest/skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the skills into a scaffold's skill roots at scaffold time (ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <PackageTags>fsgg;game;skills;product;scaffold;dotnet</PackageTags>

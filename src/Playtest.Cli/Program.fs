@@ -23,6 +23,23 @@ let private flag (name: string) (argv: string[]) : string option =
     |> Array.tryFindIndex (fun a -> a = name)
     |> Option.bind (fun i -> if i + 1 < argv.Length then Some argv.[i + 1] else None)
 
+let private parseProofInputs (argv: string[]) (proofText: string) =
+    match Proofs.parse proofText with
+    | Error e -> Error e
+    | Ok simulation ->
+        match flag "--journey-receipts" argv with
+        | None -> Ok simulation
+        | Some path ->
+            match readFile path with
+            | Error e -> Error e
+            | Ok text ->
+                match Proofs.parseJourneyReceipts text with
+                | Error e -> Error e
+                | Ok journeys ->
+                    journeys
+                    |> Map.fold (fun combined key value -> Map.add key value combined) simulation
+                    |> Ok
+
 let private scaffoldManifest (argv: string[]) : int =
     match flag "--spec" argv with
     | None ->
@@ -68,7 +85,7 @@ let private coverageLint (argv: string[]) : int =
                 eprintfn "coverage-lint: manifest %s parsed no GP records" mPath
                 1
             | Ok manifest ->
-                match Proofs.parse pText with
+                match parseProofInputs argv pText with
                 | Error e ->
                     eprintfn "coverage-lint: %s" e
                     1
@@ -93,10 +110,10 @@ let private coverageLint (argv: string[]) : int =
                         printfn "advisory: spec §14 ACs not cited by any GP (completeness gap): %A" report.SpecGap
 
                     if Coverage.passed report then
-                        printfn "coverage-lint: PASS — every cited AC has an InputDriven proof"
+                        printfn "coverage-lint: PASS — every cited AC has its required evidence level"
                         0
                     else
-                        eprintfn "coverage-lint: FAIL — cited AC(s) without an InputDriven proof: %A" report.UncoveredAcs
+                        eprintfn "coverage-lint: FAIL — cited AC(s) without their required evidence level: %A" report.UncoveredAcs
                         1
     | _ ->
         eprintfn "coverage-lint: --manifest <m> and --proofs <p> required"
@@ -121,7 +138,7 @@ let private emitEvidence (argv: string[]) : int =
                 eprintfn "emit-evidence: manifest %s parsed no GP records" mPath
                 1
             | Ok manifest ->
-                match Proofs.parse pText, Trx.parse tText tBytes with
+                match parseProofInputs argv pText, Trx.parse tText tBytes with
                 | Error e, _ ->
                     eprintfn "emit-evidence: %s" e
                     1

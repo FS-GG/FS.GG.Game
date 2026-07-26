@@ -22,6 +22,7 @@
     <Compile Include="PropertiesTests.fs" />
     <Compile Include="BotCombinatorsTests.fs" />
     <Compile Include="DependencyTests.fs" />
+    <Compile Include="JourneyTests.fs" />
     <Compile Include="ReferenceProof.fs" />
     <Compile Include="VisibilityPolygonTests.fs" />
     <Compile Include="Program.fs" />

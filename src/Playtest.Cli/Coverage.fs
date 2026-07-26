@@ -21,12 +21,18 @@ let lint (manifest: GameplayFr list) (proofs: Map<string, Provenance>) (specAcs:
     let provenanceOf (gp: string) =
         proofs |> Map.tryFind gp |> Option.defaultValue Missing
 
+    let satisfies fr =
+        match fr.RequiredEvidence, provenanceOf fr.Id with
+        | EvidenceLevel.SimulationInput, (InputDriven | ProductionJourney) -> true
+        | EvidenceLevel.ProductionJourney, ProductionJourney -> true
+        | _ -> false
+
     let cited =
         manifest |> List.collect (fun fr -> fr.CoversAc) |> List.distinct |> List.sort
 
     let coveredSet =
         manifest
-        |> List.filter (fun fr -> provenanceOf fr.Id = InputDriven)
+        |> List.filter satisfies
         |> List.collect (fun fr -> fr.CoversAc)
         |> Set.ofList
 

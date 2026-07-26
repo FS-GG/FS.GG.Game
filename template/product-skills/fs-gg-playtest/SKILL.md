@@ -1,23 +1,63 @@
 ---
 name: fs-gg-playtest
-description: Prove a gameplay requirement headlessly — drive the world through the real Command frontier with FS.GG.Game.Harness, fingerprint the trace as a value, and keep synthetic shortcuts honestly labeled.
+description: Prove gameplay headlessly at the right evidence level — use fast Playable simulation proofs for components and runner-issued production journeys for user-facing boot-to-outcome claims.
 ---
 
 # Headless Playtest (Gameplay Evidence) Capability
 
 ## Scope
 
-Use this skill to **prove a gameplay requirement with a test** — the non-synthetic, replayable kind an
-FR-level gate accepts. `FS.GG.Game.Harness` drives your world headlessly through the **standard
-`Command` input frontier** (raw key → keymap → `Command` → fixed step), folds whole fixed steps, and
-fingerprints the resulting world **as a value**, so a replay is a comparison, not a tolerance check. It
-gives you a scripted driver, an in-process `Bot` policy, a multi-seed bot-vs-bot matrix, and a **typed**
-synthetic-state escape hatch whose cost is visible.
+Use this skill to prove a gameplay requirement with evidence at the right boundary.
+`Playable`/`Driver` remains the fast simulation/component route for laws, balance, properties,
+workloads, witness search, and helper correctness. A user-facing start, control, progression, or
+terminal-outcome claim instead requires a `ProductionJourney`: boot the shipped composition root and
+drive timestamp-free host events through its real mapping, dispatch, update, fixed-tick, and
+deterministic effect-result seams.
 
 This is the test-time companion to the simulation half ([[fs-gg-game:fs-gg-game-core]]): that skill
 teaches how the world *steps*; this one teaches how you *prove it plays correctly*. It materializes for
 the `game` and `sample-pack` profiles. The harness reaches up to nothing beyond `FS.GG.Game.Core` and
 the BCL — it performs no I/O and reads no wall clock, which is what lets its evidence be deterministic.
+
+## Evidence boundary: component versus production journey
+
+Direct helper calls, a `Playable` with an overwritten `Init`, and command-level traces are valuable
+`simulation-input` evidence. They do not prove that a player can boot or reach that state. Never
+describe them as complete end-to-end acceptance evidence.
+
+For `production-journey` coverage:
+
+1. Build `ProductionJourney<...>` beside the product composition root. `Boot` must be the shipped
+   boot/init function; `MapEvent`, `Update`, `FixedTick`, and `ApplyEffectResult` must reference the
+   production functions rather than test adapters.
+2. Drive `JourneyEvent.Start`, menu actions, key up/down, pointer/aim, `Interact`, pause/resume,
+   `FixedTick`, and declared deterministic `EffectResult` values as the scenario needs.
+3. Set a positive `MaxSteps` and a terminal predicate. Exhaustion is a failed receipt containing the
+   final-fingerprint and captured-input digests.
+4. Replay a scripted or seeded-policy capture and compare `Trace.frames`. Only `Journey.runScript`
+   and `Journey.runPolicy` produce `Origin.ProductionJourney` and an opaque `JourneyReceipt`.
+5. Write `JourneyReceipt.render receipt` as JSONL and pass it to `fsgg-playtest` with
+   `--journey-receipts`. The manifest row must say `requires=production-journey`. A hand-authored
+   `productionJourney` token, a simulation trace, a stale/modified receipt, or a green TRX without
+   the matching receipt fails closed.
+
+An unbound displayed action must return `JourneyDispatch.Unbound "Action name"`. The runner then
+reports the production wiring gap instead of silently treating the event as a no-op.
+
+## Independent acceptance critic
+
+After the deterministic journey is green, run a fresh-context critic. Use a separate subagent when
+available; otherwise perform a clearly separated review pass without relying on the implementer's
+claim summary. Emit one structured row per requirement/AC:
+
+```text
+AC-### | supported|unsupported|ambiguous | checkpoints=<indices> |
+terminal=<predicate> | route=<production evidence locations> | reason=<short finding>
+```
+
+Unsupported or ambiguous required behavior prevents completion. The critic may veto or ask for
+stronger evidence, but cannot create or upgrade provenance: deleting or mismatching the runner
+receipt must still fail mechanically even if every critic row says `supported`.
 
 ## Public Contract
 
@@ -27,6 +67,8 @@ The signatures you consume are bundled with this product under `docs/api-surface
   is the value you assert on; `Trace.isSynthetic` is the provenance bit a gate reads.
 - `Playable.fsi` — `Playable<'world,'key>` (init, keymap, apply, step, dt) and the `Bot<'view>` policy.
 - `Driver.fsi` — `runScript` (raw key → keymap → `Command`), `runCommands`, and `runBot` with capture.
+- `Journey.fsi` — production host events, composition adapter, scripted/seeded runners, opaque
+  receipt, bounded failure, and production-journey provenance.
 - `Matrix.fsi` — `Seat`, `MatchSetup`, `Match`, `runMatrix`, and `winRate`.
 - `Synthetic.fsi` — the labeled fallback entry point.
 
@@ -188,7 +230,8 @@ read as *disclosed, not satisfied*.
 
 ## Prove the expected frame workload, not only the simulation frequency
 
-A fixed 60 Hz `Playable` proves deterministic simulation cadence. It does **not** prove that input,
+A fixed 60 Hz `Playable` or bounded production journey proves deterministic simulation cadence. It
+does **not** prove that input,
 AI/perception/pathfinding, presentation projection, and scene construction fit inside a 60 FPS frame.
 Define all five `ExpectedWorkload` kinds: idle, movement+aiming, combat+effects, maximum
 visibility/fog, and maximum expected actors. Drive them through `Workload.run` with real raw-key
@@ -223,7 +266,8 @@ dotnet test --filter "FullyQualifiedName~Playtest"   # just the headless gamepla
 ```
 
 Record the run as an `observedRun` receipt (a TRX/JUnit report) so the per-FR gate reads a run that
-actually happened, not a self-attested pass.
+actually happened, not a self-attested pass. Production rows additionally require runner receipt
+JSONL bound to the matching test identity.
 
 ## Common pitfalls
 
@@ -236,6 +280,12 @@ actually happened, not a self-attested pass.
   the real input instead, or accept the obligation as unmet.
 - **A bot view that is the whole world.** Instantiating `'view = 'world` technically compiles, but it
   throws away the point of the boundary — project the view down to what the policy legitimately sees.
+- **Calling a helper directly or replacing `Playable.Init` for a user-facing AC.** That proves a
+  component only. Add a production journey starting from boot.
+- **Silently dropping a displayed action.** Return `JourneyDispatch.Unbound`; an empty mapped message
+  list is reserved for a deliberately handled no-op.
+- **Treating the acceptance critic as an oracle.** It can veto weak coverage, but only the runner can
+  issue production-journey provenance.
 
 ## Generated Product
 
