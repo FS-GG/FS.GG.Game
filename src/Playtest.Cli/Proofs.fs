@@ -13,6 +13,12 @@ type Provenance =
     | Synthetic
     | Missing
 
+/// An opaque receipt which has crossed every in-process production-journey validation gate. The
+/// receipt remains non-constructible; this wrapper only carries it to the evidence serializer.
+type ValidatedJourneyProof =
+    { Provenance: Provenance
+      Receipt: JourneyReceipt }
+
 /// Parse a provenance token (case-insensitive), or `None` when unrecognized.
 let parseProvenance (s: string) : Provenance option =
     match s.Trim().ToLowerInvariant() with
@@ -54,7 +60,7 @@ let parse (text: string) : Result<Map<string, Provenance>, string> =
 /// Load and execute every public `IProductionJourneyProof` in an assembly. Production provenance is
 /// obtained only from the opaque in-memory receipt returned by `Journey.runScript`/`runPolicy`; no
 /// JSON, key, checksum, or caller-authored provenance text is accepted.
-let loadJourneyProofs (assemblyPath: string) : Result<Map<string, Provenance>, string> =
+let loadJourneyReceipts (assemblyPath: string) : Result<Map<string, ValidatedJourneyProof>, string> =
     try
         let proofType = typeof<IProductionJourneyProof>
         let assembly = Assembly.LoadFrom assemblyPath
@@ -84,14 +90,48 @@ let loadJourneyProofs (assemblyPath: string) : Result<Map<string, Provenance>, s
 
                             if String.IsNullOrWhiteSpace proof.TestId || proof.TestId <> testId then
                                 Error(sprintf "%s returned a receipt for mismatched test identity '%s'" implementation.FullName testId)
+                            elif JourneyReceipt.schemaVersion receipt <> 1 then
+                                Error(
+                                    sprintf
+                                        "production journey proof %s returned unsupported receipt schema version %d"
+                                        testId
+                                        (JourneyReceipt.schemaVersion receipt)
+                                )
+                            elif JourneyReceipt.origin receipt <> Origin.ProductionJourney then
+                                Error(sprintf "production journey proof %s has a non-production origin" testId)
+                            elif String.IsNullOrWhiteSpace(JourneyReceipt.runnerIdentity receipt)
+                                 || String.IsNullOrWhiteSpace(JourneyReceipt.runnerVersion receipt) then
+                                Error(sprintf "production journey proof %s has no runner identity/version" testId)
                             elif JourneyReceipt.result receipt <> JourneyResult.Passed then
                                 Error(sprintf "production journey proof %s did not pass" testId)
+                            elif not (JourneyReceipt.terminalPredicateReached receipt) then
+                                Error(sprintf "production journey proof %s did not reach its terminal predicate" testId)
                             elif JourneyReceipt.steps receipt > JourneyReceipt.maxSteps receipt then
                                 Error(sprintf "production journey proof %s violates its declared step bound" testId)
+                            elif
+                                [ JourneyReceipt.inputDigest receipt
+                                  JourneyReceipt.scriptDigest receipt
+                                  JourneyReceipt.traceDigest receipt
+                                  JourneyReceipt.initialFingerprintDigest receipt
+                                  JourneyReceipt.terminalFingerprintDigest receipt ]
+                                |> List.exists String.IsNullOrWhiteSpace
+                            then
+                                Error(sprintf "production journey proof %s has an incomplete digest binding" testId)
                             elif Map.containsKey testId proofs then
                                 Error(sprintf "duplicate production journey proof for %s" testId)
                             else
-                                Ok(Map.add testId ProductionJourney proofs))
+                                Ok(
+                                    Map.add
+                                        testId
+                                        { Provenance = ProductionJourney
+                                          Receipt = receipt }
+                                        proofs
+                                ))
                 (Ok Map.empty)
     with ex ->
         Error(sprintf "cannot execute production journey proof assembly %s: %s" assemblyPath ex.Message)
+
+/// Compatibility projection used by coverage-only callers which do not need the serialized receipt.
+let loadJourneyProofs (assemblyPath: string) : Result<Map<string, Provenance>, string> =
+    loadJourneyReceipts assemblyPath
+    |> Result.map (Map.map (fun _ proof -> proof.Provenance))

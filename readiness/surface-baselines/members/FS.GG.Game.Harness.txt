@@ -49,14 +49,25 @@ FS.GG.Game.Harness.JourneyEvent`4+Tags.Pause : System.Int32
 FS.GG.Game.Harness.JourneyEvent`4+Tags.PointerInput : System.Int32
 FS.GG.Game.Harness.JourneyEvent`4+Tags.Resume : System.Int32
 FS.GG.Game.Harness.JourneyEvent`4+Tags.Start : System.Int32
+FS.GG.Game.Harness.JourneyInputKind+Tags.FixedScript : System.Int32
+FS.GG.Game.Harness.JourneyInputKind+Tags.SeededPolicy : System.Int32
 FS.GG.Game.Harness.JourneyPolicy`2.DecideEvents : FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>> [get]
 FS.GG.Game.Harness.JourneyPolicy`2.new(FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>>)
+FS.GG.Game.Harness.JourneyReceipt.initialFingerprintDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.inputDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.inputKind(FS.GG.Game.Harness.JourneyReceipt) : FS.GG.Game.Harness.JourneyInputKind
 FS.GG.Game.Harness.JourneyReceipt.maxSteps(FS.GG.Game.Harness.JourneyReceipt) : System.Int32
+FS.GG.Game.Harness.JourneyReceipt.origin(FS.GG.Game.Harness.JourneyReceipt) : FS.GG.Game.Harness.Origin
 FS.GG.Game.Harness.JourneyReceipt.result(FS.GG.Game.Harness.JourneyReceipt) : FS.GG.Game.Harness.JourneyResult
 FS.GG.Game.Harness.JourneyReceipt.routeId(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.runnerIdentity(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.runnerVersion(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.scenarioId(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.schemaVersion(FS.GG.Game.Harness.JourneyReceipt) : System.Int32
 FS.GG.Game.Harness.JourneyReceipt.scriptDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.steps(FS.GG.Game.Harness.JourneyReceipt) : System.Int32
+FS.GG.Game.Harness.JourneyReceipt.terminalFingerprintDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.terminalPredicateReached(FS.GG.Game.Harness.JourneyReceipt) : System.Boolean
 FS.GG.Game.Harness.JourneyReceipt.testId(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.traceDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyResult+Tags.Failed : System.Int32

@@ -5,6 +5,10 @@ module FS.GG.Playtest.Program
 open System.IO
 open FS.GG.Playtest
 
+type private ProofInputs =
+    { Provenance: Map<string, Proofs.Provenance>
+      Journeys: Map<string, Proofs.ValidatedJourneyProof> }
+
 let private readFile (path: string) : Result<string, string> =
     try
         Ok(File.ReadAllText path)
@@ -33,21 +37,30 @@ let private parseProofInputs (argv: string[]) (manifest: Manifest.GameplayFr lis
                 requirement.RequiredEvidence = Manifest.EvidenceLevel.ProductionJourney)
 
         match flag "--journey-proof-assembly" argv, flag "--critic" argv with
-        | None, None when not productionRequired -> Ok simulation
+        | None, None when not productionRequired ->
+            Ok
+                { Provenance = simulation
+                  Journeys = Map.empty }
         | Some assemblyPath, Some criticPath ->
             match readFile criticPath with
             | Error e -> Error e
             | Ok criticText ->
-                match Proofs.loadJourneyProofs assemblyPath, Critic.parse criticText with
+                match Proofs.loadJourneyReceipts assemblyPath, Critic.parse criticText with
                 | Error e, _
                 | _, Error e -> Error e
                 | Ok journeys, Ok criticRows ->
                     match Critic.validate manifest criticRows with
                     | Error e -> Error e
                     | Ok () ->
-                        journeys
-                        |> Map.fold (fun combined key value -> Map.add key value combined) simulation
-                        |> Ok
+                        let provenance =
+                            journeys
+                            |> Map.fold
+                                (fun combined key value -> Map.add key value.Provenance combined)
+                                simulation
+
+                        Ok
+                            { Provenance = provenance
+                              Journeys = journeys }
         | _ when productionRequired ->
             Error "production-journey coverage requires --journey-proof-assembly and --critic"
         | _ ->
@@ -102,7 +115,7 @@ let private coverageLint (argv: string[]) : int =
                 | Error e ->
                     eprintfn "coverage-lint: %s" e
                     1
-                | Ok proofs ->
+                | Ok inputs ->
                     let specAcs =
                         match flag "--spec" argv with
                         | Some s ->
@@ -111,7 +124,7 @@ let private coverageLint (argv: string[]) : int =
                             | Error _ -> None
                         | None -> None
 
-                    let report = Coverage.lint manifest proofs specAcs
+                    let report = Coverage.lint manifest inputs.Provenance specAcs
 
                     printfn
                         "cited ACs: %d; covered: %d; uncovered: %d"
@@ -158,19 +171,24 @@ let private emitEvidence (argv: string[]) : int =
                 | _, Error e ->
                     eprintfn "emit-evidence: %s" e
                     1
-                | Ok proofs, Ok run ->
-                    let rows = Evidence.rows run proofs manifest
-                    let rendered = Evidence.render tPath run rows
+                | Ok inputs, Ok run ->
+                    match JourneyReceiptExport.bind tPath run inputs.Journeys with
+                    | Error e ->
+                        eprintfn "emit-evidence: %s" e
+                        1
+                    | Ok journeys ->
+                        let rows = Evidence.rows run inputs.Provenance manifest
+                        let rendered = Evidence.renderWithJourneyReceipts tPath run journeys rows
 
-                    match flag "--out" argv with
-                    | Some out ->
-                        File.WriteAllText(out, rendered)
-                        let satisfying = rows |> List.filter (fun r -> r.Result = "pass" && not r.Synthetic) |> List.length
-                        printfn "wrote %d evidence row(s) to %s (%d satisfying)" (List.length rows) out satisfying
-                        0
-                    | None ->
-                        printf "%s" rendered
-                        0
+                        match flag "--out" argv with
+                        | Some out ->
+                            File.WriteAllText(out, rendered)
+                            let satisfying = rows |> List.filter (fun r -> r.Result = "pass" && not r.Synthetic) |> List.length
+                            printfn "wrote %d evidence row(s) to %s (%d satisfying)" (List.length rows) out satisfying
+                            0
+                        | None ->
+                            printf "%s" rendered
+                            0
     | _ ->
         eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --critic <assessment>"
         2

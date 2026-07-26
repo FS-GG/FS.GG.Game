@@ -23,6 +23,8 @@ Depends on nothing but `FS.GG.Game.Core` and the BCL — no render/input stack, 
   seams, and emits an opaque, bounded `JourneyReceipt`. Its `Origin.ProductionJourney` provenance is
   distinct from `Playable`'s simulation/component evidence. `fsgg-playtest` obtains the receipt only
   by executing an `IProductionJourneyProof` and never accepts a caller-authored receipt file.
+  `emit-evidence` serializes the validated receipt as a versioned `journeyReceipt` map bound to one
+  exact passing test and the SHA-256 digest of its observed TRX report.
 - **`Workload`** — named expected-workload scripts and a product cost adapter. It keeps Release-only
   timing and bounded work observations separate from the deterministic `Trace`, and renders the
   generated scaffold's performance-evidence shape.

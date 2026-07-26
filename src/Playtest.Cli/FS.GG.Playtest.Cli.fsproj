@@ -18,6 +18,7 @@
     <Compile Include="Proofs.fs" />
     <Compile Include="Coverage.fs" />
     <Compile Include="Trx.fs" />
+    <Compile Include="JourneyReceiptExport.fs" />
     <Compile Include="Evidence.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

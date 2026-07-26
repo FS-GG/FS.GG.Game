@@ -241,6 +241,60 @@ let tests =
               finally
                   Directory.Delete(directory, true)
 
+          testCase "emit-evidence exports the opaque journey receipt bound to the exact TRX bytes"
+          <| fun _ ->
+              let directory = Path.Combine(Path.GetTempPath(), "fsgg-playtest-export-" + Guid.NewGuid().ToString("N"))
+              Directory.CreateDirectory directory |> ignore
+
+              try
+                  let manifestPath = Path.Combine(directory, "manifest.txt")
+                  let proofsPath = Path.Combine(directory, "proofs.txt")
+                  let criticPath = Path.Combine(directory, "critic.txt")
+                  let trxPath = Path.Combine(directory, "journey.trx")
+                  let outputPath = Path.Combine(directory, "evidence.yml")
+                  let manifest =
+                      [ { Id = "GP-JOURNEY-001"
+                          Facet = "gameplay"
+                          RequiredEvidence = EvidenceLevel.ProductionJourney
+                          Summary = "boot to outcome"
+                          CoversAc = [ 1 ] } ]
+                  let trx =
+                      """<?xml version="1.0"?>
+<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <ResultSummary><Counters passed="1" failed="0" /></ResultSummary>
+  <Results><UnitTestResult testName="gate GP-JOURNEY-001 production journey" outcome="Passed" /></Results>
+</TestRun>"""
+
+                  File.WriteAllText(manifestPath, Manifest.render manifest)
+                  File.WriteAllText(proofsPath, "")
+                  File.WriteAllText(
+                      criticPath,
+                      "AC-001 | supported | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed"
+                  )
+                  File.WriteAllText(trxPath, trx)
+
+                  let exitCode =
+                      FS.GG.Playtest.Program.main
+                          [| "emit-evidence"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             "--trx"; trxPath
+                             "--journey-proof-assembly"; journeyProofAssembly
+                             "--critic"; criticPath
+                             "--out"; outputPath |]
+
+                  Expect.equal exitCode 0 "the validated receipt/report pair emits evidence"
+                  let output = File.ReadAllText outputPath
+                  Expect.stringContains output "journeyReceipt:" "the typed receipt is embedded"
+                  Expect.stringContains output "schemaVersion: 1" "the receipt schema is versioned"
+                  Expect.stringContains output "testId: \"GP-JOURNEY-001\"" "the proof identity is bound"
+                  Expect.stringContains
+                      output
+                      (sprintf "digest: \"sha256:%s\"" (Trx.digest (File.ReadAllBytes trxPath)))
+                      "the receipt is bound to the exact TRX bytes"
+              finally
+                  Directory.Delete(directory, true)
+
           testCase "FR-002/006 tryParse fails closed on a malformed manifest line, parse stays lenient"
           <| fun _ ->
               let broken = "GP-001 | gameplay | covers=1 | ok\nthis line is broken\n"

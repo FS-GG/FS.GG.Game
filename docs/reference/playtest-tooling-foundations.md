@@ -94,3 +94,33 @@ executable proof's opaque in-memory receipt and matching TRX identity; JSON, cal
 hand-authored provenance text cannot upgrade a trace. Script and trace digests length-frame every encoded value, so an embedded
 newline cannot collide with an event boundary. A complete critic artifact is also mandatory for
 production rows; missing, mismatched, unsupported, or ambiguous AC rows veto completion.
+
+### Serialized journey receipt schema v1
+
+`fsgg-playtest emit-evidence` embeds a `journeyReceipt` map only after it has loaded an
+`IProductionJourneyProof`, executed it in-process, validated the opaque receipt, and found exactly one
+matching passing test in the supplied TRX. The CLI has no receipt-file or provenance-token input.
+Consequently caller-authored JSON/YAML, a `Playable` trace, or a constructed mid-game state cannot
+acquire runner-issued disposition by copying these fields.
+
+Schema v1 contains:
+
+| Field | Binding |
+| --- | --- |
+| `schemaVersion` | integer `1`; consumers fail closed on every other value |
+| `runner.identity`, `runner.version` | `FS.GG.Game.Harness.Journey` and the issuing assembly version |
+| `origin` | literal `production-journey`; every other value is non-satisfying |
+| `routeId`, `scenarioId`, `testId` | producer route, scenario, and exact proof-test identity |
+| `input.kind`, `input.digest` | `fixed-script` or `seeded-policy` and its SHA-256 definition binding |
+| `replayDigest`, `traceDigest` | captured event replay and emitted fingerprint-trace SHA-256 digests |
+| `initialFingerprint`, `terminalFingerprint` | SHA-256 identities of boot and terminal lifecycle states |
+| `terminalPredicate.reached`, `outcome` | terminal predicate result and runner outcome |
+| `maximumSteps`, `actualSteps` | declared bound and consumed event count |
+| `observedTestReport` | source, byte-exact SHA-256 digest, exact test name, and passing outcome |
+
+All digests render as `sha256:<lowercase-hex>`. SDD/lifecycle consumers must reject a missing field,
+unknown schema, non-production origin, non-passing or unreached terminal outcome, `actualSteps` beyond
+`maximumSteps`, an unexpected route/scenario/test identity, any digest mismatch, a stale or
+non-matching report, or more than one report test matching `testId`. They must never treat the map's
+presence alone as authenticity: provenance is issued by this executable runner route and the map is
+the transport binding for that already-validated receipt.

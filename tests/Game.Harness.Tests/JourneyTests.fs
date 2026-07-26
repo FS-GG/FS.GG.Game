@@ -18,6 +18,23 @@ let tests =
               let frames = Trace.frames run.Trace
 
               Expect.equal (Trace.origin run.Trace) Origin.ProductionJourney "journey provenance is runner-issued"
+              Expect.equal (JourneyReceipt.schemaVersion run.Receipt) 1 "the serialized contract is versioned"
+              Expect.equal
+                  (JourneyReceipt.runnerIdentity run.Receipt)
+                  "FS.GG.Game.Harness.Journey"
+                  "the issuing runner is named"
+              Expect.equal (JourneyReceipt.origin run.Receipt) Origin.ProductionJourney "the receipt carries the production origin"
+              Expect.equal (JourneyReceipt.inputKind run.Receipt) JourneyInputKind.FixedScript "the fixed script route is explicit"
+              Expect.isFalse
+                  (System.String.IsNullOrWhiteSpace(JourneyReceipt.runnerVersion run.Receipt))
+                  "the issuing runner version is present"
+              Expect.notEqual
+                  (JourneyReceipt.initialFingerprintDigest run.Receipt)
+                  (JourneyReceipt.terminalFingerprintDigest run.Receipt)
+                  "boot and terminal fingerprints identify different lifecycle states"
+              Expect.isTrue
+                  (JourneyReceipt.terminalPredicateReached run.Receipt)
+                  "the receipt records the terminal predicate outcome"
               Expect.equal (JourneyReceipt.result run.Receipt) JourneyResult.Passed "the bounded journey reaches its terminal predicate"
               Expect.equal frames.[0].Screen Composition.Screen.Playing "the real start action leaves the boot menu"
               Expect.equal frames.[1].Screen Composition.Screen.Paused "pause is routed through production mapping"
@@ -43,6 +60,14 @@ let tests =
 
               let generated = Journey.runPolicy productionAdapter policy 73UL
               let replay = Journey.runScript productionAdapter generated.Captured
+              Expect.equal
+                  (JourneyReceipt.inputKind generated.Receipt)
+                  JourneyInputKind.SeededPolicy
+                  "a seeded policy is distinct from its fixed-script replay"
+              Expect.notEqual
+                  (JourneyReceipt.inputDigest generated.Receipt)
+                  (JourneyReceipt.inputDigest replay.Receipt)
+                  "the seeded-policy definition binding cannot collapse to a caller-authored fixed script"
               Expect.isTrue (Trace.equalFrames generated.Trace replay.Trace) "captured events replay byte-identically"
               Expect.equal
                   (JourneyReceipt.scriptDigest generated.Receipt)
@@ -110,4 +135,18 @@ let tests =
               Expect.notEqual
                   (JourneyReceipt.scriptDigest one.Receipt)
                   (JourneyReceipt.scriptDigest two.Receipt)
-                  "one encoded value containing a newline is not the same capture as two values" ]
+                  "one encoded value containing a newline is not the same capture as two values"
+
+          testCase "byte-divergent replay fingerprints produce a different trace binding"
+          <| fun _ ->
+              let original = Journey.runScript productionAdapter productionScript
+              let divergent =
+                  Journey.runScript
+                      { productionAdapter with
+                          EncodeFingerprint = fun fingerprint -> "divergent:" + sprintf "%A" fingerprint }
+                      productionScript
+
+              Expect.notEqual
+                  (JourneyReceipt.traceDigest original.Receipt)
+                  (JourneyReceipt.traceDigest divergent.Receipt)
+                  "serialized trace provenance is bound to the exact encoded replay bytes" ]
