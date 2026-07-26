@@ -1057,7 +1057,7 @@ let stepTests =
           // (Physics.fs), whose libm differs between glibc and ucrt, so this literal is pinned to the
           // Linux runner ONLY — the cross-platform claim it would otherwise assert is the one this very
           // contract disclaims (a cross-platform lockstep guarantee needs fixed-point; see below).
-          test "the checksum is stable across the process, not just the run (linux-pinned-float-golden)" {
+          test "hotspot decomposition baseline (#492): the checksum is stable across the process (linux-pinned-float-golden)" {
               // Golden values. They are FNV-1a over the IEEE-754 bits of Pos/Vel/Rot/AngVel, so they are
               // reproducible on any runtime that agrees on IEEE-754 double arithmetic — which is what
               // `.NET` guarantees on a fixed compiler and ISA. A cross-platform lockstep guarantee needs

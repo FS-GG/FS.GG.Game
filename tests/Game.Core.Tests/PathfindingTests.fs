@@ -868,7 +868,7 @@ let jpsTests =
             Expect.isTrue (a |> Option.get |> validPathNoCut walk { Col = 0; Row = 0 } { Col = 1; Row = 1 }) "and it is a valid path"
         }
 
-        test "FR-006: jps reaches the goal on a budget that starves astar (fewer frontier pops)" {
+        test "FR-006: hotspot decomposition baseline (#492): jps reaches the goal on a budget that starves astar" {
             // A 20×20 OPEN grid, corner to corner, FourWay. astar's Manhattan heuristic is exact here,
             // so every cell on the triangle of equal-cost staircases shares one f-value and astar pops
             // hundreds of them before the goal's tie-break turn comes up. jps collapses each open run

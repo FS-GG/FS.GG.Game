@@ -37,150 +37,156 @@ module Pathfinding =
         elif scaled < int64 System.Int32.MinValue then System.Int32.MinValue
         else int scaled
 
-    // Fixed step offsets. The enumeration order does not affect A* output (the total (f,h,Col,Row)
-    // frontier order decides), and for BFS it is a deterministic, documented order.
-    let private orthoOffsets = [ (0, -1); (0, 1); (-1, 0); (1, 0) ]
-    let private diagOffsets = [ (-1, -1); (1, -1); (-1, 1); (1, 1) ]
+    // Shared frontier ordering, neighbour expansion and reconstruction form the private search kernel.
+    // The public Pathfinding module remains the stable facade declared by Pathfinding.fsi.
+    module private SearchKernel =
 
-    // Walkable neighbours of `c` with their integer step cost: `baseStep` orthogonal, `diagStep`
-    // diagonal. Under EightWay a diagonal is refused unless BOTH shared orthogonal neighbours are
-    // walkable (no corner-cutting).
-    let private neighbours (nb: Neighbourhood) (isWalkable: Cell -> bool) (c: Cell) : struct (Cell * int) list =
-        let ortho =
-            orthoOffsets
-            |> List.choose (fun (dx, dy) ->
-                let n = { Col = c.Col + dx; Row = c.Row + dy }
-                if isWalkable n then Some(struct (n, baseStep)) else None)
+        // Fixed step offsets. The enumeration order does not affect A* output (the total (f,h,Col,Row)
+        // frontier order decides), and for BFS it is a deterministic, documented order.
+        let orthoOffsets = [ (0, -1); (0, 1); (-1, 0); (1, 0) ]
+        let diagOffsets = [ (-1, -1); (1, -1); (-1, 1); (1, 1) ]
 
-        match nb with
-        | FourWay -> ortho
-        | EightWay ->
-            let diag =
-                diagOffsets
+        // Walkable neighbours of `c` with their integer step cost: `baseStep` orthogonal, `diagStep`
+        // diagonal. Under EightWay a diagonal is refused unless BOTH shared orthogonal neighbours are
+        // walkable (no corner-cutting).
+        let neighbours (nb: Neighbourhood) (isWalkable: Cell -> bool) (c: Cell) : struct (Cell * int) list =
+            let ortho =
+                orthoOffsets
                 |> List.choose (fun (dx, dy) ->
                     let n = { Col = c.Col + dx; Row = c.Row + dy }
-                    let side1 = { Col = c.Col + dx; Row = c.Row }
-                    let side2 = { Col = c.Col; Row = c.Row + dy }
+                    if isWalkable n then Some(struct (n, baseStep)) else None)
 
-                    if isWalkable n && isWalkable side1 && isWalkable side2 then
-                        Some(struct (n, diagStep))
+            match nb with
+            | FourWay -> ortho
+            | EightWay ->
+                let diag =
+                    diagOffsets
+                    |> List.choose (fun (dx, dy) ->
+                        let n = { Col = c.Col + dx; Row = c.Row + dy }
+                        let side1 = { Col = c.Col + dx; Row = c.Row }
+                        let side2 = { Col = c.Col; Row = c.Row + dy }
+
+                        if isWalkable n && isWalkable side1 && isWalkable side2 then
+                            Some(struct (n, diagStep))
+                        else
+                            None)
+
+                ortho @ diag
+
+        // Admissible integer heuristic toward `goal`: Manhattan (4-way) / octile (8-way), both in `baseStep`
+        // units. Admissible because `diagStep <= 2 * baseStep` — a diagonal never costs more than the two
+        // orthogonals it replaces — so the estimate can never exceed the true remaining cost.
+        let octile (nb: Neighbourhood) (goal: Cell) (c: Cell) : int64 =
+            // int64 deltas, the same hardening `Los`/`Ai` already carry (Los.fs, Ai.inRange), and for the
+            // same two reasons: over the module's advertised UNBOUNDED integer cell space, `c.Col - goal.Col`
+            // as `int` WRAPS on a far-apart pair (to Int32.MinValue), and `abs` of that then THROWS —
+            // breaking the "pure and total" contract on `astar`'s very first `h start`. The products below
+            // reach at most ~1e11 (baseStep/diagStep × a ~4.3e9 delta), well inside int64, so a coordinate
+            // span that used to overflow `int` into a wrapped, non-admissible estimate now yields the true
+            // admissible one. (docs/reports/2026-07-15-code-and-architecture-review.md §3.)
+            let dx = abs (int64 c.Col - int64 goal.Col)
+            let dy = abs (int64 c.Row - int64 goal.Row)
+
+            match nb with
+            | FourWay -> int64 baseStep * (dx + dy)
+            | EightWay ->
+                let lo = min dx dy
+                let hi = max dx dy
+                int64 diagStep * lo + int64 baseStep * (hi - lo)
+
+        // Walk the cameFrom chain from `goal` back to the start, yielding start..goal inclusive.
+        let reconstruct (cameFrom: Map<Cell, Cell>) (goal: Cell) : Cell list =
+            let rec walk acc c =
+                match Map.tryFind c cameFrom with
+                | Some prev -> walk (c :: acc) prev
+                | None -> c :: acc
+
+            walk [] goal
+
+        // Shared guards for the trivial/degenerate cases before a real search runs.
+        let trivial (maxVisited: int) (isWalkable: Cell -> bool) (start: Cell) (goal: Cell) : Cell list option option =
+            if maxVisited <= 0 || not (isWalkable start) || not (isWalkable goal) then Some None
+            elif start = goal then Some(Some [ start ])
+            else None
+
+        // The A* engine, parameterised by the admissible heuristic `h` (cell -> estimated remaining cost to
+        // `goal`, in `baseStep` units, as int64). `astar` passes the octile/Manhattan `heuristic`;
+        // `Landmarks.astar` passes `max(octile, ALT)`. A tighter admissible `h` expands fewer nodes but
+        // returns the SAME least cost, so swapping `h` never changes optimality — only the specific
+        // equal-cost path chosen (the frontier tie-break `(f, h, Col, Row)` shifts with `h`) and the number
+        // of expansions. Determinism is unaffected: `h` is integer and total.
+        let astarWith
+            (h: Cell -> int64)
+            (tie: Cell -> int64)
+            (neighbourhood: Neighbourhood)
+            (maxVisited: int)
+            (isWalkable: Cell -> bool)
+            (start: Cell)
+            (goal: Cell)
+            : Cell list option =
+            match trivial maxVisited isWalkable start goal with
+            | Some result -> result
+            | None ->
+                // Frontier is a Set keyed by the TOTAL order (f, h, tie, Col, Row) — Set.minElement is
+                // deterministic, so the pop order (hence the path) is bit-identical across runs/platforms.
+                // f, h, tie and the g-score are int64: `octile` returns int64, g accumulates in int64, and
+                // the `tie` term is int64, so neither the estimate (wide coordinate span) nor the g-score
+                // (long path) can wrap the way plain `int` did. `tie` is a pure function of the cell that
+                // breaks ties AFTER f and h, so it never changes which cost is optimal — `astar` passes a
+                // constant `fun _ -> 0L`, which orders identically to the historical `(f, h, Col, Row)` key
+                // (byte-identical output); `astarStraight` passes the straight-line cross-product deviation.
+                // Col/Row stay `int`: genuine cell coordinates, and the total order is unaffected.
+                let h0 = h start
+                let openSet = Set.singleton (h0, h0, tie start, start.Col, start.Row)
+                let gScore = Map.ofList [ start, 0L ]
+
+                let rec loop
+                    (openSet: Set<int64 * int64 * int64 * int * int>)
+                    (gScore: Map<Cell, int64>)
+                    (cameFrom: Map<Cell, Cell>)
+                    (expansions: int)
+                    : Cell list option =
+                    if Set.isEmpty openSet || expansions >= maxVisited then
+                        None
                     else
-                        None)
+                        let (f, hCur, tieCur, col, row) = Set.minElement openSet
+                        let current = { Col = col; Row = row }
+                        let openSet = Set.remove (f, hCur, tieCur, col, row) openSet
 
-            ortho @ diag
+                        if current = goal then
+                            Some(reconstruct cameFrom current)
+                        else
+                            let g = gScore.[current]
 
-    // Admissible integer heuristic toward `goal`: Manhattan (4-way) / octile (8-way), both in `baseStep`
-    // units. Admissible because `diagStep <= 2 * baseStep` — a diagonal never costs more than the two
-    // orthogonals it replaces — so the estimate can never exceed the true remaining cost.
-    let private octile (nb: Neighbourhood) (goal: Cell) (c: Cell) : int64 =
-        // int64 deltas, the same hardening `Los`/`Ai` already carry (Los.fs, Ai.inRange), and for the
-        // same two reasons: over the module's advertised UNBOUNDED integer cell space, `c.Col - goal.Col`
-        // as `int` WRAPS on a far-apart pair (to Int32.MinValue), and `abs` of that then THROWS —
-        // breaking the "pure and total" contract on `astar`'s very first `h start`. The products below
-        // reach at most ~1e11 (baseStep/diagStep × a ~4.3e9 delta), well inside int64, so a coordinate
-        // span that used to overflow `int` into a wrapped, non-admissible estimate now yields the true
-        // admissible one. (docs/reports/2026-07-15-code-and-architecture-review.md §3.)
-        let dx = abs (int64 c.Col - int64 goal.Col)
-        let dy = abs (int64 c.Row - int64 goal.Row)
+                            let (openSet, gScore, cameFrom) =
+                                neighbours neighbourhood isWalkable current
+                                |> List.fold
+                                    (fun (os, gs, cf) (struct (n, cost)) ->
+                                        let tentative = g + int64 cost
 
-        match nb with
-        | FourWay -> int64 baseStep * (dx + dy)
-        | EightWay ->
-            let lo = min dx dy
-            let hi = max dx dy
-            int64 diagStep * lo + int64 baseStep * (hi - lo)
+                                        match Map.tryFind n gs with
+                                        | Some existing when existing <= tentative -> (os, gs, cf)
+                                        | prior ->
+                                            let hn = h n
+                                            let tn = tie n
+                                            // Drop any stale open entry for n (same h/tie, old g) before re-adding.
+                                            let os =
+                                                match prior with
+                                                | Some oldG -> Set.remove (oldG + hn, hn, tn, n.Col, n.Row) os
+                                                | None -> os
 
-    // Walk the cameFrom chain from `goal` back to the start, yielding start..goal inclusive.
-    let private reconstruct (cameFrom: Map<Cell, Cell>) (goal: Cell) : Cell list =
-        let rec walk acc c =
-            match Map.tryFind c cameFrom with
-            | Some prev -> walk (c :: acc) prev
-            | None -> c :: acc
+                                            let os = Set.add (tentative + hn, hn, tn, n.Col, n.Row) os
+                                            (os, Map.add n tentative gs, Map.add n current cf))
+                                    (openSet, gScore, cameFrom)
 
-        walk [] goal
+                            loop openSet gScore cameFrom (expansions + 1)
 
-    // Shared guards for the trivial/degenerate cases before a real search runs.
-    let private trivial (maxVisited: int) (isWalkable: Cell -> bool) (start: Cell) (goal: Cell) : Cell list option option =
-        if maxVisited <= 0 || not (isWalkable start) || not (isWalkable goal) then Some None
-        elif start = goal then Some(Some [ start ])
-        else None
+                loop openSet gScore Map.empty 0
 
-    // The A* engine, parameterised by the admissible heuristic `h` (cell -> estimated remaining cost to
-    // `goal`, in `baseStep` units, as int64). `astar` passes the octile/Manhattan `heuristic`;
-    // `Landmarks.astar` passes `max(octile, ALT)`. A tighter admissible `h` expands fewer nodes but
-    // returns the SAME least cost, so swapping `h` never changes optimality — only the specific
-    // equal-cost path chosen (the frontier tie-break `(f, h, Col, Row)` shifts with `h`) and the number
-    // of expansions. Determinism is unaffected: `h` is integer and total.
-    let private astarWith
-        (h: Cell -> int64)
-        (tie: Cell -> int64)
-        (neighbourhood: Neighbourhood)
-        (maxVisited: int)
-        (isWalkable: Cell -> bool)
-        (start: Cell)
-        (goal: Cell)
-        : Cell list option =
-        match trivial maxVisited isWalkable start goal with
-        | Some result -> result
-        | None ->
-            // Frontier is a Set keyed by the TOTAL order (f, h, tie, Col, Row) — Set.minElement is
-            // deterministic, so the pop order (hence the path) is bit-identical across runs/platforms.
-            // f, h, tie and the g-score are int64: `octile` returns int64, g accumulates in int64, and
-            // the `tie` term is int64, so neither the estimate (wide coordinate span) nor the g-score
-            // (long path) can wrap the way plain `int` did. `tie` is a pure function of the cell that
-            // breaks ties AFTER f and h, so it never changes which cost is optimal — `astar` passes a
-            // constant `fun _ -> 0L`, which orders identically to the historical `(f, h, Col, Row)` key
-            // (byte-identical output); `astarStraight` passes the straight-line cross-product deviation.
-            // Col/Row stay `int`: genuine cell coordinates, and the total order is unaffected.
-            let h0 = h start
-            let openSet = Set.singleton (h0, h0, tie start, start.Col, start.Row)
-            let gScore = Map.ofList [ start, 0L ]
+        // The zero tie-break — orders identically to the historical `(f, h, Col, Row)` key.
+        let noTie: Cell -> int64 = fun _ -> 0L
 
-            let rec loop
-                (openSet: Set<int64 * int64 * int64 * int * int>)
-                (gScore: Map<Cell, int64>)
-                (cameFrom: Map<Cell, Cell>)
-                (expansions: int)
-                : Cell list option =
-                if Set.isEmpty openSet || expansions >= maxVisited then
-                    None
-                else
-                    let (f, hCur, tieCur, col, row) = Set.minElement openSet
-                    let current = { Col = col; Row = row }
-                    let openSet = Set.remove (f, hCur, tieCur, col, row) openSet
-
-                    if current = goal then
-                        Some(reconstruct cameFrom current)
-                    else
-                        let g = gScore.[current]
-
-                        let (openSet, gScore, cameFrom) =
-                            neighbours neighbourhood isWalkable current
-                            |> List.fold
-                                (fun (os, gs, cf) (struct (n, cost)) ->
-                                    let tentative = g + int64 cost
-
-                                    match Map.tryFind n gs with
-                                    | Some existing when existing <= tentative -> (os, gs, cf)
-                                    | prior ->
-                                        let hn = h n
-                                        let tn = tie n
-                                        // Drop any stale open entry for n (same h/tie, old g) before re-adding.
-                                        let os =
-                                            match prior with
-                                            | Some oldG -> Set.remove (oldG + hn, hn, tn, n.Col, n.Row) os
-                                            | None -> os
-
-                                        let os = Set.add (tentative + hn, hn, tn, n.Col, n.Row) os
-                                        (os, Map.add n tentative gs, Map.add n current cf))
-                                (openSet, gScore, cameFrom)
-
-                        loop openSet gScore cameFrom (expansions + 1)
-
-            loop openSet gScore Map.empty 0
-
-    // The zero tie-break — orders identically to the historical `(f, h, Col, Row)` key.
-    let private noTie: Cell -> int64 = fun _ -> 0L
+    open SearchKernel
 
     let astar
         (neighbourhood: Neighbourhood)
@@ -297,122 +303,126 @@ module Pathfinding =
     // (`n - d + e`) is blocked: that obstacle is the only thing that makes reaching `n+e` require
     // turning at `n` rather than earlier on the run, and it is the one place a straight jump must stop.
 
-    // A step from `c` in direction (dx,dy) is legal iff the target is walkable and — for a diagonal —
-    // both shared orthogonal neighbours are walkable (the module's no-corner-cutting rule, identical
-    // to `neighbours`).
-    let private stepOk (isWalkable: Cell -> bool) (c: Cell) (dx: int) (dy: int) : bool =
-        let t = { Col = c.Col + dx; Row = c.Row + dy }
+    module private JumpKernel =
 
-        if not (isWalkable t) then
-            false
-        elif dx <> 0 && dy <> 0 then
-            isWalkable { Col = c.Col + dx; Row = c.Row }
-            && isWalkable { Col = c.Col; Row = c.Row + dy }
-        else
-            true
+        // A step from `c` in direction (dx,dy) is legal iff the target is walkable and — for a diagonal —
+        // both shared orthogonal neighbours are walkable (the module's no-corner-cutting rule, identical
+        // to `neighbours`).
+        let stepOk (isWalkable: Cell -> bool) (c: Cell) (dx: int) (dy: int) : bool =
+            let t = { Col = c.Col + dx; Row = c.Row + dy }
 
-    // Does the STRAIGHT move that arrived at `n` in direction (dx,dy) have a forced neighbour? (Only
-    // straight moves do — see the header.) The classic JPS rule: a perpendicular passage `n+e` (`e` one
-    // of the two perpendiculars (dy,dx)/(-dy,-dx)) is walkable while the cell diagonally BEHIND it
-    // (`n - d + e`) is blocked, so a route arriving from behind is forced to turn at `n`. This never
-    // fires on open ground or against the map border (where the blocked `behind` would need `n+e` still
-    // walkable *past* an obstacle), which is exactly why it is safe to use as the "real obstacle turn"
-    // signal a detection jump looks for.
-    let private hasForcedStraight (isWalkable: Cell -> bool) (n: Cell) (dx: int) (dy: int) : bool =
-        [ (dy, dx); (-dy, -dx) ]
-        |> List.exists (fun (ex, ey) ->
-            let side = { Col = n.Col + ex; Row = n.Row + ey }
-            let behind = { Col = n.Col - dx + ex; Row = n.Row - dy + ey }
-            isWalkable side && not (isWalkable behind))
-
-    // Scan from `from` in ONE direction (dx,dy), returning the first jump point reached, or `None` if
-    // the run dead-ends before finding one. `cap` bounds the scan length so the walk is TOTAL even over
-    // an unbounded `isWalkable` (e.g. `fun _ -> true` with a goal off the ray, where there is no edge
-    // to stop at): `cap` is set to `maxVisited`, and because an `astar` search bounded by `maxVisited`
-    // pops settles at most `maxVisited` cells, any path it finds has every straight run <= `maxVisited`
-    // long — so a `cap` of `maxVisited` never hides a jump point on a path `astar` could reach within
-    // the same budget.
-    //
-    // `top` distinguishes a *search* jump (`true`, spawned when a popped node is expanded) from a
-    // *detection* jump (`false`, spawned to ask "is there a turn point along this perpendicular?").
-    // Two stop conditions apply only to a top-level jump, and they must NOT apply to a detection jump:
-    //  - GOAL ALIGNMENT (stop at the goal's column moving horizontally / row moving vertically). This
-    //    is what carries a `FourWay` search toward an off-axis goal (no diagonal exists to do it), but
-    //    on open ground a detection jump would find the goal's row/col from *every* cell, making every
-    //    cell a jump point and destroying the corridor pruning — so detection jumps omit it.
-    //  - PERPENDICULAR DETECTION. A `FourWay` straight run has no diagonal to notice that a turn onto a
-    //    perpendicular corridor is forced (e.g. a wall two cells ahead-and-to-the-side). So at each
-    //    cell a top-level straight jump asks whether a one-level detection jump down either
-    //    perpendicular finds a real turn point (a forced neighbour or the goal); if so, this cell is a
-    //    turn point. Detection jumps do NOT recurse into further detection, which bounds it.
-    let rec private jump
-        (isWalkable: Cell -> bool)
-        (goal: Cell)
-        (cap: int)
-        (top: bool)
-        (dx: int)
-        (dy: int)
-        (from: Cell)
-        : Cell option =
-        let diagonal = dx <> 0 && dy <> 0
-
-        let rec go (c: Cell) (budget: int) : Cell option =
-            if budget <= 0 || not (stepOk isWalkable c dx dy) then
-                None
+            if not (isWalkable t) then
+                false
+            elif dx <> 0 && dy <> 0 then
+                isWalkable { Col = c.Col + dx; Row = c.Row }
+                && isWalkable { Col = c.Col; Row = c.Row + dy }
             else
-                let n = { Col = c.Col + dx; Row = c.Row + dy }
+                true
 
-                if n = goal then
-                    Some n
-                elif not diagonal then
-                    // Wall dead ahead with an open perpendicular: `n` is the last cell before the wall,
-                    // a mandatory turn point. Applies at any level — a detection jump must still report
-                    // a turn it finds at a head-on wall.
-                    let ahead = { Col = n.Col + dx; Row = n.Row + dy }
+        // Does the STRAIGHT move that arrived at `n` in direction (dx,dy) have a forced neighbour? (Only
+        // straight moves do — see the header.) The classic JPS rule: a perpendicular passage `n+e` (`e` one
+        // of the two perpendiculars (dy,dx)/(-dy,-dx)) is walkable while the cell diagonally BEHIND it
+        // (`n - d + e`) is blocked, so a route arriving from behind is forced to turn at `n`. This never
+        // fires on open ground or against the map border (where the blocked `behind` would need `n+e` still
+        // walkable *past* an obstacle), which is exactly why it is safe to use as the "real obstacle turn"
+        // signal a detection jump looks for.
+        let hasForcedStraight (isWalkable: Cell -> bool) (n: Cell) (dx: int) (dy: int) : bool =
+            [ (dy, dx); (-dy, -dx) ]
+            |> List.exists (fun (ex, ey) ->
+                let side = { Col = n.Col + ex; Row = n.Row + ey }
+                let behind = { Col = n.Col - dx + ex; Row = n.Row - dy + ey }
+                isWalkable side && not (isWalkable behind))
 
-                    let perpOpen =
-                        isWalkable { Col = n.Col + dy; Row = n.Row + dx }
-                        || isWalkable { Col = n.Col - dy; Row = n.Row - dx }
+        // Scan from `from` in ONE direction (dx,dy), returning the first jump point reached, or `None` if
+        // the run dead-ends before finding one. `cap` bounds the scan length so the walk is TOTAL even over
+        // an unbounded `isWalkable` (e.g. `fun _ -> true` with a goal off the ray, where there is no edge
+        // to stop at): `cap` is set to `maxVisited`, and because an `astar` search bounded by `maxVisited`
+        // pops settles at most `maxVisited` cells, any path it finds has every straight run <= `maxVisited`
+        // long — so a `cap` of `maxVisited` never hides a jump point on a path `astar` could reach within
+        // the same budget.
+        //
+        // `top` distinguishes a *search* jump (`true`, spawned when a popped node is expanded) from a
+        // *detection* jump (`false`, spawned to ask "is there a turn point along this perpendicular?").
+        // Two stop conditions apply only to a top-level jump, and they must NOT apply to a detection jump:
+        //  - GOAL ALIGNMENT (stop at the goal's column moving horizontally / row moving vertically). This
+        //    is what carries a `FourWay` search toward an off-axis goal (no diagonal exists to do it), but
+        //    on open ground a detection jump would find the goal's row/col from *every* cell, making every
+        //    cell a jump point and destroying the corridor pruning — so detection jumps omit it.
+        //  - PERPENDICULAR DETECTION. A `FourWay` straight run has no diagonal to notice that a turn onto a
+        //    perpendicular corridor is forced (e.g. a wall two cells ahead-and-to-the-side). So at each
+        //    cell a top-level straight jump asks whether a one-level detection jump down either
+        //    perpendicular finds a real turn point (a forced neighbour or the goal); if so, this cell is a
+        //    turn point. Detection jumps do NOT recurse into further detection, which bounds it.
+        let rec jump
+            (isWalkable: Cell -> bool)
+            (goal: Cell)
+            (cap: int)
+            (top: bool)
+            (dx: int)
+            (dy: int)
+            (from: Cell)
+            : Cell option =
+            let diagonal = dx <> 0 && dy <> 0
 
-                    // wall-ahead is a top-level-only stop: it fires at the map border too (`ahead` out
-                    // of bounds), which a DETECTION jump must not treat as a turn point or every scan
-                    // would "find" the border and defeat all pruning on a bounded grid.
-                    let wallAhead = top && not (isWalkable ahead) && perpOpen
-
-                    let aligned =
-                        top && ((dx <> 0 && n.Col = goal.Col) || (dy <> 0 && n.Row = goal.Row))
-
-                    let perpTurn =
-                        top
-                        && ((detect n dy dx).IsSome || (detect n (-dy) (-dx)).IsSome)
-
-                    if wallAhead || aligned || perpTurn || hasForcedStraight isWalkable n dx dy then
-                        Some n
-                    else
-                        go n (budget - 1)
+            let rec go (c: Cell) (budget: int) : Cell option =
+                if budget <= 0 || not (stepOk isWalkable c dx dy) then
+                    None
                 else
-                    // Diagonal (EightWay only): `n` is a turn point if a straight DETECTION jump down
-                    // either component finds a jump point.
-                    match detect n dx 0 with
-                    | Some _ -> Some n
-                    | None ->
-                        match detect n 0 dy with
+                    let n = { Col = c.Col + dx; Row = c.Row + dy }
+
+                    if n = goal then
+                        Some n
+                    elif not diagonal then
+                        // Wall dead ahead with an open perpendicular: `n` is the last cell before the wall,
+                        // a mandatory turn point. Applies at any level — a detection jump must still report
+                        // a turn it finds at a head-on wall.
+                        let ahead = { Col = n.Col + dx; Row = n.Row + dy }
+
+                        let perpOpen =
+                            isWalkable { Col = n.Col + dy; Row = n.Row + dx }
+                            || isWalkable { Col = n.Col - dy; Row = n.Row - dx }
+
+                        // wall-ahead is a top-level-only stop: it fires at the map border too (`ahead` out
+                        // of bounds), which a DETECTION jump must not treat as a turn point or every scan
+                        // would "find" the border and defeat all pruning on a bounded grid.
+                        let wallAhead = top && not (isWalkable ahead) && perpOpen
+
+                        let aligned =
+                            top && ((dx <> 0 && n.Col = goal.Col) || (dy <> 0 && n.Row = goal.Row))
+
+                        let perpTurn =
+                            top
+                            && ((detect n dy dx).IsSome || (detect n (-dy) (-dx)).IsSome)
+
+                        if wallAhead || aligned || perpTurn || hasForcedStraight isWalkable n dx dy then
+                            Some n
+                        else
+                            go n (budget - 1)
+                    else
+                        // Diagonal (EightWay only): `n` is a turn point if a straight DETECTION jump down
+                        // either component finds a jump point.
+                        match detect n dx 0 with
                         | Some _ -> Some n
-                        | None -> go n (budget - 1)
+                        | None ->
+                            match detect n 0 dy with
+                            | Some _ -> Some n
+                            | None -> go n (budget - 1)
 
-        // A one-level detection jump (never goal-aligned, never spawns its own detection).
-        and detect (node: Cell) (sx: int) (sy: int) : Cell option = jump isWalkable goal cap false sx sy node
+            // A one-level detection jump (never goal-aligned, never spawns its own detection).
+            and detect (node: Cell) (sx: int) (sy: int) : Cell option = jump isWalkable goal cap false sx sy node
 
-        go from cap
+            go from cap
 
-    // Cells strictly AFTER `a`, up to and including `b`, one unit step at a time along the
-    // monodirectional (orthogonal or diagonal) segment `a -> b`. Used to expand a jump-point chain back
-    // into the contiguous cell-by-cell path FR-002 requires.
-    let private interpolate (a: Cell) (b: Cell) : Cell list =
-        let sx = sign (b.Col - a.Col)
-        let sy = sign (b.Row - a.Row)
-        let steps = max (abs (b.Col - a.Col)) (abs (b.Row - a.Row))
-        [ for k in 1..steps -> { Col = a.Col + sx * k; Row = a.Row + sy * k } ]
+        // Cells strictly AFTER `a`, up to and including `b`, one unit step at a time along the
+        // monodirectional (orthogonal or diagonal) segment `a -> b`. Used to expand a jump-point chain back
+        // into the contiguous cell-by-cell path FR-002 requires.
+        let interpolate (a: Cell) (b: Cell) : Cell list =
+            let sx = sign (b.Col - a.Col)
+            let sy = sign (b.Row - a.Row)
+            let steps = max (abs (b.Col - a.Col)) (abs (b.Row - a.Row))
+            [ for k in 1..steps -> { Col = a.Col + sx * k; Row = a.Row + sy * k } ]
+
+    open JumpKernel
 
     let jps
         (neighbourhood: Neighbourhood)
@@ -524,80 +534,84 @@ module Pathfinding =
     // `(dist, Col, Row)` order, and a relaxation improves a cell only on a STRICTLY lower candidate
     // (`existing <= candidate` skips), so among equal-cost predecessors the earliest-settled one wins
     // and no later tie can displace it.
-    let private dijkstra
-        (neighbourhood: Neighbourhood)
-        (cost: Cell -> int)
-        (stepWeight: int -> Cell -> int -> int64)
-        (admit: int64 -> bool)
-        (maxVisited: int)
-        (seeds: Cell list)
-        : Map<Cell, Step> =
-        let isWalkable c = cost c > 0
+    module private WeightedKernel =
 
-        let rec loop
-            (openSet: Set<int64 * int * int>)
-            (tentative: Map<Cell, int64>)
-            (cameFrom: Map<Cell, Cell>)
-            (settled: Map<Cell, Step>)
-            (expansions: int)
+        let dijkstra
+            (neighbourhood: Neighbourhood)
+            (cost: Cell -> int)
+            (stepWeight: int -> Cell -> int -> int64)
+            (admit: int64 -> bool)
+            (maxVisited: int)
+            (seeds: Cell list)
             : Map<Cell, Step> =
-            if Set.isEmpty openSet || expansions >= maxVisited then
-                settled
+            let isWalkable c = cost c > 0
+
+            let rec loop
+                (openSet: Set<int64 * int * int>)
+                (tentative: Map<Cell, int64>)
+                (cameFrom: Map<Cell, Cell>)
+                (settled: Map<Cell, Step>)
+                (expansions: int)
+                : Map<Cell, Step> =
+                if Set.isEmpty openSet || expansions >= maxVisited then
+                    settled
+                else
+                    let (d, col, row) = Set.minElement openSet
+                    let current = { Col = col; Row = row }
+                    let openSet = Set.remove (d, col, row) openSet
+                    // Popped with the minimum key and all weights > 0 => `d` is final for `current`.
+                    // A seed has no predecessor, so `CameFrom` is None for exactly the seeds.
+                    let settled =
+                        Map.add
+                            current
+                            { Cost = int d
+                              CameFrom = Map.tryFind current cameFrom }
+                            settled
+                    // `cost` is arbitrary caller code; evaluate it once per pop, not once per neighbour.
+                    let currentCost = cost current
+
+                    let (openSet, tentative, cameFrom) =
+                        neighbours neighbourhood isWalkable current
+                        |> List.fold
+                            (fun (os, tent, cf) (struct (n, stepCost)) ->
+                                let candidate = d + stepWeight currentCost n stepCost
+
+                                if candidate > int64 System.Int32.MaxValue || not (admit candidate) then
+                                    (os, tent, cf)
+                                else
+                                    match Map.tryFind n tent with
+                                    | Some existing when existing <= candidate -> (os, tent, cf)
+                                    | prior ->
+                                        // Drop any stale open entry for n (old distance) before re-adding.
+                                        let os =
+                                            match prior with
+                                            | Some oldD -> Set.remove (oldD, n.Col, n.Row) os
+                                            | None -> os
+
+                                        (Set.add (candidate, n.Col, n.Row) os,
+                                         Map.add n candidate tent,
+                                         Map.add n current cf))
+                            (openSet, tentative, cameFrom)
+
+                    loop openSet tentative cameFrom settled (expansions + 1)
+
+            // Only cells that are actually settled are returned, so a `maxVisited` cut-off yields a
+            // partial-but-correct field rather than a field with unfinalised tentative values in it.
+            let seeds = seeds |> List.filter isWalkable |> List.distinct
+
+            if maxVisited <= 0 || List.isEmpty seeds then
+                Map.empty
             else
-                let (d, col, row) = Set.minElement openSet
-                let current = { Col = col; Row = row }
-                let openSet = Set.remove (d, col, row) openSet
-                // Popped with the minimum key and all weights > 0 => `d` is final for `current`.
-                // A seed has no predecessor, so `CameFrom` is None for exactly the seeds.
-                let settled =
-                    Map.add
-                        current
-                        { Cost = int d
-                          CameFrom = Map.tryFind current cameFrom }
-                        settled
-                // `cost` is arbitrary caller code; evaluate it once per pop, not once per neighbour.
-                let currentCost = cost current
+                let openSet = seeds |> List.map (fun g -> (0L, g.Col, g.Row)) |> Set.ofList
+                let tentative = seeds |> List.map (fun g -> g, 0L) |> Map.ofList
+                loop openSet tentative Map.empty Map.empty 0
 
-                let (openSet, tentative, cameFrom) =
-                    neighbours neighbourhood isWalkable current
-                    |> List.fold
-                        (fun (os, tent, cf) (struct (n, stepCost)) ->
-                            let candidate = d + stepWeight currentCost n stepCost
+        // The cost-only projection of a settled field. `distanceField`/`reachableWithin` predate the
+        // `Step` tree and are defined in terms of it, so they cannot drift from `reachable`.
+        let costsOf (settled: Map<Cell, Step>) : Map<Cell, int> =
+            settled |> Map.map (fun _ s -> s.Cost)
 
-                            if candidate > int64 System.Int32.MaxValue || not (admit candidate) then
-                                (os, tent, cf)
-                            else
-                                match Map.tryFind n tent with
-                                | Some existing when existing <= candidate -> (os, tent, cf)
-                                | prior ->
-                                    // Drop any stale open entry for n (old distance) before re-adding.
-                                    let os =
-                                        match prior with
-                                        | Some oldD -> Set.remove (oldD, n.Col, n.Row) os
-                                        | None -> os
-
-                                    (Set.add (candidate, n.Col, n.Row) os,
-                                     Map.add n candidate tent,
-                                     Map.add n current cf))
-                        (openSet, tentative, cameFrom)
-
-                loop openSet tentative cameFrom settled (expansions + 1)
-
-        // Only cells that are actually settled are returned, so a `maxVisited` cut-off yields a
-        // partial-but-correct field rather than a field with unfinalised tentative values in it.
-        let seeds = seeds |> List.filter isWalkable |> List.distinct
-
-        if maxVisited <= 0 || List.isEmpty seeds then
-            Map.empty
-        else
-            let openSet = seeds |> List.map (fun g -> (0L, g.Col, g.Row)) |> Set.ofList
-            let tentative = seeds |> List.map (fun g -> g, 0L) |> Map.ofList
-            loop openSet tentative Map.empty Map.empty 0
-
-    // The cost-only projection of a settled field. `distanceField`/`reachableWithin` predate the
-    // `Step` tree and are defined in terms of it, so they cannot drift from `reachable`.
-    let private costsOf (settled: Map<Cell, Step>) : Map<Cell, int> =
-        settled |> Map.map (fun _ s -> s.Cost)
+    open WeightedKernel
 
     let distanceField
         (neighbourhood: Neighbourhood)

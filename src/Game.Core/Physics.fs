@@ -89,232 +89,238 @@ module Physics =
     // The presentation projection of a body — `Pos` and `Rot`, nothing else. Public via the `.fsi`.
     type Transform = { Position: Point; Rotation: float }
 
-    let private finite (v: float) =
-        not (System.Double.IsNaN v) && not (System.Double.IsInfinity v)
+    // Shape validation, vector algebra, bounds and mass properties form one private responsibility.
+    // The public Physics module remains the facade declared by Physics.fsi.
+    module private BodyGeometry =
 
-    let private finitePoint (p: Point) = finite p.X && finite p.Y
+        let finite (v: float) =
+            not (System.Double.IsNaN v) && not (System.Double.IsInfinity v)
 
-    // Shoelace area magnitude — zero for a collinear ring. Mirrors `Geometry`'s private `ringArea`, so a
-    // polygon this module calls degenerate is exactly one `Geometry.polygonManifold` would refuse.
-    let private ringArea (v: Point[]) =
-        let mutable acc = 0.0
+        let finitePoint (p: Point) = finite p.X && finite p.Y
 
-        for i in 0 .. v.Length - 1 do
-            let p = v.[i]
-            let q = v.[(i + 1) % v.Length]
-            acc <- acc + (p.X * q.Y - q.X * p.Y)
+        // Shoelace area magnitude — zero for a collinear ring. Mirrors `Geometry`'s private `ringArea`, so a
+        // polygon this module calls degenerate is exactly one `Geometry.polygonManifold` would refuse.
+        let ringArea (v: Point[]) =
+            let mutable acc = 0.0
 
-        abs acc / 2.0
+            for i in 0 .. v.Length - 1 do
+                let p = v.[i]
+                let q = v.[(i + 1) % v.Length]
+                acc <- acc + (p.X * q.Y - q.X * p.Y)
 
-    let private vadd (a: Point) (b: Point) : Point = { X = a.X + b.X; Y = a.Y + b.Y }
-    let private vsub (a: Point) (b: Point) : Point = { X = a.X - b.X; Y = a.Y - b.Y }
-    let private vscale (s: float) (v: Point) : Point = { X = s * v.X; Y = s * v.Y }
-    let private vdot (a: Point) (b: Point) = a.X * b.X + a.Y * b.Y
+            abs acc / 2.0
 
-    // The 2D scalar cross `a × b`. In 2D the cross product of two vectors is a scalar (the z component of
-    // the 3D result), and the cross of a scalar with a vector is a vector — the two shapes the angular
-    // terms of an impulse need, and the reason they are separate functions rather than one.
-    let private vcross (a: Point) (b: Point) = a.X * b.Y - a.Y * b.X
+        let vadd (a: Point) (b: Point) : Point = { X = a.X + b.X; Y = a.Y + b.Y }
+        let vsub (a: Point) (b: Point) : Point = { X = a.X - b.X; Y = a.Y - b.Y }
+        let vscale (s: float) (v: Point) : Point = { X = s * v.X; Y = s * v.Y }
+        let vdot (a: Point) (b: Point) = a.X * b.X + a.Y * b.Y
 
-    // `w × r` for a scalar angular velocity `w`: the linear velocity that rotation contributes at `r`.
-    let private scrossv (s: float) (v: Point) : Point = { X = -s * v.Y; Y = s * v.X }
+        // The 2D scalar cross `a × b`. In 2D the cross product of two vectors is a scalar (the z component of
+        // the 3D result), and the cross of a scalar with a vector is a vector — the two shapes the angular
+        // terms of an impulse need, and the reason they are separate functions rather than one.
+        let vcross (a: Point) (b: Point) = a.X * b.Y - a.Y * b.X
 
-    // Rotate about the origin. `rotation = 0.0` returns the input *bit for bit* rather than multiplying by
-    // `cos 0 = 1.0` and `sin 0 = 0.0` — which would also be exact, except that `-0.0 * 1.0 - 0.0 * y` is
-    // not `-0.0` for every `y`. Every body starts at `Rot = 0.0`, so this fast path is the common one, and
-    // it is what keeps the broad phase byte-identical to the pre-rotation `pairs` (#74/#84) it inherited.
-    let private vrot (rotation: float) (v: Point) : Point =
-        if rotation = 0.0 then
-            v
-        else
-            let c = cos rotation
-            let s = sin rotation
-            { X = c * v.X - s * v.Y
-              Y = s * v.X + c * v.Y }
+        // `w × r` for a scalar angular velocity `w`: the linear velocity that rotation contributes at `r`.
+        let scrossv (s: float) (v: Point) : Point = { X = -s * v.Y; Y = s * v.X }
 
-    // A shape's extent about its own origin, as `struct(loX, loY, hiX, hiY)`; `ValueNone` for a degenerate
-    // shape — the no-collision input of the `Shape` contract. NaN fails every `>` test, so the guards are
-    // NaN-safe without a separate check.
-    let private localBounds (shape: Shape) : struct (float * float * float * float) voption =
-        match shape with
-        | SCircle radius ->
-            if finite radius && radius > 0.0 then
-                ValueSome(struct (-radius, -radius, radius, radius))
+        // Rotate about the origin. `rotation = 0.0` returns the input *bit for bit* rather than multiplying by
+        // `cos 0 = 1.0` and `sin 0 = 0.0` — which would also be exact, except that `-0.0 * 1.0 - 0.0 * y` is
+        // not `-0.0` for every `y`. Every body starts at `Rot = 0.0`, so this fast path is the common one, and
+        // it is what keeps the broad phase byte-identical to the pre-rotation `pairs` (#74/#84) it inherited.
+        let vrot (rotation: float) (v: Point) : Point =
+            if rotation = 0.0 then
+                v
             else
-                ValueNone
-        | SBox halfExtents ->
-            if finitePoint halfExtents && halfExtents.X > 0.0 && halfExtents.Y > 0.0 then
-                ValueSome(struct (-halfExtents.X, -halfExtents.Y, halfExtents.X, halfExtents.Y))
-            else
-                ValueNone
-        | SPoly polygon ->
-            let v = polygon.Vertices
+                let c = cos rotation
+                let s = sin rotation
+                { X = c * v.X - s * v.Y
+                  Y = s * v.X + c * v.Y }
 
-            // `not (area > 0.0)` rather than `area <= 0.0`: a ring whose shoelace terms overflow and
-            // cancel has a NaN area, and NaN fails BOTH comparisons. Only the negated form rejects it —
-            // which is what `Geometry.wellFormed` does, and the parity claimed above is the point.
-            if v.Length < 3 || not (v |> Array.forall finitePoint) || not (ringArea v > 0.0) then
-                ValueNone
-            else
-                let mutable loX, loY = v.[0].X, v.[0].Y
-                let mutable hiX, hiY = v.[0].X, v.[0].Y
-
-                for p in v do
-                    loX <- min loX p.X
-                    loY <- min loY p.Y
-                    hiX <- max hiX p.X
-                    hiY <- max hiY p.Y
-
-                ValueSome(struct (loX, loY, hiX, hiY))
-
-    // Bounds of a *rotated* shape about its own origin. Once `step` can spin a body, the unrotated extent
-    // stops bounding it, and a broad phase that keeps using it drops real contacts — so rotation has to
-    // reach `pairs`, not just the narrow phase.
-    //
-    // A non-finite rotation makes the body collide with nothing, exactly as a non-finite position does:
-    // there is no box to bound, and returning one would leak NaN into `Geometry.intersects`.
-    //
-    // At `rotation = 0.0` this returns `localBounds` unchanged, so the pair set — and every golden
-    // checksum keyed on it — is bit-identical to the pre-rotation broad phase for any world of unrotated
-    // bodies, which is every world `addBody` can build.
-    let private rotatedBounds (shape: Shape) (rotation: float) : struct (float * float * float * float) voption =
-        match localBounds shape with
-        | ValueNone -> ValueNone
-        | ValueSome unrotated when rotation = 0.0 -> ValueSome unrotated
-        | ValueSome(struct (loX, loY, hiX, hiY)) ->
-            if not (finite rotation) then
-                ValueNone
-            else
-                match shape with
-                // A circle is rotationally symmetric: its box is its box.
-                | SCircle _ -> ValueSome(struct (loX, loY, hiX, hiY))
-                | SBox _
-                | SPoly _ ->
-                    // The rotated hull of a convex shape is bounded by the rotated hull of its box's
-                    // corners for `SBox`, and by its rotated vertices for `SPoly`. Both are the extremes
-                    // of a convex set, so min/max over them is exact, not conservative.
-                    let corners =
-                        match shape with
-                        | SPoly polygon -> polygon.Vertices
-                        | _ ->
-                            [| { X = loX; Y = loY }
-                               { X = hiX; Y = loY }
-                               { X = hiX; Y = hiY }
-                               { X = loX; Y = hiY } |]
-
-                    let mutable rloX, rloY = infinity, infinity
-                    let mutable rhiX, rhiY = -infinity, -infinity
-
-                    for v in corners do
-                        let r = vrot rotation v
-                        rloX <- min rloX r.X
-                        rloY <- min rloY r.Y
-                        rhiX <- max rhiX r.X
-                        rhiY <- max rhiY r.Y
-
-                    ValueSome(struct (rloX, rloY, rhiX, rhiY))
-
-    // World-space AABB of body `i`, or `ValueNone` when it collides with nothing. Reads the SoA arrays
-    // directly rather than a whole `World`, so `broadPhase` can bound every body while the `World` that will
-    // carry them — and its `Boxes`/`Grid` — is still being built.
-    let private aabbAt (pos: Point[]) (shapes: Shape[]) (rot: float[]) (i: int) : Rect voption =
-        let p = pos.[i]
-
-        if not (finitePoint p) then
-            ValueNone
-        else
-            match rotatedBounds shapes.[i] rot.[i] with
-            | ValueNone -> ValueNone
-            | ValueSome(struct (loX, loY, hiX, hiY)) ->
-                ValueSome
-                    { X = p.X + loX
-                      Y = p.Y + loY
-                      Width = hiX - loX
-                      Height = hiY - loY }
-
-    // Only a `Dynamic` body has finite mass, so a pair without one can never resolve.
-    let private solvable (a: BodyKind) (b: BodyKind) = a = Dynamic || b = Dynamic
-
-    // Mass and rotational inertia of a shape, as `struct(mass, inertia)`; `ValueNone` for a degenerate
-    // shape, which has neither.
-    //
-    // **Density is 1.0, and the body's origin is its centre of mass.** Neither `Material` nor `addBody`
-    // carries a mass, a density or a centroid, so this slice must fix a convention, and `ρ = 1` is the one
-    // that keeps `mass` a pure function of `Shape` — no new field, no new parameter, nothing to keep in
-    // sync. A later `Material.Density` multiplies both quantities and is a purely additive change; a later
-    // centroid shift is not, which is why `SPoly`'s inertia is taken about the ORIGIN rather than about
-    // the ring's centroid. A polygon whose centroid is not its origin therefore spins about its origin.
-    // That is a choice, not an oversight: the origin is what `Pos` means, and what `interpolate` (#78)
-    // will lerp.
-    //
-    // Inertia is about the axis through that origin. Zero-inertia shapes cannot exist here (`localBounds`
-    // has already rejected them), but the caller still guards, because `1.0 / 0.0` is not an error in
-    // floating point — it is `infinity`, and an infinite inverse inertia is a body that spins up to NaN
-    // on the first impulse.
-    let private massProps (shape: Shape) : struct (float * float) voption =
-        match localBounds shape with
-        | ValueNone -> ValueNone
-        | ValueSome _ ->
+        // A shape's extent about its own origin, as `struct(loX, loY, hiX, hiY)`; `ValueNone` for a degenerate
+        // shape — the no-collision input of the `Shape` contract. NaN fails every `>` test, so the guards are
+        // NaN-safe without a separate check.
+        let localBounds (shape: Shape) : struct (float * float * float * float) voption =
             match shape with
             | SCircle radius ->
-                let m = System.Math.PI * radius * radius
-                ValueSome(struct (m, 0.5 * m * radius * radius))
+                if finite radius && radius > 0.0 then
+                    ValueSome(struct (-radius, -radius, radius, radius))
+                else
+                    ValueNone
             | SBox halfExtents ->
-                let w = 2.0 * halfExtents.X
-                let h = 2.0 * halfExtents.Y
-                let m = w * h
-                ValueSome(struct (m, m * (w * w + h * h) / 12.0))
+                if finitePoint halfExtents && halfExtents.X > 0.0 && halfExtents.Y > 0.0 then
+                    ValueSome(struct (-halfExtents.X, -halfExtents.Y, halfExtents.X, halfExtents.Y))
+                else
+                    ValueNone
             | SPoly polygon ->
-                // Unit-density mass is the ring's area; the polar second moment about the origin is the
-                // standard triangle-fan sum over the same fan.
-                //
-                // Each fan term is SIGNED, and the sign is taken off the total — never off the term. A fan
-                // triangle `(origin, p, q)` whose winding opposes the ring's contributes a NEGATIVE area,
-                // and that cancellation is the whole mechanism by which the fan measures a polygon the
-                // origin lies outside of. Taking `abs` per term instead adds those triangles rather than
-                // subtracting them: the triangle `[(10,0); (11,0); (10,1)]` would weigh 21x its true mass.
-                // `ringArea` above already gets this right, and `localBounds` used it to accept this very
-                // polygon — so a per-term `abs` here would disagree with the gate that let the shape in.
-                //
-                // `abs` on the totals (rather than assuming a CCW ring) is what keeps both quantities
-                // winding-independent, which `ringArea` also promises.
                 let v = polygon.Vertices
-                let mutable twiceArea = 0.0
-                let mutable moment = 0.0
 
-                for i in 0 .. v.Length - 1 do
-                    let p = v.[i]
-                    let q = v.[(i + 1) % v.Length]
-                    let c = vcross p q
-                    twiceArea <- twiceArea + c
-                    moment <- moment + c * (vdot p p + vdot p q + vdot q q)
+                // `not (area > 0.0)` rather than `area <= 0.0`: a ring whose shoelace terms overflow and
+                // cancel has a NaN area, and NaN fails BOTH comparisons. Only the negated form rejects it —
+                // which is what `Geometry.wellFormed` does, and the parity claimed above is the point.
+                if v.Length < 3 || not (v |> Array.forall finitePoint) || not (ringArea v > 0.0) then
+                    ValueNone
+                else
+                    let mutable loX, loY = v.[0].X, v.[0].Y
+                    let mutable hiX, hiY = v.[0].X, v.[0].Y
 
-                ValueSome(struct (abs twiceArea / 2.0, abs moment / 12.0))
+                    for p in v do
+                        loX <- min loX p.X
+                        loY <- min loY p.Y
+                        hiX <- max hiX p.X
+                        hiY <- max hiY p.Y
 
-    // The inverse mass and inverse inertia of a body, which is what every impulse actually divides by.
-    // Zero means infinite: `Static` and `Kinematic` bodies are immovable by construction, and a degenerate
-    // shape has no mass to move. Guarding on `> 0.0 && finite` rejects NaN too, since NaN fails every
-    // comparison — so a body built from an overflowing polygon absorbs impulses rather than spreading NaN.
-    let private inverseProps (kind: BodyKind) (shape: Shape) : struct (float * float) =
-        match kind with
-        | Static
-        | Kinematic -> struct (0.0, 0.0)
-        | Dynamic ->
-            match massProps shape with
-            | ValueNone -> struct (0.0, 0.0)
-            | ValueSome(struct (m, i)) ->
-                let invM = if finite m && m > 0.0 then 1.0 / m else 0.0
-                let invI = if finite i && i > 0.0 then 1.0 / i else 0.0
-                struct (invM, invI)
+                    ValueSome(struct (loX, loY, hiX, hiY))
 
-    // The smallest half-extent of a shape's LOCAL box — the thinnest cross-section it presents, and so the
-    // furthest it may move in one step before it could skip clean past a contact between this step's start
-    // and end. Rotation-invariant for the thinness that matters: a box is `min(hx, hy)` thick however it is
-    // turned. `ValueNone` for a degenerate shape, which cannot tunnel because it collides with nothing.
-    let private minHalfExtent (shape: Shape) : float voption =
-        match localBounds shape with
-        | ValueNone -> ValueNone
-        | ValueSome(struct (loX, loY, hiX, hiY)) -> ValueSome(min ((hiX - loX) * 0.5) ((hiY - loY) * 0.5))
+        // Bounds of a *rotated* shape about its own origin. Once `step` can spin a body, the unrotated extent
+        // stops bounding it, and a broad phase that keeps using it drops real contacts — so rotation has to
+        // reach `pairs`, not just the narrow phase.
+        //
+        // A non-finite rotation makes the body collide with nothing, exactly as a non-finite position does:
+        // there is no box to bound, and returning one would leak NaN into `Geometry.intersects`.
+        //
+        // At `rotation = 0.0` this returns `localBounds` unchanged, so the pair set — and every golden
+        // checksum keyed on it — is bit-identical to the pre-rotation broad phase for any world of unrotated
+        // bodies, which is every world `addBody` can build.
+        let rotatedBounds (shape: Shape) (rotation: float) : struct (float * float * float * float) voption =
+            match localBounds shape with
+            | ValueNone -> ValueNone
+            | ValueSome unrotated when rotation = 0.0 -> ValueSome unrotated
+            | ValueSome(struct (loX, loY, hiX, hiY)) ->
+                if not (finite rotation) then
+                    ValueNone
+                else
+                    match shape with
+                    // A circle is rotationally symmetric: its box is its box.
+                    | SCircle _ -> ValueSome(struct (loX, loY, hiX, hiY))
+                    | SBox _
+                    | SPoly _ ->
+                        // The rotated hull of a convex shape is bounded by the rotated hull of its box's
+                        // corners for `SBox`, and by its rotated vertices for `SPoly`. Both are the extremes
+                        // of a convex set, so min/max over them is exact, not conservative.
+                        let corners =
+                            match shape with
+                            | SPoly polygon -> polygon.Vertices
+                            | _ ->
+                                [| { X = loX; Y = loY }
+                                   { X = hiX; Y = loY }
+                                   { X = hiX; Y = hiY }
+                                   { X = loX; Y = hiY } |]
+
+                        let mutable rloX, rloY = infinity, infinity
+                        let mutable rhiX, rhiY = -infinity, -infinity
+
+                        for v in corners do
+                            let r = vrot rotation v
+                            rloX <- min rloX r.X
+                            rloY <- min rloY r.Y
+                            rhiX <- max rhiX r.X
+                            rhiY <- max rhiY r.Y
+
+                        ValueSome(struct (rloX, rloY, rhiX, rhiY))
+
+        // World-space AABB of body `i`, or `ValueNone` when it collides with nothing. Reads the SoA arrays
+        // directly rather than a whole `World`, so `broadPhase` can bound every body while the `World` that will
+        // carry them — and its `Boxes`/`Grid` — is still being built.
+        let aabbAt (pos: Point[]) (shapes: Shape[]) (rot: float[]) (i: int) : Rect voption =
+            let p = pos.[i]
+
+            if not (finitePoint p) then
+                ValueNone
+            else
+                match rotatedBounds shapes.[i] rot.[i] with
+                | ValueNone -> ValueNone
+                | ValueSome(struct (loX, loY, hiX, hiY)) ->
+                    ValueSome
+                        { X = p.X + loX
+                          Y = p.Y + loY
+                          Width = hiX - loX
+                          Height = hiY - loY }
+
+        // Only a `Dynamic` body has finite mass, so a pair without one can never resolve.
+        let solvable (a: BodyKind) (b: BodyKind) = a = Dynamic || b = Dynamic
+
+        // Mass and rotational inertia of a shape, as `struct(mass, inertia)`; `ValueNone` for a degenerate
+        // shape, which has neither.
+        //
+        // **Density is 1.0, and the body's origin is its centre of mass.** Neither `Material` nor `addBody`
+        // carries a mass, a density or a centroid, so this slice must fix a convention, and `ρ = 1` is the one
+        // that keeps `mass` a pure function of `Shape` — no new field, no new parameter, nothing to keep in
+        // sync. A later `Material.Density` multiplies both quantities and is a purely additive change; a later
+        // centroid shift is not, which is why `SPoly`'s inertia is taken about the ORIGIN rather than about
+        // the ring's centroid. A polygon whose centroid is not its origin therefore spins about its origin.
+        // That is a choice, not an oversight: the origin is what `Pos` means, and what `interpolate` (#78)
+        // will lerp.
+        //
+        // Inertia is about the axis through that origin. Zero-inertia shapes cannot exist here (`localBounds`
+        // has already rejected them), but the caller still guards, because `1.0 / 0.0` is not an error in
+        // floating point — it is `infinity`, and an infinite inverse inertia is a body that spins up to NaN
+        // on the first impulse.
+        let massProps (shape: Shape) : struct (float * float) voption =
+            match localBounds shape with
+            | ValueNone -> ValueNone
+            | ValueSome _ ->
+                match shape with
+                | SCircle radius ->
+                    let m = System.Math.PI * radius * radius
+                    ValueSome(struct (m, 0.5 * m * radius * radius))
+                | SBox halfExtents ->
+                    let w = 2.0 * halfExtents.X
+                    let h = 2.0 * halfExtents.Y
+                    let m = w * h
+                    ValueSome(struct (m, m * (w * w + h * h) / 12.0))
+                | SPoly polygon ->
+                    // Unit-density mass is the ring's area; the polar second moment about the origin is the
+                    // standard triangle-fan sum over the same fan.
+                    //
+                    // Each fan term is SIGNED, and the sign is taken off the total — never off the term. A fan
+                    // triangle `(origin, p, q)` whose winding opposes the ring's contributes a NEGATIVE area,
+                    // and that cancellation is the whole mechanism by which the fan measures a polygon the
+                    // origin lies outside of. Taking `abs` per term instead adds those triangles rather than
+                    // subtracting them: the triangle `[(10,0); (11,0); (10,1)]` would weigh 21x its true mass.
+                    // `ringArea` above already gets this right, and `localBounds` used it to accept this very
+                    // polygon — so a per-term `abs` here would disagree with the gate that let the shape in.
+                    //
+                    // `abs` on the totals (rather than assuming a CCW ring) is what keeps both quantities
+                    // winding-independent, which `ringArea` also promises.
+                    let v = polygon.Vertices
+                    let mutable twiceArea = 0.0
+                    let mutable moment = 0.0
+
+                    for i in 0 .. v.Length - 1 do
+                        let p = v.[i]
+                        let q = v.[(i + 1) % v.Length]
+                        let c = vcross p q
+                        twiceArea <- twiceArea + c
+                        moment <- moment + c * (vdot p p + vdot p q + vdot q q)
+
+                    ValueSome(struct (abs twiceArea / 2.0, abs moment / 12.0))
+
+        // The inverse mass and inverse inertia of a body, which is what every impulse actually divides by.
+        // Zero means infinite: `Static` and `Kinematic` bodies are immovable by construction, and a degenerate
+        // shape has no mass to move. Guarding on `> 0.0 && finite` rejects NaN too, since NaN fails every
+        // comparison — so a body built from an overflowing polygon absorbs impulses rather than spreading NaN.
+        let inverseProps (kind: BodyKind) (shape: Shape) : struct (float * float) =
+            match kind with
+            | Static
+            | Kinematic -> struct (0.0, 0.0)
+            | Dynamic ->
+                match massProps shape with
+                | ValueNone -> struct (0.0, 0.0)
+                | ValueSome(struct (m, i)) ->
+                    let invM = if finite m && m > 0.0 then 1.0 / m else 0.0
+                    let invI = if finite i && i > 0.0 then 1.0 / i else 0.0
+                    struct (invM, invI)
+
+        // The smallest half-extent of a shape's LOCAL box — the thinnest cross-section it presents, and so the
+        // furthest it may move in one step before it could skip clean past a contact between this step's start
+        // and end. Rotation-invariant for the thinness that matters: a box is `min(hx, hy)` thick however it is
+        // turned. `ValueNone` for a degenerate shape, which cannot tunnel because it collides with nothing.
+        let minHalfExtent (shape: Shape) : float voption =
+            match localBounds shape with
+            | ValueNone -> ValueNone
+            | ValueSome(struct (loX, loY, hiX, hiY)) -> ValueSome(min ((hiX - loX) * 0.5) ((hiY - loY) * 0.5))
+
+    open BodyGeometry
 
     // The broad-phase index for a set of bodies: each body's world-space AABB (`ValueNone` where the body
     // collides with nothing), and the `SpatialGrid` that buckets the collidable ones under every cell their
