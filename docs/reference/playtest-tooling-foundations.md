@@ -14,8 +14,8 @@ the distinction the original primitives could not express:
   helper-level tests.
 - `ProductionJourney` starts from the product boot function and crosses raw event mapping, dispatch,
   update, fixed ticks, and deterministic effect results.
-- only its opaque `JourneyReceipt`, authenticated by the protected release-gate issuer key and bound
-  to route/scenario/test/script/trace/result/TRX, satisfies a manifest row marked
+- only its opaque `JourneyReceipt`, returned in-process by an executable
+  `IProductionJourneyProof` and bound to route/scenario/test/script/trace/result/TRX, satisfies a manifest row marked
   `requires=production-journey`.
 
 The original audit records
@@ -85,11 +85,12 @@ build on — the primitives already in place").
 
 `Origin.InputDriven` is retained for compatibility but means simulation/component input evidence.
 `Origin.ProductionJourney` is minted only by `Journey.runScript`/`runPolicy`. The shipped
-`ReferenceJourney` composition supplies the positive reference boot/map/update/tick/effect route;
-the test suite imports it instead of rebuilding a purpose-made adapter. A displayed event which
+the separate `FS.GG.Game.Reference` application supplies the positive reference
+boot/map/update/tick/effect composition root; the test suite imports it instead of rebuilding a
+purpose-made adapter. A displayed event which
 the production mapper does not bind fails explicitly, and a bounded run which misses its terminal
 predicate fails with final-state and captured-input digests. `fsgg-playtest` validates the rendered
-HMAC issuer signature and matching TRX identity; a public-checksum JSON or hand-authored provenance
-text cannot upgrade a trace. Script and trace digests length-frame every encoded value, so an embedded
+executable proof's opaque in-memory receipt and matching TRX identity; JSON, caller keys, and
+hand-authored provenance text cannot upgrade a trace. Script and trace digests length-frame every encoded value, so an embedded
 newline cannot collide with an event boundary. A complete critic artifact is also mandatory for
 production rows; missing, mismatched, unsupported, or ambiguous AC rows veto completion.

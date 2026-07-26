@@ -14,7 +14,7 @@
 /// laundered through `Synthetic.trace`, are refused — provenance the gate reads, not the frame values.
 ///
 /// Those constructed Pong states prove helpers and simulation behavior only. The separate
-/// `ProductionJourney` gate below starts from `JourneyTests.boot`, traverses the reference product's
+/// `ProductionJourney` gate below imports `FS.GG.Game.Reference.Composition.boot`, traverses that application's
 /// actual raw-event mapping/update/tick/effect seams, and reaches a terminal outcome. Only that
 /// runner-issued receipt is user-facing boot-to-outcome evidence.
 module Game.Harness.Tests.ReferenceProof

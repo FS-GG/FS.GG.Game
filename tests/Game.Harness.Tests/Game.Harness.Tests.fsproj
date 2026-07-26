@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Game.Harness\FS.GG.Game.Harness.fsproj" />
+    <ProjectReference Include="..\..\src\ReferenceGame\FS.GG.Game.Reference.fsproj" />
     <PackageReference Include="Expecto" />
     <PackageReference Include="FsCheck" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

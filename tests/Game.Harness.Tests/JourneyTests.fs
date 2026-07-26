@@ -1,14 +1,12 @@
 module Game.Harness.Tests.JourneyTests
 
-open System.Text
 open Expecto
 open FS.GG.Game.Core
 open FS.GG.Game.Harness
+open FS.GG.Game.Reference
 
-let productionAdapter = ReferenceJourney.adapter
-let productionScript = ReferenceJourney.script
-
-let private issuerKey = Encoding.UTF8.GetBytes("reference-release-gate-key-32-bytes-minimum")
+let productionAdapter = Composition.adapter
+let productionScript = Composition.script
 
 [<Tests>]
 let tests =
@@ -21,16 +19,17 @@ let tests =
 
               Expect.equal (Trace.origin run.Trace) Origin.ProductionJourney "journey provenance is runner-issued"
               Expect.equal (JourneyReceipt.result run.Receipt) JourneyResult.Passed "the bounded journey reaches its terminal predicate"
-              Expect.equal frames.[0].Screen ReferenceJourney.Screen.Playing "the real start action leaves the boot menu"
-              Expect.equal frames.[1].Screen ReferenceJourney.Screen.Paused "pause is routed through production mapping"
-              Expect.equal frames.[2].Screen ReferenceJourney.Screen.Playing "resume is routed through production mapping"
-              Expect.equal frames.[6].Room ReferenceJourney.Room.Vault "interaction changes the active room"
+              Expect.equal frames.[0].Screen Composition.Screen.Playing "the real start action leaves the boot menu"
+              Expect.equal frames.[1].Screen Composition.Screen.Paused "pause is routed through production mapping"
+              Expect.equal frames.[2].Screen Composition.Screen.Playing "resume is routed through production mapping"
+              Expect.equal frames.[3].Aim (12, 7) "pointer input traverses the product mapper and update"
+              Expect.equal frames.[6].Room Composition.Room.Vault "interaction changes the active room"
               Expect.isTrue frames.[6].DestinationActive "the destination is revealed and activated"
               Expect.equal frames.[6].X 0 "the player is repositioned in the destination"
               Expect.isTrue frames.[6].CameraTransition "room entry begins the camera transition"
               Expect.isFalse frames.[7].CameraTransition "a fixed production tick completes the camera transition"
-              Expect.equal frames.[8].Room ReferenceJourney.Room.Vault "the sealed exit refuses interaction before room clear"
-              Expect.equal run.Final.Screen ReferenceJourney.Screen.Won "the clear-result seam unlocks a terminal outcome"
+              Expect.equal frames.[8].Room Composition.Room.Vault "the sealed exit refuses interaction before room clear"
+              Expect.equal run.Final.Screen Composition.Screen.Won "the clear-result seam unlocks a terminal outcome"
 
           testCase "a captured seeded policy replays byte-identically through the shipped production-event route"
           <| fun _ ->
@@ -52,14 +51,14 @@ let tests =
 
           testCase "a helper can work while an unbound displayed interaction fails production reachability"
           <| fun _ ->
-              let helper (model: ReferenceJourney.Model) =
+              let helper (model: Composition.Model) =
                   { model with
-                      Room = ReferenceJourney.Room.Vault
+                      Room = Composition.Room.Vault
                       DestinationActive = true
                       X = 0 }
 
               let helperState = productionAdapter.Boot() |> helper
-              Expect.equal helperState.Room ReferenceJourney.Room.Vault "the direct helper remains green"
+              Expect.equal helperState.Room Composition.Room.Vault "the direct helper remains green"
 
               let productionMap = productionAdapter.MapEvent
               let broken =
@@ -87,14 +86,11 @@ let tests =
                   Expect.stringContains reason "captured-input sha256:" "the input capture is identified"
               | JourneyResult.Passed -> failtest "a non-terminal prefix must fail"
 
-          testCase "receipt JSON binds issuer, route, scenario, test, script, trace, result, and maximum"
+          testCase "production receipt is opaque and has no public constructor"
           <| fun _ ->
-              let json =
-                  Journey.runScript productionAdapter productionScript
-                  |> fun run -> JourneyReceipt.render issuerKey run.Receipt
-
-              for field in [ "\"kind\":\"production-journey\""; "\"issuer\":\"sha256:"; "\"routeId\":"; "\"scenarioId\":"; "\"testId\":"; "\"scriptDigest\":\"sha256:"; "\"traceDigest\":\"sha256:"; "\"signature\":\"hmac-sha256:" ] do
-                  Expect.stringContains json field $"receipt includes {field}"
+              Expect.isEmpty
+                  (typeof<JourneyReceipt>.GetConstructors())
+                  "callers cannot construct a receipt or serialize one into accepted provenance"
 
           testCase "length-framed script digests distinguish embedded newlines from event boundaries"
           <| fun _ ->

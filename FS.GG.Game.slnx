@@ -4,6 +4,7 @@
     <Project Path="src/Game.Harness/FS.GG.Game.Harness.fsproj" />
     <Project Path="src/Game.Render/FS.GG.Game.Render.fsproj" />
     <Project Path="src/Playtest.Cli/FS.GG.Playtest.Cli.fsproj" />
+    <Project Path="src/ReferenceGame/FS.GG.Game.Reference.fsproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Game.Core.Tests/Game.Core.Tests.fsproj" />

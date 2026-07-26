@@ -32,15 +32,13 @@ let private parseProofInputs (argv: string[]) (manifest: Manifest.GameplayFr lis
             |> List.exists (fun requirement ->
                 requirement.RequiredEvidence = Manifest.EvidenceLevel.ProductionJourney)
 
-        match flag "--journey-receipts" argv, flag "--journey-key-file" argv, flag "--critic" argv with
-        | None, None, None when not productionRequired -> Ok simulation
-        | Some receiptsPath, Some keyPath, Some criticPath ->
-            match readFile receiptsPath, readBytes keyPath, readFile criticPath with
-            | Error e, _, _
-            | _, Error e, _
-            | _, _, Error e -> Error e
-            | Ok receipts, Ok issuerKey, Ok criticText ->
-                match Proofs.parseJourneyReceipts issuerKey receipts, Critic.parse criticText with
+        match flag "--journey-proof-assembly" argv, flag "--critic" argv with
+        | None, None when not productionRequired -> Ok simulation
+        | Some assemblyPath, Some criticPath ->
+            match readFile criticPath with
+            | Error e -> Error e
+            | Ok criticText ->
+                match Proofs.loadJourneyProofs assemblyPath, Critic.parse criticText with
                 | Error e, _
                 | _, Error e -> Error e
                 | Ok journeys, Ok criticRows ->
@@ -51,9 +49,9 @@ let private parseProofInputs (argv: string[]) (manifest: Manifest.GameplayFr lis
                         |> Map.fold (fun combined key value -> Map.add key value combined) simulation
                         |> Ok
         | _ when productionRequired ->
-            Error "production-journey coverage requires --journey-receipts, --journey-key-file, and --critic"
+            Error "production-journey coverage requires --journey-proof-assembly and --critic"
         | _ ->
-            Error "--journey-receipts, --journey-key-file, and --critic must be supplied together"
+            Error "--journey-proof-assembly and --critic must be supplied together"
 
 let private scaffoldManifest (argv: string[]) : int =
     match flag "--spec" argv with
@@ -131,7 +129,7 @@ let private coverageLint (argv: string[]) : int =
                         eprintfn "coverage-lint: FAIL — cited AC(s) without their required evidence level: %A" report.UncoveredAcs
                         1
     | _ ->
-        eprintfn "coverage-lint: --manifest <m> and --proofs <p> required; production rows also require --journey-receipts <jsonl> --journey-key-file <key> --critic <assessment>"
+        eprintfn "coverage-lint: --manifest <m> and --proofs <p> required; production rows also require --journey-proof-assembly <dll> --critic <assessment>"
         2
 
 let private emitEvidence (argv: string[]) : int =
@@ -174,7 +172,7 @@ let private emitEvidence (argv: string[]) : int =
                         printf "%s" rendered
                         0
     | _ ->
-        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-receipts <jsonl> --journey-key-file <key> --critic <assessment>"
+        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --critic <assessment>"
         2
 
 [<EntryPoint>]

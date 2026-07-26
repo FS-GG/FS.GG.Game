@@ -76,35 +76,6 @@ module private Stable =
 
     let digestParts values = values |> frame |> digestBytes
 
-    let escape (value: string) =
-        value
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("\r", "\\r")
-            .Replace("\n", "\\n")
-
-    let resultToken = function
-        | JourneyResult.Passed -> "pass"
-        | JourneyResult.Failed _ -> "fail"
-
-    let failure = function
-        | JourneyResult.Passed -> ""
-        | JourneyResult.Failed reason -> reason
-
-    let payload (keyId: string) (d: ReceiptData) =
-        frame
-            [ "production-journey-v1"
-              keyId
-              d.RouteId
-              d.ScenarioId
-              d.TestId
-              d.ScriptDigest
-              d.TraceDigest
-              resultToken d.Result
-              failure d.Result
-              string d.Steps
-              string d.MaxSteps ]
-
 [<RequireQualifiedAccess>]
 module JourneyReceipt =
     let routeId (receipt: JourneyReceipt) = receipt.Data.RouteId
@@ -116,31 +87,9 @@ module JourneyReceipt =
     let steps (receipt: JourneyReceipt) = receipt.Data.Steps
     let maxSteps (receipt: JourneyReceipt) = receipt.Data.MaxSteps
 
-    let render (issuerKey: byte[]) (receipt: JourneyReceipt) =
-        if issuerKey.Length < 32 then
-            invalidArg "issuerKey" "a production-journey issuer key must contain at least 32 bytes"
-
-        let d = receipt.Data
-        let keyId = Stable.digestBytes issuerKey
-        let signature =
-            use hmac = new HMACSHA256(issuerKey)
-            hmac.ComputeHash(Stable.payload keyId d)
-            |> Convert.ToHexString
-            |> fun value -> value.ToLowerInvariant()
-
-        sprintf
-            """{"schemaVersion":1,"kind":"production-journey","issuer":"sha256:%s","routeId":"%s","scenarioId":"%s","testId":"%s","scriptDigest":"sha256:%s","traceDigest":"sha256:%s","result":"%s","failure":"%s","steps":%d,"maxSteps":%d,"signature":"hmac-sha256:%s"}"""
-            keyId
-            (Stable.escape d.RouteId)
-            (Stable.escape d.ScenarioId)
-            (Stable.escape d.TestId)
-            d.ScriptDigest
-            d.TraceDigest
-            (Stable.resultToken d.Result)
-            (Stable.escape (Stable.failure d.Result))
-            d.Steps
-            d.MaxSteps
-            signature
+type IProductionJourneyProof =
+    abstract TestId: string
+    abstract Run: unit -> JourneyReceipt
 
 type JourneyRun<'model, 'event, 'fingerprint> =
     { Trace: Trace<'fingerprint>

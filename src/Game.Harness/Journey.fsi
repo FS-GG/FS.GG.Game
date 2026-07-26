@@ -62,9 +62,13 @@ module JourneyReceipt =
     val result: JourneyReceipt -> JourneyResult
     val steps: JourneyReceipt -> int
     val maxSteps: JourneyReceipt -> int
-    /// Stable JSON consumed by `fsgg-playtest`, authenticated with a release-gate issuer key. The
-    /// key must contain at least 32 bytes and is never embedded in the receipt.
-    val render: issuerKey: byte[] -> JourneyReceipt -> string
+
+/// Non-generic executable proof boundary loaded by `fsgg-playtest`. Implementations can return a
+/// receipt only by running the typed journey API; the CLI consumes the opaque value in-process and
+/// never accepts production provenance from JSON or another caller-authored text artifact.
+type IProductionJourneyProof =
+    abstract TestId: string
+    abstract Run: unit -> JourneyReceipt
 
 /// A journey trace, captured event stream, final model, and runner-issued receipt.
 type JourneyRun<'model, 'event, 'fingerprint> =

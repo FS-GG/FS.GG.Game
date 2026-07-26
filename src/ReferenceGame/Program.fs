@@ -1,7 +1,8 @@
-namespace FS.GG.Game.Harness
+namespace FS.GG.Game.Reference
 
-[<RequireQualifiedAccess>]
-module ReferenceJourney =
+open FS.GG.Game.Harness
+
+module Composition =
     type Screen =
         | Menu
         | Playing
@@ -20,6 +21,7 @@ module ReferenceJourney =
           DestinationActive: bool
           CameraTransition: bool
           VaultClear: bool
+          Aim: int * int
           Tick: int }
 
     type Key = Right
@@ -27,16 +29,25 @@ module ReferenceJourney =
     type MenuAction = NewGame
     type EffectResult = VaultEnemiesDefeated
 
-    let private boot () =
+    type Message =
+        | StartGame
+        | MoveRight
+        | TryDoor
+        | PauseGame
+        | ResumeGame
+        | AimAt of int * int
+
+    let boot () =
         { Screen = Menu
           Room = Atrium
           X = 0
           DestinationActive = false
           CameraTransition = false
           VaultClear = false
+          Aim = 0, 0
           Tick = 0 }
 
-    let private traverseDoor model =
+    let traverseDoor model =
         match model.Room, model.X, model.VaultClear with
         | Atrium, x, _ when x >= 2 ->
             { model with
@@ -52,48 +63,51 @@ module ReferenceJourney =
                 CameraTransition = true }
         | _ -> model
 
-    let private update message model =
+    let update message model =
         match message with
-        | "start" when model.Screen = Menu -> { model with Screen = Playing }
-        | "right" when model.Screen = Playing -> { model with X = model.X + 1 }
-        | "interact" when model.Screen = Playing -> traverseDoor model
-        | "pause" when model.Screen = Playing -> { model with Screen = Paused }
-        | "resume" when model.Screen = Paused -> { model with Screen = Playing }
+        | StartGame when model.Screen = Menu -> { model with Screen = Playing }
+        | MoveRight when model.Screen = Playing -> { model with X = model.X + 1 }
+        | TryDoor when model.Screen = Playing -> traverseDoor model
+        | PauseGame when model.Screen = Playing -> { model with Screen = Paused }
+        | ResumeGame when model.Screen = Paused -> { model with Screen = Playing }
+        | AimAt(x, y) -> { model with Aim = x, y }
         | _ -> model
 
-    let private mapEvent event _model =
+    let mapEvent event _model =
         match event with
         | JourneyEvent.Start
-        | JourneyEvent.MenuAction NewGame -> JourneyDispatch.Mapped [ "start" ]
-        | JourneyEvent.KeyInput(Right, true) -> JourneyDispatch.Mapped [ "right" ]
-        | JourneyEvent.KeyInput(Right, false)
-        | JourneyEvent.PointerInput(Aim _) -> JourneyDispatch.Mapped []
-        | JourneyEvent.Interact -> JourneyDispatch.Mapped [ "interact" ]
-        | JourneyEvent.Pause -> JourneyDispatch.Mapped [ "pause" ]
-        | JourneyEvent.Resume -> JourneyDispatch.Mapped [ "resume" ]
+        | JourneyEvent.MenuAction NewGame -> JourneyDispatch.Mapped [ StartGame ]
+        | JourneyEvent.KeyInput(Right, true) -> JourneyDispatch.Mapped [ MoveRight ]
+        | JourneyEvent.KeyInput(Right, false) -> JourneyDispatch.Mapped []
+        | JourneyEvent.PointerInput(Aim(x, y)) -> JourneyDispatch.Mapped [ AimAt(x, y) ]
+        | JourneyEvent.Interact -> JourneyDispatch.Mapped [ TryDoor ]
+        | JourneyEvent.Pause -> JourneyDispatch.Mapped [ PauseGame ]
+        | JourneyEvent.Resume -> JourneyDispatch.Mapped [ ResumeGame ]
         | JourneyEvent.FixedTick
         | JourneyEvent.EffectResult _ -> JourneyDispatch.Mapped []
 
+    let fixedTick model =
+        let next =
+            { model with
+                CameraTransition = false
+                Tick = model.Tick + 1 }
+
+        if next.Room = Exit then { next with Screen = Won } else next
+
+    let applyEffectResult effect model =
+        match effect with
+        | VaultEnemiesDefeated -> { model with VaultClear = true }
+
     let adapter =
-        { RouteId = "reference-game/production-composition"
+        { RouteId = "FS.GG.Game.Reference/Composition"
           ScenarioId = "boot-to-vault-exit"
           TestId = "GP-JOURNEY-001"
           MaxSteps = 32
           Boot = boot
           MapEvent = mapEvent
           Update = update
-          FixedTick =
-            fun model ->
-                let next =
-                    { model with
-                        CameraTransition = false
-                        Tick = model.Tick + 1 }
-
-                if next.Room = Exit then { next with Screen = Won } else next
-          ApplyEffectResult =
-            fun effect model ->
-                match effect with
-                | VaultEnemiesDefeated -> { model with VaultClear = true }
+          FixedTick = fixedTick
+          ApplyEffectResult = applyEffectResult
           IsTerminal = fun model -> model.Screen = Won
           Fingerprint = id
           EncodeEvent = sprintf "%A"
@@ -112,3 +126,13 @@ module ReferenceJourney =
           JourneyEvent.EffectResult VaultEnemiesDefeated
           JourneyEvent.Interact
           JourneyEvent.FixedTick ]
+
+[<Sealed>]
+type ProductionJourneyProof() =
+    interface IProductionJourneyProof with
+        member _.TestId = Composition.adapter.TestId
+        member _.Run() = (Journey.runScript Composition.adapter Composition.script).Receipt
+
+module Program =
+    [<EntryPoint>]
+    let main _ = 0

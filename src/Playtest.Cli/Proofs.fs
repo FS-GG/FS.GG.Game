@@ -2,9 +2,8 @@
 module FS.GG.Playtest.Proofs
 
 open System
-open System.Security.Cryptography
-open System.Text
-open System.Text.Json
+open System.Reflection
+open FS.GG.Game.Harness
 
 /// The provenance of a gameplay-FR's proof. The manifest decides whether simulation input is enough
 /// or a validated production journey is required.
@@ -52,106 +51,47 @@ let parse (text: string) : Result<Map<string, Provenance>, string> =
     | Some e -> Error e
     | None -> Ok(Map.ofList entries)
 
-let private digestBytes (value: byte[]) =
-    value
-    |> SHA256.HashData
-    |> Convert.ToHexString
-    |> fun s -> s.ToLowerInvariant()
+/// Load and execute every public `IProductionJourneyProof` in an assembly. Production provenance is
+/// obtained only from the opaque in-memory receipt returned by `Journey.runScript`/`runPolicy`; no
+/// JSON, key, checksum, or caller-authored provenance text is accepted.
+let loadJourneyProofs (assemblyPath: string) : Result<Map<string, Provenance>, string> =
+    try
+        let proofType = typeof<IProductionJourneyProof>
+        let assembly = Assembly.LoadFrom assemblyPath
+        let implementations =
+            assembly.GetExportedTypes()
+            |> Array.filter (fun candidate ->
+                not candidate.IsAbstract
+                && not candidate.IsInterface
+                && proofType.IsAssignableFrom candidate
+                && candidate.GetConstructor(Type.EmptyTypes) <> null)
 
-let private frame (values: string list) =
-    let builder = StringBuilder()
+        if implementations.Length = 0 then
+            Error(sprintf "no public IProductionJourneyProof implementation found in %s" assemblyPath)
+        else
+            implementations
+            |> Array.fold
+                (fun state implementation ->
+                    match state with
+                    | Error error -> Error error
+                    | Ok proofs ->
+                        match Activator.CreateInstance implementation with
+                        | null -> Error(sprintf "cannot instantiate production journey proof %s" implementation.FullName)
+                        | instance ->
+                            let proof = instance :?> IProductionJourneyProof
+                            let receipt = proof.Run()
+                            let testId = JourneyReceipt.testId receipt
 
-    for value in values do
-        builder.Append(Encoding.UTF8.GetByteCount value).Append(':').Append(value) |> ignore
-
-    Encoding.UTF8.GetBytes(builder.ToString())
-
-/// Validate JSONL receipts emitted by `JourneyReceipt.render`.
-let parseJourneyReceipts (issuerKey: byte[]) (text: string) : Result<Map<string, Provenance>, string> =
-    if issuerKey.Length < 32 then
-        invalidArg "issuerKey" "a production-journey issuer key must contain at least 32 bytes"
-
-    let expectedIssuer = digestBytes issuerKey
-
-    let parseOne (line: string) =
-        try
-            use doc = JsonDocument.Parse line
-            let root = doc.RootElement
-            let str (name: string) =
-                match root.GetProperty(name).GetString() with
-                | null -> ""
-                | value -> value
-            let number (name: string) = root.GetProperty(name).GetInt32()
-            let schema = number "schemaVersion"
-            let kind = str "kind"
-            let issuer = str "issuer"
-            let route = str "routeId"
-            let scenario = str "scenarioId"
-            let testId = str "testId"
-            let scriptDigest = str "scriptDigest"
-            let traceDigest = str "traceDigest"
-            let result = str "result"
-            let failure = str "failure"
-            let steps = number "steps"
-            let maxSteps = number "maxSteps"
-            let signature = str "signature"
-            let stripSha (value: string) =
-                if value.StartsWith("sha256:", StringComparison.Ordinal) then value.Substring(7) else ""
-            let stripSignature (value: string) =
-                if value.StartsWith("hmac-sha256:", StringComparison.Ordinal) then value.Substring(12) else ""
-            let payload =
-                frame
-                    [ "production-journey-v1"
-                      expectedIssuer
-                      route
-                      scenario
-                      testId
-                      stripSha scriptDigest
-                      stripSha traceDigest
-                      result
-                      failure
-                      string steps
-                      string maxSteps ]
-            let expectedSignature =
-                use hmac = new HMACSHA256(issuerKey)
-                hmac.ComputeHash(payload)
-            let suppliedSignature =
-                try
-                    Convert.FromHexString(stripSignature signature)
-                with _ ->
-                    Array.empty
-
-            if schema <> 1 || kind <> "production-journey" then
-                Error "not a production-journey v1 receipt"
-            elif stripSha issuer <> expectedIssuer then
-                Error(sprintf "journey receipt %s was not issued by the configured release gate" testId)
-            elif String.IsNullOrWhiteSpace route || String.IsNullOrWhiteSpace scenario || String.IsNullOrWhiteSpace testId then
-                Error "journey receipt has an empty route, scenario, or test identity"
-            elif result <> "pass" || failure <> "" then
-                Error(sprintf "journey receipt %s did not pass" testId)
-            elif steps > maxSteps || steps < 0 || maxSteps <= 0 then
-                Error(sprintf "journey receipt %s violates its declared step bound" testId)
-            elif stripSha scriptDigest = "" || stripSha traceDigest = "" then
-                Error(sprintf "journey receipt %s has a malformed script or trace digest" testId)
-            elif suppliedSignature.Length <> expectedSignature.Length
-                 || not (CryptographicOperations.FixedTimeEquals(suppliedSignature, expectedSignature)) then
-                Error(sprintf "journey receipt %s has a forged or stale issuer signature" testId)
-            else
-                Ok(testId, ProductionJourney)
-        with ex ->
-            Error(sprintf "malformed journey receipt: %s" ex.Message)
-
-    let lines =
-        text.Replace("\r\n", "\n").Split('\n')
-        |> Array.map (fun line -> line.Trim())
-        |> Array.filter (String.IsNullOrWhiteSpace >> not)
-
-    lines
-    |> Array.fold
-        (fun state line ->
-            match state, parseOne line with
-            | Ok entries, Ok entry -> Ok(entry :: entries)
-            | Error e, _
-            | _, Error e -> Error e)
-        ((Ok []) : Result<(string * Provenance) list, string>)
-    |> Result.map Map.ofList
+                            if String.IsNullOrWhiteSpace proof.TestId || proof.TestId <> testId then
+                                Error(sprintf "%s returned a receipt for mismatched test identity '%s'" implementation.FullName testId)
+                            elif JourneyReceipt.result receipt <> JourneyResult.Passed then
+                                Error(sprintf "production journey proof %s did not pass" testId)
+                            elif JourneyReceipt.steps receipt > JourneyReceipt.maxSteps receipt then
+                                Error(sprintf "production journey proof %s violates its declared step bound" testId)
+                            elif Map.containsKey testId proofs then
+                                Error(sprintf "duplicate production journey proof for %s" testId)
+                            else
+                                Ok(Map.add testId ProductionJourney proofs))
+                (Ok Map.empty)
+    with ex ->
+        Error(sprintf "cannot execute production journey proof assembly %s: %s" assemblyPath ex.Message)

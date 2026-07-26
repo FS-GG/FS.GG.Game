@@ -36,10 +36,11 @@ For `production-journey` coverage:
    final-fingerprint and captured-input digests.
 4. Replay a scripted or seeded-policy capture and compare `Trace.frames`. Only `Journey.runScript`
    and `Journey.runPolicy` produce `Origin.ProductionJourney` and an opaque `JourneyReceipt`.
-5. Obtain the release gate's 32-byte-or-longer issuer key outside source control, pass it to
-   `JourneyReceipt.render issuerKey receipt`, and supply the JSONL plus the same protected key file
-   to `fsgg-playtest` with `--journey-receipts` and `--journey-key-file`. The manifest row must say
-   `requires=production-journey`. A hand-authored
+5. Add a public parameterless `IProductionJourneyProof` implementation to the product's proof
+   assembly. Its `Run` method calls the journey runner over the imported production composition and
+   returns the opaque receipt in memory. Pass that DLL to `fsgg-playtest` with
+   `--journey-proof-assembly`; the CLI loads and executes it and accepts no JSON receipt or caller
+   key. The manifest row must say `requires=production-journey`. A hand-authored
    `productionJourney` token, a simulation trace, a stale/modified receipt, or a green TRX without
    the matching receipt fails closed.
 
@@ -62,9 +63,9 @@ stronger evidence, but cannot create or upgrade provenance: deleting or mismatch
 receipt must still fail mechanically even if every critic row says `supported`.
 
 Save those rows as the critic artifact passed with `--critic`. For production-journey manifest rows,
-`fsgg-playtest coverage-lint` and `emit-evidence` require the receipt JSONL, protected issuer-key
-file, and critic artifact together. The critic AC set must exactly equal the ACs cited by production
-rows; missing or extra/mismatched rows fail, and every `unsupported` or `ambiguous` row vetoes.
+`fsgg-playtest coverage-lint` and `emit-evidence` require the executable proof assembly and critic
+artifact together. The critic AC set must exactly equal the ACs cited by production rows; missing or
+extra/mismatched rows fail, and every `unsupported` or `ambiguous` row vetoes.
 
 ## Public Contract
 
