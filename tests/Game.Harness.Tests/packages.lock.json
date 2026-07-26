@@ -127,14 +127,14 @@
       "fs.gg.game.harness": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Core": "[0.11.0, )",
+          "FS.GG.Game.Core": "[0.12.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
       "fs.gg.game.reference": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Harness": "[0.11.0, )",
+          "FS.GG.Game.Harness": "[0.12.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       }
