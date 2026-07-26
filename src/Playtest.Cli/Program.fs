@@ -29,43 +29,54 @@ let private writeBytes (path: string) (bytes: byte[]) : Result<unit, string> =
         Error(sprintf "cannot write %s: %s" path ex.Message)
 
 let private canonicalPath (path: string) =
-    let full = Path.GetFullPath path
-    let root = Path.GetPathRoot full |> Option.ofObj |> Option.defaultValue ""
-    let relative = full.Substring(root.Length)
-    let components =
-        relative.Split(
-            [| Path.DirectorySeparatorChar; Path.AltDirectorySeparatorChar |],
-            System.StringSplitOptions.RemoveEmptyEntries
-        )
+    let comparer =
+        if System.OperatingSystem.IsWindows() then
+            System.StringComparer.OrdinalIgnoreCase
+        else
+            System.StringComparer.Ordinal
+    let visited = System.Collections.Generic.HashSet<string>(comparer)
 
-    components
-    |> Array.fold
-        (fun current segment ->
-            let candidate = Path.Combine(current, segment)
-            let fileInfo = FileInfo(candidate)
+    let rec resolve candidatePath =
+        let full = Path.GetFullPath candidatePath
 
-            match fileInfo.LinkTarget |> Option.ofObj with
-            | Some linkTarget ->
-                if Path.IsPathRooted linkTarget then
-                    Path.GetFullPath linkTarget
-                else
+        if not (visited.Add full) then
+            invalidArg "path" ("symbolic-link cycle while resolving output path: " + full)
+
+        let root = Path.GetPathRoot full |> Option.ofObj |> Option.defaultValue ""
+        let relative = full.Substring(root.Length)
+        let segments =
+            relative.Split(
+                [| Path.DirectorySeparatorChar; Path.AltDirectorySeparatorChar |],
+                System.StringSplitOptions.RemoveEmptyEntries
+            )
+
+        let rec walk current index =
+            if index = segments.Length then
+                current
+            else
+                let candidate = Path.Combine(current, segments.[index])
+                let fileInfo = FileInfo(candidate)
+
+                match fileInfo.LinkTarget |> Option.ofObj with
+                | Some linkTarget ->
                     let parent =
                         fileInfo.DirectoryName
                         |> Option.ofObj
                         |> Option.defaultValue root
-                    Path.Combine(parent, linkTarget) |> Path.GetFullPath
-            | None when Directory.Exists candidate || File.Exists candidate ->
-                let info =
-                    if Directory.Exists candidate then
-                        DirectoryInfo(candidate) :> FileSystemInfo
-                    else
-                        FileInfo(candidate) :> FileSystemInfo
+                    let target =
+                        if Path.IsPathRooted linkTarget then
+                            linkTarget
+                        else
+                            Path.Combine(parent, linkTarget)
+                    let targetWithRemainder =
+                        segments.[index + 1 ..]
+                        |> Array.fold (fun current segment -> Path.Combine(current, segment)) target
+                    resolve targetWithRemainder
+                | None -> walk candidate (index + 1)
 
-                match info.ResolveLinkTarget(true) with
-                | null -> candidate
-                | target -> target.FullName
-            | None -> candidate)
-        root
+        walk root 0
+
+    resolve path
 
 let private samePath left right =
     try

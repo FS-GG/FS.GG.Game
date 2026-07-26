@@ -375,6 +375,27 @@ let tests =
                           (File.Exists journeyReportPath)
                           "dangling-alias rejection happens before the report target is created"
 
+                      let chainEvidencePath = Path.Combine(directory, "chain-evidence.yml")
+                      let intermediateLinkPath = Path.Combine(directory, "intermediate-link")
+                      let reportLinkPath = Path.Combine(directory, "report-link")
+                      File.CreateSymbolicLink(intermediateLinkPath, chainEvidencePath) |> ignore
+                      File.CreateSymbolicLink(reportLinkPath, intermediateLinkPath) |> ignore
+                      let chainedAlias =
+                          FS.GG.Playtest.Program.main
+                              [| "emit-evidence"
+                                 "--manifest"; manifestPath
+                                 "--proofs"; proofsPath
+                                 "--trx"; trxPath
+                                 "--journey-proof-assembly"; journeyProofAssembly
+                                 "--journey-authority-assembly"; journeyProofAssembly
+                                 "--critic"; criticPath
+                                 "--journey-report-out"; reportLinkPath
+                                 "--out"; chainEvidencePath |]
+                      Expect.equal chainedAlias 1 "a two-hop dangling report chain to evidence fails closed"
+                      Expect.isFalse
+                          (File.Exists chainEvidencePath)
+                          "recursive link rejection happens before the final evidence target is created"
+
                   let exitCode =
                       FS.GG.Playtest.Program.main
                           [| "emit-evidence"
