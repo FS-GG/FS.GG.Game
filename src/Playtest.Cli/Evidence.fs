@@ -4,6 +4,7 @@
 module FS.GG.Playtest.Evidence
 
 open System.Text.RegularExpressions
+open FS.GG.Playtest.JourneyReceiptExport
 open FS.GG.Playtest.Manifest
 open FS.GG.Playtest.Proofs
 open FS.GG.Playtest.Trx
@@ -51,8 +52,14 @@ let rowFor (run: TrxRun) (proofs: Map<string, Provenance>) (evId: string) (fr: G
 let rows (run: TrxRun) (proofs: Map<string, Provenance>) (manifest: GameplayFr list) : Row list =
     manifest |> List.mapi (fun i fr -> rowFor run proofs (sprintf "EV%03d" (i + 1)) fr)
 
-/// Render the rows as a valid SDD `evidence.yml` document with the TRX `observedRun` receipt.
-let render (trxPath: string) (run: TrxRun) (rows: Row list) : string =
+/// Render the rows as a valid SDD `evidence.yml` document with the TRX `observedRun` receipt and
+/// schema-v1 typed journey receipts for production-journey rows.
+let renderWithJourneyReceipts
+    (trxPath: string)
+    (run: TrxRun)
+    (journeys: Map<string, BoundReceipt>)
+    (rows: Row list)
+    : string =
     let sb = System.Text.StringBuilder()
     let line (s: string) = sb.AppendLine s |> ignore
     line "schemaVersion: 1"
@@ -77,6 +84,20 @@ let render (trxPath: string) (run: TrxRun) (rows: Row list) : string =
         line (sprintf "      passed: %d" run.Passed)
         line (sprintf "      failed: %d" run.Failed)
         line (sprintf "      skipped: %d" run.Skipped)
+
+        match r.RequirementRefs with
+        | [ testId ] ->
+            match Map.tryFind testId journeys with
+            | Some journey ->
+                line "    journeyReceipt:"
+                JourneyReceiptExport.renderYaml "      " journey |> List.iter line
+            | None -> ()
+        | _ -> ()
+
         line (sprintf "    notes: [\"%s\"]" r.Note)
 
     sb.ToString()
+
+/// Compatibility renderer for evidence sets without production-journey receipts.
+let render (trxPath: string) (run: TrxRun) (rows: Row list) : string =
+    renderWithJourneyReceipts trxPath run Map.empty rows

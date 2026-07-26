@@ -21,6 +21,8 @@ FS.GG.Game.Harness.JourneyEvent`4+KeyInput
 FS.GG.Game.Harness.JourneyEvent`4+MenuAction
 FS.GG.Game.Harness.JourneyEvent`4+PointerInput
 FS.GG.Game.Harness.JourneyEvent`4+Tags
+FS.GG.Game.Harness.JourneyInputKind
+FS.GG.Game.Harness.JourneyInputKind+Tags
 FS.GG.Game.Harness.JourneyPolicy`2
 FS.GG.Game.Harness.JourneyReceipt
 FS.GG.Game.Harness.JourneyResult

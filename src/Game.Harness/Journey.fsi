@@ -48,17 +48,33 @@ type JourneyResult =
     | Passed
     | Failed of reason: string
 
+/// The runner route which produced the captured input. A seeded policy is identified separately
+/// from replaying its captured fixed script.
+[<RequireQualifiedAccess>]
+type JourneyInputKind =
+    | FixedScript
+    | SeededPolicy
+
 /// Opaque machine-issued receipt. Only the production-journey runner can construct one.
 [<Sealed>]
 type JourneyReceipt
 
 [<RequireQualifiedAccess>]
 module JourneyReceipt =
+    val schemaVersion: JourneyReceipt -> int
+    val runnerIdentity: JourneyReceipt -> string
+    val runnerVersion: JourneyReceipt -> string
+    val origin: JourneyReceipt -> Origin
     val routeId: JourneyReceipt -> string
     val scenarioId: JourneyReceipt -> string
     val testId: JourneyReceipt -> string
+    val inputKind: JourneyReceipt -> JourneyInputKind
+    val inputDigest: JourneyReceipt -> string
     val scriptDigest: JourneyReceipt -> string
     val traceDigest: JourneyReceipt -> string
+    val initialFingerprintDigest: JourneyReceipt -> string
+    val terminalFingerprintDigest: JourneyReceipt -> string
+    val terminalPredicateReached: JourneyReceipt -> bool
     val result: JourneyReceipt -> JourneyResult
     val steps: JourneyReceipt -> int
     val maxSteps: JourneyReceipt -> int

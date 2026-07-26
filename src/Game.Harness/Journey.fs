@@ -1,6 +1,7 @@
 namespace FS.GG.Game.Harness
 
 open System
+open System.Globalization
 open System.Security.Cryptography
 open System.Text
 open FS.GG.Game.Core
@@ -45,12 +46,26 @@ type JourneyResult =
     | Passed
     | Failed of reason: string
 
+[<RequireQualifiedAccess>]
+type JourneyInputKind =
+    | FixedScript
+    | SeededPolicy
+
 type internal ReceiptData =
-    { RouteId: string
+    { SchemaVersion: int
+      RunnerIdentity: string
+      RunnerVersion: string
+      Origin: Origin
+      RouteId: string
       ScenarioId: string
       TestId: string
+      InputKind: JourneyInputKind
+      InputDigest: string
       ScriptDigest: string
       TraceDigest: string
+      InitialFingerprintDigest: string
+      TerminalFingerprintDigest: string
+      TerminalPredicateReached: bool
       Result: JourneyResult
       Steps: int
       MaxSteps: int }
@@ -78,11 +93,20 @@ module private Stable =
 
 [<RequireQualifiedAccess>]
 module JourneyReceipt =
+    let schemaVersion (receipt: JourneyReceipt) = receipt.Data.SchemaVersion
+    let runnerIdentity (receipt: JourneyReceipt) = receipt.Data.RunnerIdentity
+    let runnerVersion (receipt: JourneyReceipt) = receipt.Data.RunnerVersion
+    let origin (receipt: JourneyReceipt) = receipt.Data.Origin
     let routeId (receipt: JourneyReceipt) = receipt.Data.RouteId
     let scenarioId (receipt: JourneyReceipt) = receipt.Data.ScenarioId
     let testId (receipt: JourneyReceipt) = receipt.Data.TestId
+    let inputKind (receipt: JourneyReceipt) = receipt.Data.InputKind
+    let inputDigest (receipt: JourneyReceipt) = receipt.Data.InputDigest
     let scriptDigest (receipt: JourneyReceipt) = receipt.Data.ScriptDigest
     let traceDigest (receipt: JourneyReceipt) = receipt.Data.TraceDigest
+    let initialFingerprintDigest (receipt: JourneyReceipt) = receipt.Data.InitialFingerprintDigest
+    let terminalFingerprintDigest (receipt: JourneyReceipt) = receipt.Data.TerminalFingerprintDigest
+    let terminalPredicateReached (receipt: JourneyReceipt) = receipt.Data.TerminalPredicateReached
     let result (receipt: JourneyReceipt) = receipt.Data.Result
     let steps (receipt: JourneyReceipt) = receipt.Data.Steps
     let maxSteps (receipt: JourneyReceipt) = receipt.Data.MaxSteps
@@ -104,17 +128,22 @@ type JourneyPolicy<'model, 'event> =
 module Journey =
     let private finish
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
+        (inputKind: JourneyInputKind)
+        (inputDigest: string -> string)
         (captured: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list)
         (fingerprints: 'fingerprint list)
+        (initialFingerprint: 'fingerprint)
         (model: 'model)
         (failure: string option)
         : JourneyRun<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>, 'fingerprint> =
         let encodedEvents = captured |> List.map adapter.EncodeEvent
         let encodedFrames = fingerprints |> List.map adapter.EncodeFingerprint
+        let scriptDigest = Stable.digestParts encodedEvents
+        let terminalReached = adapter.IsTerminal model
         let result =
             match failure with
             | Some reason -> JourneyResult.Failed reason
-            | None when adapter.IsTerminal model -> JourneyResult.Passed
+            | None when terminalReached -> JourneyResult.Passed
             | None ->
                 JourneyResult.Failed(
                     sprintf
@@ -125,11 +154,26 @@ module Journey =
                 )
 
         let data =
-            { RouteId = adapter.RouteId
+            { SchemaVersion = 1
+              RunnerIdentity = "FS.GG.Game.Harness.Journey"
+              RunnerVersion =
+                typeof<JourneyReceipt>.Assembly.GetName().Version
+                |> Option.ofObj
+                |> Option.map string
+                |> Option.defaultValue "0.0.0.0"
+              Origin = Origin.ProductionJourney
+              RouteId = adapter.RouteId
               ScenarioId = adapter.ScenarioId
               TestId = adapter.TestId
-              ScriptDigest = Stable.digestParts encodedEvents
+              InputKind = inputKind
+              InputDigest = inputDigest scriptDigest
+              ScriptDigest = scriptDigest
               TraceDigest = Stable.digestParts encodedFrames
+              InitialFingerprintDigest =
+                Stable.digestParts [ adapter.EncodeFingerprint initialFingerprint ]
+              TerminalFingerprintDigest =
+                Stable.digestParts [ adapter.EncodeFingerprint (adapter.Fingerprint model) ]
+              TerminalPredicateReached = terminalReached
               Result = result
               Steps = captured.Length
               MaxSteps = adapter.MaxSteps }
@@ -163,6 +207,7 @@ module Journey =
 
         let captured = script |> List.truncate adapter.MaxSteps
         let mutable model = adapter.Boot()
+        let initialFingerprint = adapter.Fingerprint model
         let frames = ResizeArray<_>(captured.Length)
         let mutable failure =
             if script.Length > adapter.MaxSteps then
@@ -178,7 +223,7 @@ module Journey =
                     frames.Add(adapter.Fingerprint model)
                 | Error reason -> failure <- Some reason
 
-        finish adapter captured (List.ofSeq frames) model failure
+        finish adapter JourneyInputKind.FixedScript id captured (List.ofSeq frames) initialFingerprint model failure
 
     let runPolicy
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
@@ -189,6 +234,7 @@ module Journey =
             invalidArg "adapter.MaxSteps" "a production journey must declare a positive maximum"
 
         let mutable model = adapter.Boot()
+        let initialFingerprint = adapter.Fingerprint model
         let mutable rng = Rng.ofSeed seed
         let captured = ResizeArray<_>()
         let frames = ResizeArray<_>()
@@ -211,4 +257,18 @@ module Journey =
                             frames.Add(adapter.Fingerprint model)
                         | Error reason -> failure <- Some reason
 
-        finish adapter (List.ofSeq captured) (List.ofSeq frames) model failure
+        let policyDigest scriptDigest =
+            Stable.digestParts
+                [ "seeded-policy"
+                  seed.ToString(CultureInfo.InvariantCulture)
+                  scriptDigest ]
+
+        finish
+            adapter
+            JourneyInputKind.SeededPolicy
+            policyDigest
+            (List.ofSeq captured)
+            (List.ofSeq frames)
+            initialFingerprint
+            model
+            failure

@@ -2,6 +2,7 @@ module Playtest.Cli.Tests.EvidenceTests
 
 open System.Text
 open Expecto
+open FS.GG.Game.Reference
 open FS.GG.Playtest
 open FS.GG.Playtest.Manifest
 open FS.GG.Playtest.Proofs
@@ -135,4 +136,80 @@ let tests =
               let trx =
                   "<?xml version=\"1.0\"?>\n<TestRun xmlns=\"http://microsoft.com/schemas/VisualStudio/TeamTest/2010\">\n  <ResultSummary><Counters passed=\"0\" failed=\"0\" error=\"3\" /></ResultSummary>\n  <Results></Results>\n</TestRun>"
               let run = parseTrx trx
-              Expect.isGreaterThan run.Failed 0 "error-count runs must not report zero failures" ]
+              Expect.isGreaterThan run.Failed 0 "error-count runs must not report zero failures"
+
+          testCase "a production row embeds schema-v1 receipt fields bound to the exact passing report"
+          <| fun _ ->
+              let testName = "ReferenceProof gate GP-JOURNEY-001 production journey"
+              let reportText = trxXml [ testName, "Passed" ] 1 0
+              let run = parseTrx reportText
+              let assemblyPath = typeof<ProductionJourneyProof>.Assembly.Location
+
+              let receipts =
+                  match Proofs.loadJourneyReceipts assemblyPath with
+                  | Ok value -> value
+                  | Error error -> failtestf "journey receipt must load: %s" error
+
+              let bound =
+                  match JourneyReceiptExport.bind "artifacts/journey.trx" run receipts with
+                  | Ok value -> value
+                  | Error error -> failtestf "journey receipt must bind: %s" error
+
+              let productionManifest =
+                  [ { Id = "GP-JOURNEY-001"
+                      Facet = "gameplay"
+                      RequiredEvidence = EvidenceLevel.ProductionJourney
+                      Summary = "boot to outcome"
+                      CoversAc = [ 1 ] } ]
+              let proofs = receipts |> Map.map (fun _ proof -> proof.Provenance)
+              let rendered =
+                  Evidence.renderWithJourneyReceipts
+                      "artifacts/journey.trx"
+                      run
+                      bound
+                      (Evidence.rows run proofs productionManifest)
+
+              [ "journeyReceipt:"
+                "schemaVersion: 1"
+                "identity: \"FS.GG.Game.Harness.Journey\""
+                "origin: production-journey"
+                "routeId: \"FS.GG.Game.Reference/Composition\""
+                "scenarioId: \"boot-to-vault-exit\""
+                "testId: \"GP-JOURNEY-001\""
+                "kind: fixed-script"
+                "replayDigest: \"sha256:"
+                "traceDigest: \"sha256:"
+                "initialFingerprint: \"sha256:"
+                "terminalFingerprint: \"sha256:"
+                "reached: true"
+                "maximumSteps: 32"
+                "actualSteps: 12"
+                "testName: \"ReferenceProof gate GP-JOURNEY-001 production journey\""
+                sprintf "digest: \"sha256:%s\"" run.Digest
+                "outcome: passed" ]
+              |> List.iter (fun expected ->
+                  Expect.stringContains rendered expected (sprintf "serialized receipt contains %s" expected))
+
+          testCase "journey/report binding fails closed on missing, failed, and ambiguous matching tests"
+          <| fun _ ->
+              let assemblyPath = typeof<ProductionJourneyProof>.Assembly.Location
+              let receipts =
+                  match Proofs.loadJourneyReceipts assemblyPath with
+                  | Ok value -> value
+                  | Error error -> failtestf "journey receipt must load: %s" error
+              let bind results passed failed =
+                  trxXml results passed failed
+                  |> parseTrx
+                  |> fun run -> JourneyReceiptExport.bind "journey.trx" run receipts
+
+              Expect.isError (bind [ "unrelated test", "Passed" ] 1 0) "a mismatched report is refused"
+              Expect.isError
+                  (bind [ "gate GP-JOURNEY-001", "Failed" ] 0 1)
+                  "a matching failed test is refused"
+              Expect.isError
+                  (bind
+                      [ "gate GP-JOURNEY-001 first", "Passed"
+                        "gate GP-JOURNEY-001 second", "Passed" ]
+                      2
+                      0)
+                  "an ambiguous identity is refused" ]
