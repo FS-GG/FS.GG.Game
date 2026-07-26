@@ -1,10 +1,13 @@
 module Playtest.Cli.Tests.CliTests
 
 open System.IO
+open System
 open Expecto
 open FS.GG.Playtest
 open FS.GG.Playtest.Manifest
 open FS.GG.Playtest.Proofs
+open FS.GG.Game.Harness
+open FS.GG.Game.Reference
 
 // The repo root, found by walking up from the test binary until FS.GG.Game.slnx is seen.
 let private repoRoot =
@@ -21,19 +24,21 @@ let private specPath (name: string) = Path.Combine(repoRoot, "docs", "TestSpecs"
 
 // A WI-7-style Pong manifest (the CoversAc mirror ReferenceProof.fs GP-001..GP-010).
 let private wi7Manifest: GameplayFr list =
-    [ { Id = "GP-001"; Facet = "gameplay"; Summary = "replay"; CoversAc = [ 13 ] }
-      { Id = "GP-002"; Facet = "gameplay"; Summary = "keymap route"; CoversAc = [ 2; 3 ] }
-      { Id = "GP-003"; Facet = "gameplay"; Summary = "paddle clamp"; CoversAc = [ 2 ] }
-      { Id = "GP-004"; Facet = "gameplay"; Summary = "ball on field"; CoversAc = [ 4 ] }
-      { Id = "GP-005"; Facet = "gameplay"; Summary = "wall bounce"; CoversAc = [ 4 ] }
-      { Id = "GP-006"; Facet = "gameplay"; Summary = "deflection"; CoversAc = [ 5; 15 ] }
-      { Id = "GP-007"; Facet = "gameplay"; Summary = "no double hit"; CoversAc = [ 8 ] }
-      { Id = "GP-008"; Facet = "gameplay"; Summary = "scoring"; CoversAc = [ 9 ] }
-      { Id = "GP-009"; Facet = "gameplay"; Summary = "serve"; CoversAc = [ 1; 16 ] }
-      { Id = "GP-010"; Facet = "gameplay"; Summary = "match"; CoversAc = [ 10; 13 ] } ]
+    [ { Id = "GP-001"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "replay"; CoversAc = [ 13 ] }
+      { Id = "GP-002"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "keymap route"; CoversAc = [ 2; 3 ] }
+      { Id = "GP-003"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "paddle clamp"; CoversAc = [ 2 ] }
+      { Id = "GP-004"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "ball on field"; CoversAc = [ 4 ] }
+      { Id = "GP-005"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "wall bounce"; CoversAc = [ 4 ] }
+      { Id = "GP-006"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "deflection"; CoversAc = [ 5; 15 ] }
+      { Id = "GP-007"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "no double hit"; CoversAc = [ 8 ] }
+      { Id = "GP-008"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "scoring"; CoversAc = [ 9 ] }
+      { Id = "GP-009"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "serve"; CoversAc = [ 1; 16 ] }
+      { Id = "GP-010"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "match"; CoversAc = [ 10; 13 ] } ]
 
 let private allInputDriven (frs: GameplayFr list) =
     frs |> List.map (fun fr -> fr.Id, InputDriven) |> Map.ofList
+
+let private journeyProofAssembly = typeof<ProductionJourneyProof>.Assembly.Location
 
 [<Tests>]
 let tests =
@@ -117,6 +122,124 @@ let tests =
           testCase "FR-006 a spec with no section-14 yields no ACs (an error at the CLI edge)"
           <| fun _ ->
               Expect.isEmpty (TestSpec.parseSection14 "# A doc with no section 14\n\nnothing here") "no ACs parsed"
+
+          testCase "production-journey coverage accepts only a validated runner receipt"
+          <| fun _ ->
+              let required =
+                  [ { Id = "GP-JOURNEY-001"
+                      Facet = "gameplay"
+                      RequiredEvidence = EvidenceLevel.ProductionJourney
+                      Summary = "boot to outcome"
+                      CoversAc = [ 1 ] } ]
+
+              Expect.isFalse
+                  (Coverage.lint required (Map [ "GP-JOURNEY-001", InputDriven ]) None |> Coverage.passed)
+                  "a simulation/component trace cannot satisfy a user-facing journey"
+
+              match Proofs.parse "GP-JOURNEY-001 productionJourney" with
+              | Error _ -> ()
+              | Ok _ -> failtest "a hand-authored productionJourney token must be refused"
+
+              match Proofs.loadJourneyProofs journeyProofAssembly with
+              | Error e -> failtestf "executable runner proof must validate: %s" e
+              | Ok proofs ->
+                  Expect.isTrue (Coverage.lint required proofs None |> Coverage.passed) "validated receipt satisfies"
+
+          testCase "caller-authored receipt text and matching caller key are not accepted provenance inputs"
+          <| fun _ ->
+              Expect.isNone
+                  (Proofs.parseProvenance "productionJourney")
+                  "the text proof grammar has no production token"
+
+          testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
+          <| fun _ ->
+              let critic =
+                  "AC-001 | supported | checkpoints=0,6,11 | terminal=Screen=Won | route=JourneyTests.productionAdapter | reason=observed"
+              Expect.stringContains critic "| supported |" "the independent assessment may support the behavior"
+
+              let required =
+                  [ { Id = "GP-JOURNEY-001"
+                      Facet = "gameplay"
+                      RequiredEvidence = EvidenceLevel.ProductionJourney
+                      Summary = "boot to outcome"
+                      CoversAc = [ 1 ] } ]
+
+              Expect.isFalse
+                  (Coverage.lint required Map.empty None |> Coverage.passed)
+                  "without a validated runner receipt, critic support cannot turn the gate green"
+
+          testCase "critic assessment vetoes unsupported, ambiguous, missing, and mismatched AC rows"
+          <| fun _ ->
+              let required =
+                  [ { Id = "GP-JOURNEY-001"
+                      Facet = "gameplay"
+                      RequiredEvidence = EvidenceLevel.ProductionJourney
+                      Summary = "boot to outcome"
+                      CoversAc = [ 1; 2 ] } ]
+              let row ac disposition =
+                  sprintf "AC-%03d | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed" ac disposition
+              let validate text =
+                  match Critic.parse text with
+                  | Error error -> Error error
+                  | Ok rows -> Critic.validate required rows
+
+              Expect.isOk (validate (row 1 "supported" + "\n" + row 2 "supported")) "complete supported rows pass"
+              Expect.isError (validate (row 1 "unsupported" + "\n" + row 2 "supported")) "unsupported vetoes"
+              Expect.isError (validate (row 1 "supported" + "\n" + row 2 "ambiguous")) "ambiguous vetoes"
+              Expect.isError (validate (row 1 "supported")) "missing required AC vetoes"
+              Expect.isError (validate (row 1 "supported" + "\n" + row 3 "supported")) "mismatched AC vetoes"
+
+          testCase "coverage-lint executes an opaque proof assembly and binds its receipt to the critic"
+          <| fun _ ->
+              let directory = Path.Combine(Path.GetTempPath(), "fsgg-playtest-" + Guid.NewGuid().ToString("N"))
+              Directory.CreateDirectory directory |> ignore
+
+              try
+                  let manifestPath = Path.Combine(directory, "manifest.txt")
+                  let proofsPath = Path.Combine(directory, "proofs.txt")
+                  let receiptsPath = Path.Combine(directory, "author-receipt.jsonl")
+                  let keyPath = Path.Combine(directory, "author-key")
+                  let manifest =
+                      [ { Id = "GP-JOURNEY-001"
+                          Facet = "gameplay"
+                          RequiredEvidence = EvidenceLevel.ProductionJourney
+                          Summary = "boot to outcome"
+                          CoversAc = [ 1 ] } ]
+
+                  File.WriteAllText(manifestPath, Manifest.render manifest)
+                  File.WriteAllText(proofsPath, "")
+                  File.WriteAllText(receiptsPath, """{"result":"pass","provenance":"production-journey"}""")
+                  File.WriteAllText(keyPath, "author-chosen-key")
+
+                  let run assemblyFlag (critic: string) =
+                      let criticPath = Path.Combine(directory, "critic-" + Guid.NewGuid().ToString("N") + ".txt")
+                      File.WriteAllText(criticPath, critic)
+                      FS.GG.Playtest.Program.main
+                          [| "coverage-lint"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             assemblyFlag; journeyProofAssembly
+                             "--critic"; criticPath |]
+
+                  let row disposition =
+                      sprintf "AC-001 | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed" disposition
+
+                  Expect.equal (run "--journey-proof-assembly" (row "supported")) 0 "in-process opaque receipt makes the gate green"
+                  Expect.equal (run "--journey-proof-assembly" (row "ambiguous")) 1 "an ambiguous critic veto makes the same proof red"
+                  Expect.equal
+                      (let criticPath = Path.Combine(directory, "critic-author.txt")
+                       File.WriteAllText(criticPath, row "supported")
+                       FS.GG.Playtest.Program.main
+                          [| "coverage-lint"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             "--journey-receipts"; receiptsPath
+                             "--journey-key-file"; keyPath
+                             "--critic"; criticPath |])
+                      1
+                      "author-controlled receipt text and matching key are refused without executable proof"
+              finally
+                  Directory.Delete(directory, true)
 
           testCase "FR-002/006 tryParse fails closed on a malformed manifest line, parse stays lenient"
           <| fun _ ->

@@ -109,9 +109,30 @@
         "resolved": "0.11.6",
         "contentHash": "f33RkDtZO8VlGXCtmQIviOtxgnUdym9xx/b1p9h91CRGOsJFxCFOFK1FDbVt1OCf1aWwYejUFa2MOQyFWTFjbA=="
       },
+      "fs.gg.game.core": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.game.harness": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Game.Core": "[0.11.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.game.reference": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Game.Harness": "[0.11.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fsgg-playtest": {
         "type": "Project",
         "dependencies": {
+          "FS.GG.Game.Harness": "[0.11.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       }

@@ -37,5 +37,6 @@ let scaffold (acs: (int * string) list) : GameplayFr list =
     |> List.map (fun (n, title) ->
         { Id = sprintf "GP-%03d" n
           Facet = "gameplay"
+          RequiredEvidence = EvidenceLevel.ProductionJourney
           Summary = title
           CoversAc = [ n ] })

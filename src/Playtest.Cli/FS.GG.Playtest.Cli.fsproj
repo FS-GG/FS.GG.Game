@@ -7,17 +7,23 @@
     <RootNamespace>FS.GG.Playtest</RootNamespace>
   </PropertyGroup>
 
-  <!-- The fsgg-playtest CLI (Phase 5-6 of the playtest tooling roadmap): a separate, BCL-only tool
-       (NOT the pure package) that reads the TestSpec corpus + a proof report + a TRX. Pure string/file
-       processing; parsing/coverage are pure, I/O is at the Program edge. -->
+  <!-- The fsgg-playtest CLI (Phase 5-6 of the playtest tooling roadmap): a separate tool that reads
+       the TestSpec corpus + a proof report + a TRX. It references Game.Harness only to load and
+       execute IProductionJourneyProof implementations and consume their opaque receipts in-process;
+       parsing/coverage remain pure and ordinary I/O stays at the Program edge. -->
   <ItemGroup>
     <Compile Include="Manifest.fs" />
+    <Compile Include="Critic.fs" />
     <Compile Include="TestSpec.fs" />
     <Compile Include="Proofs.fs" />
     <Compile Include="Coverage.fs" />
     <Compile Include="Trx.fs" />
     <Compile Include="Evidence.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Harness\FS.GG.Game.Harness.fsproj" />
   </ItemGroup>
 
 </Project>

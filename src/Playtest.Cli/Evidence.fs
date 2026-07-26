@@ -30,6 +30,11 @@ let rowFor (run: TrxRun) (proofs: Map<string, Provenance>) (evId: string) (fr: G
     let result, synthetic, note =
         match provenance with
         | Synthetic -> "pass", true, "synthetic proof — disclosed, does not satisfy the gameplay obligation"
+        | ProductionJourney when testedGreen -> "pass", false, "runner-issued production journey receipt and a passing bound test — satisfies"
+        | ProductionJourney when testExists -> "fail", false, "production journey receipt exists but its bound test did not pass"
+        | ProductionJourney -> "missing", false, "production journey receipt has no matching passing test in the TRX"
+        | InputDriven when fr.RequiredEvidence = EvidenceLevel.ProductionJourney ->
+            "missing", false, "simulation/component input proof cannot satisfy required production-journey coverage"
         | InputDriven when testedGreen -> "pass", false, "InputDriven proof and a passing test — satisfies"
         | InputDriven when testExists -> "fail", false, "InputDriven proof but its test did not pass"
         | InputDriven -> "missing", false, "InputDriven proof declared but no matching passing test in the TRX"

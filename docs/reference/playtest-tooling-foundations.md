@@ -7,7 +7,18 @@
 > Do not change any of them without updating the tooling that depends on it. The `.fsi` files remain
 > the authoritative contract; this note is a relied-upon pointer, not a second source of truth.
 
-This is the Phase 0 audit deliverable. It builds nothing and changes no public surface — it records
+This was the Phase 0 audit deliverable. The later production-journey boundary is additive and records
+the distinction the original primitives could not express:
+
+- `Playable` + `Driver` proves simulation/component behavior, including useful constructed-state and
+  helper-level tests.
+- `ProductionJourney` starts from the product boot function and crosses raw event mapping, dispatch,
+  update, fixed ticks, and deterministic effect results.
+- only its opaque `JourneyReceipt`, returned in-process by an executable
+  `IProductionJourneyProof` and bound to route/scenario/test/script/trace/result/TRX, satisfies a manifest row marked
+  `requires=production-journey`.
+
+The original audit records
 which already-shipped surface the tooling leans on, and why, so Phases 1–6 specify against a fixed base
 and a future change to `Playable`/`Driver`/`Trace` is not made blind. See design report §3 ("What we
 build on — the primitives already in place").
@@ -69,3 +80,17 @@ build on — the primitives already in place").
 | 2 | Fingerprint-as-visited-key | `'world -> 'f` / `Driver.identityFingerprint` | `Driver.fsi` | 2 |
 | 3 | Ambient-free determinism | no clock / no ambient RNG | `DependencyTests.fs` | 1, 3 |
 | 4 | FsCheck availability | `FsCheck` `PackageReference` | `Game.Harness.Tests.fsproj` | 3 |
+
+## Production-journey trust boundary
+
+`Origin.InputDriven` is retained for compatibility but means simulation/component input evidence.
+`Origin.ProductionJourney` is minted only by `Journey.runScript`/`runPolicy`. The shipped
+the separate `FS.GG.Game.Reference` application supplies the positive reference
+boot/map/update/tick/effect composition root; the test suite imports it instead of rebuilding a
+purpose-made adapter. A displayed event which
+the production mapper does not bind fails explicitly, and a bounded run which misses its terminal
+predicate fails with final-state and captured-input digests. `fsgg-playtest` validates the rendered
+executable proof's opaque in-memory receipt and matching TRX identity; JSON, caller keys, and
+hand-authored provenance text cannot upgrade a trace. Script and trace digests length-frame every encoded value, so an embedded
+newline cannot collide with an event boundary. A complete critic artifact is also mandatory for
+production rows; missing, mismatched, unsupported, or ambiguous AC rows veto completion.

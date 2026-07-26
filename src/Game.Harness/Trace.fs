@@ -3,6 +3,7 @@ namespace FS.GG.Game.Harness
 [<RequireQualifiedAccess>]
 type Origin =
     | InputDriven
+    | ProductionJourney
     | Synthetic
 
 [<Sealed>]

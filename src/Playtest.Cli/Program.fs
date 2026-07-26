@@ -23,6 +23,36 @@ let private flag (name: string) (argv: string[]) : string option =
     |> Array.tryFindIndex (fun a -> a = name)
     |> Option.bind (fun i -> if i + 1 < argv.Length then Some argv.[i + 1] else None)
 
+let private parseProofInputs (argv: string[]) (manifest: Manifest.GameplayFr list) (proofText: string) =
+    match Proofs.parse proofText with
+    | Error e -> Error e
+    | Ok simulation ->
+        let productionRequired =
+            manifest
+            |> List.exists (fun requirement ->
+                requirement.RequiredEvidence = Manifest.EvidenceLevel.ProductionJourney)
+
+        match flag "--journey-proof-assembly" argv, flag "--critic" argv with
+        | None, None when not productionRequired -> Ok simulation
+        | Some assemblyPath, Some criticPath ->
+            match readFile criticPath with
+            | Error e -> Error e
+            | Ok criticText ->
+                match Proofs.loadJourneyProofs assemblyPath, Critic.parse criticText with
+                | Error e, _
+                | _, Error e -> Error e
+                | Ok journeys, Ok criticRows ->
+                    match Critic.validate manifest criticRows with
+                    | Error e -> Error e
+                    | Ok () ->
+                        journeys
+                        |> Map.fold (fun combined key value -> Map.add key value combined) simulation
+                        |> Ok
+        | _ when productionRequired ->
+            Error "production-journey coverage requires --journey-proof-assembly and --critic"
+        | _ ->
+            Error "--journey-proof-assembly and --critic must be supplied together"
+
 let private scaffoldManifest (argv: string[]) : int =
     match flag "--spec" argv with
     | None ->
@@ -68,7 +98,7 @@ let private coverageLint (argv: string[]) : int =
                 eprintfn "coverage-lint: manifest %s parsed no GP records" mPath
                 1
             | Ok manifest ->
-                match Proofs.parse pText with
+                match parseProofInputs argv manifest pText with
                 | Error e ->
                     eprintfn "coverage-lint: %s" e
                     1
@@ -93,13 +123,13 @@ let private coverageLint (argv: string[]) : int =
                         printfn "advisory: spec §14 ACs not cited by any GP (completeness gap): %A" report.SpecGap
 
                     if Coverage.passed report then
-                        printfn "coverage-lint: PASS — every cited AC has an InputDriven proof"
+                        printfn "coverage-lint: PASS — every cited AC has its required evidence level"
                         0
                     else
-                        eprintfn "coverage-lint: FAIL — cited AC(s) without an InputDriven proof: %A" report.UncoveredAcs
+                        eprintfn "coverage-lint: FAIL — cited AC(s) without their required evidence level: %A" report.UncoveredAcs
                         1
     | _ ->
-        eprintfn "coverage-lint: --manifest <m> and --proofs <p> required"
+        eprintfn "coverage-lint: --manifest <m> and --proofs <p> required; production rows also require --journey-proof-assembly <dll> --critic <assessment>"
         2
 
 let private emitEvidence (argv: string[]) : int =
@@ -121,7 +151,7 @@ let private emitEvidence (argv: string[]) : int =
                 eprintfn "emit-evidence: manifest %s parsed no GP records" mPath
                 1
             | Ok manifest ->
-                match Proofs.parse pText, Trx.parse tText tBytes with
+                match parseProofInputs argv manifest pText, Trx.parse tText tBytes with
                 | Error e, _ ->
                     eprintfn "emit-evidence: %s" e
                     1
@@ -142,7 +172,7 @@ let private emitEvidence (argv: string[]) : int =
                         printf "%s" rendered
                         0
     | _ ->
-        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required"
+        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --critic <assessment>"
         2
 
 [<EntryPoint>]

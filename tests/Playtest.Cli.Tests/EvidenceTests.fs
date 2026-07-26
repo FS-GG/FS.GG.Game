@@ -8,10 +8,10 @@ open FS.GG.Playtest.Proofs
 
 // A small gameplay-FR manifest (GP-001..GP-004) for the mapping tests.
 let private manifest: GameplayFr list =
-    [ { Id = "GP-001"; Facet = "gameplay"; Summary = "replay"; CoversAc = [ 13 ] }
-      { Id = "GP-002"; Facet = "gameplay"; Summary = "keymap"; CoversAc = [ 2; 3 ] }
-      { Id = "GP-003"; Facet = "gameplay"; Summary = "bounce"; CoversAc = [ 4 ] }
-      { Id = "GP-004"; Facet = "gameplay"; Summary = "deflect"; CoversAc = [ 5 ] } ]
+    [ { Id = "GP-001"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "replay"; CoversAc = [ 13 ] }
+      { Id = "GP-002"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "keymap"; CoversAc = [ 2; 3 ] }
+      { Id = "GP-003"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "bounce"; CoversAc = [ 4 ] }
+      { Id = "GP-004"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "deflect"; CoversAc = [ 5 ] } ]
 
 // A minimal TRX with the given (testName, outcome) results and pass/fail counts.
 let private trxXml (results: (string * string) list) (passed: int) (failed: int) : string =
@@ -121,8 +121,8 @@ let tests =
               // A manifest with unpadded ids and a TRX where only GP-10 passed. GP-1 must NOT be
               // classified green off the 'GP-10' substring.
               let mf =
-                  [ { Id = "GP-1"; Facet = "gameplay"; Summary = "a"; CoversAc = [ 1 ] }
-                    { Id = "GP-10"; Facet = "gameplay"; Summary = "b"; CoversAc = [ 10 ] } ]
+                  [ { Id = "GP-1"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "a"; CoversAc = [ 1 ] }
+                    { Id = "GP-10"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "b"; CoversAc = [ 10 ] } ]
               let proofs = [ "GP-1", InputDriven; "GP-10", InputDriven ] |> Map.ofList
               let trx = trxXml [ "gate GP-10 moves", "Passed" ] 1 0
               let rows = Evidence.rows (parseTrx trx) proofs mf

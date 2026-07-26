@@ -1,26 +1,27 @@
 namespace FS.GG.Game.Harness
 
 /// Public contract type exposed by the FS.GG.Game.Harness package.
-/// The provenance of a harness trace: whether its frames came from driving the real input frontier
-/// (`InputDriven`) or from a hand-built world handed to the synthetic escape hatch (`Synthetic`).
-/// This bit is the whole reason the synthetic hatch is a *distinct, typed* surface: an obligation
-/// gate reads it, and under the SDD satisfaction rule and Governance's non-relaxable synthetic gate
-/// a `Synthetic` trace can never satisfy an FR — only `InputDriven` evidence is non-synthetic.
+/// The provenance of a harness trace: simulation/component input (`InputDriven`), a boot-to-outcome
+/// production composition (`ProductionJourney`), or the hand-built synthetic hatch (`Synthetic`).
 ///
 /// **Qualified.** `Synthetic` is an ordinary word a consumer may well have its own of, so
 /// `open FS.GG.Game.Harness` must not inject it. Write `Origin.Synthetic`.
 [<RequireQualifiedAccess>]
 type Origin =
     /// The frames were produced by folding real `Command` inputs (script or bot) through the game's
-    /// own step function — the non-synthetic route.
+    /// own step function — useful simulation/component evidence, but not proof of production boot or
+    /// host-event reachability.
     | InputDriven
+    /// The frames came from `Journey.runScript` or `Journey.runPolicy`, starting at the production
+    /// composition's boot function and traversing its raw-event/update/tick/effect-result seams.
+    | ProductionJourney
     /// The frames were produced from caller-supplied, hand-built worlds via the synthetic hatch.
     | Synthetic
 
 /// Public contract type exposed by the FS.GG.Game.Harness package.
 /// A recorded sequence of per-step world fingerprints, tagged with its `Origin`. **Opaque**: it has
-/// no public constructor, so an `Origin` can never be forged — an `InputDriven` trace comes only from
-/// the driver and a `Synthetic` one only from `Synthetic.trace`. Two runs of the same game over the
+/// no public constructor, so an `Origin` can never be forged — `InputDriven` comes from `Driver`,
+/// `ProductionJourney` from `Journey`, and `Synthetic` only from `Synthetic.trace`. Two runs of the
 /// same script produce equal frames, which is what makes a replay a value comparison (compare
 /// `Trace.frames`) rather than a tolerance check.
 [<Sealed>]
@@ -36,7 +37,7 @@ module Trace =
     val frames: trace: Trace<'f> -> 'f list
 
     /// Public contract function exposed by the FS.GG.Game.Harness package.
-    /// The provenance of the trace — `Origin.InputDriven` or `Origin.Synthetic`.
+    /// The provenance of the trace.
     val origin: trace: Trace<'f> -> Origin
 
     /// Public contract function exposed by the FS.GG.Game.Harness package.
