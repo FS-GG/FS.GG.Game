@@ -34,6 +34,38 @@ FS.GG.Game.Harness.ExploreConfig.new(Microsoft.FSharp.Core.FSharpOption<Microsof
 FS.GG.Game.Harness.FindResult+Tags.Found : System.Int32
 FS.GG.Game.Harness.FindResult+Tags.NotFound : System.Int32
 FS.GG.Game.Harness.FindResult+Tags.Truncated : System.Int32
+FS.GG.Game.Harness.IProductionJourneyProof.Run() : FS.GG.Game.Harness.JourneyReceipt
+FS.GG.Game.Harness.IProductionJourneyProof.TestId : System.String [get]
+FS.GG.Game.Harness.Journey.runPolicy<model, key, pointer, menu, effectResult, message, fingerprint>(ProductionJourney<model, key, pointer, menu, effectResult, message, fingerprint>, JourneyPolicy<model, JourneyEvent<key, pointer, menu, effectResult>>, System.UInt64) : JourneyRun<model, JourneyEvent<key, pointer, menu, effectResult>, fingerprint>
+FS.GG.Game.Harness.Journey.runScript<model, key, pointer, menu, effectResult, message, fingerprint>(ProductionJourney<model, key, pointer, menu, effectResult, message, fingerprint>, FSharpList<JourneyEvent<key, pointer, menu, effectResult>>) : JourneyRun<model, JourneyEvent<key, pointer, menu, effectResult>, fingerprint>
+FS.GG.Game.Harness.JourneyDispatch`1+Tags.Mapped : System.Int32
+FS.GG.Game.Harness.JourneyDispatch`1+Tags.Unbound : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.EffectResult : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.FixedTick : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.Interact : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.KeyInput : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.MenuAction : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.Pause : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.PointerInput : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.Resume : System.Int32
+FS.GG.Game.Harness.JourneyEvent`4+Tags.Start : System.Int32
+FS.GG.Game.Harness.JourneyPolicy`2.DecideEvents : FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>> [get]
+FS.GG.Game.Harness.JourneyPolicy`2.new(FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>>)
+FS.GG.Game.Harness.JourneyReceipt.maxSteps(FS.GG.Game.Harness.JourneyReceipt) : System.Int32
+FS.GG.Game.Harness.JourneyReceipt.result(FS.GG.Game.Harness.JourneyReceipt) : FS.GG.Game.Harness.JourneyResult
+FS.GG.Game.Harness.JourneyReceipt.routeId(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.scenarioId(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.scriptDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.steps(FS.GG.Game.Harness.JourneyReceipt) : System.Int32
+FS.GG.Game.Harness.JourneyReceipt.testId(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyReceipt.traceDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
+FS.GG.Game.Harness.JourneyResult+Tags.Failed : System.Int32
+FS.GG.Game.Harness.JourneyResult+Tags.Passed : System.Int32
+FS.GG.Game.Harness.JourneyRun`3.Captured : FSharpList<event> [get]
+FS.GG.Game.Harness.JourneyRun`3.Final : model [get]
+FS.GG.Game.Harness.JourneyRun`3.Receipt : FS.GG.Game.Harness.JourneyReceipt [get]
+FS.GG.Game.Harness.JourneyRun`3.Trace : Trace<fingerprint> [get]
+FS.GG.Game.Harness.JourneyRun`3.new(Trace<fingerprint>, FSharpList<event>, model, FS.GG.Game.Harness.JourneyReceipt)
 FS.GG.Game.Harness.LawReport.Results : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.LawResult> [get]
 FS.GG.Game.Harness.LawReport.allPassed(FS.GG.Game.Harness.LawReport) : System.Boolean
 FS.GG.Game.Harness.LawReport.failures(FS.GG.Game.Harness.LawReport) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.LawResult>
@@ -61,6 +93,7 @@ FS.GG.Game.Harness.Matrix.runMatch<world, view, o>(MatchSetup<world, view>, FSha
 FS.GG.Game.Harness.Matrix.runMatrix<world, view, o>(MatchSetup<world, view>, FSharpFunc<world, o>, FSharpList<Match<view>>) : FSharpList<Tuple<Match<view>, o>>
 FS.GG.Game.Harness.Matrix.winRate<o>(FSharpFunc<o, System.Boolean>, FSharpList<o>) : System.Double
 FS.GG.Game.Harness.Origin+Tags.InputDriven : System.Int32
+FS.GG.Game.Harness.Origin+Tags.ProductionJourney : System.Int32
 FS.GG.Game.Harness.Origin+Tags.Synthetic : System.Int32
 FS.GG.Game.Harness.Playable.resolve<world, key>(Playable<world, key>, key) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Command>
 FS.GG.Game.Harness.Playable`2.Apply : FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>> [get]
@@ -69,6 +102,20 @@ FS.GG.Game.Harness.Playable`2.Init : world [get]
 FS.GG.Game.Harness.Playable`2.Keymap : FSharpMap<key, FS.GG.Game.Core.Command> [get]
 FS.GG.Game.Harness.Playable`2.Step : FSharpFunc<world, FSharpFunc<System.Double, world>> [get]
 FS.GG.Game.Harness.Playable`2.new(world, FSharpMap<key, FS.GG.Game.Core.Command>, FSharpFunc<FS.GG.Game.Core.Command, FSharpFunc<world, world>>, FSharpFunc<world, FSharpFunc<System.Double, world>>, System.Double)
+FS.GG.Game.Harness.ProductionJourney`7.ApplyEffectResult : FSharpFunc<effectResult, FSharpFunc<model, model>> [get]
+FS.GG.Game.Harness.ProductionJourney`7.Boot : FSharpFunc<Microsoft.FSharp.Core.Unit, model> [get]
+FS.GG.Game.Harness.ProductionJourney`7.EncodeEvent : FSharpFunc<JourneyEvent<key, pointer, menu, effectResult>, System.String> [get]
+FS.GG.Game.Harness.ProductionJourney`7.EncodeFingerprint : FSharpFunc<fingerprint, System.String> [get]
+FS.GG.Game.Harness.ProductionJourney`7.Fingerprint : FSharpFunc<model, fingerprint> [get]
+FS.GG.Game.Harness.ProductionJourney`7.FixedTick : FSharpFunc<model, model> [get]
+FS.GG.Game.Harness.ProductionJourney`7.IsTerminal : FSharpFunc<model, System.Boolean> [get]
+FS.GG.Game.Harness.ProductionJourney`7.MapEvent : FSharpFunc<JourneyEvent<key, pointer, menu, effectResult>, FSharpFunc<model, JourneyDispatch<message>>> [get]
+FS.GG.Game.Harness.ProductionJourney`7.MaxSteps : System.Int32 [get]
+FS.GG.Game.Harness.ProductionJourney`7.RouteId : System.String [get]
+FS.GG.Game.Harness.ProductionJourney`7.ScenarioId : System.String [get]
+FS.GG.Game.Harness.ProductionJourney`7.TestId : System.String [get]
+FS.GG.Game.Harness.ProductionJourney`7.Update : FSharpFunc<message, FSharpFunc<model, model>> [get]
+FS.GG.Game.Harness.ProductionJourney`7.new(System.String, System.String, System.String, System.Int32, FSharpFunc<Microsoft.FSharp.Core.Unit, model>, FSharpFunc<JourneyEvent<key, pointer, menu, effectResult>, FSharpFunc<model, JourneyDispatch<message>>>, FSharpFunc<message, FSharpFunc<model, model>>, FSharpFunc<model, model>, FSharpFunc<effectResult, FSharpFunc<model, model>>, FSharpFunc<model, System.Boolean>, FSharpFunc<model, fingerprint>, FSharpFunc<JourneyEvent<key, pointer, menu, effectResult>, System.String>, FSharpFunc<fingerprint, System.String>)
 FS.GG.Game.Harness.Properties.check<world, key>(Playable<world, key>, FSharpFunc<world, System.Boolean>, System.UInt64) : FS.GG.Game.Harness.PropertyResult
 FS.GG.Game.Harness.Properties.checkWith<world, key>(FS.GG.Game.Harness.PropertyConfig, Playable<world, key>, FSharpFunc<world, System.Boolean>, System.UInt64) : FS.GG.Game.Harness.PropertyResult
 FS.GG.Game.Harness.Properties.defaultConfig : FS.GG.Game.Harness.PropertyConfig [get]
