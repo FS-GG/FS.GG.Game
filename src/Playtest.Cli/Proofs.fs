@@ -180,9 +180,25 @@ let loadJourneyReceiptsWithAuthority
         Error(sprintf "cannot execute production journey proof assembly %s: %s" assemblyPath ex.Message)
 
 let loadJourneyReceipts (assemblyPath: string) : Result<Map<string, ValidatedJourneyProof>, string> =
-    loadJourneyReceiptsWithAuthority assemblyPath assemblyPath
+    Error(
+        sprintf
+            "cannot load production journey proofs from %s without an explicit producer authority; "
+            assemblyPath
+        + "use loadJourneyReceiptsWithAuthority"
+    )
+
+let loadJourneyProofsWithAuthority
+    (assemblyPath: string)
+    (authorityAssemblyPath: string)
+    : Result<Map<string, Provenance>, string> =
+    loadJourneyReceiptsWithAuthority assemblyPath authorityAssemblyPath
+    |> Result.map (Map.map (fun _ proof -> proof.Provenance))
 
 /// Compatibility projection used by coverage-only callers which do not need the serialized receipt.
 let loadJourneyProofs (assemblyPath: string) : Result<Map<string, Provenance>, string> =
-    loadJourneyReceipts assemblyPath
-    |> Result.map (Map.map (fun _ proof -> proof.Provenance))
+    Error(
+        sprintf
+            "cannot load production journey proofs from %s without an explicit producer authority; "
+            assemblyPath
+        + "use loadJourneyProofsWithAuthority"
+    )

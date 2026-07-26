@@ -169,7 +169,11 @@ let tests =
               | Error _ -> ()
               | Ok _ -> failtest "a hand-authored productionJourney token must be refused"
 
-              match Proofs.loadJourneyProofs journeyProofAssembly with
+              match
+                  Proofs.loadJourneyProofsWithAuthority
+                      journeyProofAssembly
+                      journeyProofAssembly
+              with
               | Error e -> failtestf "executable runner proof must validate: %s" e
               | Ok proofs ->
                   Expect.isTrue (Coverage.lint required proofs None |> Coverage.passed) "validated receipt satisfies"
@@ -183,6 +187,11 @@ let tests =
           testCase "an external proof cannot self-author an allowlisted production composition"
           <| fun _ ->
               let testAssembly = typeof<ExternalConstructedJourneyProof>.Assembly.Location
+
+              match Proofs.loadJourneyReceipts testAssembly with
+              | Error error ->
+                  Expect.stringContains error "without an explicit producer authority" "the convenience loader fails closed"
+              | Ok _ -> failtest "a public convenience loader must not self-authorize its proof assembly"
 
               match Proofs.loadJourneyReceiptsWithAuthority testAssembly journeyProofAssembly with
               | Error error ->
@@ -346,6 +355,25 @@ let tests =
                       (File.ReadAllText outputPath)
                       "preserve-existing-evidence"
                       "alias rejection happens before either artifact is written"
+
+                  if not (OperatingSystem.IsWindows()) then
+                      let danglingAliasPath = Path.Combine(directory, "dangling-evidence.yml")
+                      File.CreateSymbolicLink(danglingAliasPath, journeyReportPath) |> ignore
+                      let danglingAlias =
+                          FS.GG.Playtest.Program.main
+                              [| "emit-evidence"
+                                 "--manifest"; manifestPath
+                                 "--proofs"; proofsPath
+                                 "--trx"; trxPath
+                                 "--journey-proof-assembly"; journeyProofAssembly
+                                 "--journey-authority-assembly"; journeyProofAssembly
+                                 "--critic"; criticPath
+                                 "--journey-report-out"; journeyReportPath
+                                 "--out"; danglingAliasPath |]
+                      Expect.equal danglingAlias 1 "a dangling output symlink to the report fails closed"
+                      Expect.isFalse
+                          (File.Exists journeyReportPath)
+                          "dangling-alias rejection happens before the report target is created"
 
                   let exitCode =
                       FS.GG.Playtest.Program.main

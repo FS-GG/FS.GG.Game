@@ -145,7 +145,7 @@ let tests =
               let assemblyPath = typeof<ProductionJourneyProof>.Assembly.Location
 
               let receipts =
-                  match Proofs.loadJourneyReceipts assemblyPath with
+                  match Proofs.loadJourneyReceiptsWithAuthority assemblyPath assemblyPath with
                   | Ok value -> value
                   | Error error -> failtestf "journey receipt must load: %s" error
 
@@ -200,7 +200,7 @@ let tests =
           <| fun _ ->
               let assemblyPath = typeof<ProductionJourneyProof>.Assembly.Location
               let load () =
-                  match Proofs.loadJourneyReceipts assemblyPath with
+                  match Proofs.loadJourneyReceiptsWithAuthority assemblyPath assemblyPath with
                   | Ok value -> value
                   | Error error -> failtestf "journey receipt must load: %s" error
               let first = JourneyReceiptExport.generate "journey.junit.xml" (load ())

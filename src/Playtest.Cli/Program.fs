@@ -42,8 +42,19 @@ let private canonicalPath (path: string) =
     |> Array.fold
         (fun current segment ->
             let candidate = Path.Combine(current, segment)
+            let fileInfo = FileInfo(candidate)
 
-            if Directory.Exists candidate || File.Exists candidate then
+            match fileInfo.LinkTarget |> Option.ofObj with
+            | Some linkTarget ->
+                if Path.IsPathRooted linkTarget then
+                    Path.GetFullPath linkTarget
+                else
+                    let parent =
+                        fileInfo.DirectoryName
+                        |> Option.ofObj
+                        |> Option.defaultValue root
+                    Path.Combine(parent, linkTarget) |> Path.GetFullPath
+            | None when Directory.Exists candidate || File.Exists candidate ->
                 let info =
                     if Directory.Exists candidate then
                         DirectoryInfo(candidate) :> FileSystemInfo
@@ -53,8 +64,7 @@ let private canonicalPath (path: string) =
                 match info.ResolveLinkTarget(true) with
                 | null -> candidate
                 | target -> target.FullName
-            else
-                candidate)
+            | None -> candidate)
         root
 
 let private samePath left right =
