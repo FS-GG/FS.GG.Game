@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Playtest.Cli\FS.GG.Playtest.Cli.fsproj" />
+    <ProjectReference Include="..\..\src\Game.Harness\FS.GG.Game.Harness.fsproj" />
     <PackageReference Include="Expecto" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="YoloDev.Expecto.TestSdk" />

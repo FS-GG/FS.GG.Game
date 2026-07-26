@@ -8,6 +8,7 @@ open Expecto
 open FS.GG.Playtest
 open FS.GG.Playtest.Manifest
 open FS.GG.Playtest.Proofs
+open FS.GG.Game.Harness
 
 // The repo root, found by walking up from the test binary until FS.GG.Game.slnx is seen.
 let private repoRoot =
@@ -38,35 +39,42 @@ let private wi7Manifest: GameplayFr list =
 let private allInputDriven (frs: GameplayFr list) =
     frs |> List.map (fun fr -> fr.Id, InputDriven) |> Map.ofList
 
-let private journeyReceipt testId route =
+let private issuerKey = Encoding.UTF8.GetBytes("reference-release-gate-key-32-bytes-minimum")
+
+let private journeyReceipt () =
+    Journey.runScript ReferenceJourney.adapter ReferenceJourney.script
+    |> fun run -> JourneyReceipt.render issuerKey run.Receipt
+
+let private selfAttestedReceipt () =
+    let hex (bytes: byte[]) = bytes |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+    let keyId = issuerKey |> SHA256.HashData |> hex
     let script = String.replicate 64 "a"
     let trace = String.replicate 64 "b"
-    let payload =
-        String.concat
-            "\n"
-            [ "production-journey-v1"
-              route
-              "boot-to-terminal"
-              testId
-              script
-              trace
-              "pass"
-              ""
-              "12"
-              "32" ]
-    let integrity =
-        payload
+    let values =
+        [ "production-journey-v1"
+          keyId
+          "game/production-root"
+          "boot-to-terminal"
+          "GP-JOURNEY-001"
+          script
+          trace
+          "pass"
+          ""
+          "12"
+          "32" ]
+    let framed =
+        values
+        |> List.map (fun value -> string (Encoding.UTF8.GetByteCount value) + ":" + value)
+        |> String.concat ""
         |> Encoding.UTF8.GetBytes
-        |> SHA256.HashData
-        |> Convert.ToHexString
-        |> fun s -> s.ToLowerInvariant()
+    let publicChecksum = framed |> SHA256.HashData |> hex
+
     sprintf
-        """{"schemaVersion":1,"kind":"production-journey","routeId":"%s","scenarioId":"boot-to-terminal","testId":"%s","scriptDigest":"sha256:%s","traceDigest":"sha256:%s","result":"pass","failure":"","steps":12,"maxSteps":32,"integrity":"sha256:%s"}"""
-        route
-        testId
+        """{"schemaVersion":1,"kind":"production-journey","issuer":"sha256:%s","routeId":"game/production-root","scenarioId":"boot-to-terminal","testId":"GP-JOURNEY-001","scriptDigest":"sha256:%s","traceDigest":"sha256:%s","result":"pass","failure":"","steps":12,"maxSteps":32,"signature":"hmac-sha256:%s"}"""
+        keyId
         script
         trace
-        integrity
+        publicChecksum
 
 [<Tests>]
 let tests =
@@ -154,21 +162,21 @@ let tests =
           testCase "production-journey coverage accepts only a validated runner receipt"
           <| fun _ ->
               let required =
-                  [ { Id = "GP-001"
+                  [ { Id = "GP-JOURNEY-001"
                       Facet = "gameplay"
                       RequiredEvidence = EvidenceLevel.ProductionJourney
                       Summary = "boot to outcome"
                       CoversAc = [ 1 ] } ]
 
               Expect.isFalse
-                  (Coverage.lint required (Map [ "GP-001", InputDriven ]) None |> Coverage.passed)
+                  (Coverage.lint required (Map [ "GP-JOURNEY-001", InputDriven ]) None |> Coverage.passed)
                   "a simulation/component trace cannot satisfy a user-facing journey"
 
-              match Proofs.parse "GP-001 productionJourney" with
+              match Proofs.parse "GP-JOURNEY-001 productionJourney" with
               | Error _ -> ()
               | Ok _ -> failtest "a hand-authored productionJourney token must be refused"
 
-              match Proofs.parseJourneyReceipts (journeyReceipt "GP-001" "game/production-root") with
+              match Proofs.parseJourneyReceipts issuerKey (journeyReceipt ()) with
               | Error e -> failtestf "runner receipt must validate: %s" e
               | Ok proofs ->
                   Expect.isTrue (Coverage.lint required proofs None |> Coverage.passed) "validated receipt satisfies"
@@ -176,12 +184,16 @@ let tests =
           testCase "forged or stale production-journey receipts fail closed"
           <| fun _ ->
               let forged =
-                  journeyReceipt "GP-001" "game/production-root"
-                  |> fun json -> json.Replace("game/production-root", "test-only/adapter")
+                  journeyReceipt ()
+                  |> fun json -> json.Replace("reference-game/production-composition", "test-only/adapter")
 
-              match Proofs.parseJourneyReceipts forged with
-              | Error e -> Expect.stringContains e "forged or stale" "integrity mismatch is actionable"
+              match Proofs.parseJourneyReceipts issuerKey forged with
+              | Error e -> Expect.stringContains e "forged or stale" "signature mismatch is actionable"
               | Ok _ -> failtest "a modified receipt must not validate"
+
+              match Proofs.parseJourneyReceipts issuerKey (selfAttestedReceipt ()) with
+              | Error e -> Expect.stringContains e "forged or stale" "a recomputed public checksum is not an issuer signature"
+              | Ok _ -> failtest "a fully synthesized receipt with a public checksum must be refused"
 
           testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
           <| fun _ ->
@@ -190,7 +202,7 @@ let tests =
               Expect.stringContains critic "| supported |" "the independent assessment may support the behavior"
 
               let required =
-                  [ { Id = "GP-001"
+                  [ { Id = "GP-JOURNEY-001"
                       Facet = "gameplay"
                       RequiredEvidence = EvidenceLevel.ProductionJourney
                       Summary = "boot to outcome"
@@ -199,6 +211,68 @@ let tests =
               Expect.isFalse
                   (Coverage.lint required Map.empty None |> Coverage.passed)
                   "without a validated runner receipt, critic support cannot turn the gate green"
+
+          testCase "critic assessment vetoes unsupported, ambiguous, missing, and mismatched AC rows"
+          <| fun _ ->
+              let required =
+                  [ { Id = "GP-JOURNEY-001"
+                      Facet = "gameplay"
+                      RequiredEvidence = EvidenceLevel.ProductionJourney
+                      Summary = "boot to outcome"
+                      CoversAc = [ 1; 2 ] } ]
+              let row ac disposition =
+                  sprintf "AC-%03d | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=ReferenceJourney.adapter | reason=reviewed" ac disposition
+              let validate text =
+                  match Critic.parse text with
+                  | Error error -> Error error
+                  | Ok rows -> Critic.validate required rows
+
+              Expect.isOk (validate (row 1 "supported" + "\n" + row 2 "supported")) "complete supported rows pass"
+              Expect.isError (validate (row 1 "unsupported" + "\n" + row 2 "supported")) "unsupported vetoes"
+              Expect.isError (validate (row 1 "supported" + "\n" + row 2 "ambiguous")) "ambiguous vetoes"
+              Expect.isError (validate (row 1 "supported")) "missing required AC vetoes"
+              Expect.isError (validate (row 1 "supported" + "\n" + row 3 "supported")) "mismatched AC vetoes"
+
+          testCase "coverage-lint binds authenticated receipt, issuer key, and critic artifact together"
+          <| fun _ ->
+              let directory = Path.Combine(Path.GetTempPath(), "fsgg-playtest-" + Guid.NewGuid().ToString("N"))
+              Directory.CreateDirectory directory |> ignore
+
+              try
+                  let manifestPath = Path.Combine(directory, "manifest.txt")
+                  let proofsPath = Path.Combine(directory, "proofs.txt")
+                  let receiptsPath = Path.Combine(directory, "receipts.jsonl")
+                  let keyPath = Path.Combine(directory, "issuer.key")
+                  let criticPath = Path.Combine(directory, "critic.txt")
+                  let manifest =
+                      [ { Id = "GP-JOURNEY-001"
+                          Facet = "gameplay"
+                          RequiredEvidence = EvidenceLevel.ProductionJourney
+                          Summary = "boot to outcome"
+                          CoversAc = [ 1 ] } ]
+
+                  File.WriteAllText(manifestPath, Manifest.render manifest)
+                  File.WriteAllText(proofsPath, "")
+                  File.WriteAllText(receiptsPath, journeyReceipt ())
+                  File.WriteAllBytes(keyPath, issuerKey)
+
+                  let run (critic: string) =
+                      File.WriteAllText(criticPath, critic)
+                      Program.main
+                          [| "coverage-lint"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             "--journey-receipts"; receiptsPath
+                             "--journey-key-file"; keyPath
+                             "--critic"; criticPath |]
+
+                  let row disposition =
+                      sprintf "AC-001 | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=ReferenceJourney.adapter | reason=reviewed" disposition
+
+                  Expect.equal (run (row "supported")) 0 "all three authenticated artifacts make the gate green"
+                  Expect.equal (run (row "ambiguous")) 1 "an ambiguous critic veto makes the same receipt red"
+              finally
+                  Directory.Delete(directory, true)
 
           testCase "FR-002/006 tryParse fails closed on a malformed manifest line, parse stays lenient"
           <| fun _ ->

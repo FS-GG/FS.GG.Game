@@ -62,8 +62,9 @@ module JourneyReceipt =
     val result: JourneyReceipt -> JourneyResult
     val steps: JourneyReceipt -> int
     val maxSteps: JourneyReceipt -> int
-    /// Stable JSON consumed by `fsgg-playtest`; includes an integrity digest over all fields.
-    val render: JourneyReceipt -> string
+    /// Stable JSON consumed by `fsgg-playtest`, authenticated with a release-gate issuer key. The
+    /// key must contain at least 32 bytes and is never embedded in the receipt.
+    val render: issuerKey: byte[] -> JourneyReceipt -> string
 
 /// A journey trace, captured event stream, final model, and runner-issued receipt.
 type JourneyRun<'model, 'event, 'fingerprint> =

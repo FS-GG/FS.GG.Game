@@ -272,7 +272,7 @@ let tests =
 
           testCase "gate: the reference obligation chain includes a runner-issued boot-to-outcome production journey"
           <| fun _ ->
-              let journey = Journey.runScript (productionAdapter true) productionScript
+              let journey = Journey.runScript productionAdapter productionScript
               Expect.equal (Trace.origin journey.Trace) Origin.ProductionJourney "the stronger evidence level is distinct"
               Expect.equal (JourneyReceipt.result journey.Receipt) JourneyResult.Passed "boot-to-outcome reaches its terminal predicate"
               Expect.equal (JourneyReceipt.testId journey.Receipt) "GP-JOURNEY-001" "receipt binds the scenario to its test identity"

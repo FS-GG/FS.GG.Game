@@ -28,6 +28,8 @@
     <Compile Include="Driver.fs" />
     <Compile Include="Journey.fsi" />
     <Compile Include="Journey.fs" />
+    <Compile Include="ReferenceJourney.fsi" />
+    <Compile Include="ReferenceJourney.fs" />
     <Compile Include="Workload.fsi" />
     <Compile Include="Workload.fs" />
     <Compile Include="Matrix.fsi" />

@@ -12,6 +12,7 @@
        processing; parsing/coverage are pure, I/O is at the Program edge. -->
   <ItemGroup>
     <Compile Include="Manifest.fs" />
+    <Compile Include="Critic.fs" />
     <Compile Include="TestSpec.fs" />
     <Compile Include="Proofs.fs" />
     <Compile Include="Coverage.fs" />

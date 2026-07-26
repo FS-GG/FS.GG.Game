@@ -52,15 +52,27 @@ let parse (text: string) : Result<Map<string, Provenance>, string> =
     | Some e -> Error e
     | None -> Ok(Map.ofList entries)
 
-let private digest (value: string) =
+let private digestBytes (value: byte[]) =
     value
-    |> Encoding.UTF8.GetBytes
     |> SHA256.HashData
     |> Convert.ToHexString
     |> fun s -> s.ToLowerInvariant()
 
+let private frame (values: string list) =
+    let builder = StringBuilder()
+
+    for value in values do
+        builder.Append(Encoding.UTF8.GetByteCount value).Append(':').Append(value) |> ignore
+
+    Encoding.UTF8.GetBytes(builder.ToString())
+
 /// Validate JSONL receipts emitted by `JourneyReceipt.render`.
-let parseJourneyReceipts (text: string) : Result<Map<string, Provenance>, string> =
+let parseJourneyReceipts (issuerKey: byte[]) (text: string) : Result<Map<string, Provenance>, string> =
+    if issuerKey.Length < 32 then
+        invalidArg "issuerKey" "a production-journey issuer key must contain at least 32 bytes"
+
+    let expectedIssuer = digestBytes issuerKey
+
     let parseOne (line: string) =
         try
             use doc = JsonDocument.Parse line
@@ -72,6 +84,7 @@ let parseJourneyReceipts (text: string) : Result<Map<string, Provenance>, string
             let number (name: string) = root.GetProperty(name).GetInt32()
             let schema = number "schemaVersion"
             let kind = str "kind"
+            let issuer = str "issuer"
             let route = str "routeId"
             let scenario = str "scenarioId"
             let testId = str "testId"
@@ -81,13 +94,15 @@ let parseJourneyReceipts (text: string) : Result<Map<string, Provenance>, string
             let failure = str "failure"
             let steps = number "steps"
             let maxSteps = number "maxSteps"
-            let integrity = str "integrity"
+            let signature = str "signature"
             let stripSha (value: string) =
                 if value.StartsWith("sha256:", StringComparison.Ordinal) then value.Substring(7) else ""
+            let stripSignature (value: string) =
+                if value.StartsWith("hmac-sha256:", StringComparison.Ordinal) then value.Substring(12) else ""
             let payload =
-                String.concat
-                    "\n"
+                frame
                     [ "production-journey-v1"
+                      expectedIssuer
                       route
                       scenario
                       testId
@@ -97,10 +112,19 @@ let parseJourneyReceipts (text: string) : Result<Map<string, Provenance>, string
                       failure
                       string steps
                       string maxSteps ]
-            let expected = digest payload
+            let expectedSignature =
+                use hmac = new HMACSHA256(issuerKey)
+                hmac.ComputeHash(payload)
+            let suppliedSignature =
+                try
+                    Convert.FromHexString(stripSignature signature)
+                with _ ->
+                    Array.empty
 
             if schema <> 1 || kind <> "production-journey" then
                 Error "not a production-journey v1 receipt"
+            elif stripSha issuer <> expectedIssuer then
+                Error(sprintf "journey receipt %s was not issued by the configured release gate" testId)
             elif String.IsNullOrWhiteSpace route || String.IsNullOrWhiteSpace scenario || String.IsNullOrWhiteSpace testId then
                 Error "journey receipt has an empty route, scenario, or test identity"
             elif result <> "pass" || failure <> "" then
@@ -109,8 +133,9 @@ let parseJourneyReceipts (text: string) : Result<Map<string, Provenance>, string
                 Error(sprintf "journey receipt %s violates its declared step bound" testId)
             elif stripSha scriptDigest = "" || stripSha traceDigest = "" then
                 Error(sprintf "journey receipt %s has a malformed script or trace digest" testId)
-            elif stripSha integrity <> expected then
-                Error(sprintf "journey receipt %s has a forged or stale integrity digest" testId)
+            elif suppliedSignature.Length <> expectedSignature.Length
+                 || not (CryptographicOperations.FixedTimeEquals(suppliedSignature, expectedSignature)) then
+                Error(sprintf "journey receipt %s has a forged or stale issuer signature" testId)
             else
                 Ok(testId, ProductionJourney)
         with ex ->

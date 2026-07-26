@@ -60,12 +60,21 @@ type JourneyReceipt internal (data: ReceiptData) =
     member internal _.Data = data
 
 module private Stable =
-    let digest (value: string) =
+    let digestBytes (value: byte[]) =
         value
-        |> Encoding.UTF8.GetBytes
         |> SHA256.HashData
         |> Convert.ToHexString
         |> fun s -> s.ToLowerInvariant()
+
+    let frame (values: string list) =
+        let builder = StringBuilder()
+
+        for value in values do
+            builder.Append(Encoding.UTF8.GetByteCount value).Append(':').Append(value) |> ignore
+
+        Encoding.UTF8.GetBytes(builder.ToString())
+
+    let digestParts values = values |> frame |> digestBytes
 
     let escape (value: string) =
         value
@@ -82,10 +91,10 @@ module private Stable =
         | JourneyResult.Passed -> ""
         | JourneyResult.Failed reason -> reason
 
-    let payload (d: ReceiptData) =
-        String.concat
-            "\n"
+    let payload (keyId: string) (d: ReceiptData) =
+        frame
             [ "production-journey-v1"
+              keyId
               d.RouteId
               d.ScenarioId
               d.TestId
@@ -107,12 +116,21 @@ module JourneyReceipt =
     let steps (receipt: JourneyReceipt) = receipt.Data.Steps
     let maxSteps (receipt: JourneyReceipt) = receipt.Data.MaxSteps
 
-    let render (receipt: JourneyReceipt) =
+    let render (issuerKey: byte[]) (receipt: JourneyReceipt) =
+        if issuerKey.Length < 32 then
+            invalidArg "issuerKey" "a production-journey issuer key must contain at least 32 bytes"
+
         let d = receipt.Data
-        let integrity = Stable.digest (Stable.payload d)
+        let keyId = Stable.digestBytes issuerKey
+        let signature =
+            use hmac = new HMACSHA256(issuerKey)
+            hmac.ComputeHash(Stable.payload keyId d)
+            |> Convert.ToHexString
+            |> fun value -> value.ToLowerInvariant()
 
         sprintf
-            """{"schemaVersion":1,"kind":"production-journey","routeId":"%s","scenarioId":"%s","testId":"%s","scriptDigest":"sha256:%s","traceDigest":"sha256:%s","result":"%s","failure":"%s","steps":%d,"maxSteps":%d,"integrity":"sha256:%s"}"""
+            """{"schemaVersion":1,"kind":"production-journey","issuer":"sha256:%s","routeId":"%s","scenarioId":"%s","testId":"%s","scriptDigest":"sha256:%s","traceDigest":"sha256:%s","result":"%s","failure":"%s","steps":%d,"maxSteps":%d,"signature":"hmac-sha256:%s"}"""
+            keyId
             (Stable.escape d.RouteId)
             (Stable.escape d.ScenarioId)
             (Stable.escape d.TestId)
@@ -122,7 +140,7 @@ module JourneyReceipt =
             (Stable.escape (Stable.failure d.Result))
             d.Steps
             d.MaxSteps
-            integrity
+            signature
 
 type JourneyRun<'model, 'event, 'fingerprint> =
     { Trace: Trace<'fingerprint>
@@ -142,8 +160,8 @@ module Journey =
         (model: 'model)
         (failure: string option)
         : JourneyRun<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>, 'fingerprint> =
-        let scriptText = captured |> List.map adapter.EncodeEvent |> String.concat "\n"
-        let traceText = fingerprints |> List.map adapter.EncodeFingerprint |> String.concat "\n"
+        let encodedEvents = captured |> List.map adapter.EncodeEvent
+        let encodedFrames = fingerprints |> List.map adapter.EncodeFingerprint
         let result =
             match failure with
             | Some reason -> JourneyResult.Failed reason
@@ -153,16 +171,16 @@ module Journey =
                     sprintf
                         "terminal predicate not reached within %d event(s); final fingerprint sha256:%s; captured-input sha256:%s"
                         captured.Length
-                        (Stable.digest (adapter.EncodeFingerprint (adapter.Fingerprint model)))
-                        (Stable.digest scriptText)
+                        (Stable.digestParts [ adapter.EncodeFingerprint (adapter.Fingerprint model) ])
+                        (Stable.digestParts encodedEvents)
                 )
 
         let data =
             { RouteId = adapter.RouteId
               ScenarioId = adapter.ScenarioId
               TestId = adapter.TestId
-              ScriptDigest = Stable.digest scriptText
-              TraceDigest = Stable.digest traceText
+              ScriptDigest = Stable.digestParts encodedEvents
+              TraceDigest = Stable.digestParts encodedFrames
               Result = result
               Steps = captured.Length
               MaxSteps = adapter.MaxSteps }

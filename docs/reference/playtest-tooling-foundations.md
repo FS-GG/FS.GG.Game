@@ -14,8 +14,9 @@ the distinction the original primitives could not express:
   helper-level tests.
 - `ProductionJourney` starts from the product boot function and crosses raw event mapping, dispatch,
   update, fixed ticks, and deterministic effect results.
-- only its opaque `JourneyReceipt`, bound to route/scenario/test/script/trace/result/TRX, satisfies a
-  manifest row marked `requires=production-journey`.
+- only its opaque `JourneyReceipt`, authenticated by the protected release-gate issuer key and bound
+  to route/scenario/test/script/trace/result/TRX, satisfies a manifest row marked
+  `requires=production-journey`.
 
 The original audit records
 which already-shipped surface the tooling leans on, and why, so Phases 1–6 specify against a fixed base
@@ -83,7 +84,12 @@ build on — the primitives already in place").
 ## Production-journey trust boundary
 
 `Origin.InputDriven` is retained for compatibility but means simulation/component input evidence.
-`Origin.ProductionJourney` is minted only by `Journey.runScript`/`runPolicy`. A displayed event which
+`Origin.ProductionJourney` is minted only by `Journey.runScript`/`runPolicy`. The shipped
+`ReferenceJourney` composition supplies the positive reference boot/map/update/tick/effect route;
+the test suite imports it instead of rebuilding a purpose-made adapter. A displayed event which
 the production mapper does not bind fails explicitly, and a bounded run which misses its terminal
 predicate fails with final-state and captured-input digests. `fsgg-playtest` validates the rendered
-receipt integrity and matching TRX identity; hand-authored provenance text cannot upgrade a trace.
+HMAC issuer signature and matching TRX identity; a public-checksum JSON or hand-authored provenance
+text cannot upgrade a trace. Script and trace digests length-frame every encoded value, so an embedded
+newline cannot collide with an event boundary. A complete critic artifact is also mandatory for
+production rows; missing, mismatched, unsupported, or ambiguous AC rows veto completion.

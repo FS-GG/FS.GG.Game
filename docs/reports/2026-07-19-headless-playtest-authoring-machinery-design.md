@@ -53,17 +53,17 @@ The runner receipt remains the release oracle; these rows cannot mint or upgrade
 AC-01 | supported | checkpoints=Journey.runScript | terminal=adapter.IsTerminal | route=Journey.fsi production adapter | reason=public generic boot/map/update/tick/effect runner
 AC-02 | supported | checkpoints=JourneyEvent cases | terminal=n/a | route=Journey.fsi | reason=start/menu/key/pointer/interact/pause/resume/tick/effect shapes are timestamp-free
 AC-03 | supported | checkpoints=JourneyTests seeded replay | terminal=Screen=Won | route=runPolicy -> captured -> runScript | reason=byte-identical captured replay
-AC-04 | supported | checkpoints=Origin.ProductionJourney | terminal=n/a | route=opaque JourneyReceipt constructor | reason=Playable cannot create production provenance
-AC-05 | supported | checkpoints=Proofs.parseJourneyReceipts | terminal=result=pass | route=receipt integrity + TRX test identity | reason=hand-authored production token refused
+AC-04 | supported | checkpoints=Origin.ProductionJourney | terminal=n/a | route=opaque JourneyReceipt constructor + protected issuer key | reason=Playable and text artifacts cannot create authenticated production provenance
+AC-05 | supported | checkpoints=Proofs.parseJourneyReceipts | terminal=result=pass | route=HMAC issuer signature + TRX test identity | reason=hand-authored token and recomputed public checksum are refused
 AC-06 | supported | checkpoints=existing harness suite | terminal=n/a | route=Playable/Explore/Properties/Workload/Bot unchanged | reason=lower-level tools preserved
 AC-07 | supported | checkpoints=Manifest.RequiredEvidence | terminal=n/a | route=requires=production-journey | reason=simulation remains valid only for simulation rows
-AC-08 | supported | checkpoints=JourneyTests productionScript | terminal=Screen=Won | route=productionAdapter boot/map/update/tick/effect | reason=reference journey starts at menu and wins
+AC-08 | supported | checkpoints=ReferenceJourney.script | terminal=Screen=Won | route=shipped ReferenceJourney.adapter boot/map/update/tick/effect | reason=tests import the packaged reference composition
 AC-09 | supported | checkpoints=JourneyTests unbound interaction | terminal=failed receipt | route=direct helper versus production map | reason=helper stays green while journey fails actionably
 AC-10 | supported | checkpoints=frames 6-11 | terminal=Screen=Won | route=productionScript | reason=room change/reveal/reposition/camera/sealed-clear progression asserted
 AC-11 | supported | checkpoints=frames 0-2,6-11 | terminal=Screen=Won | route=productionScript | reason=start, pause/resume, progression, terminal all journey-level
 AC-12 | supported | checkpoints=fs-gg-playtest evidence boundary | terminal=n/a | route=product skill | reason=component and acceptance guidance is explicit
-AC-13 | supported | checkpoints=ReferenceProof production gate | terminal=Screen=Won | route=JourneyTests composition | reason=constructed Pong states are no longer called complete E2E proof
-AC-14 | supported | checkpoints=CLI + harness failure tests | terminal=pass required | route=receipt parser/Unbound/exhaustion/origin | reason=forged, missing, simulation, unbound, non-terminal cases fail closed
+AC-13 | supported | checkpoints=ReferenceProof production gate | terminal=Screen=Won | route=shipped ReferenceJourney composition | reason=constructed Pong states are no longer called complete E2E proof
+AC-14 | supported | checkpoints=CLI + harness failure tests | terminal=pass required | route=HMAC receipt parser/critic/Unbound/exhaustion/origin | reason=self-attested, forged, missing, simulation, critic-veto, unbound, non-terminal cases fail closed
 AC-15 | supported | checkpoints=MaxSteps=32 | terminal=Screen=Won | route=bounded pure runner | reason=exhaustion reports final fingerprint and captured-input digests
 AC-16 | supported | checkpoints=Release test and pack gates | terminal=n/a | route=0.11.0 coherent set + Skills 0.5.0 | reason=exact candidates built; publication remains a post-merge gate
 AC-17 | supported | checkpoints=skill independent-critic section | terminal=n/a | route=structured supported/unsupported/ambiguous format | reason=fresh-context critic required
