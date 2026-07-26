@@ -140,8 +140,7 @@ let tests =
 
           testCase "a production row embeds schema-v1 receipt fields bound to the exact passing report"
           <| fun _ ->
-              let testName = "ReferenceProof gate GP-JOURNEY-001 production journey"
-              let reportText = trxXml [ testName, "Passed" ] 1 0
+              let reportText = trxXml [ "unrelated stale caller test", "Failed" ] 0 1
               let run = parseTrx reportText
               let assemblyPath = typeof<ProductionJourneyProof>.Assembly.Location
 
@@ -150,10 +149,8 @@ let tests =
                   | Ok value -> value
                   | Error error -> failtestf "journey receipt must load: %s" error
 
-              let bound =
-                  match JourneyReceiptExport.bind "artifacts/journey.trx" run receipts with
-                  | Ok value -> value
-                  | Error error -> failtestf "journey receipt must bind: %s" error
+              let generated = JourneyReceiptExport.generate "artifacts/journey.junit.xml" receipts
+              let bound = generated.Receipts
 
               let productionManifest =
                   [ { Id = "GP-JOURNEY-001"
@@ -167,7 +164,7 @@ let tests =
                       "artifacts/journey.trx"
                       run
                       bound
-                      (Evidence.rows run proofs productionManifest)
+                      (Evidence.rowsWithJourneyReceipts run bound proofs productionManifest)
 
               [ "journeyReceipt:"
                 "schemaVersion: 1"
@@ -176,40 +173,48 @@ let tests =
                 "routeId: \"FS.GG.Game.Reference/Composition\""
                 "scenarioId: \"boot-to-vault-exit\""
                 "testId: \"GP-JOURNEY-001\""
+                "executionId: \""
+                "receiptBinding: \"sha256:"
                 "kind: fixed-script"
+                "identity: \"boot-to-vault-exit/fixed-script-v1\""
                 "replayDigest: \"sha256:"
                 "traceDigest: \"sha256:"
                 "initialFingerprint: \"sha256:"
                 "terminalFingerprint: \"sha256:"
+                "identity: \"screen-won-v1\""
                 "reached: true"
                 "maximumSteps: 32"
                 "actualSteps: 12"
-                "testName: \"ReferenceProof gate GP-JOURNEY-001 production journey\""
-                sprintf "digest: \"sha256:%s\"" run.Digest
+                "source: \"artifacts/journey.junit.xml\""
+                "testName: \"GP-JOURNEY-001\""
+                sprintf "digest: \"sha256:%s\"" (Trx.digest generated.Bytes)
                 "outcome: passed" ]
               |> List.iter (fun expected ->
                   Expect.stringContains rendered expected (sprintf "serialized receipt contains %s" expected))
+              Expect.stringContains rendered "result: pass" "the generated proof execution satisfies the production row"
+              Expect.isFalse
+                  (rendered.Contains run.Digest)
+                  "the stale caller TRX is not rendered or used for the production row"
 
-          testCase "journey/report binding fails closed on missing, failed, and ambiguous matching tests"
+          testCase "the journey JUnit report is generated from and uniquely bound to the same proof execution"
           <| fun _ ->
               let assemblyPath = typeof<ProductionJourneyProof>.Assembly.Location
-              let receipts =
+              let load () =
                   match Proofs.loadJourneyReceipts assemblyPath with
                   | Ok value -> value
                   | Error error -> failtestf "journey receipt must load: %s" error
-              let bind results passed failed =
-                  trxXml results passed failed
-                  |> parseTrx
-                  |> fun run -> JourneyReceiptExport.bind "journey.trx" run receipts
+              let first = JourneyReceiptExport.generate "journey.junit.xml" (load ())
+              let second = JourneyReceiptExport.generate "journey.junit.xml" (load ())
+              let firstBound = Map.find "GP-JOURNEY-001" first.Receipts
+              let reportText = Encoding.UTF8.GetString first.Bytes
 
-              Expect.isError (bind [ "unrelated test", "Passed" ] 1 0) "a mismatched report is refused"
-              Expect.isError
-                  (bind [ "gate GP-JOURNEY-001", "Failed" ] 0 1)
-                  "a matching failed test is refused"
-              Expect.isError
-                  (bind
-                      [ "gate GP-JOURNEY-001 first", "Passed"
-                        "gate GP-JOURNEY-001 second", "Passed" ]
-                      2
-                      0)
-                  "an ambiguous identity is refused" ]
+              Expect.stringContains reportText firstBound.ExecutionId "the JUnit carries the same-execution id"
+              Expect.stringContains
+                  reportText
+                  ("sha256:" + firstBound.ReceiptBindingDigest)
+                  "the JUnit carries the exact opaque-receipt binding"
+              Expect.notEqual first.Bytes second.Bytes "a fresh proof execution mints a fresh report identity"
+              Expect.notEqual
+                  (Trx.digest first.Bytes)
+                  (Trx.digest (Encoding.UTF8.GetBytes allGreenTrx))
+                  "caller TRX bytes are not reused as the journey execution report" ]

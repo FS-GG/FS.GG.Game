@@ -89,8 +89,10 @@ the separate `FS.GG.Game.Reference` application supplies the positive reference
 boot/map/update/tick/effect composition root; the test suite imports it instead of rebuilding a
 purpose-made adapter. A displayed event which
 the production mapper does not bind fails explicitly, and a bounded run which misses its terminal
-predicate fails with final-state and captured-input digests. `fsgg-playtest` validates the rendered
-executable proof's opaque in-memory receipt and matching TRX identity; JSON, caller keys, and
+predicate fails with final-state and captured-input digests. A terminal predicate already true at
+boot also fails: zero events are not a production journey. `fsgg-playtest` validates the rendered
+executable proof's opaque in-memory receipt and generates a JUnit report from that same execution;
+JSON, caller keys, caller-supplied TRX/JUnit, and
 hand-authored provenance text cannot upgrade a trace. Script and trace digests length-frame every encoded value, so an embedded
 newline cannot collide with an event boundary. A complete critic artifact is also mandatory for
 production rows; missing, mismatched, unsupported, or ambiguous AC rows veto completion.
@@ -98,8 +100,9 @@ production rows; missing, mismatched, unsupported, or ambiguous AC rows veto com
 ### Serialized journey receipt schema v1
 
 `fsgg-playtest emit-evidence` embeds a `journeyReceipt` map only after it has loaded an
-`IProductionJourneyProof`, executed it in-process, validated the opaque receipt, and found exactly one
-matching passing test in the supplied TRX. The CLI has no receipt-file or provenance-token input.
+`IProductionJourneyProofV1`, executed it in-process, validated the opaque receipt, and generated a
+passing JUnit report with `--journey-report-out` from that same execution. The CLI has no
+receipt-file, journey-report input, caller-key, or provenance-token input.
 Consequently caller-authored JSON/YAML, a `Playable` trace, or a constructed mid-game state cannot
 acquire runner-issued disposition by copying these fields.
 
@@ -110,17 +113,33 @@ Schema v1 contains:
 | `schemaVersion` | integer `1`; consumers fail closed on every other value |
 | `runner.identity`, `runner.version` | `FS.GG.Game.Harness.Journey` and the issuing assembly version |
 | `origin` | literal `production-journey`; every other value is non-satisfying |
-| `routeId`, `scenarioId`, `testId` | producer route, scenario, and exact proof-test identity |
-| `input.kind`, `input.digest` | `fixed-script` or `seeded-policy` and its SHA-256 definition binding |
+| `routeId`, `scenarioId`, `testId` | non-empty producer identities, matched independently against `IProductionJourneyProofV1` |
+| `executionId`, `receiptBinding` | fresh same-execution id and SHA-256 binding over every opaque receipt field; both also occur in generated JUnit |
+| `input.kind`, `input.identity`, `input.digest` | `fixed-script` or `seeded-policy`, non-empty definition identity, and SHA-256 definition binding |
 | `replayDigest`, `traceDigest` | captured event replay and emitted fingerprint-trace SHA-256 digests |
 | `initialFingerprint`, `terminalFingerprint` | SHA-256 identities of boot and terminal lifecycle states |
-| `terminalPredicate.reached`, `outcome` | terminal predicate result and runner outcome |
+| `terminalPredicate.identity`, `terminalPredicate.reached`, `outcome` | non-empty predicate identity, predicate result, and runner outcome |
 | `maximumSteps`, `actualSteps` | declared bound and consumed event count |
 | `observedTestReport` | source, byte-exact SHA-256 digest, exact test name, and passing outcome |
 
+`receiptBinding` is SHA-256 over one UTF-8 byte stream. Each value is framed as
+`<utf8-byte-count>:<value>` and values occur in this exact order:
+`executionId`, `schemaVersion`, runner identity, runner version, origin, route id, scenario id, test id, input kind,
+input identity, input digest, replay digest, trace digest, initial fingerprint, terminal fingerprint,
+terminal-predicate identity, terminal-predicate reached, outcome (`passed` or `failed:<reason>`),
+maximum steps, actual steps. Canonical token spellings match the transport:
+`production-journey`/`input-driven`/`synthetic`, `fixed-script`/`seeded-policy`, and lowercase
+`true`/`false`. The generated JUnit and `journeyReceipt` map carry the same
+`executionId` and `sha256:<receiptBinding>`; consumers compare both before accepting the report
+digest/outcome.
+
+For a production row, the generated JUnit is also the row's `observedRun`; the general `--trx`
+remains the observed run for simulation/component rows only. A stale, failed, or fabricated general
+TRX therefore cannot classify or render a production row as passing.
+
 All digests render as `sha256:<lowercase-hex>`. SDD/lifecycle consumers must reject a missing field,
-unknown schema, non-production origin, non-passing or unreached terminal outcome, `actualSteps` beyond
-`maximumSteps`, an unexpected route/scenario/test identity, any digest mismatch, a stale or
-non-matching report, or more than one report test matching `testId`. They must never treat the map's
+unknown schema, non-production origin, non-passing or unreached terminal outcome, zero `actualSteps`,
+`actualSteps` beyond `maximumSteps`, an unexpected route/scenario/test/input/terminal identity, any
+digest mismatch, or a JUnit execution/binding mismatch. They must never treat the map's
 presence alone as authenticity: provenance is issued by this executable runner route and the map is
 the transport binding for that already-validated receipt.

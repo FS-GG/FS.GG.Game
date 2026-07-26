@@ -69,11 +69,13 @@ module JourneyReceipt =
     val scenarioId: JourneyReceipt -> string
     val testId: JourneyReceipt -> string
     val inputKind: JourneyReceipt -> JourneyInputKind
+    val inputIdentity: JourneyReceipt -> string
     val inputDigest: JourneyReceipt -> string
     val scriptDigest: JourneyReceipt -> string
     val traceDigest: JourneyReceipt -> string
     val initialFingerprintDigest: JourneyReceipt -> string
     val terminalFingerprintDigest: JourneyReceipt -> string
+    val terminalPredicateIdentity: JourneyReceipt -> string
     val terminalPredicateReached: JourneyReceipt -> bool
     val result: JourneyReceipt -> JourneyResult
     val steps: JourneyReceipt -> int
@@ -85,6 +87,15 @@ module JourneyReceipt =
 type IProductionJourneyProof =
     abstract TestId: string
     abstract Run: unit -> JourneyReceipt
+
+/// Schema-v1 export proof. Its declared identities are independently matched to the opaque receipt
+/// after execution; legacy proofs remain executable but cannot mint a serialized v1 receipt.
+type IProductionJourneyProofV1 =
+    inherit IProductionJourneyProof
+    abstract RouteId: string
+    abstract ScenarioId: string
+    abstract InputIdentity: string
+    abstract TerminalPredicateIdentity: string
 
 /// A journey trace, captured event stream, final model, and runner-issued receipt.
 type JourneyRun<'model, 'event, 'fingerprint> =
@@ -99,9 +110,24 @@ type JourneyPolicy<'model, 'event> =
 
 [<RequireQualifiedAccess>]
 module Journey =
+    val runScriptWithIdentity:
+        inputIdentity: string ->
+        terminalPredicateIdentity: string ->
+        adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> ->
+        script: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list ->
+            JourneyRun<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>, 'fingerprint>
+
     val runScript:
         adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> ->
         script: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list ->
+            JourneyRun<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>, 'fingerprint>
+
+    val runPolicyWithIdentity:
+        policyIdentity: string ->
+        terminalPredicateIdentity: string ->
+        adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> ->
+        policy: JourneyPolicy<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>> ->
+        seed: uint64 ->
             JourneyRun<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>, 'fingerprint>
 
     val runPolicy:

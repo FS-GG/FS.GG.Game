@@ -22,6 +22,7 @@ module Game.Harness.Tests.ReferenceProof
 open Expecto
 open FS.GG.Game.Core
 open FS.GG.Game.Harness
+open FS.GG.Game.Reference
 open Game.Harness.Tests.PongSim
 open Game.Harness.Tests.JourneyTests
 
@@ -272,7 +273,12 @@ let tests =
 
           testCase "gate: the reference obligation chain includes a runner-issued boot-to-outcome production journey"
           <| fun _ ->
-              let journey = Journey.runScript productionAdapter productionScript
+              let journey =
+                  Journey.runScriptWithIdentity
+                      Composition.inputIdentity
+                      Composition.terminalPredicateIdentity
+                      productionAdapter
+                      productionScript
               Expect.equal (Trace.origin journey.Trace) Origin.ProductionJourney "the stronger evidence level is distinct"
               Expect.equal (JourneyReceipt.result journey.Receipt) JourneyResult.Passed "boot-to-outcome reaches its terminal predicate"
               Expect.equal (JourneyReceipt.testId journey.Receipt) "GP-JOURNEY-001" "receipt binds the scenario to its test identity"

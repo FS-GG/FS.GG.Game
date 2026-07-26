@@ -60,11 +60,13 @@ type internal ReceiptData =
       ScenarioId: string
       TestId: string
       InputKind: JourneyInputKind
+      InputIdentity: string
       InputDigest: string
       ScriptDigest: string
       TraceDigest: string
       InitialFingerprintDigest: string
       TerminalFingerprintDigest: string
+      TerminalPredicateIdentity: string
       TerminalPredicateReached: bool
       Result: JourneyResult
       Steps: int
@@ -101,11 +103,13 @@ module JourneyReceipt =
     let scenarioId (receipt: JourneyReceipt) = receipt.Data.ScenarioId
     let testId (receipt: JourneyReceipt) = receipt.Data.TestId
     let inputKind (receipt: JourneyReceipt) = receipt.Data.InputKind
+    let inputIdentity (receipt: JourneyReceipt) = receipt.Data.InputIdentity
     let inputDigest (receipt: JourneyReceipt) = receipt.Data.InputDigest
     let scriptDigest (receipt: JourneyReceipt) = receipt.Data.ScriptDigest
     let traceDigest (receipt: JourneyReceipt) = receipt.Data.TraceDigest
     let initialFingerprintDigest (receipt: JourneyReceipt) = receipt.Data.InitialFingerprintDigest
     let terminalFingerprintDigest (receipt: JourneyReceipt) = receipt.Data.TerminalFingerprintDigest
+    let terminalPredicateIdentity (receipt: JourneyReceipt) = receipt.Data.TerminalPredicateIdentity
     let terminalPredicateReached (receipt: JourneyReceipt) = receipt.Data.TerminalPredicateReached
     let result (receipt: JourneyReceipt) = receipt.Data.Result
     let steps (receipt: JourneyReceipt) = receipt.Data.Steps
@@ -114,6 +118,13 @@ module JourneyReceipt =
 type IProductionJourneyProof =
     abstract TestId: string
     abstract Run: unit -> JourneyReceipt
+
+type IProductionJourneyProofV1 =
+    inherit IProductionJourneyProof
+    abstract RouteId: string
+    abstract ScenarioId: string
+    abstract InputIdentity: string
+    abstract TerminalPredicateIdentity: string
 
 type JourneyRun<'model, 'event, 'fingerprint> =
     { Trace: Trace<'fingerprint>
@@ -129,6 +140,8 @@ module Journey =
     let private finish
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
         (inputKind: JourneyInputKind)
+        (inputIdentity: string)
+        (terminalPredicateIdentity: string)
         (inputDigest: string -> string)
         (captured: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list)
         (fingerprints: 'fingerprint list)
@@ -166,6 +179,7 @@ module Journey =
               ScenarioId = adapter.ScenarioId
               TestId = adapter.TestId
               InputKind = inputKind
+              InputIdentity = inputIdentity
               InputDigest = inputDigest scriptDigest
               ScriptDigest = scriptDigest
               TraceDigest = Stable.digestParts encodedFrames
@@ -173,6 +187,7 @@ module Journey =
                 Stable.digestParts [ adapter.EncodeFingerprint initialFingerprint ]
               TerminalFingerprintDigest =
                 Stable.digestParts [ adapter.EncodeFingerprint (adapter.Fingerprint model) ]
+              TerminalPredicateIdentity = terminalPredicateIdentity
               TerminalPredicateReached = terminalReached
               Result = result
               Steps = captured.Length
@@ -198,7 +213,23 @@ module Journey =
             | JourneyDispatch.Unbound action ->
                 Error(sprintf "displayed action '%s' is unbound in the production route" action)
 
-    let runScript
+    let private validateExportIdentities
+        inputIdentity
+        terminalPredicateIdentity
+        (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
+        =
+        [ "adapter.RouteId", adapter.RouteId
+          "adapter.ScenarioId", adapter.ScenarioId
+          "adapter.TestId", adapter.TestId
+          "inputIdentity", inputIdentity
+          "terminalPredicateIdentity", terminalPredicateIdentity ]
+        |> List.iter (fun (name, value) ->
+            if String.IsNullOrWhiteSpace value then
+                invalidArg name "a serialized production journey identity must be non-empty")
+
+    let private runScriptCore
+        inputIdentity
+        terminalPredicateIdentity
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
         (script: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list)
         =
@@ -210,7 +241,9 @@ module Journey =
         let initialFingerprint = adapter.Fingerprint model
         let frames = ResizeArray<_>(captured.Length)
         let mutable failure =
-            if script.Length > adapter.MaxSteps then
+            if adapter.IsTerminal model then
+                Some "terminal predicate is already satisfied at boot; no production journey was executed"
+            elif script.Length > adapter.MaxSteps then
                 Some(sprintf "script exceeds declared maximum of %d event(s)" adapter.MaxSteps)
             else
                 None
@@ -223,9 +256,28 @@ module Journey =
                     frames.Add(adapter.Fingerprint model)
                 | Error reason -> failure <- Some reason
 
-        finish adapter JourneyInputKind.FixedScript id captured (List.ofSeq frames) initialFingerprint model failure
+        finish
+            adapter
+            JourneyInputKind.FixedScript
+            inputIdentity
+            terminalPredicateIdentity
+            id
+            captured
+            (List.ofSeq frames)
+            initialFingerprint
+            model
+            failure
 
-    let runPolicy
+    let runScriptWithIdentity inputIdentity terminalPredicateIdentity adapter script =
+        validateExportIdentities inputIdentity terminalPredicateIdentity adapter
+        runScriptCore inputIdentity terminalPredicateIdentity adapter script
+
+    let runScript adapter script =
+        runScriptCore "" "" adapter script
+
+    let private runPolicyCore
+        policyIdentity
+        terminalPredicateIdentity
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
         (policy: JourneyPolicy<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>>)
         seed
@@ -238,7 +290,11 @@ module Journey =
         let mutable rng = Rng.ofSeed seed
         let captured = ResizeArray<_>()
         let frames = ResizeArray<_>()
-        let mutable failure = None
+        let mutable failure =
+            if adapter.IsTerminal model then
+                Some "terminal predicate is already satisfied at boot; no production journey was executed"
+            else
+                None
 
         while captured.Count < adapter.MaxSteps && failure.IsNone && not (adapter.IsTerminal model) do
             let struct (events, nextRng) = policy.DecideEvents model rng
@@ -266,9 +322,18 @@ module Journey =
         finish
             adapter
             JourneyInputKind.SeededPolicy
+            policyIdentity
+            terminalPredicateIdentity
             policyDigest
             (List.ofSeq captured)
             (List.ofSeq frames)
             initialFingerprint
             model
             failure
+
+    let runPolicyWithIdentity policyIdentity terminalPredicateIdentity adapter policy seed =
+        validateExportIdentities policyIdentity terminalPredicateIdentity adapter
+        runPolicyCore policyIdentity terminalPredicateIdentity adapter policy seed
+
+    let runPolicy adapter policy seed =
+        runPolicyCore "" "" adapter policy seed

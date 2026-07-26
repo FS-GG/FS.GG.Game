@@ -21,6 +21,13 @@ let private readBytes (path: string) : Result<byte[], string> =
     with ex ->
         Error(sprintf "cannot read %s: %s" path ex.Message)
 
+let private writeBytes (path: string) (bytes: byte[]) : Result<unit, string> =
+    try
+        File.WriteAllBytes(path, bytes)
+        Ok()
+    with ex ->
+        Error(sprintf "cannot write %s: %s" path ex.Message)
+
 /// The value after `--name`, if present.
 let private flag (name: string) (argv: string[]) : string option =
     argv
@@ -172,12 +179,34 @@ let private emitEvidence (argv: string[]) : int =
                     eprintfn "emit-evidence: %s" e
                     1
                 | Ok inputs, Ok run ->
-                    match JourneyReceiptExport.bind tPath run inputs.Journeys with
-                    | Error e ->
-                        eprintfn "emit-evidence: %s" e
+                    let journeyReport =
+                        if Map.isEmpty inputs.Journeys then
+                            Ok Map.empty
+                        else
+                            match flag "--journey-report-out" argv with
+                            | None ->
+                                Error(
+                                    "production-journey evidence requires --journey-report-out <junit.xml>; "
+                                    + "the same-execution report is generated output, never caller input"
+                                )
+                            | Some reportPath ->
+                                let generated = JourneyReceiptExport.generate reportPath inputs.Journeys
+
+                                match writeBytes reportPath generated.Bytes with
+                                | Error error -> Error error
+                                | Ok() -> Ok generated.Receipts
+
+                    match journeyReport with
+                    | Error error ->
+                        eprintfn "emit-evidence: %s" error
                         1
                     | Ok journeys ->
-                        let rows = Evidence.rows run inputs.Provenance manifest
+                        let rows =
+                            Evidence.rowsWithJourneyReceipts
+                                run
+                                journeys
+                                inputs.Provenance
+                                manifest
                         let rendered = Evidence.renderWithJourneyReceipts tPath run journeys rows
 
                         match flag "--out" argv with
@@ -190,7 +219,7 @@ let private emitEvidence (argv: string[]) : int =
                             printf "%s" rendered
                             0
     | _ ->
-        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --critic <assessment>"
+        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --critic <assessment> --journey-report-out <junit.xml>"
         2
 
 [<EntryPoint>]

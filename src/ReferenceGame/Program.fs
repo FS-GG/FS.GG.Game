@@ -127,11 +127,24 @@ module Composition =
           JourneyEvent.Interact
           JourneyEvent.FixedTick ]
 
+    let inputIdentity = "boot-to-vault-exit/fixed-script-v1"
+    let terminalPredicateIdentity = "screen-won-v1"
+
 [<Sealed>]
 type ProductionJourneyProof() =
-    interface IProductionJourneyProof with
+    interface IProductionJourneyProofV1 with
+        member _.RouteId = Composition.adapter.RouteId
+        member _.ScenarioId = Composition.adapter.ScenarioId
+        member _.InputIdentity = Composition.inputIdentity
+        member _.TerminalPredicateIdentity = Composition.terminalPredicateIdentity
         member _.TestId = Composition.adapter.TestId
-        member _.Run() = (Journey.runScript Composition.adapter Composition.script).Receipt
+        member _.Run() =
+            (Journey.runScriptWithIdentity
+                Composition.inputIdentity
+                Composition.terminalPredicateIdentity
+                Composition.adapter
+                Composition.script)
+                .Receipt
 
 module Program =
     [<EntryPoint>]

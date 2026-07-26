@@ -40,6 +40,22 @@ let private allInputDriven (frs: GameplayFr list) =
 
 let private journeyProofAssembly = typeof<ProductionJourneyProof>.Assembly.Location
 
+[<Sealed>]
+type MismatchedJourneyProof() =
+    interface IProductionJourneyProofV1 with
+        member _.RouteId = "mismatched/route"
+        member _.ScenarioId = Composition.adapter.ScenarioId
+        member _.InputIdentity = Composition.inputIdentity
+        member _.TerminalPredicateIdentity = Composition.terminalPredicateIdentity
+        member _.TestId = Composition.adapter.TestId
+        member _.Run() =
+            (Journey.runScriptWithIdentity
+                Composition.inputIdentity
+                Composition.terminalPredicateIdentity
+                Composition.adapter
+                Composition.script)
+                .Receipt
+
 [<Tests>]
 let tests =
     testList
@@ -151,6 +167,15 @@ let tests =
                   (Proofs.parseProvenance "productionJourney")
                   "the text proof grammar has no production token"
 
+          testCase "schema-v1 proof metadata must match the opaque runner receipt"
+          <| fun _ ->
+              let testAssembly = typeof<MismatchedJourneyProof>.Assembly.Location
+
+              match Proofs.loadJourneyReceipts testAssembly with
+              | Error error ->
+                  Expect.stringContains error "mismatched schema-v1 journey identities" "the mismatch is explicit"
+              | Ok _ -> failtest "proof-declared route/scenario/input/terminal identities must match the receipt"
+
           testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
           <| fun _ ->
               let critic =
@@ -251,6 +276,7 @@ let tests =
                   let proofsPath = Path.Combine(directory, "proofs.txt")
                   let criticPath = Path.Combine(directory, "critic.txt")
                   let trxPath = Path.Combine(directory, "journey.trx")
+                  let journeyReportPath = Path.Combine(directory, "journey.junit.xml")
                   let outputPath = Path.Combine(directory, "evidence.yml")
                   let manifest =
                       [ { Id = "GP-JOURNEY-001"
@@ -261,8 +287,8 @@ let tests =
                   let trx =
                       """<?xml version="1.0"?>
 <TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
-  <ResultSummary><Counters passed="1" failed="0" /></ResultSummary>
-  <Results><UnitTestResult testName="gate GP-JOURNEY-001 production journey" outcome="Passed" /></Results>
+  <ResultSummary><Counters passed="0" failed="1" /></ResultSummary>
+  <Results><UnitTestResult testName="unrelated stale caller test" outcome="Failed" /></Results>
 </TestRun>"""
 
                   File.WriteAllText(manifestPath, Manifest.render manifest)
@@ -273,7 +299,7 @@ let tests =
                   )
                   File.WriteAllText(trxPath, trx)
 
-                  let exitCode =
+                  let missingGeneratedReport =
                       FS.GG.Playtest.Program.main
                           [| "emit-evidence"
                              "--manifest"; manifestPath
@@ -282,16 +308,37 @@ let tests =
                              "--journey-proof-assembly"; journeyProofAssembly
                              "--critic"; criticPath
                              "--out"; outputPath |]
+                  Expect.equal
+                      missingGeneratedReport
+                      1
+                      "production evidence fails closed without a generated same-execution report output"
+
+                  let exitCode =
+                      FS.GG.Playtest.Program.main
+                          [| "emit-evidence"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             "--trx"; trxPath
+                             "--journey-proof-assembly"; journeyProofAssembly
+                             "--critic"; criticPath
+                             "--journey-report-out"; journeyReportPath
+                             "--out"; outputPath |]
 
                   Expect.equal exitCode 0 "the validated receipt/report pair emits evidence"
                   let output = File.ReadAllText outputPath
                   Expect.stringContains output "journeyReceipt:" "the typed receipt is embedded"
                   Expect.stringContains output "schemaVersion: 1" "the receipt schema is versioned"
+                  Expect.stringContains output "result: pass" "the generated proof, not caller TRX, classifies the row"
                   Expect.stringContains output "testId: \"GP-JOURNEY-001\"" "the proof identity is bound"
+                  Expect.isTrue (File.Exists journeyReportPath) "the same-execution JUnit is generated"
                   Expect.stringContains
                       output
-                      (sprintf "digest: \"sha256:%s\"" (Trx.digest (File.ReadAllBytes trxPath)))
-                      "the receipt is bound to the exact TRX bytes"
+                      (sprintf "digest: \"sha256:%s\"" (Trx.digest (File.ReadAllBytes journeyReportPath)))
+                      "the receipt is bound to the generated same-execution JUnit bytes"
+                  Expect.notEqual
+                      (Trx.digest (File.ReadAllBytes journeyReportPath))
+                      (Trx.digest (File.ReadAllBytes trxPath))
+                      "the caller TRX cannot stand in for the journey execution report"
               finally
                   Directory.Delete(directory, true)
 

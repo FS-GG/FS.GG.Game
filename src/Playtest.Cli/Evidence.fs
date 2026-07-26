@@ -48,9 +48,44 @@ let rowFor (run: TrxRun) (proofs: Map<string, Provenance>) (evId: string) (fr: G
       Synthetic = synthetic
       Note = note }
 
+/// Classify production rows from the generated same-execution journey report, never from the
+/// caller-supplied general TRX. Other evidence levels retain their existing TRX classification.
+let rowForWithJourneyReceipts
+    (run: TrxRun)
+    (journeys: Map<string, BoundReceipt>)
+    (proofs: Map<string, Provenance>)
+    (evId: string)
+    (fr: GameplayFr)
+    : Row =
+    match Map.tryFind fr.Id proofs with
+    | Some ProductionJourney ->
+        let result, note =
+            if Map.containsKey fr.Id journeys then
+                "pass", "runner-issued production journey receipt and generated same-execution JUnit — satisfies"
+            else
+                "missing", "production journey receipt has no generated same-execution JUnit binding"
+
+        { Id = evId
+          RequirementRefs = [ fr.Id ]
+          CoversAc = fr.CoversAc
+          Result = result
+          Synthetic = false
+          Note = note }
+    | _ -> rowFor run proofs evId fr
+
 /// Every emitted row for the manifest, in manifest order (EV ids assigned sequentially).
 let rows (run: TrxRun) (proofs: Map<string, Provenance>) (manifest: GameplayFr list) : Row list =
     manifest |> List.mapi (fun i fr -> rowFor run proofs (sprintf "EV%03d" (i + 1)) fr)
+
+let rowsWithJourneyReceipts
+    (run: TrxRun)
+    (journeys: Map<string, BoundReceipt>)
+    (proofs: Map<string, Provenance>)
+    (manifest: GameplayFr list)
+    : Row list =
+    manifest
+    |> List.mapi (fun i fr ->
+        rowForWithJourneyReceipts run journeys proofs (sprintf "EV%03d" (i + 1)) fr)
 
 /// Render the rows as a valid SDD `evidence.yml` document with the TRX `observedRun` receipt and
 /// schema-v1 typed journey receipts for production-journey rows.
@@ -77,22 +112,35 @@ let renderWithJourneyReceipts
         line (sprintf "    acceptanceScenarioRefs: [%s]" acRefs)
         line (sprintf "    result: %s" r.Result)
         line (sprintf "    synthetic: %b" r.Synthetic)
-        line "    observedRun:"
-        line (sprintf "      source: %s" trxPath)
-        line (sprintf "      digest: \"sha256:%s\"" run.Digest)
-        line (sprintf "      outcome: %s" (if run.Failed = 0 then "passed" else "failed"))
-        line (sprintf "      passed: %d" run.Passed)
-        line (sprintf "      failed: %d" run.Failed)
-        line (sprintf "      skipped: %d" run.Skipped)
 
-        match r.RequirementRefs with
-        | [ testId ] ->
-            match Map.tryFind testId journeys with
-            | Some journey ->
-                line "    journeyReceipt:"
-                JourneyReceiptExport.renderYaml "      " journey |> List.iter line
-            | None -> ()
-        | _ -> ()
+        let journey =
+            match r.RequirementRefs with
+            | [ testId ] -> Map.tryFind testId journeys
+            | _ -> None
+
+        line "    observedRun:"
+
+        match journey with
+        | Some bound ->
+            line (sprintf "      source: %s" bound.ReportSource)
+            line (sprintf "      digest: \"sha256:%s\"" bound.ReportDigest)
+            line "      outcome: passed"
+            line (sprintf "      passed: %d" bound.ReportPassed)
+            line "      failed: 0"
+            line "      skipped: 0"
+        | None ->
+            line (sprintf "      source: %s" trxPath)
+            line (sprintf "      digest: \"sha256:%s\"" run.Digest)
+            line (sprintf "      outcome: %s" (if run.Failed = 0 then "passed" else "failed"))
+            line (sprintf "      passed: %d" run.Passed)
+            line (sprintf "      failed: %d" run.Failed)
+            line (sprintf "      skipped: %d" run.Skipped)
+
+        match journey with
+        | Some journey ->
+            line "    journeyReceipt:"
+            JourneyReceiptExport.renderYaml "      " journey |> List.iter line
+        | None -> ()
 
         line (sprintf "    notes: [\"%s\"]" r.Note)
 
