@@ -62,10 +62,21 @@ let parse (text: string) : Result<Map<string, Provenance>, string> =
 /// Load and execute every public `IProductionJourneyProof` in an assembly. Production provenance is
 /// obtained only from the opaque in-memory receipt returned by `Journey.runScript`/`runPolicy`; no
 /// JSON, key, checksum, or caller-authored provenance text is accepted.
-let loadJourneyReceipts (assemblyPath: string) : Result<Map<string, ValidatedJourneyProof>, string> =
+let private assemblyAuthority (assembly: Assembly) =
+    let name = assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+    name + "/" + assembly.ManifestModule.ModuleVersionId.ToString("N")
+
+/// Load proofs while requiring every receipt to identify the exact producer assembly selected by
+/// the consumer. This allowlist prevents an external assembly from composing its own adapter and
+/// presenting internally consistent identities as a producer-owned journey.
+let loadJourneyReceiptsWithAuthority
+    (assemblyPath: string)
+    (authorityAssemblyPath: string)
+    : Result<Map<string, ValidatedJourneyProof>, string> =
     try
         let proofType = typeof<IProductionJourneyProof>
         let assembly = Assembly.LoadFrom assemblyPath
+        let expectedAuthority = Assembly.LoadFrom authorityAssemblyPath |> assemblyAuthority
         let implementations =
             assembly.GetExportedTypes()
             |> Array.filter (fun candidate ->
@@ -92,18 +103,29 @@ let loadJourneyReceipts (assemblyPath: string) : Result<Map<string, ValidatedJou
 
                             match proof with
                             | :? IProductionJourneyProofV1 as proofV1
-                                when String.IsNullOrWhiteSpace proofV1.RouteId
+                                when String.IsNullOrWhiteSpace proofV1.CompositionAuthority
+                                     || String.IsNullOrWhiteSpace proofV1.RouteId
                                      || String.IsNullOrWhiteSpace proofV1.ScenarioId
                                      || String.IsNullOrWhiteSpace proofV1.InputIdentity
                                      || String.IsNullOrWhiteSpace proofV1.TerminalPredicateIdentity ->
                                 Error(sprintf "%s declares an empty schema-v1 journey identity" implementation.FullName)
                             | :? IProductionJourneyProofV1 as proofV1
-                                when proofV1.RouteId <> JourneyReceipt.routeId receipt
+                                when proofV1.CompositionAuthority <> JourneyReceipt.compositionAuthority receipt
+                                     || proofV1.RouteId <> JourneyReceipt.routeId receipt
                                      || proofV1.ScenarioId <> JourneyReceipt.scenarioId receipt
                                      || proofV1.InputIdentity <> JourneyReceipt.inputIdentity receipt
                                      || proofV1.TerminalPredicateIdentity
                                         <> JourneyReceipt.terminalPredicateIdentity receipt ->
                                 Error(sprintf "%s returned a receipt with mismatched schema-v1 journey identities" implementation.FullName)
+                            | :? IProductionJourneyProofV1 as proofV1
+                                when proofV1.CompositionAuthority <> expectedAuthority ->
+                                Error(
+                                    sprintf
+                                        "%s uses composition authority '%s', which is not the allowlisted producer '%s'"
+                                        implementation.FullName
+                                        proofV1.CompositionAuthority
+                                        expectedAuthority
+                                )
                             | :? IProductionJourneyProofV1 ->
                               if String.IsNullOrWhiteSpace proof.TestId || proof.TestId <> testId then
                                 Error(sprintf "%s returned a receipt for mismatched test identity '%s'" implementation.FullName testId)
@@ -156,6 +178,9 @@ let loadJourneyReceipts (assemblyPath: string) : Result<Map<string, ValidatedJou
                 (Ok Map.empty)
     with ex ->
         Error(sprintf "cannot execute production journey proof assembly %s: %s" assemblyPath ex.Message)
+
+let loadJourneyReceipts (assemblyPath: string) : Result<Map<string, ValidatedJourneyProof>, string> =
+    loadJourneyReceiptsWithAuthority assemblyPath assemblyPath
 
 /// Compatibility projection used by coverage-only callers which do not need the serialized receipt.
 let loadJourneyProofs (assemblyPath: string) : Result<Map<string, Provenance>, string> =

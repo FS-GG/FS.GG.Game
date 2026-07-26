@@ -64,6 +64,7 @@ module JourneyReceipt =
     val schemaVersion: JourneyReceipt -> int
     val runnerIdentity: JourneyReceipt -> string
     val runnerVersion: JourneyReceipt -> string
+    val compositionAuthority: JourneyReceipt -> string
     val origin: JourneyReceipt -> Origin
     val routeId: JourneyReceipt -> string
     val scenarioId: JourneyReceipt -> string
@@ -92,6 +93,7 @@ type IProductionJourneyProof =
 /// after execution; legacy proofs remain executable but cannot mint a serialized v1 receipt.
 type IProductionJourneyProofV1 =
     inherit IProductionJourneyProof
+    abstract CompositionAuthority: string
     abstract RouteId: string
     abstract ScenarioId: string
     abstract InputIdentity: string

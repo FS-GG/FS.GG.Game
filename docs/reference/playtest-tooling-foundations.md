@@ -103,8 +103,11 @@ production rows; missing, mismatched, unsupported, or ambiguous AC rows veto com
 `IProductionJourneyProofV1`, executed it in-process, validated the opaque receipt, and generated a
 passing JUnit report with `--journey-report-out` from that same execution. The CLI has no
 receipt-file, journey-report input, caller-key, or provenance-token input.
-Consequently caller-authored JSON/YAML, a `Playable` trace, or a constructed mid-game state cannot
-acquire runner-issued disposition by copying these fields.
+The producer DLL passed as `--journey-authority-assembly` is an explicit allowlist: every critical
+composition function, proof declaration, and receipt must identify that exact assembly name and
+module version. Consequently caller-authored JSON/YAML, a `Playable` trace, or an externally
+constructed mid-game adapter cannot acquire runner-issued disposition by copying these fields.
+`--journey-report-out` and `--out` must resolve to distinct canonical paths.
 
 Schema v1 contains:
 
@@ -112,6 +115,7 @@ Schema v1 contains:
 | --- | --- |
 | `schemaVersion` | integer `1`; consumers fail closed on every other value |
 | `runner.identity`, `runner.version` | `FS.GG.Game.Harness.Journey` and the issuing assembly version |
+| `compositionAuthority` | producer assembly name/module-version identity, matched to the explicit authority allowlist |
 | `origin` | literal `production-journey`; every other value is non-satisfying |
 | `routeId`, `scenarioId`, `testId` | non-empty producer identities, matched independently against `IProductionJourneyProofV1` |
 | `executionId`, `receiptBinding` | fresh same-execution id and SHA-256 binding over every opaque receipt field; both also occur in generated JUnit |
@@ -124,7 +128,7 @@ Schema v1 contains:
 
 `receiptBinding` is SHA-256 over one UTF-8 byte stream. Each value is framed as
 `<utf8-byte-count>:<value>` and values occur in this exact order:
-`executionId`, `schemaVersion`, runner identity, runner version, origin, route id, scenario id, test id, input kind,
+`executionId`, `schemaVersion`, runner identity, runner version, composition authority, origin, route id, scenario id, test id, input kind,
 input identity, input digest, replay digest, trace digest, initial fingerprint, terminal fingerprint,
 terminal-predicate identity, terminal-predicate reached, outcome (`passed` or `failed:<reason>`),
 maximum steps, actual steps. Canonical token spellings match the transport:

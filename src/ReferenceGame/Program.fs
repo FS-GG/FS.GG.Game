@@ -133,6 +133,10 @@ module Composition =
 [<Sealed>]
 type ProductionJourneyProof() =
     interface IProductionJourneyProofV1 with
+        member _.CompositionAuthority =
+            let assembly = typeof<Composition.Model>.Assembly
+            let name = assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+            name + "/" + assembly.ManifestModule.ModuleVersionId.ToString("N")
         member _.RouteId = Composition.adapter.RouteId
         member _.ScenarioId = Composition.adapter.ScenarioId
         member _.InputIdentity = Composition.inputIdentity

@@ -28,6 +28,47 @@ let private writeBytes (path: string) (bytes: byte[]) : Result<unit, string> =
     with ex ->
         Error(sprintf "cannot write %s: %s" path ex.Message)
 
+let private canonicalPath (path: string) =
+    let full = Path.GetFullPath path
+    let root = Path.GetPathRoot full |> Option.ofObj |> Option.defaultValue ""
+    let relative = full.Substring(root.Length)
+    let components =
+        relative.Split(
+            [| Path.DirectorySeparatorChar; Path.AltDirectorySeparatorChar |],
+            System.StringSplitOptions.RemoveEmptyEntries
+        )
+
+    components
+    |> Array.fold
+        (fun current segment ->
+            let candidate = Path.Combine(current, segment)
+
+            if Directory.Exists candidate || File.Exists candidate then
+                let info =
+                    if Directory.Exists candidate then
+                        DirectoryInfo(candidate) :> FileSystemInfo
+                    else
+                        FileInfo(candidate) :> FileSystemInfo
+
+                match info.ResolveLinkTarget(true) with
+                | null -> candidate
+                | target -> target.FullName
+            else
+                candidate)
+        root
+
+let private samePath left right =
+    try
+        let comparison =
+            if System.OperatingSystem.IsWindows() then
+                System.StringComparison.OrdinalIgnoreCase
+            else
+                System.StringComparison.Ordinal
+
+        Ok(System.String.Equals(canonicalPath left, canonicalPath right, comparison))
+    with ex ->
+        Error(sprintf "cannot resolve output paths: %s" ex.Message)
+
 /// The value after `--name`, if present.
 let private flag (name: string) (argv: string[]) : string option =
     argv
@@ -43,16 +84,23 @@ let private parseProofInputs (argv: string[]) (manifest: Manifest.GameplayFr lis
             |> List.exists (fun requirement ->
                 requirement.RequiredEvidence = Manifest.EvidenceLevel.ProductionJourney)
 
-        match flag "--journey-proof-assembly" argv, flag "--critic" argv with
-        | None, None when not productionRequired ->
+        match
+            flag "--journey-proof-assembly" argv,
+            flag "--journey-authority-assembly" argv,
+            flag "--critic" argv
+        with
+        | None, None, None when not productionRequired ->
             Ok
                 { Provenance = simulation
                   Journeys = Map.empty }
-        | Some assemblyPath, Some criticPath ->
+        | Some assemblyPath, Some authorityAssemblyPath, Some criticPath ->
             match readFile criticPath with
             | Error e -> Error e
             | Ok criticText ->
-                match Proofs.loadJourneyReceipts assemblyPath, Critic.parse criticText with
+                match
+                    Proofs.loadJourneyReceiptsWithAuthority assemblyPath authorityAssemblyPath,
+                    Critic.parse criticText
+                with
                 | Error e, _
                 | _, Error e -> Error e
                 | Ok journeys, Ok criticRows ->
@@ -69,9 +117,15 @@ let private parseProofInputs (argv: string[]) (manifest: Manifest.GameplayFr lis
                             { Provenance = provenance
                               Journeys = journeys }
         | _ when productionRequired ->
-            Error "production-journey coverage requires --journey-proof-assembly and --critic"
+            Error(
+                "production-journey coverage requires --journey-proof-assembly, "
+                + "--journey-authority-assembly, and --critic"
+            )
         | _ ->
-            Error "--journey-proof-assembly and --critic must be supplied together"
+            Error(
+                "--journey-proof-assembly, --journey-authority-assembly, and --critic "
+                + "must be supplied together"
+            )
 
 let private scaffoldManifest (argv: string[]) : int =
     match flag "--spec" argv with
@@ -149,7 +203,7 @@ let private coverageLint (argv: string[]) : int =
                         eprintfn "coverage-lint: FAIL — cited AC(s) without their required evidence level: %A" report.UncoveredAcs
                         1
     | _ ->
-        eprintfn "coverage-lint: --manifest <m> and --proofs <p> required; production rows also require --journey-proof-assembly <dll> --critic <assessment>"
+        eprintfn "coverage-lint: --manifest <m> and --proofs <p> required; production rows also require --journey-proof-assembly <dll> --journey-authority-assembly <producer.dll> --critic <assessment>"
         2
 
 let private emitEvidence (argv: string[]) : int =
@@ -190,11 +244,26 @@ let private emitEvidence (argv: string[]) : int =
                                     + "the same-execution report is generated output, never caller input"
                                 )
                             | Some reportPath ->
-                                let generated = JourneyReceiptExport.generate reportPath inputs.Journeys
+                                match flag "--out" argv with
+                                | Some evidencePath ->
+                                    match samePath reportPath evidencePath with
+                                    | Error error -> Error error
+                                    | Ok true ->
+                                        Error(
+                                            "--journey-report-out and --out must resolve to different files"
+                                        )
+                                    | Ok false ->
+                                        let generated = JourneyReceiptExport.generate reportPath inputs.Journeys
 
-                                match writeBytes reportPath generated.Bytes with
-                                | Error error -> Error error
-                                | Ok() -> Ok generated.Receipts
+                                        match writeBytes reportPath generated.Bytes with
+                                        | Error error -> Error error
+                                        | Ok() -> Ok generated.Receipts
+                                | _ ->
+                                    let generated = JourneyReceiptExport.generate reportPath inputs.Journeys
+
+                                    match writeBytes reportPath generated.Bytes with
+                                    | Error error -> Error error
+                                    | Ok() -> Ok generated.Receipts
 
                     match journeyReport with
                     | Error error ->
@@ -219,7 +288,7 @@ let private emitEvidence (argv: string[]) : int =
                             printf "%s" rendered
                             0
     | _ ->
-        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --critic <assessment> --journey-report-out <junit.xml>"
+        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --journey-authority-assembly <producer.dll> --critic <assessment> --journey-report-out <junit.xml>"
         2
 
 [<EntryPoint>]

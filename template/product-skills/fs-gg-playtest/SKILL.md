@@ -41,9 +41,12 @@ For `production-journey` coverage:
 5. Add a public parameterless `IProductionJourneyProofV1` implementation to the product's proof
    assembly. Its route/scenario/input/terminal declarations are matched to the opaque receipt after
    `Run` executes the imported production composition. Pass that DLL to `fsgg-playtest` with
-   `--journey-proof-assembly`; the CLI loads and executes it and accepts no JSON receipt or caller
-   key. For `emit-evidence`, pass `--journey-report-out <junit.xml>`: this is generated output from
-   the same in-memory proof execution, never a caller report input. The manifest row must say
+   `--journey-proof-assembly` and explicitly allowlist the producer composition DLL with
+   `--journey-authority-assembly`; critical composition functions, proof metadata, and the opaque
+   receipt must identify that exact assembly name/module version. The CLI accepts no JSON receipt or
+   caller key. For `emit-evidence`, pass `--journey-report-out <junit.xml>`: this is generated output
+   from the same in-memory proof execution, never a caller report input, and it must resolve to a
+   different canonical path than `--out`. The manifest row must say
    `requires=production-journey`. A hand-authored `productionJourney` token, simulation trace,
    stale/modified receipt, or caller-supplied TRX/JUnit fails closed.
 

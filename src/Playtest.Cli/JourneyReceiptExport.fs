@@ -56,6 +56,7 @@ let private receiptBindingDigest executionId receipt =
           string (JourneyReceipt.schemaVersion receipt)
           JourneyReceipt.runnerIdentity receipt
           JourneyReceipt.runnerVersion receipt
+          JourneyReceipt.compositionAuthority receipt
           origin
           JourneyReceipt.routeId receipt
           JourneyReceipt.scenarioId receipt
@@ -160,6 +161,7 @@ let renderYaml (indent: string) (bound: BoundReceipt) : string list =
       indent + "runner:"
       indent + "  identity: " + yamlString (JourneyReceipt.runnerIdentity receipt)
       indent + "  version: " + yamlString (JourneyReceipt.runnerVersion receipt)
+      indent + "compositionAuthority: " + yamlString (JourneyReceipt.compositionAuthority receipt)
       indent
       + "origin: "
       + (match JourneyReceipt.origin receipt with

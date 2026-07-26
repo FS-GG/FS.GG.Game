@@ -55,6 +55,7 @@ type internal ReceiptData =
     { SchemaVersion: int
       RunnerIdentity: string
       RunnerVersion: string
+      CompositionAuthority: string
       Origin: Origin
       RouteId: string
       ScenarioId: string
@@ -98,6 +99,7 @@ module JourneyReceipt =
     let schemaVersion (receipt: JourneyReceipt) = receipt.Data.SchemaVersion
     let runnerIdentity (receipt: JourneyReceipt) = receipt.Data.RunnerIdentity
     let runnerVersion (receipt: JourneyReceipt) = receipt.Data.RunnerVersion
+    let compositionAuthority (receipt: JourneyReceipt) = receipt.Data.CompositionAuthority
     let origin (receipt: JourneyReceipt) = receipt.Data.Origin
     let routeId (receipt: JourneyReceipt) = receipt.Data.RouteId
     let scenarioId (receipt: JourneyReceipt) = receipt.Data.ScenarioId
@@ -121,6 +123,7 @@ type IProductionJourneyProof =
 
 type IProductionJourneyProofV1 =
     inherit IProductionJourneyProof
+    abstract CompositionAuthority: string
     abstract RouteId: string
     abstract ScenarioId: string
     abstract InputIdentity: string
@@ -139,6 +142,7 @@ type JourneyPolicy<'model, 'event> =
 module Journey =
     let private finish
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
+        (compositionAuthority: string)
         (inputKind: JourneyInputKind)
         (inputIdentity: string)
         (terminalPredicateIdentity: string)
@@ -174,6 +178,7 @@ module Journey =
                 |> Option.ofObj
                 |> Option.map string
                 |> Option.defaultValue "0.0.0.0"
+              CompositionAuthority = compositionAuthority
               Origin = Origin.ProductionJourney
               RouteId = adapter.RouteId
               ScenarioId = adapter.ScenarioId
@@ -227,7 +232,49 @@ module Journey =
             if String.IsNullOrWhiteSpace value then
                 invalidArg name "a serialized production journey identity must be non-empty")
 
+    let private compositionAuthority
+        (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
+        =
+        let functions: (string * objnull) list =
+            [ "Boot", box (adapter.Boot : unit -> 'model)
+              "MapEvent",
+              box
+                  (adapter.MapEvent:
+                      JourneyEvent<'key, 'pointer, 'menu, 'effectResult>
+                          -> 'model
+                          -> JourneyDispatch<'message>)
+              "Update", box (adapter.Update : 'message -> 'model -> 'model)
+              "FixedTick", box (adapter.FixedTick : 'model -> 'model)
+              "ApplyEffectResult", box (adapter.ApplyEffectResult : 'effectResult -> 'model -> 'model)
+              "IsTerminal", box (adapter.IsTerminal : 'model -> bool) ]
+        let identities =
+            functions
+            |> List.map (fun (name, value) ->
+                let assembly =
+                    match value with
+                    | null -> invalidArg "adapter" ("production composition function is null: " + name)
+                    | functionValue -> functionValue.GetType().Assembly
+                let assemblyName =
+                    assembly.GetName().Name
+                    |> Option.ofObj
+                    |> Option.defaultValue "<unnamed>"
+                let mvid = assembly.ManifestModule.ModuleVersionId.ToString("N")
+                name, assemblyName + "/" + mvid)
+        let distinct = identities |> List.map snd |> List.distinct
+
+        match distinct with
+        | [ authority ] -> authority
+        | _ ->
+            let detail =
+                identities
+                |> List.map (fun (name, identity) -> name + "=" + identity)
+                |> String.concat ", "
+            invalidArg
+                "adapter"
+                ("production composition functions do not share one assembly authority: " + detail)
+
     let private runScriptCore
+        (compositionAuthority: string)
         inputIdentity
         terminalPredicateIdentity
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
@@ -258,6 +305,7 @@ module Journey =
 
         finish
             adapter
+            compositionAuthority
             JourneyInputKind.FixedScript
             inputIdentity
             terminalPredicateIdentity
@@ -270,12 +318,13 @@ module Journey =
 
     let runScriptWithIdentity inputIdentity terminalPredicateIdentity adapter script =
         validateExportIdentities inputIdentity terminalPredicateIdentity adapter
-        runScriptCore inputIdentity terminalPredicateIdentity adapter script
+        runScriptCore (compositionAuthority adapter) inputIdentity terminalPredicateIdentity adapter script
 
     let runScript adapter script =
-        runScriptCore "" "" adapter script
+        runScriptCore "" "" "" adapter script
 
     let private runPolicyCore
+        (compositionAuthority: string)
         policyIdentity
         terminalPredicateIdentity
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
@@ -321,6 +370,7 @@ module Journey =
 
         finish
             adapter
+            compositionAuthority
             JourneyInputKind.SeededPolicy
             policyIdentity
             terminalPredicateIdentity
@@ -333,7 +383,13 @@ module Journey =
 
     let runPolicyWithIdentity policyIdentity terminalPredicateIdentity adapter policy seed =
         validateExportIdentities policyIdentity terminalPredicateIdentity adapter
-        runPolicyCore policyIdentity terminalPredicateIdentity adapter policy seed
+        runPolicyCore
+            (compositionAuthority adapter)
+            policyIdentity
+            terminalPredicateIdentity
+            adapter
+            policy
+            seed
 
     let runPolicy adapter policy seed =
-        runPolicyCore "" "" adapter policy seed
+        runPolicyCore "" "" "" adapter policy seed

@@ -36,6 +36,7 @@ FS.GG.Game.Harness.FindResult+Tags.NotFound : System.Int32
 FS.GG.Game.Harness.FindResult+Tags.Truncated : System.Int32
 FS.GG.Game.Harness.IProductionJourneyProof.Run() : FS.GG.Game.Harness.JourneyReceipt
 FS.GG.Game.Harness.IProductionJourneyProof.TestId : System.String [get]
+FS.GG.Game.Harness.IProductionJourneyProofV1.CompositionAuthority : System.String [get]
 FS.GG.Game.Harness.IProductionJourneyProofV1.InputIdentity : System.String [get]
 FS.GG.Game.Harness.IProductionJourneyProofV1.RouteId : System.String [get]
 FS.GG.Game.Harness.IProductionJourneyProofV1.ScenarioId : System.String [get]
@@ -59,6 +60,7 @@ FS.GG.Game.Harness.JourneyInputKind+Tags.FixedScript : System.Int32
 FS.GG.Game.Harness.JourneyInputKind+Tags.SeededPolicy : System.Int32
 FS.GG.Game.Harness.JourneyPolicy`2.DecideEvents : FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>> [get]
 FS.GG.Game.Harness.JourneyPolicy`2.new(FSharpFunc<model, FSharpFunc<FS.GG.Game.Core.Rng, ValueTuple<FSharpList<event>, FS.GG.Game.Core.Rng>>>)
+FS.GG.Game.Harness.JourneyReceipt.compositionAuthority(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.initialFingerprintDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.inputDigest(FS.GG.Game.Harness.JourneyReceipt) : System.String
 FS.GG.Game.Harness.JourneyReceipt.inputIdentity(FS.GG.Game.Harness.JourneyReceipt) : System.String

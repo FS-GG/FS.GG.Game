@@ -117,7 +117,7 @@ let tests =
                             match event with
                             | JourneyEvent.Interact -> JourneyDispatch.Unbound "Interact"
                             | other -> productionMap other model }
-              let run = runScript broken productionScript
+              let run = Journey.runScript broken productionScript
 
               match JourneyReceipt.result run.Receipt with
               | JourneyResult.Failed reason ->
@@ -183,7 +183,7 @@ let tests =
                         fun () ->
                             { productionAdapter.Boot() with
                                 Screen = Composition.Screen.Won } }
-              let run = runScript terminalBoot []
+              let run = Journey.runScript terminalBoot []
 
               match JourneyReceipt.result run.Receipt with
               | JourneyResult.Failed reason ->

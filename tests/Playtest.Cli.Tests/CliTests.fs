@@ -41,18 +41,31 @@ let private allInputDriven (frs: GameplayFr list) =
 let private journeyProofAssembly = typeof<ProductionJourneyProof>.Assembly.Location
 
 [<Sealed>]
-type MismatchedJourneyProof() =
+type ExternalConstructedJourneyProof() =
+    let adapter =
+        { Composition.adapter with
+            Boot = fun () -> Composition.adapter.Boot()
+            MapEvent = fun event model -> Composition.adapter.MapEvent event model
+            Update = fun message model -> Composition.adapter.Update message model
+            FixedTick = fun model -> Composition.adapter.FixedTick model
+            ApplyEffectResult = fun effect model -> Composition.adapter.ApplyEffectResult effect model
+            IsTerminal = fun model -> Composition.adapter.IsTerminal model }
+
     interface IProductionJourneyProofV1 with
-        member _.RouteId = "mismatched/route"
-        member _.ScenarioId = Composition.adapter.ScenarioId
+        member _.CompositionAuthority =
+            let assembly = typeof<ExternalConstructedJourneyProof>.Assembly
+            let name = assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+            name + "/" + assembly.ManifestModule.ModuleVersionId.ToString("N")
+        member _.RouteId = adapter.RouteId
+        member _.ScenarioId = adapter.ScenarioId
         member _.InputIdentity = Composition.inputIdentity
         member _.TerminalPredicateIdentity = Composition.terminalPredicateIdentity
-        member _.TestId = Composition.adapter.TestId
+        member _.TestId = adapter.TestId
         member _.Run() =
             (Journey.runScriptWithIdentity
                 Composition.inputIdentity
                 Composition.terminalPredicateIdentity
-                Composition.adapter
+                adapter
                 Composition.script)
                 .Receipt
 
@@ -167,14 +180,14 @@ let tests =
                   (Proofs.parseProvenance "productionJourney")
                   "the text proof grammar has no production token"
 
-          testCase "schema-v1 proof metadata must match the opaque runner receipt"
+          testCase "an external proof cannot self-author an allowlisted production composition"
           <| fun _ ->
-              let testAssembly = typeof<MismatchedJourneyProof>.Assembly.Location
+              let testAssembly = typeof<ExternalConstructedJourneyProof>.Assembly.Location
 
-              match Proofs.loadJourneyReceipts testAssembly with
+              match Proofs.loadJourneyReceiptsWithAuthority testAssembly journeyProofAssembly with
               | Error error ->
-                  Expect.stringContains error "mismatched schema-v1 journey identities" "the mismatch is explicit"
-              | Ok _ -> failtest "proof-declared route/scenario/input/terminal identities must match the receipt"
+                  Expect.stringContains error "not the allowlisted producer" "the authority mismatch is explicit"
+              | Ok _ -> failtest "an externally composed adapter must not mint production provenance"
 
           testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
           <| fun _ ->
@@ -244,6 +257,7 @@ let tests =
                              "--manifest"; manifestPath
                              "--proofs"; proofsPath
                              assemblyFlag; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
                              "--critic"; criticPath |]
 
                   let row disposition =
@@ -306,12 +320,32 @@ let tests =
                              "--proofs"; proofsPath
                              "--trx"; trxPath
                              "--journey-proof-assembly"; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
                              "--critic"; criticPath
                              "--out"; outputPath |]
                   Expect.equal
                       missingGeneratedReport
                       1
                       "production evidence fails closed without a generated same-execution report output"
+
+                  File.WriteAllText(outputPath, "preserve-existing-evidence")
+                  let equivalentOutputPath = Path.Combine(directory, ".", "evidence.yml")
+                  let aliasedReport =
+                      FS.GG.Playtest.Program.main
+                          [| "emit-evidence"
+                             "--manifest"; manifestPath
+                             "--proofs"; proofsPath
+                             "--trx"; trxPath
+                             "--journey-proof-assembly"; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
+                             "--critic"; criticPath
+                             "--journey-report-out"; equivalentOutputPath
+                             "--out"; outputPath |]
+                  Expect.equal aliasedReport 1 "canonical report/evidence path aliases fail closed"
+                  Expect.equal
+                      (File.ReadAllText outputPath)
+                      "preserve-existing-evidence"
+                      "alias rejection happens before either artifact is written"
 
                   let exitCode =
                       FS.GG.Playtest.Program.main
@@ -320,6 +354,7 @@ let tests =
                              "--proofs"; proofsPath
                              "--trx"; trxPath
                              "--journey-proof-assembly"; journeyProofAssembly
+                             "--journey-authority-assembly"; journeyProofAssembly
                              "--critic"; criticPath
                              "--journey-report-out"; journeyReportPath
                              "--out"; outputPath |]
