@@ -616,6 +616,13 @@ special-case code, only three points in the same parameter space):
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Basic step (core mechanic).**
    Given a new game with the snake heading Right at head `(16,9)`,
    When one step occurs,
@@ -715,6 +722,19 @@ special-case code, only three points in the same parameter space):
     Then the two runs produce the identical sequence of steps, `Score`, and food placements
     (§4.9, §13).
 
+18. **Food spawn exhausts legal cells before declaring victory.** **Given** one legal empty cell
+    remains, **When** food is spawned, **Then** it occupies that cell; **given** none remain after
+    growth, **Then** the game enters the perfect-game win state without an RNG loop or overlapping
+    food.
+
+19. **One simulation step consumes at most one queued turn.** **Given** two legal turns queued,
+    **When** one movement boundary occurs, **Then** only the first changes heading and the second
+    remains for the next boundary; render ticks between boundaries consume neither.
+
+20. **Restart is a clean seeded run.** **Given** GameOver or Win after a long snake, **When**
+    Restart is pressed, **Then** snake body/direction/queue, food, score, step timer, and RNG cursor
+    match a fresh run while only HighScore persists.
+
 ## 15. Stretch Goals
 1. **Obstacles / maze walls** — static blocker cells per level layout.
 2. **Multiple food types** — golden pellet (worth 50, +2 growth) with a timeout.
@@ -799,7 +819,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Ambient music loop + `Audio.setMasterVolume` clamp `[0,1]` (§10)
 
 ### M9 — Acceptance & determinism
-- 🟥 All 12 acceptance scenarios green (§14)
+- 🟥 All 20 acceptance scenarios green (§14)
 - 🟥 Seeded `Rng` value makes food placement + replay reproducible (§13)
 - 🟥 Frame-rate independence: identical step sequence at 30/144 FPS (§4.9) — AC #17
 - 🟥 Step-boundary determinism: no observable change between boundaries (§4.9)

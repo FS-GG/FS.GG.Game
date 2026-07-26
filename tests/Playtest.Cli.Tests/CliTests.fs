@@ -39,12 +39,28 @@ let private allInputDriven (frs: GameplayFr list) =
 let tests =
     testList
         "PlaytestCli"
-        [ testCase "FR-001 scaffold emits one GP stub per section-14 AC (snake=17, pong=19)"
+        [ testCase "FR-001 scaffold emits one GP stub per section-14 AC for every game TestSpec"
           <| fun _ ->
               let count name =
                   specPath name |> File.ReadAllText |> TestSpec.parseSection14 |> TestSpec.scaffold |> List.length
-              Expect.equal (count "snake.md") 17 "snake has 17 section-14 ACs"
-              Expect.equal (count "pong.md") 19 "pong has 19 section-14 ACs"
+              [ "asteroids.md", 30
+                "breakout.md", 29
+                "doodle-jump.md", 24
+                "flappy-bird.md", 23
+                "frogger.md", 25
+                "metroidvania.md", 24
+                "mini-tanks.md", 31
+                "missile-command.md", 28
+                "pong.md", 23
+                "roguelike-dungeon-crawler.md", 24
+                "sandbox-survival.md", 26
+                "snake.md", 20
+                "space-invaders.md", 32
+                "tetris.md", 26
+                "tower-defense.md", 32
+                "turn-based-tactics.md", 23 ]
+              |> List.iter (fun (name, expected) ->
+                  Expect.equal (count name) expected $"{name} has {expected} section-14 ACs")
 
           testCase "FR-001 a scaffolded stub carries the gameplay facet, its AC number, and the title"
           <| fun _ ->
@@ -83,11 +99,11 @@ let tests =
 
           testCase "FR-005 --spec reports the completeness gap as advisory without failing"
           <| fun _ ->
-              // The spec has 19 ACs; the WI-7 manifest cites 11 — the other 8 are the advisory gap.
+              // The spec has 23 ACs; the WI-7 manifest cites 11 — the other 12 are the advisory gap.
               let specAcs = specPath "pong.md" |> File.ReadAllText |> TestSpec.parseSection14 |> List.map fst
               let report = Coverage.lint wi7Manifest (allInputDriven wi7Manifest) (Some specAcs)
               Expect.isTrue (Coverage.passed report) "the gap is advisory — it does not fail the lint"
-              Expect.equal report.SpecGap [ 6; 7; 11; 12; 14; 17; 18; 19 ] "spec ACs no GP cites"
+              Expect.equal report.SpecGap [ 6; 7; 11; 12; 14; 17; 18; 19; 20; 21; 22; 23 ] "spec ACs no GP cites"
 
           testCase "FR-006 a malformed proof report is an error, not a silent skip"
           <| fun _ ->

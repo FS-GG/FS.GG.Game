@@ -845,6 +845,13 @@ inside each tunable's stated range, so a preset is pure data — no code path br
   further bomb resolution.
 
 ## 14. Acceptance Criteria (test scenarios)
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Cannon movement (input)** — *Given* Phase=Playing and cannon at x=640, *When*
    `Right` is held for 1.0 s of ticks at dt=1/60, *Then* CannonX ≈ 960 (±2 px) and is
    clamped to ≤ 1256.
@@ -925,6 +932,19 @@ inside each tunable's stated range, so a preset is pure data — no code path br
 29. **Invasion wins the tie** — *Given* a tick where a drop crosses y ≥ 620 and a bomb also
     overlaps the cannon, *When* the tick resolves, *Then* Phase=`GameOver` from invasion and
     the bomb hit is not separately processed (§4.9, §11).
+
+30. **Alien bomb source is live and lowest in column.** *Given* several aliens in one column,
+    *when* that column is selected to fire, *then* the lowest living alien emits the bomb; a dead
+    or covered alien cannot emit, and a seeded selection is replay-identical.
+
+31. **Respawn grace and formation continuity.** *Given* a non-lethal cannon death, *when* the
+    respawn delay completes, *then* the cannon returns at its documented position/invulnerability
+    state while alien formation, erosion, score, wave, and surviving bombs follow §4.9 ordering
+    rather than resetting the wave.
+
+32. **Pause and restart boundaries.** *Given* march, bombs, bullet, UFO, and timers in flight,
+    *when* paused, *then* none advance; *given* GameOver, *when* Restart is pressed, *then* lives,
+    score, wave, cannon, formation, bunkers, projectiles, UFO, timers, and RNG equal a fresh run.
 
 ## 15. Stretch Goals
 1. **Splitting/zig-zag bombs** with the 50% bullet-survives rule (faithful arcade RNG).
@@ -1025,7 +1045,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `Audio.setMasterVolume` mute/settings toggle, volume clamp `[0,1]` (§10, §9.1)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 29 acceptance scenarios green (§14)
+- 🟥 All 32 acceptance scenarios green (§14)
 - 🟥 Seed + scripted input replay yields identical Score/Wave/Lives (§13) — AC #17
 
 ### Stretch — deferred (post-v1)

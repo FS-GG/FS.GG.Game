@@ -1117,6 +1117,13 @@ a threat level, and §14's determinism guarantee holds *within* a fixed preset.
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 All scenarios are written against pure `update`/helper functions — **no clock
 required**. Boards are given as legends; coordinates are `(col,row)`.
 
@@ -1257,6 +1264,47 @@ required**. Boards are given as legends; coordinates are `(col,row)`.
     (board, unit HP/positions, Grid Power, grade) are **bit-for-bit identical** — no
     RNG influences rules.
 
+16. **Action economy is enforced per unit.**
+    **Given** a unit with its move and action available, **When** it moves and attacks, **Then**
+    the corresponding flags/resources are spent once; repeating either action is rejected, and
+    End Turn cannot silently refresh a unit before the next round.
+
+17. **Ability shapes, range, and friendly fire.**
+    **Given** fixtures for every v1 Single/Line/Cone/Area ability, **When** a target tile is
+    previewed and confirmed, **Then** the highlighted and resolved tile sets match, range uses the
+    documented metric, and allies/buildings/enemies are affected only where that ability permits.
+
+18. **Cooldowns tick at the round boundary.**
+    **Given** an ability placed on cooldown this player phase, **When** player and enemy phases
+    complete, **Then** it decrements exactly once at §4.3 end-of-round and becomes usable only at
+    zero; pause, selection, preview, and undo do not tick it.
+
+19. **Persistent hazards resolve once in stable order.**
+    **Given** units/buildings on fire/lava and a simultaneous terminal objective, **When** the end
+    of round resolves, **Then** each hazard applies once in entity-ID order, deaths are committed,
+    and win/loss precedence matches §4.3/§11.
+
+20. **Enemy death cancels its telegraph.**
+    **Given** an enemy with a stored telegraph, **When** the player kills it before Enemy Phase,
+    **Then** it performs no movement/attack and the telegraph is removed; no stale action damages
+    a unit or building.
+
+21. **Spawn and objective interactions are deterministic.**
+    **Given** scheduled reinforcements and occupied/blocked spawn tiles, **When** their round
+    arrives, **Then** §6 fallback/cancellation rules choose the same legal cells in stable order,
+    and spawned units cannot act before the specified phase.
+
+22. **Undo restores the complete reversible snapshot.**
+    **Given** a move that changes position, hazards, selection, and preview but has not crossed an
+    irreversible boundary, **When** Undo is pressed, **Then** all reversible model fields and
+    action availability return exactly; RNG, damage, kills, spawns, and End Turn remain forbidden
+    undo boundaries.
+
+23. **Mission restart is a clean deterministic fixture.**
+    **Given** victory or defeat after terrain mutation, deaths, cooldowns, and objective damage,
+    **When** Restart is pressed, **Then** terrain, units, initiative/round/phase, telegraphs,
+    actions, objectives, undo history, and RNG match a fresh mission for its seed/config.
+
 ## 15. Stretch Goals
 
 Ranked, out of scope for v1:
@@ -1369,7 +1417,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Persist campaign progress (highest mission unlocked, best grade per mission) as JSON (§13)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 15 acceptance scenarios green (§14)
+- 🟥 All 23 acceptance scenarios green (§14)
 - 🟥 Seed + `Msg`-sequence replay is bit-for-bit identical (§14) — AC #15
 - 🟥 Edge cases: off-board push, same-tile double push, occupied spawn vent (§13)
 

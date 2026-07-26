@@ -772,6 +772,13 @@ built, never to a rule that changed underneath you.
   singles).
 
 ## 14. Acceptance Criteria (test scenarios)
+
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
 All scenarios assume a fixed RNG seed and the default tunables unless stated.
 
 1. **Spawn & fall.** *Given* a new game, *when* the first piece spawns, *then* it appears
@@ -864,6 +871,28 @@ All scenarios assume a fixed RNG seed and the default tunables unless stated.
     brings the cumulative total to 13, *then* that Tetris scores `800 × 1` (still level 0), the
     level then becomes 1, and the next clear is scored at `× 2`. (§11, §6.3)
 
+22. **Initial rotation and hold buffer apply at entry.** *Given* rotation or hold is pressed
+    during entry delay, *when* the next piece spawns, *then* the buffered action applies once
+    using the §4.9 priority; an invalid result falls back exactly as specified and cannot create
+    overlapping locked cells.
+
+23. **All SRS kick tables are exercised.** *Given* JLSTZ and I pieces in authored floor, left-wall,
+    right-wall, and stack fixtures, *when* each clockwise/counter-clockwise transition is requested,
+    *then* candidates are tested in table order, the first valid offset wins, and total failure
+    leaves position and rotation unchanged; O rotation never translates.
+
+24. **Ghost is derived and non-colliding.** *Given* an active piece above an irregular stack,
+    *when* the ghost is computed, *then* it is the lowest legal position reachable by vertical
+    translation, does not mutate the well, and updates immediately after move/rotate/hold.
+
+25. **Spawn collision and line-clear ordering are atomic.** *Given* a lock that clears rows and
+    frees the spawn zone, *when* resolution occurs, *then* clear/collapse completes before the next
+    spawn collision test; no transient pre-clear occupancy causes a false top-out.
+
+26. **Restart resets bag-sensitive state.** *Given* GameOver after hold, queued inputs, and a partly
+    consumed bag, *when* Restart is pressed, *then* well, active/hold/next, bag cursor, score, lines,
+    level, gravity, DAS, lock delay, and input buffers match a fresh run for the selected seed.
+
 ## 15. Stretch Goals
 1. **Ghost piece toggle & hold-to-rotate options** — accessibility/preference settings.
 2. **Line-clear and lock animations** — flash + collapse tween, particle burst on Tetris.
@@ -951,7 +980,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 "Korobeiniki" music on `StartGame`, `stopMusic` on top-out, master-volume mute toggle (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 16 acceptance scenarios green (§14)
+- 🟥 All 26 acceptance scenarios green (§14)
 - 🟥 Deepened acceptance scenarios #17–#21 green (§14) — AC #17, #18, #19, #20, #21
 - 🟥 Seed + timestamped input-log replay is identical (§13) — AC #16
 

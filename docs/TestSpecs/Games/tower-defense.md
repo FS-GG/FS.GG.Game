@@ -1012,6 +1012,13 @@ two slows applied same frame → strongest wins, no double-decrement; pause duri
 its timer.
 
 ## 14. Acceptance Criteria (test scenarios)
+
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
 Verifiable Given/When/Then. Coordinates assume *Serpentine* (fixed map) unless noted; seed fixed.
 
 1. **Placement — valid build deducts gold.**
@@ -1138,6 +1145,34 @@ Verifiable Given/When/Then. Coordinates assume *Serpentine* (fixed map) unless n
     the beam radius. When it fires. Then all three take the full 120 damage (no chain falloff) and each
     rolls its 0.7 s Stun independently (§4.10).
 
+27. **Projectile target death does not duplicate damage.** **Given** two projectiles in flight
+    toward a one-hit enemy, **When** the first kills it, **Then** reward is granted once and the
+    second follows its §4.10 retarget/miss rule without damaging or rewarding the dead entity.
+
+28. **Ground/air targeting restrictions.** **Given** ground and flying enemies in range of each
+    tower kind, **When** targets are acquired, **Then** only legal layers are considered; an
+    illegal nearer enemy cannot mask a legal farther target.
+
+29. **Upgrade is atomic and preserves branch identity.** **Given** sufficient gold and a valid
+    upgrade choice, **When** Upgrade is pressed, **Then** cost is deducted once and the tower's
+    stats/traits become exactly that node; insufficient gold or an invalid cross-branch choice
+    changes nothing.
+
+30. **Re-path after maze mutation preserves progress.** **Given** enemies partway along a maze
+    route, **When** a legal tower placement or sale changes the route, **Then** each live ground
+    enemy receives a valid path from its current cell without teleporting backward; flying enemies
+    remain unaffected.
+
+31. **Wave schedule spawns each entry once.** **Given** a wave containing grouped/delayed enemy
+    entries, **When** sim time crosses their offsets (including fast-forward), **Then** each
+    configured enemy spawns once in deterministic order and the wave cannot complete while any
+    scheduled or live enemy remains.
+
+32. **Pause, build phase, and restart boundaries.** **Given** projectiles/status timers and enemies
+    in flight, **When** paused, **Then** none advance; during Build phase no enemy simulation
+    advances; Restart rebuilds grid, route, waves, towers, enemies, economy, lives, timers, and RNG
+    from the selected map/difficulty.
+
 ## 15. Stretch Goals
 Ranked, out-of-scope for v1:
 1. **Endless/continuous mode** with early-wave-call bonus and infinite scaling waves + leaderboard.
@@ -1250,7 +1285,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 `Audio.setMasterVolume` clamp `[0,1]`, mute toggle (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 20 acceptance scenarios green (§14)
+- 🟥 All 32 acceptance scenarios green (§14)
 - 🟥 Seed + input-log replay is bit-identical (§13) — AC #19
 - 🟥 Fixed-step + `SpatialGrid` perf budget under 16.7 ms/frame (§13)
 

@@ -45,6 +45,10 @@ That makes it the ideal first project, because:
 - **"Done" is defined.** Section 14 is a checklist of Given/When/Then scenarios.
   When those pass, the feature is genuinely shippable — not "looks fine on my
   screen."
+- **Tests arrive with the gameplay.** Every numbered §14 scenario is a required
+  automated development test. Implement the test in the same slice as the mechanic,
+  state transition, or interaction it covers; a feature is not complete while its
+  scenario is missing or skipped. §15 stretch goals remain outside that contract.
 
 ### Anatomy of a TestSpec
 

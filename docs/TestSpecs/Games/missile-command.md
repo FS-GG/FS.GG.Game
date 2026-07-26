@@ -756,6 +756,13 @@ effect until `Restart`, because the wave curve is derived from the `Config` capt
 
 ## 14. Acceptance Criteria (test scenarios)
 
+> **Development test contract.** Every numbered scenario in this section is a
+> required automated test, not illustrative prose. Add the test with the gameplay
+> slice that implements it; exercise the pure simulation/update path with fixed
+> seeds and fixed steps. A feature is not complete while its scenarios are missing
+> or skipped. Rendering and audio may use command/snapshot assertions; §15 remains
+> out of scope.
+
 1. **Aim follows mouse.** *Given* the game is Playing, *when* the mouse moves to
    (500, 300), *then* `Crosshair = (500, 300)`; *when* it moves to (700, 700), *then*
    `Crosshair.Vy` is clamped to ≤ 660.
@@ -858,6 +865,25 @@ effect until `Restart`, because the wave curve is derived from the `Config` capt
     Bravo and both have ammo, *when* `Fire` is issued, *then* the battery with more ammo is
     chosen, and on an ammo tie the lower-index battery (Alpha) fires (§4.8).
 
+25. **Plane flight and payload lifecycle.** *Given* a bomber/plane spawn selected by the seeded
+    wave schedule, *when* it crosses the playfield, *then* it follows the §4.7 path, releases only
+    its configured payload at the trigger point, and is removed after leaving bounds; destroying
+    it first suppresses any unreleased payload and awards the documented score once.
+
+26. **Battery impact removes its firing capability.** *Given* an incoming targets an online
+    battery, *when* it impacts, *then* the battery becomes destroyed, its remaining ammo cannot be
+    auto-selected or force-fired, and later wave reload affects only surviving batteries.
+
+27. **Wave does not finish with live threats.** *Given* the spawn quota is exhausted but a MIRV,
+    child warhead, smart bomb, plane, or released payload remains active, *when* ticks advance,
+    *then* the wave stays Playing; the bonus/next-wave transition occurs exactly once only after
+    every threat is resolved.
+
+28. **Restart separates persistent and run state.** *Given* GameOver after several waves, *when*
+    Restart is pressed, *then* cities, batteries, ammo, score, multiplier, wave, entities, timers,
+    and RNG streams match a fresh game while only explicitly persistent high-score/stat fields
+    survive.
+
 ## 15. Stretch Goals
 1. **Chain reactions:** enemy missiles destroyed by a blast spawn their own small
    secondary blast, enabling combo cascades (classic arcade feel).
@@ -955,7 +981,7 @@ its acceptance test(s) pass (§14)._
 - 🟥 Master volume clamp `[0,1]`, stop ambient pad on game over (§10)
 
 ### M10 — Acceptance & determinism
-- 🟥 All 16 acceptance scenarios green (§14)
+- 🟥 All 28 acceptance scenarios green (§14)
 - 🟥 Seed + input-log replay is identical in `Score`/`Wave`/positions (§13) — AC #16
 - 🟥 Extended acceptance scenarios #17–#24 green (§14)
 - 🟥 Wave 10 milestone checkpoint (`wavesSurvived ≥ 10`) asserted (§11, §9.2)
