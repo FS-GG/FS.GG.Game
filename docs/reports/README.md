@@ -54,3 +54,9 @@ and names the Core gaps it needs closed first.
 | Design | Concern |
 |---|---|
 | [Mini Tanks — top-down 2-D armored combat](2026-07-10-mini-tanks-product-design.md) | five vehicles, hull/turret split, directional armor & penetration pipeline, breakable terrain, LOS/FOV/spotting, layered AI. Written against three Core gaps — `Geometry.segmentPolygonHit` (#52) and the `Los` (#32) / `Fov` (#33) modules — all of which have since landed |
+
+## Cross-runtime compatibility
+
+| Design | Concern |
+|---|---|
+| [Fable lockstep compatibility proposal](2026-07-28-fable-lockstep-compatibility-proposal.md) | accepted package strategy, function-level compatibility grades, canonical fixture bytes, CI shape, and producer-before-consumer rollout for `FS.GG.Game.Core` and S.I.R. |
