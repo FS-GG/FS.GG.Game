@@ -1,10 +1,10 @@
 # Fable lockstep compatibility proposal
 
-**Status:** M4 lockstep profile implemented; release and registry activation pending
+**Status:** M4 complete — lockstep profile released and registry-activated
 **Owner:** FS.GG.Game  
 **Consumer:** [EHotwagner/S.I.R](https://github.com/EHotwagner/S.I.R.)  
 **Tracking:** [FS.GG.Game#526](https://github.com/FS-GG/FS.GG.Game/issues/526)  
-**Contract identity:** `fs-gg-game-fable-lockstep`  
+**Profile identity:** `fs-gg-game-core-fable-lockstep-v1`
 **Decision date:** 2026-07-28
 
 ## Decision
@@ -195,9 +195,14 @@ are `DotNetOnly`; all other operations remain unclassified.
 The pull-request gate exposes separate `.NET` and `Fable` conformance legs.
 Each restores only the synthetic packed package in an isolated package cache,
 so two green legs prove transitive equality with the immutable byte oracle.
-Publication of `FS.GG.Game.Core` 0.13.0 and activation of contract
-`fs-gg-game-fable-lockstep` in the FS-GG registry remain the final ordered M4
-steps.
+The ordered publication steps are complete. [PR #531](https://github.com/FS-GG/FS.GG.Game/pull/531)
+merged as `a2eef0cb54d12cd9b81b426d76de275293142e13`; tag `v0.13.0` published the
+coherent Core/Render/Harness set through release run
+[30395301449](https://github.com/FS-GG/FS.GG.Game/actions/runs/30395301449).
+Both feeds were independently downloaded and their package payloads matched
+byte for byte after excluding nuget.org signatures. The org registry then
+activated the profile under `game-sim-core@0.13.0` in
+[FS-GG/.github#1852](https://github.com/FS-GG/.github/pull/1852).
 
 ## Canonical fixture protocol
 
