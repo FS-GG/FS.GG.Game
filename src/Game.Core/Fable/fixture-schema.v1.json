@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "fixtureSet": "m3-package-consumer-smoke",
+  "cases": [
+    {
+      "id": 1,
+      "operation": "Cell.order"
+    },
+    {
+      "id": 2,
+      "operation": "Edges.edgeBetween"
+    },
+    {
+      "id": 3,
+      "operation": "Los.lineOfSightBy"
+    },
+    {
+      "id": 4,
+      "operation": "Pathfinding.astar"
+    }
+  ],
+  "oracle": "The package-derived JavaScript process exits zero only when every typed fixture assertion passes.",
+  "deferredToM4": "Canonical binary records and cross-runtime byte comparison."
+}

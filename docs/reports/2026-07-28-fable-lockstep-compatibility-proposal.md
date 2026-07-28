@@ -1,6 +1,6 @@
 # Fable lockstep compatibility proposal
 
-**Status:** accepted for the bounded packaging spike  
+**Status:** M3 packaging spike accepted; M4 lockstep profile pending
 **Owner:** FS.GG.Game  
 **Consumer:** [EHotwagner/S.I.R](https://github.com/EHotwagner/S.I.R.)  
 **Tracking:** [FS.GG.Game#526](https://github.com/FS-GG/FS.GG.Game/issues/526)  
@@ -137,6 +137,42 @@ source include, or undeclared feed is required.
 The package archive is also inspected directly. At minimum it must contain the
 ordered Fable project/source metadata, the compatibility profile, fixture
 schema, and toolchain manifest expected for that package version.
+
+### M3 result
+
+The bounded packaging and compilation spike passed on 2026-07-28.
+`FS.GG.Game.Core` now uses `Fable.Package.SDK` 1.4.0 and publishes a curated
+`fable/` view containing the canonical `Primitives`, `Pathfinding`, `Edges`,
+and `Los` implementation and signature files. The .NET assembly continues to
+compile its full existing source list; the package view changes no public .NET
+signature and contains no copied implementation.
+
+The first whole-project Fable compile was retained as design evidence: it
+failed on unsupported float-heavy calls including `System.Double.IsFinite`,
+`System.Math.ScaleB`, and `System.Math.ILogB`. The accepted package view
+therefore excludes those implementation files and marks every non-evidenced
+surface unclassified rather than claiming assembly-wide compatibility.
+
+`scripts/test-fable-package-consumer.sh` executes the acceptance boundary:
+
+1. pack a synthetic, exact-version `FS.GG.Game.Core` artifact;
+2. inspect the archive for the ordered source project, selected canonical
+   sources, compatibility profile, fixture schema, and toolchain manifest;
+3. copy only the consumer project into a temporary directory;
+4. restore through an isolated feed and empty global-packages folder;
+5. compile the package-derived source with Fable 5.13.0; and
+6. run the generated JavaScript with Node 26.
+
+The consumer exercises `Cell` ordering, `Edges.edgeBetween`, symmetric integer
+LOS, and bounded four-way `Pathfinding.astar`. The normal .NET solution build
+and all 872 tests pass unchanged. A dedicated GitHub Actions job repeats the
+artifact test on every pull request.
+
+This is M3 evidence only. The smoke assertions establish packaging,
+compilation, and execution; they do not promote the candidate functions to
+`LockstepExact`. M4 still owns shared canonical binary vectors, first-byte
+divergence diagnostics, the expanded grade inventory, release publication,
+and compatibility-registry activation.
 
 ## Canonical fixture protocol
 

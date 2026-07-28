@@ -8,6 +8,12 @@
         "fake"
       ]
     },
+    "fable": {
+      "version": "5.13.0",
+      "commands": [
+        "fable"
+      ]
+    },
     "fs.gg.coord.cli": {
       "version": "0.14.0",
       "commands": [

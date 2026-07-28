@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packageId": "FS.GG.Game.Core",
+  "packageVersionSource": "NuGet package metadata",
+  "dotnetSdk": "10.0.302",
+  "targetFramework": "net10.0",
+  "fsharpCore": "10.1.302",
+  "fableCompiler": "5.13.0",
+  "fablePackageSdk": "1.4.0",
+  "nodeMajor": 26,
+  "javascriptModuleTarget": "esmodule",
+  "compatibilityProfile": "fs-gg-game-core-fable-spike-v1",
+  "fixtureSchemaVersion": 1,
+  "sourceRepository": "https://github.com/FS-GG/FS.GG.Game",
+  "sourceCommitSource": "NuGet repository metadata",
+  "packageSha256Source": "clean-consumer gate output"
+}

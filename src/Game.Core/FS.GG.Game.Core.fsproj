@@ -7,11 +7,49 @@
     <AssemblyName>FS.GG.Game.Core</AssemblyName>
     <Title>FS.GG.Game.Core</Title>
     <Description>BCL-only deterministic simulation core for FS.GG.Game — seeded RNG, fixed-timestep drain, grid pathfinding, spatial partitioning, and AABB collision geometry. Depends on nothing but FSharp.Core (the platform's new bottom layer). Extracted from FS.GG.UI.Canvas / FS.GG.UI.Scene per ADR-0022.</Description>
-    <PackageTags>fsharp;game;simulation;deterministic;pathfinding;rng;collision;fixed-timestep</PackageTags>
+    <PackageTags>fsharp;game;simulation;deterministic;pathfinding;rng;collision;fixed-timestep;fable-javascript;fable-dotnet</PackageTags>
+    <FablePackageType>library</FablePackageType>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Game.Core.Tests" />
+    <PackageReference Include="Fable.Package.SDK"
+                      PrivateAssets="all"
+                      IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <!-- Fable.Package.SDK supplies the supported source-package machinery. Game.Core deliberately
+       publishes only the bounded integer/grid profile through that view: packaging every .NET-only
+       implementation file would make an honest Fable consumer compile unsupported floating-point
+       APIs before it can use the exact subset. The files below remain the SAME files compiled into
+       the .NET assembly; this target only curates which canonical sources enter fable/. -->
+  <Target Name="CurateFableCompatibilityView"
+          AfterTargets="CreateFablePackageFiles">
+    <ItemGroup>
+      <_PackageFiles Remove="@(_PackageFiles)" />
+      <_PackageFiles Include="Primitives.fsi;Primitives.fs;Pathfinding.fsi;Pathfinding.fs;Edges.fsi;Edges.fs;Los.fsi;Los.fs">
+        <Pack>true</Pack>
+        <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+      <_PackageFiles Include="Fable/FS.GG.Game.Core.fsproj">
+        <Pack>true</Pack>
+        <PackagePath>fable/FS.GG.Game.Core.fsproj</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup Label="fable-compatibility-metadata">
+    <None Include="Fable/compatibility-profile.v1.json"
+          Pack="true"
+          PackagePath="fable-compatibility/compatibility-profile.v1.json" />
+    <None Include="Fable/fixture-schema.v1.json"
+          Pack="true"
+          PackagePath="fable-compatibility/fixture-schema.v1.json" />
+    <None Include="Fable/toolchain-manifest.v1.json"
+          Pack="true"
+          PackagePath="fable-compatibility/toolchain-manifest.v1.json" />
   </ItemGroup>
 
   <!-- BCL-only sim vocabulary. No Scene/Skia dependency — headlessly testable, reaches up to
