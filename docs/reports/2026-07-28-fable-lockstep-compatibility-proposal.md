@@ -1,6 +1,6 @@
 # Fable lockstep compatibility proposal
 
-**Status:** M3 packaging spike accepted; M4 lockstep profile pending
+**Status:** M4 lockstep profile implemented; release and registry activation pending
 **Owner:** FS.GG.Game  
 **Consumer:** [EHotwagner/S.I.R](https://github.com/EHotwagner/S.I.R.)  
 **Tracking:** [FS.GG.Game#526](https://github.com/FS-GG/FS.GG.Game/issues/526)  
@@ -173,6 +173,31 @@ compilation, and execution; they do not promote the candidate functions to
 `LockstepExact`. M4 still owns shared canonical binary vectors, first-byte
 divergence diagnostics, the expanded grade inventory, release publication,
 and compatibility-registry activation.
+
+### M4 implementation result
+
+The bounded profile is now executable. An integer-only `cases.json` corpus is
+decoded by the checked generator into one F# fixture vector compiled by both
+the .NET package consumer and Fable/Node. Both runners consume the same packed
+artifact, emit canonical v1 records, and compare those bytes with the packaged
+`expected.bin` oracle. A mismatch reports the first byte offset, case id,
+operation id, lengths, and adjacent hexadecimal bytes.
+
+Profile `fs-gg-game-core-fable-lockstep-v1` promotes only four evidenced
+surfaces: `Cell` ordering, `Edges.edgeBetween`, `Los.lineOfSightBy`, and
+`Pathfinding.astar`. Boundary and adversarial-order cases cover full-width cell
+ordering, edge arithmetic at both coordinate extremes, reversed and corner LOS,
+equal-cost path selection, visit exhaustion, start-equals-goal, unreachable
+paths, and blocked-cell insertion order. Packaged float value types are
+`Portable`; implementation modules absent from the supported source project
+are `DotNetOnly`; all other operations remain unclassified.
+
+The pull-request gate exposes separate `.NET` and `Fable` conformance legs.
+Each restores only the synthetic packed package in an isolated package cache,
+so two green legs prove transitive equality with the immutable byte oracle.
+Publication of `FS.GG.Game.Core` 0.13.0 and activation of contract
+`fs-gg-game-fable-lockstep` in the FS-GG registry remain the final ordered M4
+steps.
 
 ## Canonical fixture protocol
 

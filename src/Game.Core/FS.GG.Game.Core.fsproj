@@ -50,6 +50,12 @@
     <None Include="Fable/toolchain-manifest.v1.json"
           Pack="true"
           PackagePath="fable-compatibility/toolchain-manifest.v1.json" />
+    <None Include="../../tests/Game.Core.Fable.Tests/fixtures/v1/cases.json"
+          Pack="true"
+          PackagePath="fable-compatibility/fixtures/v1/cases.json" />
+    <None Include="../../tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin"
+          Pack="true"
+          PackagePath="fable-compatibility/fixtures/v1/expected.bin" />
   </ItemGroup>
 
   <!-- BCL-only sim vocabulary. No Scene/Skia dependency — headlessly testable, reaches up to
