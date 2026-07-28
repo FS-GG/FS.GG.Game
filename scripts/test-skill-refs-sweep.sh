@@ -840,6 +840,306 @@ expect_has 'INFRA_LABEL' "$VERDICT_SH" 'and can name the infra tracker'
 expect_eq "$(jq -r '.jobs.sweep.steps[] | select(.name=="Verdict") | .env.REPORTED' <<<"$WF_JSON")" \
           '${{ steps.sweep.outputs.reported }}' 'and is actually handed the bit it branches on'
 
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# § 7  THE `Class:` LINE — every row this workflow files must be CLASSABLE, and classed correctly
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+#
+# Since ADR-0066 the `Class:` body line is the authority behind the Coordination board's `Class`
+# column, and an open Ready row that declares none is CLASS-UNSET — counted as a POSSIBLE defect, so
+# a burn-down can never establish the board is defect-free while it exists. These bodies are
+# rewritten on every sweep, so nobody BUT the sweep can put the line there: a human's edit to the
+# body is erased by the next run, and an edit to the board column is overwritten by `reconcile` from
+# this text — lost, and believed until it is (FS.GG.Game#515).
+#
+# The line must therefore be DERIVED and not guessed (FS-GG/.github#1588 AC3), which is what this
+# section is about. § 7a fixes the mapping against STUBBED findings, § 7b fixes it against the REAL
+# script's real prose, § 7c proves it FOLLOWS the findings instead of latching the first run's value,
+# and § 7d follows it onto the wire — for BOTH trackers, because this repo has two (#277) and an
+# unclassed infra row is exactly as unschedulable as an unclassed decay one.
+
+# The newest JSON payload this run put on the wire. `any_payload` concatenates every one of them, so
+# it cannot tell "the second PATCH carries the new class" from "the first one did" — which is the
+# only interesting question in § 7c.
+# The glob and a numeric max, not `ls | sort -n | tail`: the fake `gh` numbers its payloads by the
+# gh.log line count, so `body-10.json` sorts before `body-9.json` lexically and "the newest payload"
+# would silently become "the one whose name happens to sort last" past nine calls — with every
+# assertion here still passing, on the wrong body.
+last_payload() {
+  local f n best=""
+  for f in "$FIX"/gh-bodies/body-*.json; do
+    [[ -f $f ]] || continue
+    n=${f##*/body-}; n=${n%.json}
+    if [[ -z $best || $n -gt $best ]]; then best=$n; fi
+  done
+  [[ -n $best ]] && cat "$FIX/gh-bodies/body-$best.json"
+}
+
+# The `Class:` lines the ENGINE would read out of the rendered body — `^ {0,3}[Cc]lass:`, outside any
+# fence (FS-GG/.github's `Class.declaredValues`). Modelled rather than shared, because the engine is
+# F# and this is bash; what it buys is that the prose mention in the body's "## Severity" paragraph —
+# which opens with a backtick — is counted the way the parser counts it, i.e. not at all.
+class_lines() { grep -E '^ {0,3}[Cc]lass:' <<<"$(body)" || true; }
+
+# The same reading, applied to what actually went ON THE WIRE — the `body` field of a JSON payload,
+# decoded, not the raw escaped JSON. A `grep -F 'Class: hardening'` over the raw payload is VACUOUS:
+# the "## Severity" paragraph contains that substring in prose, so such an assertion passes over a
+# body carrying no sentinel line at all — which is precisely the row `lint` calls CLASS-UNSET. It has
+# to be the LINE, read the way the engine reads it, or the wire assertions prove nothing.
+payload_class_lines()  { jq -r '.body // ""' <<<"$(last_payload)" | grep -E '^ {0,3}[Cc]lass:' || true; }
+payloads_class_lines() {
+  local f
+  for f in "$FIX"/gh-bodies/body-*.json; do [[ -f $f ]] && jq -r '.body // ""' "$f"; done \
+    | grep -E '^ {0,3}[Cc]lass:' || true
+}
+
+case_start '§7a DECAY only → hardening: the world moved, and nothing here is broken'
+fixture
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: stale link — FS-GG/FS.GG.Rendering#100 is CLOSED. Repoint it at the live issue
+template/product-skills/alpha/SKILL.md:11: dangling link — FS-GG/FS.GG.Rendering#4242 does not exist
+template/product-skills/beta/SKILL.md:3: unresolvable link — could not read FS-GG/FS.GG.Rendering#7 from the API after 3 tries
+template/product-skills/beta/SKILL.md:5: stale closed-ok marker — FS-GG/FS.GG.Rendering#100 is OPEN again; drop the marker
+ERR
+run_sweep
+run_render
+expect_rc 0 'the renderer runs clean'
+expect_eq "$(class_lines)" 'Class: hardening' 'all four world-moved kinds map to hardening, and to ONE line'
+expect_has 'world-moved decay' "$(body)" 'and the body says why, rather than asserting it'
+
+case_start '§7a every HERMETIC kind is recognised as one → defect'
+# Five spellings, and `dangling [[…]]` vs `dangling link —` is the pair a looser match collapses:
+# they sit on OPPOSITE sides of the mapping, so confusing them silently downgrades a gate regression
+# to hardening — the failure mode that still LOOKS like a classed row. The last one is this repo's
+# own § 0 finding (#280), which Rendering does not have: it opens with the skill's id, not a fixed
+# word, so it is the one whose pattern could most easily be written to match nothing.
+for msg in \
+  'bare ref — #4242 is read against the repo this body is MATERIALIZED into, so it points at the reader'"'"'s own tracker' \
+  'bare [[fs-gg-beta]] in a MIRRORED body — it resolves here and dangles in the repo ADR-0022 §6 mirrors this into' \
+  'dangling [[fs-gg-nope]] — this repo does not publish it; qualify it as [[<owner>:fs-gg-nope]]' \
+  'stale prose-ok marker — nothing in this file writes a bare #4242; drop it' \
+  "'fs-gg-alpha' is published but has NO mirror verdict in template/skill-manifest/skill-manifest.json (no row, or a row with no \`mirrored\` field) — the gate cannot tell whether ADR-0022 §6 mirrors it"
+do
+  fixture
+  sweep_findings <<ERR
+template/product-skills/alpha/SKILL.md:9: $msg
+ERR
+  run_sweep
+  run_render
+  expect_eq "$(class_lines)" 'Class: defect' "hermetic: ${msg:0:38}…"
+  expect_hasnt 'does not recognise' "$(body)" "…and it was RECOGNISED, not classed up by accident: ${msg:0:20}…"
+done
+
+case_start '§7a a MIXED run is defect — the gate regression is not averaged away'
+# `Class.fromBody`'s own precedence, applied at the point the line is written rather than left for
+# the reader: a run carrying both must not resolve to the class that lets a burn-down stop.
+fixture
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: stale link — FS-GG/FS.GG.Rendering#100 is CLOSED
+template/product-skills/alpha/SKILL.md:11: bare ref — #4242 is read against the repo this body is MATERIALIZED into
+template/product-skills/beta/SKILL.md:3: dangling link — FS-GG/FS.GG.Rendering#4242 does not exist
+ERR
+run_sweep
+run_render
+expect_eq "$(class_lines)" 'Class: defect' 'one hermetic finding among three raises the whole row'
+expect_has 'include 1 **hermetic** one(s)' "$(body)" 'and the body names how many, so the reader can check it'
+
+case_start '§7a a kind this workflow does not RECOGNISE classes UP, and says so'
+# The mapping is a second contract with `report()`'s prose. If a finding is reworded, the honest
+# answer is "I could not derive this", and FS-GG/.github#266's rule decides which way that falls: a
+# subject you could not evaluate is never a subject that passed. Landing it in `hardening` would be
+# invisible — the row still looks classed.
+fixture
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: rotten pointer — some future finding nobody has written yet
+ERR
+run_sweep
+run_render
+expect_eq "$(class_lines)" 'Class: defect' 'an underivable severity is not quietly the gentle one'
+expect_has 'does not recognise 1 of the findings' "$(body)" 'and the body refuses to imply it derived anything'
+
+case_start '§7a the DRIFT and BROKEN bodies are classed too — the #416 shape, not decay'
+# These file a row as much as the decay body does, and an unclassed one is just as unschedulable.
+# They land on DIFFERENT trackers here (§ 7d), which is why both are asserted rather than one.
+fixture
+sweep_drifted
+run_sweep
+run_render
+expect_eq "$(class_lines)" 'Class: defect' 'the drift body is a defect: real decay this workflow cannot read'
+fixture
+sweep_broken
+run_sweep
+run_render
+expect_eq "$(class_lines)" 'Class: defect' 'the "links UNCHECKED" body is a defect: nothing was examined'
+# The `<details>` block above it is fenced, and `Class:` is read OUTSIDE fences only. A line that
+# drifted inside the fence would parse as nothing at all — with the body still LOOKING classed.
+expect_re '^Class: defect' "$(body)" 'and it is a real line at column 0, not fenced evidence'
+
+case_start '§7b the REAL script: real decay derives hardening'
+# Everything in § 7a stubs the script, so all of it would still pass if `report()` reworded its
+# findings — and the class would silently become `defect`-by-unrecognised, or worse, drift to a
+# spelling that lands in the WRONG bucket. So: real decay, real prose, real mapping.
+fixture
+use_real_checker
+skill fs-gg-alpha <<'MD'
+# alpha
+Add your case at FS.GG.Rendering#100.
+MD
+issue 'FS-GG/FS.GG.Rendering#100' closed
+run_sweep
+run_render
+expect_eq "$(out_of reported)" 'true' 'the real script reported'
+expect_eq "$(class_lines)" 'Class: hardening' 'the REAL `stale link` prose still lands in the decay bucket'
+expect_hasnt 'does not recognise' "$(body)" \
+             'and it was recognised — a rewording would show up HERE, not as a silent misclass'
+
+case_start '§7b the REAL script: a real bare `#N` derives defect'
+fixture
+use_real_checker
+skill fs-gg-alpha <<'MD'
+# alpha
+Add your case at #4242.
+MD
+run_sweep
+run_render
+expect_eq "$(out_of reported)" 'true' 'the real script reported'
+expect_eq "$(class_lines)" 'Class: defect' 'the REAL `bare ref` prose still lands in the hermetic bucket'
+expect_hasnt 'does not recognise' "$(body)" 'and it was recognised, not classed up by accident'
+
+case_start '§7b the REAL script: a real dangling `[[ref]]` derives defect'
+fixture
+use_real_checker
+skill fs-gg-alpha <<'MD'
+# alpha
+See [[fs-gg-nope]].
+MD
+run_sweep
+run_render
+expect_eq "$(class_lines)" 'Class: defect' 'the REAL `dangling [[…]]` prose is hermetic, not a decayed link'
+expect_hasnt 'does not recognise' "$(body)" 'and it was recognised'
+
+case_start '§7b the REAL script: a real bare `[[ref]]` in a MIRRORED body derives defect'
+fixture
+use_real_checker
+skill fs-gg-beta <<'MD'
+# beta
+MD
+skill fs-gg-alpha <<'MD'
+# alpha
+See [[fs-gg-beta]].
+MD
+mirror fs-gg-alpha
+run_sweep
+run_render
+expect_eq "$(class_lines)" 'Class: defect' 'the REAL `bare [[…]] in a MIRRORED body` prose is hermetic'
+expect_hasnt 'does not recognise' "$(body)" 'and it was recognised'
+
+case_start '§7b the REAL script: this repo'"'"'s own § 0 finding derives defect'
+# The divergence from Rendering that a byte-port would have missed (#280): a published body with no
+# mirror verdict. It is f(tree) — the manifest and the skill dirs, no world — and it is WHOLE-TREE
+# even under `--changed`, so `gate` is red on it for every PR too. Its message opens with the skill's
+# own id rather than a fixed word, which is exactly why it needs the REAL prose and not a stub.
+fixture
+use_real_checker
+skill fs-gg-alpha <<'MD'
+# alpha
+MD
+unclassify fs-gg-alpha
+run_sweep
+run_render
+expect_eq "$(out_of reported)" 'true' 'the real script reported the unclassified body'
+expect_eq "$(class_lines)" 'Class: defect' 'an unclassified published skill is a gate regression, not decay'
+expect_hasnt 'does not recognise' "$(body)" \
+             'and the pattern really matches its prose — a mistyped one would fall through to UNKNOWN here'
+
+case_start '§7b the REAL script: a real MIXED tree is defect, not averaged down'
+fixture
+use_real_checker
+skill fs-gg-alpha <<'MD'
+# alpha
+Add your case at FS.GG.Rendering#100, and see #4242.
+MD
+issue 'FS-GG/FS.GG.Rendering#100' closed
+run_sweep
+run_render
+expect_eq "$(class_lines)" 'Class: defect' 'real decay + a real bare `#N` in one tree raises the whole row'
+expect_hasnt 'does not recognise' "$(body)" 'both kinds were recognised'
+
+case_start '§7c the class FOLLOWS the findings — it does not latch the first run'"'"'s value'
+# The point of the line is that a driver can trust it, and a latched value is worse than none: a row
+# that says `hardening` while a gate regression sits on `main` is a lie the board will believe. The
+# body is rewritten in full on every sweep, so the class must move with it — in BOTH directions.
+fixture
+trackers <<JSON
+[{"number":42,"state":"open","labels":["$DECAY_LABEL"]}]
+JSON
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: stale link — FS-GG/FS.GG.Rendering#100 is CLOSED
+ERR
+pipeline
+expect_eq "$(class_lines)" 'Class: hardening' 'run 1: plain decay'
+expect_eq "$(payload_class_lines)" 'Class: hardening' 'and that is what the tracker was rewritten with'
+
+# Run 2, SAME fixture and SAME tracker: a gate regression appears alongside the decay.
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: stale link — FS-GG/FS.GG.Rendering#100 is CLOSED
+template/product-skills/alpha/SKILL.md:11: bare ref — #4242 is read against the repo this body is MATERIALIZED into
+ERR
+pipeline
+expect_eq "$(class_lines)" 'Class: defect' 'run 2: the row is upgraded, not left at the first value'
+expect_eq "$(payload_class_lines)" 'Class: defect' 'and the tracker is REWRITTEN with the new class'
+gh_called PATCH "/issues/42$" 'onto the same tracker, not a second one'
+
+# Run 3: the gate regression is fixed and only decay remains. The class must come back DOWN — a
+# ratchet would leave every tracker that ever saw one bare ref permanently `defect`, which is the
+# same lie pointing the other way.
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: stale link — FS-GG/FS.GG.Rendering#100 is CLOSED
+ERR
+pipeline
+expect_eq "$(class_lines)" 'Class: hardening' 'run 3: it comes back down, too — this is not a ratchet'
+expect_eq "$(payload_class_lines)" 'Class: hardening' 'and the tracker follows it down'
+
+case_start '§7d the class travels onto the wire — the DECAY tracker'
+fixture
+sweep_findings <<'ERR'
+template/product-skills/alpha/SKILL.md:9: stale link — FS-GG/FS.GG.Rendering#100 is CLOSED
+ERR
+pipeline
+expect_has "$DECAY_TITLE" "$(any_payload)" 'the decay tracker is the one filed'
+expect_eq "$(payloads_class_lines)" 'Class: hardening' \
+          'and the filed issue carries the class as a LINE, not just the local render'
+
+case_start '§7d the class travels onto the wire — the INFRA tracker (AC4)'
+# The tracker this repo has and Rendering does not. It is NOT decay: while the sweep cannot run every
+# published pointer is unchecked, which is the FS-GG/.github#416 shape by name — so `defect`, and it
+# has to reach the WIRE, not merely the step summary.
+fixture
+sweep_broken
+pipeline
+expect_has "$INFRA_TITLE" "$(any_payload)" 'the infra tracker is the one filed'
+expect_eq "$(payloads_class_lines)" 'Class: defect' \
+          'and it is filed CLASSED, as defect — an unclassed infra row is just as unschedulable, and a
+           hardening one would say the unchecked pointers can wait'
+
+case_start '§7d the DRIFT body reaches the decay tracker classed'
+fixture
+sweep_drifted
+pipeline
+expect_has "$DECAY_TITLE" "$(any_payload)" 'drift is filed as decay (§ 6)'
+expect_eq "$(payloads_class_lines)" 'Class: defect' 'and classed defect — real rot this workflow cannot read'
+
+case_start '§7d a REWRITE of an already-open tracker carries the class too'
+# The body edit, not the create. This is the path that runs every single day once a tracker exists,
+# so a class that only appeared on the FIRST filing would be missing from almost every real row.
+fixture
+trackers <<JSON
+[{"number":91,"state":"open","labels":["$INFRA_LABEL"]}]
+JSON
+sweep_broken
+pipeline
+gh_called PATCH "/issues/91$" 'the open infra tracker is rewritten in place'
+expect_eq "$(payload_class_lines)" 'Class: defect' 'and the rewrite carries the class'
+
 # ── summary ─────────────────────────────────────────────────────────────────────────────────────
 #
 # WHO ELSE READS THIS WORKFLOW. Until #270 the honest answer was "GitHub, at dispatch time", and the

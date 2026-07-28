@@ -298,7 +298,25 @@ jobs:
               echo
               echo "</details>"
               echo
+              # BOTH bodies above are `defect`, and that is DERIVED rather than chosen (FS.GG.Game#515).
+              # They land on DIFFERENT trackers — the drift body on `$DECAY_LABEL`, the "could not run"
+              # body on `$INFRA_LABEL` (see `reconcile`) — and the class is the same for both anyway,
+              # because neither of them is decay:
+              #
+              #   DRIFT (reported=true)  — the script found REAL rot and this workflow can no longer READ
+              #       it. The broken thing is the parser in this file, and while it is broken the finding
+              #       reaches nobody.
+              #   BROKEN (reported=false) — no pointer was judged at all, so every published pointer is
+              #       UNCHECKED. That is the `FS-GG/.github#416` shape by name — a green over an unread
+              #       subject — and this issue's own title says so.
+              #
+              # In ADR-0066's vocabulary `defect` is "something is broken NOW", not a way something COULD
+              # break later, and in both branches the sweep itself is the broken thing. AC4 of #515 names
+              # the infra tracker specifically: it is not decay, and classing it `hardening` would let a
+              # burn-down stop while the pointers are unchecked.
               echo "Paths: .github/workflows/skill-refs-sweep.yml scripts/check-skill-refs.sh"
+              echo
+              echo "Class: defect"
             } >> "$body"
           else
             {
@@ -316,6 +334,48 @@ jobs:
             } >> "$body"
 
             cur=""
+
+            # ── HOW BAD IS THIS ROW? (FS.GG.Game#515) ────────────────────────────────────────────
+            #
+            # Since ADR-0066 the `Class:` body line is the authority behind the Coordination board's
+            # `Class` column, and `fsgg-coord lint` reports an open Ready row that declares none as
+            # CLASS-UNSET — counted as a POSSIBLE defect, so a burn-down can never establish the board
+            # is defect-free while such a row exists. This body is REWRITTEN on every sweep, so nobody
+            # but the sweep can put the line there: a human's edit to the body is erased by the next
+            # run, and an edit to the board column is overwritten by `reconcile` from this text — lost,
+            # and believed until it is.
+            #
+            # So the sweep writes it, and FS-GG/.github#1588 AC3 says it must be DERIVED, never guessed.
+            # It is derived from the KIND of each finding, because this workflow already tells its
+            # reader that the kinds differ in urgency (see "Fixing it" below). The mapping, stated here
+            # rather than left implicit:
+            #
+            #   DECAY — `stale link`, `dangling link`, `unresolvable link`, `stale closed-ok marker`
+            #       (check-skill-refs.sh § 2). These are f(tree, WORLD): nobody's commit did this, the
+            #       citation was TRUE when it was published and an issue closed underneath it. Nothing
+            #       in this repo is broken, and repointing it removes a way a published body can
+            #       mislead its reader.                                                  → hardening
+            #
+            #   HERMETIC — `bare [[…]]`, `dangling [[…]]` (§ 1), `bare ref`, `stale prose-ok marker`
+            #       (§ 3), and the unclassified-skill finding (§ 0, FS.GG.Game#280). These are f(tree)
+            #       alone: they consult no world, they are WHOLE-TREE even under `--changed` (the
+            #       script's own § 4 says so), so `gate` resolves them on every PR and is red on them
+            #       too. A hermetic finding on `main` is a GATE REGRESSION, which the body below
+            #       already calls "more urgent than the rest of this issue".               → defect
+            #
+            # DEFECT DOMINATES a mixed run, matching `Class.fromBody`'s own precedence: the strongest
+            # claim is "something is broken NOW", and a run that mixes a gate regression with ordinary
+            # decay must not be quietly downgraded to the class that lets a burn-down stop.
+            #
+            # AND A KIND THIS BLOCK DOES NOT RECOGNISE IS `defect`, NOT `hardening`. The two lists above
+            # are a second contract with `report()`'s prose, alongside the `path:line:` shape the parser
+            # already depends on — and a reworded finding must not silently land in the gentler bucket,
+            # because THAT failure is invisible: the row still looks classed (FS-GG/.github#266). A
+            # subject you could not evaluate is never a subject that passed, so an unreadable kind
+            # classes UP and the body says so. scripts/test-skill-refs-sweep.sh § 7b drives the REAL
+            # script for both buckets, so a rewording fails there rather than here, silently.
+            hermetic=0; decay=0; unknown=0
+
             # shellcheck disable=SC2016
             #
             # SC2016 ("expressions don't expand in single quotes") is a FALSE POSITIVE on both printf
@@ -334,6 +394,24 @@ jobs:
             while IFS= read -r ln; do
               f=${ln%%:*}; rest=${ln#*:}
               n=${rest%%:*}; msg=${rest#*: }
+              # Matched on the finding's opening WORDS, not on its punctuation: every one of these
+              # messages continues with an em dash the shell would have to carry through three
+              # quotings, and `dangling link` vs `dangling [[…]]` is precisely the pair a looser match
+              # would collapse — the two sit on OPPOSITE sides of the mapping above.
+              #
+              # The § 0 finding opens with the skill's own id rather than a fixed word, so its pattern
+              # starts at the quote and pins the sentence that follows it. It is hermetic: it reads the
+              # producer manifest and the skill tree, nothing else.
+              case $msg in
+                'bare [['*|'dangling [['*|'stale prose-ok marker'*|'bare ref '*)
+                  hermetic=$((hermetic + 1)) ;;
+                "'"*"' is published but has NO mirror verdict in "*)
+                  hermetic=$((hermetic + 1)) ;;
+                'stale link '*|'dangling link '*|'unresolvable link '*|'stale closed-ok marker'*)
+                  decay=$((decay + 1)) ;;
+                *)
+                  unknown=$((unknown + 1)) ;;
+              esac
               if [ "$f" != "$cur" ]; then
                 printf '\n### `%s`\n\n' "$f" >> "$body"
                 cur="$f"
@@ -347,7 +425,38 @@ jobs:
                 "$n" "$SERVER" "$REPO" "$SHA" "$f" "$n" "$(printf '%s' "$msg" | tr '`' "'")" >> "$body"
             done < "$RUNNER_TEMP/findings.txt"
 
+            # The verdict, and the sentence that shows its working. Recomputed from THIS run's findings
+            # every time the body is rendered, which is what stops the first run's value latching: the
+            # reconcile step rewrites the WHOLE body, so a repo that fixes its gate regression and is
+            # left with plain decay drops from `defect` back to `hardening` on the next sweep by itself.
+            # Neither a latch nor a ratchet is acceptable — a row asserting `hardening` while a gate
+            # regression sits on `main` is a lie the board will believe, and one stuck at `defect` after
+            # the regression is fixed is the same lie pointing the other way.
+            if [ "$hermetic" -gt 0 ] || [ "$unknown" -gt 0 ]; then
+              class=defect
+              if [ "$hermetic" -gt 0 ]; then
+                why="the findings above include $hermetic **hermetic** one(s) (\`[[ref]]\`, a bare \`#N\`, or a published skill with no mirror verdict). Those consult no world, so \`gate\` is red on them for every PR too: that is a gate regression on \`main\`, something broken now, and it raises the whole row."
+              else
+                why="this workflow does not recognise $unknown of the findings above, so it could not derive their severity and will not guess it downward. A subject you could not evaluate is never a subject that passed (\`FS-GG/.github#266\`); read them yourself before trusting this line."
+              fi
+            else
+              class=hardening
+              why="all $decay finding(s) above are world-moved decay: a citation that was true when it was published, with an issue that closed underneath it. Nothing in this repo is broken, and repointing it removes a way a published body can mislead its reader."
+            fi
+
             {
+              echo
+              echo "## Severity"
+              echo
+              # The class is DERIVED (FS-GG/.github#1588 AC3, ADR-0066), so the body shows its working.
+              # A reader who disagrees with the line is handed the input it was computed from rather
+              # than asked to take it on trust — and this is also the paragraph that explains why the
+              # `Class:` line at the foot of the body will change on its own when the findings do.
+              echo "\`Class: $class\` — $why"
+              echo
+              echo "The mapping is in \`.github/workflows/skill-refs-sweep.yml\`: world-moved decay is"
+              echo "\`hardening\`, a hermetic finding is \`defect\`, and a mixed run is \`defect\`. It is"
+              echo "recomputed on every sweep, so it follows the findings rather than latching."
               echo
               echo "## Fixing it"
               echo
@@ -359,9 +468,10 @@ jobs:
               echo "  it. Fix the reference."
               echo "- **stale marker** — an excuse that excuses nothing: the sentence it guarded was rewritten,"
               echo "  or the issue reopened. Drop it."
-              echo "- **\`[[ref]]\` or bare \`#N\`** — these checks are *hermetic*: they do not depend on the world,"
-              echo "  so \`gate\` is red on them for every PR too. A finding of this kind is a **gate regression on"
-              echo "  \`main\`**, not decay — it is more urgent than the rest of this issue, not less."
+              echo "- **\`[[ref]]\`, bare \`#N\`, or a skill with no mirror verdict** — these checks are *hermetic*:"
+              echo "  they do not depend on the world, so \`gate\` is red on them for every PR too. A finding of"
+              echo "  this kind is a **gate regression on \`main\`**, not decay — it is more urgent than the rest"
+              echo "  of this issue, not less."
               echo
               echo "Reproduce locally with \`scripts/check-skill-refs.sh\`."
               echo
@@ -371,15 +481,31 @@ jobs:
               echo "when the sweep next goes green. Edit the skills, not this issue.*"
               echo
 
-              # A finding filed without a touch-set is a finding nobody can pick up: `take`/`batch` refuse
-              # an item whose `Paths:` cannot be proven disjoint from a live claim, so it lands on the
-              # board LOOKING like work and is invisible to every worker who asks for work
-              # (FS-GG/.github#442). The sweep knows exactly which files it is asking someone to edit, so
-              # it declares them. It cannot place the item on the board itself — that is Projects v2, and
-              # GITHUB_TOKEN has no project scope — but the moment a human adds it, it is schedulable.
+              # THE TWO SENTINELS, at the foot of the body where a filer writes them by hand.
+              #
+              # Two lines, one failure between them: a row filed without either lands on the board
+              # LOOKING like work that no scheduler can act on.
+              #
+              # `Paths:` is what `take`/`batch` need to prove the item disjoint from a live claim —
+              # without it they refuse it, so it is invisible to every worker who asks for work
+              # (FS-GG/.github#442). The sweep knows exactly which files it is asking someone to edit,
+              # so it declares them. `Class:` is what `fsgg-coord lint` needs to stop calling the row
+              # CLASS-UNSET, and what a burn-down needs in order to decide whether it may stop: under
+              # ADR-0066 an unclassed row counts as a POSSIBLE defect, so the gap is not a small one —
+              # it is a permanent "this run did not establish the board is defect-free".
+              #
+              # And a human cannot supply either one here. The next sweep rewrites this body and erases
+              # the edit; hand-editing the board column is worse still, because `reconcile` overwrites
+              # it from this text — so the edit is lost, and believed until it is.
+              #
+              # Neither can be placed on the board by this workflow — that is Projects v2 and
+              # GITHUB_TOKEN has no project scope — but the moment a human adds the issue, it is
+              # schedulable AND classed, with no further edit anywhere.
               printf 'Paths:'
               cut -d: -f1 "$RUNNER_TEMP/findings.txt" | sort -u | sed 's/^/ /' | tr -d '\n'
               echo
+              echo
+              echo "Class: $class"
             } >> "$body"
           fi
 
