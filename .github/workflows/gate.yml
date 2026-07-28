@@ -97,6 +97,33 @@ jobs:
       - name: Build (net10.0)
         run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
 
+  # M3 of the S.I.R. Fable roadmap: this is an artifact boundary test, not a project-reference test.
+  # It packs Game.Core, restores a consumer outside the checkout into a fresh global-packages folder,
+  # compiles the package's bounded integer/grid source view with the pinned Fable tool, and executes
+  # the generated ES module under the pinned Node major. The package inspection in the script also
+  # fails if required profile metadata is absent or known unsupported float-heavy source leaks in.
+  fable-package-consumer:
+    name: Packed Fable consumer (Fable/Node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: "10.0.x"
+          cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "26"
+
+      - name: Pack, restore isolated consumer, compile with Fable, and execute with Node
+        run: scripts/test-fable-package-consumer.sh
+
   # Separate job so a test failure is a distinct signal, not serialized behind the build gate. The
   # whole suite is headless (zero Skia / zero Scene) — the P2 exit invariant (ADR-0022).
   full-test-suite:

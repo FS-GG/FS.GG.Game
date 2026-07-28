@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    This project is package metadata, not a second implementation project. It is packed as
+    fable/FS.GG.Game.Core.fsproj beside the canonical source files selected below. The source files
+    themselves come directly from src/Game.Core and are compiled into the normal .NET assembly too.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>FS.GG.Game.Core.Fable.Metadata</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Primitives.fsi" />
+    <Compile Include="Primitives.fs" />
+    <Compile Include="Pathfinding.fsi" />
+    <Compile Include="Pathfinding.fs" />
+    <Compile Include="Edges.fsi" />
+    <Compile Include="Edges.fs" />
+    <Compile Include="Los.fsi" />
+    <Compile Include="Los.fs" />
+  </ItemGroup>
+
+</Project>

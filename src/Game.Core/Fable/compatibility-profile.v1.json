@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "profileId": "fs-gg-game-core-fable-spike-v1",
+  "status": "spike-validated",
+  "packageId": "FS.GG.Game.Core",
+  "target": "javascript",
+  "surfaces": [
+    {
+      "name": "Cell",
+      "evidence": "structural value and (Col, Row) total-order smoke fixture",
+      "candidateGrade": "LockstepExact"
+    },
+    {
+      "name": "Edges.edgeBetween",
+      "evidence": "forward, reverse, and non-adjacent smoke fixture",
+      "candidateGrade": "LockstepExact"
+    },
+    {
+      "name": "Los.lineOfSightBy",
+      "evidence": "integer supercover occlusion and endpoint-reversal smoke fixture",
+      "candidateGrade": "LockstepExact"
+    },
+    {
+      "name": "Pathfinding.astar",
+      "evidence": "bounded four-way detour smoke fixture",
+      "candidateGrade": "LockstepExact"
+    }
+  ],
+  "defaultGrade": "Unclassified",
+  "notes": [
+    "M3 proves packed-artifact restore, compilation, and Node execution only.",
+    "Candidate grades do not become compatibility promises until M4 canonical-byte conformance accepts them.",
+    "Floating-point and all non-listed surfaces are unavailable to S.I.R. authority."
+  ]
+}

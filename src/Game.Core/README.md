@@ -50,6 +50,20 @@ Three provenances:
 
 Headlessly testable — zero Skia, zero Scene. Purity, totality (degenerate and non-finite input degrades to a documented value rather than throwing), and determinism (integer logic / float presentation) are the contract each module's `.fsi` states and its tests hold it to — so identical input replays byte-identically across runs, and a module is safe to call from a replayed simulation step. Cross-*platform* byte-identity is unconditional for the integer / grid layer; the float-heavy modules scope it (`Visibility` to `|coord| <= 1e6`) or defer full lockstep to a later fixed-point ADR (`Physics.checksum`), so trust the per-module `.fsi`, not one blanket claim.
 
+## Fable compatibility
+
+The NuGet package carries a bounded Fable source view for the M3 compatibility
+spike. It contains the canonical `Primitives`, `Pathfinding`, `Edges`, and `Los`
+source files used by the .NET assembly; it does not contain copied algorithms.
+The package's `fable-compatibility/` directory records the spike profile,
+fixture schema, and pinned toolchain.
+
+Only `Cell`, `Edges.edgeBetween`, `Los.lineOfSightBy`, and
+`Pathfinding.astar` have package-compile and Node smoke evidence so far. Their
+`LockstepExact` grades remain candidates until the M4 canonical-byte suite is
+accepted. Every other surface is unclassified for cross-runtime use even when
+its source happens to be present because it shares one of those files.
+
 To project sim state onto drawables, add [`FS.GG.Game.Render`](https://www.nuget.org/packages/FS.GG.Game.Render).
 
 House style: `.fsi` is the sole public surface; `net10.0`; `-preview` channel.
