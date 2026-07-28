@@ -1,4 +1,30 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
+#
+# THE LINE ABOVE IS LOAD-BEARING, AND ITS POSITION IS PART OF IT (.github#1718). This file `source`s
+# two libraries out of `lib/`, and the `# shellcheck source=...` pragmas on those lines are RELATIVE.
+# Without a `source-path`, shellcheck resolves them against ITS OWN working directory rather than this
+# script's, so `shellcheck -x scripts/skill-view` run from the repository root — which is how every
+# gate in this org invokes it, and how a developer types it — finds neither library and lints this
+# file with BOTH sources unread, inventing SC2034s for every variable they define:
+#
+#   scripts/skill-view:NN:3: note: Not following: lib/args.sh:  … does not exist [SC1091]
+#   scripts/skill-view:NN:3: note: Not following: lib/roots.sh: … does not exist [SC1091]
+#
+# `SCRIPTDIR` makes them resolve against the directory holding THIS FILE, so the command reproduces
+# from any cwd — in CI, in a receiver's materialized tree, and on the desk of whoever runs shellcheck
+# by hand. Fixing it with `-P`/`--source-path` on a gate's command line would fix the gate only, and
+# leave the by-hand run broken; the pragma belongs in the file.
+#
+# IT MUST STAY ABOVE THE FIRST COMMAND. Measured with the pinned shellcheck 0.11.0: this directive is
+# file-scoped only where it precedes every command in the file. Moved down next to the `source` lines
+# it binds to THE NEXT COMMAND ONLY — it clears the `lib/args.sh` finding and leaves the `lib/roots.sh`
+# one standing. Do not "tidy" it down to the code it describes.
+#
+# `scripts/skill-view` is a kit-materialized file (registry/repos.yml `kit:` row `skill-view`), so a
+# receiver cannot repair this in its own tree: the next FsggKitMaterialize reverts the edit. That is
+# why the fix is here and shipped as a kit release.
+#
 # skill-view — the checkout-time generated skill view, and the LOUD ABSENCE CHECK it makes mandatory.
 #
 # ADR-0067 (`resolve, don't copy`) §6/§7/§8; phase 2 of the rewrite decided on .github#1611, tracked as
