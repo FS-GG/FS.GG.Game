@@ -2,8 +2,8 @@
 
   <!--
     FS.GG.Kit receiver (ADR-0062, .github#1262). This repo is a `coordination-kit` receiver: it holds
-    the shared coordination skills, the `fsgg-coord` client, and the engine tool manifest on disk. It
-    used to take them by byte-copy sync PR (`coordination-propagate`); it now REFERENCES the versioned
+    the shared coordination skills and the `fsgg-coord` client on disk. It used to take them by
+    byte-copy sync PR (`coordination-propagate`); it now REFERENCES the versioned
     `FS.GG.Kit` package and MATERIALIZES that kit onto disk from its pin. A hub change reaches this repo
     as an ordinary Renovate bump of the pin (in Directory.Packages.local.props), and `kit-materialize.yml`
     re-runs the materialize on that PR — the same shape lockfile-sync uses for packages.lock.json.
@@ -13,11 +13,40 @@
 
         dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize
 
-    The materialized files (skills, scripts/fsgg-coord, .config/dotnet-tools.json, and — because this is
-    a `build-config` receiver — Directory.Build.props / Directory.Packages.props) are COMMITTED: the
+    The materialized files (skills, scripts/fsgg-coord, and — because this is a `build-config` receiver
+    — Directory.Build.props / Directory.Packages.props) are COMMITTED: the
     materialize is the write arm that replaces the byte-copy, not a live per-build input, so it does NOT
     run on every build (FsggKitMaterializeOnBuild=false, per the .github#1280 review). The committed bytes
     are content-addressed and byte-identical to canonical, so `coordination-coherence` stays green.
+
+    `.config/dotnet-tools.json` IS THIS REPO'S OWN FILE, NOT A MATERIALIZED ONE (FS.GG.Kit 0.18.0,
+    FS-GG/.github#1615, ADR-0068). That line above used to name it third in the materialized list, and
+    the claim outlived its truth by one release: #1615 removed `dist/dotnet/.config/dotnet-tools.json`
+    from the kit's `kit:` block — kit members 9 -> 8 — so from 0.18.0 the materialize does not write the
+    engine tool manifest into any receiver. NOTHING WAS LOST HERE, which is exactly why the stale
+    sentence was easy to miss: the file is tracked in this tree, so the kit simply stopped overwriting
+    bytes that were already correct. A `coordination-sync` check against the pin reports no drift and no
+    "extra" finding for it, and `FsggKitMaterialize` on 0.18.0 writes 29 files and leaves the tree clean.
+    A comment asserting a property the code does not have is a defect in its own right (.github#1059),
+    and this one had teeth: it is the sentence a reader consults before hand-editing the manifest.
+
+    SO THE PINS IN IT ARE OURS TO MOVE, AND NOTHING MOVES THEM YET. The intended route is Renovate
+    bumping `fs.gg.coord.cli` in this file directly, the way it already bumps every other pin this repo
+    authors. That route is FILED BUT NOT LIVE: the shared preset's `packageRules[5]` still disables
+    `.config/dotnet-tools.json` across all seven coordination-kit receivers, a rule written when the file
+    WAS kit-materialized and a bump against it was therefore guaranteed-red churn (.github#794, #1552).
+    Now that this repo owns the file the rule suppresses a bump we want, so the pin sits where the last
+    materialize left it until FS-GG/.github#1798 re-enables it. Do not read a quiet Renovate as a current
+    pin — a non-proposal is not an error (.github#1533), which is the whole failure mode here.
+
+    DELETING THIS FILE IS CAUGHT CENTRALLY, NOT SILENTLY. ADR-0068 moved the invariant that used to come
+    free from kit membership onto `scripts/repos-audit.sh`'s engine-manifest sweep in FS-GG/.github,
+    which runs daily (cron 08:17 UTC) and reads each rostered receiver's ACTUAL tree rather than the
+    hub's roster: a receiver that receives the coordination kit but whose `.config/dotnet-tools.json` is
+    missing, unparseable, versionless, or does not declare `fs.gg.coord.cli` is a red FINDING naming
+    #1077's defect — a `fsgg-coord` shim with no engine to exec. The old `repos.sh validate` co-fabric
+    rule could not see that, because it read only the hub's roster. It grades the DECLARATION, not the
+    VERSION; a stale pin here is still ours to notice.
 
     ONE RUNTIME ROOT IS NO LONGER MATERIALIZED INTO (FS-GG/.github#1734, ADR-0067 §9 phase 4, stage 4,
     2026-07-28). This repo used to commit its 21 skills TWICE — 41 tracked files under `.claude/skills`

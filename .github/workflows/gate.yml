@@ -333,10 +333,19 @@ jobs:
       - name: Behavioural test suite (baseline + .fsi + fsproj fixture in, exit code + subject claim out)
         run: scripts/test-check-packed-api-surface.sh
 
-  # Sync-not-fork drift gate (shared-build-config contract, ADR-0006). The three managed build-config
-  # files (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json) must stay
-  # byte-identical to the org source of truth in FS-GG/.github dist/dotnet/. A hand-edit to a managed
-  # file (or an un-re-synced org baseline bump) fails this job. Separate job = distinct signal.
+  # Sync-not-fork drift gate (shared-build-config contract, ADR-0006). The TWO managed build-config
+  # files (Directory.Build.props, Directory.Packages.props) must stay byte-identical to the org source
+  # of truth in FS-GG/.github dist/dotnet/. A hand-edit to a managed file (or an un-re-synced org
+  # baseline bump) fails this job. Separate job = distinct signal.
+  #
+  # IT WAS THREE UNTIL FS.GG.Kit 0.18.0, and the third was `.config/dotnet-tools.json`. FS-GG/.github#1615
+  # (ADR-0068) dropped it from the kit's `kit:` block, so the materialize this job runs no longer writes
+  # it and this gate no longer speaks for it — `FsggKitMaterializeBuildConfig` covers the two .props and
+  # nothing else. The manifest is still tracked here; it is simply OURS now, hand-editable without
+  # tripping anything in this file. Its own invariant did not evaporate with the row: FS-GG/.github's
+  # `repos-audit` engine-manifest sweep asserts daily that this repo declares `fs.gg.coord.cli` in it.
+  # Left as prose rather than deleted because the count is what a reader checks their diff against, and
+  # a gate comment that over-claims its subject is how a hand-edit gets attributed to the wrong signal.
   build-config-drift:
     name: Build-config drift check (shared-build-config)
     runs-on: ubuntu-latest

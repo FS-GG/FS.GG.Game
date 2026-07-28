@@ -37,7 +37,14 @@ jobs:
           dotnet-version: "10.0.x"
 
       # FS.GG.Governance.Cli is dual-published to nuget.org (ADR-0012/0013), so no org-feed
-      # credential is needed. Advisory tool; not pinned in the org-managed .config/dotnet-tools.json.
+      # credential is needed. Advisory tool, installed globally and deliberately NOT pinned in
+      # .config/dotnet-tools.json — that manifest is reserved for the engine `fsgg-coord` execs.
+      #
+      # THAT FILE USED TO BE "org-managed" AND IS NOT ANY MORE (FS.GG.Kit 0.18.0, FS-GG/.github#1615,
+      # ADR-0068): it left the kit's `kit:` block, so it is this repo's own file now. The reason to keep
+      # this tool out of it is unchanged and never depended on who owned the file — an advisory,
+      # `--prerelease` tool that must never gate a merge does not belong in a manifest whose whole job
+      # is to make `dotnet tool restore` reproducible. Only the ownership word was false.
       - name: Install fsgg-governance
         run: dotnet tool install --global FS.GG.Governance.Cli --prerelease
 
