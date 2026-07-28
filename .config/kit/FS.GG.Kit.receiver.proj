@@ -18,6 +18,29 @@
     materialize is the write arm that replaces the byte-copy, not a live per-build input, so it does NOT
     run on every build (FsggKitMaterializeOnBuild=false, per the .github#1280 review). The committed bytes
     are content-addressed and byte-identical to canonical, so `coordination-coherence` stays green.
+
+    ONE RUNTIME ROOT IS NO LONGER MATERIALIZED INTO (FS-GG/.github#1734, ADR-0067 §9 phase 4, stage 4,
+    2026-07-28). This repo used to commit its 21 skills TWICE — 41 tracked files under `.claude/skills`
+    and 41 byte-identical ones under `.agents/skills`. It commits them once. `.agents/skills` is a VIEW
+    root: still in the runtime contract, still loaded by both runtimes, but git-ignored and RESOLVED
+    from `.claude/skills` at checkout instead of being a second committed copy of the same bytes. See
+    the FsggKitViewSkillRoots block below and FsggGameGenerateSkillView at the bottom.
+    `coordination-coherence` narrows with it — it derives its roots from FsggKitSkillRoots — and stays
+    green with no gate edit anywhere.
+
+    THIS REPO'S OWN 17 SKILLS WERE IN BOTH ROOTS AND STAY VISIBLE IN BOTH. `.claude/skills` and
+    `.agents/skills` each held the same 21 directories: the kit's 4 (`check-board`,
+    `cross-repo-coordination`, `intra-repo-parallel-work`, `pnext-item`) plus `cut-general-release` and
+    16 `fs-gg-sdd-*` skills this repo owns. `diff -r` between the two roots was SILENT before this
+    change, so nothing lived only in the retired copy and nothing had to be relocated first — the view
+    reproduces all 21. That check is not optional: on FS.GG.SDD the same diff found a tracked,
+    producer-authoritative file with no home under a view (FS.GG.SDD#771), which is why the retirement
+    order requires it before any receiver is retired.
+
+    `.codex/skills` IS NOT TOUCHED BY THIS CHANGE. It is the RETIRED root (ADR-0067 §5,
+    FS-GG/.github#1636); FS.GG.Kit's retired-root sweep already withdrew the kit-owned files from it,
+    and the 17 skills remaining there (`cut-general-release` + 16 `fs-gg-sdd-*`) are this repo's OWN.
+    ADR-0065 §Retiring a root forbids anyone hand-deleting them, and this change does not.
   -->
 
   <PropertyGroup>
@@ -27,6 +50,29 @@
     <!-- Tooling-only: no source, no output, no lockfile of its own (the gate locks the solution, not this). -->
     <EnableDefaultItems>false</EnableDefaultItems>
     <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+
+    <!-- ADR-0067 §9 phase 4, stage 4 (FS-GG/.github#1734). `.agents/skills` is a VIEW root now, not a
+         materialized one: still in the runtime contract, still loaded by both runtimes, but its content
+         is RESOLVED from `.claude/skills` at checkout by `scripts/skill-view generate` instead of being
+         a second committed copy. THE RUNTIME ROOT SET IS UNCHANGED — ADR-0065 §A root's three
+         dispositions makes it the UNION of these two properties, and that union is still ADR-0011's
+         two roots. Nothing is retired here; one copy stopped existing.
+
+         WHY `.claude/skills` IS THE LIVE ROOT AND NOT THE VIEW. The kit's four skill rows source
+         `.claude/skills/<id>` in FS-GG/.github `registry/repos.yml`, and `registry/repos.lock`
+         content-addresses those exact paths — so the materialize writes there, and
+         `coordination-coherence` grades those bytes against this repo's pin. Making `.agents/skills`
+         the live root instead would rename a `kit:` source, obliging a kit republish and a
+         seven-receiver fan-out for a path rename. See FS-GG/.github
+         `docs/coordination/skill-apparatus-retirement-order.md` §3.
+
+         BOTH PROPERTIES ARE DECLARED EXPLICITLY, AND THAT IS LOAD-BEARING.
+         `scripts/check-skill-view-roots.sh` grades their union on this repo's required
+         `Build-config drift check (shared-build-config)` context and fails CLOSED on an absent
+         property — because an undeclared property would silently evaluate to the package default and
+         hide exactly the regression that alarm exists for. -->
+    <FsggKitSkillRoots>.claude/skills</FsggKitSkillRoots>
+    <FsggKitViewSkillRoots>.agents/skills</FsggKitViewSkillRoots>
 
     <!-- Materialize into the repo ROOT (two levels up from .config/kit/), on demand — never on build. -->
     <FsggKitReceiverRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../'))</FsggKitReceiverRoot>
@@ -43,5 +89,39 @@
     <!-- Version pinned centrally in Directory.Packages.local.props (Renovate-managed), like every other pin. -->
     <PackageReference Include="FS.GG.Kit" />
   </ItemGroup>
+
+  <!--
+    THE VIEW IS GENERATED BEFORE IT IS ASSERTED, IN EVERY TREE THE MATERIALIZE RUNS IN.
+
+    `FsggKitCheckSkillView` (ADR-0067 §8, AfterTargets=FsggKitMaterialize) fails the build when a view
+    root is absent, dangling, or partly visible — deliberately, because all three of those are exit 0
+    with no diagnostic in BOTH runtimes. A view root is NOT committed (a committed symlink degrades to
+    a plain text file under `git -c core.symlinks=false`, ADR-0067 §6), so EVERY fresh checkout starts
+    without one: a clean clone, a new worktree, `kit-materialize.yml`'s runner, and — the one that
+    bites THIS repo specifically — gate.yml's `build-config-drift` job, which is a REQUIRED context
+    and runs `-t:FsggKitMaterialize` on a bare checkout on every PR. Measured on a fresh clone at the
+    retirement commit: without this target the materialize FAILS with "view skill root '.agents/skills'
+    is ABSENT or a DANGLING link", so the required build-config gate would red on a tree nobody
+    touched.
+
+    So the generate belongs next to the assertion, not in a workflow step that only some of those trees
+    run. The tool is `scripts/skill-view` — THIS repo's copy, delivered and byte-verified by the
+    FS.GG.Kit version this repo pins (a `kind: client` kit row since 0.15.0), never one fetched from a
+    moving hub `main`: a receiver's verdict must be a function of the receiver (FS-GG/.github#1584).
+
+    The `roots` flag names the view roots EXPLICITLY rather than letting the tool fall back to
+    ADR-0011's default pair. The fallback would also try to resolve `.claude/skills`, this repo's
+    TRACKED live root, and `skill-view` refuses to generate over a tracked root with no override, so it
+    would be a refusal rather than a no-op.
+
+    The `Condition` guards on the PROPERTY, so if a later change empties FsggKitViewSkillRoots this
+    target stops running with it instead of generating a view nothing asserts. That same emptying is
+    what `scripts/check-skill-view-roots.sh` reds on.
+  -->
+  <Target Name="FsggGameGenerateSkillView" BeforeTargets="FsggKitCheckSkillView"
+          Condition="'$(FsggKitViewSkillRoots)' != ''">
+    <Exec WorkingDirectory="$(FsggKitReceiverRoot)"
+          Command="bash scripts/skill-view generate --source $(FsggKitSkillRoots) --roots &quot;$(FsggKitViewSkillRoots.Replace(';',' '))&quot;" />
+  </Target>
 
 </Project>

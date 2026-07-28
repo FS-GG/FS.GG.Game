@@ -345,6 +345,25 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
+      # THE RUNTIME SKILL-ROOT CONTRACT (ADR-0067 §8, FS-GG/.github#1734).
+      #
+      # `.agents/skills` is a generated VIEW root since phase 4 stage 4, not a second committed copy.
+      # That retirement removed the only gate that would have noticed the root later LEAVING this
+      # repo's runtime contract: `coordination-coherence` derives its roots from <FsggKitSkillRoots>
+      # alone and stops looking, and `FsggKitCheckSkillView` reports "nothing to assert" for an empty
+      # <FsggKitViewSkillRoots>. Both measured GREEN on a tree with the root dropped and deleted — so
+      # `kit / coordination-kit`, required though it is, passes on exactly the tree this alarm exists
+      # to fail. A rewrite that removes the loud failure and adds the quiet one is worse than no
+      # rewrite, so the replacement rides HERE, on a context that is already REQUIRED under
+      # enforce_admins and whose subject is already this repo's FS.GG.Kit receiver contract.
+      #
+      # It goes BEFORE setup-dotnet deliberately: it is static, offline and sub-second, and a network
+      # failure in the restore below must not be able to turn this assertion into a step that never
+      # ran. See scripts/check-skill-view-roots.sh for the measurements and for why it grades the
+      # DECLARATION rather than msbuild's evaluation.
+      - name: Runtime skill-root contract
+        run: bash scripts/check-skill-view-roots.sh
+
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
