@@ -158,5 +158,6 @@ readiness/*/
 # plain text file under `git -c core.symlinks=false` (the git-for-Windows default without Developer
 # Mode) and BOTH agent runtimes then load zero skills and exit 0 saying nothing (ADR-0067 §6). The
 # FS.GG.Kit materialize regenerates it and then asserts it is visible (FsggKitCheckSkillView,
-# ADR-0067 §8), and scripts/check-skill-view-roots.sh asserts the root is still in the contract.
+# ADR-0067 §8), and `scripts/skill-view check --receiver-proj` asserts the root is still in the
+# contract.
 /.agents/skills

@@ -359,10 +359,50 @@ jobs:
       #
       # It goes BEFORE setup-dotnet deliberately: it is static, offline and sub-second, and a network
       # failure in the restore below must not be able to turn this assertion into a step that never
-      # ran. See scripts/check-skill-view-roots.sh for the measurements and for why it grades the
-      # DECLARATION rather than msbuild's evaluation.
+      # ran.
+      #
+      # IT USED TO BE `scripts/check-skill-view-roots.sh`, 18,277 BYTES OF THIS REPO'S OWN
+      # (FS-GG/.github#1710/#1777). Five receivers retired their second committed skill root, ADR-0067
+      # §8 obliged each to replace the loud failure it removed, and each hand-wrote the same alarm on
+      # the same day: 23,050 / 21,353 / 18,346 / 18,277 / 14,864 bytes for one invariant. The delivery
+      # seam already existed — `scripts/skill-view` is a kit-delivered file this repo pins and
+      # byte-verifies — so the assertion lives THERE now and this repo calls it.
+      #
+      # THE FS.GG.Audio#212 REPAIR THIS REPO FOUND IS PRESERVED BY CONSTRUCTION. This repo's copy was
+      # written from FS.GG.Audio's, spotted its `[[ ! -e ]]` absence test — which FOLLOWS symlinks, so
+      # a DANGLING view root answered it exactly as a missing path does and went GREEN — and fixed it
+      # here first (`b1d4fbd`, FS-GG/.github#1734) before it was brought home to Audio. `classify_root`
+      # in `scripts/skill-view` has ALWAYS separated absent / dangling / text-file / not-a-directory as
+      # four classes, so the shared implementation cannot regress into that shape, and the `--absent-ok`
+      # excuse below is scoped to ABSENCE and does not reach dangling.
+      #
+      # The can-fire demonstration now ships INSIDE the tool: 16 cases, each negative one asserting the
+      # SPECIFIC diagnostic class its branch emits. Offline, about a second.
+      - name: Demonstrate every lane of the skill-root alarm can fire
+        run: bash scripts/skill-view selftest
+
+      # `--receiver-proj` is LANE 1, THE DECLARATION, and it is what replaces the deleted script: the
+      # sorted union of <FsggKitSkillRoots> and <FsggKitViewSkillRoots> must be ADR-0011's two roots,
+      # and an UNDECLARED property is a RED rather than an empty contribution — it grades the
+      # DECLARATION rather than msbuild's evaluation, which is why it can run before the SDK exists.
+      # Lane 2 is `check`'s own resolution loop, which grades a partial view PER SKILL BY IDENTITY
+      # where the deleted script compared directory COUNTS; lane 3 is `[tracked-view-root]`, adopted
+      # from FS.GG.Net's copy and had by none of the others.
+      #
+      # `--absent-ok` REQUIRES a reason and prints it on every run, because what else catches an absent
+      # root DIFFERS PER RECEIVER. THIS REPO'S ANSWER IS THE STRONG ONE, and it is why FS.GG.Audio's
+      # and FS.GG.Templates' notes say not to import Game's: the alarm rides `build-config-drift`, the
+      # SAME required job that runs `-t:FsggKitMaterialize` a few steps below, so on this repo
+      # `FsggKitCheckSkillView` reds a REQUIRED context on an absent or dangling view root. On Audio
+      # and Templates no required context materializes at all. The excuse here covers only the window
+      # between this bare checkout and that materialize, inside one job.
       - name: Runtime skill-root contract
-        run: bash scripts/check-skill-view-roots.sh
+        run: |
+          bash scripts/skill-view check \
+            --source .claude/skills \
+            --tree . \
+            --receiver-proj .config/kit/FS.GG.Kit.receiver.proj \
+            --absent-ok "this step runs on a bare actions/checkout before setup-dotnet, so an ungenerated view root is its normal state HERE — but the SAME required job runs -t:FsggKitMaterialize below, where FsggKitCheckSkillView reds an absent or dangling root on a REQUIRED context (unlike FS.GG.Audio and FS.GG.Templates, where no required context materializes). A DANGLING root is not excused by this (FS.GG.Audio#212)." 
 
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
