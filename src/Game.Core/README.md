@@ -52,17 +52,19 @@ Headlessly testable — zero Skia, zero Scene. Purity, totality (degenerate and 
 
 ## Fable compatibility
 
-The NuGet package carries a bounded Fable source view for the M3 compatibility
-spike. It contains the canonical `Primitives`, `Pathfinding`, `Edges`, and `Los`
-source files used by the .NET assembly; it does not contain copied algorithms.
-The package's `fable-compatibility/` directory records the spike profile,
-fixture schema, and pinned toolchain.
+The NuGet package carries a bounded Fable source view containing the canonical
+`Primitives`, `Pathfinding`, `Edges`, and `Los` source files used by the .NET
+assembly; it does not contain copied algorithms. The package's
+`fable-compatibility/` directory records the versioned profile, authored input
+vectors, canonical binary oracle, fixture schema, and pinned toolchain.
 
-Only `Cell`, `Edges.edgeBetween`, `Los.lineOfSightBy`, and
-`Pathfinding.astar` have package-compile and Node smoke evidence so far. Their
-`LockstepExact` grades remain candidates until the M4 canonical-byte suite is
-accepted. Every other surface is unclassified for cross-runtime use even when
-its source happens to be present because it shares one of those files.
+`Cell` ordering, `Edges.edgeBetween`, `Los.lineOfSightBy`, and
+`Pathfinding.astar` are `LockstepExact` under profile
+`fs-gg-game-core-fable-lockstep-v1`. The packed .NET assembly and
+package-derived Fable source must emit byte-identical records for the shared
+boundary corpus. Floating value types are `Portable`, not exact; implementation
+surfaces excluded from the source view are `DotNetOnly`. Every other operation
+remains unclassified even when its source file is present.
 
 To project sim state onto drawables, add [`FS.GG.Game.Render`](https://www.nuget.org/packages/FS.GG.Game.Render).
 

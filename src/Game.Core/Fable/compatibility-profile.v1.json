@@ -1,35 +1,45 @@
 {
   "schemaVersion": 1,
-  "profileId": "fs-gg-game-core-fable-spike-v1",
-  "status": "spike-validated",
+  "profileId": "fs-gg-game-core-fable-lockstep-v1",
+  "status": "published-contract",
   "packageId": "FS.GG.Game.Core",
   "target": "javascript",
   "surfaces": [
     {
-      "name": "Cell",
-      "evidence": "structural value and (Col, Row) total-order smoke fixture",
-      "candidateGrade": "LockstepExact"
+      "name": "Cell structural value and total order",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 1; canonical cases 1001-1002"
     },
     {
-      "name": "Edges.edgeBetween",
-      "evidence": "forward, reverse, and non-adjacent smoke fixture",
-      "candidateGrade": "LockstepExact"
+      "name": "Dir, Edge, and Edges.edgeBetween",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 2; canonical cases 2001-2005"
     },
     {
-      "name": "Los.lineOfSightBy",
-      "evidence": "integer supercover occlusion and endpoint-reversal smoke fixture",
-      "candidateGrade": "LockstepExact"
+      "name": "LineMode and Los.lineOfSightBy",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 3; canonical cases 3001-3004"
     },
     {
-      "name": "Pathfinding.astar",
-      "evidence": "bounded four-way detour smoke fixture",
-      "candidateGrade": "LockstepExact"
+      "name": "Neighbourhood and Pathfinding.astar",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 4; canonical cases 4001-4005"
+    },
+    {
+      "name": "Point, Rect, Contact, Circle, RayHit, ConvexPolygon, and Manifold values",
+      "grade": "Portable",
+      "evidence": "types compile through the supported source view; no canonical byte equality is promised for floating fields"
+    },
+    {
+      "name": "Geometry, Rng, Dice, FixedStep, Loop, Hex, Grids, MapGen, Fov, SpatialGrid, Resolution, Ballistics, Visibility, Ai, Effects, Physics, and MapAnalysis",
+      "grade": "DotNetOnly",
+      "evidence": "implementation sources are absent from the supported Fable package project"
     }
   ],
   "defaultGrade": "Unclassified",
   "notes": [
-    "M3 proves packed-artifact restore, compilation, and Node execution only.",
-    "Candidate grades do not become compatibility promises until M4 canonical-byte conformance accepts them.",
+    "Only a row explicitly graded LockstepExact may enter cross-runtime authoritative code.",
+    "Operations present in one of the four packaged source files but absent from this profile remain Unclassified.",
     "Floating-point and all non-listed surfaces are unavailable to S.I.R. authority."
   ]
 }

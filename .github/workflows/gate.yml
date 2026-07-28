@@ -97,15 +97,19 @@ jobs:
       - name: Build (net10.0)
         run: dotnet build FS.GG.Game.slnx -c Debug --no-restore
 
-  # M3 of the S.I.R. Fable roadmap: this is an artifact boundary test, not a project-reference test.
-  # It packs Game.Core, restores a consumer outside the checkout into a fresh global-packages folder,
-  # compiles the package's bounded integer/grid source view with the pinned Fable tool, and executes
-  # the generated ES module under the pinned Node major. The package inspection in the script also
-  # fails if required profile metadata is absent or known unsupported float-heavy source leaks in.
+  # M4 of the S.I.R. Fable roadmap: this is an artifact boundary test, not a project-reference test.
+  # Both matrix legs pack Game.Core and restore the consumer outside the checkout into a fresh package
+  # folder. The .NET leg executes the packed binary; the Fable leg compiles the package-derived source
+  # under the pinned toolchain. Each independently emits canonical bytes and compares them with the
+  # checked-in oracle, which makes the two successful legs transitively byte-identical.
   fable-package-consumer:
-    name: Packed Fable consumer (Fable/Node)
+    name: Lockstep conformance (${{ matrix.runtime }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [dotnet, fable]
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -121,8 +125,8 @@ jobs:
         with:
           node-version: "26"
 
-      - name: Pack, restore isolated consumer, compile with Fable, and execute with Node
-        run: scripts/test-fable-package-consumer.sh
+      - name: Pack, restore isolated consumer, and execute canonical fixtures
+        run: scripts/test-fable-package-consumer.sh --${{ matrix.runtime }}
 
   # Separate job so a test failure is a distinct signal, not serialized behind the build gate. The
   # whole suite is headless (zero Skia / zero Scene) — the P2 exit invariant (ADR-0022).

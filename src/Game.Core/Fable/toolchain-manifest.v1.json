@@ -9,7 +9,7 @@
   "fablePackageSdk": "1.4.0",
   "nodeMajor": 26,
   "javascriptModuleTarget": "esmodule",
-  "compatibilityProfile": "fs-gg-game-core-fable-spike-v1",
+  "compatibilityProfile": "fs-gg-game-core-fable-lockstep-v1",
   "fixtureSchemaVersion": 1,
   "sourceRepository": "https://github.com/FS-GG/FS.GG.Game",
   "sourceCommitSource": "NuGet repository metadata",

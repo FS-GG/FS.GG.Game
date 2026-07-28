@@ -1,21 +1,41 @@
 #!/usr/bin/env bash
 #
-# M3 packed-artifact Fable spike. Packs Game.Core, restores a consumer in an isolated directory and
-# package cache, compiles only the package-derived source view, and executes the result under Node.
+# M4 packed-artifact lockstep gate. Packs Game.Core, restores a consumer in an isolated directory and
+# package cache, then executes the same generated fixtures against the .NET binary and package-derived
+# Fable source view. Each runtime is compared with the checked-in canonical binary oracle.
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SPIKE_VERSION="0.12.0-m3-spike"
-PACKAGE_NAME="FS.GG.Game.Core.${SPIKE_VERSION}.nupkg"
+CONFORMANCE_VERSION="0.13.0-m4-conformance"
+PACKAGE_NAME="FS.GG.Game.Core.${CONFORMANCE_VERSION}.nupkg"
+RUNTIME="${1:---all}"
+EXPECTED="$REPO_ROOT/tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin"
 
-for command in dotnet node unzip sha256sum; do
+case "$RUNTIME" in
+  --all|--dotnet|--fable) ;;
+  *)
+    echo "usage: $0 [--all|--dotnet|--fable]" >&2
+    exit 2
+    ;;
+esac
+
+for command in dotnet unzip sha256sum python3; do
   command -v "$command" >/dev/null || {
     echo "test-fable-package-consumer: required command '$command' was not found" >&2
     exit 2
   }
 done
+
+if [[ $RUNTIME != --dotnet ]]; then
+  command -v node >/dev/null || {
+    echo "test-fable-package-consumer: required command 'node' was not found" >&2
+    exit 2
+  }
+fi
+
+python3 "$REPO_ROOT/scripts/generate-fable-lockstep-cases.py" --check
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -24,7 +44,7 @@ mkdir -p "$TMP/feed" "$TMP/consumer" "$TMP/packages"
 dotnet tool restore
 dotnet pack "$REPO_ROOT/src/Game.Core/FS.GG.Game.Core.fsproj" \
   -c Release \
-  -p:PackageVersion="$SPIKE_VERSION" \
+  -p:PackageVersion="$CONFORMANCE_VERSION" \
   -o "$TMP/feed"
 
 PACKAGE="$TMP/feed/$PACKAGE_NAME"
@@ -47,6 +67,8 @@ required_entries=(
   "fable-compatibility/compatibility-profile.v1.json"
   "fable-compatibility/fixture-schema.v1.json"
   "fable-compatibility/toolchain-manifest.v1.json"
+  "fable-compatibility/fixtures/v1/cases.json"
+  "fable-compatibility/fixtures/v1/expected.bin"
 )
 
 for entry in "${required_entries[@]}"; do
@@ -64,30 +86,88 @@ fi
 cp \
   "$REPO_ROOT/tests/Game.Core.Fable.Tests/package-consumer/FS.GG.Game.Core.Fable.Consumer.fsproj" \
   "$REPO_ROOT/tests/Game.Core.Fable.Tests/package-consumer/Program.fs" \
+  "$REPO_ROOT/tests/Game.Core.Fable.Tests/shared/GeneratedCases.fs" \
+  "$REPO_ROOT/tests/Game.Core.Fable.Tests/shared/FixtureProtocol.fs" \
   "$TMP/consumer/"
 
 # A generated config with <clear/> prevents a developer's or runner's package-source mapping from
 # silently excluding the isolated feed. NuGet.org supplies only the pinned toolchain dependencies.
 dotnet new nugetconfig -o "$TMP/consumer" --force >/dev/null
 dotnet nuget add source "$TMP/feed" \
-  --name m3-spike \
+  --name m4-conformance \
   --configfile "$TMP/consumer/nuget.config" >/dev/null
 
 NUGET_PACKAGES="$TMP/packages" \
   dotnet restore "$TMP/consumer/FS.GG.Game.Core.Fable.Consumer.fsproj" \
     --configfile "$TMP/consumer/nuget.config" \
-    -p:SpikePackageVersion="$SPIKE_VERSION"
+    -p:ConformancePackageVersion="$CONFORMANCE_VERSION"
 
-NUGET_PACKAGES="$TMP/packages" \
-  dotnet fable "$TMP/consumer/FS.GG.Game.Core.Fable.Consumer.fsproj" \
-    --outDir "$TMP/javascript" \
-    --noRestore \
-    --noCache
+run_and_decode() {
+  local runtime="$1"
+  local output="$2"
+  local hex
 
-node "$TMP/javascript/Program.js"
+  case "$runtime" in
+    dotnet)
+      hex="$(
+        NUGET_PACKAGES="$TMP/packages" \
+          dotnet run \
+            --project "$TMP/consumer/FS.GG.Game.Core.Fable.Consumer.fsproj" \
+            --no-restore \
+            -p:ConformancePackageVersion="$CONFORMANCE_VERSION" |
+          sed -n 's/^FSGG_FIXTURES_V1_HEX=//p'
+      )"
+      ;;
+    fable)
+      NUGET_PACKAGES="$TMP/packages" \
+        dotnet fable "$TMP/consumer/FS.GG.Game.Core.Fable.Consumer.fsproj" \
+          --outDir "$TMP/javascript" \
+          --noRestore \
+          --noCache
+      hex="$(node "$TMP/javascript/Program.js" | sed -n 's/^FSGG_FIXTURES_V1_HEX=//p')"
+      ;;
+  esac
+
+  if [[ -z $hex || $hex =~ [^0-9a-f] || $((${#hex} % 2)) -ne 0 ]]; then
+    echo "test-fable-package-consumer: $runtime runner emitted invalid canonical hex" >&2
+    exit 1
+  fi
+
+  printf '%s' "$hex" |
+    python3 -c 'import sys; sys.stdout.buffer.write(bytes.fromhex(sys.stdin.read()))' >"$output"
+}
+
+if [[ $RUNTIME == --all || $RUNTIME == --dotnet ]]; then
+  run_and_decode dotnet "$TMP/actual-dotnet.bin"
+
+  if [[ ${UPDATE_EXPECTED:-0} == 1 ]]; then
+    cp "$TMP/actual-dotnet.bin" "$EXPECTED"
+    echo "test-fable-package-consumer: updated ${EXPECTED#"$REPO_ROOT/"}"
+  fi
+
+  [[ -f $EXPECTED ]] || {
+    echo "test-fable-package-consumer: missing canonical oracle: ${EXPECTED#"$REPO_ROOT/"}" >&2
+    exit 1
+  }
+
+  python3 "$REPO_ROOT/scripts/compare-fable-lockstep-fixtures.py" \
+    "$EXPECTED" "$TMP/actual-dotnet.bin"
+fi
+
+if [[ $RUNTIME == --all || $RUNTIME == --fable ]]; then
+  [[ -f $EXPECTED ]] || {
+    echo "test-fable-package-consumer: missing canonical oracle: ${EXPECTED#"$REPO_ROOT/"}" >&2
+    exit 1
+  }
+
+  run_and_decode fable "$TMP/actual-fable.bin"
+  python3 "$REPO_ROOT/scripts/compare-fable-lockstep-fixtures.py" \
+    "$EXPECTED" "$TMP/actual-fable.bin"
+fi
 
 PACKAGE_SHA256="$(sha256sum "$PACKAGE" | cut -d ' ' -f 1)"
-printf 'test-fable-package-consumer: OK — package=%s sha256=%s fable=5.13.0 node=%s\n' \
+printf 'test-fable-package-consumer: OK — runtime=%s package=%s sha256=%s fable=5.13.0 node=%s\n' \
+  "${RUNTIME#--}" \
   "$PACKAGE_NAME" \
   "$PACKAGE_SHA256" \
-  "$(node --version)"
+  "$(node --version 2>/dev/null || printf 'not-required')"

@@ -1,24 +1,40 @@
 {
   "schemaVersion": 1,
-  "fixtureSet": "m3-package-consumer-smoke",
-  "cases": [
+  "fixtureSet": "fs-gg-game-core-fable-lockstep-v1",
+  "canonicalEncoding": {
+    "byteOrder": "little-endian",
+    "signedIntegers": "two's-complement",
+    "record": "u32 recordByteCount, u32 caseId, u16 operationId, u16 outcomeTag, payload",
+    "list": "u32 elementCount followed by elements in declared order",
+    "option": "u8 tag: 0 absent, 1 present"
+  },
+  "operations": [
     {
       "id": 1,
-      "operation": "Cell.order"
+      "operation": "Cell.order",
+      "payload": "list<Cell>; Cell = i32 Col, i32 Row"
     },
     {
       "id": 2,
-      "operation": "Edges.edgeBetween"
+      "operation": "Edges.edgeBetween",
+      "payload": "option<Edge>; Edge = Cell Lo, Cell Hi"
     },
     {
       "id": 3,
-      "operation": "Los.lineOfSightBy"
+      "operation": "Los.lineOfSightBy",
+      "payload": "u8 boolean"
     },
     {
       "id": 4,
-      "operation": "Pathfinding.astar"
+      "operation": "Pathfinding.astar",
+      "payload": "option<list<Cell>>"
     }
   ],
-  "oracle": "The package-derived JavaScript process exits zero only when every typed fixture assertion passes.",
-  "deferredToM4": "Canonical binary records and cross-runtime byte comparison."
+  "inputs": "fixtures/v1/cases.json",
+  "oracle": "fixtures/v1/expected.bin",
+  "oracleSha256": "9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24",
+  "outcomeTags": {
+    "0": "operation completed normally"
+  },
+  "comparison": "Both the packed .NET assembly and package-derived Fable source emit the complete canonical byte stream and must equal expected.bin."
 }
