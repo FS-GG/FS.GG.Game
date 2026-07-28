@@ -120,7 +120,6 @@ jobs:
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "26"
-          cache: false
 
       - name: Pack, restore isolated consumer, compile with Fable, and execute with Node
         run: scripts/test-fable-package-consumer.sh
