@@ -1,4 +1,0 @@
-interface:
-  display_name: "Cut General Release"
-  short_description: "Publish every FS-GG package stale on NuGet"
-  default_prompt: "Use $cut-general-release to audit FS-GG packages against NuGet and cut the required general releases."

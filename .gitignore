@@ -152,3 +152,11 @@ Thumbs.db
 readiness/*/
 !readiness/surface-baselines/
 !readiness/surface-baselines/**
+
+# ADR-0067 §9 phase 4 stage 4 (FS-GG/.github#1734). A GENERATED VIEW of .claude/skills, resolved at
+# checkout by `scripts/skill-view generate` and never committed: a committed symlink checks out as a
+# plain text file under `git -c core.symlinks=false` (the git-for-Windows default without Developer
+# Mode) and BOTH agent runtimes then load zero skills and exit 0 saying nothing (ADR-0067 §6). The
+# FS.GG.Kit materialize regenerates it and then asserts it is visible (FsggKitCheckSkillView,
+# ADR-0067 §8), and scripts/check-skill-view-roots.sh asserts the root is still in the contract.
+/.agents/skills
