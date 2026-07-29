@@ -176,10 +176,10 @@ at `done`.
 **You own the check; the repair belongs to whoever owns the shared checkout.** It is a mutation of a
 tree N workers share, and the actor that *creates* the drift is the one merging their PRs — so the
 refresh belongs with whoever dispatched the wave, which is also the only actor that can serialise it.
-That ownership is filed as `.github#1663` and is **not** in place yet, which is precisely why the rule
-above is a floor rather than a division of labour: check every time, because whether anyone else did
-is not something you can observe from here. And note `.github#1664` — `stale_guard`'s own printed
-remedy still says `pull --ff-only`, which is why this recipe does not.
+That ownership is now in place: `drive-board` repairs the shared checkout after it verifies each merge
+(`.github#1663`). The rule above remains a floor rather than a division of labour: check every time,
+because whether the host performed that repair is not something you can observe from here. And note
+`.github#1664` — `stale_guard` now prints `merge --ff-only`, matching this recipe.
 
 ```sh
 scripts/fsgg-coord take --repo <r>     # pick + claim the next SCHEDULABLE item, retrying a lost race
