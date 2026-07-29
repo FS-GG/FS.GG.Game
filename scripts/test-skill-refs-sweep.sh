@@ -907,17 +907,13 @@ expect_eq "$(class_lines)" 'Class: hardening' 'all four world-moved kinds map to
 expect_has 'world-moved decay' "$(body)" 'and the body says why, rather than asserting it'
 
 case_start '§7a every HERMETIC kind is recognised as one → defect'
-# Five spellings, and `dangling [[…]]` vs `dangling link —` is the pair a looser match collapses:
+# Three spellings, and `dangling [[…]]` vs `dangling link —` is the pair a looser match collapses:
 # they sit on OPPOSITE sides of the mapping, so confusing them silently downgrades a gate regression
-# to hardening — the failure mode that still LOOKS like a classed row. The last one is this repo's
-# own § 0 finding (#280), which Rendering does not have: it opens with the skill's id, not a fixed
-# word, so it is the one whose pattern could most easily be written to match nothing.
+# to hardening — the failure mode that still LOOKS like a classed row.
 for msg in \
   'bare ref — #4242 is read against the repo this body is MATERIALIZED into, so it points at the reader'"'"'s own tracker' \
-  'bare [[fs-gg-beta]] in a MIRRORED body — it resolves here and dangles in the repo ADR-0022 §6 mirrors this into' \
   'dangling [[fs-gg-nope]] — this repo does not publish it; qualify it as [[<owner>:fs-gg-nope]]' \
-  'stale prose-ok marker — nothing in this file writes a bare #4242; drop it' \
-  "'fs-gg-alpha' is published but has NO mirror verdict in template/skill-manifest/skill-manifest.json (no row, or a row with no \`mirrored\` field) — the gate cannot tell whether ADR-0022 §6 mirrors it"
+  'stale prose-ok marker — nothing in this file writes a bare #4242; drop it'
 do
   fixture
   sweep_findings <<ERR
@@ -1017,39 +1013,7 @@ run_render
 expect_eq "$(class_lines)" 'Class: defect' 'the REAL `dangling [[…]]` prose is hermetic, not a decayed link'
 expect_hasnt 'does not recognise' "$(body)" 'and it was recognised'
 
-case_start '§7b the REAL script: a real bare `[[ref]]` in a MIRRORED body derives defect'
-fixture
-use_real_checker
-skill fs-gg-beta <<'MD'
-# beta
-MD
-skill fs-gg-alpha <<'MD'
-# alpha
-See [[fs-gg-beta]].
-MD
-mirror fs-gg-alpha
-run_sweep
-run_render
-expect_eq "$(class_lines)" 'Class: defect' 'the REAL `bare [[…]] in a MIRRORED body` prose is hermetic'
-expect_hasnt 'does not recognise' "$(body)" 'and it was recognised'
-
-case_start '§7b the REAL script: this repo'"'"'s own § 0 finding derives defect'
-# The divergence from Rendering that a byte-port would have missed (#280): a published body with no
-# mirror verdict. It is f(tree) — the manifest and the skill dirs, no world — and it is WHOLE-TREE
-# even under `--changed`, so `gate` is red on it for every PR too. Its message opens with the skill's
-# own id rather than a fixed word, which is exactly why it needs the REAL prose and not a stub.
-fixture
-use_real_checker
-skill fs-gg-alpha <<'MD'
-# alpha
-MD
-unclassify fs-gg-alpha
-run_sweep
-run_render
-expect_eq "$(out_of reported)" 'true' 'the real script reported the unclassified body'
-expect_eq "$(class_lines)" 'Class: defect' 'an unclassified published skill is a gate regression, not decay'
-expect_hasnt 'does not recognise' "$(body)" \
-             'and the pattern really matches its prose — a mistyped one would fall through to UNKNOWN here'
+# Retired mirror-only checker classifications removed with FS.GG.Game#540.
 
 case_start '§7b the REAL script: a real MIXED tree is defect, not averaged down'
 fixture

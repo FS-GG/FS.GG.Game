@@ -6,14 +6,13 @@
 #
 # It proves the things the game-skills package must get right:
 #   1. DERIVED, NOT RESTATED — the staged set is exactly template/skill-manifest/skill-manifest.json's
-#      `mirrored: false` `scope: product` rows (ADR-0058); the packed manifest is byte-identical to the
-#      committed one; and a `mirrored: true` row carries NO bytes (delivered via Rendering's mirror,
-#      ADR-0022 §6 — not this package).
-#   2. PACKS — `dotnet pack` produces a nupkg carrying the manifest, every delivered SKILL.md, and the
+#      `scope: product` rows (ADR-0058), and the packed manifest is byte-identical to the committed one.
+#   2. NEW ROWS FLOW — a synthetic product row is staged without joining any hand-maintained set.
+#   3. PACKS — `dotnet pack` produces a nupkg carrying the manifest, every delivered SKILL.md, and the
 #      consumer handle (build/FS.GG.Game.Skills.props) + README.
-#   3. CONTENT-ADDRESSED — every packed SKILL.md's canonical digest matches its manifest sha256
+#   4. CONTENT-ADDRESSED — every packed SKILL.md's canonical digest matches its manifest sha256
 #      (the ADR-0014 record the SDD CLI verifies against at scaffold time).
-#   4. FAILS LOUD — a tampered byte is DETECTED by that digest check, never silently delivered.
+#   5. FAILS LOUD — a tampered byte is DETECTED by that digest check, never silently delivered.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,28 +35,19 @@ print(hashlib.sha256(raw).hexdigest())
 PY
 }
 
-# The delivered set the manifest declares: (id, sha256) for every `mirrored: false` `scope: product`
-# row, and the ids of every `mirrored: true` `scope: product` row (which must carry NO bytes here).
-# Parsed once, in python, from the ONE source.
+# The delivered set the manifest declares: (id, sha256) for every `scope: product` row.
+# Parsed once, in Python, from the one source.
 mapfile -t DELIVERED_ROWS < <(python3 - "$MANIFEST" <<'PY'
 import json, sys
 doc = json.load(open(sys.argv[1]))
 for s in doc.get("skills", []):
-    if s.get("scope") == "product" and s.get("mirrored") is False:
+    if s.get("scope") == "product":
         print(f"{s['id']}\t{s['sha256']}")
 PY
 )
-mapfile -t MIRRORED_IDS < <(python3 - "$MANIFEST" <<'PY'
-import json, sys
-doc = json.load(open(sys.argv[1]))
-for s in doc.get("skills", []):
-    if s.get("scope") == "product" and s.get("mirrored") is True:
-        print(s["id"])
-PY
-)
-[ "${#DELIVERED_ROWS[@]}" -gt 0 ] || fail "manifest declares no mirrored:false product rows — nothing to deliver"
+[ "${#DELIVERED_ROWS[@]}" -gt 0 ] || fail "manifest declares no product rows — nothing to deliver"
 
-echo "== 1. stage + derive parity (mirrored:false rows staged & content-addressed; mirrored:true carries no bytes) =="
+echo "== 1. stage + derive parity (all product rows staged and content-addressed) =="
 python3 "$HERE/stage-skills.py" "$WORK/stage" >/dev/null
 # The manifest is carried VERBATIM.
 diff -q "$MANIFEST" "$WORK/stage/skill-manifest.json" >/dev/null \
@@ -70,14 +60,34 @@ for row in "${DELIVERED_ROWS[@]}"; do
   got="$(digest "$f")"
   [ "$got" = "$want" ] || fail "skill '$id' staged sha256 $got != manifest $want"
 done
-# Every mirrored:true row: NOT staged (delivered via Rendering's mirror, not this package).
-for id in "${MIRRORED_IDS[@]}"; do
-  [ -n "$id" ] || continue
-  [ ! -e "$WORK/stage/skills/$id" ] || fail "mirrored skill '$id' was staged — it is delivered via Rendering's mirror, not here"
-done
-echo "   ${#DELIVERED_ROWS[@]} product skill(s) staged & content-addressed; ${#MIRRORED_IDS[@]} mirrored row(s) correctly withheld"
+echo "   ${#DELIVERED_ROWS[@]} product skill(s) staged & content-addressed"
 
-echo "== 2. pack + content assert =="
+echo "== 2. a newly added product row is staged without joining another set =="
+fixture="$WORK/new-row-repo"
+mkdir -p "$fixture/src/FS.GG.Game.Skills" "$fixture/template/skill-manifest" \
+         "$fixture/template/product-skills/fs-gg-new-row"
+cp "$HERE/stage-skills.py" "$fixture/src/FS.GG.Game.Skills/stage-skills.py"
+printf 'new row body\n' > "$fixture/template/product-skills/fs-gg-new-row/SKILL.md"
+new_sha="$(digest "$fixture/template/product-skills/fs-gg-new-row/SKILL.md")"
+python3 - "$fixture/template/skill-manifest/skill-manifest.json" "$new_sha" <<'PY'
+import json, sys
+doc = {"schemaVersion": 1, "skills": [{
+    "id": "fs-gg-new-row",
+    "scope": "product",
+    "sha256": sys.argv[2],
+    "resolvablePath": ".agents/skills/fs-gg-new-row/SKILL.md",
+    "materializes-when": "profile in [game]",
+    "supplied-by": "template/product-skills/fs-gg-new-row/",
+}]}
+with open(sys.argv[1], "w") as handle:
+    json.dump(doc, handle)
+PY
+python3 "$fixture/src/FS.GG.Game.Skills/stage-skills.py" "$fixture/stage" >/dev/null
+[ -f "$fixture/stage/skills/fs-gg-new-row/SKILL.md" ] \
+  || fail "a new product row was not staged from the manifest"
+echo "   synthetic product row flowed from manifest to staged bytes"
+
+echo "== 3. pack + content assert =="
 dotnet pack "$HERE/FS.GG.Game.Skills.csproj" -c Release -o "$WORK/out" >/dev/null
 nupkg="$(echo "$WORK"/out/FS.GG.Game.Skills.*.nupkg)"
 [ -f "$nupkg" ] || fail "no nupkg produced"
@@ -107,7 +117,7 @@ content_addressed_ok() {
   return 0
 }
 
-echo "== 3. content-addressed: every packed byte matches its manifest sha256 =="
+echo "== 4. content-addressed: every packed byte matches its manifest sha256 =="
 unzip -q "$nupkg" "game-skills/*" -d "$WORK/unpacked"
 # The packed manifest is byte-identical to the committed one.
 diff -q "$MANIFEST" "$WORK/unpacked/game-skills/skill-manifest.json" >/dev/null \
@@ -116,7 +126,7 @@ content_addressed_ok "$WORK/unpacked/game-skills" \
   || fail "a packed SKILL.md does not match its manifest sha256 (the ADR-0014 record)"
 echo "   every packed SKILL.md verifies against the manifest — the ADR-0014 record the CLI uses"
 
-echo "== 4. a tampered byte is REJECTED by that same verify (fail-loud) =="
+echo "== 5. a tampered byte is REJECTED by that same verify (fail-loud) =="
 cp -r "$WORK/unpacked/game-skills" "$WORK/tampered"
 first_id="${DELIVERED_ROWS[0]%%$'\t'*}"
 echo "CORRUPT" >> "$WORK/tampered/skills/$first_id/SKILL.md"     # bytes drift from the recorded sha256

@@ -399,13 +399,8 @@ jobs:
               # quotings, and `dangling link` vs `dangling [[…]]` is precisely the pair a looser match
               # would collapse — the two sit on OPPOSITE sides of the mapping above.
               #
-              # The § 0 finding opens with the skill's own id rather than a fixed word, so its pattern
-              # starts at the quote and pins the sentence that follows it. It is hermetic: it reads the
-              # producer manifest and the skill tree, nothing else.
               case $msg in
                 'bare [['*|'dangling [['*|'stale prose-ok marker'*|'bare ref '*)
-                  hermetic=$((hermetic + 1)) ;;
-                "'"*"' is published but has NO mirror verdict in "*)
                   hermetic=$((hermetic + 1)) ;;
                 'stale link '*|'dangling link '*|'unresolvable link '*|'stale closed-ok marker'*)
                   decay=$((decay + 1)) ;;
@@ -435,7 +430,7 @@ jobs:
             if [ "$hermetic" -gt 0 ] || [ "$unknown" -gt 0 ]; then
               class=defect
               if [ "$hermetic" -gt 0 ]; then
-                why="the findings above include $hermetic **hermetic** one(s) (\`[[ref]]\`, a bare \`#N\`, or a published skill with no mirror verdict). Those consult no world, so \`gate\` is red on them for every PR too: that is a gate regression on \`main\`, something broken now, and it raises the whole row."
+                why="the findings above include $hermetic **hermetic** one(s) (a \`[[ref]]\` or bare \`#N\`). Those consult no world, so \`gate\` is red on them for every PR too: that is a gate regression on \`main\`, something broken now, and it raises the whole row."
               else
                 why="this workflow does not recognise $unknown of the findings above, so it could not derive their severity and will not guess it downward. A subject you could not evaluate is never a subject that passed (\`FS-GG/.github#266\`); read them yourself before trusting this line."
               fi
@@ -468,7 +463,7 @@ jobs:
               echo "  it. Fix the reference."
               echo "- **stale marker** — an excuse that excuses nothing: the sentence it guarded was rewritten,"
               echo "  or the issue reopened. Drop it."
-              echo "- **\`[[ref]]\`, bare \`#N\`, or a skill with no mirror verdict** — these checks are *hermetic*:"
+              echo "- **\`[[ref]]\` or bare \`#N\`** — these checks are *hermetic*:"
               echo "  they do not depend on the world, so \`gate\` is red on them for every PR too. A finding of"
               echo "  this kind is a **gate regression on \`main\`**, not decay — it is more urgent than the rest"
               echo "  of this issue, not less."

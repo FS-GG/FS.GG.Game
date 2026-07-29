@@ -1,6 +1,6 @@
 name: release-skills
 
-# Publishes FS.GG.Game.Skills — FS.GG.Game's owner-authored `mirrored: false` product-skill bytes as one
+# Publishes FS.GG.Game.Skills — FS.GG.Game's owner-authored product-skill bytes as one
 # versioned artifact (ADR-0062 substrate / ADR-0063 owner-repo byte source / ADR-0014 content-addressed
 # verify; FS.GG.Game#449/#451) — to the org GitHub Packages feed and public nuget.org. This is a SEPARATE
 # release workflow, deliberately NOT folded into release.yml: FS.GG.Game.Skills carries its OWN version
@@ -10,7 +10,7 @@ name: release-skills
 #
 # WHY THIS PUBLISH IS LOAD-BEARING. Nothing consumes the game-skills bytes until they are on a feed. Once
 # published, FS.GG.SDD.Cli pins FS.GG.Game.Skills at a version, restores it at build time (online), and
-# materializes each `mirrored: false` product skill into a scaffold's skill roots at scaffold time
+# materializes each product skill into a scaffold's skill roots at scaffold time
 # (offline), verifying each against the manifest sha256 (ADR-0014). This publish unblocks the feed-side of
 # FS.GG.SDD#623 (ADR-0037 publish-before-flip: the SDD materializer cannot pin a delivered artifact until
 # this publish makes one exist).
@@ -119,7 +119,7 @@ jobs:
           target: src/FS.GG.Game.Skills/FS.GG.Game.Skills.csproj
 
       # THE PACKAGE IS NEVER PUBLISHED UNVERIFIED. verify-package.sh is the gate: it proves the packed set
-      # derives from template/skill-manifest/skill-manifest.json, packs every `mirrored: false` product
+      # derives from template/skill-manifest/skill-manifest.json, packs every product
       # member + the manifest, and fails loud on a byte that does not match its recorded sha256 (the
       # ADR-0014 record the SDD CLI verifies against at scaffold time). A publish that skipped it would ship
       # the package without the evidence it works.
