@@ -67,10 +67,17 @@ regression coverage, and run proportionate build/test/format gates. Poll inbox a
 
 ## 4. Route findings
 
-Fix in-scope causes now. For a distinct cause, dedupe over REST, file one issue with acceptance criteria
-and a narrow `Paths:` declaration, link dependencies only when authorship truly depends on landed work,
-then add it to the follow-up queue. Load [findings-and-filing](references/findings-and-filing.md) for
-the recipes and judgement boundaries.
+Fix in-scope causes now. For a distinct cause, **establish the root cause before you file** — a finding
+is where a defect *surfaced*, which is rarely where it *lives*, and filing the surface is how one defect
+gets seven numbers (#266). Then **dedupe over REST against that cause, not against the symptom**: reuse
+an existing issue that expresses the same cause and transplant your evidence onto it instead of opening
+a second row. File only when no row carries that cause. The issue states observed behavior, **the root
+cause** — or, where you could not establish one, says so explicitly and gives what you measured instead
+(#1858) — acceptance criteria, verification, and a narrow `Paths:` declaration. Link dependencies only
+when authorship truly depends on landed work, then add it to the follow-up queue.
+
+[findings-and-filing](references/findings-and-filing.md) carries the rest of this rule and is **binding,
+not elaboration** — load it for the dedupe reads and the judgement boundaries.
 
 ## 5. Review, merge, and obligations
 
