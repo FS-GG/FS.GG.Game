@@ -797,7 +797,12 @@ jobs:
     # first thing this job ever did was catch that, in its own definition.
     name: "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # 10, not 5, since #518 put an SDK install and a one-package restore into this job. MEASURED, not
+    # guessed: on run 30411586774 the whole job was 18s — `Set up .NET` ~0s (ubuntu-latest preinstalls
+    # the 10.0.302 global.json pins) and the restore 7s. So the headroom is not for today; it is for the
+    # day the image stops shipping this band and setup-dotnet has to download one. A timeout that trips
+    # on a slow morning is a red nobody's diff caused — the false accusation this job refuses.
+    timeout-minutes: 10
     env:
       # Pinned, and checksum-verified below. This binary reads every workflow in the repo and decides
       # whether they may merge; fetching whatever `latest` happens to be that morning would make the
@@ -953,9 +958,78 @@ jobs:
 
           exit "$rc"
 
+      # ...and the THIRD place this repo keeps shell: inside a COMPOSITE ACTION (the cold-restore
+      # action). Neither of the other two passes can see it — actionlint discovers
+      # `.github/workflows/*.yml` and nothing else (handed an action.yml explicitly it rejects it as a
+      # malformed workflow), and the scripts/ pass discovers shell by extension or shebang, which shell
+      # embedded in YAML has neither of. So the cold restore's ~20 lines of bash — the code that
+      # decides whether every other job in this file restores at all — would have merged unread,
+      # beneath two green lint steps. Verified, not assumed: an unquoted `$NUGET_PACKAGES` planted in
+      # the action passes both of them at exit 0.
+      #
+      # The subject, the counting, and the fail-closed reasoning live in the script, where a developer
+      # can run them (`SHELLCHECK=<pinned> scripts/lint-action-shell.sh`) and where the scripts/ pass
+      # below LINTS them — the same standard this job applies to every other line of shell in the repo,
+      # now applied to the linter that reads the actions. scripts/test-lint-action-shell.sh drives it.
+      #
+      # IT RUNS BEFORE THE RESTORE BELOW, DELIBERATELY, and for the reason `build-config-drift` states
+      # one job up: this pass is static, offline and sub-second, and a network failure in a restore it
+      # does not need must not be able to turn it into a step that never ran. #518 put an SDK install
+      # and a NuGet restore in this job for the scripts/ pass; this step predates that and does not
+      # depend on it, so it keeps the ordering that makes it independent of the feed.
+      #
+      # Same pinned shellcheck as every other pass in this job. No second download, no second version
+      # to keep in step: when the pin moves, all three halves of this job move with it.
+      - name: Lint the shell inside composite actions
+        env:
+          SHELLCHECK: ${{ runner.temp }}/shellcheck
+        run: |
+          set -euo pipefail
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
+          scripts/lint-action-shell.sh
+
+      # THE KIT'S OWN INVENTORY, BECAUSE THE STEP BELOW MUST NOT KEEP ONE BY HAND (#518).
+      #
+      # The shell pass withholds vendored coordination-kit shell from its subject. That exclusion used
+      # to be one hand-written line naming ONE path, and it went stale in the only direction nothing
+      # watched: FS-GG/.github#1696 added three more shell rows to the kit contract, FS.GG.Kit 0.15.0
+      # materialized them into this tree, and the exclusion still named 1 of 4 while `scripts/skill-view`
+      # and both `scripts/lib/*.sh` libraries were linted here as if this repo had written them.
+      #
+      # So the exclusion is DERIVED now, from the same three things the materialize itself reads: the
+      # pin (Directory.Packages.local.props), the receiver project (.config/kit/FS.GG.Kit.receiver.proj),
+      # and the package's own `kit/kit-manifest.tsv`, which lists every path the kit writes into a
+      # receiver. Resolving it needs the SDK, which is why this job — alone among the lint jobs — now
+      # installs one.
+      #
+      # THIS IS NOT ONE OF ADR-0006's RESTORES, and the distinction is worth stating where a reader
+      # will look for it. The gate's restores are LOCKED and COLD because they validate a committed
+      # dependency graph. This one resolves a single tooling package that has no lockfile by
+      # construction (`RestorePackagesWithLockFile=false` in the receiver project, which compiles
+      # nothing and is deliberately outside the solution), so there is no lock for it to validate and
+      # no warm-folder shortcut for it to take. `cache: false` for the same reason as every job above.
+      - name: Set up .NET (to resolve the pinned kit's own file manifest)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: "10.0.x"
+          cache: false
+
+      # A STEP OF ITS OWN, so a feed failure reds a step named for the feed. Folded into the lint step
+      # below, a nuget.org outage would surface as "Lint the repo's own shell" failing — an accusation
+      # pointed at the diff instead of at the network, which is exactly the misattribution this job's
+      # pinning exists to prevent. It moves the diagnosis, not the verdict: the REQUIRED context is the
+      # JOB name, so a feed failure still blocks the merge — the step name only tells the reader why.
+      #
+      # AND IT ADDS NO NEW EXPOSURE. `Build-config drift check (shared-build-config)` is required on
+      # this repo too and already restores THIS SAME project on every PR, so a nuget.org outage was
+      # already a red before this job asked the feed for anything.
+      - name: Restore the kit receiver project (pin → package → manifest)
+        run: dotnet restore .config/kit/FS.GG.Kit.receiver.proj
+
       # ...and now the shell that is NOT in a `run:` block.
       #
-      # The step above is the only shellcheck this repo has ever run, and it reads `run:` blocks. So
+      # `Lint every workflow` was the only shellcheck this repo had ever run, and it reads `run:`
+      # blocks. So
       # `scripts/` — several hundred lines of bash that CI itself depends on, including the two
       # harnesses that decide whether the skill-refs gates work at all — was never read by any linter.
       #
@@ -964,8 +1038,8 @@ jobs:
       # turned inside out — not a gate reporting green over an unread subject, but
       # a subject that believes it is being read.
       #
-      # Same pinned binary as the step above. No second download, and no second version to keep in
-      # step: when the pin moves, both halves of this job move with it. That is the property pinning
+      # Same pinned binary as `Lint every workflow`. No second download, and no second version to keep
+      # in step: when the pin moves, both halves of this job move with it. That is the property pinning
       # the tool bought, and this step is its second customer.
       - name: Lint the repo's own shell
         run: |
@@ -995,25 +1069,148 @@ jobs:
             } | sort -zu
           )
 
-          # VENDORED, so not ours to lint. The coordination kit is SYNCED from FS-GG/.github (`chore:
-          # sync coordination kit from FS-GG/.github@…`). Linting it here would report
-          # findings this repo cannot fix — the next sync reverts any local edit — and it would do it
-          # LOUDLY and WRONGLY: four of its SC1010s are false positives (a `local` variable named
-          # `done`, and `banner done …` as an argument; shellcheck sees the keyword, the shell does
-          # not). A gate that goes red on day one over a file nobody here owns is the false-accusation
-          # shape this repo refuses. Its four real-but-cosmetic
-          # SC2155s were routed UPSTREAM instead, where they can actually be fixed.
-          kit=(scripts/fsgg-coord)
+          # VENDORED, so not ours to lint. The coordination kit is MATERIALIZED into this tree from the
+          # pinned FS.GG.Kit package (ADR-0062; `.config/kit/FS.GG.Kit.receiver.proj`). Linting it here
+          # would report findings this repo cannot fix — the next materialize reverts any local edit,
+          # and `kit / coordination-kit` reds on it until then. A gate that goes red over a file nobody
+          # here owns is the false-accusation shape this repo refuses; real kit findings are routed
+          # UPSTREAM, where they can actually be fixed.
+          #
+          # THE EXAMPLE IS MEASURED AGAINST THE PIN THIS TREE ACTUALLY HOLDS, and it is not the example
+          # this comment used to give. It named "four SC1010 false positives (a `local` named `done`,
+          # `banner done …` as an argument)" and "four real-but-cosmetic SC2155s" — true of the ~7,000-
+          # line bash `fsgg-coord`, and false since ADR-0040 Phase D replaced it with a resolver: at
+          # FS.GG.Kit 0.18.0 the pinned shellcheck reports ZERO of either over that file. A comment
+          # asserting a property the code does not have is a defect in its own right (.github#1059), and
+          # this one had already survived one edit of its own sentence.
+          #
+          # What linting the kit costs TODAY is sharper than what it used to cost. `scripts/fsgg-coord`
+          # sources `scripts/fsgg-coord-guards.sh`, which the kit does not materialize into a receiver
+          # (it is not a `kit:` row), so shellcheck emits `[SC1091] Not following: …` — and the SC1091
+          # guard at the bottom of this step turns that into a hard RED with a remedy this repo cannot
+          # perform. The other three kit files are clean. So the exclusion is not a courtesy: without
+          # it this gate is red on a file nobody here can fix.
+          #
+          # DERIVED, NOT LISTED — the same rule the discovery above already obeys, now applied to the
+          # other half of the subject (#518). This block was one line, `kit=(scripts/fsgg-coord)`, with
+          # a guard beneath it that was careful about the wrong half of the problem: it checked that
+          # every NAMED path still exists, and nothing checked that every VENDORED path is named. The
+          # list could only rot in the direction nothing watched, and it did — FS-GG/.github#1696 added
+          # `client/skill-view`, `config/args.sh` and `config/roots.sh` to the kit contract, FS.GG.Kit
+          # 0.15.0 materialized all three into this tree, the guard passed because `scripts/fsgg-coord`
+          # was still there, and three kit-owned files were linted here as this repo's own.
+          #
+          # `kit/kit-manifest.tsv` is the kit's own answer to "which paths do I write into a receiver?"
+          # — the same file `MaterializeKit` reads to do the writing and `coordination-sync --check
+          # --against-pin` reads to grade the result. Rows are TAB-separated:
+          #
+          #     kind <TAB> package-relative source <TAB> receiver destination <TAB> sha256 <TAB> exec
+          #
+          # so column 3 IS the inventory, and it moves with the pin instead of with somebody's memory.
+          #
+          # TWO properties, because column 3 means two different things (see the kind guard below), and
+          # an explicit `if` on each rather than a bare assignment: `set -e` would kill the step with
+          # msbuild's own exit code and none of the context below, which is the one failure this step
+          # would report without saying what it was doing.
+          if ! kit_dir="$(dotnet msbuild .config/kit/FS.GG.Kit.receiver.proj \
+                            -getProperty:FsggKitDir -nologo | tr -d '\r')"; then
+            echo "::error::could not resolve <FsggKitDir> from the kit receiver project. The pin did" \
+                 "not restore, so the vendored set is unknown and this step cannot say which shell is" \
+                 "this repo's."
+            exit 1
+          fi
+          if ! skill_roots="$(dotnet msbuild .config/kit/FS.GG.Kit.receiver.proj \
+                                -getProperty:FsggKitSkillRoots -nologo | tr -d '\r')"; then
+            echo "::error::could not resolve <FsggKitSkillRoots> from the kit receiver project." \
+                 "Skill-row destinations are relative to those roots and cannot be placed without them."
+            exit 1
+          fi
+          manifest="$kit_dir/kit-manifest.tsv"
 
-          # An exclusion that names nothing excludes nothing — silently. If a future sync renames or
-          # moves the kit, this list keeps "excluding" a path that is gone while the kit's real file
-          # sails into the subject and reds the gate with the false positives above. So the exclusion
-          # is checked as itself, exactly like the pinned binary and the file count are.
-          for k in "${kit[@]}"; do
+          # FAIL CLOSED. Every way this derivation can come up empty is a way to withdraw NOTHING and
+          # lint the kit, or to withdraw EVERYTHING and lint nothing — and both are green by default.
+          # An unresolvable pin, a package without its manifest, a manifest whose shape changed: none
+          # of them are this repo's diff, and none of them get to be a pass either.
+          if [ ! -f "$manifest" ]; then
+            echo "::error::could not read the pinned kit's file manifest at '$manifest'. Without it the" \
+                 "vendored set is unknown, so this step cannot say which shell is this repo's. That is" \
+                 "a RED, not a shrug: the fallback is linting the kit as if we wrote it."
+            exit 1
+          fi
+
+          # THE KINDS ARE CHECKED AS THEMSELVES, for the same reason the paths no longer are: a kind
+          # this step has never seen is a kind whose destinations it is silently mis-classifying.
+          # `skill` destinations are relative to a SKILL ROOT (`pnext-item/SKILL.md`) and are placed
+          # below; every other kind's destination is repo-root-relative as written. A fifth kind would
+          # be read as repo-root-relative by the awk below without anyone deciding that it should be.
+          # (`NF` skips blank rows, which carry no kind and are not a shape change.)
+          unknown_kinds="$(awk -F'\t' 'NF { print $1 }' "$manifest" | sort -u \
+                             | grep -vxE 'skill|client|config|build-config' || true)"
+          if [ -n "$unknown_kinds" ]; then
+            echo "::error::the kit manifest carries kind(s) this step does not know: $unknown_kinds." \
+                 "Destination paths are interpreted per kind here, so decide what the new one means" \
+                 "before it is silently treated as a repo-root path."
+            exit 1
+          fi
+
+          # EVERY kind is placed, and none is dropped — because dropping one is exactly the defect this
+          # item is about, one kind over (#518 review). `skill` rows were nearly left out on the
+          # grounds that their destinations are not repo paths; they are, once joined to the roots the
+          # receiver project declares, and a kit skill that ever ships a `.sh` alongside its SKILL.md
+          # would otherwise be discovered here and linted as this repo's own — the same "vendored but
+          # not named" shape, arrived at by a different route. Driven, not argued: a planted
+          # `.claude/skills/pnext-item/helper.sh` is withdrawn with this join and was linted without it.
+          #
+          # <FsggKitViewSkillRoots> needs no join: a view root is generated and git-ignored, so
+          # `git ls-files` never discovers anything under it.
+          mapfile -t kit_root_rows < <(awk -F'\t' 'NF >= 3 && $1 != "skill" { print $3 }' "$manifest")
+          mapfile -t kit < <(
+            {
+              printf '%s\n' "${kit_root_rows[@]}"
+              for root in ${skill_roots//;/ }; do
+                awk -F'\t' -v r="$root" 'NF >= 3 && $1 == "skill" { print r "/" $3 }' "$manifest"
+              done
+            } | sort -u
+          )
+
+          # THE REPO-ROOT HALF IS CHECKED SEPARATELY, and it is checked because joining the skill rows
+          # in above would otherwise have WEAKENED this guard — the direct heir of "an exclusion that
+          # names nothing excludes nothing — silently". A manifest with skill rows and no others still
+          # makes `${#kit[@]}` non-zero while every shell the kit ships goes back into the subject, and
+          # a package in that state is truncated, not a kit that stopped shipping shell. Measured
+          # before this guard existed: the step still reddened, but through the SC1091 guard at the
+          # bottom, accusing `scripts/fsgg-coord` of a defect this repo cannot fix — a red pointed at
+          # the wrong thing is the shape this whole exclusion exists to prevent.
+          if [ "${#kit_root_rows[@]}" -eq 0 ]; then
+            echo "::error::the kit manifest named no repo-root destinations — no client, config or" \
+                 "build-config rows at all. The package is truncated or its shape changed; the kit's" \
+                 "own shell is about to be linted as if this repo wrote it."
+            exit 1
+          fi
+
+          # ...and the rows whose destination this repo is OBLIGED to hold must actually be on disk.
+          # This is the old guard's intent, kept and inverted: it used to ask "is this remembered
+          # string still a file?", and it now asks "did everything the pin says the kit writes actually
+          # arrive?". A `client` or `config` row with no file behind it means the materialize is behind
+          # the pin in THIS branch — the state a kit-bump PR is in before `kit-materialize` has run.
+          #
+          # THE SELECTION IS BY KIND, NOT BY SHELL-NESS: `client` and `config` are the two kinds that
+          # carry shell today, and nothing guarantees a future row of either is shell. It is a
+          # deliberate superset, and asserting existence over a non-shell row costs nothing.
+          #
+          # `skill` rows are excluded because one of this repo's two runtime roots is a generated,
+          # git-ignored view, so "absent" is the normal state there. `build-config` rows are excluded
+          # because materializing them is a per-receiver opt-in (`FsggKitMaterializeBuildConfig`); a
+          # receiver that does not take them is not in drift, and this step is not the place that
+          # grades that. `kit / coordination-kit` owns both.
+          mapfile -t kit_obliged_rows < <(
+            awk -F'\t' 'NF >= 3 && ($1 == "client" || $1 == "config") { print $3 }' "$manifest"
+          )
+          for k in "${kit_obliged_rows[@]}"; do
             if [ ! -f "$k" ]; then
-              echo "::error::the excluded path '$k' is not in the tree. The coordination kit moved," \
-                   "so this exclusion now excludes NOTHING and the kit is about to be linted as if" \
-                   "this repo wrote it. Re-derive the exclusion; do not delete this check."
+              echo "::error::the kit's pin names '$k', and it is not in the tree. The materialize is" \
+                   "behind the pin on this branch — re-run kit-materialize — and until it catches up" \
+                   "the vendored set derived here is not the set of files this repo actually holds."
               exit 1
             fi
           done
@@ -1029,11 +1226,14 @@ jobs:
           done
 
           # The vendored count is the number of files actually WITHDRAWN from the discovered set, not
-          # the length of the exclusion list. They differ the day the kit stops looking like shell (a
-          # rewrite, a compiled binary): the path still exists, so the guard above passes, but it was
-          # never discovered and so was never excluded from anything. Printing `${#kit[@]}` there would
-          # produce an accounting line that does not add up — in a step whose entire claim is that its
-          # subject count can be trusted.
+          # the length of the exclusion list — and deriving that list made the gap between them WIDER,
+          # not narrower. `${#kit[@]}` is now EVERY path the kit writes into this tree: 29 of them at
+          # FS.GG.Kit 0.18.0, of which 4 are shell. The other 25 — 23 skill files, 2 `build-config`
+          # .props — were never in `discovered` to be withdrawn from anything. It would also survive
+          # the day the kit stops looking like shell (a rewrite, a compiled binary), when the paths
+          # still exist and nothing is withdrawn at all. Printing `${#kit[@]}` there would produce an
+          # accounting line that does not add up — in a step whose entire claim is that its subject
+          # count can be trusted.
           echo "shell in tree: ${#discovered[@]} · vendored (not linted): $excluded_n · linted: ${#subject[@]}"
 
           # Run over zero files, shellcheck exits 0 — and a green over an empty subject is precisely
@@ -1121,30 +1321,6 @@ jobs:
             exit 1
           fi
           echo "shellcheck: clean at -S warning across ${#subject[@]} file(s)."
-
-      # ...and now the THIRD place this repo keeps shell: inside a COMPOSITE ACTION (the cold-restore
-      # action). Neither step above can see it — actionlint discovers `.github/workflows/*.yml` and
-      # nothing else (handed an action.yml explicitly it rejects it as a malformed workflow), and the
-      # scripts/ pass discovers shell by extension or shebang, which shell embedded in YAML has
-      # neither of. So the cold restore's ~20 lines of bash — the code that decides whether every
-      # other job in this file restores at all — would have merged unread, beneath two green lint
-      # steps. Verified, not assumed: an unquoted `$NUGET_PACKAGES` planted in the action passes both
-      # of them at exit 0.
-      #
-      # The subject, the counting, and the fail-closed reasoning live in the script, where a developer
-      # can run them (`SHELLCHECK=<pinned> scripts/lint-action-shell.sh`) and where the step above
-      # LINTS them — the same standard this job applies to every other line of shell in the repo, now
-      # applied to the linter that reads the actions. scripts/test-lint-action-shell.sh drives it.
-      #
-      # Same pinned shellcheck as both steps above. No second download, no second version to keep in
-      # step: when the pin moves, all three halves of this job move with it.
-      - name: Lint the shell inside composite actions
-        env:
-          SHELLCHECK: ${{ runner.temp }}/shellcheck
-        run: |
-          set -euo pipefail
-          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y -qq python3-yaml
-          scripts/lint-action-shell.sh
 
   # Tests for the composite-action linter in workflow-lint above. It is the only thing standing
   # between a composite action's shell and an unread merge, and its dangerous failure is not going red
