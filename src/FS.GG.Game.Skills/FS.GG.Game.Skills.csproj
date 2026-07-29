@@ -1,11 +1,11 @@
 <!--
-  FS.GG.Game.Skills — FS.GG.Game's OWNER-authored `mirrored: false` PRODUCT skill bytes as ONE versioned
+  FS.GG.Game.Skills — FS.GG.Game's OWNER-authored PRODUCT skill bytes as ONE versioned
   package (ADR-0062 substrate / ADR-0063 owner-repo byte source / ADR-0014 content-addressed verify).
   FS.GG.Game#449, closing the byte-SOURCE gap under FS.GG.SDD#622 / FS-GG/.github#1308.
 
   WHAT THIS DELIVERS. FS.GG.Game owns a `scope: product` skill class whose bytes live at
-  template/product-skills/<id>/SKILL.md. The `mirrored: false` subset (ADR-0022 §6: no FS.GG.Rendering
-  mirror) has no channel that carries it to a scaffold. This package IS that channel: it publishes those
+  template/product-skills/<id>/SKILL.md. Rendering's retired second-copy channel no longer carries any
+  of them. This package is the sole delivery channel: it publishes all product
   bytes + template/skill-manifest/skill-manifest.json as a versioned artifact the SDD CLI pins, restores
   at build time (online), and materializes into a scaffold's skill roots at scaffold time (offline), with
   the ADR-0014 content-addressed sha256 as the integrity guarantee.
@@ -24,7 +24,7 @@
 
   DERIVED, NOT RESTATED (ADR-0058). This project packs no committed list of skills. stage-skills.py reads
   template/skill-manifest/skill-manifest.json — the ONE authored source, emitted by
-  scripts/generate-skill-manifest.fsx — and stages exactly its `mirrored: false` `scope: product` rows at
+  scripts/generate-skill-manifest.fsx — and stages exactly its `scope: product` rows at
   pack time. A skill added/retired in the generator needs no edit here.
 
   IDENTITY IS FOREVER (ADR-0003): PackageId FS.GG.Game.Skills is the product identity — never renamed in
@@ -63,10 +63,12 @@
          0.4.0 (minor/additive, FS.GG.Game#505): four packaged product skills gain the expected-workload
          and performance guidance merged in #488; the content-addressed manifest advances with them.
          0.5.0 (minor/additive, FS.GG.Game#507): fs-gg-playtest distinguishes simulation proofs from
-         runner-issued, critic-reviewed production journeys. -->
-    <Version>0.5.0</Version>
+         runner-issued, critic-reviewed production journeys.
+         0.6.0 (minor delivery-contract simplification, FS.GG.Game#540): retire the mirror
+         classification and package every owner-authored scope:product row. -->
+    <Version>0.6.0</Version>
 
-    <Description>FS.GG.Game's owner-authored mirrored:false product skill bytes (e.g. fs-gg-playtest, fs-gg-ai) as one versioned artifact, with template/skill-manifest/skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the skills into a scaffold's skill roots at scaffold time (ADR-0062, ADR-0063; ADR-0014 verify).</Description>
+    <Description>FS.GG.Game's owner-authored product skill bytes (e.g. fs-gg-playtest, fs-gg-ai) as one versioned artifact, with template/skill-manifest/skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the skills into a scaffold's skill roots at scaffold time (ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <PackageTags>fsgg;game;skills;product;scaffold;dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/FS-GG/FS.GG.Game/tree/main/src/FS.GG.Game.Skills</PackageProjectUrl>

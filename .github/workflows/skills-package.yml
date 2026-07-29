@@ -1,6 +1,6 @@
 # FS.GG.Game.Skills gate (ADR-0062, ADR-0063, ADR-0014; FS.GG.Game#449/#451). Packs the product-skills
 # package and proves it derives from template/skill-manifest/skill-manifest.json, packs every
-# `mirrored: false` `scope: product` member + the manifest, content-addresses each SKILL.md against its
+# `scope: product` member + the manifest, content-addresses each SKILL.md against its
 # recorded sha256, and fails LOUD on a byte that does not match. The logic lives in
 # src/FS.GG.Game.Skills/verify-package.sh — nothing executes a workflow, so this gate CALLS the script
 # rather than hand-rolling the checks in YAML (#724). Mirrors .github's drivers-package.yml, one repo over.

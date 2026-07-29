@@ -5,7 +5,6 @@
       "id": "fs-gg-ai",
       "scope": "product",
       "sha256": "612e642ed57a2ea6857d68236c91219698674e1467a09d22bd00ae0e3abf6098",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-ai/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-ai/"
@@ -14,7 +13,6 @@
       "id": "fs-gg-audio",
       "scope": "product",
       "sha256": "e9fff88a3be86c2d95829357ffc180e3c53c18f2872b4f84e792de5a24f73bb7",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-audio/SKILL.md",
       "materializes-when": "profile in [app, sample-pack, game]",
       "supplied-by": "template/product-skills/fs-gg-audio/"
@@ -23,7 +21,6 @@
       "id": "fs-gg-ballistics",
       "scope": "product",
       "sha256": "01620e43423d429c1332de30e3d69358c2bf5e2f8fa4fb92d8c7d67ea3de2f77",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-ballistics/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-ballistics/"
@@ -32,7 +29,6 @@
       "id": "fs-gg-collision",
       "scope": "product",
       "sha256": "8bd79af6dfe1a0f8abbc57cf6d0a3a81bb5a0bbe6aa3e6f36f82a2e770e9b57f",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-collision/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-collision/"
@@ -41,7 +37,6 @@
       "id": "fs-gg-effects",
       "scope": "product",
       "sha256": "85816888a88eb7f073ea02cfe3ff3be2d075eae8f77356b2772de20a6b113d87",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-effects/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-effects/"
@@ -50,7 +45,6 @@
       "id": "fs-gg-game-core",
       "scope": "product",
       "sha256": "de45c8fcfb5510d6afa5ef584516b4938011a8207844b7eb81112119d0d02e45",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-game-core/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-game-core/"
@@ -59,7 +53,6 @@
       "id": "fs-gg-grids",
       "scope": "product",
       "sha256": "bda8b1bde799114506d63f98f6ecb351e13782517f3c054476d63aee5a6cea85",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-grids/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-grids/"
@@ -68,7 +61,6 @@
       "id": "fs-gg-line-drawing",
       "scope": "product",
       "sha256": "822a6c4241e92405236fdd38d6a7532e7d49f76f3f933d376c141e5816d58882",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-line-drawing/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-line-drawing/"
@@ -77,7 +69,6 @@
       "id": "fs-gg-mapcraft",
       "scope": "product",
       "sha256": "73725ff9b9e8958d053842a895777704ac74092a28a600836495d12512fdd049",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-mapcraft/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-mapcraft/"
@@ -86,7 +77,6 @@
       "id": "fs-gg-model-swap",
       "scope": "product",
       "sha256": "720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-model-swap/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-model-swap/"
@@ -95,7 +85,6 @@
       "id": "fs-gg-persistence",
       "scope": "product",
       "sha256": "9461822e5c282f0cac37aa0a88720fbb910319a6571d74bbcb1119eeb48530fb",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-persistence/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-persistence/"
@@ -104,7 +93,6 @@
       "id": "fs-gg-physics",
       "scope": "product",
       "sha256": "cabeed0641815e23776045a57d923d79f52fdc5ba51a2377d26efe97f9581724",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-physics/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-physics/"
@@ -113,7 +101,6 @@
       "id": "fs-gg-playtest",
       "scope": "product",
       "sha256": "f070f0719dde93b55d1a41ea8aa881b90e41cd20a20e558771d87ef3fe28f642",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-playtest/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-playtest/"
@@ -122,7 +109,6 @@
       "id": "fs-gg-visibility",
       "scope": "product",
       "sha256": "bea49973f4cd5c9fb002ab8ff3eb90e38cf144ddc37c5b4bf7bf1d780e442766",
-      "mirrored": false,
       "resolvablePath": ".agents/skills/fs-gg-visibility/SKILL.md",
       "materializes-when": "profile in [game, sample-pack]",
       "supplied-by": "template/product-skills/fs-gg-visibility/"

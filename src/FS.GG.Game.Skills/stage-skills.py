@@ -1,30 +1,26 @@
 #!/usr/bin/env python3
-"""stage-skills.py — stage FS.GG.Game's owner-authored `mirrored: false` PRODUCT skill bytes into a
+"""stage-skills.py — stage FS.GG.Game's owner-authored PRODUCT skill bytes into a
 directory the package packs from (ADR-0062 / ADR-0063 / ADR-0014; FS.GG.Game#449, closing the
 byte-SOURCE gap under FS.GG.SDD#622 / FS-GG/.github#1308).
 
 WHAT THIS IS. FS.GG.Game owns a `scope: product` skill class (`owner: fs-gg-game`) whose bytes live at
-`template/product-skills/<id>/SKILL.md`. Those rows split two ways (`mirrored`, in the manifest):
-
-  mirrored: true    reaches a scaffold via FS.GG.Rendering's frozen `--profile game` mirror — NOT this
-                    package's job (ADR-0022 §6). Carried in the manifest, delivered nowhere HERE.
-  mirrored: false   has NO mirror. These are the bytes this package publishes, content-addressed, so
-                    FS.GG.SDD#623's scaffold-time materializer can pin and verify them.
+`template/product-skills/<id>/SKILL.md`. Rendering's second copies and their classification are
+retired (FS.GG.Game#540 / FS-GG/.github#1862), so this package publishes every product row,
+content-addressed, for FS.GG.SDD#623's scaffold-time materializer to pin and verify.
 
 This mirrors `.github`'s `src/FS.GG.Drivers/` substrate (ADR-0063: "reuse ADR-0062's substrate rather
-than invent a second one"), one repo over: the delivered subclass here is `mirrored: false` rather than
-`scope: driver`, and the withheld-but-listed subclass is `mirrored: true` rather than `scope: operator`
-(ADR-0057). A `mirrored: false` product row added or retired in the manifest needs NO edit here.
+than invent a second one"), one repo over. A product row added or retired in the manifest needs no
+edit here.
 
 DERIVED, NOT RESTATED (ADR-0058). The delivered set lives in exactly ONE authored place —
 `template/skill-manifest/skill-manifest.json`, emitted by `scripts/generate-skill-manifest.fsx` from the
-authored SKILL.md bodies. This stager reads that manifest and stages exactly its `mirrored: false`
-`scope: product` rows; it restates no list of skill names.
+authored SKILL.md bodies. This stager reads that manifest and stages exactly its `scope: product`
+rows; it restates no list of skill names.
 
 WHAT IT STAGES, under <out-dir> (the package packs it under `game-skills/`):
 
   skill-manifest.json                 the manifest VERBATIM — the delivered set's authority + sha256s
-  skills/<id>/SKILL.md                one per `mirrored: false` `scope: product` row (id = the row's id)
+  skills/<id>/SKILL.md                one per `scope: product` row (id = the row's id)
 
 INTEGRITY AT STAGE TIME. Each staged SKILL.md's canonical digest (BOM-stripped body sha256 — byte-parity
 with generate-skill-manifest.fsx's `Encoding.UTF8.GetBytes(File.ReadAllText …)`, the exact digest the
@@ -63,10 +59,8 @@ def canonical_digest(raw: bytes) -> str:
 
 
 def is_delivered(row: dict) -> bool:
-    """The delivered subclass: an owner:fs-gg-game product row with NO mirror (ADR-0022 §6). A
-    `mirrored: true` row is carried in the manifest but delivered NOWHERE here — it reaches a scaffold
-    through FS.GG.Rendering's mirror instead."""
-    return row.get("scope") == "product" and row.get("mirrored") is False
+    """The delivered class: every owner-authored product row."""
+    return row.get("scope") == "product"
 
 
 def main(argv: list) -> int:
@@ -101,7 +95,7 @@ def main(argv: list) -> int:
     staged = 0
     for row in skills:
         if not is_delivered(row):
-            continue  # mirrored:true (delivered via Rendering's mirror) or any non-product row.
+            continue  # Any non-product row belongs to its scope-specific delivery channel.
         skill_id = row.get("id")
         supplied_by = row.get("supplied-by")
         want_sha = row.get("sha256")
@@ -127,7 +121,7 @@ def main(argv: list) -> int:
         staged += 1
 
     if staged == 0:
-        die("no mirrored:false scope:product rows in the manifest — nothing to deliver "
+        die("no scope:product rows in the manifest — nothing to deliver "
             "(a truncated/empty manifest?).")
 
     sys.stdout.write(f"stage-skills: staged {staged} product skill(s) + the manifest into {out}\n")

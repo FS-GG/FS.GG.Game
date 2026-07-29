@@ -1,11 +1,11 @@
 # FS.GG.Game.Skills
 
-FS.GG.Game's owner-authored **`mirrored: false` product** skill bytes (`owner: fs-gg-game`) as one
+FS.GG.Game's owner-authored **product** skill bytes (`owner: fs-gg-game`) as one
 versioned package.
 
 FS.GG.Game owns a `scope: product` skill class whose bytes live at
-`template/product-skills/<id>/SKILL.md`. The `mirrored: false` subset has **no FS.GG.Rendering mirror**
-(ADR-0022 §6), so nothing carries it to a scaffold. This package is that channel.
+`template/product-skills/<id>/SKILL.md`. Rendering's ADR-0022 §6 second copies are retired, so this
+package is the sole channel that carries every product row to a scaffold.
 
 ## Why a package (and why a sibling, not `.github`'s FS.GG.Drivers)
 
@@ -33,21 +33,19 @@ gap under FS.GG.SDD#622 / FS-GG/.github#1308).
 
 ```
 game-skills/skill-manifest.json        the delivered set + per-skill sha256 (the ADR-0014 record)
-game-skills/skills/<id>/SKILL.md        the bytes for each mirrored:false product row
+game-skills/skills/<id>/SKILL.md        the bytes for each product row
 build/FS.GG.Game.Skills.props          a consumer handle: $(FsggGameSkillsContentDir) → the content root
 ```
 
-Only `mirrored: false` `scope: product` rows carry bytes. A `mirrored: true` row (e.g. `fs-gg-audio`,
-`fs-gg-game-core`) is listed in the manifest (the generator's single output) but its bytes are
-deliberately **not** delivered here — it reaches a scaffold through FS.GG.Rendering's frozen
-`--profile game` mirror (ADR-0022 §6).
+Every `scope: product` row carries bytes. The manifest has no mirror classification: each body is
+authored here and delivered from this package.
 
 ## Consuming it
 
 There is **no consumer materialize target** in this package, by design: the materialize is the SDD CLI's,
 at scaffold time. `build/FS.GG.Game.Skills.props` exposes `$(FsggGameSkillsContentDir)` so the CLI's
-build can locate the packed bytes; the CLI reads `skill-manifest.json`, and for each `mirrored: false`
-product row whose `materializes-when` holds, lays `skills/<id>/SKILL.md` into the scaffold's skill roots
+build can locate the packed bytes; the CLI reads `skill-manifest.json`, and for each product row whose
+`materializes-when` holds, lays `skills/<id>/SKILL.md` into the scaffold's skill roots
 and verifies it against the recorded `sha256`. See ADR-0063 for the materializer design (FS.GG.SDD#623).
 
 ## Deriving, not restating
@@ -55,6 +53,6 @@ and verifies it against the recorded `sha256`. See ADR-0063 for the materializer
 The delivered set lives in exactly one authored place —
 `template/skill-manifest/skill-manifest.json`, emitted by `scripts/generate-skill-manifest.fsx` from the
 authored `SKILL.md` bodies (ADR-0058). `stage-skills.py` reads that manifest at pack time and stages
-exactly its `mirrored: false` `scope: product` rows; a skill added or retired needs no edit to this
+exactly its `scope: product` rows; a skill added or retired needs no edit to this
 package. `verify-package.sh` proves the packed set derives from the manifest, packs every delivered
 member, and fails loud on a byte that does not match its recorded `sha256`.
