@@ -36,9 +36,21 @@ git rev-list --count "$SHARED_HEAD..origin/main" -- \
 
 Zero: current, carry on. Non-zero: the engine you are about to run is not the code `main` says it is.
 Bring it current — `git -C "$SHARED" merge --ff-only origin/main`, then
-`dotnet build "$SHARED/src/FS.GG.Coord.Cli" -c Release`. **If you cannot touch the shared checkout**,
-say so to whoever dispatched you and stop *before* spending the lease on writes the guard will refuse —
-the repair belongs to whoever owns that checkout, and you must never assume it was done. Read
+`dotnet build "$SHARED/src/FS.GG.Coord.Cli" -c Release`.
+
+**If your host refuses `git -C "$SHARED" …` — and some do — you are not out of moves, and the printed
+remedy will not tell you this.** Build the engine in **your own** worktree, which you may touch:
+
+```bash
+git rebase origin/main            # your tree must BE current, or you have only moved the staleness
+dotnet build src/FS.GG.Coord.Cli -c Release
+```
+
+`scripts/fsgg-coord` prefers a source build under **your** toplevel (tier 2a) over the shared
+checkout's (tier 2b), and the guard measures whichever tree it resolved — so the engine that runs is
+current *and* owned by a checkout you control, and the refusal lifts. Only if that is unavailable too:
+say so to whoever dispatched you and stop *before* spending the lease on writes the guard will refuse.
+Never assume someone else did the repair. Read
 [engine currency](references/deep-detail.md#engine-currency) before
 running any of it — every clause above has a measured reason, including why the check needs no `-C`
 and why the repair is not `pull --ff-only`.
