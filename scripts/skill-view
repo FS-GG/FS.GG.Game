@@ -35,6 +35,8 @@
 #   skill-view generate  produce each runtime's skill root as a VIEW of ONE source directory.
 #   skill-view check     assert the skills that source declares are VISIBLE at each runtime's
 #                        expected path — and FAIL LOUDLY when they are not.
+#   skill-view roots     report the resolved roots and their filesystem classes, without requiring
+#                        an expected skill source.
 #   skill-view selftest  demonstrate that every lane of `check` CAN FIRE, over fixture trees.
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -167,6 +169,7 @@
 #                       [--roots "<r1> <r2> ..."] [--mode auto|link|copy]
 #   skill-view check    (--source <dir> | --manifest <file.json>) [--tree <dir>] [--roots "<r1> ..."]
 #                       [--receiver-proj <file>] [--expect-roots "<r1> ..."] [--absent-ok "<why>"]
+#   skill-view roots    [--tree <dir>] [--roots "<r1> ..."]
 #   skill-view selftest [--tree <dir>]
 #
 # Exit: 0 = every declared skill is visible at every configured root
@@ -307,6 +310,16 @@ classify_root() {
     echo "not-a-directory"; return
   fi
   echo "absent"
+}
+
+# do_roots — expose classify_root to callers that must judge the roots before a readable source
+# exists.  Keep this deliberately source-free: the hook's subject can itself be the source.
+do_roots() {
+  local root cls
+  for root in $ROOTS; do
+    cls="$(classify_root "$TREE_ABS/$root")"
+    printf '%s\t%s\n' "$root" "$cls"
+  done
 }
 
 # looks_like_link_body <file> — is this regular file the CHECKED-OUT BODY of a committed symlink?
@@ -976,10 +989,10 @@ do_selftest() {
 # ---------------------------------------------------------------------------------------------
 CMD="${1:-}"
 case "$CMD" in
-  generate|check|selftest) shift ;;
+  generate|check|roots|selftest) shift ;;
   -h|--help) usage; exit 0 ;;
-  "") usage >&2; die "no subcommand (expected 'generate', 'check' or 'selftest')." ;;
-  *) usage >&2; die "unknown subcommand: $CMD (expected 'generate', 'check' or 'selftest')." ;;
+  "") usage >&2; die "no subcommand (expected 'generate', 'check', 'roots' or 'selftest')." ;;
+  *) usage >&2; die "unknown subcommand: $CMD (expected 'generate', 'check', 'roots' or 'selftest')." ;;
 esac
 
 while [ $# -gt 0 ]; do
@@ -1039,4 +1052,5 @@ fi
 case "$CMD" in
   generate) do_generate ;;
   check)    do_check ;;
+  roots)    do_roots ;;
 esac
