@@ -6,6 +6,12 @@ name: governance
 # merge — the real merge gate stays `gate.yml` (locked restore + build + test + surface drift).
 # `fsgg-governance route --mode gate` reads the .fsgg/ overlay (light profile) and prints an
 # advisory verdict; `continue-on-error` guarantees a red verdict can never block a PR.
+#
+# NOT MEASURED (FS.GG.Game#525; fleet precedent FS-GG/.github#1810): both retained-endpoint
+# measurements reported all 11 configured oracles unavailable, so this workflow's successful
+# conclusion is not evidence that governance evaluated this repository. The advisory becomes
+# informative only after this tree authors a path consumed by at least one configured oracle;
+# until then, do not count its green history as a clean gate record.
 on:
   push:
     branches: [main]
