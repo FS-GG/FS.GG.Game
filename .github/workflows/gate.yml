@@ -429,20 +429,21 @@ jobs:
       # where the deleted script compared directory COUNTS; lane 3 is `[tracked-view-root]`, adopted
       # from FS.GG.Net's copy and had by none of the others.
       #
-      # `--absent-ok` REQUIRES a reason and prints it on every run, because what else catches an absent
-      # root DIFFERS PER RECEIVER. THIS REPO'S ANSWER IS THE STRONG ONE, and it is why FS.GG.Audio's
-      # and FS.GG.Templates' notes say not to import Game's: the alarm rides `build-config-drift`, the
-      # SAME required job that runs `-t:FsggKitMaterialize` a few steps below, so on this repo
-      # `FsggKitCheckSkillView` reds a REQUIRED context on an absent or dangling view root. On Audio
-      # and Templates no required context materializes at all. The excuse here covers only the window
-      # between this bare checkout and that materialize, inside one job.
+      # `--absent-ok` REQUIRES a reason and prints it on every run, because the bare checkout has not
+      # generated its view yet. This receiver's required `build-config-drift` path grades successful,
+      # declared generation and source completeness: `FsggGameGenerateSkillView` runs before
+      # `FsggKitCheckSkillView`, repairing an absent or dangling view root before that assertion sees
+      # it. A text-file root instead makes the generator refuse, so this job reds before the assertion.
+      # The per-PR path therefore does not mutation-demonstrate absent/dangling/text-file assertion
+      # verdicts; the FS.GG.Kit `verify-package.sh` no-generate fixtures are the mutation-proven route.
+      # The excuse below covers only the bare-checkout window before the declared generation in this job.
       - name: Runtime skill-root contract
         run: |
           bash scripts/skill-view check \
             --source .claude/skills \
             --tree . \
             --receiver-proj .config/kit/FS.GG.Kit.receiver.proj \
-            --absent-ok "this step runs on a bare actions/checkout before setup-dotnet, so an ungenerated view root is its normal state HERE — but the SAME required job runs -t:FsggKitMaterialize below, where FsggKitCheckSkillView reds an absent or dangling root on a REQUIRED context (unlike FS.GG.Audio and FS.GG.Templates, where no required context materializes). A DANGLING root is not excused by this (FS.GG.Audio#212)." 
+            --absent-ok "this step runs on a bare actions/checkout before setup-dotnet, so an ungenerated view root is its normal state here. The same required job then runs the declared FsggGameGenerateSkillView before FsggKitCheckSkillView: absent and dangling roots are repaired first, while a text-file root makes generation refuse. Mutation-proven no-generate absence-class fixtures live in FS.GG.Kit's verify-package.sh, not in this receiver path."
 
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
