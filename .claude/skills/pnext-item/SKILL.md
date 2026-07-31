@@ -77,7 +77,7 @@ Before implementing interactive/game work, run the
 [performance-first planning gate](references/performance-first.md). Then fix causes, add focused
 regression coverage, and run proportionate build/test/format gates. Poll inbox at phase boundaries.
 
-## 4. Route findings
+## 4. Route implementation findings
 
 Fix in-scope causes now. For a distinct cause, **establish the root cause before you file** — a finding
 is where a defect *surfaced*, which is rarely where it *lives*, and filing the surface is how one defect
@@ -89,18 +89,37 @@ cause** — or, where you could not establish one, says so explicitly and gives 
 when authorship truly depends on landed work, then add it to the follow-up queue.
 
 [findings-and-filing](references/findings-and-filing.md) carries the rest of this rule and is **binding,
-not elaboration** — load it for the dedupe reads and the judgement boundaries.
+not elaboration** — load it for the dedupe reads and the judgement boundaries. This section owns
+findings discovered before independent review begins. Once review starts, do not file the critic's
+findings or add them to a private follow-up queue; the critic owns their disposition.
 
-## 5. Review, merge, and obligations
+## 5. Independent critique
 
-Push, open a PR that closes the item, obtain review, address actionable feedback, and wait on the typed
+Push the candidate, open its PR, and ask the host to assign a fresh critic agent. Keep the implementing worker and
+claim alive, set the item to `In review`, and freshly verify that row while the critic independently
+reviews the exact head SHA. The critic does not edit the
+implementation: it checks requirements, diff, tests, architecture, release obligations, and `Paths:`;
+searches code/history and existing work for each candidate root cause; and files only unresolved,
+distinct **material** work. The same critic reviews up to three numbered repair rounds. If material
+findings remain after round three, park the item on `Blocked on: human/action`, release the claim, and
+escalate to a human; never start round four or merge.
+
+[independent-review](references/independent-review.md) is the binding contract for materiality, critic
+ownership, the durable PR marker, direct filing, confirmation, and host verification. Do not merge
+without its passing review evidence and the host's exact-SHA `fsgg:review-accepted:v1` marker. If no independent agent mechanism is available, stop and report
+that the review gate is unavailable; self-review does not satisfy it.
+
+## 6. Merge and obligations
+
+Ensure the PR closes the item, observe the host-acceptance marker for the current head, address
+confirmed actionable feedback, and wait on the typed
 `landable` verdict for the exact head SHA. Merge only green and verify the merge on the default branch.
 Then complete every package, deployment, generated-registry, and downstream obligation described in
 [merge-and-release](references/merge-and-release.md).
 For uncommon failure recovery, exact REST recipes, review-thread handling, and incident rationale,
 load [deep detail](references/deep-detail.md).
 
-## 6. Stamp and stop
+## 7. Stamp and stop
 
 ```bash
 scripts/fsgg-coord done <ref> --flip --pr <pr>
