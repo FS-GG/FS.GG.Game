@@ -119,6 +119,100 @@ A branching random walk from a `Start` room grows a connected graph (a candidate
 is rejected, keeping it tree-like); `SpecialRooms` are assigned to the farthest dead-ends by graph distance.
 A game rasterises `FloorLayout` into a `TileMap` with its own room sizes.
 
+### Exact product floor budgets
+
+`FloorParams.RoomCount` is a **target**, not a guaranteed minimum. `floorLayout` is deliberately total: a
+constrained walk may stop early and return fewer rooms rather than fail or invent product policy. If a game
+requires an exact room budget, keep that acceptance policy at the product boundary. Retry complete layouts
+from the **returned** stream a fixed number of times, then use a deterministic product-owned fallback. Do not
+change `MapGen.floorLayout` to make one product's minimum universal.
+
+The fallback is injected because its room templates and special-room policy are product decisions. It must
+return exactly `count` orthogonally adjacent, connected rooms and respect `MaxRooms`; it may consume the
+stream, but must return the successor it used.
+
+```fsharp
+open System.Collections.Generic
+
+let isOrthogonallyConnected (expectedCount: int) (layout: FloorLayout) =
+    let cells = layout.Rooms |> Array.map _.Cell |> Set.ofArray
+    let validEdge (a, b) =
+        cells.Contains a
+        && cells.Contains b
+        && abs (a.Col - b.Col) + abs (a.Row - b.Row) = 1
+
+    if expectedCount < 1 || layout.Rooms.Length <> expectedCount || cells.Count <> expectedCount
+       || not (layout.Adjacency |> Array.forall validEdge) then
+        false
+    else
+        let links = Dictionary<Cell, ResizeArray<Cell>>()
+        for cell in cells do links.[cell] <- ResizeArray()
+        for a, b in layout.Adjacency do
+            links.[a].Add b
+            links.[b].Add a
+        let seen = HashSet<Cell>()
+        let queue = Queue<Cell>()
+        queue.Enqueue layout.Rooms.[0].Cell
+        seen.Add layout.Rooms.[0].Cell |> ignore
+        while queue.Count > 0 do
+            for next in links.[queue.Dequeue()] do
+                if seen.Add next then queue.Enqueue next
+        seen.Count = expectedCount
+
+let boundedExactFloor maxAttempts parameters fallback rng =
+    let cap = max 1 parameters.MaxRooms
+    let target = max 1 (min parameters.RoomCount cap)
+    let parameters = { parameters with RoomCount = target; MaxRooms = cap }
+
+    let rec retry remaining currentRng =
+        if remaining = 0 then
+            let struct (layout, nextRng) = fallback target parameters.SpecialRooms currentRng
+            struct (layout, nextRng, true)
+        else
+            let struct (candidate, nextRng) = MapGen.floorLayout parameters currentRng
+            if candidate.Rooms.Length = target && isOrthogonallyConnected target candidate then
+                struct (candidate, nextRng, false)
+            else
+                retry (remaining - 1) nextRng
+
+    retry (max 0 maxAttempts) rng
+
+// One possible product fallback: a deterministic comb tree. A real product can assign its requested
+// special rooms to its own eligible leaves before returning it.
+let combFallback count _specialRooms rng =
+    let rooms =
+        Array.init count (fun id ->
+            let cell =
+                if id = 0 then { Col = 0; Row = 0 }
+                elif id % 2 = 1 then { Col = (id + 1) / 2; Row = 0 }
+                else { Col = id / 2; Row = if id % 4 = 0 then 1 else -1 }
+            { Cell = cell; Kind = (if id = 0 then Start else Normal); TemplateId = id % 4 })
+    let adjacency =
+        [| for id in 1 .. count - 1 do
+               let parent = if id % 2 = 0 then id - 1 elif id = 1 then 0 else id - 2
+               yield rooms.[parent].Cell, rooms.[id].Cell |]
+    struct ({ Rooms = rooms; Adjacency = adjacency }, rng)
+
+let require condition message = if not condition then invalidOp message
+let parameters = { RoomCount = 8; MaxRooms = 20; SpecialRooms = [] }
+
+// Product tests: exact min/max, every edge orthogonal and connected, and seed replay.
+for requested in [ 8; 20 ] do
+    let p = { parameters with RoomCount = requested }
+    let struct (layout, _, _) = boundedExactFloor 32 p combFallback (Rng.ofSeed 42UL)
+    require (layout.Rooms.Length = requested) "exact product room count"
+    require (isOrthogonallyConnected requested layout) "connected orthogonal adjacency"
+
+let struct (first, _, _) = boundedExactFloor 32 parameters combFallback (Rng.ofSeed 99UL)
+let struct (replay, _, _) = boundedExactFloor 32 parameters combFallback (Rng.ofSeed 99UL)
+require (first = replay) "byte-identical seed replay"
+
+// Zero retries exercises the bounded fallback path without relying on a lucky partial walk.
+let struct (fallbackOnly, _, usedFallback) = boundedExactFloor 0 parameters combFallback (Rng.ofSeed 7UL)
+require usedFallback "fallback selected after the bounded retry budget"
+require (isOrthogonallyConnected 8 fallbackOnly) "fallback preserves the map contract"
+```
+
 ## Maze, noise, scatter
 
 ```fsharp
