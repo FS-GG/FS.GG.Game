@@ -274,7 +274,9 @@ jobs:
           }
 
           consume() {
-            local feed="$1" source="$2" consumer="$work/consumer-$feed"
+            local feed="$1"
+            local source="$2"
+            local consumer="$work/consumer-$feed"
             mkdir -p "$consumer"
             cp "$source/package.nupkg" "$consumer/FS.GG.Game.Skills.${VERSION}.nupkg"
             cat > "$consumer/isolated.config" <<CFG
