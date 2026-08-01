@@ -65,8 +65,10 @@
          0.5.0 (minor/additive, FS.GG.Game#507): fs-gg-playtest distinguishes simulation proofs from
          runner-issued, critic-reviewed production journeys.
          0.6.0 (minor delivery-contract simplification, FS.GG.Game#540): retire the mirror
-         classification and package every owner-authored scope:product row. -->
-    <Version>0.6.0</Version>
+         classification and package every owner-authored scope:product row.
+         0.7.0 (minor/additive, FS.GG.Game#552): add the owner-authored Game.Core Fable
+         lockstep product-consumption skill. -->
+    <Version>0.7.0</Version>
 
     <Description>FS.GG.Game's owner-authored product skill bytes (e.g. fs-gg-playtest, fs-gg-ai) as one versioned artifact, with template/skill-manifest/skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the skills into a scaffold's skill roots at scaffold time (ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <PackageTags>fsgg;game;skills;product;scaffold;dotnet</PackageTags>

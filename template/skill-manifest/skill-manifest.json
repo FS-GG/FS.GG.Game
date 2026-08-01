@@ -50,6 +50,14 @@
       "supplied-by": "template/product-skills/fs-gg-game-core/"
     },
     {
+      "id": "fs-gg-game-fable",
+      "scope": "product",
+      "sha256": "443a82d24a0b4bbd21f4499b06f6e3d12b95a36a858f3880b414b74cae1a5c50",
+      "resolvablePath": ".agents/skills/fs-gg-game-fable/SKILL.md",
+      "materializes-when": "profile in [game, sample-pack]",
+      "supplied-by": "template/product-skills/fs-gg-game-fable/"
+    },
+    {
       "id": "fs-gg-grids",
       "scope": "product",
       "sha256": "bda8b1bde799114506d63f98f6ecb351e13782517f3c054476d63aee5a6cea85",
