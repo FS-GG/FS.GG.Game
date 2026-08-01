@@ -1134,9 +1134,12 @@ daily seed (§4.10) stays comparable **within** a mode.
 
 8. **Fixed-timestep accumulator advances the sim correctly.**
 - **Given** `Accumulator = 0` and `FIXED_DT = 1/120`,
-- **When** a `Tick 0.033` (≈ 1/30 s) is processed,
+- **When** a literal `Tick 0.033` is processed,
+- **Then** exactly `3` sim steps run and `Accumulator` holds the positive remainder
+  (`0.033 − 3/120 = 0.008 s`, within float epsilon);
+- **And When** an exact `Tick (1.0 / 30.0)` is processed,
 - **Then** exactly `4` sim steps run (`floor((1/30) / (1/120)) = 4`) and `Accumulator` holds
-  the remainder (`(1/30) − 4/120 ≈ 0.00 s`, within float epsilon);
+  the zero remainder (`(1/30) − 4/120 ≈ 0.00 s`, within float epsilon);
 - **And When** a single `Tick 1.0` arrives (huge stall), **Then** at most `MAX_STEPS = 5`
   steps run and the remainder is clamped (no spiral of death).
 
