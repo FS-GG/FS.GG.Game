@@ -200,6 +200,118 @@ jobs:
             --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
 
+      # A successful push is not public-consumer evidence. Both feeds can take time to expose a
+      # new version, and each may add its own signature/container metadata. Download the exact
+      # version from each feed's PackageBaseAddress, compare the normalized payload (not signature
+      # bytes), then restore and materialize a skill from EACH downloaded artifact in an empty cache.
+      # The bounded retry makes propagation observable without letting a release wait forever.
+      - name: Verify published feeds — payload parity and clean consumer materialization
+        if: steps.v.outputs.push == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          ORG_INDEX: https://nuget.pkg.github.com/FS-GG/index.json
+          NUGET_INDEX: https://api.nuget.org/v3/index.json
+          PACKAGE_USER: ${{ github.actor }}
+          PACKAGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REF: ${{ github.ref_name }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          package_lower="fs.gg.game.skills"
+          version_lower="${VERSION,,}"
+
+          base_address() {
+            local index="$1" auth="${2:-}"
+            if [ -n "$auth" ]; then
+              curl --fail --silent --show-error --user "$auth" "$index"
+            else
+              curl --fail --silent --show-error "$index"
+            fi | jq -er '.resources[] | select(."@type" | tostring | startswith("PackageBaseAddress")) | ."@id"' | head -1
+          }
+
+          org_base="$(base_address "$ORG_INDEX" "$PACKAGE_USER:$PACKAGE_TOKEN")"
+          nuget_base="$(base_address "$NUGET_INDEX")"
+          org_url="${org_base%/}/${package_lower}/${version_lower}/${package_lower}.${version_lower}.nupkg"
+          nuget_url="${nuget_base%/}/${package_lower}/${version_lower}/${package_lower}.${version_lower}.nupkg"
+          mkdir -p "$work/org" "$work/nuget"
+
+          downloaded=false
+          for attempt in $(seq 1 12); do
+            rm -f "$work/org"/*.nupkg "$work/nuget"/*.nupkg
+            if curl --fail --silent --show-error --location --user "$PACKAGE_USER:$PACKAGE_TOKEN" "$org_url" -o "$work/org/package.nupkg" \
+              && curl --fail --silent --show-error --location "$nuget_url" -o "$work/nuget/package.nupkg"; then
+              downloaded=true
+              break
+            fi
+            echo "published package not visible on both feeds yet (attempt $attempt/12); retrying in 15s" >&2
+            sleep 15
+          done
+          "$downloaded" || { echo "published package $VERSION did not become readable from both feeds" >&2; exit 1; }
+
+          normalized_payload() {
+            python3 - "$1" <<'PY'
+          import hashlib, sys, zipfile
+          excluded = lambda name: name == ".signature.p7s" or name.startswith("package/services/metadata/core-properties/")
+          with zipfile.ZipFile(sys.argv[1]) as package:
+              digest = hashlib.sha256()
+              for name in sorted(name for name in package.namelist() if not name.endswith("/") and not excluded(name)):
+                  digest.update(name.encode("utf-8")); digest.update(b"\0")
+                  digest.update(hashlib.sha256(package.read(name)).digest())
+              print(digest.hexdigest())
+          PY
+          }
+
+          org_sha="$(sha256sum "$work/org/package.nupkg" | cut -d ' ' -f 1)"
+          nuget_sha="$(sha256sum "$work/nuget/package.nupkg" | cut -d ' ' -f 1)"
+          org_payload="$(normalized_payload "$work/org/package.nupkg")"
+          nuget_payload="$(normalized_payload "$work/nuget/package.nupkg")"
+          [ "$org_payload" = "$nuget_payload" ] || {
+            echo "published package payloads differ after excluding documented feed signatures/core metadata" >&2
+            exit 1
+          }
+
+          consume() {
+            local feed="$1"
+            local source="$2"
+            local consumer="$work/consumer-$feed"
+            mkdir -p "$consumer"
+            cp "$source/package.nupkg" "$consumer/FS.GG.Game.Skills.${VERSION}.nupkg"
+            cat > "$consumer/isolated.config" <<CFG
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration><packageSources><clear /><add key="$feed" value="$consumer" /></packageSources></configuration>
+          CFG
+            cat > "$consumer/Consumer.csproj" <<CSPROJ
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup><TargetFramework>net10.0</TargetFramework><EnableDefaultCompileItems>false</EnableDefaultCompileItems><IncludeBuildOutput>false</IncludeBuildOutput></PropertyGroup>
+            <ItemGroup><PackageReference Include="FS.GG.Game.Skills" Version="$VERSION" /></ItemGroup>
+            <Target Name="MaterializePublishedSkill" AfterTargets="Build">
+              <Error Condition="'\$(FsggGameSkillsContentDir)' == ''" Text="published package did not import FS.GG.Game.Skills.props" />
+              <MakeDir Directories="\$(MSBuildProjectDirectory)/materialized/.agents/skills/fs-gg-game-fable" />
+              <Copy SourceFiles="\$(FsggGameSkillsContentDir)/skills/fs-gg-game-fable/SKILL.md" DestinationFiles="\$(MSBuildProjectDirectory)/materialized/.agents/skills/fs-gg-game-fable/SKILL.md" />
+              <Error Condition="!Exists('\$(MSBuildProjectDirectory)/materialized/.agents/skills/fs-gg-game-fable/SKILL.md')" Text="published package skill did not materialize" />
+            </Target>
+          </Project>
+          CSPROJ
+            NUGET_PACKAGES="$consumer/packages" dotnet restore "$consumer/Consumer.csproj" --configfile "$consumer/isolated.config"
+            NUGET_PACKAGES="$consumer/packages" dotnet build "$consumer/Consumer.csproj" -c Release --no-restore
+            test -s "$consumer/materialized/.agents/skills/fs-gg-game-fable/SKILL.md"
+          }
+          consume org "$work/org"
+          consume nuget "$work/nuget"
+
+          tag="skills/v$VERSION"
+          {
+            echo "### Published FS.GG.Game.Skills $VERSION verification"
+            echo "- tag: \`$tag\`; release ref: \`$RELEASE_REF\`; commit: \`$RELEASE_COMMIT\`"
+            echo "- GitHub Packages: $org_url — archive sha256 \`$org_sha\`"
+            echo "- nuget.org: $nuget_url — archive sha256 \`$nuget_sha\`"
+            echo "- normalized payload sha256 (excludes \`.signature.p7s\` and feed core metadata): \`$org_payload\`"
+            echo "- evidence: bounded two-feed download passed; each downloaded artifact restored from its own isolated source/cache and materialized \`fs-gg-game-fable/SKILL.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Summary
         run: |
           {
