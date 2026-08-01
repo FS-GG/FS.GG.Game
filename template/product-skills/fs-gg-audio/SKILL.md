@@ -332,6 +332,60 @@ GeneratedAppHost.dispatchKey host keyEvent model
 |> Audio.interpret          // AudioEvidence — the same evidence the record-only path yields
 ```
 
+### Production-shell music journey — prove requests, including the negative cases
+
+Model-level assertions cannot catch a stale loop: the model may correctly say “menu” while the sink
+was never told to stop the prior run track. Put the music policy in the same pure transition function,
+then lift its batch through `ViewerEffect.PlayAudio` and assert the **ordered**
+`AudioEvidence.Requested` values at `GeneratedAppHost.audioRequests`. This is the production sink
+boundary, not a cue-table-only test.
+
+```fsharp
+open FS.GG.Audio.Core
+open FS.GG.UI.SkiaViewer
+
+type ShellEvent = Continued | Abandoned | KeyboardReturnToMenu | PickupAcquired | BossHealed | RunReset
+
+let audioForShellEvent event : AudioEffect list =
+    match event with
+    // Every context replacement is StopMusic followed by exactly one looping replacement.
+    | Continued -> [ Audio.stopMusic; Audio.playMusic (TrackId "run") true ]
+    | Abandoned | KeyboardReturnToMenu | RunReset ->
+        [ Audio.stopMusic; Audio.playMusic (TrackId "menu") true ]
+    // A pickup is an acquisition event, not an inference from any arbitrary state transition.
+    | PickupAcquired -> [ Audio.playSfx (SoundId "pickup") 0.8 ]
+    | BossHealed -> []
+
+let requestedAtProductionSink events =
+    events
+    |> List.collect (fun event -> [ ViewerEffect.PlayAudio(audioForShellEvent event) ])
+    |> GeneratedAppHost.audioRequests
+    |> Audio.interpret
+    |> fun evidence -> evidence.Requested
+
+let journey = requestedAtProductionSink [ Continued; Abandoned; KeyboardReturnToMenu ]
+
+let expectedJourney =
+    [ Audio.stopMusic; Audio.playMusic (TrackId "run") true
+      Audio.stopMusic; Audio.playMusic (TrackId "menu") true
+      Audio.stopMusic; Audio.playMusic (TrackId "menu") true ]
+
+if journey <> expectedJourney then failwith "each shell music replacement must stop, then start one loop"
+
+let containsPickup =
+    function
+    | PlaySfx(SoundId "pickup", _) -> true
+    | _ -> false
+
+for event in [ BossHealed; RunReset ] do
+    if requestedAtProductionSink [ event ] |> List.exists containsPickup then
+        failwith "boss healing and a run reset are not pickup acquisitions"
+```
+
+This is deliberately headless evidence: it proves requests and their order at the sink boundary. It
+does **not** prove asset lookup, device output, or audible playback; verify those separately on a
+capable host when the product owns that integration.
+
 The bundled surfaces: `docs/api-surface/Audio.Core/Audio.fsi` (the vocabulary) and
 `docs/api-surface/Audio.Host/Host.fsi` (`IAudioBackend`, `Audio.play`, the backends).
 
