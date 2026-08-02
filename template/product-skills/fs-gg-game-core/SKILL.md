@@ -139,6 +139,123 @@ To *test* determinism over this RNG — byte-identical fixtures for a fixed seed
 stream-independence property that proves a `split` sub-stream is isolated from the stream it was
 derived from — see the seeded-generation section in **[[fs-gg-rendering:fs-gg-testing]]**.
 
+## Whole-model determinism encoding
+
+That seeded-generation advice assumes the value under comparison is already shaped for save-slot
+persistence — serialize it with the `serialize` your product owns per `fs-gg-persistence` and diff
+bytes. A **whole simulation model** — a workload digest, a replay fingerprint, a journey receipt — is
+a different case: it usually has no dedicated persisted shape, and it routinely carries collections
+past a few dozen entries (per-tick agent logs, waypoint queues, sampled message frames).
+
+**Do not reach for `sprintf "%A"` as a substitute.** F#'s default structured printer applies a
+100-element print length to any collection and appends an ellipsis instead of the tail, so two models
+that differ only past their 100th collection element print identically — measured on this toolchain:
+
+```fsharp
+sprintf "%A" [ 1 .. 600 ] = sprintf "%A" ([ 1 .. 599 ] @ [ 999 ])   // true — %A cannot see the divergence
+```
+
+A determinism assertion built on that text — `assert (encode modelA <> encode modelB)` — silently
+**passes** when it should fail: the two models really do differ; `%A` just cannot tell you.
+
+The canonical encoding is a **total, length-unlimited structural walk**: records by declared field
+order, union cases by name plus fields, tuples positionally, every sequence (list/array/`Set`/`Map`/…)
+by its *own* enumeration order — `Set`/`Map` already enumerate in a deterministic, value-derived
+comparison order, so nothing here depends on insertion order — and numbers via invariant, round-trip
+text with `NaN`/`Infinity` spelled out by name rather than culture-formatted (their default text has
+varied across hosts). Anything the walk does not recognize **fails loudly** (raises) instead of
+falling back to `.ToString()` — a silent fallback would just relocate this same defect to whichever
+leaf type reached it. A worked, minimal version — extend the final match arm for the leaf types your
+own model adds, never with a lossy string fallback:
+
+```fsharp
+open Microsoft.FSharp.Reflection
+
+let private keyValuePairDefinition = typedefof<System.Collections.Generic.KeyValuePair<_, _>>
+
+/// Total, length-unlimited structural encoding for a whole-model determinism/fingerprint
+/// comparison. NOT `sprintf "%A"` — see the counterexample above.
+let rec encodeModel (value: obj) : string =
+    let sb = System.Text.StringBuilder()
+    let inline app (s: string) = sb.Append(s: string) |> ignore
+
+    let rec write (value: obj) =
+        match value with
+        | null -> app "~"
+        | :? bool as b -> app (if b then "true" else "false")
+        | :? string as s -> app "\""; app (s.Replace("\\", "\\\\").Replace("\"", "\\\"")); app "\""
+        | :? int as i -> app (string i)
+        | :? int64 as i -> app (string i)
+        | :? uint64 as i -> app (string i)
+        | :? float as f ->
+            if System.Double.IsNaN f then app "nan"
+            elif System.Double.IsPositiveInfinity f then app "inf"
+            elif System.Double.IsNegativeInfinity f then app "-inf"
+            else app (f.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+        | _ ->
+            let t = value.GetType()
+            if t.IsGenericType && t.GetGenericTypeDefinition() = keyValuePairDefinition then
+                write (t.GetProperty("Key").GetValue value)
+                app "=>"
+                write (t.GetProperty("Value").GetValue value)
+            elif FSharpType.IsRecord(t, true) then
+                app (t.Name); app "{"
+                FSharpType.GetRecordFields(t, true)
+                |> Array.iteri (fun i field ->
+                    if i > 0 then app ";"
+                    app field.Name; app "="
+                    write (field.GetValue value))
+                app "}"
+            elif FSharpType.IsTuple t then
+                app "("
+                FSharpValue.GetTupleFields value
+                |> Array.iteri (fun i field ->
+                    if i > 0 then app ","
+                    write field)
+                app ")"
+            // Sequences are matched BEFORE unions on purpose: an F# list is itself a union, and
+            // walking a long list recursively as a union would both nest deep and lose this flat,
+            // enumeration-order encoding — `Set`/`Map` reach this same arm, already enumerating in
+            // their own deterministic, value-derived comparison order, not insertion order.
+            elif (value :? System.Collections.IEnumerable) then
+                let items = value :?> System.Collections.IEnumerable
+                app (t.Name); app "["
+                let mutable first = true
+                for item in items do
+                    if not first then app ";"
+                    write item
+                    first <- false
+                app "]"
+            elif FSharpType.IsUnion(t, true) then
+                let case, fields = FSharpValue.GetUnionFields(value, t, true)
+                app (t.Name); app "."; app case.Name
+                if fields.Length > 0 then
+                    app "("
+                    fields |> Array.iteri (fun i f -> (if i > 0 then app ","); write f)
+                    app ")"
+            else
+                failwithf "encodeModel has no total encoding for %s; extend it, don't fall back to ToString" t.FullName
+
+    write value
+    sb.ToString()
+
+// The same 600-element counterexample, this time told apart correctly:
+let modelA = [ 1 .. 600 ]
+let modelB = [ 1 .. 599 ] @ [ 999 ]
+assert (encodeModel modelA <> encodeModel modelB)   // %A cannot see this; encodeModel does
+
+// Tuples and Map — named in the prose above, exercised here so the claim is not just asserted:
+assert (encodeModel (1, "a") <> encodeModel (1, "b"))
+assert (encodeModel (Map.ofList [ 1, "a"; 2, "b" ]) <> encodeModel (Map.ofList [ 1, "a"; 2, "c" ]))
+// Map enumerates in comparison order, not insertion order — these two encode identically:
+assert (encodeModel (Map.ofList [ 2, "b"; 1, "a" ]) = encodeModel (Map.ofList [ 1, "a"; 2, "b" ]))
+```
+
+Reach for this whenever the comparison is over the whole model rather than a persisted save-slot
+record. `Physics.checksum` (below) is the same idea already shipped for rigid-body worlds — a total
+encoding scoped to exactly the fields that must match — so treat the two together as the rule: never
+compare a model structurally or with `%A`; always through a total, named encoding.
+
 ## Collision
 
 Collision detection **and** response now have a dedicated skill — see **[[fs-gg-game:fs-gg-collision]]**. It covers
@@ -624,6 +741,9 @@ let hardSigma = Difficulty.hard.AimErrorSigma
   movers included. Unequal moving/interpolated counts are a failed workload.
 - **Mutable `System.Random` in the `Model`.** Breaks determinism and structural equality; use the
   value-type `Rng` and thread its returned state.
+- **`sprintf "%A"` as a whole-model determinism/fingerprint encoding.** It truncates any collection
+  past 100 elements, so two models differing only after their 100th entry print identically. Use the
+  total, length-unlimited structural encoding above.
 - **Hand-rolled BFS/A* with a non-deterministic tie-break.** Iterating a `Dictionary`/`HashSet` frontier
   leaks iteration order into the path and breaks replay. Use `Pathfinding.astar`/`bfs` — the tie-break is
   a total order over cells, so identical inputs give a byte-identical path.
