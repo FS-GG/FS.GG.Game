@@ -59,10 +59,10 @@ only literal pause-menu entries. A product that instantiates `'menu` with `unit`
 single-inhabitant type) can never construct more than one distinct `MenuAction` value, so no script,
 however written, can ever reach a second `MapEvent` arm for it — including a catch-all `Unbound` arm
 guarding an action nobody wired. That shape shipped unplayable for ten milestones behind 100%-green
-suites (`2026-08-01-Rogue3-12.md` §4.1, `FS.GG.Game#563`): `TraverseDoor` and `UnlockDoor` were
-implemented and unit-tested, but no production input route ever dispatched them, and journey coverage —
-defined entirely over the messages a script issues — was structurally blind to the gap between the
-message set and the player.
+suites (`2026-08-01-Rogue3-12.md` §4.1): `TraverseDoor` and `UnlockDoor` were implemented and
+unit-tested, but no production input route ever dispatched them, and journey coverage — defined
+entirely over the messages a script issues — was structurally blind to the gap between the message
+set and the player.
 
 ### Closing the blind spot: `Journey.checkActionCoverage`
 
