@@ -53,6 +53,96 @@ For `production-journey` coverage:
 An unbound displayed action must return `JourneyDispatch.Unbound "Action name"`. The runner then
 reports the production wiring gap instead of silently treating the event as a no-op.
 
+**`'menu` is the product's general displayed-action vocabulary, not a menu-only slot.** Instantiate it
+with every UI-triggered action your product exposes — every button, HUD control, and dialog choice, not
+only literal pause-menu entries. A product that instantiates `'menu` with `unit` (or any other
+single-inhabitant type) can never construct more than one distinct `MenuAction` value, so no script,
+however written, can ever reach a second `MapEvent` arm for it — including a catch-all `Unbound` arm
+guarding an action nobody wired. That shape shipped unplayable for ten milestones behind 100%-green
+suites (`2026-08-01-Rogue3-12.md` §4.1, `FS.GG.Game#563`): `TraverseDoor` and `UnlockDoor` were
+implemented and unit-tested, but no production input route ever dispatched them, and journey coverage —
+defined entirely over the messages a script issues — was structurally blind to the gap between the
+message set and the player.
+
+### Closing the blind spot: `Journey.checkActionCoverage`
+
+Journey coverage measured only over what committed scripts issue cannot see an `Unbound` arm no script
+ever reaches, and it cannot see a single-inhabitant vocabulary slot make that arm unreachable by
+construction regardless of what scripts exist. `Journey.checkActionCoverage` names both:
+
+```fsharp
+open FS.GG.Game.Core
+open FS.GG.Game.Harness
+
+type Model = { Started: bool }
+type Menu =
+    | NewGame
+    | Settings
+    | Quit
+
+// A minimal adapter: Quit is deliberately left Unbound to show what the check catches.
+let adapter: ProductionJourney<Model, unit, unit, Menu, unit, string, Model> =
+    { RouteId = "doc-example"
+      ScenarioId = "menu-coverage"
+      TestId = "GP-DOC-001"
+      MaxSteps = 8
+      Boot = fun () -> { Started = false }
+      MapEvent =
+        fun event _ ->
+            match event with
+            | JourneyEvent.Start
+            | JourneyEvent.MenuAction NewGame -> JourneyDispatch.Mapped [ "start" ]
+            | JourneyEvent.MenuAction Settings -> JourneyDispatch.Mapped [ "open-settings" ]
+            | JourneyEvent.MenuAction Quit -> JourneyDispatch.Unbound "quit"
+            | _ -> JourneyDispatch.Mapped []
+      Update = fun _ model -> model
+      FixedTick = id
+      ApplyEffectResult = fun _ model -> model
+      IsTerminal = fun _ -> false
+      Fingerprint = id
+      EncodeEvent = sprintf "%A"
+      EncodeFingerprint = sprintf "%A" }
+
+// Every value your product's own menu-action type can hold — the honest, exhaustive declaration
+// this check depends on.
+let vocabulary =
+    [ JourneyEvent.MenuAction NewGame
+      JourneyEvent.MenuAction Settings
+      JourneyEvent.MenuAction Quit ]
+
+// Every script your committed suite actually runs.
+let committedScripts = [ [ JourneyEvent.Start ]; [ JourneyEvent.MenuAction Settings ] ]
+
+let report = Journey.checkActionCoverage adapter vocabulary committedScripts
+let clean: bool = ActionCoverageReport.isClean report // false — Quit is Unbound and no script issues it
+let reasons: string list = ActionCoverageReport.describe report // one line naming the unreached action
+```
+
+It reports two kinds of gap, both members of `ActionCoverageGap`:
+
+- `UnexercisedUnbound(action, event)` — `MapEvent` returns `Unbound action` for `event`, and `event`
+  never appears in `committedScripts`. Nothing in the suite can ever surface this arm firing or failing
+  to fire.
+- `DegenerateVocabulary(slot, inhabitants)` — the declared `vocabulary` supplies only one distinct
+  producible value at `"menu"`, `"key"`, or `"pointer"`. This is the Rogue3 shape exactly: a hidden
+  `Unbound` catch-all behind a single-inhabitant type is dead code that no script can ever reach, and
+  `UnexercisedUnbound` alone cannot see it, because `MapEvent` never returns `Unbound` for the one value
+  that exists — it returns `Mapped`. Run both checks; neither substitutes for the other.
+
+`vocabulary` must be your own honest declaration of every event the product's displayed surface can
+emit. A `vocabulary` narrower than the real product understates coverage, not the other way round: an
+action you never declare here is exactly as invisible to this check as it is to the committed suite.
+This function evaluates `MapEvent` once per vocabulary event against the freshly booted model, so an
+`Unbound` arm reachable only from a later game state is outside what one call proves — script your
+`vocabulary` from the states you actually need covered if boot alone is not enough.
+
+**What this still cannot see.** `checkActionCoverage` finds an `Unbound` arm your own vocabulary
+reaches; it cannot find a `'message` your `MapEvent` produces for **no** event at all — a message no
+input path emits, as distinct from one it explicitly refuses. Proving that a message is reachable from
+the product's real entry point through the real control surface is `FS.GG.Game#565`'s and
+`.github#2087`'s scope, not this function's: this closes the coverage-model blind spot; it does not by
+itself prove a bot or player can reach the action from boot.
+
 ## Independent acceptance critic
 
 After the deterministic journey is green, run a fresh-context critic. Use a separate subagent when
@@ -298,6 +388,10 @@ JSONL bound to the matching test identity.
   component only. Add a production journey starting from boot.
 - **Silently dropping a displayed action.** Return `JourneyDispatch.Unbound`; an empty mapped message
   list is reserved for a deliberately handled no-op.
+- **Instantiating `'menu` (or `'key`/`'pointer`) with a single-inhabitant type.** No script can then
+  construct a second value at that slot, so any `Unbound` arm distinguishing it from something else is
+  unreachable regardless of suite size. Run `Journey.checkActionCoverage` and treat a
+  `DegenerateVocabulary` gap as a design smell, not noise.
 - **Treating the acceptance critic as an oracle.** It can veto weak coverage, but only the runner can
   issue production-journey provenance.
 

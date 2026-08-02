@@ -1,3 +1,8 @@
+FS.GG.Game.Harness.ActionCoverageGap
+FS.GG.Game.Harness.ActionCoverageGap+DegenerateVocabulary
+FS.GG.Game.Harness.ActionCoverageGap+Tags
+FS.GG.Game.Harness.ActionCoverageGap+UnexercisedUnbound
+FS.GG.Game.Harness.ActionCoverageReport
 FS.GG.Game.Harness.Bot`1
 FS.GG.Game.Harness.Bots
 FS.GG.Game.Harness.Counterexample

@@ -14,6 +14,73 @@ let runScript adapter script =
         adapter
         script
 
+// Fixtures for Journey.checkActionCoverage (FS.GG.Game#563). Kept separate from the shared
+// production composition above: `checkActionCoverage` reports a gap for a single-inhabitant
+// action slot regardless of whether the product's own mapper actually contains a dead arm behind
+// it, so a fixture proving that has to control cardinality deliberately rather than borrow it.
+module ActionCoverageFixtures =
+    type Model = { Booted: bool }
+    type Menu =
+        | Play
+        | Debug
+
+    /// Two distinct menu actions: `Play` is wired, `Debug` is an explicit `Unbound` arm — the
+    /// mechanism `Game.Harness` already had before #563. Whether the coverage gap is visible
+    /// depends only on whether a committed script ever issues `MenuAction Debug`.
+    let twoActionAdapter: ProductionJourney<Model, unit, unit, Menu, unit, string, Model> =
+        { RouteId = "test/two-action-menu"
+          ScenarioId = "action-coverage"
+          TestId = "GP-JOURNEY-COVERAGE-001"
+          MaxSteps = 8
+          Boot = fun () -> { Booted = true }
+          MapEvent =
+            fun event _ ->
+                match event with
+                | JourneyEvent.Start -> JourneyDispatch.Mapped [ "start" ]
+                | JourneyEvent.MenuAction Play -> JourneyDispatch.Mapped [ "play" ]
+                | JourneyEvent.MenuAction Debug -> JourneyDispatch.Unbound "debug menu"
+                | _ -> JourneyDispatch.Mapped []
+          Update = fun _ model -> model
+          FixedTick = id
+          ApplyEffectResult = fun _ model -> model
+          IsTerminal = fun _ -> false
+          Fingerprint = id
+          EncodeEvent = sprintf "%A"
+          EncodeFingerprint = sprintf "%A" }
+
+    /// Same two-action vocabulary, but `Debug` is wired too — the "full coverage" control case.
+    let fullyWiredAdapter =
+        { twoActionAdapter with
+            MapEvent =
+              fun event model ->
+                  match event with
+                  | JourneyEvent.MenuAction Debug -> JourneyDispatch.Mapped [ "debug" ]
+                  | other -> twoActionAdapter.MapEvent other model }
+
+    /// The exact Rogue3 shape (`2026-08-01-Rogue3-12.md` §4.1): a `'menu` type with ONE
+    /// inhabitant. Its sole value is wired (`Mapped`), so `MapEvent` never returns `Unbound` for
+    /// anything a script can construct — an empirical unbound-tracking check alone reports this
+    /// adapter as clean no matter what runs, which is the blind spot #563 exists to close.
+    let unitMenuAdapter: ProductionJourney<Model, unit, unit, unit, unit, string, Model> =
+        { RouteId = "test/unit-menu"
+          ScenarioId = "action-coverage-degenerate"
+          TestId = "GP-JOURNEY-COVERAGE-002"
+          MaxSteps = 8
+          Boot = fun () -> { Booted = true }
+          MapEvent =
+            fun event _ ->
+                match event with
+                | JourneyEvent.Start -> JourneyDispatch.Mapped [ "start" ]
+                | JourneyEvent.MenuAction() -> JourneyDispatch.Mapped [ "only-action" ]
+                | _ -> JourneyDispatch.Mapped []
+          Update = fun _ model -> model
+          FixedTick = id
+          ApplyEffectResult = fun _ model -> model
+          IsTerminal = fun _ -> false
+          Fingerprint = id
+          EncodeEvent = sprintf "%A"
+          EncodeFingerprint = sprintf "%A" }
+
 [<Tests>]
 let tests =
     testList
@@ -123,6 +190,72 @@ let tests =
               | JourneyResult.Failed reason ->
                   Expect.stringContains reason "displayed action 'Interact' is unbound" "failure names the production wiring gap"
               | JourneyResult.Passed -> failtest "an unbound interaction must not mint a passing journey receipt"
+
+          testCase "checkActionCoverage flags an Unbound arm no committed script ever issues"
+          <| fun _ ->
+              let vocabulary =
+                  [ JourneyEvent.MenuAction ActionCoverageFixtures.Play
+                    JourneyEvent.MenuAction ActionCoverageFixtures.Debug ]
+
+              let committedScripts =
+                  [ [ JourneyEvent.Start; JourneyEvent.MenuAction ActionCoverageFixtures.Play ] ]
+
+              let report =
+                  Journey.checkActionCoverage
+                      ActionCoverageFixtures.twoActionAdapter
+                      vocabulary
+                      committedScripts
+
+              Expect.isFalse (ActionCoverageReport.isClean report) "an unreached Unbound arm is a coverage gap"
+              Expect.contains
+                  report.Gaps
+                  (ActionCoverageGap.UnexercisedUnbound("debug menu", "MenuAction Debug"))
+                  "the gap names the unbound action and the unreached event"
+
+          testCase "checkActionCoverage stays clean when every declared action is wired and exercised"
+          <| fun _ ->
+              let vocabulary =
+                  [ JourneyEvent.MenuAction ActionCoverageFixtures.Play
+                    JourneyEvent.MenuAction ActionCoverageFixtures.Debug ]
+
+              let committedScripts =
+                  [ [ JourneyEvent.Start; JourneyEvent.MenuAction ActionCoverageFixtures.Play ]
+                    [ JourneyEvent.Start; JourneyEvent.MenuAction ActionCoverageFixtures.Debug ] ]
+
+              let report =
+                  Journey.checkActionCoverage
+                      ActionCoverageFixtures.fullyWiredAdapter
+                      vocabulary
+                      committedScripts
+
+              Expect.isTrue (ActionCoverageReport.isClean report) "full coverage over a rich-enough vocabulary stays green"
+
+          testCase "checkActionCoverage flags a single-inhabitant vocabulary slot that empirical Unbound-tracking alone cannot see"
+          <| fun _ ->
+              // This is the exact Rogue3 shape: 'menu = unit means MapEvent's sole reachable arm is
+              // Mapped, so an empirical sweep over what MapEvent RETURNS reports nothing wrong here —
+              // demonstrating why the structural DegenerateVocabulary check exists as an independent
+              // signal, not a restatement of UnexercisedUnbound.
+              let vocabulary = [ JourneyEvent.MenuAction() ]
+              let committedScripts = [ [ JourneyEvent.Start; JourneyEvent.MenuAction() ] ]
+
+              let report =
+                  Journey.checkActionCoverage
+                      ActionCoverageFixtures.unitMenuAdapter
+                      vocabulary
+                      committedScripts
+
+              Expect.isFalse (ActionCoverageReport.isClean report) "a single-inhabitant action slot is a coverage gap on its own"
+              Expect.isEmpty
+                  (report.Gaps
+                   |> List.choose (function
+                       | ActionCoverageGap.UnexercisedUnbound _ as gap -> Some gap
+                       | _ -> None))
+                  "no Unbound arm was ever returned for the single inhabitant, so empirical tracking alone sees nothing"
+              Expect.contains
+                  report.Gaps
+                  (ActionCoverageGap.DegenerateVocabulary("menu", 1))
+                  "the structural check names the degenerate slot and its inhabitant count"
 
           testCase "exhaustion fails with final-fingerprint and captured-input digests instead of hanging"
           <| fun _ ->
