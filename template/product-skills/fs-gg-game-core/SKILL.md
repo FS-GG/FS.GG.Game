@@ -165,8 +165,20 @@ comparison order, so nothing here depends on insertion order — and numbers via
 text with `NaN`/`Infinity` spelled out by name rather than culture-formatted (their default text has
 varied across hosts). Anything the walk does not recognize **fails loudly** (raises) instead of
 falling back to `.ToString()` — a silent fallback would just relocate this same defect to whichever
-leaf type reached it. A worked, minimal version — extend the final match arm for the leaf types your
-own model adds, never with a lossy string fallback:
+leaf type reached it.
+
+**Tag records and unions with `FullName`, never `Name`.** A record's or union's *simple* name is not a
+unique identity — two records declared in different modules, or two unions with a same-named case,
+routinely share one (this is the same hazard the "Consumer geometry records colliding with framework
+Point/Rect" and "DU case names colliding" pitfalls above already warn about) — so a walk that tags with
+`.Name` alone silently encodes two different models identically. `.FullName` disambiguates by carrying
+the declaring namespace/module, at the cost that *renaming or moving* an otherwise-unchanged type also
+changes the fingerprint; for an authorship/replay fingerprint that is the correct call; deciding
+otherwise is not free, so choose `.FullName` deliberately here rather than reaching for the shorter
+`.Name`. A union case's own runtime type is the compiler-generated per-case subtype, not the declaring
+union — its `.FullName` therefore does not equal the declaring union's `.FullName` — so the walk below
+resolves the DECLARING union type first, off `t.BaseType`, before tagging. A worked, minimal version —
+extend the final match arm for the leaf types your own model adds, never with a lossy string fallback:
 
 ```fsharp
 open Microsoft.FSharp.Reflection
@@ -199,7 +211,7 @@ let rec encodeModel (value: obj) : string =
                 app "=>"
                 write (t.GetProperty("Value").GetValue value)
             elif FSharpType.IsRecord(t, true) then
-                app (t.Name); app "{"
+                app (t.FullName); app "{"
                 FSharpType.GetRecordFields(t, true)
                 |> Array.iteri (fun i field ->
                     if i > 0 then app ";"
@@ -228,7 +240,16 @@ let rec encodeModel (value: obj) : string =
                 app "]"
             elif FSharpType.IsUnion(t, true) then
                 let case, fields = FSharpValue.GetUnionFields(value, t, true)
-                app (t.Name); app "."; app case.Name
+                // `t` is a multi-case union's compiler-generated PER-CASE subtype, whose own
+                // `.Name`/`.FullName` equals the case name, not the declaring union's — resolve the
+                // declaring type off `BaseType` before tagging, or two different unions that share a
+                // case name (`WeatherKind.Storm` / `AlertLevel.Storm`) would encode identically.
+                let declaringType =
+                    match t.BaseType with
+                    | null -> t
+                    | baseType when FSharpType.IsUnion(baseType, true) -> baseType
+                    | _ -> t
+                app (declaringType.FullName); app "."; app case.Name
                 if fields.Length > 0 then
                     app "("
                     fields |> Array.iteri (fun i f -> (if i > 0 then app ","); write f)
@@ -249,6 +270,17 @@ assert (encodeModel (1, "a") <> encodeModel (1, "b"))
 assert (encodeModel (Map.ofList [ 1, "a"; 2, "b" ]) <> encodeModel (Map.ofList [ 1, "a"; 2, "c" ]))
 // Map enumerates in comparison order, not insertion order — these two encode identically:
 assert (encodeModel (Map.ofList [ 2, "b"; 1, "a" ]) = encodeModel (Map.ofList [ 1, "a"; 2, "b" ]))
+
+// Two DIFFERENT declared types that share a record or union-case simple name must NOT collide —
+// `.Name` alone would report these equal; `.FullName` (and the resolved declaring union type above)
+// tells them apart:
+type WeatherKind = Sunny | Storm of int
+type AlertLevel = Calm | Storm of int
+assert (encodeModel (box (WeatherKind.Storm 5)) <> encodeModel (box (AlertLevel.Storm 5)))
+
+module ModA = type Pos = { Slot: int }
+module ModB = type Pos = { Slot: int }
+assert (encodeModel (box { ModA.Slot = 1 }) <> encodeModel (box { ModB.Slot = 1 }))
 ```
 
 Reach for this whenever the comparison is over the whole model rather than a persisted save-slot
