@@ -23,6 +23,11 @@ type JourneyDispatch<'message> =
     | Mapped of 'message list
     | Unbound of action: string
 
+[<RequireQualifiedAccess>]
+type ActionCoverageGap =
+    | UnexercisedUnbound of action: string * event: string
+    | DegenerateVocabulary of slot: string * inhabitants: int
+
 type ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> =
     { RouteId: string
       ScenarioId: string
@@ -137,6 +142,28 @@ type JourneyRun<'model, 'event, 'fingerprint> =
 
 type JourneyPolicy<'model, 'event> =
     { DecideEvents: 'model -> Rng -> struct ('event list * Rng) }
+
+type ActionCoverageReport = { Gaps: ActionCoverageGap list }
+
+[<RequireQualifiedAccess>]
+module ActionCoverageReport =
+    let isClean report = List.isEmpty report.Gaps
+
+    let describe report =
+        report.Gaps
+        |> List.map (function
+            | ActionCoverageGap.UnexercisedUnbound(action, event) ->
+                sprintf
+                    "unbound action '%s' (event %s) is never reached by any committed script"
+                    action
+                    event
+            | ActionCoverageGap.DegenerateVocabulary(slot, inhabitants) ->
+                sprintf
+                    "vocabulary slot '%s' supplies only %d distinct producible value(s); no committed \
+                     script can construct a second, so an Unbound arm distinguishing them is \
+                     unreachable by construction"
+                    slot
+                    inhabitants)
 
 [<RequireQualifiedAccess>]
 module Journey =
@@ -393,3 +420,65 @@ module Journey =
 
     let runPolicy adapter policy seed =
         runPolicyCore "" "" "" adapter policy seed
+
+    let private slotCardinalityGap
+        (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
+        (vocabulary: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list)
+        (slot: string)
+        (normalize: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> JourneyEvent<'key, 'pointer, 'menu, 'effectResult> option)
+        =
+        let inhabitants =
+            vocabulary
+            |> List.choose normalize
+            |> List.map adapter.EncodeEvent
+            |> List.distinct
+            |> List.length
+
+        if inhabitants = 1 then
+            Some(ActionCoverageGap.DegenerateVocabulary(slot, inhabitants))
+        else
+            None
+
+    let checkActionCoverage
+        (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
+        (vocabulary: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list)
+        (committedScripts: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list list)
+        : ActionCoverageReport =
+        let model = adapter.Boot()
+
+        let exercised =
+            committedScripts
+            |> List.collect id
+            |> List.map adapter.EncodeEvent
+            |> Set.ofList
+
+        let unexercisedUnbound =
+            vocabulary
+            |> List.choose (fun event ->
+                match adapter.MapEvent event model with
+                | JourneyDispatch.Mapped _ -> None
+                | JourneyDispatch.Unbound action ->
+                    let encoded = adapter.EncodeEvent event
+                    if Set.contains encoded exercised then
+                        None
+                    else
+                        Some(ActionCoverageGap.UnexercisedUnbound(action, encoded)))
+
+        // Cardinality is read off the DECLARED vocabulary, not off reflection over 'menu/'key/
+        // 'pointer: the harness never constrains those type parameters to `equality`, and a
+        // caller-declared vocabulary is exactly the set this check can otherwise ever exercise.
+        // `KeyInput` is normalized to `pressed = true` so a key's up/down pair counts once, per
+        // key, rather than doubling every key's inhabitant count.
+        let degenerate =
+            [ slotCardinalityGap adapter vocabulary "menu" (function
+                  | JourneyEvent.MenuAction _ as event -> Some event
+                  | _ -> None)
+              slotCardinalityGap adapter vocabulary "key" (function
+                  | JourneyEvent.KeyInput(key, _) -> Some(JourneyEvent.KeyInput(key, true))
+                  | _ -> None)
+              slotCardinalityGap adapter vocabulary "pointer" (function
+                  | JourneyEvent.PointerInput _ as event -> Some event
+                  | _ -> None) ]
+            |> List.choose id
+
+        { Gaps = unexercisedUnbound @ degenerate }

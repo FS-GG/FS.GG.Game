@@ -22,6 +22,25 @@ type JourneyDispatch<'message> =
     | Mapped of 'message list
     | Unbound of action: string
 
+/// A structural or empirical gap in a product's displayed-action coverage. Journey coverage is
+/// defined over the events a committed script actually issues; both cases name a way that
+/// definition can go blind to an action no player-emittable message reaches (`FS.GG.Game#563`).
+[<RequireQualifiedAccess>]
+type ActionCoverageGap =
+    /// `MapEvent` returns `JourneyDispatch.Unbound action` for `event`, and `event` (by
+    /// `adapter.EncodeEvent`) appears in none of the committed scripts supplied to
+    /// `Journey.checkActionCoverage`. The arm exists in source and is exercised by nothing: no
+    /// gate that only runs committed scripts can ever see it fire or fail to fire.
+    | UnexercisedUnbound of action: string * event: string
+    /// The declared `vocabulary` supplies only one distinct producible value at the named slot
+    /// (`"menu"`, `"key"`, or `"pointer"`). With one inhabitant, no script — however written —
+    /// can construct a second value at that slot, so an `Unbound` arm distinguishing it from
+    /// anything else is unreachable by construction, not merely unexercised by the current suite.
+    /// This is reported independently of `UnexercisedUnbound`: it can be the only signal when the
+    /// dead arm never appears in `MapEvent`'s output for the single inhabitant that exists (the
+    /// shape `FS.GG.Game#563` was filed against).
+    | DegenerateVocabulary of slot: string * inhabitants: int
+
 /// A product-owned adapter over its real composition root. Unlike `Playable`, it owns boot,
 /// timestamp-free host mapping, message dispatch, fixed ticks, and deterministic effect results.
 type ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> =
@@ -110,6 +129,20 @@ type JourneyRun<'model, 'event, 'fingerprint> =
 type JourneyPolicy<'model, 'event> =
     { DecideEvents: 'model -> Rng -> struct ('event list * Rng) }
 
+/// The verdict of `Journey.checkActionCoverage`: every gap found. Empty means the declared
+/// vocabulary is both fully wired, per the committed suite, and rich enough for that proof to mean
+/// something — a vocabulary that can express no more than one value per slot proves nothing by
+/// staying green, so it cannot be clean by omission.
+type ActionCoverageReport = { Gaps: ActionCoverageGap list }
+
+[<RequireQualifiedAccess>]
+module ActionCoverageReport =
+    /// True only when `Gaps` is empty.
+    val isClean: ActionCoverageReport -> bool
+
+    /// One human-readable line per gap, in `Gaps` order — for a failed-test message or a CI log.
+    val describe: ActionCoverageReport -> string list
+
 [<RequireQualifiedAccess>]
 module Journey =
     val runScriptWithIdentity:
@@ -137,3 +170,24 @@ module Journey =
         policy: JourneyPolicy<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>> ->
         seed: uint64 ->
             JourneyRun<'model, JourneyEvent<'key, 'pointer, 'menu, 'effectResult>, 'fingerprint>
+
+    /// Names every displayed-action coverage gap the committed suite cannot see on its own
+    /// (`FS.GG.Game#563`): an `Unbound` arm `MapEvent` can produce for a declared `vocabulary`
+    /// event that no script in `committedScripts` ever issues, and a `'menu`/`'key`/`'pointer`
+    /// slot whose `vocabulary` supplies only one distinct producible value (`'menu` instantiated
+    /// with `unit` being the shape this was filed against).
+    ///
+    /// `vocabulary` must be the product's own declaration of every event its displayed surface can
+    /// emit — every menu action, every key, every pointer gesture a player can actually trigger.
+    /// This sweep evaluates `MapEvent` once per vocabulary event against the freshly booted model;
+    /// it does not vary model state, so an `Unbound` arm that only a later game state reaches is
+    /// outside what one call proves. A `vocabulary` narrower than the real product understates
+    /// coverage, never overstates it: an event never declared here is invisible to this check the
+    /// same way it is invisible to the committed suite. This also cannot see a `'message` that
+    /// `MapEvent` produces for no event at all — a message no input path emits rather than one it
+    /// explicitly refuses — which is `FS.GG.Game#565`'s scope, not this function's.
+    val checkActionCoverage:
+        adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> ->
+        vocabulary: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list ->
+        committedScripts: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list list ->
+            ActionCoverageReport
