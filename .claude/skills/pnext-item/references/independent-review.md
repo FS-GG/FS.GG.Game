@@ -21,9 +21,39 @@ A finding is **material** only when the evidence shows at least one of:
 - acceptance criteria are unmet, or observable correctness, compatibility, security, data integrity,
   performance intent, or releaseability is at risk;
 - a test or gate can report green without checking its declared subject;
-- an architecture or ownership violation creates a concrete defect or blocks safe evolution; or
+- an architecture or ownership violation creates a concrete defect or blocks safe evolution;
 - bounded hardening prevents a measured recurring failure, retry, operational burden, or meaningful
-  maintenance cost.
+  maintenance cost; or
+- the item ships or claims reachable game functionality with no passing bot-driven headless player
+  journey (`.github#2087`) — see **Game functionality** below.
+
+## Game functionality — the bot-driven player journey gate
+
+This gate is **blocking**, not advisory. When an item ships or claims reachable game functionality,
+the critic verifies a passing bot-driven headless player journey exists and reviews the journey
+itself, not only its result: whether the messages used are genuinely player-emittable and whether
+the start point is genuinely the product's entry. Absence of that evidence is a material finding by
+itself, never a style note — a green suite that never boots the product cannot distinguish "works"
+from "unreachable" (`2026-08-02-Rogue3.md` §4.3: eleven consecutive `shipReady` verdicts preceded
+the human launch that found an unreachable starting room).
+
+A journey is evidence only when driven **through the product's real input surface** — the same
+control messages a player emits. Direct `Msg` injection, a test-only API, or any seam that exists
+solely for tests is **not evidence**; a journey using one is rejected by this gate, not merely
+discouraged in review prose. A journey must **boot at the product's real entry point** and reach the
+functionality by navigating as a player would — seeding a mid-game model, or claiming the
+functionality "reached" from such a seed, is a gate failure regardless of whether the reducer state
+afterward looks correct. The item states which functionality each journey covers; functionality
+named by the item that no journey reaches is reported as uncovered, never silently absent.
+
+Where the product's entry point is not yet test-ownable, the critic returns `changes-required` and
+records that the gate cannot run and why, rather than treating the absence as a pass — fail closed,
+not pass by absence.
+
+One advisory input is explicitly **not** consumed as blocking here: `FS.GG.Game#563`'s
+`DegenerateVocabulary` check fires unconditionally on declared-vocabulary cardinality alone, so it
+flags a legitimately single-inhabitant slot with zero `Unbound` arms. A `DegenerateVocabulary`-only
+finding, with no accompanying `Unbound`-arm evidence, is not by itself material under this gate.
 
 Style, naming taste, speculative edge cases, optional refactors, “could be cleaner” observations, and
 findings already repaired in the current PR are not material new work. Record them in the review
