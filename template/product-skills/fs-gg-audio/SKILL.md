@@ -116,6 +116,12 @@ let evidence =
   never called for it and anything the initial state implies — a restored volume, a menu track — is
   silently never requested. Handle it under `Started`; see
   [`Started` — the initial model makes no transition](#started--the-initial-model-makes-no-transition).
+- **Keying a cue on a message that later moves behind a coarser one.** A `match msg with` cue is fine
+  while that message is the only way its reducer is reached. If routing later folds the reducer
+  behind a different message instead — most often `Tick` — the cue silently stops firing on the
+  production route while a test that dispatches the original message directly stays green. See
+  [a message-keyed cue can silently orphan when its reducer moves behind a different
+  message](#a-message-keyed-cue-can-silently-orphan-when-its-reducer-moves-behind-a-different-message).
 
 ## Build Commands
 
@@ -231,6 +237,53 @@ asserts on the model catches it, the same failure shape as the [`Started`
 hole](#started--the-initial-model-makes-no-transition) below one level down. If you need to cue a
 same-frame appear-and-vanish event, **give it its own `Msg`** and match that, rather than trying to
 recover it from a diff that has already cancelled it out.
+
+### A message-keyed cue can silently orphan when its reducer moves behind a different message
+
+`match msg with | SomeMsg -> ...` is exactly right for a message that reaches `forTransition` as
+itself — a player-driven one-shot dispatched straight from input, where the message name IS the
+event. It stops being safe the moment the *reducer* that message used to be the only way to reach
+becomes reachable through a **different, coarser** message instead — most often when a menu- or
+input-resolved action gets folded inside `Tick` rather than staying its own dispatched case (the
+routing changed; the message case may still exist and still type-check).
+
+When that happens, a cue keyed on the retired route stops firing on the path a player actually takes:
+the production route now reaches the reducer through `Tick`, and the original message is never the
+`msg` `forTransition` receives on that route. Nothing type-checks wrong, so the seam looks intact —
+a test that dispatches the original message directly (`forTransition SomeMsg before after`, or
+`update SomeMsg model`) still returns the cue, because dispatching it directly is a route the seam
+still sees, even though the shipped game never dispatches it that way anymore.
+
+```fsharp
+// BEFORE — orphans the moment the production route stops dispatching `DescendFloor` on its own and
+// starts resolving the descent from inside a `Tick` instead (e.g. "press E on a trapdoor").
+let forTransition (msg: Msg) (previous: Model) (next: Model) : AudioEffect list =
+    match msg with
+    | DescendFloor -> [ Audio.playSfx (SoundId "floor-descend") 0.8 ]   // never the `msg` on the real route
+    | ...
+
+// AFTER — derived from the transition itself, so it fires no matter which message carries it.
+let forTransition (msg: Msg) (previous: Model) (next: Model) : AudioEffect list =
+    [ if next.FloorIndex > previous.FloorIndex then
+          Audio.playSfx (SoundId "floor-descend") 0.8   // fires however the descent actually happens
+      ... ]
+```
+
+**When a reducer is reachable from more than one message shape — or might become so as routing
+evolves — key the cue on the transition itself (a before/after model diff), not solely on message
+identity**, the same [before/after `Tick` diff](#deriving-cues-from-a-model-diff--most-gameplay-events-have-no-msg)
+form used above. A diff-derived cue keeps firing regardless of which message the routing sends
+through, because it never asked which message that was; a `msg`-only match is fragile in exact
+proportion to how many distinct routes can reach its reducer.
+
+**Test the production input route, not only the message.** A regression test that dispatches the
+message directly proves the cue *would* fire on that message — it does not prove that message is
+what a player's real input actually sends. Drive the same control a player uses (the key press, the
+menu confirm) through the production dispatch chain into whatever step actually resolves it, and
+assert the cue at the sink (e.g. `GeneratedAppHost.audioRequests`), not at the model and not by
+calling the reducer message by hand. Only a test that exercises the route can show a route-level
+orphaning red; a direct-dispatch test cannot see it, because it never asks the routing layer to do
+any routing.
 
 ### `Started` — the initial model makes no transition
 
