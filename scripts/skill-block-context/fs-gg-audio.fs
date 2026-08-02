@@ -151,7 +151,7 @@ let audioSink : AudioEffect list -> unit = ignore
 let interactiveHost : InteractiveAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
 let generatedHost : GeneratedAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
 
-//#block 9 "GeneratedAppHost.dispatchKey host keyEvent model"
+//#block 10 "GeneratedAppHost.dispatchKey host keyEvent model"
 // The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
 // sound WITHOUT a device. `dispatchKey` returns `(model * ViewerEffect list)` and `audioRequests`
 // narrows that to the `AudioEffect list` the block interprets — the `|> snd` and the two module
@@ -170,3 +170,9 @@ type KeyMsg = Fire
 let host : GeneratedAppHost<KeyModel, KeyMsg> = Unchecked.defaultof<_>
 let keyEvent : ViewerKeyEvent = Unchecked.defaultof<_>
 let model : KeyModel = { Score = 0 }
+
+//#block 9 "let generatedPcmSilence sampleRate frames ="
+// The content-completeness example owns ONE product cue inventory and derives both the request
+// batch and the resolver gate from it. It uses the real published AssetResolver and Wav surface;
+// the mutable packaged map is the deliberate negative-to-positive mutation the example documents.
+// `BinaryPrimitives`/SHA256 are BCL APIs, so no fixture reconstruction is needed.

@@ -372,6 +372,177 @@ sound **without editing the host**: add a case to `AudioCues.forTransition` and 
 an id with no file resolves to `None`, which the backend records as a no-op rather than throwing. So a
 product with no assets yet still runs, and still requests the right sounds.
 
+### Complete audio evidence: route, request, resolved content, then device
+
+Audio is deliberately allowed to degrade to a no-op when a device or an asset is unavailable. That
+makes a product robust; it must not make a feature silently complete. Keep these evidence classes
+separate:
+
+| Evidence | Proves | Does not prove |
+| --- | --- | --- |
+| **Route / reachability** | A player-emittable input reached the production update path that owns the cue. | That the cue was dispatched, resolved, or heard. |
+| **Requested / dispatched** | `ViewerEffect.PlayAudio` reached `GeneratedAppHost.audioRequests` in the expected order. | That its `SoundId`/`TrackId` has packaged bytes or that a device played it. |
+| **Resolved / deployable** | Every production-owned cue id resolves from the assets staged for the product. | That the player can reach the cue or that the host/device made it audible. |
+| **Live-device outcome** (optional, capable host only) | The backend and an actual device reported the expected result. | That every product route or every cue id was covered. |
+
+Use the first two together for a player journey: drive real input from the product entry point, then
+assert the request at the sink. Use the third whenever sound is expected to operate in a shipped
+profile. A null backend, absent device, or documented unresolved-asset no-op is a valid runtime
+degradation, not a passing readiness result. A live-device check is valuable integration evidence,
+but never a substitute for deterministic request and resolution checks.
+
+Own one cue-id set beside `AudioCues.forTransition`; derive both request coverage and resolution
+coverage from it. Do not maintain a test-only second list that can stay green after a new cue is
+added. This executable example has the required negative mutation: request assertions remain green
+while `pickup` is absent, the resolution gate names it, and adding a valid WAV clears the gate.
+
+```fsharp
+open System
+open System.Buffers.Binary
+open System.Security.Cryptography
+open FS.GG.Audio.Core
+open FS.GG.Audio.Host
+open FS.GG.UI.KeyboardInput
+open FS.GG.UI.Scene
+open FS.GG.UI.SkiaViewer
+
+type PlayerAction = Fired | PickupAcquired | ReturnedToMenu
+type Model = { Routed: PlayerAction list }
+
+module AudioCues =
+    // The production cue table is the one inventory. forTransition and resolution both derive
+    // from it, so adding a real cue cannot leave either check's hand-maintained twin unchanged.
+    let private cueByAction =
+        Map [ Fired, SoundId "fire"; PickupAcquired, SoundId "pickup"; ReturnedToMenu, SoundId "menu" ]
+
+    let productionSoundIds = cueByAction.Values |> Set.ofSeq
+
+    let forTransition action (_previous: Model) (_next: Model) =
+        [ Audio.playSfx cueByAction[action] 0.5 ]
+
+    let resolver (packaged: Map<SoundId, byte[]>) : AssetResolver =
+        { ResolveSound = fun id -> Map.tryFind id packaged
+          ResolveTrack = fun _ -> None }
+
+let playerScript =
+    [ { RawKey = "Space"; Direction = ViewerKeyDirection.KeyDown }
+      { RawKey = "E"; Direction = ViewerKeyDirection.KeyDown }
+      { RawKey = "Escape"; Direction = ViewerKeyDirection.KeyDown } ]
+
+let productHost installAudioDispatch : GeneratedAppHost<Model, PlayerAction> =
+    { Init = fun () -> { Routed = [] }, []
+      Update =
+        fun action previous ->
+            let next = { previous with Routed = previous.Routed @ [ action ] }
+            let audio = AudioCues.forTransition action previous next
+            let effects = if installAudioDispatch then [ ViewerEffect.PlayAudio audio ] else []
+            next, effects
+      View = fun _ -> Group []
+      MapKey =
+        fun key isDown ->
+            if not isDown then None
+            else
+                match key with
+                | Space -> Some Fired
+                | Letter 'e' -> Some PickupAcquired
+                | Escape -> Some ReturnedToMenu
+                | _ -> None
+      Tick = fun _ -> None
+      Diagnostics = Viewer.defaultDiagnostics }
+
+let drivePlayerRoute (host: GeneratedAppHost<Model, PlayerAction>) =
+    let initial, initEffects = host.Init()
+    let finalModel, viewerEffects =
+        playerScript
+        |> List.fold (fun (model, allEffects) input ->
+            let next, effects = GeneratedAppHost.dispatchKey host input model
+            next, allEffects @ effects) (initial, initEffects)
+    finalModel, viewerEffects, Audio.interpret (GeneratedAppHost.audioRequests viewerEffects)
+
+let routed, dispatchedViewerEffects, requestEvidence = drivePlayerRoute (productHost true)
+let expectedPlayerActions = [ Fired; PickupAcquired; ReturnedToMenu ]
+if routed.Routed <> expectedPlayerActions then
+    failwithf "player input did not reach the production update route: %A" routed.Routed
+
+let expectedRequests =
+    expectedPlayerActions
+    |> List.collect (fun action -> AudioCues.forTransition action { Routed = [] } { Routed = [] })
+
+if requestEvidence.Requested <> expectedRequests then
+    failwithf "the host boundary dispatched the wrong ordered requests: %A" requestEvidence.Requested
+
+let requestedSoundIds =
+    requestEvidence.Requested
+    |> List.choose (function PlaySfx(id, _) -> Some id | _ -> None)
+    |> Set.ofList
+if requestedSoundIds <> AudioCues.productionSoundIds then
+    failwithf "the player route did not cover every production cue id: %A" requestedSoundIds
+
+// The product launcher installs `Audio.play backend` as this sink. NullBackend proves that the
+// device-free host dispatch received the production batch; it makes no claim about audible output.
+use recordingBackend = NullBackend.create ()
+let hostSink: AudioEffect list -> unit = FS.GG.Audio.Host.Audio.play recordingBackend
+hostSink (GeneratedAppHost.audioRequests dispatchedViewerEffects)
+if recordingBackend.Evidence.Requested <> expectedRequests then
+    failwith "the product host sink did not receive the dispatched production requests"
+
+// Mutation-backed reachability: removing PlayAudio installation keeps reducer state green, but
+// must red the dispatch assertion. This kills the exact 'model changed, sound seam unwired' defect.
+let mutatedRoute, _, mutatedRequestEvidence = drivePlayerRoute (productHost false)
+if mutatedRoute.Routed <> routed.Routed then failwith "the mutation must preserve reducer behavior"
+if mutatedRequestEvidence.Requested = expectedRequests then
+    failwith "dispatch-installation mutation survived; the route/request evidence is not load-bearing"
+
+let unresolvedSoundIds resolver =
+    AudioCues.productionSoundIds
+    |> Set.filter (fun id ->
+        resolver.ResolveSound id
+        |> Option.bind Wav.tryParse
+        |> Option.isNone)
+
+// Deterministic, generated PCM is useful for a test/content fixture only. Keep its source
+// parameters and digest in review; replace it with authored production audio before shipping.
+let generatedPcmSilence sampleRate frames =
+    let bytes = Array.zeroCreate<byte> (44 + 2 * frames)
+    let writeText offset (text: string) =
+        Text.Encoding.ASCII.GetBytes text |> Array.iteri (fun i b -> bytes[offset + i] <- b)
+    writeText 0 "RIFF"
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(4, 4), 36 + 2 * frames)
+    writeText 8 "WAVE"
+    writeText 12 "fmt "
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(16, 4), 16)
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(20, 2), 1s) // PCM
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(22, 2), 1s) // mono
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(24, 4), sampleRate)
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(28, 4), sampleRate * 2)
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(32, 2), 2s)
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(34, 2), 16s)
+    writeText 36 "data"
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(40, 4), 2 * frames)
+    bytes
+
+let fixtureWav = generatedPcmSilence 8000 8
+let fixtureDigest = Convert.ToHexString(SHA256.HashData fixtureWav)
+if Wav.tryParse fixtureWav |> Option.isNone then failwith "generated fixture must be valid PCM WAV"
+
+let mutable packaged =
+    Map [ SoundId "fire", fixtureWav; SoundId "menu", fixtureWav ] // pickup deliberately absent
+
+let missingBefore = unresolvedSoundIds (AudioCues.resolver packaged)
+if requestEvidence.Requested <> expectedRequests then
+    failwith "all production requests must remain green while resolution is red"
+if missingBefore <> set [ SoundId "pickup" ] then
+    failwithf "resolution gate must name the missing id; got %A" missingBefore
+
+packaged <- packaged.Add(SoundId "pickup", fixtureWav) // mutation: staged content now contains it
+if unresolvedSoundIds (AudioCues.resolver packaged) <> Set.empty then
+    failwith "resolution gate must clear only after every production cue resolves"
+```
+
+`fixtureDigest` makes the generated output reviewable; record it with the generation parameters in
+the test/content manifest. It is not evidence that a production asset is artist-authored, licensed,
+or appropriate — use the product's authored-content and packaging checks for those obligations.
+
 Two escape hatches you rarely need. The silent entry points — the second line of each family in the
 launcher block above — simply **discard** audio: use one when a product should make no sound at all.
 And `GeneratedAppHost.audioRequests : ViewerEffect list -> AudioEffect list` flattens a frame's batches
