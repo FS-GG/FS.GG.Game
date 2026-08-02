@@ -176,9 +176,13 @@ the declaring namespace/module, at the cost that *renaming or moving* an otherwi
 changes the fingerprint; for an authorship/replay fingerprint that is the correct call; deciding
 otherwise is not free, so choose `.FullName` deliberately here rather than reaching for the shorter
 `.Name`. A union case's own runtime type is the compiler-generated per-case subtype, not the declaring
-union — its `.FullName` therefore does not equal the declaring union's `.FullName` — so the walk below
-resolves the DECLARING union type first, off `t.BaseType`, before tagging. A worked, minimal version —
-extend the final match arm for the leaf types your own model adds, never with a lossy string fallback:
+union — but it is a *nested* CLR type, so its `.FullName` already embeds the declaring union
+(`MyApp.WeatherKind+Storm`) and does not collide across unions on its own. The walk below still
+resolves the DECLARING union type first, off `t.BaseType`, before tagging — not to avoid a collision,
+but because tagging with the subtype's `FullName` directly would print the redundant
+`WeatherKind+Storm.Storm(5)`; resolving first keeps the tag exactly `WeatherKind.Storm(5)`. A worked,
+minimal version — extend the final match arm for the leaf types your own model adds, never with a
+lossy string fallback:
 
 ```fsharp
 open Microsoft.FSharp.Reflection
@@ -240,10 +244,12 @@ let rec encodeModel (value: obj) : string =
                 app "]"
             elif FSharpType.IsUnion(t, true) then
                 let case, fields = FSharpValue.GetUnionFields(value, t, true)
-                // `t` is a multi-case union's compiler-generated PER-CASE subtype, whose own
-                // `.Name`/`.FullName` equals the case name, not the declaring union's — resolve the
-                // declaring type off `BaseType` before tagging, or two different unions that share a
-                // case name (`WeatherKind.Storm` / `AlertLevel.Storm`) would encode identically.
+                // `t` is a multi-case union's compiler-generated PER-CASE subtype, whose own `.Name`
+                // is just the case name — but it is a NESTED CLR type, so its `.FullName` already
+                // embeds the declaring union (`WeatherKind+Storm`) and would NOT collide with another
+                // union's same-named case even tagged as-is. Resolving the declaring type off
+                // `BaseType` here is a readability choice, not a correctness requirement: it turns
+                // the redundant `WeatherKind+Storm.Storm(5)` into the clean `WeatherKind.Storm(5)`.
                 let declaringType =
                     match t.BaseType with
                     | null -> t
@@ -272,8 +278,8 @@ assert (encodeModel (Map.ofList [ 1, "a"; 2, "b" ]) <> encodeModel (Map.ofList [
 assert (encodeModel (Map.ofList [ 2, "b"; 1, "a" ]) = encodeModel (Map.ofList [ 1, "a"; 2, "b" ]))
 
 // Two DIFFERENT declared types that share a record or union-case simple name must NOT collide —
-// `.Name` alone would report these equal; `.FullName` (and the resolved declaring union type above)
-// tells them apart:
+// `.Name` alone would report these equal; tagging with `.FullName` (records) and the resolved
+// declaring union type's `.FullName` (unions) tells them apart:
 type WeatherKind = Sunny | Storm of int
 type AlertLevel = Calm | Storm of int
 assert (encodeModel (box (WeatherKind.Storm 5)) <> encodeModel (box (AlertLevel.Storm 5)))
