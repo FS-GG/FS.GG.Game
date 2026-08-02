@@ -402,28 +402,103 @@ open System.Buffers.Binary
 open System.Security.Cryptography
 open FS.GG.Audio.Core
 open FS.GG.Audio.Host
+open FS.GG.UI.KeyboardInput
+open FS.GG.UI.Scene
+open FS.GG.UI.SkiaViewer
+
+type PlayerAction = Fired | PickupAcquired | ReturnedToMenu
+type Model = { Routed: PlayerAction list }
 
 module AudioCues =
-    // Product-owned inventory: add a cue here when forTransition can request it.
-    let productionSoundIds = set [ SoundId "fire"; SoundId "pickup"; SoundId "menu" ]
+    // The production cue table is the one inventory. forTransition and resolution both derive
+    // from it, so adding a real cue cannot leave either check's hand-maintained twin unchanged.
+    let private cueByAction =
+        Map [ Fired, SoundId "fire"; PickupAcquired, SoundId "pickup"; ReturnedToMenu, SoundId "menu" ]
+
+    let productionSoundIds = cueByAction.Values |> Set.ofSeq
+
+    let forTransition action (_previous: Model) (_next: Model) =
+        [ Audio.playSfx cueByAction[action] 0.5 ]
 
     let resolver (packaged: Map<SoundId, byte[]>) : AssetResolver =
         { ResolveSound = fun id -> Map.tryFind id packaged
           ResolveTrack = fun _ -> None }
 
-let requested =
-    AudioCues.productionSoundIds
-    |> Set.toList
-    |> List.map (fun id -> Audio.playSfx id 0.5)
-    |> Audio.interpret
-    |> fun evidence -> evidence.Requested
+let playerScript =
+    [ { RawKey = "Space"; Direction = ViewerKeyDirection.KeyDown }
+      { RawKey = "E"; Direction = ViewerKeyDirection.KeyDown }
+      { RawKey = "Escape"; Direction = ViewerKeyDirection.KeyDown } ]
 
-if List.length requested <> Set.count AudioCues.productionSoundIds then
-    failwith "request coverage must derive from the production cue inventory"
+let productHost installAudioDispatch : GeneratedAppHost<Model, PlayerAction> =
+    { Init = fun () -> { Routed = [] }, []
+      Update =
+        fun action previous ->
+            let next = { previous with Routed = previous.Routed @ [ action ] }
+            let audio = AudioCues.forTransition action previous next
+            let effects = if installAudioDispatch then [ ViewerEffect.PlayAudio audio ] else []
+            next, effects
+      View = fun _ -> Group []
+      MapKey =
+        fun key isDown ->
+            if not isDown then None
+            else
+                match key with
+                | Space -> Some Fired
+                | Letter 'e' -> Some PickupAcquired
+                | Escape -> Some ReturnedToMenu
+                | _ -> None
+      Tick = fun _ -> None
+      Diagnostics = Viewer.defaultDiagnostics }
+
+let drivePlayerRoute (host: GeneratedAppHost<Model, PlayerAction>) =
+    let initial, initEffects = host.Init()
+    let finalModel, viewerEffects =
+        playerScript
+        |> List.fold (fun (model, allEffects) input ->
+            let next, effects = GeneratedAppHost.dispatchKey host input model
+            next, allEffects @ effects) (initial, initEffects)
+    finalModel, viewerEffects, Audio.interpret (GeneratedAppHost.audioRequests viewerEffects)
+
+let routed, dispatchedViewerEffects, requestEvidence = drivePlayerRoute (productHost true)
+let expectedPlayerActions = [ Fired; PickupAcquired; ReturnedToMenu ]
+if routed.Routed <> expectedPlayerActions then
+    failwithf "player input did not reach the production update route: %A" routed.Routed
+
+let expectedRequests =
+    expectedPlayerActions
+    |> List.collect (fun action -> AudioCues.forTransition action { Routed = [] } { Routed = [] })
+
+if requestEvidence.Requested <> expectedRequests then
+    failwithf "the host boundary dispatched the wrong ordered requests: %A" requestEvidence.Requested
+
+let requestedSoundIds =
+    requestEvidence.Requested
+    |> List.choose (function PlaySfx(id, _) -> Some id | _ -> None)
+    |> Set.ofList
+if requestedSoundIds <> AudioCues.productionSoundIds then
+    failwithf "the player route did not cover every production cue id: %A" requestedSoundIds
+
+// The product launcher installs `Audio.play backend` as this sink. NullBackend proves that the
+// device-free host dispatch received the production batch; it makes no claim about audible output.
+use recordingBackend = NullBackend.create ()
+let hostSink: AudioEffect list -> unit = FS.GG.Audio.Host.Audio.play recordingBackend
+hostSink (GeneratedAppHost.audioRequests dispatchedViewerEffects)
+if recordingBackend.Evidence.Requested <> expectedRequests then
+    failwith "the product host sink did not receive the dispatched production requests"
+
+// Mutation-backed reachability: removing PlayAudio installation keeps reducer state green, but
+// must red the dispatch assertion. This kills the exact 'model changed, sound seam unwired' defect.
+let mutatedRoute, _, mutatedRequestEvidence = drivePlayerRoute (productHost false)
+if mutatedRoute.Routed <> routed.Routed then failwith "the mutation must preserve reducer behavior"
+if mutatedRequestEvidence.Requested = expectedRequests then
+    failwith "dispatch-installation mutation survived; the route/request evidence is not load-bearing"
 
 let unresolvedSoundIds resolver =
     AudioCues.productionSoundIds
-    |> Set.filter (resolver.ResolveSound >> Option.isNone)
+    |> Set.filter (fun id ->
+        resolver.ResolveSound id
+        |> Option.bind Wav.tryParse
+        |> Option.isNone)
 
 // Deterministic, generated PCM is useful for a test/content fixture only. Keep its source
 // parameters and digest in review; replace it with authored production audio before shipping.
@@ -454,6 +529,8 @@ let mutable packaged =
     Map [ SoundId "fire", fixtureWav; SoundId "menu", fixtureWav ] // pickup deliberately absent
 
 let missingBefore = unresolvedSoundIds (AudioCues.resolver packaged)
+if requestEvidence.Requested <> expectedRequests then
+    failwith "all production requests must remain green while resolution is red"
 if missingBefore <> set [ SoundId "pickup" ] then
     failwithf "resolution gate must name the missing id; got %A" missingBefore
 
