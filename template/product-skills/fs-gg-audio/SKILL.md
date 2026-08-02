@@ -372,6 +372,100 @@ sound **without editing the host**: add a case to `AudioCues.forTransition` and 
 an id with no file resolves to `None`, which the backend records as a no-op rather than throwing. So a
 product with no assets yet still runs, and still requests the right sounds.
 
+### Complete audio evidence: route, request, resolved content, then device
+
+Audio is deliberately allowed to degrade to a no-op when a device or an asset is unavailable. That
+makes a product robust; it must not make a feature silently complete. Keep these evidence classes
+separate:
+
+| Evidence | Proves | Does not prove |
+| --- | --- | --- |
+| **Route / reachability** | A player-emittable input reached the production update path that owns the cue. | That the cue was dispatched, resolved, or heard. |
+| **Requested / dispatched** | `ViewerEffect.PlayAudio` reached `GeneratedAppHost.audioRequests` in the expected order. | That its `SoundId`/`TrackId` has packaged bytes or that a device played it. |
+| **Resolved / deployable** | Every production-owned cue id resolves from the assets staged for the product. | That the player can reach the cue or that the host/device made it audible. |
+| **Live-device outcome** (optional, capable host only) | The backend and an actual device reported the expected result. | That every product route or every cue id was covered. |
+
+Use the first two together for a player journey: drive real input from the product entry point, then
+assert the request at the sink. Use the third whenever sound is expected to operate in a shipped
+profile. A null backend, absent device, or documented unresolved-asset no-op is a valid runtime
+degradation, not a passing readiness result. A live-device check is valuable integration evidence,
+but never a substitute for deterministic request and resolution checks.
+
+Own one cue-id set beside `AudioCues.forTransition`; derive both request coverage and resolution
+coverage from it. Do not maintain a test-only second list that can stay green after a new cue is
+added. This executable example has the required negative mutation: request assertions remain green
+while `pickup` is absent, the resolution gate names it, and adding a valid WAV clears the gate.
+
+```fsharp
+open System
+open System.Buffers.Binary
+open System.Security.Cryptography
+open FS.GG.Audio.Core
+open FS.GG.Audio.Host
+
+module AudioCues =
+    // Product-owned inventory: add a cue here when forTransition can request it.
+    let productionSoundIds = set [ SoundId "fire"; SoundId "pickup"; SoundId "menu" ]
+
+    let resolver (packaged: Map<SoundId, byte[]>) : AssetResolver =
+        { ResolveSound = fun id -> Map.tryFind id packaged
+          ResolveTrack = fun _ -> None }
+
+let requested =
+    AudioCues.productionSoundIds
+    |> Set.toList
+    |> List.map (fun id -> Audio.playSfx id 0.5)
+    |> Audio.interpret
+    |> fun evidence -> evidence.Requested
+
+if List.length requested <> Set.count AudioCues.productionSoundIds then
+    failwith "request coverage must derive from the production cue inventory"
+
+let unresolvedSoundIds resolver =
+    AudioCues.productionSoundIds
+    |> Set.filter (resolver.ResolveSound >> Option.isNone)
+
+// Deterministic, generated PCM is useful for a test/content fixture only. Keep its source
+// parameters and digest in review; replace it with authored production audio before shipping.
+let generatedPcmSilence sampleRate frames =
+    let bytes = Array.zeroCreate<byte> (44 + 2 * frames)
+    let writeText offset (text: string) =
+        Text.Encoding.ASCII.GetBytes text |> Array.iteri (fun i b -> bytes[offset + i] <- b)
+    writeText 0 "RIFF"
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(4, 4), 36 + 2 * frames)
+    writeText 8 "WAVE"
+    writeText 12 "fmt "
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(16, 4), 16)
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(20, 2), 1s) // PCM
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(22, 2), 1s) // mono
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(24, 4), sampleRate)
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(28, 4), sampleRate * 2)
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(32, 2), 2s)
+    BinaryPrimitives.WriteInt16LittleEndian(bytes.AsSpan(34, 2), 16s)
+    writeText 36 "data"
+    BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(40, 4), 2 * frames)
+    bytes
+
+let fixtureWav = generatedPcmSilence 8000 8
+let fixtureDigest = Convert.ToHexString(SHA256.HashData fixtureWav)
+if Wav.tryParse fixtureWav |> Option.isNone then failwith "generated fixture must be valid PCM WAV"
+
+let mutable packaged =
+    Map [ SoundId "fire", fixtureWav; SoundId "menu", fixtureWav ] // pickup deliberately absent
+
+let missingBefore = unresolvedSoundIds (AudioCues.resolver packaged)
+if missingBefore <> set [ SoundId "pickup" ] then
+    failwithf "resolution gate must name the missing id; got %A" missingBefore
+
+packaged <- packaged.Add(SoundId "pickup", fixtureWav) // mutation: staged content now contains it
+if unresolvedSoundIds (AudioCues.resolver packaged) <> Set.empty then
+    failwith "resolution gate must clear only after every production cue resolves"
+```
+
+`fixtureDigest` makes the generated output reviewable; record it with the generation parameters in
+the test/content manifest. It is not evidence that a production asset is artist-authored, licensed,
+or appropriate — use the product's authored-content and packaging checks for those obligations.
+
 Two escape hatches you rarely need. The silent entry points — the second line of each family in the
 launcher block above — simply **discard** audio: use one when a product should make no sound at all.
 And `GeneratedAppHost.audioRequests : ViewerEffect list -> AudioEffect list` flattens a frame's batches
