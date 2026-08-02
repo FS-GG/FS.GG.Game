@@ -365,6 +365,50 @@ let tests =
                       productionScript
                   |> ignore)
 
+          testCase "definitionDigest is stable across receipts whose composition authority differs but every authored declaration is identical (FS.GG.Game#562)"
+          <| fun _ ->
+              // Every field here is unchanged from productionAdapter EXCEPT the six
+              // authority-checked composition functions, each re-wrapped in a closure freshly
+              // authored in THIS assembly (Game.Harness.Tests) rather than FS.GG.Game.Reference.
+              // Wrapping uniformly keeps a single shared authority (so validation still accepts
+              // it) while moving that authority to a different assembly -- the same shape a
+              // rebuild produces (a fresh module version id), without needing a real rebuild to
+              // prove it. EncodeEvent/EncodeFingerprint/Fingerprint are reused verbatim (they are
+              // not authority-checked) so every digest fed by them stays byte-identical.
+              let crossAuthorityAdapter =
+                  { productionAdapter with
+                      Boot = fun () -> productionAdapter.Boot()
+                      MapEvent = fun event model -> productionAdapter.MapEvent event model
+                      Update = fun message model -> productionAdapter.Update message model
+                      FixedTick = fun model -> productionAdapter.FixedTick model
+                      ApplyEffectResult = fun effect model -> productionAdapter.ApplyEffectResult effect model
+                      IsTerminal = fun model -> productionAdapter.IsTerminal model }
+
+              let original = runScript productionAdapter productionScript
+              let rebuilt = runScript crossAuthorityAdapter productionScript
+
+              Expect.notEqual
+                  (JourneyReceipt.compositionAuthority original.Receipt)
+                  (JourneyReceipt.compositionAuthority rebuilt.Receipt)
+                  "the two receipts really do carry different build/composition identities"
+              Expect.equal
+                  (JourneyReceipt.definitionDigest original.Receipt)
+                  (JourneyReceipt.definitionDigest rebuilt.Receipt)
+                  "a different composition authority -- the shape a rebuild of identical sources \
+                   produces via a fresh module version id -- must not move the reviewable \
+                   definition digest"
+
+          testCase "definitionDigest changes when an authored declaration changes"
+          <| fun _ ->
+              let original = runScript productionAdapter productionScript
+              let renamedTest =
+                  runScript { productionAdapter with TestId = productionAdapter.TestId + "-renamed" } productionScript
+
+              Expect.notEqual
+                  (JourneyReceipt.definitionDigest original.Receipt)
+                  (JourneyReceipt.definitionDigest renamedTest.Receipt)
+                  "a real change to an authored declaration (here, testId) must move the definition digest"
+
           testCase "runScriptWithIdentity's composition-authority diagnostic names the likely cause, not only the mismatch (FS.GG.Game#565)"
           <| fun _ ->
               // productionAdapter's six composition functions are all authored in FS.GG.Game.Reference

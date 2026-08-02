@@ -101,6 +101,18 @@ module JourneyReceipt =
     val steps: JourneyReceipt -> int
     val maxSteps: JourneyReceipt -> int
 
+    /// Stable digest over exactly the receipt's authored, reproducible declarations: schema
+    /// version, origin, route/scenario/test identities, input kind/identity/digest, script and
+    /// trace digests, initial and terminal fingerprint digests, the terminal-predicate identity
+    /// and reached bit, the outcome, and the step counts. Deliberately excludes `runnerIdentity`,
+    /// `runnerVersion`, and `compositionAuthority`: those accessors carry the runner's own build
+    /// identity, which changes on every rebuild of identical sources (`FS.GG.Game#562`), and are
+    /// preserved unchanged for provenance and tamper-evidence checks -- never for diffing. Use
+    /// this value, not a hand-rolled hash over every accessor, for any committed evidence artifact
+    /// a human or CI diffs across runs: hashing build identity alongside authored content makes
+    /// "regenerated with nothing changed" indistinguishable from "a real change landed".
+    val definitionDigest: JourneyReceipt -> string
+
 /// Non-generic executable proof boundary loaded by `fsgg-playtest`. Implementations can return a
 /// receipt only by running the typed journey API; the CLI consumes the opaque value in-process and
 /// never accepts production provenance from JSON or another caller-authored text artifact.
