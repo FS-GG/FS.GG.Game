@@ -363,4 +363,40 @@ let tests =
                       ""
                       productionAdapter
                       productionScript
-                  |> ignore) ]
+                  |> ignore)
+
+          testCase "runScriptWithIdentity's composition-authority diagnostic names the likely cause, not only the mismatch (FS.GG.Game#565)"
+          <| fun _ ->
+              // productionAdapter's six composition functions are all authored in FS.GG.Game.Reference
+              // (Composition.adapter, a separate assembly from this test project). Overriding just one
+              // field with a closure written HERE reproduces the exact shape Rogue3 hit: a
+              // caller-authored function crossing into an otherwise product-owned composition, which
+              // `compositionAuthority` must reject by assembly identity.
+              let crossed =
+                  { productionAdapter with
+                      ApplyEffectResult = fun _ model -> model }
+
+              let thrown =
+                  try
+                      Journey.runScriptWithIdentity
+                          Composition.inputIdentity
+                          Composition.terminalPredicateIdentity
+                          crossed
+                          productionScript
+                      |> ignore
+                      None
+                  with :? System.ArgumentException as ex ->
+                      Some ex.Message
+
+              match thrown with
+              | None ->
+                  failtest "a composition mixing product- and caller-authored functions must be rejected"
+              | Some message ->
+                  Expect.stringContains
+                      message
+                      "do not share one assembly authority"
+                      "the mismatch is still named by function and assembly identity"
+                  Expect.stringContains
+                      message
+                      "caller-constructed closure crossing into the composition"
+                      "the diagnostic also names the likely cause, not only the raw mismatch" ]

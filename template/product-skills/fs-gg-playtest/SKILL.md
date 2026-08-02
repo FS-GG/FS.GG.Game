@@ -29,7 +29,9 @@ For `production-journey` coverage:
 
 1. Build `ProductionJourney<...>` beside the product composition root. `Boot` must be the shipped
    boot/init function; `MapEvent`, `Update`, `FixedTick`, and `ApplyEffectResult` must reference the
-   production functions rather than test adapters.
+   production functions rather than test adapters. A caller-supplied model or boot closure, even one
+   wrapped by a product-side factory, fails the composition-authority check — see "Owning the whole
+   entry point" below for the pattern that satisfies it.
 2. Drive `JourneyEvent.Start`, menu actions, key up/down, pointer/aim, `Interact`, pause/resume,
    `FixedTick`, and declared deterministic `EffectResult` values as the scenario needs.
 3. Set a positive `MaxSteps` and a terminal predicate. Exhaustion is a failed receipt containing the
@@ -139,9 +141,92 @@ This function evaluates `MapEvent` once per vocabulary event against the freshly
 **What this still cannot see.** `checkActionCoverage` finds an `Unbound` arm your own vocabulary
 reaches; it cannot find a `'message` your `MapEvent` produces for **no** event at all — a message no
 input path emits, as distinct from one it explicitly refuses. Proving that a message is reachable from
-the product's real entry point through the real control surface is `FS.GG.Game#565`'s and
-`.github#2087`'s scope, not this function's: this closes the coverage-model blind spot; it does not by
-itself prove a bot or player can reach the action from boot.
+the product's real entry point through the real control surface needs the product to own its whole
+journey entry point (below), and is `.github#2087`'s scope, not this function's: this closes the
+coverage-model blind spot; it does not by itself prove a bot or player can reach the action from boot.
+
+### Owning the whole entry point: composition authority
+
+`Journey.runScriptWithIdentity` and `Journey.runPolicyWithIdentity` refuse an adapter whose composition
+functions (`Boot`, `MapEvent`, `Update`, `FixedTick`, `ApplyEffectResult`, `IsTerminal`) do not all come
+from one assembly. This is not incidental strictness: it is the mechanism that stops a test from
+laundering its own state into a "production" journey through a side door, so the receipt's
+`compositionAuthority` field means what it says.
+
+**The trap.** A product-side factory that just wraps a caller-supplied value does not satisfy the check,
+even though it looks like the product owns the composition:
+
+```text
+// LOOKS like the product owns Boot. Does not satisfy compositionAuthority.
+let journeyBootOf model = fun () -> model   // defined in the product
+...
+Boot = journeyBootOf someTestBuiltModel     // called from a test with a test-built model
+```
+
+The returned closure's composition authority follows the value that built it, not the module that wraps
+it — a caller-constructed closure crossing into the composition this way is exactly what the check
+exists to catch. Reaching for this shape costs a full round trip through the check every time: build,
+run, get refused, try to route around it, get refused again. That is the source of this guidance
+(`2026-08-01-Rogue3-12.md` §4.7) — three failed `dotnet test` runs and two discarded implementations
+before landing on the pattern below.
+
+**The supported pattern.** The product owns the *whole* entry point: expose a function that takes a
+script (and only product-internal parameters that resolve without any caller-supplied closure) and **no
+model parameter at all**. Every composition function is then defined and referenced entirely inside the
+product module, so `compositionAuthority` sees exactly one assembly — not because the check was routed
+around, but because the composition genuinely has one author.
+
+```fsharp
+open FS.GG.Game.Core
+open FS.GG.Game.Harness
+
+type Model = { Started: bool }
+
+// The product owns Boot outright: no parameters, no caller-supplied closure folded in.
+let boot () : Model = { Started = false }
+
+let mapEvent (event: JourneyEvent<unit, unit, unit, unit>) (_model: Model) =
+    match event with
+    | JourneyEvent.Start -> JourneyDispatch.Mapped [ "start" ]
+    | _ -> JourneyDispatch.Mapped []
+
+let update (message: string) (model: Model) =
+    match message with
+    | "start" -> { model with Started = true }
+    | _ -> model
+
+let adapter: ProductionJourney<Model, unit, unit, unit, unit, string, Model> =
+    { RouteId = "doc-owned-entry-point"
+      ScenarioId = "owns-boot"
+      TestId = "GP-DOC-002"
+      MaxSteps = 4
+      Boot = boot
+      MapEvent = mapEvent
+      Update = update
+      FixedTick = id
+      ApplyEffectResult = fun _ model -> model
+      IsTerminal = fun model -> model.Started
+      Fingerprint = id
+      EncodeEvent = sprintf "%A"
+      EncodeFingerprint = sprintf "%A" }
+
+// The product's own entry point: a script in, a JourneyRun out. NOTHING else — no model
+// parameter, no caller-built closure crossing into Boot/MapEvent/Update/FixedTick/
+// ApplyEffectResult/IsTerminal above. A test calls this function and only this function; every
+// composition function it closes over was authored in the product module, which is what
+// satisfies compositionAuthority for the reason the check exists, not by routing around it.
+let runOwnedJourney (script: JourneyEvent<unit, unit, unit, unit> list) =
+    Journey.runScriptWithIdentity "doc-owned-entry-point/script-v1" "doc-owned-entry-point/started" adapter script
+
+let run = runOwnedJourney [ JourneyEvent.Start ]
+let passed: bool = JourneyReceipt.result run.Receipt = JourneyResult.Passed
+```
+
+A test authored against this shape supplies only `script` — never a model, never a boot closure — and
+passes the composition-authority check on the first attempt. If you still hit the rejection, the
+diagnostic now names the likely cause in addition to each function's assembly and module version id: a
+caller-constructed closure crossing into the composition. Move that closure inside the product's own
+entry point rather than trying to wrap it more cleverly; wrapping is what fails.
 
 ## Independent acceptance critic
 
@@ -386,6 +471,10 @@ JSONL bound to the matching test identity.
   throws away the point of the boundary — project the view down to what the policy legitimately sees.
 - **Calling a helper directly or replacing `Playable.Init` for a user-facing AC.** That proves a
   component only. Add a production journey starting from boot.
+- **A product-side boot factory that wraps a caller-supplied model.** `journeyBootOf model = fun () ->
+  model` looks like the product owns `Boot`, but the returned closure's composition authority follows
+  the caller, not the factory, so `runScriptWithIdentity` rejects it. Give the product an entry point
+  that takes a script and no model at all — see "Owning the whole entry point" above.
 - **Silently dropping a displayed action.** Return `JourneyDispatch.Unbound`; an empty mapped message
   list is reserved for a deliberately handled no-op.
 - **Instantiating `'menu` (or `'key`/`'pointer`) with a single-inhabitant type.** No script can then
