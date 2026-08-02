@@ -257,16 +257,15 @@ still sees, even though the shipped game never dispatches it that way anymore.
 ```fsharp
 // BEFORE — orphans the moment the production route stops dispatching `DescendFloor` on its own and
 // starts resolving the descent from inside a `Tick` instead (e.g. "press E on a trapdoor").
-let forTransition (msg: Msg) (previous: Model) (next: Model) : AudioEffect list =
+let forTransitionKeyedOnMessage (msg: Msg) (previous: Model) (next: Model) : AudioEffect list =
     match msg with
     | DescendFloor -> [ Audio.playSfx (SoundId "floor-descend") 0.8 ]   // never the `msg` on the real route
-    | ...
+    | Tick _ -> []
 
 // AFTER — derived from the transition itself, so it fires no matter which message carries it.
-let forTransition (msg: Msg) (previous: Model) (next: Model) : AudioEffect list =
+let forTransitionKeyedOnDiff (_msg: Msg) (previous: Model) (next: Model) : AudioEffect list =
     [ if next.FloorIndex > previous.FloorIndex then
-          Audio.playSfx (SoundId "floor-descend") 0.8   // fires however the descent actually happens
-      ... ]
+          Audio.playSfx (SoundId "floor-descend") 0.8 ]   // fires however the descent actually happens
 ```
 
 **When a reducer is reachable from more than one message shape — or might become so as routing
