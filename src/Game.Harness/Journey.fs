@@ -122,6 +122,41 @@ module JourneyReceipt =
     let steps (receipt: JourneyReceipt) = receipt.Data.Steps
     let maxSteps (receipt: JourneyReceipt) = receipt.Data.MaxSteps
 
+    let definitionDigest (receipt: JourneyReceipt) =
+        let data = receipt.Data
+        let origin =
+            match data.Origin with
+            | Origin.ProductionJourney -> "production-journey"
+            | Origin.InputDriven -> "input-driven"
+            | Origin.Synthetic -> "synthetic"
+        let inputKind =
+            match data.InputKind with
+            | JourneyInputKind.FixedScript -> "fixed-script"
+            | JourneyInputKind.SeededPolicy -> "seeded-policy"
+        let outcome =
+            match data.Result with
+            | JourneyResult.Passed -> "passed"
+            | JourneyResult.Failed reason -> "failed:" + reason
+
+        Stable.digestParts
+            [ string data.SchemaVersion
+              origin
+              data.RouteId
+              data.ScenarioId
+              data.TestId
+              inputKind
+              data.InputIdentity
+              data.InputDigest
+              data.ScriptDigest
+              data.TraceDigest
+              data.InitialFingerprintDigest
+              data.TerminalFingerprintDigest
+              data.TerminalPredicateIdentity
+              (data.TerminalPredicateReached.ToString().ToLowerInvariant())
+              outcome
+              string data.Steps
+              string data.MaxSteps ]
+
 type IProductionJourneyProof =
     abstract TestId: string
     abstract Run: unit -> JourneyReceipt
