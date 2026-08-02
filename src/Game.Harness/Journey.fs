@@ -298,7 +298,15 @@ module Journey =
                 |> String.concat ", "
             invalidArg
                 "adapter"
-                ("production composition functions do not share one assembly authority: " + detail)
+                ("production composition functions do not share one assembly authority: " + detail
+                 + ". Likely cause: a caller-constructed closure crossing into the composition -- for \
+                    example, a product-side boot factory that wraps a caller-supplied model \
+                    (journeyBootOf model = fun () -> model) still returns a closure whose composition \
+                    authority follows the caller that built it, not the factory that returned it. Give \
+                    the product the whole entry point instead: a function that takes a script (and only \
+                    product-internal parameters, never a caller-supplied closure) and no model \
+                    parameter at all, so every composition function is authored inside the product \
+                    module.")
 
     let private runScriptCore
         (compositionAuthority: string)
