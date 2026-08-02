@@ -401,6 +401,86 @@ emit_bare() {
 links=$(emit_links | sort -u | sort -t$'\t' -k1,1 -k2,2n)
 bares=$(emit_bare | sort -u | sort -t$'\t' -k1,1 -k2,2n)
 
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+# 1b. SELF-REFERENCING CITATIONS (FS.GG.Game#568)
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# A citation of the ISSUE THIS VERY PR CLOSES is a trap § 2 cannot see: at PR time that issue is
+# open (it cannot yet be otherwise — merging is what closes it), so the link half passes, correctly,
+# on the state that exists right now. Merging then closes it, the citation dangles, and the very
+# next push-to-`main` run goes red — over a PR every check, including this one, called green.
+#
+# A `closed-ok` marker does not fix this: it would have to be added while the cited issue is still
+# open (the marker audit below rejects a marker on an OPEN ref as stale), so it is unwritable at
+# authorship time for exactly this case. The only sound fix is catching the shape itself, on the PR,
+# before the state that makes it look fine ever exists — evaluating "what will this look like after
+# merge" both requires foreseeing the merge and is exactly what already broke `main` once.
+#
+# THE SUBJECT is the PR body's own closing keywords (`close(s|d)`, `fix(es|ed)`, `resolve(s|d)`),
+# read from SKILL_REFS_PR_BODY — GitHub's own convention for "merging this closes that issue", so
+# this reproduces the exact mechanism that dangles the citation rather than a guess at it. It is
+# UNGATED by link_mode and needs no network: a keyword and a `#N` are compared as TEXT, and the
+# defect this catches is that a citation and its own PR's `Closes` keyword name the SAME issue — a
+# fact the diff already states, in its own PR body, before any API call could tell us anything.
+# So it still runs offline, with SKILL_REFS_SKIP_LINKS set, and in CI even if the token cannot
+# reach the API — the one thing § 2 cannot promise, but this half can.
+#
+# A row a citation resolves to is REMOVED from `links` once reported here, so § 2 never spends an
+# API call resolving a ref this half has already condemned, and never reports the same line twice.
+#
+# No escape hatch. The acceptance criteria are explicit: reject it with guidance to cite the
+# DURABLE source artifact instead (a feedback report, an ADR) — not the tracking issue that is
+# about to close. A marker would just be a second way to write the same mistake.
+self_closing=""
+if [[ -n ${SKILL_REFS_PR_BODY:-} ]]; then
+  # One row per (owner, repo, num) this PR's body says it closes, keyed exactly like `links`. A
+  # bare `#N` on a closing line means THIS repo (GitHub's own rule for a closing keyword); a
+  # qualified `owner/repo#N` or `repo#N` names another. Reuses § 2's own ref grammar — same
+  # boundary trick, same qualified-vs-bare split — so a line's refs are read identically here and
+  # there, and this half cannot disagree with § 2 about what a ref IS, only about what to do once
+  # it is doomed.
+  self_closing=$(awk -v OFS='\t' -v def="$DEFAULT_OWNER" -v selfrepo="$SELF_REPO" '
+      {
+        low = tolower($0)
+        if (low !~ /(^|[^a-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)([^a-z]|$)/) next
+        s = $0
+        while (match(s, /(^|[^A-Za-z0-9._\/#-])([A-Za-z0-9._-]+\/)?[A-Za-z][A-Za-z0-9._-]*#[0-9]+/)) {
+          t = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+          sub(/^[^A-Za-z0-9]+/, "", t)
+          h = index(t, "#"); num = substr(t, h + 1); nr = substr(t, 1, h - 1)
+          sl = index(nr, "/")
+          if (sl) print substr(nr, 1, sl - 1), substr(nr, sl + 1), num
+          else    print def, nr, num
+        }
+        s = $0
+        while (match(s, /(^|[^A-Za-z0-9._\/#-])#[0-9]+/)) {
+          t = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+          sub(/^[^#]*#/, "", t)
+          print def, selfrepo, t
+        }
+      }
+    ' <<<"$SKILL_REFS_PR_BODY" | sort -u)
+fi
+
+is_self_closing() { # owner repo num
+  [[ -n $self_closing ]] &&
+    awk -F'\t' -v o="$1" -v r="$2" -v n="$3" '$1==o && $2==r && $3==n {found=1} END{exit !found}' \
+      <<<"$self_closing"
+}
+
+if [[ -n $self_closing && -n $links ]]; then
+  kept=""
+  while IFS=$'\t' read -r file line owner repo num; do
+    [[ -z ${num:-} ]] && continue
+    if is_self_closing "$owner" "$repo" "$num"; then
+      report "$file" "$line" "self-referencing citation — this PR's own Closes/Fixes/Resolves keyword targets $owner/$repo#$num, so merging closes it and the citation dangles on the very next push to main. Cite the durable source artifact instead (a feedback report, an ADR) — not the tracking issue this PR is about to close. See FS.GG.Game#568."
+    else
+      kept+="$file"$'\t'"$line"$'\t'"$owner"$'\t'"$repo"$'\t'"$num"$'\n'
+    fi
+  done <<<"$links"
+  links=${kept%$'\n'}
+fi
+
 # How many bodies the link half actually LOOKED at — reported, so a scoped run states its subject
 # rather than leaving the reader to infer it from a count of zero.
 n_link_files=$(link_md_files | tr '\0' '\n' | grep -c . || true)

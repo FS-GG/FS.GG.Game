@@ -605,6 +605,17 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # FS.GG.Game#568: a skill citing the issue THIS PR closes passes here (the issue is still
+          # open — merging is what closes it) and dangles on the very next push to `main`. The script
+          # reads GitHub's own closing keywords (Closes/Fixes/Resolves) out of the PR body as TEXT —
+          # no API call, so this still runs when the link half above is skipped or unreachable — and
+          # rejects a citation that names the same issue, before the state that made it look fine ever
+          # exists. Empty on `push`/`workflow_dispatch`, where there is no PR body and the check is a
+          # no-op — exactly right: a self-reference can only be introduced BY a PR, so it can only be
+          # caught on one. This is an env VALUE, not text spliced into the script body, which is the
+          # safe side of the untrusted-`github.event.*`-in-`run:` hazard (the runner writes it to the
+          # step's env file rather than interpolating it into the shell script GitHub generates).
+          SKILL_REFS_PR_BODY: ${{ github.event.pull_request.body }}
           SKILL_REFS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
 
   # Tests for the gate ABOVE. check-skill-refs.sh is ~600 lines of load-bearing bash

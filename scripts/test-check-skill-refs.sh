@@ -95,13 +95,19 @@ git_orphan() {
   git -C "$FIX" commit-tree "$empty" -m 'unrelated root'
 }
 
-# run [args…] — env knobs: CI_MODE=1, SKIP_LINKS=1, GH_NOAUTH=1
+# run [args…] — env knobs: CI_MODE=1, SKIP_LINKS=1, GH_NOAUTH=1, PR_BODY=<text>
+#
+# PR_BODY (FS.GG.Game#568) stands in for the workflow's `SKILL_REFS_PR_BODY: ${{
+# github.event.pull_request.body }}` — set it to the text of a PR body carrying a `Closes`/`Fixes`/
+# `Resolves` keyword to simulate a PR run; leave it unset to simulate `push`/`workflow_dispatch`,
+# which never has one.
 run() {
-  local -a e=(env -u GITHUB_ACTIONS -u SKILL_REFS_SKIP_LINKS -u GH_NOAUTH) base
+  local -a e=(env -u GITHUB_ACTIONS -u SKILL_REFS_SKIP_LINKS -u GH_NOAUTH -u SKILL_REFS_PR_BODY) base
   mapfile -t base < <(gh_env); e+=("${base[@]}")
   [[ ${CI_MODE:-0}   == 1 ]] && e+=("GITHUB_ACTIONS=true")
   [[ ${SKIP_LINKS:-0} == 1 ]] && e+=("SKILL_REFS_SKIP_LINKS=1")
   [[ ${GH_NOAUTH:-0}  == 1 ]] && e+=("GH_NOAUTH=1")
+  [[ -n ${PR_BODY:-} ]] && e+=("SKILL_REFS_PR_BODY=$PR_BODY")
   OUT=$("${e[@]}" "$FIX/scripts/check-skill-refs.sh" "$@" 2>&1)
   RC=$?
   ((VERBOSE)) && { printf '    ── %s\n' "$*"; printf '%s\n' "$OUT" | sed 's/^/    │ /'; }
@@ -245,6 +251,132 @@ MD
 run   # unregistered → the fake gh 404s it
 expect_rc 1 'missing issue fails'
 expect_out_has 'dangling link' 'calls it dangling'
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# § 1b  SELF-REFERENCING CITATIONS (FS.GG.Game#568) — f(tree, PR body), no network needed
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+#
+# The falsifiability leg the issue names directly: a skill citing the issue THIS PR's own `Closes`
+# keyword targets must be caught ON THE PR, not only after `main` goes red on merge. The fixture
+# registers the issue as OPEN — its true state for the entire life of the originating PR, since
+# merging is what closes it — so a suite that only tried the CLOSED branch could not tell this fix
+# apart from one that does nothing: § 2 alone already passes an open link, correctly, and that
+# correctness is exactly what makes the trap invisible.
+
+case_start '#568 FALSIFIABILITY: a citation of THIS PR'"'"'s own Closes-linked issue is caught on the PR — while the issue is still open, before any merge'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See FS.GG.Game#999 for the issue this closes.
+MD
+issue 'FS-GG/FS.GG.Game#999' open   # true for this PR's whole review window — merging is what closes it
+PR_BODY=$'Implements the alpha skill.\n\nCloses #999\n' run
+expect_rc 1 'BEFORE this fix this fixture is green (see the companion case below); AFTER, it is caught here'
+expect_out_has 'self-referencing citation' 'names the trap'
+expect_out_has "this PR's own Closes/Fixes/Resolves keyword targets FS-GG/FS.GG.Game#999" 'names the exact ref'
+expect_out_has 'durable source artifact' 'tells the author what to cite instead'
+expect_out_hasnt 'stale link' 'does not fall through to the ordinary open/closed report'
+
+case_start '#568 companion: the SAME fixture with no PR body — i.e. what the unfixed gate saw — passes, which is the defect'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See FS.GG.Game#999 for the issue this closes.
+MD
+issue 'FS-GG/FS.GG.Game#999' open
+run   # no PR_BODY: this is push/workflow_dispatch, or a script with no self-reference detection at all
+expect_rc 0 'an open link with nothing to compare it against passes — the exact shape that broke main'
+expect_out_has 'issue/PR link(s) in the tree are open or marked' 'passes for the ordinary reason'
+
+case_start '#568 no network is needed — self-reference is caught even with the link half fully skipped'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See FS.GG.Game#999 for the issue this closes.
+MD
+# Deliberately NOT registering the issue's state: if this case reached resolve_state at all it would
+# 404 as missing, a DIFFERENT report than the one asserted below — proof the self-check never called out.
+PR_BODY=$'Closes #999\n' SKIP_LINKS=1 run
+expect_rc 1 'caught offline'
+expect_out_has 'self-referencing citation' 'the hermetic half fired without gh'
+expect_out_hasnt 'dangling link' 'never reached the network-dependent report'
+
+case_start '#568 a qualified self-citation (owner/repo#num form) is caught the same way'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+Tracked at FS.GG.Game#999.
+MD
+issue 'FS-GG/FS.GG.Game#999' open
+PR_BODY=$'Fixes: FS-GG/FS.GG.Game#999\n' run
+expect_rc 1 'the qualified form is recognised too'
+expect_out_has 'self-referencing citation' 'names the trap'
+
+case_start '#568 a cross-repo closing target is recognised too, not just same-repo bare #N'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See FS.GG.Rendering#50 for background.
+MD
+issue 'FS-GG/FS.GG.Rendering#50' open
+PR_BODY=$'Resolves FS-GG/FS.GG.Rendering#50\n' run
+expect_rc 1 'a cross-repo Closes target is still matched against the citation'
+expect_out_has 'self-referencing citation' 'names the trap'
+
+case_start '#568 citing a DIFFERENT issue than the one this PR closes is unaffected — no over-triggering'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+Add your case at FS.GG.Rendering#100.
+MD
+issue 'FS-GG/FS.GG.Rendering#100' open
+PR_BODY=$'Closes #999\n' run   # closes a DIFFERENT issue; #100 is not this PR's own closing target
+expect_rc 0 'an unrelated citation still passes on its own open/closed state'
+expect_out_hasnt 'self-referencing citation' 'the unrelated link was never flagged'
+
+case_start '#568 the CRITIC'"'"'S REFINEMENT: a follow-up PR citing an already-closed issue it does not itself close still uses closed-ok, unaffected by this check'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+<!-- skill-refs: closed-ok FS.GG.Game#563 — the issue this recovery PR is fixing, already closed by the original merge -->
+The original merge (FS.GG.Game#563) broke main; this is the recovery.
+MD
+issue 'FS-GG/FS.GG.Game#563' closed
+PR_BODY=$'Recovers from the main breakage.\n'   # no Closes/Fixes/Resolves keyword for #563 at all
+run
+expect_rc 0 'closed-ok still works for a genuinely-closed citation this PR does not itself close'
+expect_out_hasnt 'self-referencing citation' 'this is not the shape #568 is about'
+
+case_start '#568 closing-keyword variants (fixes/resolved/Closes:, case-insensitive) are all recognised'
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See FS.GG.Game#999.
+MD
+issue 'FS-GG/FS.GG.Game#999' open
+PR_BODY=$'closes: #999\n' run
+expect_rc 1 'lower-case "closes:" is recognised'
+expect_out_has 'self-referencing citation' 'variant 1'
+
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See FS.GG.Game#999.
+MD
+issue 'FS-GG/FS.GG.Game#999' open
+PR_BODY=$'FIXES #999\n' run
+expect_rc 1 'upper-case "FIXES" is recognised'
+expect_out_has 'self-referencing citation' 'variant 2'
+
+fixture
+skill fs-gg-alpha <<'MD'
+# alpha
+See FS.GG.Game#999.
+MD
+issue 'FS-GG/FS.GG.Game#999' open
+PR_BODY=$'Resolved #999\n' run
+expect_rc 1 '"Resolved" is recognised'
+expect_out_has 'self-referencing citation' 'variant 3'
 
 # ════════════════════════════════════════════════════════════════════════════════════════════════
 # § 3  BARE #N  — f(tree), hermetic, no network
