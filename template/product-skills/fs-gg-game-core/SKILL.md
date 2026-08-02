@@ -171,6 +171,8 @@ own model adds, never with a lossy string fallback:
 ```fsharp
 open Microsoft.FSharp.Reflection
 
+let private keyValuePairDefinition = typedefof<System.Collections.Generic.KeyValuePair<_, _>>
+
 /// Total, length-unlimited structural encoding for a whole-model determinism/fingerprint
 /// comparison. NOT `sprintf "%A"` — see the counterexample above.
 let rec encodeModel (value: obj) : string =
@@ -190,17 +192,13 @@ let rec encodeModel (value: obj) : string =
             elif System.Double.IsPositiveInfinity f then app "inf"
             elif System.Double.IsNegativeInfinity f then app "-inf"
             else app (f.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
-        | :? System.Collections.IEnumerable as items when not (value :? string) ->
-            app (value.GetType().Name); app "["
-            let mutable first = true
-            for item in items do
-                if not first then app ";"
-                write item
-                first <- false
-            app "]"
         | _ ->
             let t = value.GetType()
-            if FSharpType.IsRecord(t, true) then
+            if t.IsGenericType && t.GetGenericTypeDefinition() = keyValuePairDefinition then
+                write (t.GetProperty("Key").GetValue value)
+                app "=>"
+                write (t.GetProperty("Value").GetValue value)
+            elif FSharpType.IsRecord(t, true) then
                 app (t.Name); app "{"
                 FSharpType.GetRecordFields(t, true)
                 |> Array.iteri (fun i field ->
@@ -208,6 +206,26 @@ let rec encodeModel (value: obj) : string =
                     app field.Name; app "="
                     write (field.GetValue value))
                 app "}"
+            elif FSharpType.IsTuple t then
+                app "("
+                FSharpValue.GetTupleFields value
+                |> Array.iteri (fun i field ->
+                    if i > 0 then app ","
+                    write field)
+                app ")"
+            // Sequences are matched BEFORE unions on purpose: an F# list is itself a union, and
+            // walking a long list recursively as a union would both nest deep and lose this flat,
+            // enumeration-order encoding — `Set`/`Map` reach this same arm, already enumerating in
+            // their own deterministic, value-derived comparison order, not insertion order.
+            elif (value :? System.Collections.IEnumerable) then
+                let items = value :?> System.Collections.IEnumerable
+                app (t.Name); app "["
+                let mutable first = true
+                for item in items do
+                    if not first then app ";"
+                    write item
+                    first <- false
+                app "]"
             elif FSharpType.IsUnion(t, true) then
                 let case, fields = FSharpValue.GetUnionFields(value, t, true)
                 app (t.Name); app "."; app case.Name
@@ -225,6 +243,12 @@ let rec encodeModel (value: obj) : string =
 let modelA = [ 1 .. 600 ]
 let modelB = [ 1 .. 599 ] @ [ 999 ]
 assert (encodeModel modelA <> encodeModel modelB)   // %A cannot see this; encodeModel does
+
+// Tuples and Map — named in the prose above, exercised here so the claim is not just asserted:
+assert (encodeModel (1, "a") <> encodeModel (1, "b"))
+assert (encodeModel (Map.ofList [ 1, "a"; 2, "b" ]) <> encodeModel (Map.ofList [ 1, "a"; 2, "c" ]))
+// Map enumerates in comparison order, not insertion order — these two encode identically:
+assert (encodeModel (Map.ofList [ 2, "b"; 1, "a" ]) = encodeModel (Map.ofList [ 1, "a"; 2, "b" ]))
 ```
 
 Reach for this whenever the comparison is over the whole model rather than a persisted save-slot
