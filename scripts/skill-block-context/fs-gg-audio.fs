@@ -56,7 +56,7 @@ module AudioCues =
 // `Enemies` is `int list` (ids) so `List.length` is honest; `Score` is a plain `int` so `>` is the
 // real comparison the reader copies. No label overlaps Scene's Point/Rect (§2b), by construction.
 // Each block compiles against its OWN section, so these `Settings`/`Model`/`Msg` do not collide
-// with block 6's — the two never share a compilation unit.
+// with block 7's — the two never share a compilation unit.
 open FS.GG.Audio.Core
 
 type Settings = { Volume: float }
@@ -69,7 +69,26 @@ type Msg =
     | Fired
     | Tick of float
 
-//#block 6 "| Started ->"
+//#block 6 "let forTransitionKeyedOnMessage (msg: Msg) (previous: Model) (next: Model) : AudioEffect list ="
+// The hazard section's worked example: a message-keyed cue (BEFORE) and the same cue rewritten as a
+// transition/model-diff (AFTER), both compiled against the same `Msg`/`Model` shapes so the reader
+// sees the identical types behave differently. `DescendFloor` and `FloorIndex` mirror the real
+// Rogue3 M11 regression (FS.GG.Game#564): a reducer that used to be the only way to reach a
+// `floor-descend` cue moved behind `Tick` once the descent became reachable from input routing, and
+// the `msg`-keyed form silently stopped firing on the production route while the diff-keyed form
+// kept firing regardless of which message carried the transition.
+//
+// The two functions are named DIFFERENTLY (`forTransitionKeyedOnMessage` / `forTransitionKeyedOnDiff`)
+// rather than both being `forTransition`, purely so each has an anchorable line of its own — the
+// prose still calls both "`forTransition`" because that is the one function a real product owns.
+open FS.GG.Audio.Core
+
+type Model = { FloorIndex: int }
+type Msg =
+    | DescendFloor
+    | Tick of float
+
+//#block 7 "| Started ->"
 // `Started`, and the trap it closes (FS.GG.Rendering#458): `forTransition` is a function of a
 // TRANSITION, and the initial model makes none, so state that was LOADED rather than transitioned
 // into never reaches the mixer unless `Started` carries it.
@@ -91,7 +110,7 @@ type Msg =
     | Started
     | Fired
 
-//#block 7 "let appOutcome       = ControlsElmish.runInteractiveAppWithAudio viewerOptions audioSink interactiveHost"
+//#block 8 "let appOutcome       = ControlsElmish.runInteractiveAppWithAudio viewerOptions audioSink interactiveHost"
 // The LAUNCH, per family — and the block this skill spent two releases unable to compile.
 //
 // `ControlsElmish.runInteractiveAppWithAudio` is the launcher an `app`-profile product must call to
@@ -132,7 +151,7 @@ let audioSink : AudioEffect list -> unit = ignore
 let interactiveHost : InteractiveAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
 let generatedHost : GeneratedAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
 
-//#block 8 "GeneratedAppHost.dispatchKey host keyEvent model"
+//#block 9 "GeneratedAppHost.dispatchKey host keyEvent model"
 // The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
 // sound WITHOUT a device. `dispatchKey` returns `(model * ViewerEffect list)` and `audioRequests`
 // narrows that to the `AudioEffect list` the block interprets — the `|> snd` and the two module
