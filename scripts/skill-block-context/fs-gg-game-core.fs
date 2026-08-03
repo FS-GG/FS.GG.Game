@@ -45,3 +45,6 @@ let spawn : Cell = { Col = 0; Row = 0 }
 let goal : Cell = { Col = 31; Row = 23 }
 let cellPx = 32.0
 let creeps : Creep list = []
+
+//#block 4 "let private keyValuePairDefinition = typedefof<System.Collections.Generic.KeyValuePair<_, _>>"
+//#run verifyEncodingExamples verify

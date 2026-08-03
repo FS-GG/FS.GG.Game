@@ -87,6 +87,9 @@
 //   dotnet fsi scripts/typecheck-md-blocks.fsx --keep               # leave the generated project on disk
 //
 // The build is Debug by default; override with --configuration Release.
+// Blocks marked `//#run <entrypoint> <verifier>` in their fixture are also EXECUTED after compilation.
+// The harness then invokes that verifier with `false` and requires a non-zero exit, proving the
+// published runtime check cannot become a compile-only or DEBUG-elided no-op.
 
 open System
 open System.Diagnostics
@@ -545,6 +548,9 @@ let suggestAnchor (docBlocks: Block list) (b: Block) : string option =
 //     //#block 7 "let render model = ..."
 //     //#skip <why this block cannot be compiled>
 //
+//     //#block 8 "let provesThePublishedBehaviour = ..."
+//     //#run proveThePublishedBehaviour verify
+//
 // The quoted ANCHOR is a line copied verbatim from the block the ordinal names, and it is REQUIRED. The
 // ordinal alone is a positional key that silently re-binds when a block is inserted ahead of it (#181);
 // the anchor is what turns it into a key the harness can CHECK. Below, `loadFixtures` proves that the
@@ -559,7 +565,7 @@ let suggestAnchor (docBlocks: Block list) (b: Block) : string option =
 // exactly what to add. Absence is never a skip.
 
 type Fixture =
-    | Context of recursive: bool * text: string   // F# text prepended to the block, in its module
+    | Context of recursive: bool * runner: (string * string) option * text: string // F# text prepended to the block
     | Skipped of reason: string                   // printed on every run, never silent
 
 // The anchor is greedy to the LAST quote on the line, so a block line that itself contains a string
@@ -567,6 +573,7 @@ type Fixture =
 let blockDirective = Regex(@"^//#block\s+(\d+)\s+""(.*)""\s*$")
 let skipDirective = Regex(@"^//#skip\s+(.+)$")
 let recDirective = Regex(@"^//#rec\s*$")
+let runDirective = Regex(@"^//#run\s+([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*$")
 
 /// The anchorless key that WAS the grammar until #181. Matched only to diagnose it: it is by far the
 /// most likely "not a directive" an author will write, and answering it with the generic
@@ -594,7 +601,7 @@ let validateDirectives (corpus: Corpus) (doc: string) (docBlocks: Block list) (l
     lines
     |> Array.iteri (fun i line ->
         if line.StartsWith "//#"
-           && not (blockDirective.IsMatch line || skipDirective.IsMatch line || recDirective.IsMatch line) then
+           && not (blockDirective.IsMatch line || skipDirective.IsMatch line || recDirective.IsMatch line || runDirective.IsMatch line) then
             let text = line.Trim()
             let anchorless = anchorlessBlockDirective.Match line
             if anchorless.Success then
@@ -605,8 +612,9 @@ let validateDirectives (corpus: Corpus) (doc: string) (docBlocks: Block list) (l
                        means. Write: {suggestedDirective docBlocks n} — or run `dotnet fsi \
                        scripts/typecheck-md-blocks.fsx --list`, which prints the line for every block."
             fail $"{corpus.FixtureDir}/{doc}.fs line {i + 1} is not a directive this harness \
-                   understands: {text}. Expected `//#block <n> \"<anchor line>\"`, `//#skip <reason>`, or \
-                   `//#rec`. A directive that is silently ignored fails as somebody ELSE's bug — refusing.")
+                   understands: {text}. Expected `//#block <n> \"<anchor line>\"`, `//#skip <reason>`, \
+                   `//#rec`, or `//#run <entrypoint> <verifier>`. A directive that is silently ignored fails as somebody \
+                   ELSE's bug — refusing.")
 
 /// `strict` is the gate; `not strict` is --list, which must be able to READ a fixture file that the gate
 /// would reject — because --list is the tool an author reaches for to FIX one. A repair tool that
@@ -623,6 +631,7 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) (strict: bo
         let anchors = System.Collections.Generic.Dictionary<int, string>()
         let skips = System.Collections.Generic.Dictionary<int, string>()
         let recs = System.Collections.Generic.HashSet<int>()
+        let runners = System.Collections.Generic.Dictionary<int, string * string>()
         let lines = File.ReadAllLines path
         if strict then validateDirectives corpus doc docBlocks lines
 
@@ -656,13 +665,25 @@ let loadFixtures (corpus: Corpus) (blocks: Block list) (doc: string) (strict: bo
                     let s = skipDirective.Match line
                     if s.Success then skips[n] <- s.Groups[1].Value.Trim()
                     elif recDirective.IsMatch line then recs.Add n |> ignore
+                    elif runDirective.IsMatch line then
+                        if strict && runners.ContainsKey n then
+                            fail $"{corpus.FixtureDir}/{doc}.fs declares //#run twice for block {n}. A runtime \
+                                   entrypoint/verifier pair is one exact contract, so name it once."
+                        let m = runDirective.Match line
+                        runners[n] <- m.Groups[1].Value, m.Groups[2].Value
                     else acc[n].Add line
         let fixtures =
             acc
             |> Seq.map (fun kv ->
                 match skips.TryGetValue kv.Key with
-                | true, reason -> kv.Key, Skipped reason
-                | _ -> kv.Key, Context(recs.Contains kv.Key, String.Join("\n", kv.Value).Trim()))
+                | true, reason ->
+                    if strict && runners.ContainsKey kv.Key then
+                        fail $"{corpus.FixtureDir}/{doc}.fs marks block {kv.Key} both //#skip and //#run. A \
+                               skipped block cannot be runtime verification evidence."
+                    kv.Key, Skipped reason
+                | _ ->
+                    let runner = match runners.TryGetValue kv.Key with | true, r -> Some r | _ -> None
+                    kv.Key, Context(recs.Contains kv.Key, runner, String.Join("\n", kv.Value).Trim()))
             |> Map.ofSeq
         // A //#block section keyed to a block that does not exist is a stale fixture — usually a
         // block was deleted or reordered. Say so; a silently-ignored fixture is a lie in a file whose
@@ -1611,7 +1632,8 @@ let checkCorpus (corpus: Corpus) : int =
     ///     recursion is opted into by the fixtures that genuinely need it.
     let generateBlockFile (b: Block) =
         let fixture = fixtureFor b
-        let isRec = match fixture with Some(Context(true, _)) -> true | _ -> false
+        let isRec = match fixture with Some(Context(true, _, _)) -> true | _ -> false
+        let runner = match fixture with Some(Context(_, runner, _)) -> runner | _ -> None
 
         // Hoist the block's TOP-LEVEL opens, preserving the block's line count by blanking them in
         // place. Column-0 only, deliberately: an INDENTED `open` belongs to a nested scope, and
@@ -1649,7 +1671,7 @@ let checkCorpus (corpus: Corpus) : int =
         sb.AppendLine() |> ignore
 
         match fixture with
-        | Some(Context(_, ctx)) when ctx <> "" ->
+        | Some(Context(_, _, ctx)) when ctx <> "" ->
             sb.AppendLine($"// fixture: {corpus.FixtureDir}/{b.Doc}.fs //#block {b.Ordinal}") |> ignore
             sb.AppendLine(ctx).AppendLine() |> ignore
         | _ -> ()
@@ -1659,6 +1681,12 @@ let checkCorpus (corpus: Corpus) : int =
         let anchor = b.SourceFile.Replace(@"\", "/")
         sb.AppendLine($"# {b.StartLine} \"{anchor}\"") |> ignore
         sb.AppendLine(body) |> ignore
+        match runner with
+        | Some(entrypoint, _) ->
+            // Referencing this binding from the generated executable forces F# to initialize the
+            // module, then invokes the documented behavioral route itself.
+            sb.AppendLine($"let __fsgg_execute () = {entrypoint} ()") |> ignore
+        | None -> ()
 
         let file = Path.Combine(outDir, $"{ident b.Doc}_{b.Ordinal}.fs")
         File.WriteAllText(file, sb.ToString())
@@ -1675,7 +1703,42 @@ let checkCorpus (corpus: Corpus) : int =
     // module to be compiled before it can be opened.
     let ordered = compiled |> List.sortBy (fun b -> b.Doc, b.Ordinal)
     let blockFiles = ordered |> List.map generateBlockFile
-    let compileItems = preludeCopies @ blockFiles
+    let runtimeBlocks =
+        ordered
+        |> List.choose (fun b ->
+            match fixtureFor b with
+            | Some(Context(_, Some(entrypoint, verifier), _)) -> Some(b, entrypoint, verifier)
+            | _ -> None)
+
+    let runtimeRunner =
+        if runtimeBlocks.IsEmpty then None
+        else
+            let calls =
+                runtimeBlocks
+                |> List.map (fun (b, _, verifier) ->
+                    let m = moduleName b
+                    $"            {m}.__fsgg_execute ()\n            {m}.{verifier} \"negative mutation\" false")
+                |> String.concat "\n"
+            let body =
+                $"""open System
+
+[<EntryPoint>]
+let main argv =
+    try
+        if argv |> Array.contains "--negative-mutation" then
+{calls}
+            failwith "negative mutation unexpectedly passed"
+        else
+{runtimeBlocks |> List.map (fun (b, _, _) -> $"            {moduleName b}.__fsgg_execute ()") |> String.concat "\n"}
+            0
+    with ex ->
+        Console.Error.WriteLine("runtime verification failed: " + ex.Message)
+        1
+"""
+            let file = Path.Combine(outDir, "RuntimeVerification.fs")
+            File.WriteAllText(file, body)
+            Some file
+    let compileItems = preludeCopies @ blockFiles @ (runtimeRunner |> Option.toList)
 
     // Every generated file must actually EXIST on disk and be non-empty. (Counting `compileItems`
     // against `compiled` would be a tautology — the list is built by mapping over `compiled`, so its
@@ -1702,7 +1765,7 @@ let checkCorpus (corpus: Corpus) : int =
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <OutputType>Library</OutputType>
+    <OutputType>{if runtimeRunner.IsSome then "Exe" else "Library"}</OutputType>
     <!-- Generated, transient: no lockfile, and so no NU1403 against the committed FSharp.Core pin
          (ADR-0032). The repo's Directory.Build.props / CPM are kept out by the empty
          Directory.Build.props+targets written beside this file — MSBuild stops its upward search at
@@ -1767,10 +1830,10 @@ let checkCorpus (corpus: Corpus) : int =
     // compiled block, plus the preludes — anything else means the gate is about to examine less than
     // it claims to.
     let emittedCompileItems = Regex.Matches(File.ReadAllText projectFile, @"<Compile Include=").Count
-    let expected = compiled.Length + preludeCopies.Length
+    let expected = compiled.Length + preludeCopies.Length + (if runtimeRunner.IsSome then 1 else 0)
     if emittedCompileItems <> expected then
         fail $"[{corpus.Id}] the generated project has {emittedCompileItems} Compile item(s) for \
-               {compiled.Length} block(s) + {preludeCopies.Length} prelude(s). The gate would compile \
+               {compiled.Length} block(s) + {preludeCopies.Length} prelude(s) + {if runtimeRunner.IsSome then 1 else 0} runtime runner(s). The gate would compile \
                less than it reports — refusing."
 
     // -- compile -----------------------------------------------------------------------------
@@ -1778,6 +1841,22 @@ let checkCorpus (corpus: Corpus) : int =
     printfn "compiling %d block(s) against %s" compiled.Length (relative coreDll)
 
     let exitCode, output = run "dotnet" $"build \"{projectFile}\" -c {configuration} --nologo -v minimal"
+
+    let runtimeErrors =
+        match runtimeRunner with
+        | None -> 0
+        | Some _ when exitCode <> 0 -> 0
+        | Some _ ->
+            let runExit, runOutput = run "dotnet" $"run --project \"{projectFile}\" -c {configuration} --no-build"
+            if runExit <> 0 then
+                printfn "%s" runOutput
+                fail $"[{corpus.Id}] runtime verification failed (exit {runExit})."
+            let negativeExit, negativeOutput = run "dotnet" $"run --project \"{projectFile}\" -c {configuration} --no-build -- --negative-mutation"
+            if negativeExit = 0 then
+                printfn "%s" negativeOutput
+                fail $"[{corpus.Id}] negative runtime-verification mutation passed. The documented verifier must fail on false."
+            printfn "runtime verification: %d block(s) executed; negative mutation failed as required." runtimeBlocks.Length
+            0
 
     if not keepGenerated then
         try Directory.Delete(outDir, true) with _ -> ()
@@ -1820,7 +1899,7 @@ let checkCorpus (corpus: Corpus) : int =
         else
             printfn "%d block(s) typecheck, but the label rule is violated %d time(s) — see above."
                 compiled.Length labelViolations
-        labelViolations
+        labelViolations + runtimeErrors
     else
 
     printfn ""

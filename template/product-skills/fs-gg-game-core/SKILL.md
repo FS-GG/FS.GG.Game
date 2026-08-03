@@ -155,7 +155,7 @@ that differ only past their 100th collection element print identically — measu
 sprintf "%A" [ 1 .. 600 ] = sprintf "%A" ([ 1 .. 599 ] @ [ 999 ])   // true — %A cannot see the divergence
 ```
 
-A determinism assertion built on that text — `assert (encode modelA <> encode modelB)` — silently
+A determinism check built on that text — `verify "distinct models" (encode modelA <> encode modelB)` — silently
 **passes** when it should fail: the two models really do differ; `%A` just cannot tell you.
 
 The canonical encoding is a **total, length-unlimited structural walk**: records by declared field
@@ -188,6 +188,10 @@ lossy string fallback:
 open Microsoft.FSharp.Reflection
 
 let private keyValuePairDefinition = typedefof<System.Collections.Generic.KeyValuePair<_, _>>
+
+/// Runtime checks in a copied FSI example must not depend on the build's DEBUG symbol.
+let verify (name: string) (condition: bool) =
+    if not condition then failwithf "verification failed: %s" name
 
 /// Total, length-unlimited structural encoding for a whole-model determinism/fingerprint
 /// comparison. NOT `sprintf "%A"` — see the counterexample above.
@@ -266,27 +270,31 @@ let rec encodeModel (value: obj) : string =
     write value
     sb.ToString()
 
-// The same 600-element counterexample, this time told apart correctly:
-let modelA = [ 1 .. 600 ]
-let modelB = [ 1 .. 599 ] @ [ 999 ]
-assert (encodeModel modelA <> encodeModel modelB)   // %A cannot see this; encodeModel does
-
-// Tuples and Map — named in the prose above, exercised here so the claim is not just asserted:
-assert (encodeModel (1, "a") <> encodeModel (1, "b"))
-assert (encodeModel (Map.ofList [ 1, "a"; 2, "b" ]) <> encodeModel (Map.ofList [ 1, "a"; 2, "c" ]))
-// Map enumerates in comparison order, not insertion order — these two encode identically:
-assert (encodeModel (Map.ofList [ 2, "b"; 1, "a" ]) = encodeModel (Map.ofList [ 1, "a"; 2, "b" ]))
-
 // Two DIFFERENT declared types that share a record or union-case simple name must NOT collide —
 // `.Name` alone would report these equal; tagging with `.FullName` (records) and the resolved
 // declaring union type's `.FullName` (unions) tells them apart:
 type WeatherKind = Sunny | Storm of int
 type AlertLevel = Calm | Storm of int
-assert (encodeModel (box (WeatherKind.Storm 5)) <> encodeModel (box (AlertLevel.Storm 5)))
 
 module ModA = type Pos = { Slot: int }
 module ModB = type Pos = { Slot: int }
-assert (encodeModel (box { ModA.Slot = 1 }) <> encodeModel (box { ModB.Slot = 1 }))
+
+/// Runs every behavioral claim in this copied example under plain `dotnet fsi`.
+let verifyEncodingExamples () =
+    // The same 600-element counterexample, this time told apart correctly:
+    let modelA = [ 1 .. 600 ]
+    let modelB = [ 1 .. 599 ] @ [ 999 ]
+    verify "long-list tail distinction" (encodeModel modelA <> encodeModel modelB) // %A cannot see this; encodeModel does
+
+    // Tuples and Map — named in the prose above, exercised here so the claim is not just asserted:
+    verify "tuple distinction" (encodeModel (1, "a") <> encodeModel (1, "b"))
+    verify "map value distinction" (encodeModel (Map.ofList [ 1, "a"; 2, "b" ]) <> encodeModel (Map.ofList [ 1, "a"; 2, "c" ]))
+    // Map enumerates in comparison order, not insertion order — these two encode identically:
+    verify "map comparison-order determinism" (encodeModel (Map.ofList [ 2, "b"; 1, "a" ]) = encodeModel (Map.ofList [ 1, "a"; 2, "b" ]))
+    verify "union full-name distinction" (encodeModel (box (WeatherKind.Storm 5)) <> encodeModel (box (AlertLevel.Storm 5)))
+    verify "record full-name distinction" (encodeModel (box { ModA.Slot = 1 }) <> encodeModel (box { ModB.Slot = 1 }))
+
+verifyEncodingExamples ()
 ```
 
 Reach for this whenever the comparison is over the whole model rather than a persisted save-slot
