@@ -21,6 +21,33 @@ eval "$(scripts/fsgg-coord whoami --mint)"
 
 Keep `FSGG_WORKER` for the entire item. Never invent or copy a worker id.
 
+**Under agent worktree isolation that line does not run, and the fallback is where identity is lost.**
+Every `fsgg-worker-*` and `fsgg-critic-*` agent is dispatched worktree-isolated, and that harness
+refuses `eval "$(…)"` as too complex to verify it stays inside the worktree. Do **not** improvise a
+second way to conjure an id — there is no second way, and reaching for one is #419 from the other end.
+Consume the **same** sanctioned command isolation-safely instead: run it as a plain single command,
+read the id it prints, and carry that id by prefix.
+
+```bash
+scripts/fsgg-coord whoami --mint        # plain, single command; prints: export FSGG_WORKER=<id>
+FSGG_WORKER=<id> scripts/fsgg-coord take --repo <repo> --json    # the FIRST board write — prefix it
+```
+
+Shell state does not survive between an agent's tool calls, so even where the `eval` is permitted it
+sets `FSGG_WORKER` for exactly one command. The prefix is the only thing carrying your identity
+forward, and it belongs on **every** later invocation.
+
+**`take` is the invocation the prefix is missed on** (#2684). It is the first board write, it happens
+before the prefix is a habit, and an unprefixed `take` does not fail: the engine falls back to the
+agent harness's session id — which every subagent of one Claude Code session shares — warns that it
+did, and then writes the claim under it anyway and returns **0**. A warning on a completed write is not a guard. Measured
+in one wave: a converged claim marker on the right item under a session-derived id, and a sibling
+worker that had done nothing wrong denied its item with exit 6.
+
+So after `take` — and after any `claim` — **read the marker back and confirm it names the id you
+minted.** If it names a session-derived id, stop and report it rather than working the item: you are
+holding a lock that cannot separate you from any other agent in your session.
+
 ## 1. Take one item
 
 Before `take`, claim, or a Ready-to-In-progress transition, inspect the item's current typed
@@ -100,6 +127,8 @@ touch-set before editing. Heartbeat during long work.
 ## 3. Implement and verify
 
 Change only the declared paths. If scope must grow, use `widen` before touching it; stop on overlap.
+Apply the shared [measurement discipline](references/measurement-discipline.md) to every absence,
+count, or unchanged assertion in implementation evidence and review handoffs.
 Before implementing interactive/game work, run the
 [performance-first planning gate](references/performance-first.md). Then fix causes, add focused
 regression coverage, and run proportionate build/test/format gates. Poll inbox at phase boundaries.
@@ -107,8 +136,9 @@ regression coverage, and run proportionate build/test/format gates. Poll inbox a
 Every gate this change adds or modifies **ships with evidence it can fail**: invert it, run the suite,
 and record the mutation and the observed red. A test that passes both before and after the fix has not
 tested the fix, and a gate whose inversion survives is a material finding at review by definition — see
-Gate-inversion evidence in [independent-review](references/independent-review.md), whose numbered steps
-also bound the fixture and the measurement environment. Doing this at authoring time is cheaper than at
+[Gate-inversion evidence](references/independent-review.md#gate-inversion-evidence), whose numbered steps
+also bound the fixture, the measurement environment, the unreadable input, and the repair that must catch
+the escape actually found. Doing this at authoring time is cheaper than at
 review time, and it makes the critic's step a confirmation rather than a discovery.
 
 ## 4. Route implementation findings
@@ -117,15 +147,29 @@ Fix in-scope causes now. For a distinct cause, **establish the root cause before
 is where a defect *surfaced*, which is rarely where it *lives*, and filing the surface is how one defect
 gets seven numbers (#266). Then **dedupe over REST against that cause, not against the symptom**: reuse
 an existing issue that expresses the same cause and transplant your evidence onto it instead of opening
-a second row. File only when no row carries that cause. The issue states observed behavior, **the root
-cause** — or, where you could not establish one, says so explicitly and gives what you measured instead
-(#1858) — acceptance criteria, verification, and a narrow `Paths:` declaration. Link dependencies only
-when authorship truly depends on landed work, then add it to the follow-up queue.
+a second row. File only when no row carries that cause. Use the complete `fsgg.coord.intake/v1` draft
+shown in [deep detail](references/deep-detail.md): put observed behavior, **the root cause** — or the
+measurement that remains unestablished — acceptance, verification, `paths`, `class`, `severity`, and
+optional `blockedBy` in the draft, run `scripts/fsgg-coord intake validate`, then `intake apply` on
+that same file. A hand-authored `Paths:` or `Class:` line in a created body is a defect, not a style
+choice. Link dependencies only when authorship truly depends on landed work, then add it to the
+follow-up queue.
 
 [findings-and-filing](references/findings-and-filing.md) carries the rest of this rule and is **binding,
 not elaboration** — load it for the dedupe reads and the judgement boundaries. This section owns
 findings discovered before independent review begins. Once review starts, do not file the critic's
-findings or add them to a private follow-up queue; the critic owns their disposition.
+findings or add them to a private follow-up queue; the critic owns their disposition, under
+[Root cause, dedupe, and materiality](references/independent-review.md#root-cause-dedupe-and-materiality),
+which is also where the definition of a **material** finding lives.
+
+Every checkable assertion you write into the handoff carries `Verification:` or exactly `unverified`, per
+[Handoff-assertion provenance](references/independent-review.md#handoff-assertion-provenance); a claim
+about whether an issue or PR **body** changed is answered by `body-edits` and never by the REST timeline,
+per [Body-edit provenance](references/independent-review.md#body-edit-provenance--the-rest-timeline-does-not-surface-body-edits).
+The body you file is itself evidence someone will act on, so re-derive every checkable `path:line`, count
+and suite-green claim in it before relying on it, per
+[Issue and pull-request body evidence](references/independent-review.md#issue-and-pull-request-body-evidence)
+— the review-time check that owns remote bodies, because a source-only CI checkout cannot read them.
 
 For a bulk rename (or when the critic requires it), produce the typed semantic-diff receipt over the
 exact base/head and declared paths. Classify every changed literal, comment, serialized key, generated
@@ -184,13 +228,13 @@ scripts/fsgg-coord review --snapshot <fresh-review-snapshot.json> --json
 ```
 
 It returns exactly one closed state (awaiting initial review, changes requiring repair, awaiting
-implementer repair, awaiting the same critic's confirmation, passed awaiting checks, awaiting host
+implementer repair, awaiting a fresh successor's full review, passed awaiting checks, awaiting host
 acceptance, ordinary exhaustion, repair-phase setup, repair-phase active review, accepted, or terminal
 human park) and the one typed next action that follows from it — dispatch critic, resume implementer,
-resume the same critic, await checks, request host acceptance, enter the one permitted fresh repair
+dispatch a fresh successor critic, await checks, request host acceptance, enter the one permitted fresh repair
 phase, accept, or park for human action — bound to a freshness token that a changed head invalidates.
 This is a mechanical cross-check, not a substitute for the qualitative judgement below: materiality,
-same-critic continuity, and repair-phase provenance are still read from the live PR by both the worker
+critic-generation continuity, durable wait receipts, and repair-phase provenance are read from the live PR by both the worker
 and the critic.
 
 Push the candidate, open its PR, and ask the host to assign a fresh critic agent. Keep the implementing worker and
@@ -200,15 +244,34 @@ implementation: it checks requirements, diff, tests, architecture, release oblig
 searches code/history and existing work for each candidate root cause; and files only unresolved,
 distinct **material** work. For a meaningful runtime behavior reachable through more than one route,
 the handoff supplies a built artifact and runnable production-route evidence so the critic can execute
-or measure the comparison required by `independent-review`, not infer it from source alone. The same
-critic reviews up to three numbered repair rounds. If material findings remain after round three,
+or measure the comparison required by `independent-review`, not infer it from source alone. A fresh
+successor performs each numbered repair review. If material findings remain after round three,
 never start round four or merge that PR: close it without merging and automatically enter the one
-fresh-worker, fresh-critic repair phase defined by `independent-review`. Park the item on `Blocked on:
+fresh-worker, fresh-critic
+[repair phase](references/independent-review.md#repair-phase). Park the item on `Blocked on:
 human/action` and release the claim only if that repair phase exhausts or its required route is
 unavailable.
 
+Before yielding at every protocol-created critic queue, write the bounded entry event with
+`scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json`. After a critic record lands, write
+the matching completion event; cancellation and bounded timeout use the same command and generation.
+Never treat a sleeping process as the receipt. On resumption, run live `review` and revalidate or
+reacquire the current claim generation before any mutation. Use the canonical generation token
+`<head>:initial-review:0` or `<head>:repair-confirmation:<round>`; dispatch and `review record` fail
+closed without the matching waiting entry, and acceptance requires its completed critic-record evidence.
+
 [independent-review](references/independent-review.md) is the binding contract for materiality, critic
-ownership, the durable PR record, direct filing, confirmation, and host verification. Do not merge
+ownership, the durable PR record, direct filing, confirmation, and host verification. Its
+[Runtime-route evidence gate](references/independent-review.md#runtime-route-evidence-gate) states when
+that comparison must be executed rather than read;
+[Game functionality](references/independent-review.md#game-functionality--the-bot-driven-player-journey-gate)
+states when a bot-driven player journey is blocking;
+[Disposition and repair bounds](references/independent-review.md#disposition-and-repair-bounds) states the
+park procedure and the critic's filing preconditions;
+[A head that moves after the chain was accepted](references/independent-review.md#a-head-that-moves-after-the-chain-was-accepted)
+and
+[Reading the review state](references/independent-review.md#reading-the-review-state-a-designed-wait-is-not-broken-evidence)
+state what a moved head and a designed wait do and do not mean. Do not merge
 without its passing review evidence and exact-SHA structured v2 acceptance record, authored through
 `scripts/fsgg-coord review record <ref> <draft.json> --pr <n> --json`. If no independent agent mechanism is available, stop and report
 that the review gate is unavailable; self-review does not satisfy it.
@@ -250,12 +313,48 @@ therefore always safe to make again. Making the call here binds the marker to th
 `landable` is about to score and the one that actually merges — the same property §6 has always
 required, reached one step earlier.
 
-This call's JSON output may report `action: refreshReview, stage: reviewActive` at this point, because
-`claim-generation` and any other still-running checks have not yet reported against the marker this call
-just wrote. **That is not a refusal** — the write happens unconditionally (`.github#2488` removed the
-`--apply` gate), and the reported action is only the engine's own next-step suggestion from a review
-chain it re-inspected before the checks caught up. Do not call it a second time; proceed straight to
-waiting on `landable` below.
+**Two answers here mean carry on, and they are the only two.** `stage: landable, action:
+awaitLandability` is the one to expect: it is what a PR gets when its handoff facts are in order *and*
+its review chain is complete and host-accepted, with checks not yet green — including the
+`claim-generation` window that by design cannot be green until this very call writes
+`fsgg:pr-authorization` (`.github#2504`). It is precisely the next step below: wait on `landable` for
+this exact head. `stage: accepted, action: guardedLand` is the other, and far from being a surprise it is
+the engine's **own merge authorization** — `authorizeGuardedLanding` refuses every other action outright
+(`DeliveryApplication.fs`, `transition.Action <> Delivery.GuardedLand -> MergeRefused`), so this pair is
+what a head that is already fully green looks like at this call site. You meet it whenever the marker was
+current and the checks had settled before this call — typically a second call, after a repair below that
+left the head unchanged. Proceed to the merge.
+
+**Every other answer is a stop**, including any `verdict: noVerdict`, which carries no stage/action pair
+at all. None of it is noise to proceed through. The write happened either way — it is unconditional
+(`.github#2488` removed the `--apply` gate) — so repeating the call cannot conjure a different answer by
+itself; what changes the answer is repairing the fact the stop names. Calling again *after* that repair
+is expected rather than forbidden, and costs nothing: against an already-current marker the call is a
+no-op PATCH-skip (see the bullets below).
+
+`stage: reviewReady` is a stop about the **handoff**, and it is the likeliest one to meet here, because
+`Delivery.inspect` tests these facts *before* it ever reads the review chain. `action:
+repairReviewHandoff` means the item branch is not canonical, the canonical closing linkage is missing,
+the declared paths are not verified, or the post-merge obligations are undeclared; `action: moveToReview`
+means the board row is not `In review`. Two of those reach past this call — closing linkage cannot be
+fixed once merged (`.github#2107`), and an undeclared obligation blocks the item's own completion, because
+after a merge `Delivery.inspect` refuses a verdict outright while obligations are undeclared and holds the
+item at `MergedAwaitingObligations` while any declared one is unverified — so repair the named fact and
+call again rather than merging past it. Like `refreshReview` below, `repairReviewHandoff` renders without
+its problem text, so read the cause off the PR itself.
+
+`action: refreshReview, stage: reviewActive` is a stop about the review **evidence**. `.github#2575`
+stopped folding the liveness clause "review checks are not green" into the review problem list, so a
+still-running check can no longer produce that pair here. At this call site it now means the durable
+review evidence is structurally invalid (`Delivery.reviewProblem` ->
+`Driver.validateReviewChainStructure`) — chiefly a missing or invalid marker, a missing critic identity,
+a missing review head SHA, rounds not ordered from one, an exhausted round ceiling, missing runtime-route
+evidence, an unresolved diff-audit receipt, a missing host acceptance, or a chain recorded against a
+different head SHA; it also carries any error the live adapter hit parsing the review comments at all,
+which is a longer list. **Do not merge on it**, and report the chain to whoever dispatched you.
+`delivery` prints the pair but not which cause it found (`DeliveryApplication.fs` renders `RefreshReview`
+without its problem text), so identify it from the review chain itself rather than from this output. A
+chain carrying no review evidence at all reports the distinct `action: awaitIndependentReview` instead.
 
 - **Once per item, at this exact point — after the host-acceptance marker and all repairs, and before
   `landable`'s check — never after opening the PR, and never on every push.** A call made earlier binds
