@@ -237,20 +237,42 @@ Gate on the code:
 ```sh
 receipt="$(scripts/fsgg-coord take --repo <r> --json)" \
   || { rc=$?; echo "no item (exit $rc)"; exit "$rc"; }
-jq -e '.markerObserved == true and .status == "In progress" and .converged == true' \
+jq -e '.markerObserved == true and .converged == true' \
   <<<"$receipt" >/dev/null \
   || { echo "claim won but board readback is NOT converged — do not start or announce work" >&2; exit 1; }
 issue="$(jq -r '.ref' <<<"$receipt")"
 # Only here is the winning marker AND the user-visible board Status freshly confirmed.
+# `.status` is REPORTED, never asserted — see below for why the literal is not the gate.
+echo "claimed $issue at $(jq -r '.status' <<<"$receipt")"
 ```
 
 **The receipt is the start gate.** Exit 0 still means the lock was won — preserving the CAS safety
-contract — while `.converged` says whether a fresh read observed that marker and `Status=In progress`.
-`statusWrite` distinguishes `written`, `deferred`, `not-on-board`, and `failed`; `statusRead` distinguishes
-an observed column from a failed read; `pendingBoardWrites` exposes the queue depth. Never announce or
-implement the item before the predicate above passes. A lagged lock stays reserved and
-[`check-board`](../../check-board/SKILL.md) retains its `CLAIM-STATUS-LAG` repair; do not release or double-claim
-merely because the projection lagged.
+contract — while `.converged` says whether a fresh read observed that marker **and a board column that
+agrees with the lifecycle projection this claim derived from the item's live facts**.
+
+**`.converged` DOES NOT MEAN `Status=In progress`, AND ASSERTING THAT LITERAL IS A BUG
+([.github#2645](https://github.com/FS-GG/.github/issues/2645)).** It used to: `claim` fed the lifecycle
+reducer a hardcoded *"this item has no PR, nothing blocks it, the issue is open"*, so the reducer had
+only one answer it could give, and `converged` was written to require exactly that answer. Both halves
+were wrong together, which is why neither looked wrong. A worker re-affirming its own lock mid-review
+had the column silently reverted from `In review` to `In progress`, and the receipt called that revert a
+success. The destination is now derived from the item's real PR / blockers / delivery / issue facts, so
+it is `In review` for a row under review, `Blocked` for a row with a live blocker, and `In progress` for
+the ordinary fresh claim — and `.converged` is the board **agreeing with whichever of those was
+derived**. A predicate that re-states one column defeats the fix and fails a correct claim.
+
+`statusWrite` distinguishes `written`, `deferred`, `not-on-board`, `failed`, and — since #2645 —
+`withheld`; `statusRead` distinguishes an observed column from a failed read; `pendingBoardWrites`
+exposes the queue depth. Never announce or implement the item before the predicate above passes.
+
+**`withheld` IS NOT A LAGGED WRITE, AND MUST NOT BE ROUTED LIKE ONE.** A lagged lock (`deferred`, or a
+`failed` mutation) stays reserved and [`check-board`](../../check-board/SKILL.md) retains its
+`CLAIM-STATUS-LAG` repair for it; do not release or double-claim merely because the projection lagged.
+`withheld` is the *other* thing: a fact the claim needed could not be READ, so it wrote nothing at all
+rather than derive a column from a fiction — the lock is held, the column is untouched, and stderr names
+the unreadable fact. The repair is to re-run `claim <ref> --json` once that read recovers (or
+`reconcile --apply`), not to treat the column as merely behind. Collapsing the two is the exact
+distinction #2645 exists to draw: "I could not look" is not "I looked, and the write is on its way".
 
 **If `take` exits 75, a rate budget is exhausted — back off until the reset it names; do not loop.**
 **Read WHICH budget it named** ([#897](https://github.com/FS-GG/.github/issues/897)): they fail
@@ -789,28 +811,40 @@ just as well as an issue does:
   that graph and *nothing else*, so of two duplicate children the linked one is the one that can
   actually complete its parent; an unlinked twin lets the parent stamp `Done` over open work (#322).
 
+For a distinct cause that clears the filing bar, author this draft and omit `blockedBy` when there is
+no true sequencing dependency:
+
+```json
+{
+  "schema": "fsgg.coord.intake/v1",
+  "id": "<stable-finding-id>",
+  "owner": "FS-GG",
+  "repository": "<target>",
+  "title": "<root-cause-oriented title>",
+  "observed": "<behavior measured on main or the merge it blocks>",
+  "rootCause": "<established cause, or the measurement that remains unestablished>",
+  "acceptance": "<testable repair criteria>",
+  "verification": "<currently red command and intended proof>",
+  "paths": ["<narrow exact path or directory prefix>"],
+  "class": "<defect|hardening|capability|decision>",
+  "severity": "<low|medium|high|critical>",
+  "status": "Backlog",
+  "backlogReason": "not-yet-actionable",
+  "disposition": "create"
+}
+```
+
 ```sh
 # 1. The message: an issue in the repo that OWNS the problem, not the one that found it.
-#    The `Paths:` line is NOT optional — see below. Without it the item cannot be scheduled.
-#    REST, because `gh issue create` is GraphQL and the budget is routinely gone by now (#587).
-gh api -X POST repos/FS-GG/<target>/issues \
-  -f title='[cross-repo] <short summary>' \
-  -f 'labels[]=cross-repo' -f 'labels[]=cross-repo:request' \
-  -f body="From: <this repo>, found while working <this repo>#<n>. Contract: <id>. <what and why>
+#    Put every structured field in finding-intake.json using the complete shape below, validate it,
+#    then apply that SAME file. `paths`, `class`, `severity`, and optional `blockedBy` are draft fields;
+#    hand-authoring their projected body lines is a defect.
+scripts/fsgg-coord intake validate finding-intake.json --json
+intake_result="$(scripts/fsgg-coord intake apply finding-intake.json --json)"
+new_ref="$(jq -r .issue <<<"$intake_result")"
 
-Paths: src/Scene/ tests/Scene/" --jq .html_url
-
-# 2. Put it on the board, so it is sequenced rather than merely filed.
-#    QUALIFY EVERY REF HERE. A bare `<new>` resolves against the repo you are STANDING IN — which in
-#    this block is never the target repo — so it would silently address `.github#<new>`: a real,
-#    unrelated, usually-closed item. See "A bare ref is not a short ref" below.
-scripts/fsgg-coord add FS-GG/<target>#<new>
-scripts/fsgg-coord set-field FS-GG/<target>#<new> 'Repo Scope' <target-short-id>
-scripts/fsgg-coord set-field FS-GG/<target>#<new> Phase '<the target repo's phase>'
-scripts/fsgg-coord set-field FS-GG/<target>#<new> Status Backlog
-
-# 3. If the finding belongs under an epic, LINK it as a sub-issue — NOW, not at close-out.
-scripts/fsgg-coord child FS-GG/<repo>#<parent> FS-GG/<target>#<new>
+# 2. If the finding belongs under an epic, LINK it as a sub-issue — NOW, not at close-out.
+scripts/fsgg-coord child FS-GG/<repo>#<parent> "$new_ref"
 ```
 
 **A bare ref is not a short ref — it resolves against the repo you are STANDING IN, and this block
@@ -1483,21 +1517,20 @@ Two more that bite in the same state:
   cause is the rate limit, because it derives the repo via a GraphQL call and reads the empty result
   as "no checkout" ([#430](https://github.com/FS-GG/.github/issues/430)). Pass the repo explicitly:
   `scripts/fsgg-coord verify-paths --pr <pr> --repo FS-GG/<repo>`.
-- **`gh issue create` is GraphQL too** — which strands you in §4, at the exact moment you are filing
-  a finding after a long session, i.e. precisely when the budget is gone:
+- **The validated intake transaction owns issue creation.** It avoids the GraphQL-spending issue-create
+  surface and keeps creation bound to the same validated draft used for projection:
 
   ```sh
-  jq -n --arg t "<title>" --rawfile b body.md \
-        '{title:$t, body:$b, labels:["cross-repo","cross-repo:request"]}' \
-    | gh api -X POST repos/FS-GG/<target>/issues --input - --jq '"#\(.number) \(.html_url)"'
+  scripts/fsgg-coord intake validate finding-intake.json --json
+  scripts/fsgg-coord intake apply finding-intake.json --json
   ```
 
   The **board** placement that follows it (`add`, `set-field`) is Projects v2 and has no REST form, so
   it cannot land on an exhausted budget. It is not lost: `set-field` QUEUES the write and exits 75, and
   `scripts/fsgg-coord flush` replays it after the reset (#510 made that true of every board write;
-  #878 gave you the verb that replays them). So file the issue now, then either flush once the budget
-  is back or say on the issue that the placement is still owed — the gap should be a decision somebody
-  made rather than an omission nobody noticed.
+  #878 gave you the verb that replays them). Preserve the `intake apply` receipt, then either flush once
+  the budget is back or say on the returned issue that placement is still owed — the gap should be a
+  decision somebody made rather than an omission nobody noticed.
 
 ## 6. Clean up, then go again
 
