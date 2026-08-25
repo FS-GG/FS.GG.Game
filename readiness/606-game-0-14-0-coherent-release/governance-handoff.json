@@ -6,12 +6,12 @@
   "sources": [
     {
       "path": "readiness/606-game-0-14-0-coherent-release/ship.json",
-      "digest": "sha256:7a722f33fe460f29bde3dafa35c86190eb1f1ccacc8de4f4d1a35a50d0a642c9",
+      "digest": "sha256:3a871a04848bdb9362def5111cb86080d731a4faaf38defe450d7e9da2730399",
       "schemaVersion": 1
     },
     {
       "path": "readiness/606-game-0-14-0-coherent-release/verify.json",
-      "digest": "sha256:951391105573c490f2f9293a0e0cf198b2bc8967aade906e35553869dbd80147",
+      "digest": "sha256:908aa1d46ac6677c0ae5e6d041c195f2cbd3a4181438460e8f9bb1cdc34abf54",
       "schemaVersion": 1
     },
     {

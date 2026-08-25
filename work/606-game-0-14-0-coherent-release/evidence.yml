@@ -11,7 +11,7 @@ sourceAnalysis: readiness/606-game-0-14-0-coherent-release/analysis.json
 sourceSnapshots:
   - label: analysis
     path: readiness/606-game-0-14-0-coherent-release/analysis.json
-    digest: ba658566cb0942a6ce136c3f03503826b6ba0cb6419bfe6573fd7d707d6d120f
+    digest: d31836378027268e051393a5f84d8f6939315bf10cefe526f5c82426bf8810f7
     schemaVersion: 1
   - label: checklist
     path: work/606-game-0-14-0-coherent-release/checklist.md
