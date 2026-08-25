@@ -63,7 +63,10 @@
     <!-- The release tag is authoritative: release.yml packs with -p:Version="$VER" from the tag,
          which overrides this. Keep it equal to the newest released version anyway, so a local
          `dotnet pack` and the feed cannot disagree. -->
-    <Version>0.13.0</Version>
+    <!-- 0.14.0 is a MINOR cut: the coherent set adds the public Journey receipt digest and
+         displayed-action coverage surface while preserving the 0.13.0 API. Core, Render, and
+         Harness keep one scalar and are packed/published together by release.yml. -->
+    <Version>0.14.0</Version>
     <Authors>FS.GG Contributors</Authors>
     <Company>FS.GG Contributors</Company>
     <RepositoryType>git</RepositoryType>
