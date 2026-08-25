@@ -65,6 +65,12 @@ jobs:
       - name: Test (full headless suite)
         run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
 
+      - name: Verify 0.14.0 release contract and inversion
+        shell: bash
+        run: |
+          tests/release/test-game-0-14-release.sh --source-only
+          tests/release/test-game-0-14-release-selftest.sh
+
   publish-packages:
     name: Publish FS.GG.Game.* (org feed + nuget.org, release-only)
     runs-on: ubuntu-latest
@@ -146,8 +152,17 @@ jobs:
           VER: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          dotnet pack FS.GG.Game.slnx -c Release -p:Version="$VER" -o artifacts/packages
+          dotnet pack FS.GG.Game.slnx -c Release \
+            -p:Version="$VER" \
+            -p:RepositoryCommit="$GITHUB_SHA" \
+            -p:EnablePackageValidation=true \
+            -p:PackageValidationBaselineVersion=0.13.0 \
+            -o artifacts/packages
           echo "Packed:"; ls -1 artifacts/packages/*.nupkg
+
+      - name: Verify coherent package set, metadata, and clean Journey consumer
+        shell: bash
+        run: tests/release/test-game-0-14-release.sh --packages artifacts/packages
 
       - name: Push coherent set to nuget.pkg.github.com/FS-GG
         if: steps.ver.outputs.push == 'true'

@@ -1,0 +1,443 @@
+schemaVersion: 1
+workId: 606-game-0-14-0-coherent-release
+stage: evidence
+status: evidenceReady
+sourceSpec: work/606-game-0-14-0-coherent-release/spec.md
+sourceClarifications: work/606-game-0-14-0-coherent-release/clarifications.md
+sourceChecklist: work/606-game-0-14-0-coherent-release/checklist.md
+sourcePlan: work/606-game-0-14-0-coherent-release/plan.md
+sourceTasks: work/606-game-0-14-0-coherent-release/tasks.yml
+sourceAnalysis: readiness/606-game-0-14-0-coherent-release/analysis.json
+sourceSnapshots:
+  - label: analysis
+    path: readiness/606-game-0-14-0-coherent-release/analysis.json
+    digest: ba658566cb0942a6ce136c3f03503826b6ba0cb6419bfe6573fd7d707d6d120f
+    schemaVersion: 1
+  - label: checklist
+    path: work/606-game-0-14-0-coherent-release/checklist.md
+    digest: 0cd948719aa957045732f8563216c35bdebd160ea2d8819a5a8403d034211521
+    schemaVersion: 1
+  - label: clarifications
+    path: work/606-game-0-14-0-coherent-release/clarifications.md
+    digest: 5fba1293e8518a6563d18b20383c4fe73c4eec34fe99c4a9d0d90fcb7708504f
+    schemaVersion: 1
+  - label: plan
+    path: work/606-game-0-14-0-coherent-release/plan.md
+    digest: d78a4245c4e54a1e4b6739fa1073394904b32784bd4e984aec54056875ba20eb
+    schemaVersion: 1
+  - label: spec
+    path: work/606-game-0-14-0-coherent-release/spec.md
+    digest: a6ba355ab7517e1dc1036e50f401cfeeb29c2f3f0aadf600c10256335ecd270a
+    schemaVersion: 1
+  - label: tasks
+    path: work/606-game-0-14-0-coherent-release/tasks.yml
+    digest: f1c385039ee4c94afaadc110864fb80576959b966ef4a9adf1da982937870b87
+    schemaVersion: 1
+evidence:
+  - id: EV001
+    kind: verification
+    subject:
+      type: task
+      id: T001
+    taskRefs: [T001]
+    requirementRefs: [FR-001]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV001]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV002
+    kind: verification
+    subject:
+      type: task
+      id: T002
+    taskRefs: [T002]
+    requirementRefs: [FR-002]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV002]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV003
+    kind: verification
+    subject:
+      type: task
+      id: T003
+    taskRefs: [T003]
+    requirementRefs: [FR-003]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV003]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV004
+    kind: verification
+    subject:
+      type: task
+      id: T004
+    taskRefs: [T004]
+    requirementRefs: [FR-004]
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV004]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV005
+    kind: verification
+    subject:
+      type: task
+      id: T005
+    taskRefs: [T005]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV005]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV006
+    kind: verification
+    subject:
+      type: task
+      id: T006
+    taskRefs: [T006]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV006]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV007
+    kind: verification
+    subject:
+      type: task
+      id: T007
+    taskRefs: [T007]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV007]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV008
+    kind: verification
+    subject:
+      type: task
+      id: T008
+    taskRefs: [T008]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001, PD-002]
+    obligationRefs: [EV008]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV009
+    kind: verification
+    subject:
+      type: task
+      id: T009
+    taskRefs: [T009]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV009]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV010
+    kind: verification
+    subject:
+      type: task
+      id: T010
+    taskRefs: [T010]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV010]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV011
+    kind: verification
+    subject:
+      type: task
+      id: T011
+    taskRefs: [T011]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-002]
+    obligationRefs: [EV011]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV012
+    kind: verification
+    subject:
+      type: task
+      id: T012
+    taskRefs: [T012]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-003]
+    obligationRefs: [EV012]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV013
+    kind: verification
+    subject:
+      type: task
+      id: T013
+    taskRefs: [T013]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-004]
+    obligationRefs: [EV013]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV014
+    kind: verification
+    subject:
+      type: task
+      id: T014
+    taskRefs: [T014]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: []
+    obligationRefs: [EV014]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+  - id: EV015
+    kind: verification
+    subject:
+      type: task
+      id: T015
+    taskRefs: [T015]
+    requirementRefs: []
+    acceptanceScenarioRefs: []
+    clarificationDecisionRefs: []
+    checklistResultRefs: []
+    planDecisionRefs: [PD-001]
+    obligationRefs: [EV015]
+    artifacts: []
+    sourceRefs:
+      - kind: verification
+        path: tests/release/test-game-0-14-release.sh
+    result: pass
+    synthetic: false
+    observedRun:
+      source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
+      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digestContract: exact-bytes-v1
+      outcome: passed
+      passed: 7
+      failed: 0
+      skipped: 0
+    notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
+lifecycleNotes:
+  - "Next lifecycle action: verify."
