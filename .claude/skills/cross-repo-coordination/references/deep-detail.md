@@ -104,7 +104,7 @@ the eventual claimant can. The rules the engine will hold you to are below, gene
   "verification": "<commands or evidence URLs>",
   "paths": ["src/Scene", "tests/Scene"],
   "class": "<defect|hardening|capability|decision>",
-  "severity": "<low|medium|high|critical>",
+  "severity": "<Low|Medium|High|Critical>",
   "status": "Backlog",
   "backlogReason": "not-yet-actionable",
   "blockedBy": "<qualified ref, only when authorship truly depends on it>",
@@ -139,8 +139,8 @@ sentinel — so an omission is caught rather than sitting on the board looking l
 ```sh
 scripts/fsgg-coord issues <repo> --label cross-repo   # REST + ETag: 0 GraphQL, free on repeat.
                                                       # `gh issue list` costs 2 pts to say the same thing.
-# Post the response over REST — `gh issue comment` is GraphQL and spends the shared fleet budget.
-gh api -X POST repos/FS-GG/<repo>/issues/<n>/comments -f body="## Response ..."
+# Save the `## Response` body in an owned file. The typed verb posts it over REST and verifies readback.
+scripts/fsgg-coord comment create FS-GG/<repo>#<n> FS-GG/<repo>#<n> <owned-response-file> --text
 ```
 
 ## Track on the Coordination board (Projects v2)
@@ -329,7 +329,7 @@ by printing a success line; **earn** it — have the tool confirm both facts fir
 ```sh
 scripts/fsgg-coord done <issue>            # verify BOTH; green FSGG-DONE stamp (exit 0) or
                                            # red FSGG-NOT-DONE stamp naming the failing check (exit 1)
-scripts/fsgg-coord done <issue> --flip     # once the PR is merged, also set Status=Done, then stamp
+scripts/fsgg-coord delivery <issue> --pr <pr> --flip --apply  # verify the merge, receipt it, then project Done
 scripts/fsgg-coord done <issue> --pr <N>   # name the closing PR explicitly (else the first merged closer)
 ```
 
@@ -403,7 +403,7 @@ wrong and the registry advertises a version the feed can't serve. The universal 
    (e.g. `FS.GG.Templates` → `providers/<provider>.providers.yml` `source: <PkgId>::<V>`); its
    own CI (e.g. `composition`) must pass.
 4. **Land + record.** Merge both PRs, confirm the producer issue closed, then close out each board
-   item with `scripts/fsgg-coord done <issue> --flip` (see *Signal an item is finished*) — it flips
+   item with `scripts/fsgg-coord delivery <issue> --pr <pr> --flip --apply` (see *Signal an item is finished*) — it flips
    `Status: Done` only after re-confirming the merge, the green stamp is your proof, and the parent
    epic rolls up to `Done` on its own once the last child stamps green.
 
