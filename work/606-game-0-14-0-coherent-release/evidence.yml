@@ -54,10 +54,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -81,10 +81,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -108,10 +108,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -135,10 +135,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -162,10 +162,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -189,10 +189,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -216,10 +216,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -243,10 +243,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -270,10 +270,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -297,10 +297,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -324,10 +324,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -351,10 +351,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -378,10 +378,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -405,10 +405,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]
@@ -432,10 +432,10 @@ evidence:
     synthetic: false
     observedRun:
       source: readiness/606-game-0-14-0-coherent-release/test-results/game-0-14-release.junit.xml
-      digest: "sha256:45baf855fce445541370c01d976eb36795686662c6a1c2f645c6e1f38b7401b4"
+      digest: "sha256:303cf1f8cc36f6c7b09b85a79fd1bae04c69cb0f9532517683f9d5e1588b2a34"
       digestContract: exact-bytes-v1
       outcome: passed
-      passed: 7
+      passed: 10
       failed: 0
       skipped: 0
     notes: ["Verified by the command-produced Game 0.14.0 composite JUnit receipt; see sourceRefs and observedRun."]

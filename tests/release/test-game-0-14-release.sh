@@ -39,11 +39,17 @@ for label, token in required.items():
         raise SystemExit(f"release workflow is missing {label}: {token}")
 if text.count("dotnet pack FS.GG.Game.slnx") != 1:
     raise SystemExit("release workflow must prepare the coherent set exactly once")
-org = text.index("https://nuget.pkg.github.com/FS-GG/index.json")
-public = text.index("https://api.nuget.org/v3/index.json")
-if org >= public:
+push = 'dotnet nuget push "artifacts/packages/*.nupkg"'
+pushes = [index for index in range(len(text)) if text.startswith(push, index)]
+if len(pushes) != 2:
+    raise SystemExit("release workflow must contain exactly two actual dotnet nuget push operations")
+org = text.index("https://nuget.pkg.github.com/FS-GG/index.json", pushes[0])
+public = text.index("https://api.nuget.org/v3/index.json", pushes[1])
+if org > pushes[1] or public < pushes[1]:
+    raise SystemExit("each dotnet nuget push must own its expected feed source")
+if pushes[0] >= pushes[1]:
     raise SystemExit("release workflow must push the org feed before nuget.org")
-if "dotnet pack" in text[org:public]:
+if "dotnet pack" in text[pushes[0]:pushes[1]]:
     raise SystemExit("release workflow must not re-pack between feed pushes")
 PY
 

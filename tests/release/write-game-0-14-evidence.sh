@@ -52,9 +52,17 @@ for name, path in reports:
         raise SystemExit(f"{name} is not a passing non-empty run: passed={passed} failed={failed}")
     observed.append((name, passed, skipped, path.name))
 
+release_cases = [
+    ("release-source-positive-control", "both actual dotnet nuget push operations accepted"),
+    ("release-first-push-mutation", "substituting only the GitHub Packages push was rejected"),
+    ("release-second-push-mutation", "substituting only the nuget.org push was rejected"),
+    ("release-both-pushes-mutation", "substituting both push operations was rejected"),
+    ("release-version-mutation", "mutating the coherent scalar from 0.14.0 to 0.14.1 was rejected"),
+    ("coherent-package-consumer", "three packages, nuspec commit metadata, and clean Journey API consumer"),
+]
 suite = ET.Element("testsuite", {
     "name": "FS.GG.Game 0.14.0 release candidate",
-    "tests": str(len(observed) + 3),
+    "tests": str(len(observed) + len(release_cases)),
     "failures": "0",
     "errors": "0",
     "skipped": "0",
@@ -62,11 +70,7 @@ suite = ET.Element("testsuite", {
 for name, passed, skipped, report in observed:
     case = ET.SubElement(suite, "testcase", {"classname": "repository-suite", "name": name})
     ET.SubElement(case, "system-out").text = f"report={report}; passed={passed}; failed=0; skipped={skipped}"
-for name, detail in [
-    ("release-source-contract", "0.14.0 scalar and ordered one-pack dual-feed workflow"),
-    ("release-gate-inversion", "mutated 0.14.1 scalar rejected by the shipped gate"),
-    ("coherent-package-consumer", "three packages, nuspec commit metadata, and clean Journey API consumer"),
-]:
+for name, detail in release_cases:
     case = ET.SubElement(suite, "testcase", {"classname": "release-contract", "name": name})
     ET.SubElement(case, "system-out").text = detail
 ET.ElementTree(suite).write(output, encoding="utf-8", xml_declaration=True)

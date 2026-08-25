@@ -6,17 +6,17 @@
   "sources": [
     {
       "path": "readiness/606-game-0-14-0-coherent-release/ship.json",
-      "digest": "sha256:4f3bfc6e8213c82ad83bfa0197e3fae57ebddc7d5fee42f656aa2d22a727df6c",
+      "digest": "sha256:7a722f33fe460f29bde3dafa35c86190eb1f1ccacc8de4f4d1a35a50d0a642c9",
       "schemaVersion": 1
     },
     {
       "path": "readiness/606-game-0-14-0-coherent-release/verify.json",
-      "digest": "sha256:bcf47508e497e0bee01867d7dc6b2c6b2765c6f078c9d036f83e23045b7fd244",
+      "digest": "sha256:951391105573c490f2f9293a0e0cf198b2bc8967aade906e35553869dbd80147",
       "schemaVersion": 1
     },
     {
       "path": "readiness/606-game-0-14-0-coherent-release/work-model.json",
-      "digest": "sha256:2bf3b77146a5e1d77511bbe18002e21700e49bf7d09c79403b028c2b70769299",
+      "digest": "sha256:90fcea185abfb7f52e63769da5d6ff9a980c9d7133d361cb64e692c84cbbad83",
       "schemaVersion": 1
     }
   ],

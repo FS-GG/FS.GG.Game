@@ -77,7 +77,7 @@
       "schemaStatus": "current",
       "sourceDigest": {
         "algorithm": "sha256",
-        "value": "237785b9e4adc7b79bddf20db1f9264ef17c843c2786c006d486089b2a7c7316"
+        "value": "20941f0b2e14d0207bbc6a481978e9713b45572cf636dd1dc7c86010c35a27a3"
       }
     },
     {
@@ -1078,7 +1078,7 @@
           "path": "work/606-game-0-14-0-coherent-release/evidence.yml",
           "digest": {
             "algorithm": "sha256",
-            "value": "237785b9e4adc7b79bddf20db1f9264ef17c843c2786c006d486089b2a7c7316"
+            "value": "20941f0b2e14d0207bbc6a481978e9713b45572cf636dd1dc7c86010c35a27a3"
           },
           "schemaVersion": 1
         },
@@ -1109,7 +1109,7 @@
       ],
       "outputDigest": {
         "algorithm": "sha256",
-        "value": "9df4b187daf68d9eb5813c32ec6f1d33500420c7ce8abcbd5a791f03a8d5d21f"
+        "value": "a24d2b46770b5c8eb73da235458ed09949e06e251278268f45cf23ca40b5911e"
       },
       "currency": "current"
     }
