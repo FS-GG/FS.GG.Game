@@ -188,7 +188,16 @@ occurrences itself — it never substitutes the changed-file count, which is a d
 smaller quantity that let a one-file/six-occurrence rename slip under the default threshold of 5
 (.github#2144). Evidence the host cannot read requires the receipt rather than clearing it.
 
-## 5. Independent critique
+## 5. Accountable critique and acceptance
+
+One Accountable Delivery Owner authorizes the item. CI, formal checks, mutation controls, and critique
+records are decision evidence, not additional authorizers. Never require a second human, account, agent,
+critic, reviewer quorum, or external approval merely to complete this section.
+
+The same owner may perform implementation, a fresh critique pass, repair, host acceptance, and delivery.
+Where the existing wire protocol requires implementer, critic, and host identities to differ, mint distinct
+**phase identities** for those passes. Distinct phase identities prevent stale generation reuse and preserve
+ordering; they do not imply separate people or separate authorization. An external critic is optional.
 
 ### Typed delivery receipt
 
@@ -237,20 +246,21 @@ This is a mechanical cross-check, not a substitute for the qualitative judgement
 critic-generation continuity, durable wait receipts, and repair-phase provenance are read from the live PR by both the worker
 and the critic.
 
-Push the candidate, open its PR, and ask the host to assign a fresh critic agent. Keep the implementing worker and
-claim alive, set the item to `In review`, and freshly verify that row while the critic independently
-reviews the exact head SHA. The critic does not edit the
+Push the candidate, open its PR, keep the implementing worker and claim alive, set the item to `In review`,
+and freshly verify that row. Then perform a fresh critique pass against the exact head SHA under a distinct
+phase identity. The critique pass does not edit the
 implementation: it checks requirements, diff, tests, architecture, release obligations, and `Paths:`;
 searches code/history and existing work for each candidate root cause; and files only unresolved,
 distinct **material** work. For a meaningful runtime behavior reachable through more than one route,
 the handoff supplies a built artifact and runnable production-route evidence so the critic can execute
 or measure the comparison required by `independent-review`, not infer it from source alone. A fresh
-successor performs each numbered repair review. If material findings remain after round three,
+critique phase performs each numbered repair review. If material findings remain after round three,
 never start round four or merge that PR: close it without merging and automatically enter the one
-fresh-worker, fresh-critic
+fresh-worktree, fresh-phase
 [repair phase](references/independent-review.md#repair-phase). Park the item on `Blocked on:
-human/action` and release the claim only if that repair phase exhausts or its required route is
-unavailable.
+owner/action` and release the claim only if that repair phase exhausts or its required route is
+unavailable. The accountable owner decides the redesign or terminal disposition; reviewer availability
+is never the blocker.
 
 Before yielding at every protocol-created critic queue, write the bounded entry event with
 `scripts/fsgg-coord review wait <ref> <event.json> --pr <n> --json`. After a critic record lands, write
@@ -272,9 +282,9 @@ park procedure and the critic's filing preconditions;
 and
 [Reading the review state](references/independent-review.md#reading-the-review-state-a-designed-wait-is-not-broken-evidence)
 state what a moved head and a designed wait do and do not mean. Do not merge
-without its passing review evidence and exact-SHA structured v2 acceptance record, authored through
-`scripts/fsgg-coord review record <ref> <draft.json> --pr <n> --json`. If no independent agent mechanism is available, stop and report
-that the review gate is unavailable; self-review does not satisfy it.
+without its passing critique evidence and exact-SHA structured v2 acceptance record, authored through
+`scripts/fsgg-coord review record <ref> <draft.json> --pr <n> --json`. The accountable owner may author
+both records through distinct phase identities; absence of another agent is not a stop condition.
 
 ## 6. Merge and obligations
 
