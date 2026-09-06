@@ -176,5 +176,13 @@ scripts/fsgg-coord telemetry lifecycle validate \
 
 Use `--require-terminal --require-reconciled` before a done stamp or roadmap roll-up. The first rejects an
 active or blocked phase; the second keeps the explicit completion intent visible even though the compiled
-validator already rejects every terminal `pending` token record. Validate implementation changes through
+validator already rejects every terminal `pending` token record. A legacy terminal `unavailable` whose
+reason says usage was still pending because the child response had not finished is not genuine
+unavailability. Append a distinct completed `telemetry-reconciliation-<original-phase>` phase with measured
+usage and exactly one evidence entry
+`supersedes-lifecycle-digest:<64-hex-digest-of-the-original-terminal-event>`. The validator requires the
+target digest to exist, to identify an unavailable record for that exact original phase, and to be
+superseded only once; prose, a phase name alone, or a later usage receipt without this digest does not
+reconcile it. Genuine post-completion lookup or collector-schema failures may remain `unavailable` when
+their exact lookup/validation failure is recorded in the reason and evidence. Validate implementation changes through
 the CLI test suite and the frozen black-box parity corpus.
