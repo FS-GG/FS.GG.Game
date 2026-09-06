@@ -34,8 +34,8 @@
          .config/kit/FS.GG.Kit.receiver.proj, which materializes the kit onto disk; Renovate bumps
          this pin and kit-materialize.yml refreshes the committed kit on that PR. -->
     <PackageVersion Include="FS.GG.Kit" Version="0.85.1" />
-    <PackageVersion Include="FS.GG.UI.Scene" Version="0.10.0" />
-    <PackageVersion Include="FS.GG.UI.KeyboardInput" Version="0.10.0" />
+    <PackageVersion Include="FS.GG.UI.Scene" Version="0.28.0" />
+    <PackageVersion Include="FS.GG.UI.KeyboardInput" Version="0.28.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test-only">
@@ -131,10 +131,10 @@
   <ItemGroup Label="Gate-only — packages the published skills teach (no project references these)">
     <PackageVersion Include="FS.GG.Audio.Core" Version="0.2.0" />
     <PackageVersion Include="FS.GG.Audio.Host" Version="0.2.0" />
-    <PackageVersion Include="FS.GG.UI.Canvas" Version="0.10.0" />
-    <PackageVersion Include="FS.GG.UI.Controls.Elmish" Version="0.10.0" />
-    <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.10.0" />
-    <PackageVersion Include="FS.GG.UI.Symbology" Version="0.10.0" />
+    <PackageVersion Include="FS.GG.UI.Canvas" Version="0.28.0" />
+    <PackageVersion Include="FS.GG.UI.Controls.Elmish" Version="0.28.0" />
+    <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.28.0" />
+    <PackageVersion Include="FS.GG.UI.Symbology" Version="0.28.0" />
   </ItemGroup>
 
   <!-- Generator-only — the SOURCE that scripts/skill-block-context/_scaffold.fs is generated FROM
@@ -161,6 +161,6 @@
        guards that with a merge-blocking test (Feature570PublishedScaffoldGeometryTests), so the path
        is a contract; the generator still fails closed if it ever stops shipping. -->
   <ItemGroup Label="Generator-only — source for the generated _scaffold.fs (no project references this)">
-    <PackageVersion Include="FS.GG.UI.Template" Version="0.10.0" />
+    <PackageVersion Include="FS.GG.UI.Template" Version="0.28.0" />
   </ItemGroup>
 </Project>
