@@ -30,6 +30,21 @@ CSVs and local session paths remain private and untracked. A phase receipt may g
 active, but freezes when its digest is cited; later phases use new receipts so appends cannot invalidate
 earlier events.
 
+Frozen CSVs must survive worker, worktree, `/tmp`, and runtime-session cleanup. The collector archives
+each completed CSV at the canonical per-user host-state root selected by `$FSGG_USAGE_RECEIPT_STORE`,
+then `$XDG_STATE_HOME/fsgg/telemetry/usage`, then platform local application data. Receipts live at
+`sha256/<first-two-hex>/<64-hex>.csv`; owner-only permissions, atomic no-overwrite publication,
+byte equality on collision, and digest verification on every read are mandatory. A temporary or
+repository store root is refused. Seal and validation resolve omitted explicit `--usage` paths here.
+
+For a historical digest absent from both canonical storage and its authoritative runtime source, never
+reconstruct a CSV from the public event. Use a separately reviewed
+`fsgg.telemetry.legacy-receipt-proof/v1` bound to the original event digest, missing receipt source,
+canonical issue/comment, exhaustive lookup, distinct author/reviewer identities, and review evidence.
+Its only decision is `irrecoverable-exclude-usage`; a later lifecycle event cites
+`legacy-receipt-proof:sha256:<proof-digest>`. The unverifiable counts are excluded from roll-up. This is
+a generic migration state, not a per-item waiver and not measured usage.
+
 GitHub comment ids are the server-assigned total order. For a legacy or pre-upgrade fork, export accepts
 the lowest-id child of a predecessor and reports every later sibling on stderr as preserved rejected-fork
 evidence. Never edit or delete either comment. After create, the command re-reads complete live authority
@@ -186,3 +201,19 @@ superseded only once; prose, a phase name alone, or a later usage receipt withou
 reconcile it. Genuine post-completion lookup or collector-schema failures may remain `unavailable` when
 their exact lookup/validation failure is recorded in the reason and evidence. Validate implementation changes through
 the CLI test suite and the frozen black-box parity corpus.
+
+### Human-authorized synthetic checkpoint
+
+When an immutable history is extraordinary and cannot be repaired under either its creating or current
+tool version, the accountable human may explicitly authorize one synthetic evidence/receipt checkpoint.
+Author a closed `fsgg.telemetry.synthetic-checkpoint/v1` proof binding the canonical repository, issue,
+run id, unit id, exact frontier revision/digest, a closed extraordinary reason, and an immutable human
+issue-comment URL. It must literally set `missing_provenance_required:false` and
+`reconstruct_missing_data:false`, and carry at least one functional check, all `passed`, with immutable
+GitHub-comment or `sha256:<64-hex>` evidence.
+
+Pass that proof to sealing and validation with `--synthetic-checkpoint <proof.json>`. The frontier's
+immediate successor is the started event of one adjacent `synthetic-evidence-checkpoint` phase whose sole
+evidence is `synthetic-checkpoint:sha256:<proof-digest>`; the completed event is the new trusted anchor.
+Ordinary strict validation resumes after it. Missing authority, wrong scope/frontier, reuse, multiple
+proofs/checkpoints, tampering, or absent/failing functional verification refuses.
