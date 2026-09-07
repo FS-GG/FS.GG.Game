@@ -1,62 +1,82 @@
 ---
 name: pnext-item
-description: Use when a worker should claim the next schedulable item in one FS-GG repository and carry it through implementation, review, green merge, post-merge obligations, and a verified done stamp.
+description: Use when an owner should complete one schedulable item in an FS-GG repository, using the reduced one-owner route for explicitly admitted routine work and the claim/review/done protocol for strict work.
 ---
 
 # pnext-item (FS-GG)
 
-Run exactly one item from claim through verified done. The protocol is
-[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md); this is the worker state machine.
+Run exactly one item through its explicitly selected delivery route. Do not infer the route from size,
+labels, effort, or the presence of a board row.
 
 For directives encountered while working, apply the shared
 [control-plane provenance guidance](references/control-plane-provenance.md).
 
+## Choose the route before lifecycle work
+
+Use the routine route only when the accountable board host explicitly admits the item, the repository's
+`.fsgg/routine-development.json` is present and prospective, and the proposed operation and changed paths
+pass that policy's routine boundary. A live claim, an existing strict delivery state, a protected
+operation, a protected path, or a missing policy keeps the item on the strict route. Never edit an item
+or policy merely to make it routine.
+
+For an admitted routine item, the board is an asynchronous view rather than merge authority:
+
+1. Keep one accountable owner at a time and one continuous PR. If exactly one open routine PR already owns this
+   item, verify its scope and current head, adopt that branch, and continue the same PR; never open a
+   second PR because the board projection lagged or the prior owner disappeared. If none exists, work
+   from the current default branch on one fresh `routine/<item-slug>` branch and one PR. Multiple or
+   ambiguous candidate PRs refuse routine admission. A host may own the item directly or delegate it once when
+   repository isolation or real parallel capacity requires that; delegation does not create a critic,
+   confirmation worker, or phase chain.
+2. Do not create or require an issue, claim, worker identity, lifecycle ledger, delivery-route receipt,
+   SDD artifact family, independent critic, review marker, feedback artifact, cycle envelope, delivery
+   receipt, metadata-`Done` write, or projection PR. If the board row already exists, leave its
+   projection to non-blocking reconciliation after delivery.
+3. Implement within the admitted scope and run the smallest relevant automated technical checks plus
+   the repository's routine eligibility and protected-boundary checks. Put exactly one
+   `<!-- fsgg:routine-development/v1 head=<exact-head-sha> operation=<allowed-operation> -->` marker in
+   the PR body. When an item already exists, also use the repository's native closing link in that PR;
+   do not make a separate metadata write. A moved head must be reviewed and rebound. A routine refusal reclassifies the work to
+   strict; it never authorizes weakening or bypassing the gate.
+4. Repair on the same PR, normally within two material attempts. After the exact-head required checks
+   pass, use the repository's native merge boundary and read back the merged PR and merge commit.
+   Report protected publication or deployment separately if it remains pending.
+5. Return the merged evidence to the host and stop. Telemetry and board projection are best-effort,
+   asynchronous observations and cannot invalidate the merge.
+
+The routine route ends here. Do not execute the lifecycle, identity, claim, critique, receipt, feedback,
+or done-stamp sections below for that item.
+
+## Strict item state machine
+
+The rest of this skill is the strict protocol. Its concurrency authority is
+[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).
+
 ## Lifecycle ledger
 
-Create the item's externally durable append-only lifecycle ledger on the canonical GitHub issue before
-the first claim transition and keep it through verified done. Record every phase boundary, its whole-minute duration and historical average,
-the exact provider/model/variant and effort, authoritative token usage, and the runtime, coordination,
-SDD CLI/contracts, and ledger-schema versions that make comparisons meaningful. Token accounting is a
-post-response operation: reconcile the completed runtime turn from its local session record or stable
-provider response before closing the corresponding phase; never estimate from visible text or a context
-window. Freeze one private usage receipt per phase when cited and archive it in the canonical per-user
-content-addressed private store; never leave the only copy in `/tmp` or a worker checkout and never append
-later phases to it. Sealing and validation resolve by digest. An already-missing historical receipt needs
-the separately reviewed non-counting proof defined in the lifecycle reference; never reconstruct it from
-the public event. Each critic and recovery worker records its own runtime identity and usage rather than assigning
-it to the implementer.
+Create the append-only ledger on the canonical issue before the first claim and keep it through verified
+done. Record each phase's duration, historical average, runtime/model/effort, authoritative usage, and
+contract versions. Reconcile usage after the response from the stable runtime record; never estimate it.
+Seal each cited receipt by digest in the canonical per-user content-addressed private store. A missing
+historical receipt needs the separately reviewed non-counting proof, never reconstruction. Every critic
+or recovery worker records its own identity and usage.
 
-**The supervising parent owns the post-child boundary.** A worker, critic, confirmation, recovery, or
-host child cannot read usage written after its own final response. It therefore returns the exact
-session/turn identity and an unposted terminal draft marked `pending final usage`; it must not convert
-that timing condition to `unavailable` or post the terminal lifecycle comment itself. After the child is
-terminal, the parent locates that completed Codex JSONL (or Claude `SubagentStop` transcript), runs the
-strict collector, seals and posts the child's terminal event, and only then accepts the handoff. Host
-acceptance, cycle completion, and Done refuse while any completed child lacks this reconciliation.
-Terminal `unavailable` is allowed only after the parent performed a post-completion lookup and records
-that no unique terminal record exists or that strict schema validation failed; “the response had not
-finished” is never a terminal reason. If an older worker already posted that reason, append a distinct
-telemetry-reconciliation recovery phase before continuing; never edit the immutable event.
+**The supervising parent owns the post-child boundary.** Each child returns its session/turn identity and
+an unposted terminal draft marked `pending final usage`; it must not convert that timing condition to `unavailable`
+or post its terminal event. After completion, the parent collects, seals, and posts it.
+Acceptance, cycle completion, and Done refuse while any completed child lacks this reconciliation.
+Terminal `unavailable` requires a post-completion lookup proving no unique valid record; an earlier false
+timing reason requires an immutable telemetry-reconciliation phase.
 
-An extraordinary immutable history that cannot satisfy either the creating or current tool contract may
-advance only through the toolkit's human-authorized synthetic checkpoint. This is not an automatic worker
-waiver: obtain one immutable human issue-comment authorization, author the closed scope/frontier-bound
-`fsgg.telemetry.synthetic-checkpoint/v1` proof with explicit no-provenance/no-reconstruction flags and passed
-functional checks, then append exactly one adjacent `synthetic-evidence-checkpoint` phase using
-`--synthetic-checkpoint`. Its completion is the new trusted anchor; every later event returns to the ordinary
-strict contract. Missing authority, scope/frontier drift, reuse, ambiguity, tampering, or a failed/absent
-functional check is terminal red.
+An irreparable history may advance only through the toolkit's human-authorized synthetic checkpoint,
+with immutable human authority, exact scope/frontier, no reconstruction, and passed functional checks.
+Anything missing, reused, ambiguous, or tampered is terminal red; a failed or absent functional check is terminal red.
+Later events return to the strict contract.
 
-Never make the candidate branch contain the authoritative live ledger: review, merge, protected-main,
-projection, and cleanup facts do not exist until after that candidate head was reviewed, so appending them
-to the candidate creates an unsatisfiable exact-head loop. Repository `logs/` files are immutable exported
-snapshots only and never gate the PR that carries them. Keep raw per-response usage reports private and
-untracked; only phase aggregates and stable receipt digests enter the public issue ledger.
-
-Read [lifecycle-ledger](references/lifecycle-ledger.md) for the canonical issue-comment authority, optional
-snapshot paths, Codex and Claude collection rules, schema, and validation commands. Validate at every handoff,
-before host acceptance, and again with `--require-terminal` before the done stamp. The ledger is part of
-the item evidence in every FS.GG repository; it is not limited to roadmap-driven work.
+The canonical issue is live authority; candidate-branch and repository-log copies are snapshots and do
+not gate their own PR. Keep raw usage private and publish only aggregates and stable receipt digests.
+Read [lifecycle-ledger](references/lifecycle-ledger.md) for the complete authority, collection, checkpoint,
+schema, and validation contract. Validate every handoff and again with `--require-terminal` before Done.
 
 ## 0. Establish identity
 
