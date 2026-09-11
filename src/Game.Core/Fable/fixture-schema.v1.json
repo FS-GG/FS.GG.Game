@@ -28,11 +28,16 @@
       "id": 4,
       "operation": "Pathfinding.astar",
       "payload": "option<list<Cell>>"
+    },
+    {
+      "id": 5,
+      "operation": "SessionCompatibility.compare",
+      "payload": "u8 compatible, u16 issueCount, issueCount*u8 issueTag, u16 initializationIssueCount, u16 inputIssueCount, u8 contractOnlySupport"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "9c0d7128f7b9558ef7e985618b1165199f83a0bb4af7533b175cc95b340c4a24",
+  "oracleSha256": "328cf37f9cb92064452f3fc3883426230ce97df3d4d3907dc1ca0fdf813164a5",
   "outcomeTags": {
     "0": "operation completed normally"
   },

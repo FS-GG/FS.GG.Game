@@ -11,6 +11,11 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the detecti
 - **`FixedStep`** — fixed-timestep accumulator drain (`drain`/`drainWith`). No wall-clock read, so a scripted frame time replays exactly.
 - **`Loop`** — the fixed-step double-buffered loop built on `FixedStep.drain` (`advance`/`alpha`): the world as of the last completed step (`Current`), the one before it (`Previous`), and the carried sub-step time (`Accumulator`). Renderers interpolate `Previous → Current` by `alpha`, so motion is smooth at any frame rate while the sim only ever advances by whole fixed steps. The default for any continuously-moving simulation.
 - **`InputCommand`** — the abstract, device-free vocabulary of input *intents* (`Command.MoveNorth`/…/`Fire`/`Pause`) as pure data. The **policy** half of the input split: `Game.Core` owns *which* commands exist; the render/input layer owns *how* a device makes one and never learns a game action.
+- **`SessionContract`** — generic initialization, semantic-input admission, advancement, projection,
+  snapshot, and restoration envelopes. `SessionCompatibility` binds contract, engine, profile, and
+  product schema identities before a snapshot is restored. Its explicit support classification is
+  `ContractEnvelopeOnly`: this package provides no local loop, worker, server, transport, store, or
+  complete session runtime.
 
 ### Collision — detection, then response
 
@@ -53,13 +58,13 @@ Headlessly testable — zero Skia, zero Scene. Purity, totality (degenerate and 
 ## Fable compatibility
 
 The NuGet package carries a bounded Fable source view containing the canonical
-`Primitives`, `Pathfinding`, `Edges`, and `Los` source files used by the .NET
+`Primitives`, `SessionContract`, `Pathfinding`, `Edges`, and `Los` source files used by the .NET
 assembly; it does not contain copied algorithms. The package's
 `fable-compatibility/` directory records the versioned profile, authored input
 vectors, canonical binary oracle, fixture schema, and pinned toolchain.
 
-`Cell` ordering, `Edges.edgeBetween`, `Los.lineOfSightBy`, and
-`Pathfinding.astar` are `LockstepExact` under profile
+`Cell` ordering, `Edges.edgeBetween`, `Los.lineOfSightBy`, `Pathfinding.astar`, and the
+session identity validation/compatibility result are `LockstepExact` under profile
 `fs-gg-game-core-fable-lockstep-v1`. The packed .NET assembly and
 package-derived Fable source must emit byte-identical records for the shared
 boundary corpus. Floating value types are `Portable`, not exact; implementation

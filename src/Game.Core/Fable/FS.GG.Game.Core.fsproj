@@ -16,6 +16,8 @@
   <ItemGroup>
     <Compile Include="Primitives.fsi" />
     <Compile Include="Primitives.fs" />
+    <Compile Include="SessionContract.fsi" />
+    <Compile Include="SessionContract.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
     <Compile Include="Edges.fsi" />

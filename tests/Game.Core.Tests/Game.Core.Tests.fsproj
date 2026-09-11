@@ -12,6 +12,7 @@
        opens change: FS.GG.UI.Scene/FS.GG.UI.Canvas → FS.GG.Game.Core). -->
   <ItemGroup>
     <Compile Include="InputCommandTests.fs" />
+    <Compile Include="SessionContractTests.fs" />
     <Compile Include="GeometryTests.fs" />
     <Compile Include="RngTests.fs" />
     <Compile Include="DiceTests.fs" />

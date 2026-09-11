@@ -41,6 +41,15 @@ module FixtureProtocol =
             bytes.Add 1uy
             appendCells bytes cells
 
+    let private compatibilityIssueTag issue =
+        match issue with
+        | SessionCompatibilityIssue.ContractVersion _ -> 1uy
+        | SessionCompatibilityIssue.EngineId _ -> 2uy
+        | SessionCompatibilityIssue.EngineVersion _ -> 3uy
+        | SessionCompatibilityIssue.ProfileId _ -> 4uy
+        | SessionCompatibilityIssue.SchemaId _ -> 5uy
+        | SessionCompatibilityIssue.SchemaVersion _ -> 6uy
+
     let private record caseId operation appendPayload =
         let body = ResizeArray<byte>()
         appendU32 body (uint32 caseId)
@@ -76,6 +85,24 @@ module FixtureProtocol =
 
             let path = Pathfinding.astar neighbourhood maxVisited walkable start goal
             record caseId 4 (fun bytes -> appendOptionalCells bytes path)
+        | SessionCompatibilityCase (caseId, expected, actual, sessionId, inputId) ->
+            let initialization =
+                { SessionId = sessionId
+                  Compatibility = actual
+                  Configuration = () }
+            let input =
+                { SessionId = sessionId
+                  InputId = inputId
+                  Sequence = 0UL
+                  Value = () }
+            let issues = SessionCompatibility.compare expected actual
+            record caseId 5 (fun bytes ->
+                bytes.Add(if SessionCompatibility.isCompatible expected actual then 1uy else 0uy)
+                appendU16 bytes issues.Length
+                issues |> List.iter (compatibilityIssueTag >> bytes.Add)
+                appendU16 bytes (SessionEnvelope.validateInitialization initialization).Length
+                appendU16 bytes (SessionEnvelope.validateInput input).Length
+                bytes.Add(if SessionSupport.id SessionSupport.current = "contract-envelope-only" then 1uy else 0uy))
 
     let encodeAll () : byte array =
         GeneratedCases.all |> List.collect (run >> Array.toList) |> List.toArray

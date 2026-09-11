@@ -26,6 +26,11 @@
       "evidence": "fixture-schema.v1 operation 4; canonical cases 4001-4005"
     },
     {
+      "name": "Session contract identities, envelopes, support classification, validation, and compatibility",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 5; canonical cases 5001-5002"
+    },
+    {
       "name": "Point, Rect, Contact, Circle, RayHit, ConvexPolygon, and Manifold values",
       "grade": "Portable",
       "evidence": "types compile through the supported source view; no canonical byte equality is promised for floating fields"
@@ -39,7 +44,7 @@
   "defaultGrade": "Unclassified",
   "notes": [
     "Only a row explicitly graded LockstepExact may enter cross-runtime authoritative code.",
-    "Operations present in one of the four packaged source files but absent from this profile remain Unclassified.",
-    "Floating-point and all non-listed surfaces are unavailable to S.I.R. authority."
+    "Operations present in a packaged source file but absent from this profile remain Unclassified.",
+    "Floating-point and all non-listed surfaces are outside this compatibility profile."
   ]
 }

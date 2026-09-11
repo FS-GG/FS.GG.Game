@@ -122,6 +122,50 @@
       "goal": [2, 0],
       "bounds": [0, 2, 0, 1],
       "blocked": [[2, 1], [1, 0], [1, 1]]
+    },
+    {
+      "id": 5001,
+      "operation": "SessionCompatibility.compare",
+      "expected": {
+        "contractVersion": 1,
+        "engineId": "example.engine",
+        "engineVersion": "1.2.3",
+        "profileId": "example.profile/1",
+        "schemaId": "example.save",
+        "schemaVersion": 2
+      },
+      "actual": {
+        "contractVersion": 1,
+        "engineId": "example.engine",
+        "engineVersion": "1.2.3",
+        "profileId": "example.profile/1",
+        "schemaId": "example.save",
+        "schemaVersion": 2
+      },
+      "sessionId": "session-7",
+      "inputId": "game.fire"
+    },
+    {
+      "id": 5002,
+      "operation": "SessionCompatibility.compare",
+      "expected": {
+        "contractVersion": 1,
+        "engineId": "example.engine",
+        "engineVersion": "1.2.3",
+        "profileId": "example.profile/1",
+        "schemaId": "example.save",
+        "schemaVersion": 2
+      },
+      "actual": {
+        "contractVersion": 2,
+        "engineId": "other.engine",
+        "engineVersion": "2.0.0",
+        "profileId": "other.profile/1",
+        "schemaId": "other.save",
+        "schemaVersion": 3
+      },
+      "sessionId": "",
+      "inputId": ""
     }
   ]
 }

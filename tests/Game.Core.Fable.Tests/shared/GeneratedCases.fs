@@ -16,6 +16,12 @@ type Fixture =
         goal: Cell *
         bounds: (int * int * int * int) *
         blocked: Cell list
+    | SessionCompatibilityCase of
+        caseId: int *
+        expected: SessionCompatibility *
+        actual: SessionCompatibility *
+        sessionId: string *
+        inputId: string
 
 [<RequireQualifiedAccess>]
 module GeneratedCases =
@@ -38,4 +44,6 @@ module GeneratedCases =
           Astar (4002, FourWay, 32, cell 0 0, cell 2 2, (0, 2, 0, 2), [ cell 1 1 ])
           Astar (4003, FourWay, 1, cell 0 0, cell 2 0, (0, 2, 0, 0), [  ])
           Astar (4004, EightWay, 16, cell 1 1, cell 1 1, (0, 2, 0, 2), [ cell 2 2; cell 0 0 ])
-          Astar (4005, FourWay, 32, cell 0 0, cell 2 0, (0, 2, 0, 1), [ cell 2 1; cell 1 0; cell 1 1 ]) ]
+          Astar (4005, FourWay, 32, cell 0 0, cell 2 0, (0, 2, 0, 1), [ cell 2 1; cell 1 0; cell 1 1 ])
+          SessionCompatibilityCase (5001, { ContractVersion = 1; EngineId = "example.engine"; EngineVersion = "1.2.3"; ProfileId = "example.profile/1"; SchemaId = "example.save"; SchemaVersion = 2 }, { ContractVersion = 1; EngineId = "example.engine"; EngineVersion = "1.2.3"; ProfileId = "example.profile/1"; SchemaId = "example.save"; SchemaVersion = 2 }, "session-7", "game.fire")
+          SessionCompatibilityCase (5002, { ContractVersion = 1; EngineId = "example.engine"; EngineVersion = "1.2.3"; ProfileId = "example.profile/1"; SchemaId = "example.save"; SchemaVersion = 2 }, { ContractVersion = 2; EngineId = "other.engine"; EngineVersion = "2.0.0"; ProfileId = "other.profile/1"; SchemaId = "other.save"; SchemaVersion = 3 }, "", "") ]
