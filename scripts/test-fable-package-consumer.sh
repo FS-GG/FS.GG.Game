@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CONFORMANCE_VERSION="0.13.0-m4-conformance"
+CONFORMANCE_VERSION="0.15.0-preview.1"
 PACKAGE_NAME="FS.GG.Game.Core.${CONFORMANCE_VERSION}.nupkg"
 RUNTIME="${1:---all}"
 EXPECTED="$REPO_ROOT/tests/Game.Core.Fable.Tests/fixtures/v1/expected.bin"
@@ -73,6 +73,8 @@ required_entries=(
   "fable/FS.GG.Game.Core.fsproj"
   "fable/Primitives.fsi"
   "fable/Primitives.fs"
+  "fable/SessionContract.fsi"
+  "fable/SessionContract.fs"
   "fable/Pathfinding.fsi"
   "fable/Pathfinding.fs"
   "fable/Edges.fsi"

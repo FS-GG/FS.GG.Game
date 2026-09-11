@@ -28,6 +28,21 @@ def cells(values: list[list[int]]) -> str:
     return "[ " + "; ".join(cell(value) for value in values) + " ]"
 
 
+def fsharp_string(value: str) -> str:
+    return json.dumps(value)
+
+
+def compatibility(value: dict[str, object]) -> str:
+    return (
+        "{ ContractVersion = " + integer(value["contractVersion"]) +
+        "; EngineId = " + fsharp_string(value["engineId"]) +
+        "; EngineVersion = " + fsharp_string(value["engineVersion"]) +
+        "; ProfileId = " + fsharp_string(value["profileId"]) +
+        "; SchemaId = " + fsharp_string(value["schemaId"]) +
+        "; SchemaVersion = " + integer(value["schemaVersion"]) + " }"
+    )
+
+
 def render_case(case: dict[str, object]) -> str:
     case_id = case["id"]
     operation = case["operation"]
@@ -47,6 +62,12 @@ def render_case(case: dict[str, object]) -> str:
             f"Astar ({case_id}, {case['neighbourhood']}, {case['maxVisited']}, "
             f"{cell(case['start'])}, {cell(case['goal'])}, ({bounds}), "
             f"{cells(case['blocked'])})"
+        )
+    if operation == "SessionCompatibility.compare":
+        return (
+            f"SessionCompatibilityCase ({case_id}, {compatibility(case['expected'])}, "
+            f"{compatibility(case['actual'])}, {fsharp_string(case['sessionId'])}, "
+            f"{fsharp_string(case['inputId'])})"
         )
     raise ValueError(f"unsupported operation {operation!r}")
 
@@ -82,6 +103,12 @@ type Fixture =
         goal: Cell *
         bounds: (int * int * int * int) *
         blocked: Cell list
+    | SessionCompatibilityCase of
+        caseId: int *
+        expected: SessionCompatibility *
+        actual: SessionCompatibility *
+        sessionId: string *
+        inputId: string
 
 [<RequireQualifiedAccess>]
 module GeneratedCases =

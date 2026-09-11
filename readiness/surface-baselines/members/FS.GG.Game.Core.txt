@@ -374,6 +374,68 @@ FS.GG.Game.Core.Rule+Tags.MaxComponents : System.Int32
 FS.GG.Game.Core.Rule+Tags.MaxDiameter : System.Int32
 FS.GG.Game.Core.Rule+Tags.MinBorderOpenings : System.Int32
 FS.GG.Game.Core.Rule+Tags.MinDiameter : System.Int32
+FS.GG.Game.Core.SessionAdvance.SessionId : System.String [get]
+FS.GG.Game.Core.SessionAdvance.StepCount : System.UInt64 [get]
+FS.GG.Game.Core.SessionAdvance.new(System.String, System.UInt64)
+FS.GG.Game.Core.SessionCompatibility.ContractVersion : System.Int32 [get]
+FS.GG.Game.Core.SessionCompatibility.EngineId : System.String [get]
+FS.GG.Game.Core.SessionCompatibility.EngineVersion : System.String [get]
+FS.GG.Game.Core.SessionCompatibility.ProfileId : System.String [get]
+FS.GG.Game.Core.SessionCompatibility.SchemaId : System.String [get]
+FS.GG.Game.Core.SessionCompatibility.SchemaVersion : System.Int32 [get]
+FS.GG.Game.Core.SessionCompatibility.compare(FS.GG.Game.Core.SessionCompatibility, FS.GG.Game.Core.SessionCompatibility) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.SessionCompatibilityIssue>
+FS.GG.Game.Core.SessionCompatibility.isCompatible(FS.GG.Game.Core.SessionCompatibility, FS.GG.Game.Core.SessionCompatibility) : System.Boolean
+FS.GG.Game.Core.SessionCompatibility.new(System.Int32, System.String, System.String, System.String, System.String, System.Int32)
+FS.GG.Game.Core.SessionCompatibility.validate(FS.GG.Game.Core.SessionCompatibility) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.SessionContractIssue>
+FS.GG.Game.Core.SessionCompatibilityIssue+Tags.ContractVersion : System.Int32
+FS.GG.Game.Core.SessionCompatibilityIssue+Tags.EngineId : System.Int32
+FS.GG.Game.Core.SessionCompatibilityIssue+Tags.EngineVersion : System.Int32
+FS.GG.Game.Core.SessionCompatibilityIssue+Tags.ProfileId : System.Int32
+FS.GG.Game.Core.SessionCompatibilityIssue+Tags.SchemaId : System.Int32
+FS.GG.Game.Core.SessionCompatibilityIssue+Tags.SchemaVersion : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.InvalidContractVersion : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.InvalidSchemaVersion : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.MissingEngineId : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.MissingEngineVersion : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.MissingInputId : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.MissingProfileId : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.MissingSchemaId : System.Int32
+FS.GG.Game.Core.SessionContractIssue+Tags.MissingSessionId : System.Int32
+FS.GG.Game.Core.SessionContract`5.AdmitInput : FSharpFunc<SessionInput<input>, FSharpFunc<state, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>> [get]
+FS.GG.Game.Core.SessionContract`5.Advance : FSharpFunc<FS.GG.Game.Core.SessionAdvance, FSharpFunc<state, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>> [get]
+FS.GG.Game.Core.SessionContract`5.Initialize : FSharpFunc<SessionInitialization<configuration>, FSharpResult<state, FS.GG.Game.Core.SessionFailure>> [get]
+FS.GG.Game.Core.SessionContract`5.Project : FSharpFunc<state, SessionProjection<projection>> [get]
+FS.GG.Game.Core.SessionContract`5.Restore : FSharpFunc<SessionSnapshot<snapshot>, FSharpResult<state, FS.GG.Game.Core.SessionFailure>> [get]
+FS.GG.Game.Core.SessionContract`5.Snapshot : FSharpFunc<state, SessionSnapshot<snapshot>> [get]
+FS.GG.Game.Core.SessionContract`5.new(FSharpFunc<SessionInitialization<configuration>, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>, FSharpFunc<SessionInput<input>, FSharpFunc<state, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>>, FSharpFunc<FS.GG.Game.Core.SessionAdvance, FSharpFunc<state, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>>, FSharpFunc<state, SessionProjection<projection>>, FSharpFunc<state, SessionSnapshot<snapshot>>, FSharpFunc<SessionSnapshot<snapshot>, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>)
+FS.GG.Game.Core.SessionEnvelope.validateAdvance(FS.GG.Game.Core.SessionAdvance) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.SessionContractIssue>
+FS.GG.Game.Core.SessionEnvelope.validateInitialization<configuration>(SessionInitialization<configuration>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.SessionContractIssue>
+FS.GG.Game.Core.SessionEnvelope.validateInput<input>(SessionInput<input>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.SessionContractIssue>
+FS.GG.Game.Core.SessionEnvelope.validateProjection<projection>(SessionProjection<projection>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.SessionContractIssue>
+FS.GG.Game.Core.SessionEnvelope.validateSnapshot<snapshot>(SessionSnapshot<snapshot>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.SessionContractIssue>
+FS.GG.Game.Core.SessionFailure.Code : System.String [get]
+FS.GG.Game.Core.SessionFailure.Message : System.String [get]
+FS.GG.Game.Core.SessionFailure.new(System.String, System.String)
+FS.GG.Game.Core.SessionInitialization`1.Compatibility : FS.GG.Game.Core.SessionCompatibility [get]
+FS.GG.Game.Core.SessionInitialization`1.Configuration : configuration [get]
+FS.GG.Game.Core.SessionInitialization`1.SessionId : System.String [get]
+FS.GG.Game.Core.SessionInitialization`1.new(System.String, FS.GG.Game.Core.SessionCompatibility, configuration)
+FS.GG.Game.Core.SessionInput`1.InputId : System.String [get]
+FS.GG.Game.Core.SessionInput`1.Sequence : System.UInt64 [get]
+FS.GG.Game.Core.SessionInput`1.SessionId : System.String [get]
+FS.GG.Game.Core.SessionInput`1.Value : input [get]
+FS.GG.Game.Core.SessionInput`1.new(System.String, System.String, System.UInt64, input)
+FS.GG.Game.Core.SessionProjection`1.Revision : System.UInt64 [get]
+FS.GG.Game.Core.SessionProjection`1.SessionId : System.String [get]
+FS.GG.Game.Core.SessionProjection`1.Value : projection [get]
+FS.GG.Game.Core.SessionProjection`1.new(System.String, System.UInt64, projection)
+FS.GG.Game.Core.SessionSnapshot`1.Compatibility : FS.GG.Game.Core.SessionCompatibility [get]
+FS.GG.Game.Core.SessionSnapshot`1.Revision : System.UInt64 [get]
+FS.GG.Game.Core.SessionSnapshot`1.SessionId : System.String [get]
+FS.GG.Game.Core.SessionSnapshot`1.Value : snapshot [get]
+FS.GG.Game.Core.SessionSnapshot`1.new(System.String, System.UInt64, FS.GG.Game.Core.SessionCompatibility, snapshot)
+FS.GG.Game.Core.SessionSupport.current : FS.GG.Game.Core.SessionSupport [get]
+FS.GG.Game.Core.SessionSupport.id(FS.GG.Game.Core.SessionSupport) : System.String
 FS.GG.Game.Core.Sighting`1.Agent : FS.GG.Game.Core.AgentId [get]
 FS.GG.Game.Core.Sighting`1.LastSeenTick : System.Int32 [get]
 FS.GG.Game.Core.Sighting`1.Position : FS.GG.Game.Core.Point [get]
