@@ -31,6 +31,7 @@ type SessionContractIssue =
 [<RequireQualifiedAccess>]
 type SessionSupport =
     | ContractEnvelopeOnly
+    | PortableRuntime
 
 type SessionInitialization<'configuration> =
     { SessionId: string
@@ -111,7 +112,8 @@ module SessionEnvelope =
 
 [<RequireQualifiedAccess>]
 module SessionSupport =
-    let current = SessionSupport.ContractEnvelopeOnly
+    let current = SessionSupport.PortableRuntime
     let id support =
         match support with
         | SessionSupport.ContractEnvelopeOnly -> "contract-envelope-only"
+        | SessionSupport.PortableRuntime -> "portable-runtime"

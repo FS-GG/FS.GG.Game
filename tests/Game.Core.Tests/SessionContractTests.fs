@@ -43,6 +43,16 @@ let private contract: SessionContract<int, State, int, int, int> =
         else
             Ok { SessionId = snapshot.SessionId; Compatibility = snapshot.Compatibility; Value = snapshot.Value; Revision = snapshot.Revision } }
 
+let private runtime () =
+    match
+        SessionRuntime.initialize
+            { StepMicroseconds = 10_000UL; MaxCatchUpSteps = 3u }
+            contract
+            { SessionId = "session-1"; Compatibility = identity; Configuration = 10 }
+    with
+    | Ok value -> value
+    | Error error -> failtestf "runtime initialization failed: %A" error
+
 [<Tests>]
 let tests =
     testList "Game.Core portable session contract" [
@@ -110,8 +120,81 @@ let tests =
                 "semantic input requires both identities"
         }
 
-        test "support classification states that no runtime is included" {
-            Expect.equal SessionSupport.current SessionSupport.ContractEnvelopeOnly "the package exports contracts only"
-            Expect.equal (SessionSupport.id SessionSupport.current) "contract-envelope-only" "support identity is stable"
+        test "bounded integer time produces deterministic whole steps and explicit clamp evidence" {
+            let initial = runtime ()
+            let first, firstEffects = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 25_000UL) initial
+            let second, secondEffects = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 45_000UL) first
+            Expect.equal first.Current.Value 12 "two whole steps advance"
+            Expect.equal first.AccumulatorMicroseconds 5_000UL "the sub-step remainder is retained"
+            Expect.equal firstEffects [ SessionRuntimeEffect.Advanced 2UL; SessionRuntimeEffect.ProjectionReady(contract.Project first.Current) ] "advance effects are ordered"
+            Expect.equal second.Current.Value 15 "catch-up work is bounded to three steps"
+            Expect.equal second.AccumulatorMicroseconds 9_999UL "bounded catch-up keeps only a sub-step remainder"
+            Expect.equal secondEffects.Head (SessionRuntimeEffect.CatchUpClamped 10_001UL) "dropped suspension time is explicit"
+        }
+
+        test "runtime policy and portable envelopes are validated before product execution" {
+            let badClock = SessionRuntime.initialize { StepMicroseconds=0UL;MaxCatchUpSteps=3u } contract { SessionId="session-1";Compatibility=identity;Configuration=10 }
+            let badEnvelope = SessionRuntime.initialize { StepMicroseconds=10_000UL;MaxCatchUpSteps=3u } contract { SessionId="";Compatibility=identity;Configuration=10 }
+            Expect.equal badClock (Error(SessionRuntimeRefusal.InvalidStepMicroseconds 0UL)) "a zero tick is refused"
+            Expect.equal badEnvelope (Error(SessionRuntimeRefusal.InvalidEnvelope [ SessionContractIssue.MissingSessionId ])) "the generic boundary validates before the product contract"
+        }
+
+        test "pause step and resume keep the deterministic clock separate from presentation time" {
+            let initial = runtime ()
+            let paused, _ = SessionRuntime.update contract SessionRuntimeObservation.Pause initial
+            let ignored, effects = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 50_000UL) paused
+            let stepped, _ = SessionRuntime.update contract SessionRuntimeObservation.StepOnce ignored
+            let resumed, _ = SessionRuntime.update contract SessionRuntimeObservation.Resume stepped
+            Expect.equal ignored paused "elapsed host time does not mutate a paused session"
+            Expect.isEmpty effects "a paused clock emits no projection"
+            Expect.equal stepped.Current.Value 11 "manual step advances exactly once"
+            Expect.equal resumed.Status SessionRuntimeStatus.Running "resume is explicit"
+        }
+
+        test "input admission is monotonic and refusals preserve accepted state" {
+            let initial = runtime ()
+            let accepted, _ = SessionRuntime.update contract (SessionRuntimeObservation.AdmitInput { SessionId="session-1";InputId="game.add";Sequence=4UL;Value=2 }) initial
+            let stale, effects = SessionRuntime.update contract (SessionRuntimeObservation.AdmitInput { SessionId="session-1";InputId="game.add";Sequence=4UL;Value=99 }) accepted
+            Expect.equal stale accepted "a stale sequence cannot mutate product or runtime state"
+            Expect.equal effects [ SessionRuntimeEffect.Refused(SessionRuntimeRefusal.StaleInputSequence(4UL,4UL)) ] "staleness is precise"
+        }
+
+        test "reset and compatible restore clear transient clock state" {
+            let initial = runtime ()
+            let changed, _ = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 25_000UL) initial
+            let reset, _ = SessionRuntime.update contract SessionRuntimeObservation.Reset changed
+            let restored, _ = SessionRuntime.update contract (SessionRuntimeObservation.Restore(contract.Snapshot changed.Current)) reset
+            Expect.equal reset.Current initial.Current "reset restores the initialization snapshot"
+            Expect.equal reset.AccumulatorMicroseconds 0UL "reset clears carried host time"
+            Expect.equal restored.Current changed.Current "compatible snapshots restore exactly"
+        }
+
+        test "wrong-session and incompatible snapshots are rejected before product restore" {
+            let initial = runtime ()
+            let wrong = { contract.Snapshot initial.Current with SessionId = "other" }
+            let same, wrongEffects = SessionRuntime.update contract (SessionRuntimeObservation.Restore wrong) initial
+            let incompatible = { contract.Snapshot initial.Current with Compatibility = { identity with EngineVersion = "2.0.0" } }
+            let sameAgain, incompatibleEffects = SessionRuntime.update contract (SessionRuntimeObservation.Restore incompatible) initial
+            Expect.equal same initial "wrong-session restore preserves state"
+            Expect.equal wrongEffects [ SessionRuntimeEffect.Refused(SessionRuntimeRefusal.WrongSession("session-1","other")) ] "session ownership is checked"
+            Expect.equal sameAgain initial "incompatible restore preserves state"
+            Expect.equal incompatibleEffects [ SessionRuntimeEffect.Refused(SessionRuntimeRefusal.IncompatibleSnapshot [ SessionCompatibilityIssue.EngineVersion("1.2.3","2.0.0") ]) ] "compatibility axes are returned"
+        }
+
+        test "disposal is idempotent and makes later observations inert" {
+            let initial = runtime ()
+            let disposed, effects = SessionRuntime.update contract SessionRuntimeObservation.Dispose initial
+            let again, repeated = SessionRuntime.update contract SessionRuntimeObservation.Dispose disposed
+            let inert, refused = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 10_000UL) disposed
+            Expect.equal effects [ SessionRuntimeEffect.Disposed ] "one disposal effect is emitted"
+            Expect.equal again disposed "repeated disposal is idempotent"
+            Expect.isEmpty repeated "repeated disposal emits nothing"
+            Expect.equal inert disposed "disposed runtime cannot advance"
+            Expect.equal refused [ SessionRuntimeEffect.Refused SessionRuntimeRefusal.RuntimeDisposed ] "inert refusal is explicit"
+        }
+
+        test "support classification includes the portable runtime" {
+            Expect.equal SessionSupport.current SessionSupport.PortableRuntime "the package exports the runtime reducer"
+            Expect.equal (SessionSupport.id SessionSupport.current) "portable-runtime" "support identity is stable"
         }
     ]
