@@ -26,6 +26,9 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the detecti
 - **`Geometry`** — the detection surface: overlap and containment for AABB, circle, and convex polygon (`intersects`/`contains`/`aabbContact`/`circleContact`/`polygonContact`/`obbPolygon`), swept tests (`sweptIntersects`), and segment casts (`segmentAabbHit`/`segmentCircleHit`/`segmentPolygonHit`/…). It returns manifests as values and never resolves them.
 - **`Resolution`** — the response layer that consumes a detection `Contact` and produces transforms (`pushOut`/`slide`/`push`; `knockback` is a deprecated shim over `push`). Deliberately separate from detection; it never re-detects.
 - **`SpatialGrid`** — uniform spatial partitioning for the broad phase (`build`/`query`/`queryRadius`).
+- **`Kinematics`** — a bounded arcade-world adapter that uses `SpatialGrid` for swept candidates,
+  `Geometry` for AABB/circle/convex detection and casts, and `Resolution` for slide/bounce response.
+  Triggers remain observations and never alter motion.
 - **`Physics`** — an opt-in mini rigid-body engine: a world of bodies, a broad phase, a narrow phase, and a semi-implicit Euler step with a warm-started sequential-impulse contact solver over bodies that sleep once they settle. Mass is *derived* from a shape's area, not given. Arcade `Resolution` stays the first-class default; neither module knows the other.
 
 ### The grid
@@ -53,7 +56,7 @@ Three provenances:
 
 - **Extracted** from `FS.GG.UI.Canvas` / `FS.GG.UI.Scene` and reimplemented BCL-only, per [ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md) — the shared types, `Geometry`, `Rng`, `FixedStep`, `Pathfinding`, `SpatialGrid`.
 - **Promoted** from the frozen starter fragments in `FS.GG.Rendering` (`template/fragments/*`), which every game that wanted them previously had to copy and diverge from — `Los`, `Visibility`, `Grids`.
-- **Authored here** through the SDD lifecycle, because the org had nothing to promote — `Fov`, `Resolution`, `Loop`, `InputCommand`, `Ballistics`, `Effects`, `Ai`, and `Physics`.
+- **Authored here** through the SDD lifecycle, because the org had nothing to promote — `Fov`, `Resolution`, `Kinematics`, `Loop`, `InputCommand`, `Ballistics`, `Effects`, `Ai`, and `Physics`.
 
 ## Guarantees
 

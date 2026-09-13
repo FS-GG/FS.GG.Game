@@ -1,7 +1,7 @@
 # SVG-RUNTIME-01 — Sessions and continuous gameplay
 
-Status: active; SVG-RUNTIME-01.1 merged, SVG-RUNTIME-01.2 implementation complete in its routine change,
-with .3 next after merge readback.
+Status: active; SVG-RUNTIME-01.1 and .2 merged, SVG-RUNTIME-01.3 implementation complete in its
+routine change, with .4 next after merge readback.
 Route: routine.
 
 Owners: FS.GG.Game owns session semantics, fixed-step execution, collision classification and gameplay
@@ -62,7 +62,7 @@ strictly off limits.
   bounded 30-step simulations, and passes witnesses for reversed replies, slow projection consumption,
   cancellation races and recovery after replacement.
 
-- [ ] **SVG-RUNTIME-01.3 — Collision and continuous-arena correspondence — route: routine**
+- [x] **SVG-RUNTIME-01.3 — Collision and continuous-arena correspondence — route: routine**
 
   Owner: Game. Compose the existing Geometry, SpatialGrid and Resolution surfaces into a bounded kinematic
   world adapter. Cover circle/AABB/convex overlap, broad-phase candidates, segment/raycast, swept motion,
@@ -72,6 +72,12 @@ strictly off limits.
   Acceptance: narrow phase agrees with direct fixtures; broad phase has no false negatives; high-speed swept
   motion cannot tunnel through thin-obstacle fixtures; collision detection stays separate from product
   response; two independent runs produce identical projections and snapshots.
+
+  Evidence: the kinematic adapter delegates AABB, circle and convex detection and segment casts to the shared
+  geometry surface, uses the spatial grid for insertion-ordered swept candidates, and applies slide/bounce
+  only after detection. Core fixtures cover direct agreement, broad-phase completeness, triggers and thin-wall
+  tunnelling. The neutral arena drives movement, collectibles, hazards, score, health, win/loss and restart
+  through `Playable`; two independent command runs produce equal projection traces.
 
 - [ ] **SVG-RUNTIME-01.4 — Browser clock and retained projection host — route: routine**
 

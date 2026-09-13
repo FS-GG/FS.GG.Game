@@ -33,6 +33,9 @@ Depends on nothing but `FS.GG.Game.Core` and the BCL — no render/input stack, 
   `Match<'view>` set up a seeded field of matches so a policy is exercised across many seeds, not one.
 - **`Synthetic`** — the typed synthetic-state escape hatch: a *labeled* fallback that keeps its own
   evidence self-identifying, so a synthetic trace can never be mistaken for a real driven one.
+- **`ContinuousArena`** — a neutral movement/obstacle/collectible/hazard product that composes the
+  kinematic world through `Playable`, making score, health, win, loss and restart outcomes available
+  to the same command-driven trace authority as adopter games.
 
 ## Guarantees
 
