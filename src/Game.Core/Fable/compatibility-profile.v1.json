@@ -61,6 +61,11 @@
       "evidence": "fixture-schema.v1 operation 10; canonical planning record -6"
     },
     {
+      "name": "Rule catalog dependency order, causal explanations and formal evidence identity",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 11; canonical neutral-rule record -7"
+    },
+    {
       "name": "Geometry, SpatialGrid, Resolution, and Kinematics surfaces outside the operation 8 path",
       "grade": "Portable",
       "evidence": "implementation sources compile through the supported source view; only the operation 8 path promises canonical byte equality"

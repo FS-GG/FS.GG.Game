@@ -276,6 +276,29 @@ module FixtureProtocol =
             bytes.Add(if refreshed.Scenarios.Head.Status=PlanningScenarioStatus.Stale then 1uy else 0uy)
             bytes.Add(if refreshed.Authored=initial.Authored then 1uy else 0uy))
 
+    let private rulesRecord () =
+        let evidence =
+            {ModelId="energy-rules/1";ModelSha256="sha";Tool="quint";ToolVersion="0.32.0"
+             Invariants=["energyRulesSafe"];ImplementationBinding="fixture/v1"}
+        let available : RuleDefinition<int,string> =
+            {Metadata={Id="energy.available";Version=1;Title="Energy";Summary="Energy is required";DependsOn=[]}
+             Evaluate=fun energy -> {RuleId="energy.available";Applies=energy>0;Explanation=string energy;Causes=[{Code="energy";Message=string energy}];Effects=[]}}
+        let enter : RuleDefinition<int,string> =
+            {Metadata={Id="door.enter";Version=1;Title="Enter";Summary="Enter a door";DependsOn=["energy.available"]}
+             Evaluate=fun _ -> {RuleId="door.enter";Applies=true;Explanation="closed";Causes=[{Code="door";Message="closed"}];Effects=["enter"]}}
+        let catalog=RuleCatalog.create evidence [available;enter] |> Result.defaultWith (fun error -> failwithf "rule fixture failed: %A" error)
+        let accepted=RuleCatalog.inspect "door.enter" 2 catalog
+        let refused=RuleCatalog.inspect "door.enter" 0 catalog
+        record -7 11 (fun bytes ->
+            match accepted with
+            | Ok value -> appendU16 bytes value.Evaluations.Length; bytes.Add(if value.Applies then 1uy else 0uy); appendU16 bytes value.Evaluations.Head.Causes.Length
+            | Error _ -> appendU16 bytes 0; bytes.Add 0uy; appendU16 bytes 0
+            match refused with
+            | Ok value -> bytes.Add(if value.Applies then 1uy else 0uy); appendU16 bytes value.Evaluations.Length
+            | Error _ -> bytes.Add 1uy; appendU16 bytes 0
+            appendU16 bytes (RuleCatalog.metadata catalog).Length
+            appendU16 bytes (RuleCatalog.evidence catalog).Invariants.Length)
+
     let encodeAll () : byte array =
         (GeneratedCases.all |> List.collect (run >> Array.toList))
         @ (runtimeRecord () |> Array.toList)
@@ -283,6 +306,7 @@ module FixtureProtocol =
         @ (kinematicsRecord () |> Array.toList)
         @ (replayRecord () |> Array.toList)
         @ (planningRecord () |> Array.toList)
+        @ (rulesRecord () |> Array.toList)
         |> List.toArray
 
     let toLowerHex (bytes: byte array) =

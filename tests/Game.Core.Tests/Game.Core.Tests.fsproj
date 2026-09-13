@@ -15,6 +15,7 @@
     <Compile Include="SessionContractTests.fs" />
     <Compile Include="ReplayTests.fs" />
     <Compile Include="PlanningTests.fs" />
+    <Compile Include="RuleCatalogTests.fs" />
     <Compile Include="SessionOperationTests.fs" />
     <Compile Include="SaveMigrationTests.fs" />
     <Compile Include="KinematicsTests.fs" />

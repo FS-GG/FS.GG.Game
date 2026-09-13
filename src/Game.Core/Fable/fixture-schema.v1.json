@@ -58,11 +58,16 @@
       "id": 10,
       "operation": "Planning.apply",
       "payload": "i32 acceptedState, i32 predictedState, u32 commitBasisRevision, u16 commitIntentCount, u8 refreshedScenarioStale, u8 authoredUnchanged"
+    },
+    {
+      "id": 11,
+      "operation": "RuleCatalog.inspect",
+      "payload": "u16 acceptedEvaluationCount, u8 acceptedApplies, u16 causeCount, u8 refusedApplies, u16 refusedEvaluationCount, u16 metadataCount, u16 invariantCount"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "9d73a93eaa3b32290abe484b4f3679bb80fc20ac06424cc4696d96babe95d0d1",
+  "oracleSha256": "f710a2a98431c063f942cae3df73cf69808a5a8074df1621a5872871e7dddea7",
   "outcomeTags": {
     "0": "operation completed normally"
   },

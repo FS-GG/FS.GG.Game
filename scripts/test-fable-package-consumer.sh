@@ -81,6 +81,8 @@ required_entries=(
   "fable/Replay.fs"
   "fable/Planning.fsi"
   "fable/Planning.fs"
+  "fable/Rules.fsi"
+  "fable/Rules.fs"
   "fable/SessionOperations.fsi"
   "fable/SessionOperations.fs"
   "fable/SaveMigration.fsi"
