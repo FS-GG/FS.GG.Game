@@ -22,6 +22,8 @@
     <Compile Include="SessionRuntime.fs" />
     <Compile Include="SessionOperations.fsi" />
     <Compile Include="SessionOperations.fs" />
+    <Compile Include="SaveMigration.fsi" />
+    <Compile Include="SaveMigration.fs" />
     <Compile Include="Geometry.fsi" />
     <Compile Include="Geometry.fs" />
     <Compile Include="Pathfinding.fsi" />

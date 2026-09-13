@@ -1,0 +1,1 @@
+printf "%s" (SaveMigrationCorrespondence.run())

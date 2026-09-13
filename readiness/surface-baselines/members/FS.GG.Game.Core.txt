@@ -11,6 +11,38 @@ FS.GG.Game.Core.Ai.threatField(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.
 FS.GG.Game.Core.Ai.tryFind<T>(FS.GG.Game.Core.AgentId, TeamView<T>) : FSharpValueOption<Sighting<T>>
 FS.GG.Game.Core.Ai.view<T>(System.Int32, System.Int32, FSharpList<Sighting<T>>) : TeamView<T>
 FS.GG.Game.Core.Ai.viewTick<T>(TeamView<T>) : System.Int32
+FS.GG.Game.Core.Autosave.initialize<value>(FS.GG.Game.Core.AutosaveConfig, FSharpOption<value>) : FSharpResult<AutosaveState<value>, FS.GG.Game.Core.SaveRefusal>
+FS.GG.Game.Core.Autosave.update<value>(AutosaveObservation<value>, AutosaveState<value>) : Tuple<AutosaveState<value>, FSharpList<AutosaveEffect<value>>>
+FS.GG.Game.Core.AutosaveConfig.DebounceMilliseconds : System.UInt64 [get]
+FS.GG.Game.Core.AutosaveConfig.new(System.UInt64)
+FS.GG.Game.Core.AutosaveEffect`1+Tags.Committed : System.Int32
+FS.GG.Game.Core.AutosaveEffect`1+Tags.Disposed : System.Int32
+FS.GG.Game.Core.AutosaveEffect`1+Tags.GenerationInvalidated : System.Int32
+FS.GG.Game.Core.AutosaveEffect`1+Tags.Persist : System.Int32
+FS.GG.Game.Core.AutosaveEffect`1+Tags.Refused : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.Cancel : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.Dispose : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.Edit : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.PersistFailed : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.Persisted : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.Replace : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.Retry : System.Int32
+FS.GG.Game.Core.AutosaveObservation`1+Tags.Tick : System.Int32
+FS.GG.Game.Core.AutosaveState`1.Config : FS.GG.Game.Core.AutosaveConfig [get]
+FS.GG.Game.Core.AutosaveState`1.Draft : FSharpOption<value> [get]
+FS.GG.Game.Core.AutosaveState`1.DueAtMilliseconds : Microsoft.FSharp.Core.FSharpOption<System.UInt64> [get]
+FS.GG.Game.Core.AutosaveState`1.Generation : System.UInt64 [get]
+FS.GG.Game.Core.AutosaveState`1.InFlight : FSharpOption<Tuple<FS.GG.Game.Core.SaveOperationId, value>> [get]
+FS.GG.Game.Core.AutosaveState`1.LastCommitted : FSharpOption<value> [get]
+FS.GG.Game.Core.AutosaveState`1.NextOperation : System.UInt64 [get]
+FS.GG.Game.Core.AutosaveState`1.Status : FS.GG.Game.Core.AutosaveStatus [get]
+FS.GG.Game.Core.AutosaveState`1.new(FS.GG.Game.Core.AutosaveConfig, System.UInt64, System.UInt64, FS.GG.Game.Core.AutosaveStatus, FSharpOption<value>, FSharpOption<value>, Microsoft.FSharp.Core.FSharpOption<System.UInt64>, FSharpOption<Tuple<FS.GG.Game.Core.SaveOperationId, value>>)
+FS.GG.Game.Core.AutosaveStatus+Tags.Cancelled : System.Int32
+FS.GG.Game.Core.AutosaveStatus+Tags.Clean : System.Int32
+FS.GG.Game.Core.AutosaveStatus+Tags.Debouncing : System.Int32
+FS.GG.Game.Core.AutosaveStatus+Tags.Disposed : System.Int32
+FS.GG.Game.Core.AutosaveStatus+Tags.Failed : System.Int32
+FS.GG.Game.Core.AutosaveStatus+Tags.Persisting : System.Int32
 FS.GG.Game.Core.Ballistics.intercept(FS.GG.Game.Core.Point, System.Double, FS.GG.Game.Core.Point, FS.GG.Game.Core.Point) : Microsoft.FSharp.Core.FSharpValueOption<FS.GG.Game.Core.Point>
 FS.GG.Game.Core.Ballistics.inverseSquareFalloff(System.Double) : Microsoft.FSharp.Core.FSharpFunc<System.Double, System.Double>
 FS.GG.Game.Core.Ballistics.linearFalloff(System.Double) : Microsoft.FSharp.Core.FSharpFunc<System.Double, System.Double>
@@ -402,6 +434,70 @@ FS.GG.Game.Core.Rule+Tags.MaxComponents : System.Int32
 FS.GG.Game.Core.Rule+Tags.MaxDiameter : System.Int32
 FS.GG.Game.Core.Rule+Tags.MinBorderOpenings : System.Int32
 FS.GG.Game.Core.Rule+Tags.MinDiameter : System.Int32
+FS.GG.Game.Core.SaveEnvelope`1.Identity : FS.GG.Game.Core.SaveIdentity [get]
+FS.GG.Game.Core.SaveEnvelope`1.Payload : payload [get]
+FS.GG.Game.Core.SaveEnvelope`1.PayloadHash : System.String [get]
+FS.GG.Game.Core.SaveEnvelope`1.new(FS.GG.Game.Core.SaveIdentity, System.String, payload)
+FS.GG.Game.Core.SaveFamily+Tags.AssetManifest : System.Int32
+FS.GG.Game.Core.SaveFamily+Tags.GameSave : System.Int32
+FS.GG.Game.Core.SaveFamily+Tags.ProjectDocument : System.Int32
+FS.GG.Game.Core.SaveFamily+Tags.WorkspacePreferences : System.Int32
+FS.GG.Game.Core.SaveIdentity.AssetHash : System.String [get]
+FS.GG.Game.Core.SaveIdentity.ContentHash : System.String [get]
+FS.GG.Game.Core.SaveIdentity.EngineId : System.String [get]
+FS.GG.Game.Core.SaveIdentity.EngineVersion : System.String [get]
+FS.GG.Game.Core.SaveIdentity.Family : FS.GG.Game.Core.SaveFamily [get]
+FS.GG.Game.Core.SaveIdentity.ProfileId : System.String [get]
+FS.GG.Game.Core.SaveIdentity.SchemaId : System.String [get]
+FS.GG.Game.Core.SaveIdentity.SchemaVersion : System.Int32 [get]
+FS.GG.Game.Core.SaveIdentity.new(FS.GG.Game.Core.SaveFamily, System.String, System.String, System.String, System.String, System.Int32, System.String, System.String)
+FS.GG.Game.Core.SaveMigration.initialize<payload>(FS.GG.Game.Core.SaveIdentity) : FSharpResult<SaveMigrationState<payload>, FS.GG.Game.Core.SaveRefusal>
+FS.GG.Game.Core.SaveMigration.update<payload>(FSharpFunc<payload, System.String>, FSharpList<SaveMigrationStep<payload>>, SaveMigrationObservation<payload>, SaveMigrationState<payload>) : Tuple<SaveMigrationState<payload>, FSharpList<SaveMigrationEffect<payload>>>
+FS.GG.Game.Core.SaveMigrationEffect`1+Tags.Accepted : System.Int32
+FS.GG.Game.Core.SaveMigrationEffect`1+Tags.Disposed : System.Int32
+FS.GG.Game.Core.SaveMigrationEffect`1+Tags.GenerationInvalidated : System.Int32
+FS.GG.Game.Core.SaveMigrationEffect`1+Tags.PersistStep : System.Int32
+FS.GG.Game.Core.SaveMigrationEffect`1+Tags.Refused : System.Int32
+FS.GG.Game.Core.SaveMigrationObservation`1+Tags.Begin : System.Int32
+FS.GG.Game.Core.SaveMigrationObservation`1+Tags.Dispose : System.Int32
+FS.GG.Game.Core.SaveMigrationObservation`1+Tags.Replace : System.Int32
+FS.GG.Game.Core.SaveMigrationObservation`1+Tags.StepCommitted : System.Int32
+FS.GG.Game.Core.SaveMigrationObservation`1+Tags.StepFailed : System.Int32
+FS.GG.Game.Core.SaveMigrationState`1.Expected : FS.GG.Game.Core.SaveIdentity [get]
+FS.GG.Game.Core.SaveMigrationState`1.Generation : System.UInt64 [get]
+FS.GG.Game.Core.SaveMigrationState`1.LastCommitted : FSharpOption<SaveEnvelope<payload>> [get]
+FS.GG.Game.Core.SaveMigrationState`1.NextOperation : System.UInt64 [get]
+FS.GG.Game.Core.SaveMigrationState`1.Pending : FSharpOption<Tuple<FS.GG.Game.Core.SaveOperationId, SaveEnvelope<payload>>> [get]
+FS.GG.Game.Core.SaveMigrationState`1.Status : FS.GG.Game.Core.SaveMigrationStatus [get]
+FS.GG.Game.Core.SaveMigrationState`1.new(FS.GG.Game.Core.SaveIdentity, System.UInt64, System.UInt64, FS.GG.Game.Core.SaveMigrationStatus, FSharpOption<SaveEnvelope<payload>>, FSharpOption<Tuple<FS.GG.Game.Core.SaveOperationId, SaveEnvelope<payload>>>)
+FS.GG.Game.Core.SaveMigrationStatus+Tags.Disposed : System.Int32
+FS.GG.Game.Core.SaveMigrationStatus+Tags.Failed : System.Int32
+FS.GG.Game.Core.SaveMigrationStatus+Tags.Idle : System.Int32
+FS.GG.Game.Core.SaveMigrationStatus+Tags.Migrating : System.Int32
+FS.GG.Game.Core.SaveMigrationStatus+Tags.Ready : System.Int32
+FS.GG.Game.Core.SaveMigrationStep`1.Apply : FSharpFunc<payload, FSharpResult<payload, System.String>> [get]
+FS.GG.Game.Core.SaveMigrationStep`1.FromVersion : System.Int32 [get]
+FS.GG.Game.Core.SaveMigrationStep`1.ToVersion : System.Int32 [get]
+FS.GG.Game.Core.SaveMigrationStep`1.new(System.Int32, System.Int32, FSharpFunc<payload, FSharpResult<payload, System.String>>)
+FS.GG.Game.Core.SaveOperationId.Generation : System.UInt64 [get]
+FS.GG.Game.Core.SaveOperationId.Operation : System.UInt64 [get]
+FS.GG.Game.Core.SaveOperationId.new(System.UInt64, System.UInt64)
+FS.GG.Game.Core.SaveRefusal+Tags.AssetHashMismatch : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.ContentHashMismatch : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.EngineMismatch : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.FamilyMismatch : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.Inactive : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.InvalidIdentity : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.InvalidMigrationPlan : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.MigrationFailed : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.MissingMigration : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.NewerSchema : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.OperationFailed : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.OperationSequenceExhausted : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.PayloadHashMismatch : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.ProfileMismatch : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.SchemaMismatch : System.Int32
+FS.GG.Game.Core.SaveRefusal+Tags.StaleOperation : System.Int32
 FS.GG.Game.Core.SessionAdvance.SessionId : System.String [get]
 FS.GG.Game.Core.SessionAdvance.StepCount : System.UInt64 [get]
 FS.GG.Game.Core.SessionAdvance.new(System.String, System.UInt64)
