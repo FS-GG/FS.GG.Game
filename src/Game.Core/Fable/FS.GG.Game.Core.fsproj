@@ -20,6 +20,8 @@
     <Compile Include="SessionContract.fs" />
     <Compile Include="SessionRuntime.fsi" />
     <Compile Include="SessionRuntime.fs" />
+    <Compile Include="Replay.fsi" />
+    <Compile Include="Replay.fs" />
     <Compile Include="SessionOperations.fsi" />
     <Compile Include="SessionOperations.fs" />
     <Compile Include="SaveMigration.fsi" />

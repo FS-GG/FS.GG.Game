@@ -48,11 +48,16 @@
       "id": 8,
       "operation": "Kinematics.advance",
       "payload": "i32 finalX, i32 finalY, i32 remainingX, i32 remainingY, u16 hitCount, u16 candidateCount, u8 thinWallStopped, u8 triggerObserved, u8 insertionOrder"
+    },
+    {
+      "id": 9,
+      "operation": "Replay.seek",
+      "payload": "u32 completedCursor, i32 completedState, u32 cancelledCursor, i32 cancelledState, u32 divergenceIndex, i32 expectedDigest, i32 actualDigest, u32 canonicalTextLength"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "b7c3cf641103ef1497409be0bb7036d153f2307d2906f42e3b2a876a2231a29e",
+  "oracleSha256": "635b2ef90a3165a93772aa641fdc61e5c44daccfc6b06151827d41798e72e0f3",
   "outcomeTags": {
     "0": "operation completed normally"
   },
