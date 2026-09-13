@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="InputCommandTests.fs" />
     <Compile Include="SessionContractTests.fs" />
+    <Compile Include="SessionOperationTests.fs" />
     <Compile Include="GeometryTests.fs" />
     <Compile Include="RngTests.fs" />
     <Compile Include="DiceTests.fs" />

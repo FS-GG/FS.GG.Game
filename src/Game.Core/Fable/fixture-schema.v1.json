@@ -38,11 +38,16 @@
       "id": 6,
       "operation": "SessionRuntime.update",
       "payload": "i32 current, u32 accumulatorMicroseconds, u8 staleInputPreserved, u8 catchUpClamped, u8 disposedInputPreserved, u8 disposed"
+     },
+     {
+       "id": 7,
+       "operation": "SessionOperations.update",
+       "payload": "u32 generation, u16 requiredCommitEffects, u16 projectionRefreshEffects, u8 outOfOrderBuffered, u8 projectionCoalesced, u8 staleGenerationPreserved, u8 disposed"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "97ce4f6420bba44ad7666dacaf4a00601339e7dcc1ad1f4560b07cb60bf5196f",
+  "oracleSha256": "8c4cd7f3cdba3934920f4f22e00cbab081288c8b2253ac611b5dc4a0d75afa3e",
   "outcomeTags": {
     "0": "operation completed normally"
   },

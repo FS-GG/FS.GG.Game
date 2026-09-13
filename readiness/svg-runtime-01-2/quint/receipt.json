@@ -1,0 +1,33 @@
+{
+  "schema": "fsgg.quint.receipt/v1",
+  "model": {
+    "path": "readiness/svg-runtime-01-2/quint/sessionOperations.qnt",
+    "sha256": "98fe9d8a6665d393e3877bea82b72dc8e7ebeb91028ca06a8e7b07754a6e87bb"
+  },
+  "tool": {
+    "name": "quint",
+    "version": "0.32.0"
+  },
+  "systemModel": {
+    "actors": "one portable coordinator with product-owned interpreters",
+    "communication": "transport-neutral request and reply observations",
+    "failure": "cancellation, replacement, interpreter failure, stale reply and disposal",
+    "time": "asynchronous completion order; no clock"
+  },
+  "checks": {
+    "typecheck": "passed",
+    "simulation": {
+      "result": "no violation found",
+      "invariant": "sessionOperationsSafe",
+      "maxSteps": 30,
+      "maxSamples": 1000
+    },
+    "witnesses": {
+      "reversedRequiredRepliesCommitInOrder": "passed",
+      "slowProjectionConsumerCoalesces": "passed",
+      "cancellationRejectsLateReply": "passed",
+      "replacementRecoversAfterFailure": "passed"
+    }
+  },
+  "exhaustiveModelChecking": false
+}
