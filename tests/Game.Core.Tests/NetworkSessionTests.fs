@@ -41,6 +41,14 @@ module NetworkSessionTests =
                 (NetworkAdmission.bind (binding "a" "replacement") state)
                 (Error [ NetworkAdmissionIssue.ClientAlreadyBound "a" ])
                 "an existing identity cannot be rebound"
+            let retired = NetworkAdmission.unbind "a" next
+            Expect.equal (NetworkAdmission.lastSequence "a" retired) None "retirement removes the old cursor"
+            Expect.equal (NetworkAdmission.accepted retired |> List.map _.ClientId) ["a"; "c"] "retirement preserves history"
+            let rebound =
+                retired
+                |> NetworkAdmission.bind (binding "a" "replacement")
+                |> Result.defaultWith (fun issue -> failtestf "%A" issue)
+            Expect.equal (NetworkAdmission.lastSequence "a" rebound) None "the replacement starts with no cursor"
 
         testCase "wrong identity duplicate stale and invalid payloads are refused without mutation" <| fun _ ->
             let state, _ = created () |> admit (input "a" "ta" 5UL "left") |> Result.defaultWith (fun issue -> failtestf "%A" issue)

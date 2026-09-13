@@ -329,6 +329,7 @@ FS.GG.Game.Core.NetworkAdmission.canonicalText<input>(FSharpFunc<input, System.S
 FS.GG.Game.Core.NetworkAdmission.create<input>(System.String, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.NetworkClientBinding>) : FSharpResult<NetworkAdmissionState<input>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.NetworkAdmissionIssue>>
 FS.GG.Game.Core.NetworkAdmission.lastSequence<input>(System.String, NetworkAdmissionState<input>) : Microsoft.FSharp.Core.FSharpOption<System.UInt64>
 FS.GG.Game.Core.NetworkAdmission.resync(Microsoft.FSharp.Core.FSharpOption<System.UInt64>, System.UInt64, System.UInt64) : FS.GG.Game.Core.NetworkResyncDecision
+FS.GG.Game.Core.NetworkAdmission.unbind<input>(System.String, NetworkAdmissionState<input>) : NetworkAdmissionState<input>
 FS.GG.Game.Core.NetworkAdmissionIssue+Tags.ClientAlreadyBound : System.Int32
 FS.GG.Game.Core.NetworkAdmissionIssue+Tags.ClientNotBound : System.Int32
 FS.GG.Game.Core.NetworkAdmissionIssue+Tags.DuplicateClientId : System.Int32

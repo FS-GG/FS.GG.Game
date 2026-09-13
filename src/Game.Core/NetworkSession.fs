@@ -76,6 +76,13 @@ module NetworkAdmission =
         else
             Error issues
 
+    let unbind clientId (NetworkAdmissionState(sessionId, bindings, sequences, accepted)) =
+        NetworkAdmissionState(
+            sessionId,
+            bindings |> List.filter (fun binding -> binding.ClientId <> clientId),
+            Map.remove clientId sequences,
+            accepted)
+
     let admit validatePayload (candidate: NetworkInput<'input>) (state: NetworkAdmissionState<'input>) =
         let (NetworkAdmissionState(sessionId, bindings, sequences, accepted)) = state
         if candidate.Binding.SessionId <> sessionId then Error(NetworkAdmissionIssue.WrongSession(sessionId, candidate.Binding.SessionId))
