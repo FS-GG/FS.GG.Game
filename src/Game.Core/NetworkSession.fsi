@@ -55,6 +55,10 @@ module NetworkAdmission =
         binding: NetworkClientBinding ->
         state: NetworkAdmissionState<'input> -> Result<NetworkAdmissionState<'input>, NetworkAdmissionIssue list>
 
+    /// Retire a client binding and its sequence cursor while preserving the accepted room history.
+    val unbind:
+        clientId: string -> state: NetworkAdmissionState<'input> -> NetworkAdmissionState<'input>
+
     /// Validate identity, token, monotonic sequence and product payload before assigning the next order.
     val admit:
         validatePayload: ('input -> Result<unit, string>) ->
