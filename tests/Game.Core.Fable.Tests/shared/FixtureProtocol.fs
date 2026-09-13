@@ -253,12 +253,36 @@ module FixtureProtocol =
             | _ -> appendU32 bytes 0u; appendI32 bytes -1; appendI32 bytes -1
             appendU32 bytes (uint32 canonical.Length))
 
+    let private planningRecord () =
+        let adapter : ScenarioAdapter<int,int> =
+            { Apply=fun intent state -> Ok(state+intent)
+              StateDigest=string }
+        let initial : PlanningSession<string,int,int> =
+            Planning.create {ContentId="map";Revision=3UL;Value="authored"} {SessionId="fixture";Revision=7UL;StateDigest="10";Value=10}
+            |> Result.defaultWith (fun error -> failwithf "planning fixture initialization failed: %A" error)
+        let planned =
+            initial |> Planning.beginScenario "route" |> Result.bind (Planning.apply adapter "route" 4)
+            |> Result.defaultWith (fun error -> failwithf "planning fixture failed: %A" error)
+        let commit = Planning.proposeCommit "route" planned
+        let refreshed =
+            Planning.replaceAccepted {SessionId="fixture";Revision=8UL;StateDigest="11";Value=11} planned
+            |> Result.defaultWith (fun error -> failwithf "planning refresh failed: %A" error)
+        record -6 10 (fun bytes ->
+            appendI32 bytes planned.Accepted.Value
+            appendI32 bytes planned.Scenarios.Head.Prediction.Value
+            match commit with
+            | Ok value -> appendU32 bytes (uint32 value.BasisRevision); appendU16 bytes value.Intents.Length
+            | Error _ -> appendU32 bytes 0u; appendU16 bytes 0
+            bytes.Add(if refreshed.Scenarios.Head.Status=PlanningScenarioStatus.Stale then 1uy else 0uy)
+            bytes.Add(if refreshed.Authored=initial.Authored then 1uy else 0uy))
+
     let encodeAll () : byte array =
         (GeneratedCases.all |> List.collect (run >> Array.toList))
         @ (runtimeRecord () |> Array.toList)
         @ (operationRecord () |> Array.toList)
         @ (kinematicsRecord () |> Array.toList)
         @ (replayRecord () |> Array.toList)
+        @ (planningRecord () |> Array.toList)
         |> List.toArray
 
     let toLowerHex (bytes: byte array) =

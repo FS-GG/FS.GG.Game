@@ -53,11 +53,16 @@
       "id": 9,
       "operation": "Replay.seek",
       "payload": "u32 completedCursor, i32 completedState, u32 cancelledCursor, i32 cancelledState, u32 divergenceIndex, i32 expectedDigest, i32 actualDigest, u32 canonicalTextLength"
+    },
+    {
+      "id": 10,
+      "operation": "Planning.apply",
+      "payload": "i32 acceptedState, i32 predictedState, u32 commitBasisRevision, u16 commitIntentCount, u8 refreshedScenarioStale, u8 authoredUnchanged"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "635b2ef90a3165a93772aa641fdc61e5c44daccfc6b06151827d41798e72e0f3",
+  "oracleSha256": "9d73a93eaa3b32290abe484b4f3679bb80fc20ac06424cc4696d96babe95d0d1",
   "outcomeTags": {
     "0": "operation completed normally"
   },
