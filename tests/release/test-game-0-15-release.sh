@@ -17,8 +17,8 @@ props="$root/Directory.Build.local.props"
 workflow="$root/.github/workflows/release.yml"
 
 version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$props")"
-[[ "$version" == "0.14.0" ]] || {
-  echo "release scalar must be 0.14.0, observed '$version'" >&2
+[[ "$version" == "0.15.0" ]] || {
+  echo "release scalar must be 0.15.0, observed '$version'" >&2
   exit 1
 }
 
@@ -30,7 +30,9 @@ required = {
     "verification dependency": "needs: [verify]",
     "repository commit binding": '-p:RepositoryCommit="$GITHUB_SHA"',
     "API compatibility gate": "-p:EnablePackageValidation=true",
-    "0.13.0 API baseline": "-p:PackageValidationBaselineVersion=0.13.0",
+    "0.14.0 API baseline": "-p:PackageValidationBaselineVersion=0.14.0",
+    "custody checksums": "sha256sum -- *.nupkg",
+    "retained custody artifact": "game-release-custody-",
     "org feed": "https://nuget.pkg.github.com/FS-GG/index.json",
     "public feed": "https://api.nuget.org/v3/index.json",
 }
@@ -43,6 +45,9 @@ push = 'dotnet nuget push "artifacts/packages/*.nupkg"'
 pushes = [index for index in range(len(text)) if text.startswith(push, index)]
 if len(pushes) != 2:
     raise SystemExit("release workflow must contain exactly two actual dotnet nuget push operations")
+retained = text.index("uses: actions/upload-artifact@v7")
+if retained >= pushes[0]:
+    raise SystemExit("original custody bytes must be retained before the first feed push")
 org = text.index("https://nuget.pkg.github.com/FS-GG/index.json", pushes[0])
 public = text.index("https://api.nuget.org/v3/index.json", pushes[1])
 if org > pushes[1] or public < pushes[1]:
@@ -57,12 +62,12 @@ PY
 
 mapfile -t nupkgs < <(find "$packages" -maxdepth 1 -type f -name '*.nupkg' ! -name '*.symbols.nupkg' -printf '%f\n' | sort)
 expected=(
-  FS.GG.Game.Core.0.14.0.nupkg
-  FS.GG.Game.Harness.0.14.0.nupkg
-  FS.GG.Game.Render.0.14.0.nupkg
+  FS.GG.Game.Core.0.15.0.nupkg
+  FS.GG.Game.Harness.0.15.0.nupkg
+  FS.GG.Game.Render.0.15.0.nupkg
 )
 [[ "${nupkgs[*]}" == "${expected[*]}" ]] || {
-  echo "expected exactly the coherent 0.14.0 package set" >&2
+  echo "expected exactly the coherent 0.15.0 package set" >&2
   printf 'observed: %s\n' "${nupkgs[*]:-<none>}" >&2
   exit 1
 }
@@ -72,8 +77,8 @@ for package in "${nupkgs[@]}"; do
   nuspec="$(unzip -Z1 "$packages/$package" | sed -n '/\.nuspec$/p')"
   [[ -n "$nuspec" ]] || { echo "$package has no nuspec" >&2; exit 1; }
   metadata="$(unzip -p "$packages/$package" "$nuspec")"
-  grep -q '<version>0.14.0</version>' <<<"$metadata" || {
-    echo "$package does not declare version 0.14.0" >&2; exit 1;
+  grep -q '<version>0.15.0</version>' <<<"$metadata" || {
+    echo "$package does not declare version 0.15.0" >&2; exit 1;
   }
   grep -q "commit=\"$expected_commit\"" <<<"$metadata" || {
     echo "$package does not bind repository commit $expected_commit" >&2; exit 1;
@@ -91,7 +96,7 @@ cat >"$consumer/src/Consumer.fsproj" <<'EOF'
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework></PropertyGroup>
   <ItemGroup><Compile Include="Program.fs" /></ItemGroup>
-  <ItemGroup><PackageReference Include="FS.GG.Game.Harness" Version="0.14.0" /></ItemGroup>
+  <ItemGroup><PackageReference Include="FS.GG.Game.Harness" Version="0.15.0" /></ItemGroup>
 </Project>
 EOF
 cat >"$consumer/src/Program.fs" <<'EOF'
