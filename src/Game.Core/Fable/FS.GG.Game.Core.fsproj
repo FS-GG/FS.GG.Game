@@ -22,12 +22,20 @@
     <Compile Include="SessionRuntime.fs" />
     <Compile Include="SessionOperations.fsi" />
     <Compile Include="SessionOperations.fs" />
+    <Compile Include="Geometry.fsi" />
+    <Compile Include="Geometry.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
     <Compile Include="Edges.fsi" />
     <Compile Include="Edges.fs" />
     <Compile Include="Los.fsi" />
     <Compile Include="Los.fs" />
+    <Compile Include="SpatialGrid.fsi" />
+    <Compile Include="SpatialGrid.fs" />
+    <Compile Include="Resolution.fsi" />
+    <Compile Include="Resolution.fs" />
+    <Compile Include="Kinematics.fsi" />
+    <Compile Include="Kinematics.fs" />
   </ItemGroup>
 
 </Project>
