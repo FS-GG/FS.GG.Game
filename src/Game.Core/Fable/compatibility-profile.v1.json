@@ -66,6 +66,11 @@
       "evidence": "fixture-schema.v1 operation 11; canonical neutral-rule record -7"
     },
     {
+      "name": "Network admission identity, deterministic accepted order, stale refusal, resync decision and canonical stream",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 12; canonical network record -8"
+    },
+    {
       "name": "Geometry, SpatialGrid, Resolution, and Kinematics surfaces outside the operation 8 path",
       "grade": "Portable",
       "evidence": "implementation sources compile through the supported source view; only the operation 8 path promises canonical byte equality"
