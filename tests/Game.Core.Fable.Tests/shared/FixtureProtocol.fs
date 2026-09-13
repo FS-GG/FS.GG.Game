@@ -191,10 +191,35 @@ module FixtureProtocol =
             bytes.Add(if replacementEffects.Length = 1 && stale = replacement && staleEffects.Length = 1 then 1uy else 0uy)
             bytes.Add(if disposed.Status = SessionOperationStatus.Disposed then 1uy else 0uy))
 
+    let private kinematicsRecord () =
+        let moving =
+            { Bounds = { X = 0.0; Y = 0.0; Width = 2.0; Height = 2.0 }
+              Displacement = { X = 20.0; Y = 0.0 } }
+        let colliders =
+            [ { Id = "goal"
+                Shape = KinematicShape.AxisAlignedBox { X = 4.0; Y = -2.0; Width = 1.0; Height = 6.0 }
+                Response = KinematicResponse.Trigger }
+              { Id = "wall"
+                Shape = KinematicShape.AxisAlignedBox { X = 10.0; Y = -2.0; Width = 0.25; Height = 6.0 }
+                Response = KinematicResponse.Slide } ]
+        let result = Kinematics.advance 4.0 moving colliders
+        let scaled value = int (value * 1000.0)
+        record -4 8 (fun bytes ->
+            appendI32 bytes (scaled result.Bounds.X)
+            appendI32 bytes (scaled result.Bounds.Y)
+            appendI32 bytes (scaled result.Displacement.X)
+            appendI32 bytes (scaled result.Displacement.Y)
+            appendU16 bytes result.Hits.Length
+            appendU16 bytes result.CandidateIds.Length
+            bytes.Add(if result.Bounds.X < 10.0 then 1uy else 0uy)
+            bytes.Add(if result.Hits |> List.exists _.IsTrigger then 1uy else 0uy)
+            bytes.Add(if result.CandidateIds = [ "goal"; "wall" ] then 1uy else 0uy))
+
     let encodeAll () : byte array =
         (GeneratedCases.all |> List.collect (run >> Array.toList))
         @ (runtimeRecord () |> Array.toList)
         @ (operationRecord () |> Array.toList)
+        @ (kinematicsRecord () |> Array.toList)
         |> List.toArray
 
     let toLowerHex (bytes: byte array) =

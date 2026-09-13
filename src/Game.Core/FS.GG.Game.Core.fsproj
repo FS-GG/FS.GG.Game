@@ -19,15 +19,15 @@
   </ItemGroup>
 
   <!-- Fable.Package.SDK supplies the supported source-package machinery. Game.Core deliberately
-       publishes only the bounded integer/grid profile through that view: packaging every .NET-only
-       implementation file would make an honest Fable consumer compile unsupported floating-point
-       APIs before it can use the exact subset. The files below remain the SAME files compiled into
-       the .NET assembly; this target only curates which canonical sources enter fable/. -->
+       publishes a bounded portable profile through that view: packaging every .NET-only
+       implementation file would make an honest Fable consumer compile unsupported APIs before it
+       can use the qualified subset. The files below remain the SAME files compiled into the .NET
+       assembly; this target only curates which canonical sources enter fable/. -->
   <Target Name="CurateFableCompatibilityView"
           AfterTargets="CreateFablePackageFiles">
     <ItemGroup>
       <_PackageFiles Remove="@(_PackageFiles)" />
-      <_PackageFiles Include="Primitives.fsi;Primitives.fs;SessionContract.fsi;SessionContract.fs;SessionRuntime.fsi;SessionRuntime.fs;SessionOperations.fsi;SessionOperations.fs;Pathfinding.fsi;Pathfinding.fs;Edges.fsi;Edges.fs;Los.fsi;Los.fs">
+      <_PackageFiles Include="Primitives.fsi;Primitives.fs;SessionContract.fsi;SessionContract.fs;SessionRuntime.fsi;SessionRuntime.fs;SessionOperations.fsi;SessionOperations.fs;Geometry.fsi;Geometry.fs;Pathfinding.fsi;Pathfinding.fs;Edges.fsi;Edges.fs;Los.fsi;Los.fs;SpatialGrid.fsi;SpatialGrid.fs;Resolution.fsi;Resolution.fs;Kinematics.fsi;Kinematics.fs">
         <Pack>true</Pack>
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
         <BuildAction>None</BuildAction>

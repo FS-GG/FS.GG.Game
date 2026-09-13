@@ -43,11 +43,16 @@
        "id": 7,
        "operation": "SessionOperations.update",
        "payload": "u32 generation, u16 requiredCommitEffects, u16 projectionRefreshEffects, u8 outOfOrderBuffered, u8 projectionCoalesced, u8 staleGenerationPreserved, u8 disposed"
+    },
+    {
+      "id": 8,
+      "operation": "Kinematics.advance",
+      "payload": "i32 finalX, i32 finalY, i32 remainingX, i32 remainingY, u16 hitCount, u16 candidateCount, u8 thinWallStopped, u8 triggerObserved, u8 insertionOrder"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "8c4cd7f3cdba3934920f4f22e00cbab081288c8b2253ac611b5dc4a0d75afa3e",
+  "oracleSha256": "b7c3cf641103ef1497409be0bb7036d153f2307d2906f42e3b2a876a2231a29e",
   "outcomeTags": {
     "0": "operation completed normally"
   },
