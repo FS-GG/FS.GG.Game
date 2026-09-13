@@ -41,6 +41,11 @@
       "evidence": "fixture-schema.v1 operation 7; canonical operation record -3"
     },
     {
+      "name": "SaveMigration and Autosave compatibility, recovery, generation, retry, and lifecycle reducers",
+      "grade": "LockstepExact",
+      "evidence": "packed SaveMigration.PortableConsumers corpus SHA-256 80c5b00a6796f4af649f8de0ae7b80e97575fd04067956b9d9896753c7f21268"
+    },
+    {
       "name": "Kinematics.advance axis-aligned trigger and thin-wall slide path",
       "grade": "LockstepExact",
       "evidence": "fixture-schema.v1 operation 8; canonical kinematics record -4"

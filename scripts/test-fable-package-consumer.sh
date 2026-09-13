@@ -79,6 +79,8 @@ required_entries=(
   "fable/SessionRuntime.fs"
   "fable/SessionOperations.fsi"
   "fable/SessionOperations.fs"
+  "fable/SaveMigration.fsi"
+  "fable/SaveMigration.fs"
   "fable/Geometry.fsi"
   "fable/Geometry.fs"
   "fable/Pathfinding.fsi"
