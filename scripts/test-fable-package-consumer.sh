@@ -79,6 +79,8 @@ required_entries=(
   "fable/SessionRuntime.fs"
   "fable/Replay.fsi"
   "fable/Replay.fs"
+  "fable/Planning.fsi"
+  "fable/Planning.fs"
   "fable/SessionOperations.fsi"
   "fable/SessionOperations.fs"
   "fable/SaveMigration.fsi"

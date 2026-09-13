@@ -19,6 +19,8 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the detecti
   restore and disposal without reading a clock or taking a renderer, worker, transport or storage dependency.
 - **`Replay`** — portable accepted-input/advance recordings, checkpoints, exact seek, cancellation cursors,
   first-divergence diagnostics, and a canonical export envelope over that same product session contract.
+- **`Planning`** — generic scenario branches over product transition functions, with separate authored,
+  accepted and predicted identities and commit intents that the real session authority must accept.
 - **`SessionOperations`** — a transport-neutral generation coordinator shared by local-worker and
   authoritative-server interpreters. Required records commit in request order while projection demand
   coalesces behind one owned request; cancellation, replacement, failure and disposal reject stale replies.

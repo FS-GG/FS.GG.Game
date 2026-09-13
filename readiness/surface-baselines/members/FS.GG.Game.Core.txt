@@ -1,3 +1,8 @@
+FS.GG.Game.Core.AcceptedState`1.Revision : System.UInt64 [get]
+FS.GG.Game.Core.AcceptedState`1.SessionId : System.String [get]
+FS.GG.Game.Core.AcceptedState`1.StateDigest : System.String [get]
+FS.GG.Game.Core.AcceptedState`1.Value : state [get]
+FS.GG.Game.Core.AcceptedState`1.new(System.String, System.UInt64, System.String, state)
 FS.GG.Game.Core.Ai.aimError(System.Double, FS.GG.Game.Core.Rng) : System.ValueTuple<System.Double, FS.GG.Game.Core.Rng>
 FS.GG.Game.Core.Ai.best<p>(FSharpFunc<p, System.Double>, FSharpFunc<p, System.ValueTuple<System.Int32, System.Int32>>, FSharpList<p>) : FSharpValueOption<p>
 FS.GG.Game.Core.Ai.due(System.Int32, System.Int32) : System.Boolean
@@ -11,6 +16,10 @@ FS.GG.Game.Core.Ai.threatField(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.
 FS.GG.Game.Core.Ai.tryFind<T>(FS.GG.Game.Core.AgentId, TeamView<T>) : FSharpValueOption<Sighting<T>>
 FS.GG.Game.Core.Ai.view<T>(System.Int32, System.Int32, FSharpList<Sighting<T>>) : TeamView<T>
 FS.GG.Game.Core.Ai.viewTick<T>(TeamView<T>) : System.Int32
+FS.GG.Game.Core.AuthoredState`1.ContentId : System.String [get]
+FS.GG.Game.Core.AuthoredState`1.Revision : System.UInt64 [get]
+FS.GG.Game.Core.AuthoredState`1.Value : content [get]
+FS.GG.Game.Core.AuthoredState`1.new(System.String, System.UInt64, content)
 FS.GG.Game.Core.Autosave.initialize<value>(FS.GG.Game.Core.AutosaveConfig, FSharpOption<value>) : FSharpResult<AutosaveState<value>, FS.GG.Game.Core.SaveRefusal>
 FS.GG.Game.Core.Autosave.update<value>(AutosaveObservation<value>, AutosaveState<value>) : Tuple<AutosaveState<value>, FSharpList<AutosaveEffect<value>>>
 FS.GG.Game.Core.AutosaveConfig.DebounceMilliseconds : System.UInt64 [get]
@@ -367,9 +376,58 @@ FS.GG.Game.Core.Physics.interpolate(System.Double, FS.GG.Game.Core.Physics+World
 FS.GG.Game.Core.Physics.manifold(FS.GG.Game.Core.Physics+World, System.Int32, System.Int32) : Microsoft.FSharp.Core.FSharpValueOption<FS.GG.Game.Core.Manifold>
 FS.GG.Game.Core.Physics.pairs(FS.GG.Game.Core.Physics+World) : System.ValueTuple<System.Int32, System.Int32>[]
 FS.GG.Game.Core.Physics.step(FS.GG.Game.Core.Physics+World, System.Double) : FS.GG.Game.Core.Physics+World
+FS.GG.Game.Core.Planning.apply<state, intent, content>(ScenarioAdapter<state, intent>, System.String, intent, PlanningSession<content, state, intent>) : FSharpResult<PlanningSession<content, state, intent>, FS.GG.Game.Core.PlanningIssue>
+FS.GG.Game.Core.Planning.beginScenario<content, state, intent>(System.String, PlanningSession<content, state, intent>) : FSharpResult<PlanningSession<content, state, intent>, FS.GG.Game.Core.PlanningIssue>
+FS.GG.Game.Core.Planning.cancel<content, state, intent>(System.String, PlanningSession<content, state, intent>) : FSharpResult<PlanningSession<content, state, intent>, FS.GG.Game.Core.PlanningIssue>
+FS.GG.Game.Core.Planning.compare<content, state, intent>(System.String, PlanningSession<content, state, intent>) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Core.PlanningComparison, FS.GG.Game.Core.PlanningIssue>
+FS.GG.Game.Core.Planning.create<content, state, intent>(AuthoredState<content>, AcceptedState<state>) : FSharpResult<PlanningSession<content, state, intent>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.PlanningIssue>>
+FS.GG.Game.Core.Planning.proposeCommit<content, state, intent>(System.String, PlanningSession<content, state, intent>) : FSharpResult<PlanningCommitIntent<intent>, FS.GG.Game.Core.PlanningIssue>
+FS.GG.Game.Core.Planning.replaceAccepted<state, content, intent>(AcceptedState<state>, PlanningSession<content, state, intent>) : FSharpResult<PlanningSession<content, state, intent>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.PlanningIssue>>
+FS.GG.Game.Core.PlanningCommitIntent`1.BasisDigest : System.String [get]
+FS.GG.Game.Core.PlanningCommitIntent`1.BasisRevision : System.UInt64 [get]
+FS.GG.Game.Core.PlanningCommitIntent`1.BasisSessionId : System.String [get]
+FS.GG.Game.Core.PlanningCommitIntent`1.Intents : FSharpList<intent> [get]
+FS.GG.Game.Core.PlanningCommitIntent`1.PredictedDigest : System.String [get]
+FS.GG.Game.Core.PlanningCommitIntent`1.ScenarioId : System.String [get]
+FS.GG.Game.Core.PlanningCommitIntent`1.new(System.String, System.String, System.UInt64, System.String, FSharpList<intent>, System.String)
+FS.GG.Game.Core.PlanningComparison.BasisDigest : System.String [get]
+FS.GG.Game.Core.PlanningComparison.BasisRevision : System.UInt64 [get]
+FS.GG.Game.Core.PlanningComparison.IsUnchanged : System.Boolean [get]
+FS.GG.Game.Core.PlanningComparison.PredictedDigest : System.String [get]
+FS.GG.Game.Core.PlanningComparison.PredictedSteps : System.UInt64 [get]
+FS.GG.Game.Core.PlanningComparison.ScenarioId : System.String [get]
+FS.GG.Game.Core.PlanningComparison.new(System.String, System.UInt64, System.String, System.String, System.UInt64, System.Boolean)
+FS.GG.Game.Core.PlanningIssue+Tags.AcceptedBasisChanged : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.ContractFailure : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.DuplicateScenarioId : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.MissingContentId : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.MissingScenarioId : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.MissingSessionId : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.MissingStateDigest : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.ScenarioNotDraft : System.Int32
+FS.GG.Game.Core.PlanningIssue+Tags.ScenarioNotFound : System.Int32
+FS.GG.Game.Core.PlanningScenarioStatus+Tags.Cancelled : System.Int32
+FS.GG.Game.Core.PlanningScenarioStatus+Tags.Draft : System.Int32
+FS.GG.Game.Core.PlanningScenarioStatus+Tags.Stale : System.Int32
+FS.GG.Game.Core.PlanningScenario`2.Intents : FSharpList<intent> [get]
+FS.GG.Game.Core.PlanningScenario`2.Prediction : PredictedState<state> [get]
+FS.GG.Game.Core.PlanningScenario`2.Status : FS.GG.Game.Core.PlanningScenarioStatus [get]
+FS.GG.Game.Core.PlanningScenario`2.new(PredictedState<state>, FSharpList<intent>, FS.GG.Game.Core.PlanningScenarioStatus)
+FS.GG.Game.Core.PlanningSession`3.Accepted : AcceptedState<state> [get]
+FS.GG.Game.Core.PlanningSession`3.Authored : AuthoredState<content> [get]
+FS.GG.Game.Core.PlanningSession`3.Scenarios : FSharpList<PlanningScenario<state, intent>> [get]
+FS.GG.Game.Core.PlanningSession`3.new(AuthoredState<content>, AcceptedState<state>, FSharpList<PlanningScenario<state, intent>>)
 FS.GG.Game.Core.Point.X : System.Double [get]
 FS.GG.Game.Core.Point.Y : System.Double [get]
 FS.GG.Game.Core.Point.new(System.Double, System.Double)
+FS.GG.Game.Core.PredictedState`1.BasisDigest : System.String [get]
+FS.GG.Game.Core.PredictedState`1.BasisRevision : System.UInt64 [get]
+FS.GG.Game.Core.PredictedState`1.BasisSessionId : System.String [get]
+FS.GG.Game.Core.PredictedState`1.ScenarioId : System.String [get]
+FS.GG.Game.Core.PredictedState`1.StateDigest : System.String [get]
+FS.GG.Game.Core.PredictedState`1.StepCount : System.UInt64 [get]
+FS.GG.Game.Core.PredictedState`1.Value : state [get]
+FS.GG.Game.Core.PredictedState`1.new(System.String, System.String, System.UInt64, System.String, System.UInt64, System.String, state)
 FS.GG.Game.Core.Projectile.Position : FS.GG.Game.Core.Point [get]
 FS.GG.Game.Core.Projectile.TicksRemaining : System.Int32 [get]
 FS.GG.Game.Core.Projectile.Velocity : FS.GG.Game.Core.Point [get]
@@ -542,6 +600,9 @@ FS.GG.Game.Core.SaveRefusal+Tags.PayloadHashMismatch : System.Int32
 FS.GG.Game.Core.SaveRefusal+Tags.ProfileMismatch : System.Int32
 FS.GG.Game.Core.SaveRefusal+Tags.SchemaMismatch : System.Int32
 FS.GG.Game.Core.SaveRefusal+Tags.StaleOperation : System.Int32
+FS.GG.Game.Core.ScenarioAdapter`2.Apply : FSharpFunc<intent, FSharpFunc<state, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>> [get]
+FS.GG.Game.Core.ScenarioAdapter`2.StateDigest : FSharpFunc<state, System.String> [get]
+FS.GG.Game.Core.ScenarioAdapter`2.new(FSharpFunc<intent, FSharpFunc<state, FSharpResult<state, FS.GG.Game.Core.SessionFailure>>>, FSharpFunc<state, System.String>)
 FS.GG.Game.Core.SessionAdvance.SessionId : System.String [get]
 FS.GG.Game.Core.SessionAdvance.StepCount : System.UInt64 [get]
 FS.GG.Game.Core.SessionAdvance.new(System.String, System.UInt64)
