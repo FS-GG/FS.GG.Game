@@ -65,11 +65,11 @@ jobs:
       - name: Test (full headless suite)
         run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
 
-      - name: Verify 0.14.0 release contract and inversion
+      - name: Verify 0.15.0 release contract and inversion
         shell: bash
         run: |
-          tests/release/test-game-0-14-release.sh --source-only
-          tests/release/test-game-0-14-release-selftest.sh
+          tests/release/test-game-0-15-release.sh --source-only
+          tests/release/test-game-0-15-release-selftest.sh
 
   publish-packages:
     name: Publish FS.GG.Game.* (org feed + nuget.org, release-only)
@@ -156,13 +156,24 @@ jobs:
             -p:Version="$VER" \
             -p:RepositoryCommit="$GITHUB_SHA" \
             -p:EnablePackageValidation=true \
-            -p:PackageValidationBaselineVersion=0.13.0 \
+            -p:PackageValidationBaselineVersion=0.14.0 \
             -o artifacts/packages
+          (cd artifacts/packages && sha256sum -- *.nupkg | sort -k2 > SHA256SUMS)
           echo "Packed:"; ls -1 artifacts/packages/*.nupkg
 
       - name: Verify coherent package set, metadata, and clean Journey consumer
         shell: bash
-        run: tests/release/test-game-0-14-release.sh --packages artifacts/packages
+        run: tests/release/test-game-0-15-release.sh --packages artifacts/packages
+
+      - name: Retain original coherent package bytes before publication
+        uses: actions/upload-artifact@v7
+        with:
+          name: game-release-custody-${{ github.sha }}-${{ steps.ver.outputs.version }}
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Push coherent set to nuget.pkg.github.com/FS-GG
         if: steps.ver.outputs.push == 'true'
