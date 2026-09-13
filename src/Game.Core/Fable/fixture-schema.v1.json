@@ -33,11 +33,16 @@
       "id": 5,
       "operation": "SessionCompatibility.compare",
       "payload": "u8 compatible, u16 issueCount, issueCount*u8 issueTag, u16 initializationIssueCount, u16 inputIssueCount, u8 contractOnlySupport"
+    },
+    {
+      "id": 6,
+      "operation": "SessionRuntime.update",
+      "payload": "i32 current, u32 accumulatorMicroseconds, u8 staleInputPreserved, u8 catchUpClamped, u8 disposedInputPreserved, u8 disposed"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "328cf37f9cb92064452f3fc3883426230ce97df3d4d3907dc1ca0fdf813164a5",
+  "oracleSha256": "97ce4f6420bba44ad7666dacaf4a00601339e7dcc1ad1f4560b07cb60bf5196f",
   "outcomeTags": {
     "0": "operation completed normally"
   },

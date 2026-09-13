@@ -75,6 +75,8 @@ required_entries=(
   "fable/Primitives.fs"
   "fable/SessionContract.fsi"
   "fable/SessionContract.fs"
+  "fable/SessionRuntime.fsi"
+  "fable/SessionRuntime.fs"
   "fable/Pathfinding.fsi"
   "fable/Pathfinding.fs"
   "fable/Edges.fsi"

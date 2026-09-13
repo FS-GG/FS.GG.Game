@@ -37,6 +37,8 @@ type SessionContractIssue =
 type SessionSupport =
     /// Game.Core supplies contract values and signatures only. It supplies no M5 session runtime.
     | ContractEnvelopeOnly
+    /// Game.Core supplies the portable bounded fixed-step session reducer.
+    | PortableRuntime
 
 /// Input to a product-provided session initializer.
 type SessionInitialization<'configuration> =

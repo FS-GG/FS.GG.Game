@@ -27,7 +27,7 @@
           AfterTargets="CreateFablePackageFiles">
     <ItemGroup>
       <_PackageFiles Remove="@(_PackageFiles)" />
-      <_PackageFiles Include="Primitives.fsi;Primitives.fs;SessionContract.fsi;SessionContract.fs;Pathfinding.fsi;Pathfinding.fs;Edges.fsi;Edges.fs;Los.fsi;Los.fs">
+      <_PackageFiles Include="Primitives.fsi;Primitives.fs;SessionContract.fsi;SessionContract.fs;SessionRuntime.fsi;SessionRuntime.fs;Pathfinding.fsi;Pathfinding.fs;Edges.fsi;Edges.fs;Los.fsi;Los.fs">
         <Pack>true</Pack>
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
         <BuildAction>None</BuildAction>
@@ -72,6 +72,8 @@
     <Compile Include="InputCommand.fs" />
     <Compile Include="SessionContract.fsi" />
     <Compile Include="SessionContract.fs" />
+    <Compile Include="SessionRuntime.fsi" />
+    <Compile Include="SessionRuntime.fs" />
     <Compile Include="Geometry.fsi" />
     <Compile Include="Geometry.fs" />
     <Compile Include="Rng.fsi" />

@@ -31,6 +31,11 @@
       "evidence": "fixture-schema.v1 operation 5; canonical cases 5001-5002"
     },
     {
+      "name": "SessionRuntime fixed-step observations, refusals, effects, and lifecycle",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 6; canonical runtime record -2"
+    },
+    {
       "name": "Point, Rect, Contact, Circle, RayHit, ConvexPolygon, and Manifold values",
       "grade": "Portable",
       "evidence": "types compile through the supported source view; no canonical byte equality is promised for floating fields"

@@ -102,10 +102,47 @@ module FixtureProtocol =
                 issues |> List.iter (compatibilityIssueTag >> bytes.Add)
                 appendU16 bytes (SessionEnvelope.validateInitialization initialization).Length
                 appendU16 bytes (SessionEnvelope.validateInput input).Length
-                bytes.Add(if SessionSupport.id SessionSupport.current = "contract-envelope-only" then 1uy else 0uy))
+                bytes.Add(if SessionSupport.id SessionSupport.current = "portable-runtime" then 1uy else 0uy))
+
+    let private runtimeRecord () =
+        let compatibility =
+            { ContractVersion=1;EngineId="fixture.runtime";EngineVersion="1";ProfileId="fixture";SchemaId="fixture.state";SchemaVersion=1 }
+        let contract: SessionContract<int,int,int,int,int> =
+            { Initialize = fun value -> Ok value.Configuration
+              AdmitInput = fun input state -> Ok(state + input.Value)
+              Advance = fun value state -> Ok(state + int value.StepCount)
+              Project = fun state -> { SessionId="fixture";Revision=uint64 state;Value=state }
+              Snapshot = fun state -> { SessionId="fixture";Revision=uint64 state;Compatibility=compatibility;Value=state }
+              Restore = fun value -> Ok value.Value }
+        let initial =
+            SessionRuntime.initialize
+                { StepMicroseconds=10_000UL;MaxCatchUpSteps=3u }
+                contract
+                { SessionId="fixture";Compatibility=compatibility;Configuration=10 }
+            |> Result.defaultWith (fun error -> failwithf "runtime fixture initialization failed: %A" error)
+        let admitted, _ =
+            SessionRuntime.update contract
+                (SessionRuntimeObservation.AdmitInput { SessionId="fixture";InputId="add";Sequence=4UL;Value=2 }) initial
+        let stale, staleEffects =
+            SessionRuntime.update contract
+                (SessionRuntimeObservation.AdmitInput { SessionId="fixture";InputId="add";Sequence=4UL;Value=99 }) admitted
+        let advanced, _ = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 25_000UL) stale
+        let clamped, clampEffects = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 45_000UL) advanced
+        let paused, _ = SessionRuntime.update contract SessionRuntimeObservation.Pause clamped
+        let stepped, _ = SessionRuntime.update contract SessionRuntimeObservation.StepOnce paused
+        let disposed, _ = SessionRuntime.update contract SessionRuntimeObservation.Dispose stepped
+        let inert, inertEffects = SessionRuntime.update contract (SessionRuntimeObservation.AdvanceElapsed 10_000UL) disposed
+        record -2 6 (fun bytes ->
+            appendI32 bytes inert.Current
+            appendU32 bytes (uint32 clamped.AccumulatorMicroseconds)
+            bytes.Add(if stale = admitted && staleEffects.Length = 1 then 1uy else 0uy)
+            bytes.Add(if clampEffects.Length = 3 then 1uy else 0uy)
+            bytes.Add(if inert = disposed && inertEffects.Length = 1 then 1uy else 0uy)
+            bytes.Add(if disposed.Status = SessionRuntimeStatus.Disposed then 1uy else 0uy))
 
     let encodeAll () : byte array =
-        GeneratedCases.all |> List.collect (run >> Array.toList) |> List.toArray
+        (GeneratedCases.all |> List.collect (run >> Array.toList)) @ (runtimeRecord () |> Array.toList)
+        |> List.toArray
 
     let toLowerHex (bytes: byte array) =
         let digits = "0123456789abcdef"
