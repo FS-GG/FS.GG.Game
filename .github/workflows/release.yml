@@ -278,7 +278,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/readback/github artifacts/readback/nuget
           for package in artifacts/packages/*.nupkg; do
-            file="$(basename "$package")"; id="${file%.$VER.nupkg}"; lower="${id,,}"
+            file="$(basename "$package")"; id="${file%."$VER".nupkg}"; lower="${id,,}"
             for feed in github nuget; do
               url="https://nuget.pkg.github.com/FS-GG/download/$lower/$VER/$lower.$VER.nupkg"
               auth=(--user "fs-gg:$FEED_TOKEN")
