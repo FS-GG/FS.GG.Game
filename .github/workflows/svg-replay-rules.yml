@@ -1,0 +1,38 @@
+name: svg-replay-rules
+
+on:
+  pull_request:
+    paths:
+      - "src/Game.Core/Rules.*"
+      - "tests/Game.Core.Tests/RuleCatalogTests.fs"
+      - "readiness/svg-replay-01-3/**"
+      - "scripts/generate-svg-replay-rule-evidence.py"
+      - "scripts/verify-svg-replay-rules.sh"
+      - ".github/workflows/svg-replay-rules.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/Game.Core/Rules.*"
+      - "tests/Game.Core.Tests/RuleCatalogTests.fs"
+      - "readiness/svg-replay-01-3/**"
+      - "scripts/generate-svg-replay-rule-evidence.py"
+      - "scripts/verify-svg-replay-rules.sh"
+      - ".github/workflows/svg-replay-rules.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  correspondence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --global @informalsystems/quint@0.32.0
+      - run: dotnet restore tests/Game.Core.Tests/Game.Core.Tests.fsproj --locked-mode
+      - run: scripts/verify-svg-replay-rules.sh

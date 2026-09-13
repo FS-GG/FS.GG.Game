@@ -21,6 +21,8 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the detecti
   first-divergence diagnostics, and a canonical export envelope over that same product session contract.
 - **`Planning`** — generic scenario branches over product transition functions, with separate authored,
   accepted and predicted identities and commit intents that the real session authority must accept.
+- **`RuleCatalog`** — versioned product rules, dependency-ordered inspection, causal explanations and
+  formal-model identity. Products supply the executable evaluations; the catalog never reimplements them.
 - **`SessionOperations`** — a transport-neutral generation coordinator shared by local-worker and
   authoritative-server interpreters. Required records commit in request order while projection demand
   coalesces behind one owned request; cancellation, replacement, failure and disposal reject stale replies.

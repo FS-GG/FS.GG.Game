@@ -1,0 +1,41 @@
+{
+  "authority": "Product RuleDefinition.Evaluate functions execute semantics; Quint and metadata provide scoped evidence and do not run the game.",
+  "catalog": {
+    "id": "energy-door-rules/1",
+    "rules": [
+      {
+        "dependsOn": [],
+        "id": "energy.available",
+        "version": 1
+      },
+      {
+        "dependsOn": [
+          "energy.available"
+        ],
+        "id": "door.enter",
+        "version": 1
+      }
+    ]
+  },
+  "implementationBinding": {
+    "conformance": "tests/Game.Core.Tests/RuleCatalogTests.fs",
+    "fableOperation": 11,
+    "implementation": "src/Game.Core/Rules.fs",
+    "surface": "src/Game.Core/Rules.fsi"
+  },
+  "invariants": [
+    "energyNeverNegative",
+    "acceptedRevisionMonotonic",
+    "doorRequiresSpentEnergy",
+    "energyRulesSafe"
+  ],
+  "model": {
+    "path": "readiness/svg-replay-01-3/quint/energyRules.qnt",
+    "sha256": "1a010d56a535dc87807ae19d4c73f0e20698a476eb92da20016c7a95055e7059"
+  },
+  "schema": "fsgg.svg-replay.rule-evidence/v1",
+  "tool": {
+    "name": "quint",
+    "version": "0.32.0"
+  }
+}

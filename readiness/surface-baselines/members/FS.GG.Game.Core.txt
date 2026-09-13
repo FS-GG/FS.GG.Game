@@ -536,6 +536,51 @@ FS.GG.Game.Core.Rule+Tags.MaxComponents : System.Int32
 FS.GG.Game.Core.Rule+Tags.MaxDiameter : System.Int32
 FS.GG.Game.Core.Rule+Tags.MinBorderOpenings : System.Int32
 FS.GG.Game.Core.Rule+Tags.MinDiameter : System.Int32
+FS.GG.Game.Core.RuleCatalog.create<facts, effect>(FS.GG.Game.Core.RuleFormalEvidence, FSharpList<RuleDefinition<facts, effect>>) : FSharpResult<RuleCatalog<facts, effect>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.RuleCatalogIssue>>
+FS.GG.Game.Core.RuleCatalog.evidence<facts, effect>(RuleCatalog<facts, effect>) : FS.GG.Game.Core.RuleFormalEvidence
+FS.GG.Game.Core.RuleCatalog.inspect<facts, effect>(System.String, facts, RuleCatalog<facts, effect>) : FSharpResult<RuleInspection<effect>, FS.GG.Game.Core.RuleCatalogIssue>
+FS.GG.Game.Core.RuleCatalog.metadata<facts, effect>(RuleCatalog<facts, effect>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.RuleMetadata>
+FS.GG.Game.Core.RuleCatalogIssue+Tags.DependencyCycle : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.DuplicateRuleId : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.EvaluationRuleMismatch : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.InvalidRuleVersion : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.MissingImplementationBinding : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.MissingInvariant : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.MissingModelId : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.MissingModelSha256 : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.MissingRuleId : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.MissingTitle : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.SelfDependency : System.Int32
+FS.GG.Game.Core.RuleCatalogIssue+Tags.UnknownDependency : System.Int32
+FS.GG.Game.Core.RuleCause.Code : System.String [get]
+FS.GG.Game.Core.RuleCause.Message : System.String [get]
+FS.GG.Game.Core.RuleCause.new(System.String, System.String)
+FS.GG.Game.Core.RuleDefinition`2.Evaluate : FSharpFunc<facts, RuleEvaluation<effect>> [get]
+FS.GG.Game.Core.RuleDefinition`2.Metadata : FS.GG.Game.Core.RuleMetadata [get]
+FS.GG.Game.Core.RuleDefinition`2.new(FS.GG.Game.Core.RuleMetadata, FSharpFunc<facts, RuleEvaluation<effect>>)
+FS.GG.Game.Core.RuleEvaluation`1.Applies : System.Boolean [get]
+FS.GG.Game.Core.RuleEvaluation`1.Causes : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.RuleCause> [get]
+FS.GG.Game.Core.RuleEvaluation`1.Effects : FSharpList<effect> [get]
+FS.GG.Game.Core.RuleEvaluation`1.Explanation : System.String [get]
+FS.GG.Game.Core.RuleEvaluation`1.RuleId : System.String [get]
+FS.GG.Game.Core.RuleEvaluation`1.new(System.String, System.Boolean, System.String, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.RuleCause>, FSharpList<effect>)
+FS.GG.Game.Core.RuleFormalEvidence.ImplementationBinding : System.String [get]
+FS.GG.Game.Core.RuleFormalEvidence.Invariants : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Core.RuleFormalEvidence.ModelId : System.String [get]
+FS.GG.Game.Core.RuleFormalEvidence.ModelSha256 : System.String [get]
+FS.GG.Game.Core.RuleFormalEvidence.Tool : System.String [get]
+FS.GG.Game.Core.RuleFormalEvidence.ToolVersion : System.String [get]
+FS.GG.Game.Core.RuleFormalEvidence.new(System.String, System.String, System.String, System.String, Microsoft.FSharp.Collections.FSharpList<System.String>, System.String)
+FS.GG.Game.Core.RuleInspection`1.Applies : System.Boolean [get]
+FS.GG.Game.Core.RuleInspection`1.Evaluations : FSharpList<RuleEvaluation<effect>> [get]
+FS.GG.Game.Core.RuleInspection`1.RequestedRuleId : System.String [get]
+FS.GG.Game.Core.RuleInspection`1.new(System.String, FSharpList<RuleEvaluation<effect>>, System.Boolean)
+FS.GG.Game.Core.RuleMetadata.DependsOn : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Core.RuleMetadata.Id : System.String [get]
+FS.GG.Game.Core.RuleMetadata.Summary : System.String [get]
+FS.GG.Game.Core.RuleMetadata.Title : System.String [get]
+FS.GG.Game.Core.RuleMetadata.Version : System.Int32 [get]
+FS.GG.Game.Core.RuleMetadata.new(System.String, System.Int32, System.String, System.String, Microsoft.FSharp.Collections.FSharpList<System.String>)
 FS.GG.Game.Core.SaveEnvelope`1.Identity : FS.GG.Game.Core.SaveIdentity [get]
 FS.GG.Game.Core.SaveEnvelope`1.Payload : payload [get]
 FS.GG.Game.Core.SaveEnvelope`1.PayloadHash : System.String [get]
