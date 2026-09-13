@@ -24,6 +24,10 @@ on:
         description: "Version to pack+publish (e.g. 0.1.0-preview.1). Required to actually push on a manual run; omit for a pack-only dry run."
         type: string
         required: false
+      source_run_id:
+        description: "Failed tag release run whose retained package artifact must be resumed."
+        type: string
+        required: false
 
 concurrency:
   group: release-${{ github.ref }}
@@ -44,6 +48,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version != '' && format('refs/tags/v{0}', inputs.version) || github.ref }}
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: '10.0.x'
@@ -77,11 +83,14 @@ jobs:
     if: github.repository == 'FS-GG/FS.GG.Game'
     needs: [verify]
     permissions:
+      actions: read
       contents: read
       packages: write
       id-token: write   # ADR-0013: mint the GitHub OIDC token for nuget.org Trusted Publishing
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version != '' && format('refs/tags/v{0}', inputs.version) || github.ref }}
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: '10.0.x'
@@ -133,6 +142,7 @@ jobs:
       # pre-seeded package folder, exactly like the one in `verify` — just harder to see, because the
       # flag that would have told you was implicit.
       - name: Restore (locked, cold)
+        if: inputs.source_run_id == ''
         uses: ./.github/actions/locked-restore
         with:
           target: FS.GG.Game.slnx
@@ -147,6 +157,7 @@ jobs:
       # resolves into the COLD NUGET_PACKAGES the step above exported to GITHUB_ENV, so it validates
       # against the same feed-backed folder rather than the image's.
       - name: Pack FS.GG.Game.* (coherent set @ $VER)
+        if: inputs.source_run_id == ''
         shell: bash
         env:
           VER: ${{ steps.ver.outputs.version }}
@@ -161,11 +172,58 @@ jobs:
           (cd artifacts/packages && sha256sum -- *.nupkg | sort -k2 > SHA256SUMS)
           echo "Packed:"; ls -1 artifacts/packages/*.nupkg
 
+      - name: Authenticate failed release custody
+        if: inputs.source_run_id != ''
+        id: recovery
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]] || { echo "::error::source_run_id must be numeric"; exit 1; }
+          source_head="$(git rev-parse HEAD)"
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          jq -e --arg head "$source_head" --arg branch "v$VER" \
+            '.event == "push" and .head_branch == $branch and .head_sha == $head and .status == "completed" and .conclusion == "failure" and .path == ".github/workflows/release.yml"' \
+            <<<"$run_json" >/dev/null || {
+              echo "::error::run $SOURCE_RUN_ID is not the failed release for immutable tag v$VER at $source_head"
+              exit 1
+            }
+          artifact="game-release-custody-$source_head-$VER"
+          artifacts_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100")"
+          jq -e --arg name "$artifact" \
+            '[.artifacts[] | select(.name == $name and .expired == false and ((.digest // "") | test("^sha256:[0-9a-f]{64}$")))] | length == 1' \
+            <<<"$artifacts_json" >/dev/null || {
+              echo "::error::run $SOURCE_RUN_ID has no unique retained artifact $artifact"
+              exit 1
+            }
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Download retained release bytes
+        if: inputs.source_run_id != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ steps.recovery.outputs.artifact }}
+          path: artifacts/packages
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
+
+      - name: Verify coherent release custody
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd artifacts/packages && sha256sum --check SHA256SUMS)
+          count="$(find artifacts/packages -maxdepth 1 -type f -name '*.nupkg' ! -name '*.snupkg' | wc -l)"
+          [ "$count" = 3 ] || { echo "::error::release custody must contain exactly three primary packages; found $count"; exit 1; }
+
       - name: Verify coherent package set, metadata, and clean Journey consumer
         shell: bash
         run: tests/release/test-game-0-15-release.sh --packages artifacts/packages
 
       - name: Retain original coherent package bytes before publication
+        if: inputs.source_run_id == ''
         uses: actions/upload-artifact@v7
         with:
           name: game-release-custody-${{ github.sha }}-${{ steps.ver.outputs.version }}
@@ -183,6 +241,7 @@ jobs:
           dotnet nuget push "artifacts/packages/*.nupkg" \
             --source https://nuget.pkg.github.com/FS-GG/index.json \
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --no-symbols \
             --skip-duplicate
           echo "Published FS.GG.Game.* ${{ steps.ver.outputs.version }} to the org feed."
 
@@ -205,5 +264,62 @@ jobs:
           dotnet nuget push "artifacts/packages/*.nupkg" \
             --source https://api.nuget.org/v3/index.json \
             --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+            --no-symbols \
             --skip-duplicate
           echo "Published FS.GG.Game.* ${{ steps.ver.outputs.version }} to nuget.org."
+
+      - name: Read back and compare both feed payloads
+        if: steps.ver.outputs.push == 'true'
+        shell: bash
+        env:
+          FEED_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VER: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/readback/github artifacts/readback/nuget
+          for package in artifacts/packages/*.nupkg; do
+            file="$(basename "$package")"; id="${file%.$VER.nupkg}"; lower="${id,,}"
+            for feed in github nuget; do
+              url="https://nuget.pkg.github.com/FS-GG/download/$lower/$VER/$lower.$VER.nupkg"
+              auth=(--user "fs-gg:$FEED_TOKEN")
+              if [ "$feed" = nuget ]; then
+                url="https://api.nuget.org/v3-flatcontainer/$lower/$VER/$lower.$VER.nupkg"; auth=()
+              fi
+              for attempt in {1..60}; do
+                if curl --fail --location --silent --show-error "${auth[@]}" "$url" --output "artifacts/readback/$feed/$file"; then break; fi
+                [ "$attempt" != 60 ] || exit 4
+                echo "Waiting for $feed readback of $id $VER ($attempt/60)"; sleep 10
+              done
+            done
+          done
+          python3 - artifacts/packages artifacts/readback artifacts/readback.json <<'PY'
+          from hashlib import sha256
+          import json
+          from pathlib import Path
+          import sys
+          from zipfile import ZipFile
+          originals, readbacks, report = map(Path, sys.argv[1:])
+          def payload(path):
+              with ZipFile(path) as archive:
+                  return {name: sha256(archive.read(name)).hexdigest()
+                          for name in archive.namelist() if name != '.signature.p7s'}
+          rows=[]
+          for original in sorted(originals.glob('*.nupkg')):
+              expected=payload(original); row={'file':original.name,'originalSha256':sha256(original.read_bytes()).hexdigest(),'feeds':{}}
+              for feed in ('github','nuget'):
+                  remote=readbacks/feed/original.name; observed=payload(remote)
+                  if observed != expected: raise SystemExit(f'{feed} payload differs for {original.name}')
+                  row['feeds'][feed]={'archiveSha256':sha256(remote.read_bytes()).hexdigest(),'payloadMembers':len(observed),'payloadMatch':True}
+              rows.append(row)
+          if len(rows) != 3: raise SystemExit(f'expected three primary package readbacks, got {len(rows)}')
+          report.write_text(json.dumps({'schema':'fsgg.game.release-readback/v1','packages':rows},indent=2)+'\n')
+          PY
+
+      - name: Retain dual-feed readback evidence
+        if: steps.ver.outputs.push == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: game-release-readback-${{ steps.ver.outputs.version }}-${{ github.run_id }}
+          path: artifacts/readback.json
+          if-no-files-found: error
+          retention-days: 90
