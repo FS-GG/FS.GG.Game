@@ -389,6 +389,50 @@ FS.GG.Game.Core.Rect.new(System.Double, System.Double, System.Double, System.Dou
 FS.GG.Game.Core.Region.Cells : FS.GG.Game.Core.Cell[] [get]
 FS.GG.Game.Core.Region.Id : System.Int32 [get]
 FS.GG.Game.Core.Region.new(System.Int32, FS.GG.Game.Core.Cell[])
+FS.GG.Game.Core.Replay.seek<configuration, state, input, projection, snapshot>(SessionContract<configuration, state, input, projection, snapshot>, FSharpFunc<state, System.String>, Microsoft.FSharp.Core.FSharpFunc<System.UInt64, System.Boolean>, System.UInt64, ReplayRecording<input, snapshot>) : FSharpResult<ReplayRunOutcome<state>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.ReplayIssue>>
+FS.GG.Game.Core.Replay.validate<input, snapshot>(ReplayRecording<input, snapshot>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.ReplayIssue>
+FS.GG.Game.Core.ReplayCheckpoint`1.NextEventIndex : System.UInt64 [get]
+FS.GG.Game.Core.ReplayCheckpoint`1.Snapshot : SessionSnapshot<snapshot> [get]
+FS.GG.Game.Core.ReplayCheckpoint`1.StateDigest : System.String [get]
+FS.GG.Game.Core.ReplayCheckpoint`1.new(System.UInt64, SessionSnapshot<snapshot>, System.String)
+FS.GG.Game.Core.ReplayDivergence.ActualDigest : System.String [get]
+FS.GG.Game.Core.ReplayDivergence.EventIndex : System.UInt64 [get]
+FS.GG.Game.Core.ReplayDivergence.ExpectedDigest : System.String [get]
+FS.GG.Game.Core.ReplayDivergence.new(System.UInt64, System.String, System.String)
+FS.GG.Game.Core.ReplayEventKind`1+Tags.Advance : System.Int32
+FS.GG.Game.Core.ReplayEventKind`1+Tags.Input : System.Int32
+FS.GG.Game.Core.ReplayEvent`1.Index : System.UInt64 [get]
+FS.GG.Game.Core.ReplayEvent`1.Kind : ReplayEventKind<input> [get]
+FS.GG.Game.Core.ReplayEvent`1.StateDigest : System.String [get]
+FS.GG.Game.Core.ReplayEvent`1.new(System.UInt64, ReplayEventKind<input>, System.String)
+FS.GG.Game.Core.ReplayExport.canonicalText<input, snapshot>(FSharpFunc<input, System.String>, FSharpFunc<snapshot, System.String>, ReplayRecording<input, snapshot>) : Microsoft.FSharp.Core.FSharpResult<System.String, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.ReplayIssue>>
+FS.GG.Game.Core.ReplayIssue+Tags.CheckpointDigestMismatch : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.IncompatibleSnapshot : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.InvalidAdvance : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.InvalidCheckpointIndex : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.InvalidEventIndex : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.InvalidSession : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.MissingStateDigest : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.StaleInputSequence : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.TargetBeyondRecording : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.UnsupportedFormatVersion : System.Int32
+FS.GG.Game.Core.ReplayIssue+Tags.WrongSession : System.Int32
+FS.GG.Game.Core.ReplayRecorder.addCheckpoint<snapshot, input>(SessionSnapshot<snapshot>, System.String, ReplayRecording<input, snapshot>) : FSharpResult<ReplayRecording<input, snapshot>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.ReplayIssue>>
+FS.GG.Game.Core.ReplayRecorder.appendAdvance<input, snapshot>(System.UInt64, System.String, ReplayRecording<input, snapshot>) : FSharpResult<ReplayRecording<input, snapshot>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.ReplayIssue>>
+FS.GG.Game.Core.ReplayRecorder.appendInput<input, snapshot>(SessionInput<input>, System.String, ReplayRecording<input, snapshot>) : FSharpResult<ReplayRecording<input, snapshot>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.ReplayIssue>>
+FS.GG.Game.Core.ReplayRecorder.create<snapshot, input>(SessionSnapshot<snapshot>, System.String) : FSharpResult<ReplayRecording<input, snapshot>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.ReplayIssue>>
+FS.GG.Game.Core.ReplayRecording`2.Checkpoints : FSharpList<ReplayCheckpoint<snapshot>> [get]
+FS.GG.Game.Core.ReplayRecording`2.Compatibility : FS.GG.Game.Core.SessionCompatibility [get]
+FS.GG.Game.Core.ReplayRecording`2.Events : FSharpList<ReplayEvent<input>> [get]
+FS.GG.Game.Core.ReplayRecording`2.FormatVersion : System.Int32 [get]
+FS.GG.Game.Core.ReplayRecording`2.InitialSnapshot : SessionSnapshot<snapshot> [get]
+FS.GG.Game.Core.ReplayRecording`2.InitialStateDigest : System.String [get]
+FS.GG.Game.Core.ReplayRecording`2.SessionId : System.String [get]
+FS.GG.Game.Core.ReplayRecording`2.new(System.Int32, System.String, FS.GG.Game.Core.SessionCompatibility, SessionSnapshot<snapshot>, System.String, FSharpList<ReplayEvent<input>>, FSharpList<ReplayCheckpoint<snapshot>>)
+FS.GG.Game.Core.ReplayRunOutcome`1+Tags.Cancelled : System.Int32
+FS.GG.Game.Core.ReplayRunOutcome`1+Tags.Completed : System.Int32
+FS.GG.Game.Core.ReplayRunOutcome`1+Tags.ContractRefused : System.Int32
+FS.GG.Game.Core.ReplayRunOutcome`1+Tags.Diverged : System.Int32
 FS.GG.Game.Core.Report.BorderOpenings : System.Int32 [get]
 FS.GG.Game.Core.Report.ComponentCount : System.Int32 [get]
 FS.GG.Game.Core.Report.Connected : System.Boolean [get]

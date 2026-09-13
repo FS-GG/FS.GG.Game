@@ -17,6 +17,8 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the detecti
 - **`SessionRuntime`** — a pure integer-microsecond fixed-step reducer around a product's session contract.
   It bounds catch-up, enforces monotonic semantic input, and provides pause, single-step, reset, compatible
   restore and disposal without reading a clock or taking a renderer, worker, transport or storage dependency.
+- **`Replay`** — portable accepted-input/advance recordings, checkpoints, exact seek, cancellation cursors,
+  first-divergence diagnostics, and a canonical export envelope over that same product session contract.
 - **`SessionOperations`** — a transport-neutral generation coordinator shared by local-worker and
   authoritative-server interpreters. Required records commit in request order while projection demand
   coalesces behind one owned request; cancellation, replacement, failure and disposal reject stale replies.
@@ -65,7 +67,7 @@ Headlessly testable — zero Skia, zero Scene. Purity, totality (degenerate and 
 ## Fable compatibility
 
 The NuGet package carries a bounded Fable source view containing the canonical
-`Primitives`, `SessionContract`, `SessionRuntime`, `SessionOperations`, `Pathfinding`, `Edges`, and `Los` source files used by the .NET
+`Primitives`, `SessionContract`, `SessionRuntime`, `Replay`, `SessionOperations`, `Pathfinding`, `Edges`, and `Los` source files used by the .NET
 assembly; it does not contain copied algorithms. The package's
 `fable-compatibility/` directory records the versioned profile, authored input
 vectors, canonical binary oracle, fixture schema, and pinned toolchain.

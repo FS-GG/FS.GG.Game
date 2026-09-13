@@ -27,7 +27,7 @@
           AfterTargets="CreateFablePackageFiles">
     <ItemGroup>
       <_PackageFiles Remove="@(_PackageFiles)" />
-      <_PackageFiles Include="Primitives.fsi;Primitives.fs;SessionContract.fsi;SessionContract.fs;SessionRuntime.fsi;SessionRuntime.fs;SessionOperations.fsi;SessionOperations.fs;SaveMigration.fsi;SaveMigration.fs;Geometry.fsi;Geometry.fs;Pathfinding.fsi;Pathfinding.fs;Edges.fsi;Edges.fs;Los.fsi;Los.fs;SpatialGrid.fsi;SpatialGrid.fs;Resolution.fsi;Resolution.fs;Kinematics.fsi;Kinematics.fs">
+      <_PackageFiles Include="Primitives.fsi;Primitives.fs;SessionContract.fsi;SessionContract.fs;SessionRuntime.fsi;SessionRuntime.fs;Replay.fsi;Replay.fs;SessionOperations.fsi;SessionOperations.fs;SaveMigration.fsi;SaveMigration.fs;Geometry.fsi;Geometry.fs;Pathfinding.fsi;Pathfinding.fs;Edges.fsi;Edges.fs;Los.fsi;Los.fs;SpatialGrid.fsi;SpatialGrid.fs;Resolution.fsi;Resolution.fs;Kinematics.fsi;Kinematics.fs">
         <Pack>true</Pack>
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
         <BuildAction>None</BuildAction>
@@ -74,6 +74,8 @@
     <Compile Include="SessionContract.fs" />
     <Compile Include="SessionRuntime.fsi" />
     <Compile Include="SessionRuntime.fs" />
+    <Compile Include="Replay.fsi" />
+    <Compile Include="Replay.fs" />
     <Compile Include="SessionOperations.fsi" />
     <Compile Include="SessionOperations.fs" />
     <Compile Include="SaveMigration.fsi" />

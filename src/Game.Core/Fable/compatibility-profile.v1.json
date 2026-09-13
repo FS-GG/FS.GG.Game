@@ -51,6 +51,11 @@
       "evidence": "fixture-schema.v1 operation 8; canonical kinematics record -4"
     },
     {
+      "name": "Replay record, checkpoint seek, cancellation, divergence and canonical export",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 9; canonical replay record -5"
+    },
+    {
       "name": "Geometry, SpatialGrid, Resolution, and Kinematics surfaces outside the operation 8 path",
       "grade": "Portable",
       "evidence": "implementation sources compile through the supported source view; only the operation 8 path promises canonical byte equality"

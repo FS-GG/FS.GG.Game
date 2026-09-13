@@ -215,11 +215,50 @@ module FixtureProtocol =
             bytes.Add(if result.Hits |> List.exists _.IsTrigger then 1uy else 0uy)
             bytes.Add(if result.CandidateIds = [ "goal"; "wall" ] then 1uy else 0uy))
 
+    let private replayRecord () =
+        let compatibility =
+            { ContractVersion=1;EngineId="fixture.replay";EngineVersion="1";ProfileId="fixture";SchemaId="fixture.state";SchemaVersion=1 }
+        let snapshot value = { SessionId="fixture";Revision=uint64 value;Compatibility=compatibility;Value=value }
+        let contract: SessionContract<unit,int,int,int,int> =
+            { Initialize=fun _ -> Ok 0
+              AdmitInput=fun input state -> Ok(state + input.Value)
+              Advance=fun value state -> Ok(state + int value.StepCount)
+              Project=fun state -> { SessionId="fixture";Revision=uint64 state;Value=state }
+              Snapshot=snapshot
+              Restore=fun value -> Ok value.Value }
+        let recording =
+            ReplayRecorder.create (snapshot 0) "0"
+            |> Result.bind (ReplayRecorder.appendInput {SessionId="fixture";InputId="add";Sequence=1UL;Value=2} "2")
+            |> Result.bind (ReplayRecorder.appendAdvance 3UL "5")
+            |> Result.bind (ReplayRecorder.addCheckpoint (snapshot 5) "5")
+            |> Result.bind (ReplayRecorder.appendInput {SessionId="fixture";InputId="add";Sequence=2UL;Value=4} "9")
+            |> Result.defaultWith (fun error -> failwithf "replay fixture recording failed: %A" error)
+        let completed = Replay.seek contract string (fun _ -> false) 3UL recording
+        let cancelled = Replay.seek contract string ((=) 1UL) 3UL {recording with Checkpoints=[]}
+        let mutated =
+            { recording with
+                Checkpoints=[]
+                Events=recording.Events |> List.map (fun event -> if event.Index=1UL then {event with StateDigest="6"} else event) }
+        let diverged = Replay.seek contract string (fun _ -> false) 3UL mutated
+        let canonical = ReplayExport.canonicalText string string recording |> Result.defaultValue ""
+        record -5 9 (fun bytes ->
+            match completed with
+            | Ok(ReplayRunOutcome.Completed(next, state)) -> appendU32 bytes (uint32 next); appendI32 bytes state
+            | _ -> appendU32 bytes 0u; appendI32 bytes -1
+            match cancelled with
+            | Ok(ReplayRunOutcome.Cancelled(next, state)) -> appendU32 bytes (uint32 next); appendI32 bytes state
+            | _ -> appendU32 bytes 0u; appendI32 bytes -1
+            match diverged with
+            | Ok(ReplayRunOutcome.Diverged value) -> appendU32 bytes (uint32 value.EventIndex); appendI32 bytes (int value.ExpectedDigest); appendI32 bytes (int value.ActualDigest)
+            | _ -> appendU32 bytes 0u; appendI32 bytes -1; appendI32 bytes -1
+            appendU32 bytes (uint32 canonical.Length))
+
     let encodeAll () : byte array =
         (GeneratedCases.all |> List.collect (run >> Array.toList))
         @ (runtimeRecord () |> Array.toList)
         @ (operationRecord () |> Array.toList)
         @ (kinematicsRecord () |> Array.toList)
+        @ (replayRecord () |> Array.toList)
         |> List.toArray
 
     let toLowerHex (bytes: byte array) =
