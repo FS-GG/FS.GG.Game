@@ -1,7 +1,8 @@
 # SVG-RUNTIME-01 — Sessions and continuous gameplay
 
-Status: active; SVG-RUNTIME-01.1 and .2 merged, SVG-RUNTIME-01.3 implementation complete in its
-routine change, with .4 next after merge readback.
+Status: complete at the source/generated-candidate boundary. Game, Rendering and Templates owner changes
+are merged and the exact generated continuous-player qualification is green. Publication remains owned by
+SVG-PREVIEW-B.
 Route: routine.
 
 Owners: FS.GG.Game owns session semantics, fixed-step execution, collision classification and gameplay
@@ -79,7 +80,7 @@ strictly off limits.
   tunnelling. The neutral arena drives movement, collectibles, hazards, score, health, win/loss and restart
   through `Playable`; two independent command runs produce equal projection traces.
 
-- [ ] **SVG-RUNTIME-01.4 — Browser clock and retained projection host — route: routine**
+- [x] **SVG-RUNTIME-01.4 — Browser clock and retained projection host — route: routine**
 
   Owner: Rendering. Add a disposable browser session host over `requestAnimationFrame` and the Game runtime
   contract. It converts host elapsed time at one boundary, keeps presentation interpolation separate, pauses
@@ -91,7 +92,12 @@ strictly off limits.
   bounded catch-up, pause/step/reset, tab suspension, stale worker reply, projection coalescing and zero-owned
   resources after disposal.
 
-- [ ] **SVG-RUNTIME-01.5 — Generated continuous player and Preview-B handoff — route: routine**
+  Evidence: Rendering PR #1310 merged as `504e5f0ab3d06e363dae65f42687139744d09553`; native gamepad
+  qualification repair PR #1311 merged as `50bb064c8acb0251a469ca406d193551f8e209d1`. Portable .NET/Fable
+  correspondence and the Chromium, Firefox and WebKit browser matrix cover clock, lifecycle, coalescing,
+  stale-generation rejection, retained projection and zero-resource disposal behavior.
+
+- [x] **SVG-RUNTIME-01.5 — Generated continuous player and Preview-B handoff — route: routine**
 
   Owner: Templates; Game and Rendering retain producer defects and completion ledgers. Compose the current
   SVG input profile, session runtime, collision adapter and retained scene into the opt-in candidate. Qualify
@@ -102,8 +108,13 @@ strictly off limits.
   excludes Studio modules. Evidence binds exact Game, Rendering and Templates revisions and archives, Fable
   correspondence, headless/browser outcomes, public baselines and every migration/rollback result.
 
+  Evidence: the final Game producer repair is merged as `c6de5b83eaa3d3f14909b42c3f8c3c94558157c9` (PR #625).
+  Templates PR #471 merged as `4a392a18ada74a87a12dd0b31aebaa7039a84b86` after exact candidate
+  qualification passed generated authoring, input and runtime players in Chromium, Firefox and WebKit,
+  Orca/AT-SPI, package consumers, typed receivers and repository composition. Public pins remained unchanged.
+
 ## Completion and release impact
 
-After all five milestones meet their authority boundaries, record SVG-RUNTIME-01 complete with publication
-pending Preview B, update the unified projection and select SVG-PRESENT-01. Candidate versions remain private
-and unique to their bytes. No provider, registry, lifecycle or default changes occur in this feature.
+All five milestones meet their authority boundaries. SVG-RUNTIME-01 is complete with publication pending
+Preview B, and SVG-PRESENT-01 is selected next. Candidate versions remain private and unique to their bytes.
+No provider, registry, lifecycle or default changes occur in this feature.
