@@ -1,6 +1,7 @@
 # SVG-RUNTIME-01 — Sessions and continuous gameplay
 
-Status: active; SVG-RUNTIME-01.1 implementation complete in its routine change, with .2 next after merge readback.
+Status: active; SVG-RUNTIME-01.1 merged, SVG-RUNTIME-01.2 implementation complete in its routine change,
+with .3 next after merge readback.
 Route: routine.
 
 Owners: FS.GG.Game owns session semantics, fixed-step execution, collision classification and gameplay
@@ -44,7 +45,7 @@ strictly off limits.
   refusal-state preservation. The packed .NET and Fable consumers produce the same 512-byte canonical session
   transition corpus, with its schema and compatibility profile pinned to the committed oracle digest.
 
-- [ ] **SVG-RUNTIME-01.2 — Generation-safe operations and projection backpressure — route: routine**
+- [x] **SVG-RUNTIME-01.2 — Generation-safe operations and projection backpressure — route: routine**
 
   Owner: Game. Add portable request/generation state for local-worker and authoritative-server interpreters.
   Inputs and required session records remain ordered; obsolete projections may coalesce. Cancellation,
@@ -54,6 +55,12 @@ strictly off limits.
   Acceptance: deterministic traces cover stale replies, cancellation races, slow consumers, projection
   coalescing, input preservation, suspension recovery and bounded ownership. Packed .NET/Fable consumers
   agree on every reducer transition.
+
+  Evidence: 746 Game.Core tests cover ordered required completions, stale-generation refusal, cancellation,
+  replacement, failure, projection coalescing and disposal. Packed .NET and Fable consumers produce the same
+  536-byte canonical corpus. The checked-in Quint model typechecks, finds no invariant violation across 1,000
+  bounded 30-step simulations, and passes witnesses for reversed replies, slow projection consumption,
+  cancellation races and recovery after replacement.
 
 - [ ] **SVG-RUNTIME-01.3 — Collision and continuous-arena correspondence — route: routine**
 

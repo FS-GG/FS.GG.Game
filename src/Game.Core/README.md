@@ -17,6 +17,9 @@ The shared types — `Point`, `Rect`, `Circle`, `ConvexPolygon`, and the detecti
 - **`SessionRuntime`** — a pure integer-microsecond fixed-step reducer around a product's session contract.
   It bounds catch-up, enforces monotonic semantic input, and provides pause, single-step, reset, compatible
   restore and disposal without reading a clock or taking a renderer, worker, transport or storage dependency.
+- **`SessionOperations`** — a transport-neutral generation coordinator shared by local-worker and
+  authoritative-server interpreters. Required records commit in request order while projection demand
+  coalesces behind one owned request; cancellation, replacement, failure and disposal reject stale replies.
 
 ### Collision — detection, then response
 
@@ -59,13 +62,13 @@ Headlessly testable — zero Skia, zero Scene. Purity, totality (degenerate and 
 ## Fable compatibility
 
 The NuGet package carries a bounded Fable source view containing the canonical
-`Primitives`, `SessionContract`, `SessionRuntime`, `Pathfinding`, `Edges`, and `Los` source files used by the .NET
+`Primitives`, `SessionContract`, `SessionRuntime`, `SessionOperations`, `Pathfinding`, `Edges`, and `Los` source files used by the .NET
 assembly; it does not contain copied algorithms. The package's
 `fable-compatibility/` directory records the versioned profile, authored input
 vectors, canonical binary oracle, fixture schema, and pinned toolchain.
 
 `Cell` ordering, `Edges.edgeBetween`, `Los.lineOfSightBy`, `Pathfinding.astar`, the
-session identity validation/compatibility result, and the `SessionRuntime` transition corpus are `LockstepExact` under profile
+session identity validation/compatibility result, and the `SessionRuntime` and `SessionOperations` transition corpora are `LockstepExact` under profile
 `fs-gg-game-core-fable-lockstep-v1`. The packed .NET assembly and
 package-derived Fable source must emit byte-identical records for the shared
 boundary corpus. Floating value types are `Portable`, not exact; implementation

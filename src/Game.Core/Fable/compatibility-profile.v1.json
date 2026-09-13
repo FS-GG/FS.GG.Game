@@ -36,6 +36,11 @@
       "evidence": "fixture-schema.v1 operation 6; canonical runtime record -2"
     },
     {
+      "name": "SessionOperations generation, required-record ordering, projection backpressure, and lifecycle",
+      "grade": "LockstepExact",
+      "evidence": "fixture-schema.v1 operation 7; canonical operation record -3"
+    },
+    {
       "name": "Point, Rect, Contact, Circle, RayHit, ConvexPolygon, and Manifold values",
       "grade": "Portable",
       "evidence": "types compile through the supported source view; no canonical byte equality is promised for floating fields"

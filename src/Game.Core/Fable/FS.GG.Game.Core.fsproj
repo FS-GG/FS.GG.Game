@@ -20,6 +20,8 @@
     <Compile Include="SessionContract.fs" />
     <Compile Include="SessionRuntime.fsi" />
     <Compile Include="SessionRuntime.fs" />
+    <Compile Include="SessionOperations.fsi" />
+    <Compile Include="SessionOperations.fs" />
     <Compile Include="Pathfinding.fsi" />
     <Compile Include="Pathfinding.fs" />
     <Compile Include="Edges.fsi" />

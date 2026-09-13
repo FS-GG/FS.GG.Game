@@ -140,8 +140,61 @@ module FixtureProtocol =
             bytes.Add(if inert = disposed && inertEffects.Length = 1 then 1uy else 0uy)
             bytes.Add(if disposed.Status = SessionRuntimeStatus.Disposed then 1uy else 0uy))
 
+    let private operationRecord () =
+        let initial : SessionOperationState<int> =
+            SessionOperations.initialize
+                { Target = SessionOperationTarget.LocalWorker
+                  MaxPendingRequired = 2u }
+            |> Result.defaultWith (fun error -> failwithf "operation fixture initialization failed: %A" error)
+        let firstState, firstEffects =
+            SessionOperations.update (SessionOperationObservation.EnqueueRequired 10) initial
+        let secondState, secondEffects =
+            SessionOperations.update (SessionOperationObservation.EnqueueRequired 20) firstState
+        let dispatch effect =
+            match effect with
+            | [ SessionOperationEffect.DispatchRequired value ] -> value
+            | value -> failwithf "operation fixture expected required dispatch, got %A" value
+        let first, second = dispatch firstEffects, dispatch secondEffects
+        let buffered, early =
+            SessionOperations.update
+                (SessionOperationObservation.CompleteRequired(second.Id, 200))
+                secondState
+        let committed, commits =
+            SessionOperations.update
+                (SessionOperationObservation.CompleteRequired(first.Id, 100))
+                buffered
+        let projected, projectionEffects =
+            SessionOperations.update SessionOperationObservation.DemandProjection committed
+        let projectionId =
+            match projectionEffects with
+            | [ SessionOperationEffect.DispatchProjection value ] -> value.Id
+            | value -> failwithf "operation fixture expected projection dispatch, got %A" value
+        let queued, coalesced =
+            SessionOperations.update SessionOperationObservation.DemandProjection projected
+        let refreshed, refreshEffects =
+            SessionOperations.update
+                (SessionOperationObservation.CompleteProjection(projectionId, 3UL, 300))
+                queued
+        let replacement, replacementEffects =
+            SessionOperations.update SessionOperationObservation.Replace refreshed
+        let stale, staleEffects =
+            SessionOperations.update
+                (SessionOperationObservation.CompleteProjection(projectionId, 4UL, 400))
+                replacement
+        let disposed, _ = SessionOperations.update SessionOperationObservation.Dispose stale
+        record -3 7 (fun bytes ->
+            appendU32 bytes (uint32 disposed.Generation)
+            appendU16 bytes commits.Length
+            appendU16 bytes refreshEffects.Length
+            bytes.Add(if early.IsEmpty && buffered.BufferedRequired.Count = 1 then 1uy else 0uy)
+            bytes.Add(if coalesced.Length = 1 && queued.ProjectionDemandQueued then 1uy else 0uy)
+            bytes.Add(if replacementEffects.Length = 1 && stale = replacement && staleEffects.Length = 1 then 1uy else 0uy)
+            bytes.Add(if disposed.Status = SessionOperationStatus.Disposed then 1uy else 0uy))
+
     let encodeAll () : byte array =
-        (GeneratedCases.all |> List.collect (run >> Array.toList)) @ (runtimeRecord () |> Array.toList)
+        (GeneratedCases.all |> List.collect (run >> Array.toList))
+        @ (runtimeRecord () |> Array.toList)
+        @ (operationRecord () |> Array.toList)
         |> List.toArray
 
     let toLowerHex (bytes: byte array) =
