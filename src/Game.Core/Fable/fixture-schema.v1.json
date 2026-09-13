@@ -63,11 +63,16 @@
       "id": 11,
       "operation": "RuleCatalog.inspect",
       "payload": "u16 acceptedEvaluationCount, u8 acceptedApplies, u16 causeCount, u8 refusedApplies, u16 refusedEvaluationCount, u16 metadataCount, u16 invariantCount"
+    },
+    {
+      "id": 12,
+      "operation": "NetworkAdmission.admit",
+      "payload": "u32 secondAcceptedOrder, u16 acceptedCount, u32 canonicalTextLength, u8 staleRefused, u8 replaySuffixSelected, u8 fullSnapshotSelected"
     }
   ],
   "inputs": "fixtures/v1/cases.json",
   "oracle": "fixtures/v1/expected.bin",
-  "oracleSha256": "f710a2a98431c063f942cae3df73cf69808a5a8074df1621a5872871e7dddea7",
+  "oracleSha256": "330e3177840351187e00420c33863de7142d2bedff3f833b1fd815717c08fb5d",
   "outcomeTags": {
     "0": "operation completed normally"
   },

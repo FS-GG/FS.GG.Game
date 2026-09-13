@@ -1,3 +1,7 @@
+FS.GG.Game.Core.AcceptedNetworkInput`1.AcceptedOrder : System.UInt64 [get]
+FS.GG.Game.Core.AcceptedNetworkInput`1.ClientId : System.String [get]
+FS.GG.Game.Core.AcceptedNetworkInput`1.Input : SessionInput<input> [get]
+FS.GG.Game.Core.AcceptedNetworkInput`1.new(System.UInt64, System.String, SessionInput<input>)
 FS.GG.Game.Core.AcceptedState`1.Revision : System.UInt64 [get]
 FS.GG.Game.Core.AcceptedState`1.SessionId : System.String [get]
 FS.GG.Game.Core.AcceptedState`1.StateDigest : System.String [get]
@@ -318,6 +322,37 @@ FS.GG.Game.Core.MapGen.regions(FS.GG.Game.Core.Neighbourhood, FS.GG.Game.Core.Gr
 FS.GG.Game.Core.MapGen.set<T>(Grid<T>, FS.GG.Game.Core.Cell, T) : Grid<T>
 FS.GG.Game.Core.Neighbourhood+Tags.EightWay : System.Int32
 FS.GG.Game.Core.Neighbourhood+Tags.FourWay : System.Int32
+FS.GG.Game.Core.NetworkAdmission.accepted<input>(NetworkAdmissionState<input>) : FSharpList<AcceptedNetworkInput<input>>
+FS.GG.Game.Core.NetworkAdmission.admit<input>(FSharpFunc<input, Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>, NetworkInput<input>, NetworkAdmissionState<input>) : FSharpResult<Tuple<NetworkAdmissionState<input>, AcceptedNetworkInput<input>>, FS.GG.Game.Core.NetworkAdmissionIssue>
+FS.GG.Game.Core.NetworkAdmission.bind<input>(FS.GG.Game.Core.NetworkClientBinding, NetworkAdmissionState<input>) : FSharpResult<NetworkAdmissionState<input>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.NetworkAdmissionIssue>>
+FS.GG.Game.Core.NetworkAdmission.canonicalText<input>(FSharpFunc<input, System.String>, NetworkAdmissionState<input>) : System.String
+FS.GG.Game.Core.NetworkAdmission.create<input>(System.String, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.NetworkClientBinding>) : FSharpResult<NetworkAdmissionState<input>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.NetworkAdmissionIssue>>
+FS.GG.Game.Core.NetworkAdmission.lastSequence<input>(System.String, NetworkAdmissionState<input>) : Microsoft.FSharp.Core.FSharpOption<System.UInt64>
+FS.GG.Game.Core.NetworkAdmission.resync(Microsoft.FSharp.Core.FSharpOption<System.UInt64>, System.UInt64, System.UInt64) : FS.GG.Game.Core.NetworkResyncDecision
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.ClientAlreadyBound : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.ClientNotBound : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.DuplicateClientId : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.DuplicateInputSequence : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.InputSessionMismatch : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.InvalidInput : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.MissingClientId : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.MissingReconnectToken : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.MissingSessionId : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.PayloadRefused : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.ReconnectTokenMismatch : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.StaleInputSequence : System.Int32
+FS.GG.Game.Core.NetworkAdmissionIssue+Tags.WrongSession : System.Int32
+FS.GG.Game.Core.NetworkClientBinding.ClientId : System.String [get]
+FS.GG.Game.Core.NetworkClientBinding.ReconnectToken : System.String [get]
+FS.GG.Game.Core.NetworkClientBinding.SessionId : System.String [get]
+FS.GG.Game.Core.NetworkClientBinding.new(System.String, System.String, System.String)
+FS.GG.Game.Core.NetworkInput`1.Binding : FS.GG.Game.Core.NetworkClientBinding [get]
+FS.GG.Game.Core.NetworkInput`1.Input : SessionInput<input> [get]
+FS.GG.Game.Core.NetworkInput`1.new(FS.GG.Game.Core.NetworkClientBinding, SessionInput<input>)
+FS.GG.Game.Core.NetworkResyncDecision+Tags.ClientAhead : System.Int32
+FS.GG.Game.Core.NetworkResyncDecision+Tags.Current : System.Int32
+FS.GG.Game.Core.NetworkResyncDecision+Tags.FullSnapshot : System.Int32
+FS.GG.Game.Core.NetworkResyncDecision+Tags.ReplaySuffix : System.Int32
 FS.GG.Game.Core.NoiseParams.Frequency : System.Double [get]
 FS.GG.Game.Core.NoiseParams.Octaves : System.Int32 [get]
 FS.GG.Game.Core.NoiseParams.Persistence : System.Double [get]

@@ -83,6 +83,8 @@ required_entries=(
   "fable/Planning.fs"
   "fable/Rules.fsi"
   "fable/Rules.fs"
+  "fable/NetworkSession.fsi"
+  "fable/NetworkSession.fs"
   "fable/SessionOperations.fsi"
   "fable/SessionOperations.fs"
   "fable/SaveMigration.fsi"

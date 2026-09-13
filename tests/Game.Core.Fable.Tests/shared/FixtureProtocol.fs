@@ -299,6 +299,30 @@ module FixtureProtocol =
             appendU16 bytes (RuleCatalog.metadata catalog).Length
             appendU16 bytes (RuleCatalog.evidence catalog).Invariants.Length)
 
+    let private networkRecord () =
+        let binding client token = { SessionId="fixture";ClientId=client;ReconnectToken=token }
+        let state : NetworkAdmissionState<int> =
+            NetworkAdmission.create "fixture" [binding "a" "ta";binding "b" "tb"]
+            |> Result.defaultWith (fun error -> failwithf "network fixture initialization failed: %A" error)
+        let candidate client token sequence value =
+            { Binding=binding client token
+              Input={SessionId="fixture";InputId="move";Sequence=sequence;Value=value} }
+        let first, _ =
+            NetworkAdmission.admit (fun _ -> Ok()) (candidate "b" "tb" 3UL 7) state
+            |> Result.defaultWith (fun error -> failwithf "network fixture admission failed: %A" error)
+        let accepted, second =
+            NetworkAdmission.admit (fun _ -> Ok()) (candidate "a" "ta" 1UL -2) first
+            |> Result.defaultWith (fun error -> failwithf "network fixture admission failed: %A" error)
+        let stale = NetworkAdmission.admit (fun _ -> Ok()) (candidate "b" "tb" 2UL 99) accepted
+        let canonical = NetworkAdmission.canonicalText string accepted
+        record -8 12 (fun bytes ->
+            appendU32 bytes (uint32 second.AcceptedOrder)
+            appendU16 bytes (NetworkAdmission.accepted accepted).Length
+            appendU32 bytes (uint32 canonical.Length)
+            bytes.Add(match stale with Error(NetworkAdmissionIssue.StaleInputSequence _) -> 1uy | _ -> 0uy)
+            bytes.Add(match NetworkAdmission.resync (Some 4UL) 6UL 9UL with NetworkResyncDecision.ReplaySuffix _ -> 1uy | _ -> 0uy)
+            bytes.Add(match NetworkAdmission.resync (Some 4UL) 2UL 9UL with NetworkResyncDecision.FullSnapshot _ -> 1uy | _ -> 0uy))
+
     let encodeAll () : byte array =
         (GeneratedCases.all |> List.collect (run >> Array.toList))
         @ (runtimeRecord () |> Array.toList)
@@ -307,6 +331,7 @@ module FixtureProtocol =
         @ (replayRecord () |> Array.toList)
         @ (planningRecord () |> Array.toList)
         @ (rulesRecord () |> Array.toList)
+        @ (networkRecord () |> Array.toList)
         |> List.toArray
 
     let toLowerHex (bytes: byte array) =
