@@ -5,6 +5,17 @@ FS.GG.Game.Harness.ActionCoverageGap+UnexercisedUnbound
 FS.GG.Game.Harness.ActionCoverageReport
 FS.GG.Game.Harness.Bot`1
 FS.GG.Game.Harness.Bots
+FS.GG.Game.Harness.ContinuousArena
+FS.GG.Game.Harness.ContinuousArenaConfig
+FS.GG.Game.Harness.ContinuousArenaItem
+FS.GG.Game.Harness.ContinuousArenaItemKind
+FS.GG.Game.Harness.ContinuousArenaItemKind+Collectible
+FS.GG.Game.Harness.ContinuousArenaItemKind+Hazard
+FS.GG.Game.Harness.ContinuousArenaItemKind+Tags
+FS.GG.Game.Harness.ContinuousArenaOutcome
+FS.GG.Game.Harness.ContinuousArenaOutcome+Tags
+FS.GG.Game.Harness.ContinuousArenaProjection
+FS.GG.Game.Harness.ContinuousArenaWorld
 FS.GG.Game.Harness.Counterexample
 FS.GG.Game.Harness.Driver
 FS.GG.Game.Harness.ExpectedWorkload`1

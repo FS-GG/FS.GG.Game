@@ -198,6 +198,34 @@ FS.GG.Game.Core.Hex.subtract(FS.GG.Game.Core.Hex, FS.GG.Game.Core.Hex) : FS.GG.G
 FS.GG.Game.Core.Hex.toDoubled(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Cell
 FS.GG.Game.Core.Hex.toOffset(FS.GG.Game.Core.Hex) : FS.GG.Game.Core.Cell
 FS.GG.Game.Core.Hex.tryCreateCube(System.Int32, System.Int32, System.Int32) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Hex>
+FS.GG.Game.Core.KinematicCollider.Id : System.String [get]
+FS.GG.Game.Core.KinematicCollider.Response : FS.GG.Game.Core.KinematicResponse [get]
+FS.GG.Game.Core.KinematicCollider.Shape : FS.GG.Game.Core.KinematicShape [get]
+FS.GG.Game.Core.KinematicCollider.new(System.String, FS.GG.Game.Core.KinematicShape, FS.GG.Game.Core.KinematicResponse)
+FS.GG.Game.Core.KinematicHit.ColliderId : System.String [get]
+FS.GG.Game.Core.KinematicHit.Contact : FS.GG.Game.Core.Contact [get]
+FS.GG.Game.Core.KinematicHit.IsTrigger : System.Boolean [get]
+FS.GG.Game.Core.KinematicHit.Sweep : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit> [get]
+FS.GG.Game.Core.KinematicHit.new(System.String, FS.GG.Game.Core.Contact, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>, System.Boolean)
+FS.GG.Game.Core.KinematicMotion.Bounds : FS.GG.Game.Core.Rect [get]
+FS.GG.Game.Core.KinematicMotion.Displacement : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.KinematicMotion.new(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Point)
+FS.GG.Game.Core.KinematicResponse+Tags.Bounce : System.Int32
+FS.GG.Game.Core.KinematicResponse+Tags.Slide : System.Int32
+FS.GG.Game.Core.KinematicResponse+Tags.Trigger : System.Int32
+FS.GG.Game.Core.KinematicResult.Bounds : FS.GG.Game.Core.Rect [get]
+FS.GG.Game.Core.KinematicResult.CandidateIds : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Core.KinematicResult.Displacement : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.KinematicResult.Hits : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.KinematicHit> [get]
+FS.GG.Game.Core.KinematicResult.new(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Point, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.KinematicHit>, Microsoft.FSharp.Collections.FSharpList<System.String>)
+FS.GG.Game.Core.KinematicShape+Tags.AxisAlignedBox : System.Int32
+FS.GG.Game.Core.KinematicShape+Tags.Circle : System.Int32
+FS.GG.Game.Core.KinematicShape+Tags.Convex : System.Int32
+FS.GG.Game.Core.Kinematics.advance(System.Double, FS.GG.Game.Core.KinematicMotion, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.KinematicCollider>) : FS.GG.Game.Core.KinematicResult
+FS.GG.Game.Core.Kinematics.bounds(FS.GG.Game.Core.KinematicShape) : FS.GG.Game.Core.Rect
+FS.GG.Game.Core.Kinematics.candidates(System.Double, FS.GG.Game.Core.KinematicMotion, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.KinematicCollider>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.KinematicCollider>
+FS.GG.Game.Core.Kinematics.contact(FS.GG.Game.Core.Rect, FS.GG.Game.Core.KinematicShape) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.Contact>
+FS.GG.Game.Core.Kinematics.segmentHit(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.KinematicShape) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.RayHit>
 FS.GG.Game.Core.LineMode+Tags.Supercover : System.Int32
 FS.GG.Game.Core.LineMode+Tags.Thin : System.Int32
 FS.GG.Game.Core.Loop.advance<world>(System.Double, FSharpFunc<world, FSharpFunc<System.Double, world>>, System.Double, StepState<world>) : StepState<world>

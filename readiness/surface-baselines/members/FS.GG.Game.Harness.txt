@@ -12,6 +12,40 @@ FS.GG.Game.Harness.Bots.on<outer, inner>(FSharpFunc<outer, inner>, Bot<inner>) :
 FS.GG.Game.Harness.Bots.random<view>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.Rng, System.ValueTuple<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>, FS.GG.Game.Core.Rng>>) : Bot<view>
 FS.GG.Game.Harness.Bots.scripted<view>(Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>>) : Bot<view>
 FS.GG.Game.Harness.Bots.sitter<view>() : Bot<view>
+FS.GG.Game.Harness.ContinuousArena.apply(FS.GG.Game.Harness.ContinuousArenaConfig, FS.GG.Game.Core.Command, FS.GG.Game.Harness.ContinuousArenaWorld) : FS.GG.Game.Harness.ContinuousArenaWorld
+FS.GG.Game.Harness.ContinuousArena.init(FS.GG.Game.Harness.ContinuousArenaConfig) : FS.GG.Game.Harness.ContinuousArenaWorld
+FS.GG.Game.Harness.ContinuousArena.playable<key>(FS.GG.Game.Harness.ContinuousArenaConfig, FSharpMap<key, FS.GG.Game.Core.Command>, System.Double) : Playable<FS.GG.Game.Harness.ContinuousArenaWorld, key>
+FS.GG.Game.Harness.ContinuousArena.project(FS.GG.Game.Harness.ContinuousArenaWorld) : FS.GG.Game.Harness.ContinuousArenaProjection
+FS.GG.Game.Harness.ContinuousArena.step(FS.GG.Game.Harness.ContinuousArenaConfig, FS.GG.Game.Harness.ContinuousArenaWorld, System.Double) : FS.GG.Game.Harness.ContinuousArenaWorld
+FS.GG.Game.Harness.ContinuousArenaConfig.CollisionCellSize : System.Double [get]
+FS.GG.Game.Harness.ContinuousArenaConfig.InitialHealth : System.Int32 [get]
+FS.GG.Game.Harness.ContinuousArenaConfig.Items : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.ContinuousArenaItem> [get]
+FS.GG.Game.Harness.ContinuousArenaConfig.Obstacles : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.KinematicCollider> [get]
+FS.GG.Game.Harness.ContinuousArenaConfig.PlayerStart : FS.GG.Game.Core.Rect [get]
+FS.GG.Game.Harness.ContinuousArenaConfig.Speed : System.Double [get]
+FS.GG.Game.Harness.ContinuousArenaConfig.WinningScore : System.Int32 [get]
+FS.GG.Game.Harness.ContinuousArenaConfig.new(FS.GG.Game.Core.Rect, System.Double, System.Int32, System.Int32, System.Double, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.KinematicCollider>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Harness.ContinuousArenaItem>)
+FS.GG.Game.Harness.ContinuousArenaItem.Bounds : FS.GG.Game.Core.Rect [get]
+FS.GG.Game.Harness.ContinuousArenaItem.Id : System.String [get]
+FS.GG.Game.Harness.ContinuousArenaItem.Kind : FS.GG.Game.Harness.ContinuousArenaItemKind [get]
+FS.GG.Game.Harness.ContinuousArenaItem.new(System.String, FS.GG.Game.Core.Rect, FS.GG.Game.Harness.ContinuousArenaItemKind)
+FS.GG.Game.Harness.ContinuousArenaItemKind+Tags.Collectible : System.Int32
+FS.GG.Game.Harness.ContinuousArenaItemKind+Tags.Hazard : System.Int32
+FS.GG.Game.Harness.ContinuousArenaOutcome+Tags.Lost : System.Int32
+FS.GG.Game.Harness.ContinuousArenaOutcome+Tags.Running : System.Int32
+FS.GG.Game.Harness.ContinuousArenaOutcome+Tags.Won : System.Int32
+FS.GG.Game.Harness.ContinuousArenaProjection.Health : System.Int32 [get]
+FS.GG.Game.Harness.ContinuousArenaProjection.Outcome : FS.GG.Game.Harness.ContinuousArenaOutcome [get]
+FS.GG.Game.Harness.ContinuousArenaProjection.Player : FS.GG.Game.Core.Rect [get]
+FS.GG.Game.Harness.ContinuousArenaProjection.Score : System.Int32 [get]
+FS.GG.Game.Harness.ContinuousArenaProjection.new(FS.GG.Game.Core.Rect, System.Int32, System.Int32, FS.GG.Game.Harness.ContinuousArenaOutcome)
+FS.GG.Game.Harness.ContinuousArenaWorld.Collected : Microsoft.FSharp.Collections.FSharpSet<System.String> [get]
+FS.GG.Game.Harness.ContinuousArenaWorld.Health : System.Int32 [get]
+FS.GG.Game.Harness.ContinuousArenaWorld.Outcome : FS.GG.Game.Harness.ContinuousArenaOutcome [get]
+FS.GG.Game.Harness.ContinuousArenaWorld.Player : FS.GG.Game.Core.Rect [get]
+FS.GG.Game.Harness.ContinuousArenaWorld.Score : System.Int32 [get]
+FS.GG.Game.Harness.ContinuousArenaWorld.Velocity : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Harness.ContinuousArenaWorld.new(FS.GG.Game.Core.Rect, FS.GG.Game.Core.Point, System.Int32, System.Int32, Microsoft.FSharp.Collections.FSharpSet<System.String>, FS.GG.Game.Harness.ContinuousArenaOutcome)
 FS.GG.Game.Harness.Counterexample.Script : Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.Command>> [get]
 FS.GG.Game.Harness.Counterexample.Seed : System.UInt64 [get]
 FS.GG.Game.Harness.Counterexample.Step : System.Int32 [get]

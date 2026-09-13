@@ -52,6 +52,8 @@
     <Compile Include="Bots.fs" />
     <Compile Include="VisibilityPolygon.fsi" />
     <Compile Include="VisibilityPolygon.fs" />
+    <Compile Include="ContinuousArena.fsi" />
+    <Compile Include="ContinuousArena.fs" />
   </ItemGroup>
 
   <ItemGroup>

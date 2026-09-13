@@ -25,6 +25,7 @@
     <Compile Include="JourneyTests.fs" />
     <Compile Include="ReferenceProof.fs" />
     <Compile Include="VisibilityPolygonTests.fs" />
+    <Compile Include="ContinuousArenaTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
