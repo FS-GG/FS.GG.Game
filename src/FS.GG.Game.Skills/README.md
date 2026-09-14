@@ -32,7 +32,7 @@ gap under FS.GG.SDD#622 / FS-GG/.github#1308).
 ## What it ships
 
 ```
-game-skills/skill-manifest.json        the delivered set + per-skill sha256 (the ADR-0014 record)
+game-skills/skill-manifest.json        the delivered set + closed per-file sha256s (the ADR-0014 record)
 game-skills/skills/<id>/SKILL.md        the bytes for each product row
 build/FS.GG.Game.Skills.props          a consumer handle: $(FsggGameSkillsContentDir) → the content root
 ```

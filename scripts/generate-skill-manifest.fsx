@@ -3,12 +3,12 @@
 // Writes template/skill-manifest/skill-manifest.json: the product-scope catalog of the game
 // skills FS.GG.Game owns after the ADR-0022 extraction — migrated byte-identically from
 // FS.GG.Rendering (owner fs-gg-rendering → fs-gg-game; the .github registry/skills.yml reconciles
-// its rows from THIS manifest, so registry = manifest = bytes). Each entry carries the SHA256 of
-// its canonical SKILL.md body.
+// its rows from THIS manifest, so registry = manifest = bytes). Each schema-v2 entry carries the
+// legacy SKILL.md SHA256 plus a closed per-file digest set.
 //
 // Digest semantics match Fsgg.SkillMirror.sha256 and FS.GG.Rendering's generator: lowercase hex
-// over the UTF-8 bytes of the body TEXT — hash(Encoding.UTF8.GetBytes(File.ReadAllText path)) — so
-// a BOM never enters the digest on either the producing or the verifying side.
+// over LF-normalized UTF-8 text — so a BOM and checkout line endings never enter the digest on
+// either the producing or the verifying side.
 //
 // Unlike Rendering's generator this catalog holds the ADR-0017 CANONICAL `materializes-when`
 // grammar DIRECTLY (bare tokens, `in [..]`, no parens/quotes) — the grammar the .github skill-union
@@ -71,10 +71,10 @@ let catalog =
       // materialization it describes. Keep the historical applicability condition, not its neighbours'.
       "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [app, sample-pack, game]"
       "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
       "fs-gg-effects", "template/product-skills/fs-gg-effects/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-game-fable", "template/product-skills/fs-gg-game-fable/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-game-fable", "template/product-skills/fs-gg-game-fable/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
+      "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
       "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]"
       // fs-gg-mapcraft (FS.GG.Game map construction & analysis; renamed from fs-gg-mapgen in M7,
@@ -85,7 +85,9 @@ let catalog =
       // bytes) — the cross-repo follow-up FS-GG/.github#1355 (originally filed as fs-gg-mapgen, renamed).
       "fs-gg-mapcraft", "template/product-skills/fs-gg-mapcraft/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack]"
+      "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
+      "fs-gg-replay", "template/product-skills/fs-gg-replay/SKILL.md", "template == fable-game"
+      "fs-gg-rules", "template/product-skills/fs-gg-rules/SKILL.md", "template == fable-game and bundle in [tactical, complete]"
       "fs-gg-playtest", "template/product-skills/fs-gg-playtest/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-physics", "template/product-skills/fs-gg-physics/SKILL.md", "profile in [game, sample-pack]"
       "fs-gg-visibility", "template/product-skills/fs-gg-visibility/SKILL.md", "profile in [game, sample-pack]" ]
@@ -99,10 +101,19 @@ let jsonEscape (s: string) : string =
     s.Replace("\\", "\\\\").Replace("\"", "\\\"")
 
 let sha256Text (body: string) : string =
-    Encoding.UTF8.GetBytes body
+    Encoding.UTF8.GetBytes(body.Replace("\r\n", "\n"))
     |> SHA256.HashData
     |> Array.map (fun b -> b.ToString "x2")
     |> String.concat ""
+
+let filesOf (source: string) =
+    let directory = Path.GetDirectoryName(repoPath source)
+    Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
+    |> Array.map (fun path ->
+        let relative = Path.GetRelativePath(directory, path).Replace(Path.DirectorySeparatorChar, '/')
+        relative, sha256Text (File.ReadAllText path))
+    |> Array.sortBy fst
+    |> Array.toList
 
 // A duplicated id would emit two rows for one skill. Cheap to make impossible, so it is.
 let duplicateIds =
@@ -121,13 +132,18 @@ let manifestJson =
         |> List.sortBy (fun (id, _, _) -> id)
         |> List.map (fun (id, source, condition) ->
             let body = File.ReadAllText(repoPath source)
+            let files =
+                filesOf source
+                |> List.map (fun (path, digest) ->
+                    sprintf "        { \"path\": \"%s\", \"sha256\": \"%s\" }" (jsonEscape path) digest)
+                |> String.concat ",\n"
 
             sprintf
-                "    {\n      \"id\": \"%s\",\n      \"scope\": \"product\",\n      \"sha256\": \"%s\",\n      \"resolvablePath\": \".agents/skills/%s/SKILL.md\",\n      \"materializes-when\": \"%s\",\n      \"supplied-by\": \"%s\"\n    }"
-                id (sha256Text body) id (jsonEscape condition) (jsonEscape (suppliedByOf source)))
+                "    {\n      \"id\": \"%s\",\n      \"scope\": \"product\",\n      \"sha256\": \"%s\",\n      \"resolvablePath\": \".agents/skills/%s/SKILL.md\",\n      \"materializes-when\": \"%s\",\n      \"supplied-by\": \"%s\",\n      \"files\": [\n%s\n      ]\n    }"
+                id (sha256Text body) id (jsonEscape condition) (jsonEscape (suppliedByOf source)) files)
         |> String.concat ",\n"
 
-    sprintf "{\n  \"schemaVersion\": 1,\n  \"skills\": [\n%s\n  ]\n}\n" entries
+    sprintf "{\n  \"schemaVersion\": 2,\n  \"skills\": [\n%s\n  ]\n}\n" entries
 
 let manifestPath = repoPath manifestRel
 let check = Environment.GetCommandLineArgs() |> Array.contains "--check"
