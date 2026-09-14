@@ -14,7 +14,7 @@ make_fixture() {
 
 positive="$scratch/positive"
 make_fixture "$positive"
-"$root/tests/release/test-game-0-15-release.sh" --root "$positive" --source-only
+"$root/tests/release/test-game-0-16-release.sh" --root "$positive" --source-only
 echo "positive control accepted both actual dotnet nuget push operations"
 
 expect_push_mutation_red() {
@@ -36,7 +36,7 @@ for index, tail in enumerate(parts[1:]):
     rebuilt += ("echo package-push-disabled" if index in selected else needle) + tail
 path.write_text(rebuilt, encoding="utf-8")
 PY
-  if output=$("$root/tests/release/test-game-0-15-release.sh" --root "$fixture" --source-only 2>&1); then
+  if output=$("$root/tests/release/test-game-0-16-release.sh" --root "$fixture" --source-only 2>&1); then
     echo "$label mutation unexpectedly passed" >&2
     exit 1
   fi
@@ -53,13 +53,13 @@ expect_push_mutation_red both-pushes 0,1
 
 version_fixture="$scratch/version"
 make_fixture "$version_fixture"
-sed -i 's:<Version>0.15.0</Version>:<Version>0.15.1</Version>:' "$version_fixture/Directory.Build.local.props"
-if output=$("$root/tests/release/test-game-0-15-release.sh" --root "$version_fixture" --source-only 2>&1); then
+sed -i 's:<Version>0.16.0</Version>:<Version>0.16.1</Version>:' "$version_fixture/Directory.Build.local.props"
+if output=$("$root/tests/release/test-game-0-16-release.sh" --root "$version_fixture" --source-only 2>&1); then
   echo "release gate inversion unexpectedly passed" >&2
   exit 1
 fi
-grep -q "release scalar must be 0.15.0" <<<"$output" || {
+grep -q "release scalar must be 0.16.0" <<<"$output" || {
   echo "release gate inversion failed for the wrong reason: $output" >&2
   exit 1
 }
-echo "version witness: 0.15.1 scalar rejected"
+echo "version witness: 0.16.1 scalar rejected"

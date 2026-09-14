@@ -71,11 +71,11 @@ jobs:
       - name: Test (full headless suite)
         run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
 
-      - name: Verify 0.15.0 release contract and inversion
+      - name: Verify 0.16.0 release contract and inversion
         shell: bash
         run: |
-          tests/release/test-game-0-15-release.sh --source-only
-          tests/release/test-game-0-15-release-selftest.sh
+          tests/release/test-game-0-16-release.sh --source-only
+          tests/release/test-game-0-16-release-selftest.sh
 
   publish-packages:
     name: Publish FS.GG.Game.* (org feed + nuget.org, release-only)
@@ -167,7 +167,7 @@ jobs:
             -p:Version="$VER" \
             -p:RepositoryCommit="$GITHUB_SHA" \
             -p:EnablePackageValidation=true \
-            -p:PackageValidationBaselineVersion=0.14.0 \
+            -p:PackageValidationBaselineVersion=0.15.0 \
             -o artifacts/packages
           (cd artifacts/packages && sha256sum -- *.nupkg | sort -k2 > SHA256SUMS)
           echo "Packed:"; ls -1 artifacts/packages/*.nupkg
@@ -220,7 +220,7 @@ jobs:
 
       - name: Verify coherent package set, metadata, and clean Journey consumer
         shell: bash
-        run: tests/release/test-game-0-15-release.sh --packages artifacts/packages
+        run: tests/release/test-game-0-16-release.sh --packages artifacts/packages
 
       - name: Retain original coherent package bytes before publication
         if: inputs.source_run_id == ''
