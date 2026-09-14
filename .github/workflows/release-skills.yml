@@ -43,6 +43,10 @@ on:
         description: "Push to the feeds (false = pack-only dry run)"
         type: boolean
         default: false
+      readback_version:
+        description: "Verify and retain already-published archives for this immutable skills version without pushing."
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -52,12 +56,94 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  readback:
+    name: Retain and verify existing FS.GG.Game.Skills feed archives
+    runs-on: ubuntu-latest
+    if: github.repository == 'FS-GG/FS.GG.Game' && github.event_name == 'workflow_dispatch' && inputs.readback_version != ''
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Bind immutable release identity
+        id: source
+        shell: bash
+        env:
+          VERSION: ${{ inputs.readback_version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::readback_version must be a stable three-part version"
+            exit 1
+          }
+          git fetch --force origin "refs/tags/skills/v$VERSION:refs/tags/skills/v$VERSION"
+          source_head="$(git rev-parse "refs/tags/skills/v$VERSION^{commit}")"
+          echo "source-head=$source_head" >> "$GITHUB_OUTPUT"
+      - name: Download and compare both published archives
+        id: archives
+        shell: bash
+        env:
+          VERSION: ${{ inputs.readback_version }}
+          PACKAGE_USER: ${{ github.actor }}
+          PACKAGE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/game-skills-readback"
+          mkdir -p "$work/org" "$work/public"
+          package="fs.gg.game.skills"
+          base_address() {
+            local index="$1" auth="${2:-}"
+            if [ -n "$auth" ]; then
+              curl --fail --silent --show-error --user "$auth" "$index"
+            else
+              curl --fail --silent --show-error "$index"
+            fi | jq -er '.resources[] | select(."@type" | tostring | startswith("PackageBaseAddress")) | ."@id"' | head -1
+          }
+          org_base="$(base_address https://nuget.pkg.github.com/FS-GG/index.json "$PACKAGE_USER:$PACKAGE_TOKEN")"
+          public_base="$(base_address https://api.nuget.org/v3/index.json)"
+          curl --fail --silent --show-error --location --user "$PACKAGE_USER:$PACKAGE_TOKEN" \
+            "${org_base%/}/$package/$VERSION/$package.$VERSION.nupkg" -o "$work/org/$package.$VERSION.nupkg"
+          curl --fail --silent --show-error --location \
+            "${public_base%/}/$package/$VERSION/$package.$VERSION.nupkg" -o "$work/public/$package.$VERSION.nupkg"
+          python3 - "$work/org/$package.$VERSION.nupkg" "$work/public/$package.$VERSION.nupkg" <<'PY'
+          import hashlib, sys, zipfile
+          def payload(path):
+              with zipfile.ZipFile(path) as package:
+                  digest = hashlib.sha256()
+                  for name in sorted(package.namelist()):
+                      if name.endswith("/") or name == ".signature.p7s" or name.startswith("package/services/metadata/core-properties/"):
+                          continue
+                      digest.update(name.encode()); digest.update(b"\0")
+                      digest.update(hashlib.sha256(package.read(name)).digest())
+                  return digest.hexdigest()
+          org, public = map(payload, sys.argv[1:])
+          assert org == public, (org, public)
+          print(f"normalized-payload-sha256={org}")
+          PY
+          sha256sum "$work/org/$package.$VERSION.nupkg" | tee "$work/ORG_SHA256"
+          sha256sum "$work/public/$package.$VERSION.nupkg" | tee "$work/PUBLIC_SHA256"
+          echo "work=$work" >> "$GITHUB_OUTPUT"
+      - name: Retain exact post-publication feed readbacks
+        id: custody
+        uses: actions/upload-artifact@v7
+        with:
+          name: game-skills-feed-readback-${{ steps.source.outputs.source-head }}-${{ inputs.readback_version }}
+          path: ${{ steps.archives.outputs.work }}
+          if-no-files-found: error
+          retention-days: 90
+      - name: Record readback custody
+        run: |
+          echo "source-commit=${{ steps.source.outputs.source-head }}"
+          echo "artifact-id=${{ steps.custody.outputs.artifact-id }}"
+          echo "artifact-digest=${{ steps.custody.outputs.artifact-digest }}"
+
   publish:
     name: Pack & publish FS.GG.Game.Skills
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Restrict to the canonical repo: fork tags/dispatch never run this (no fork secret exposure).
-    if: github.repository == 'FS-GG/FS.GG.Game'
+    if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'workflow_dispatch' || inputs.readback_version == '')
     # Least-privilege: only this job gains packages: write, and the org-feed push uses the run-scoped
     # GITHUB_TOKEN, never a PAT. id-token: write mints the GitHub OIDC token for nuget.org Trusted
     # Publishing (ADR-0013).
@@ -173,10 +259,32 @@ jobs:
           dotnet build   "$work/Consumer.csproj" -c Release --no-restore
           echo "packaged game-skills: a real consumer restore reached skill-manifest.json at the content root" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Record the original archive
+        if: steps.v.outputs.push == 'true'
+        id: archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$(find artifacts/packages -maxdepth 1 -type f -name 'FS.GG.Game.Skills.*.nupkg' -print -quit)"
+          test -s "$archive"
+          sha256sum "$archive" | tee artifacts/packages/ORIGINAL_SHA256
+          echo "path=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Retain original archive before either push
+        if: steps.v.outputs.push == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: game-skills-release-custody-${{ github.sha }}-${{ steps.v.outputs.version }}
+          path: |
+            ${{ steps.archive.outputs.path }}
+            artifacts/packages/ORIGINAL_SHA256
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Push to org GitHub Packages feed
         if: steps.v.outputs.push == 'true'
         run: |
-          dotnet nuget push "artifacts/packages/FS.GG.Game.Skills.*.nupkg" \
+          dotnet nuget push "${{ steps.archive.outputs.path }}" \
             --source https://nuget.pkg.github.com/FS-GG/index.json \
             --api-key ${{ secrets.GITHUB_TOKEN }} \
             --skip-duplicate
@@ -195,7 +303,7 @@ jobs:
       - name: Push byte-identical package to nuget.org
         if: steps.v.outputs.push == 'true'
         run: |
-          dotnet nuget push "artifacts/packages/FS.GG.Game.Skills.*.nupkg" \
+          dotnet nuget push "${{ steps.archive.outputs.path }}" \
             --source https://api.nuget.org/v3/index.json \
             --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
