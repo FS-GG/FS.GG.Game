@@ -32,4 +32,8 @@ type Board = class end
 //#block 3 "type Phase ="
 // The spec marks this "cosmetic; not authoritative" and never declares it — the animation state is
 // the reader's, and the rules must not read it.
-type AnimState = { Elapsed: float; Playing: string option }
+type AnimState =
+    {
+        Elapsed: float
+        Playing: string option
+    }

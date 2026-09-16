@@ -7,8 +7,8 @@
 // `Ballistics.intercept` and is a sim `Point` (`X`/`Y`). Typing `Vel` as a `Point` here would make
 // the block compile for the wrong reason and quietly retire the crossing it teaches.
 type Ship = { Vel: Geometry.Vec2 }
-let ship : Ship = { Vel = { Vx = 0.0; Vy = 0.0 } }
-let aim : Point = { X = 1.0; Y = 0.0 }
+let ship: Ship = { Vel = { Vx = 0.0; Vy = 0.0 } }
+let aim: Point = { X = 1.0; Y = 0.0 }
 let shotSpeed = 900.0
 
 //#block 5 "type Enemy = { Pos: Geometry.Vec2; Hp: int }"
@@ -19,6 +19,6 @@ let shotSpeed = 900.0
 // which is what //#rec is for. A fixture that redeclared `Enemy` would collide with the block's
 // (FS0037) and, worse, would be the type actually typechecked — so the gate would be reading a
 // fixture's idea of the world instead of the skill's.
-let enemies : Enemy list = []
-let blast : Geometry.Vec2 = { Vx = 100.0; Vy = 100.0 }
+let enemies: Enemy list = []
+let blast: Geometry.Vec2 = { Vx = 100.0; Vy = 100.0 }
 let baseDamage = 40

@@ -50,13 +50,12 @@ if [[ $RUNTIME == --browser ]]; then
   }
 fi
 
-python3 "$REPO_ROOT/scripts/generate-fable-lockstep-cases.py" --check
-
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/feed" "$TMP/consumer" "$TMP/packages"
 
 dotnet tool restore
+python3 "$REPO_ROOT/scripts/generate-fable-lockstep-cases.py" --check
 dotnet pack "$REPO_ROOT/src/Game.Core/FS.GG.Game.Core.fsproj" \
   -c Release \
   -p:PackageVersion="$CONFORMANCE_VERSION" \

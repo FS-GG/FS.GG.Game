@@ -29,22 +29,21 @@ type ActionCoverageGap =
     | DegenerateVocabulary of slot: string * inhabitants: int
 
 type ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> =
-    { RouteId: string
-      ScenarioId: string
-      TestId: string
-      MaxSteps: int
-      Boot: unit -> 'model
-      MapEvent:
-        JourneyEvent<'key, 'pointer, 'menu, 'effectResult> ->
-        'model ->
-            JourneyDispatch<'message>
-      Update: 'message -> 'model -> 'model
-      FixedTick: 'model -> 'model
-      ApplyEffectResult: 'effectResult -> 'model -> 'model
-      IsTerminal: 'model -> bool
-      Fingerprint: 'model -> 'fingerprint
-      EncodeEvent: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> string
-      EncodeFingerprint: 'fingerprint -> string }
+    {
+        RouteId: string
+        ScenarioId: string
+        TestId: string
+        MaxSteps: int
+        Boot: unit -> 'model
+        MapEvent: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> 'model -> JourneyDispatch<'message>
+        Update: 'message -> 'model -> 'model
+        FixedTick: 'model -> 'model
+        ApplyEffectResult: 'effectResult -> 'model -> 'model
+        IsTerminal: 'model -> bool
+        Fingerprint: 'model -> 'fingerprint
+        EncodeEvent: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> string
+        EncodeFingerprint: 'fingerprint -> string
+    }
 
 [<RequireQualifiedAccess>]
 type JourneyResult =
@@ -57,26 +56,28 @@ type JourneyInputKind =
     | SeededPolicy
 
 type internal ReceiptData =
-    { SchemaVersion: int
-      RunnerIdentity: string
-      RunnerVersion: string
-      CompositionAuthority: string
-      Origin: Origin
-      RouteId: string
-      ScenarioId: string
-      TestId: string
-      InputKind: JourneyInputKind
-      InputIdentity: string
-      InputDigest: string
-      ScriptDigest: string
-      TraceDigest: string
-      InitialFingerprintDigest: string
-      TerminalFingerprintDigest: string
-      TerminalPredicateIdentity: string
-      TerminalPredicateReached: bool
-      Result: JourneyResult
-      Steps: int
-      MaxSteps: int }
+    {
+        SchemaVersion: int
+        RunnerIdentity: string
+        RunnerVersion: string
+        CompositionAuthority: string
+        Origin: Origin
+        RouteId: string
+        ScenarioId: string
+        TestId: string
+        InputKind: JourneyInputKind
+        InputIdentity: string
+        InputDigest: string
+        ScriptDigest: string
+        TraceDigest: string
+        InitialFingerprintDigest: string
+        TerminalFingerprintDigest: string
+        TerminalPredicateIdentity: string
+        TerminalPredicateReached: bool
+        Result: JourneyResult
+        Steps: int
+        MaxSteps: int
+    }
 
 [<Sealed>]
 type JourneyReceipt internal (data: ReceiptData) =
@@ -84,16 +85,14 @@ type JourneyReceipt internal (data: ReceiptData) =
 
 module private Stable =
     let digestBytes (value: byte[]) =
-        value
-        |> SHA256.HashData
-        |> Convert.ToHexString
-        |> fun s -> s.ToLowerInvariant()
+        value |> SHA256.HashData |> Convert.ToHexString |> fun s -> s.ToLowerInvariant()
 
     let frame (values: string list) =
         let builder = StringBuilder()
 
         for value in values do
-            builder.Append(Encoding.UTF8.GetByteCount value).Append(':').Append(value) |> ignore
+            builder.Append(Encoding.UTF8.GetByteCount value).Append(':').Append(value)
+            |> ignore
 
         Encoding.UTF8.GetBytes(builder.ToString())
 
@@ -124,38 +123,43 @@ module JourneyReceipt =
 
     let definitionDigest (receipt: JourneyReceipt) =
         let data = receipt.Data
+
         let origin =
             match data.Origin with
             | Origin.ProductionJourney -> "production-journey"
             | Origin.InputDriven -> "input-driven"
             | Origin.Synthetic -> "synthetic"
+
         let inputKind =
             match data.InputKind with
             | JourneyInputKind.FixedScript -> "fixed-script"
             | JourneyInputKind.SeededPolicy -> "seeded-policy"
+
         let outcome =
             match data.Result with
             | JourneyResult.Passed -> "passed"
             | JourneyResult.Failed reason -> "failed:" + reason
 
         Stable.digestParts
-            [ string data.SchemaVersion
-              origin
-              data.RouteId
-              data.ScenarioId
-              data.TestId
-              inputKind
-              data.InputIdentity
-              data.InputDigest
-              data.ScriptDigest
-              data.TraceDigest
-              data.InitialFingerprintDigest
-              data.TerminalFingerprintDigest
-              data.TerminalPredicateIdentity
-              (data.TerminalPredicateReached.ToString().ToLowerInvariant())
-              outcome
-              string data.Steps
-              string data.MaxSteps ]
+            [
+                string data.SchemaVersion
+                origin
+                data.RouteId
+                data.ScenarioId
+                data.TestId
+                inputKind
+                data.InputIdentity
+                data.InputDigest
+                data.ScriptDigest
+                data.TraceDigest
+                data.InitialFingerprintDigest
+                data.TerminalFingerprintDigest
+                data.TerminalPredicateIdentity
+                (data.TerminalPredicateReached.ToString().ToLowerInvariant())
+                outcome
+                string data.Steps
+                string data.MaxSteps
+            ]
 
 type IProductionJourneyProof =
     abstract TestId: string
@@ -170,13 +174,17 @@ type IProductionJourneyProofV1 =
     abstract TerminalPredicateIdentity: string
 
 type JourneyRun<'model, 'event, 'fingerprint> =
-    { Trace: Trace<'fingerprint>
-      Captured: 'event list
-      Final: 'model
-      Receipt: JourneyReceipt }
+    {
+        Trace: Trace<'fingerprint>
+        Captured: 'event list
+        Final: 'model
+        Receipt: JourneyReceipt
+    }
 
 type JourneyPolicy<'model, 'event> =
-    { DecideEvents: 'model -> Rng -> struct ('event list * Rng) }
+    {
+        DecideEvents: 'model -> Rng -> struct ('event list * Rng)
+    }
 
 type ActionCoverageReport = { Gaps: ActionCoverageGap list }
 
@@ -188,10 +196,7 @@ module ActionCoverageReport =
         report.Gaps
         |> List.map (function
             | ActionCoverageGap.UnexercisedUnbound(action, event) ->
-                sprintf
-                    "unbound action '%s' (event %s) is never reached by any committed script"
-                    action
-                    event
+                sprintf "unbound action '%s' (event %s) is never reached by any committed script" action event
             | ActionCoverageGap.DegenerateVocabulary(slot, inhabitants) ->
                 sprintf
                     "vocabulary slot '%s' supplies only %d distinct producible value(s); no committed \
@@ -219,6 +224,7 @@ module Journey =
         let encodedFrames = fingerprints |> List.map adapter.EncodeFingerprint
         let scriptDigest = Stable.digestParts encodedEvents
         let terminalReached = adapter.IsTerminal model
+
         let result =
             match failure with
             | Some reason -> JourneyResult.Failed reason
@@ -228,42 +234,44 @@ module Journey =
                     sprintf
                         "terminal predicate not reached within %d event(s); final fingerprint sha256:%s; captured-input sha256:%s"
                         captured.Length
-                        (Stable.digestParts [ adapter.EncodeFingerprint (adapter.Fingerprint model) ])
+                        (Stable.digestParts [ adapter.EncodeFingerprint(adapter.Fingerprint model) ])
                         (Stable.digestParts encodedEvents)
                 )
 
         let data =
-            { SchemaVersion = 1
-              RunnerIdentity = "FS.GG.Game.Harness.Journey"
-              RunnerVersion =
-                typeof<JourneyReceipt>.Assembly.GetName().Version
-                |> Option.ofObj
-                |> Option.map string
-                |> Option.defaultValue "0.0.0.0"
-              CompositionAuthority = compositionAuthority
-              Origin = Origin.ProductionJourney
-              RouteId = adapter.RouteId
-              ScenarioId = adapter.ScenarioId
-              TestId = adapter.TestId
-              InputKind = inputKind
-              InputIdentity = inputIdentity
-              InputDigest = inputDigest scriptDigest
-              ScriptDigest = scriptDigest
-              TraceDigest = Stable.digestParts encodedFrames
-              InitialFingerprintDigest =
-                Stable.digestParts [ adapter.EncodeFingerprint initialFingerprint ]
-              TerminalFingerprintDigest =
-                Stable.digestParts [ adapter.EncodeFingerprint (adapter.Fingerprint model) ]
-              TerminalPredicateIdentity = terminalPredicateIdentity
-              TerminalPredicateReached = terminalReached
-              Result = result
-              Steps = captured.Length
-              MaxSteps = adapter.MaxSteps }
+            {
+                SchemaVersion = 1
+                RunnerIdentity = "FS.GG.Game.Harness.Journey"
+                RunnerVersion =
+                    typeof<JourneyReceipt>.Assembly.GetName().Version
+                    |> Option.ofObj
+                    |> Option.map string
+                    |> Option.defaultValue "0.0.0.0"
+                CompositionAuthority = compositionAuthority
+                Origin = Origin.ProductionJourney
+                RouteId = adapter.RouteId
+                ScenarioId = adapter.ScenarioId
+                TestId = adapter.TestId
+                InputKind = inputKind
+                InputIdentity = inputIdentity
+                InputDigest = inputDigest scriptDigest
+                ScriptDigest = scriptDigest
+                TraceDigest = Stable.digestParts encodedFrames
+                InitialFingerprintDigest = Stable.digestParts [ adapter.EncodeFingerprint initialFingerprint ]
+                TerminalFingerprintDigest = Stable.digestParts [ adapter.EncodeFingerprint(adapter.Fingerprint model) ]
+                TerminalPredicateIdentity = terminalPredicateIdentity
+                TerminalPredicateReached = terminalReached
+                Result = result
+                Steps = captured.Length
+                MaxSteps = adapter.MaxSteps
+            }
 
-        { Trace = Trace.create Origin.ProductionJourney fingerprints
-          Captured = captured
-          Final = model
-          Receipt = JourneyReceipt data }
+        {
+            Trace = Trace.create Origin.ProductionJourney fingerprints
+            Captured = captured
+            Final = model
+            Receipt = JourneyReceipt data
+        }
 
     let private applyEvent
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
@@ -285,11 +293,13 @@ module Journey =
         terminalPredicateIdentity
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
         =
-        [ "adapter.RouteId", adapter.RouteId
-          "adapter.ScenarioId", adapter.ScenarioId
-          "adapter.TestId", adapter.TestId
-          "inputIdentity", inputIdentity
-          "terminalPredicateIdentity", terminalPredicateIdentity ]
+        [
+            "adapter.RouteId", adapter.RouteId
+            "adapter.ScenarioId", adapter.ScenarioId
+            "adapter.TestId", adapter.TestId
+            "inputIdentity", inputIdentity
+            "terminalPredicateIdentity", terminalPredicateIdentity
+        ]
         |> List.iter (fun (name, value) ->
             if String.IsNullOrWhiteSpace value then
                 invalidArg name "a serialized production journey identity must be non-empty")
@@ -298,17 +308,19 @@ module Journey =
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
         =
         let functions: (string * objnull) list =
-            [ "Boot", box (adapter.Boot : unit -> 'model)
-              "MapEvent",
-              box
-                  (adapter.MapEvent:
-                      JourneyEvent<'key, 'pointer, 'menu, 'effectResult>
-                          -> 'model
-                          -> JourneyDispatch<'message>)
-              "Update", box (adapter.Update : 'message -> 'model -> 'model)
-              "FixedTick", box (adapter.FixedTick : 'model -> 'model)
-              "ApplyEffectResult", box (adapter.ApplyEffectResult : 'effectResult -> 'model -> 'model)
-              "IsTerminal", box (adapter.IsTerminal : 'model -> bool) ]
+            [
+                "Boot", box (adapter.Boot: unit -> 'model)
+                "MapEvent",
+                box (
+                    adapter.MapEvent
+                    : JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> 'model -> JourneyDispatch<'message>
+                )
+                "Update", box (adapter.Update: 'message -> 'model -> 'model)
+                "FixedTick", box (adapter.FixedTick: 'model -> 'model)
+                "ApplyEffectResult", box (adapter.ApplyEffectResult: 'effectResult -> 'model -> 'model)
+                "IsTerminal", box (adapter.IsTerminal: 'model -> bool)
+            ]
+
         let identities =
             functions
             |> List.map (fun (name, value) ->
@@ -316,12 +328,13 @@ module Journey =
                     match value with
                     | null -> invalidArg "adapter" ("production composition function is null: " + name)
                     | functionValue -> functionValue.GetType().Assembly
+
                 let assemblyName =
-                    assembly.GetName().Name
-                    |> Option.ofObj
-                    |> Option.defaultValue "<unnamed>"
+                    assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+
                 let mvid = assembly.ManifestModule.ModuleVersionId.ToString("N")
                 name, assemblyName + "/" + mvid)
+
         let distinct = identities |> List.map snd |> List.distinct
 
         match distinct with
@@ -331,9 +344,11 @@ module Journey =
                 identities
                 |> List.map (fun (name, identity) -> name + "=" + identity)
                 |> String.concat ", "
+
             invalidArg
                 "adapter"
-                ("production composition functions do not share one assembly authority: " + detail
+                ("production composition functions do not share one assembly authority: "
+                 + detail
                  + ". Likely cause: a caller-constructed closure crossing into the composition -- for \
                     example, a product-side boot factory that wraps a caller-supplied model \
                     (journeyBootOf model = fun () -> model) still returns a closure whose composition \
@@ -357,6 +372,7 @@ module Journey =
         let mutable model = adapter.Boot()
         let initialFingerprint = adapter.Fingerprint model
         let frames = ResizeArray<_>(captured.Length)
+
         let mutable failure =
             if adapter.IsTerminal model then
                 Some "terminal predicate is already satisfied at boot; no production journey was executed"
@@ -390,8 +406,7 @@ module Journey =
         validateExportIdentities inputIdentity terminalPredicateIdentity adapter
         runScriptCore (compositionAuthority adapter) inputIdentity terminalPredicateIdentity adapter script
 
-    let runScript adapter script =
-        runScriptCore "" "" "" adapter script
+    let runScript adapter script = runScriptCore "" "" "" adapter script
 
     let private runPolicyCore
         (compositionAuthority: string)
@@ -409,13 +424,16 @@ module Journey =
         let mutable rng = Rng.ofSeed seed
         let captured = ResizeArray<_>()
         let frames = ResizeArray<_>()
+
         let mutable failure =
             if adapter.IsTerminal model then
                 Some "terminal predicate is already satisfied at boot; no production journey was executed"
             else
                 None
 
-        while captured.Count < adapter.MaxSteps && failure.IsNone && not (adapter.IsTerminal model) do
+        while captured.Count < adapter.MaxSteps
+              && failure.IsNone
+              && not (adapter.IsTerminal model) do
             let struct (events, nextRng) = policy.DecideEvents model rng
             rng <- nextRng
 
@@ -433,10 +451,7 @@ module Journey =
                         | Error reason -> failure <- Some reason
 
         let policyDigest scriptDigest =
-            Stable.digestParts
-                [ "seeded-policy"
-                  seed.ToString(CultureInfo.InvariantCulture)
-                  scriptDigest ]
+            Stable.digestParts [ "seeded-policy"; seed.ToString(CultureInfo.InvariantCulture); scriptDigest ]
 
         finish
             adapter
@@ -453,13 +468,7 @@ module Journey =
 
     let runPolicyWithIdentity policyIdentity terminalPredicateIdentity adapter policy seed =
         validateExportIdentities policyIdentity terminalPredicateIdentity adapter
-        runPolicyCore
-            (compositionAuthority adapter)
-            policyIdentity
-            terminalPredicateIdentity
-            adapter
-            policy
-            seed
+        runPolicyCore (compositionAuthority adapter) policyIdentity terminalPredicateIdentity adapter policy seed
 
     let runPolicy adapter policy seed =
         runPolicyCore "" "" "" adapter policy seed
@@ -468,7 +477,9 @@ module Journey =
         (adapter: ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint>)
         (vocabulary: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> list)
         (slot: string)
-        (normalize: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> JourneyEvent<'key, 'pointer, 'menu, 'effectResult> option)
+        (normalize:
+            JourneyEvent<'key, 'pointer, 'menu, 'effectResult>
+                -> JourneyEvent<'key, 'pointer, 'menu, 'effectResult> option)
         =
         let inhabitants =
             vocabulary
@@ -502,6 +513,7 @@ module Journey =
                 | JourneyDispatch.Mapped _ -> None
                 | JourneyDispatch.Unbound action ->
                     let encoded = adapter.EncodeEvent event
+
                     if Set.contains encoded exercised then
                         None
                     else
@@ -513,15 +525,19 @@ module Journey =
         // `KeyInput` is normalized to `pressed = true` so a key's up/down pair counts once, per
         // key, rather than doubling every key's inhabitant count.
         let degenerate =
-            [ slotCardinalityGap adapter vocabulary "menu" (function
-                  | JourneyEvent.MenuAction _ as event -> Some event
-                  | _ -> None)
-              slotCardinalityGap adapter vocabulary "key" (function
-                  | JourneyEvent.KeyInput(key, _) -> Some(JourneyEvent.KeyInput(key, true))
-                  | _ -> None)
-              slotCardinalityGap adapter vocabulary "pointer" (function
-                  | JourneyEvent.PointerInput _ as event -> Some event
-                  | _ -> None) ]
+            [
+                slotCardinalityGap adapter vocabulary "menu" (function
+                    | JourneyEvent.MenuAction _ as event -> Some event
+                    | _ -> None)
+                slotCardinalityGap adapter vocabulary "key" (function
+                    | JourneyEvent.KeyInput(key, _) -> Some(JourneyEvent.KeyInput(key, true))
+                    | _ -> None)
+                slotCardinalityGap adapter vocabulary "pointer" (function
+                    | JourneyEvent.PointerInput _ as event -> Some event
+                    | _ -> None)
+            ]
             |> List.choose id
 
-        { Gaps = unexercisedUnbound @ degenerate }
+        {
+            Gaps = unexercisedUnbound @ degenerate
+        }

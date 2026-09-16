@@ -10,9 +10,11 @@ namespace FS.GG.Game.Core
 [<Struct>]
 type Hex =
     private
-        { q: int
-          r: int
-          s: int }
+        {
+            q: int
+            r: int
+            s: int
+        }
 
     /// The cube Q axis.
     member Q: int

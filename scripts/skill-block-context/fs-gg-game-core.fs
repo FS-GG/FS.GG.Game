@@ -22,15 +22,20 @@ let lerpWorld (_previous: World) (current: World) (_t: float) : World = current
 type Mover = { Cell: Cell; Move: int }
 let cost (_c: Cell) = 1
 let canEndOn (_c: Cell) = true
-let unit : Mover = { Cell = { Col = 0; Row = 0 }; Move = 4 }
+
+let unit: Mover =
+    {
+        Cell = { Col = 0; Row = 0 }
+        Move = 4
+    }
 
 //#block 8 "let grid = SpatialGrid.build 32.0 [ for e in enemies -> simPoint e.Pos, e.Id ]"
 // Spatial queries. `enemies` positions are stored in the scaffold's collision-safe Vec2 — that is
 // the whole premise of the section, and it is what forces the `simPoint` crossing the block
 // teaches. Giving `Pos` a sim `Point` here would make the block typecheck for the wrong reason.
 type Enemy = { Id: int; Pos: Geometry.Vec2 }
-let enemies : Enemy list = []
-let blast : Geometry.Vec2 = { Vx = 64.0; Vy = 48.0 }
+let enemies: Enemy list = []
+let blast: Geometry.Vec2 = { Vx = 64.0; Vy = 48.0 }
 
 //#block 9 "type Creep = { Pos: Geometry.Vec2; Hp: int }"
 //#rec
@@ -40,11 +45,11 @@ let blast : Geometry.Vec2 = { Vx = 64.0; Vy = 48.0 }
 // of the subject) or leaving it inferred, which cannot resolve `.Pos`.
 let cols = 32
 let rows = 24
-let walls : Set<Cell> = Set.empty
-let spawn : Cell = { Col = 0; Row = 0 }
-let goal : Cell = { Col = 31; Row = 23 }
+let walls: Set<Cell> = Set.empty
+let spawn: Cell = { Col = 0; Row = 0 }
+let goal: Cell = { Col = 31; Row = 23 }
 let cellPx = 32.0
-let creeps : Creep list = []
+let creeps: Creep list = []
 
 //#block 4 "let private keyValuePairDefinition = typedefof<System.Collections.Generic.KeyValuePair<_, _>>"
 //#run verifyEncodingExamples verify

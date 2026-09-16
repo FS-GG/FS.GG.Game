@@ -24,9 +24,11 @@ let private referencedTypes () : (string * string) list =
     use pe = new PEReader(fs)
     let md = pe.GetMetadataReader()
 
-    [ for handle in md.TypeReferences do
-          let tr = md.GetTypeReference(handle)
-          md.GetString(tr.Namespace), md.GetString(tr.Name) ]
+    [
+        for handle in md.TypeReferences do
+            let tr = md.GetTypeReference(handle)
+            md.GetString(tr.Namespace), md.GetString(tr.Name)
+    ]
 
 // A referenced type that would let determinism leak: I/O, networking, an ambient civil clock/RNG, or
 // a process/environment probe. Workload observations deliberately use monotonic Stopwatch timing,
@@ -45,45 +47,59 @@ let private isForbidden (ns: string, name: string) : bool =
 let tests =
     testList
         "Dependency"
-        [ testCase "FR-007 the harness references only FS.GG.Game.Core and the BCL"
-          <| fun _ ->
-              let assembly = typeof<Origin>.Assembly
-              let referenced = assembly.GetReferencedAssemblies() |> Array.choose (fun a -> Option.ofObj a.Name)
+        [
+            testCase "FR-007 the harness references only FS.GG.Game.Core and the BCL"
+            <| fun _ ->
+                let assembly = typeof<Origin>.Assembly
 
-              let disallowed = referenced |> Array.filter (isAllowed >> not)
+                let referenced =
+                    assembly.GetReferencedAssemblies()
+                    |> Array.choose (fun a -> Option.ofObj a.Name)
 
-              Expect.isEmpty
-                  disallowed
-                  (sprintf "the harness must reference only Game.Core + BCL; found: %A" disallowed)
+                let disallowed = referenced |> Array.filter (isAllowed >> not)
 
-          testCase "FR-007 the harness does reference FS.GG.Game.Core"
-          <| fun _ ->
-              // Assert the subject is real: the leaf-dependency claim is only meaningful if it is in
-              // fact built on Game.Core.
-              let assembly = typeof<Origin>.Assembly
-              let referenced = assembly.GetReferencedAssemblies() |> Array.choose (fun a -> Option.ofObj a.Name)
-              Expect.contains referenced "FS.GG.Game.Core" "the harness is built on Game.Core"
+                Expect.isEmpty
+                    disallowed
+                    (sprintf "the harness must reference only Game.Core + BCL; found: %A" disallowed)
 
-          testCase "FR-007 no render/input/graphics assembly is referenced"
-          <| fun _ ->
-              let assembly = typeof<Origin>.Assembly
-              let referenced = assembly.GetReferencedAssemblies() |> Array.choose (fun a -> Option.ofObj a.Name)
+            testCase "FR-007 the harness does reference FS.GG.Game.Core"
+            <| fun _ ->
+                // Assert the subject is real: the leaf-dependency claim is only meaningful if it is in
+                // fact built on Game.Core.
+                let assembly = typeof<Origin>.Assembly
 
-              let forbidden =
-                  referenced
-                  |> Array.filter (fun n ->
-                      n.StartsWith("FS.GG.UI")
-                      || n.StartsWith("FS.GG.Game.Render")
-                      || n.StartsWith("SkiaSharp"))
+                let referenced =
+                    assembly.GetReferencedAssemblies()
+                    |> Array.choose (fun a -> Option.ofObj a.Name)
 
-              Expect.isEmpty forbidden (sprintf "no render/input stack allowed; found: %A" forbidden)
+                Expect.contains referenced "FS.GG.Game.Core" "the harness is built on Game.Core"
 
-          testCase "FR-007 the harness references no I/O, networking, ambient clock, or RNG type"
-          <| fun _ ->
-              // Scan the IL type references; monotonic workload timing is the one deliberate clock.
-              // since all of these fold into System.Runtime and are invisible to GetReferencedAssemblies.
-              let forbidden = referencedTypes () |> List.filter isForbidden
+            testCase "FR-007 no render/input/graphics assembly is referenced"
+            <| fun _ ->
+                let assembly = typeof<Origin>.Assembly
 
-              Expect.isEmpty
-                  forbidden
-                  (sprintf "the harness must reference no I/O / networking / ambient-clock / ambient-RNG type; found: %A" forbidden) ]
+                let referenced =
+                    assembly.GetReferencedAssemblies()
+                    |> Array.choose (fun a -> Option.ofObj a.Name)
+
+                let forbidden =
+                    referenced
+                    |> Array.filter (fun n ->
+                        n.StartsWith("FS.GG.UI")
+                        || n.StartsWith("FS.GG.Game.Render")
+                        || n.StartsWith("SkiaSharp"))
+
+                Expect.isEmpty forbidden (sprintf "no render/input stack allowed; found: %A" forbidden)
+
+            testCase "FR-007 the harness references no I/O, networking, ambient clock, or RNG type"
+            <| fun _ ->
+                // Scan the IL type references; monotonic workload timing is the one deliberate clock.
+                // since all of these fold into System.Runtime and are invisible to GetReferencedAssemblies.
+                let forbidden = referencedTypes () |> List.filter isForbidden
+
+                Expect.isEmpty
+                    forbidden
+                    (sprintf
+                        "the harness must reference no I/O / networking / ambient-clock / ambient-RNG type; found: %A"
+                        forbidden)
+        ]

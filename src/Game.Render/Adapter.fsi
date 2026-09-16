@@ -47,26 +47,18 @@ module Adapter =
     val drawRect: fill: FS.GG.UI.Scene.Color -> r: FS.GG.Game.Core.Rect -> FS.GG.UI.Scene.Scene
 
     /// Draw a single tile `Cell` as a filled Scene square at `cellSize`.
-    val drawCell:
-        cellSize: float -> fill: FS.GG.UI.Scene.Color -> cell: FS.GG.Game.Core.Cell -> FS.GG.UI.Scene.Scene
+    val drawCell: cellSize: float -> fill: FS.GG.UI.Scene.Color -> cell: FS.GG.Game.Core.Cell -> FS.GG.UI.Scene.Scene
 
     /// Draw a set of tiles (a walkable/occupied set) as a grouped Scene of filled squares, in the
     /// order supplied — no reordering, so the result is deterministic in enumeration order.
     val drawCells:
-        cellSize: float ->
-        fill: FS.GG.UI.Scene.Color ->
-        cells: FS.GG.Game.Core.Cell seq ->
-            FS.GG.UI.Scene.Scene
+        cellSize: float -> fill: FS.GG.UI.Scene.Color -> cells: FS.GG.Game.Core.Cell seq -> FS.GG.UI.Scene.Scene
 
     /// Draw a route (a `Cell list`, e.g. from `FS.GG.Game.Core.Pathfinding.astar`/`bfs`) as a Scene
     /// polyline through the tile centres, painted with `paint`. A route of fewer than two cells has
     /// nothing to connect and yields `Scene.empty`. Deterministic in route order.
     val drawPath:
-        cellSize: float ->
-        paint: FS.GG.UI.Scene.Paint ->
-        route: FS.GG.Game.Core.Cell list ->
-            FS.GG.UI.Scene.Scene
+        cellSize: float -> paint: FS.GG.UI.Scene.Paint -> route: FS.GG.Game.Core.Cell list -> FS.GG.UI.Scene.Scene
 
     /// Draw simulation points as a Scene points node painted with `paint`, in supplied order.
-    val drawPoints:
-        paint: FS.GG.UI.Scene.Paint -> points: FS.GG.Game.Core.Point seq -> FS.GG.UI.Scene.Scene
+    val drawPoints: paint: FS.GG.UI.Scene.Paint -> points: FS.GG.Game.Core.Point seq -> FS.GG.UI.Scene.Scene

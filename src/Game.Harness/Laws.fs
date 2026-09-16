@@ -3,17 +3,20 @@ namespace FS.GG.Game.Harness
 open FS.GG.Game.Core
 
 type LawResult =
-    { Law: string
-      Passed: bool
-      DivergenceStep: int option
-      Detail: string }
+    {
+        Law: string
+        Passed: bool
+        DivergenceStep: int option
+        Detail: string
+    }
 
 type LawReport = { Results: LawResult list }
 
 [<RequireQualifiedAccess>]
 module LawReport =
 
-    let allPassed (report: LawReport) : bool = report.Results |> List.forall (fun r -> r.Passed)
+    let allPassed (report: LawReport) : bool =
+        report.Results |> List.forall (fun r -> r.Passed)
 
     let failures (report: LawReport) : LawResult list =
         report.Results |> List.filter (fun r -> not r.Passed)
@@ -35,15 +38,19 @@ module Laws =
         let determinismResult =
             match determinism with
             | None ->
-                { Law = "determinism"
-                  Passed = true
-                  DivergenceStep = None
-                  Detail = "every script reproduces equal frames across two runs" }
+                {
+                    Law = "determinism"
+                    Passed = true
+                    DivergenceStep = None
+                    Detail = "every script reproduces equal frames across two runs"
+                }
             | Some i ->
-                { Law = "determinism"
-                  Passed = false
-                  DivergenceStep = Some i
-                  Detail = sprintf "two runs of a script diverged at step %d" i }
+                {
+                    Law = "determinism"
+                    Passed = false
+                    DivergenceStep = Some i
+                    Detail = sprintf "two runs of a script diverged at step %d" i
+                }
 
         // replay: a captured playthrough replays byte-identically through runCommands (FR-002). Drive a
         // scripted bot (view ignored) that emits the script's resolved commands, then replay what it
@@ -56,29 +63,43 @@ module Laws =
                 let position = ref 0
 
                 let scriptedBot =
-                    { Decide =
-                        fun _ rng ->
-                            let i = position.Value
-                            position.Value <- i + 1
-                            let commands = if i < List.length resolved then List.item i resolved else []
-                            struct (commands, rng) }
+                    {
+                        Decide =
+                            fun _ rng ->
+                                let i = position.Value
+                                position.Value <- i + 1
 
-                let run = Driver.runBot playable (fun w -> w) scriptedBot 0UL (List.length resolved) fp
+                                let commands =
+                                    if i < List.length resolved then
+                                        List.item i resolved
+                                    else
+                                        []
+
+                                struct (commands, rng)
+                    }
+
+                let run =
+                    Driver.runBot playable (fun w -> w) scriptedBot 0UL (List.length resolved) fp
+
                 let replayed = Driver.runCommands playable fp run.Captured
                 Trace.firstDivergence run.Trace replayed |> Option.map (fun (i, _, _) -> i))
 
         let replayResult =
             match replay with
             | None ->
-                { Law = "replay"
-                  Passed = true
-                  DivergenceStep = None
-                  Detail = "resolved-command replay reproduces runScript for every script" }
+                {
+                    Law = "replay"
+                    Passed = true
+                    DivergenceStep = None
+                    Detail = "resolved-command replay reproduces runScript for every script"
+                }
             | Some i ->
-                { Law = "replay"
-                  Passed = false
-                  DivergenceStep = Some i
-                  Detail = sprintf "runScript and runCommands replay diverged at step %d" i }
+                {
+                    Law = "replay"
+                    Passed = false
+                    DivergenceStep = Some i
+                    Detail = sprintf "runScript and runCommands replay diverged at step %d" i
+                }
 
         // fixed-step: an n-frame script yields exactly n recorded frames (one whole step per frame).
         let fixedStep =
@@ -92,15 +113,19 @@ module Laws =
         let fixedStepResult =
             match fixedStep with
             | None ->
-                { Law = "fixed-step"
-                  Passed = true
-                  DivergenceStep = None
-                  Detail = "recorded frame count equals input frame count for every script" }
+                {
+                    Law = "fixed-step"
+                    Passed = true
+                    DivergenceStep = None
+                    Detail = "recorded frame count equals input frame count for every script"
+                }
             | Some(inputs, frames) ->
-                { Law = "fixed-step"
-                  Passed = false
-                  DivergenceStep = None
-                  Detail = sprintf "an %d-frame script recorded %d frames" inputs frames }
+                {
+                    Law = "fixed-step"
+                    Passed = false
+                    DivergenceStep = None
+                    Detail = sprintf "an %d-frame script recorded %d frames" inputs frames
+                }
 
         // provenance: every trace the runner builds is Origin.InputDriven.
         let provenanceOk =
@@ -108,16 +133,20 @@ module Laws =
             |> List.forall (fun script -> not (Trace.isSynthetic (Driver.runScript playable fp script)))
 
         let provenanceResult =
-            { Law = "provenance"
-              Passed = provenanceOk
-              DivergenceStep = None
-              Detail =
-                if provenanceOk then
-                    "every driven trace is Origin.InputDriven"
-                else
-                    "a driven trace was Origin.Synthetic" }
+            {
+                Law = "provenance"
+                Passed = provenanceOk
+                DivergenceStep = None
+                Detail =
+                    if provenanceOk then
+                        "every driven trace is Origin.InputDriven"
+                    else
+                        "a driven trace was Origin.Synthetic"
+            }
 
-        { Results = [ determinismResult; replayResult; fixedStepResult; provenanceResult ] }
+        {
+            Results = [ determinismResult; replayResult; fixedStepResult; provenanceResult ]
+        }
 
     let matrixOrderIndependent
         (setup: MatchSetup<'world, 'view>)
@@ -131,11 +160,13 @@ module Laws =
         let reversed = Matrix.runMatrix setup outcome (List.rev matches) |> List.map snd
         let passed = forward = List.rev reversed
 
-        { Law = "matrix-order-independence"
-          Passed = passed
-          DivergenceStep = None
-          Detail =
-            if passed then
-                "permuting the matches permutes the outcomes identically"
-            else
-                "a match's outcome changed under a permutation of the match set" }
+        {
+            Law = "matrix-order-independence"
+            Passed = passed
+            DivergenceStep = None
+            Detail =
+                if passed then
+                    "permuting the matches permutes the outcomes identically"
+                else
+                    "a match's outcome changed under a permutation of the match set"
+        }

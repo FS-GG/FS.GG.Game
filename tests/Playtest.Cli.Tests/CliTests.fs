@@ -15,25 +15,90 @@ let private repoRoot =
         match d with
         | null -> failwith "repo root (FS.GG.Game.slnx) not found"
         | dir ->
-            if File.Exists(Path.Combine(dir.FullName, "FS.GG.Game.slnx")) then dir.FullName
-            else up dir.Parent
+            if File.Exists(Path.Combine(dir.FullName, "FS.GG.Game.slnx")) then
+                dir.FullName
+            else
+                up dir.Parent
 
     up (DirectoryInfo(System.AppContext.BaseDirectory))
 
-let private specPath (name: string) = Path.Combine(repoRoot, "docs", "TestSpecs", "Games", name)
+let private specPath (name: string) =
+    Path.Combine(repoRoot, "docs", "TestSpecs", "Games", name)
 
 // A WI-7-style Pong manifest (the CoversAc mirror ReferenceProof.fs GP-001..GP-010).
 let private wi7Manifest: GameplayFr list =
-    [ { Id = "GP-001"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "replay"; CoversAc = [ 13 ] }
-      { Id = "GP-002"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "keymap route"; CoversAc = [ 2; 3 ] }
-      { Id = "GP-003"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "paddle clamp"; CoversAc = [ 2 ] }
-      { Id = "GP-004"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "ball on field"; CoversAc = [ 4 ] }
-      { Id = "GP-005"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "wall bounce"; CoversAc = [ 4 ] }
-      { Id = "GP-006"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "deflection"; CoversAc = [ 5; 15 ] }
-      { Id = "GP-007"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "no double hit"; CoversAc = [ 8 ] }
-      { Id = "GP-008"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "scoring"; CoversAc = [ 9 ] }
-      { Id = "GP-009"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "serve"; CoversAc = [ 1; 16 ] }
-      { Id = "GP-010"; Facet = "gameplay"; RequiredEvidence = SimulationInput; Summary = "match"; CoversAc = [ 10; 13 ] } ]
+    [
+        {
+            Id = "GP-001"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "replay"
+            CoversAc = [ 13 ]
+        }
+        {
+            Id = "GP-002"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "keymap route"
+            CoversAc = [ 2; 3 ]
+        }
+        {
+            Id = "GP-003"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "paddle clamp"
+            CoversAc = [ 2 ]
+        }
+        {
+            Id = "GP-004"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "ball on field"
+            CoversAc = [ 4 ]
+        }
+        {
+            Id = "GP-005"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "wall bounce"
+            CoversAc = [ 4 ]
+        }
+        {
+            Id = "GP-006"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "deflection"
+            CoversAc = [ 5; 15 ]
+        }
+        {
+            Id = "GP-007"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "no double hit"
+            CoversAc = [ 8 ]
+        }
+        {
+            Id = "GP-008"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "scoring"
+            CoversAc = [ 9 ]
+        }
+        {
+            Id = "GP-009"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "serve"
+            CoversAc = [ 1; 16 ]
+        }
+        {
+            Id = "GP-010"
+            Facet = "gameplay"
+            RequiredEvidence = SimulationInput
+            Summary = "match"
+            CoversAc = [ 10; 13 ]
+        }
+    ]
 
 let private allInputDriven (frs: GameplayFr list) =
     frs |> List.map (fun fr -> fr.Id, InputDriven) |> Map.ofList
@@ -49,18 +114,24 @@ type ExternalConstructedJourneyProof() =
             Update = fun message model -> Composition.adapter.Update message model
             FixedTick = fun model -> Composition.adapter.FixedTick model
             ApplyEffectResult = fun effect model -> Composition.adapter.ApplyEffectResult effect model
-            IsTerminal = fun model -> Composition.adapter.IsTerminal model }
+            IsTerminal = fun model -> Composition.adapter.IsTerminal model
+        }
 
     interface IProductionJourneyProofV1 with
         member _.CompositionAuthority =
             let assembly = typeof<ExternalConstructedJourneyProof>.Assembly
-            let name = assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+
+            let name =
+                assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+
             name + "/" + assembly.ManifestModule.ModuleVersionId.ToString("N")
+
         member _.RouteId = adapter.RouteId
         member _.ScenarioId = adapter.ScenarioId
         member _.InputIdentity = Composition.inputIdentity
         member _.TerminalPredicateIdentity = Composition.terminalPredicateIdentity
         member _.TestId = adapter.TestId
+
         member _.Run() =
             (Journey.runScriptWithIdentity
                 Composition.inputIdentity
@@ -73,364 +144,514 @@ type ExternalConstructedJourneyProof() =
 let tests =
     testList
         "PlaytestCli"
-        [ testCase "FR-001 scaffold emits one GP stub per section-14 AC for every game TestSpec"
-          <| fun _ ->
-              let count name =
-                  specPath name |> File.ReadAllText |> TestSpec.parseSection14 |> TestSpec.scaffold |> List.length
-              [ "asteroids.md", 30
-                "breakout.md", 29
-                "doodle-jump.md", 24
-                "flappy-bird.md", 23
-                "frogger.md", 25
-                "metroidvania.md", 24
-                "mini-tanks.md", 31
-                "missile-command.md", 28
-                "pong.md", 23
-                "roguelike-dungeon-crawler.md", 24
-                "sandbox-survival.md", 26
-                "snake.md", 20
-                "space-invaders.md", 32
-                "tetris.md", 26
-                "tower-defense.md", 32
-                "turn-based-tactics.md", 23 ]
-              |> List.iter (fun (name, expected) ->
-                  Expect.equal (count name) expected $"{name} has {expected} section-14 ACs")
+        [
+            testCase "FR-001 scaffold emits one GP stub per section-14 AC for every game TestSpec"
+            <| fun _ ->
+                let count name =
+                    specPath name
+                    |> File.ReadAllText
+                    |> TestSpec.parseSection14
+                    |> TestSpec.scaffold
+                    |> List.length
 
-          testCase "FR-001 a scaffolded stub carries the gameplay facet, its AC number, and the title"
-          <| fun _ ->
-              let frs = specPath "pong.md" |> File.ReadAllText |> TestSpec.parseSection14 |> TestSpec.scaffold
-              let gp1 = frs |> List.find (fun fr -> fr.Id = "GP-001")
-              Expect.equal gp1.Facet "gameplay" "the classifier facet"
-              Expect.equal gp1.CoversAc [ 1 ] "covers its own AC number"
-              Expect.stringContains gp1.Summary "Serve" "the summary is the AC title"
+                [
+                    "asteroids.md", 30
+                    "breakout.md", 29
+                    "doodle-jump.md", 24
+                    "flappy-bird.md", 23
+                    "frogger.md", 25
+                    "metroidvania.md", 24
+                    "mini-tanks.md", 31
+                    "missile-command.md", 28
+                    "pong.md", 23
+                    "roguelike-dungeon-crawler.md", 24
+                    "sandbox-survival.md", 26
+                    "snake.md", 20
+                    "space-invaders.md", 32
+                    "tetris.md", 26
+                    "tower-defense.md", 32
+                    "turn-based-tactics.md", 23
+                ]
+                |> List.iter (fun (name, expected) ->
+                    Expect.equal (count name) expected $"{name} has {expected} section-14 ACs")
 
-          testCase "FR-002 the manifest round-trips through render/parse"
-          <| fun _ ->
-              let parsed = wi7Manifest |> Manifest.render |> Manifest.parse
-              Expect.equal parsed wi7Manifest "render then parse yields the same records"
+            testCase "FR-001 a scaffolded stub carries the gameplay facet, its AC number, and the title"
+            <| fun _ ->
+                let frs =
+                    specPath "pong.md"
+                    |> File.ReadAllText
+                    |> TestSpec.parseSection14
+                    |> TestSpec.scaffold
 
-          testCase "FR-003/007 coverage-lint reports the WI-7 manifest fully covered under InputDriven proofs"
-          <| fun _ ->
-              let report = Coverage.lint wi7Manifest (allInputDriven wi7Manifest) None
-              Expect.isTrue (Coverage.passed report) "every cited AC has an InputDriven proof"
-              Expect.isEmpty report.UncoveredAcs "no uncovered cited ACs"
-              Expect.equal report.CitedAcs [ 1; 2; 3; 4; 5; 8; 9; 10; 13; 15; 16 ] "the cited AC set"
+                let gp1 = frs |> List.find (fun fr -> fr.Id = "GP-001")
+                Expect.equal gp1.Facet "gameplay" "the classifier facet"
+                Expect.equal gp1.CoversAc [ 1 ] "covers its own AC number"
+                Expect.stringContains gp1.Summary "Serve" "the summary is the AC title"
 
-          testCase "FR-004/007 removing a proof leaves its uniquely-covered ACs uncovered (fail closed)"
-          <| fun _ ->
-              // Drop GP-006's proof: ACs 5 and 15 are covered only by it.
-              let proofs = allInputDriven wi7Manifest |> Map.remove "GP-006"
-              let report = Coverage.lint wi7Manifest proofs None
-              Expect.isFalse (Coverage.passed report) "a missing proof fails the lint"
-              Expect.equal report.UncoveredAcs [ 5; 15 ] "exactly the ACs only GP-006 covered are uncovered"
+            testCase "FR-002 the manifest round-trips through render/parse"
+            <| fun _ ->
+                let parsed = wi7Manifest |> Manifest.render |> Manifest.parse
+                Expect.equal parsed wi7Manifest "render then parse yields the same records"
 
-          testCase "FR-004 a synthetic proof does not cover"
-          <| fun _ ->
-              let proofs = allInputDriven wi7Manifest |> Map.add "GP-006" Synthetic
-              let report = Coverage.lint wi7Manifest proofs None
-              Expect.isFalse (Coverage.passed report) "synthetic never satisfies"
-              Expect.equal report.UncoveredAcs [ 5; 15 ] "the synthetic-only ACs are uncovered"
+            testCase "FR-003/007 coverage-lint reports the WI-7 manifest fully covered under InputDriven proofs"
+            <| fun _ ->
+                let report = Coverage.lint wi7Manifest (allInputDriven wi7Manifest) None
+                Expect.isTrue (Coverage.passed report) "every cited AC has an InputDriven proof"
+                Expect.isEmpty report.UncoveredAcs "no uncovered cited ACs"
+                Expect.equal report.CitedAcs [ 1; 2; 3; 4; 5; 8; 9; 10; 13; 15; 16 ] "the cited AC set"
 
-          testCase "FR-005 --spec reports the completeness gap as advisory without failing"
-          <| fun _ ->
-              // The spec has 23 ACs; the WI-7 manifest cites 11 — the other 12 are the advisory gap.
-              let specAcs = specPath "pong.md" |> File.ReadAllText |> TestSpec.parseSection14 |> List.map fst
-              let report = Coverage.lint wi7Manifest (allInputDriven wi7Manifest) (Some specAcs)
-              Expect.isTrue (Coverage.passed report) "the gap is advisory — it does not fail the lint"
-              Expect.equal report.SpecGap [ 6; 7; 11; 12; 14; 17; 18; 19; 20; 21; 22; 23 ] "spec ACs no GP cites"
+            testCase "FR-004/007 removing a proof leaves its uniquely-covered ACs uncovered (fail closed)"
+            <| fun _ ->
+                // Drop GP-006's proof: ACs 5 and 15 are covered only by it.
+                let proofs = allInputDriven wi7Manifest |> Map.remove "GP-006"
+                let report = Coverage.lint wi7Manifest proofs None
+                Expect.isFalse (Coverage.passed report) "a missing proof fails the lint"
+                Expect.equal report.UncoveredAcs [ 5; 15 ] "exactly the ACs only GP-006 covered are uncovered"
 
-          testCase "FR-006 a malformed proof report is an error, not a silent skip"
-          <| fun _ ->
-              match Proofs.parse "GP-001 bogusprovenance" with
-              | Error _ -> ()
-              | Ok _ -> failtest "an unknown provenance token must be an error"
-              match Proofs.parse "GP-001 inputDriven\nGP-002 synthetic" with
-              | Ok m -> Expect.equal (Map.find "GP-002" m) Synthetic "a well-formed report parses"
-              | Error e -> failtestf "a well-formed report must parse, got %s" e
+            testCase "FR-004 a synthetic proof does not cover"
+            <| fun _ ->
+                let proofs = allInputDriven wi7Manifest |> Map.add "GP-006" Synthetic
+                let report = Coverage.lint wi7Manifest proofs None
+                Expect.isFalse (Coverage.passed report) "synthetic never satisfies"
+                Expect.equal report.UncoveredAcs [ 5; 15 ] "the synthetic-only ACs are uncovered"
 
-          testCase "FR-006 a spec with no section-14 yields no ACs (an error at the CLI edge)"
-          <| fun _ ->
-              Expect.isEmpty (TestSpec.parseSection14 "# A doc with no section 14\n\nnothing here") "no ACs parsed"
+            testCase "FR-005 --spec reports the completeness gap as advisory without failing"
+            <| fun _ ->
+                // The spec has 23 ACs; the WI-7 manifest cites 11 — the other 12 are the advisory gap.
+                let specAcs =
+                    specPath "pong.md"
+                    |> File.ReadAllText
+                    |> TestSpec.parseSection14
+                    |> List.map fst
 
-          testCase "production-journey coverage accepts only a validated runner receipt"
-          <| fun _ ->
-              let required =
-                  [ { Id = "GP-JOURNEY-001"
-                      Facet = "gameplay"
-                      RequiredEvidence = EvidenceLevel.ProductionJourney
-                      Summary = "boot to outcome"
-                      CoversAc = [ 1 ] } ]
+                let report = Coverage.lint wi7Manifest (allInputDriven wi7Manifest) (Some specAcs)
+                Expect.isTrue (Coverage.passed report) "the gap is advisory — it does not fail the lint"
+                Expect.equal report.SpecGap [ 6; 7; 11; 12; 14; 17; 18; 19; 20; 21; 22; 23 ] "spec ACs no GP cites"
 
-              Expect.isFalse
-                  (Coverage.lint required (Map [ "GP-JOURNEY-001", InputDriven ]) None |> Coverage.passed)
-                  "a simulation/component trace cannot satisfy a user-facing journey"
+            testCase "FR-006 a malformed proof report is an error, not a silent skip"
+            <| fun _ ->
+                match Proofs.parse "GP-001 bogusprovenance" with
+                | Error _ -> ()
+                | Ok _ -> failtest "an unknown provenance token must be an error"
 
-              match Proofs.parse "GP-JOURNEY-001 productionJourney" with
-              | Error _ -> ()
-              | Ok _ -> failtest "a hand-authored productionJourney token must be refused"
+                match Proofs.parse "GP-001 inputDriven\nGP-002 synthetic" with
+                | Ok m -> Expect.equal (Map.find "GP-002" m) Synthetic "a well-formed report parses"
+                | Error e -> failtestf "a well-formed report must parse, got %s" e
 
-              match
-                  Proofs.loadJourneyProofsWithAuthority
-                      journeyProofAssembly
-                      journeyProofAssembly
-              with
-              | Error e -> failtestf "executable runner proof must validate: %s" e
-              | Ok proofs ->
-                  Expect.isTrue (Coverage.lint required proofs None |> Coverage.passed) "validated receipt satisfies"
+            testCase "FR-006 a spec with no section-14 yields no ACs (an error at the CLI edge)"
+            <| fun _ ->
+                Expect.isEmpty (TestSpec.parseSection14 "# A doc with no section 14\n\nnothing here") "no ACs parsed"
 
-          testCase "caller-authored receipt text and matching caller key are not accepted provenance inputs"
-          <| fun _ ->
-              Expect.isNone
-                  (Proofs.parseProvenance "productionJourney")
-                  "the text proof grammar has no production token"
+            testCase "production-journey coverage accepts only a validated runner receipt"
+            <| fun _ ->
+                let required =
+                    [
+                        {
+                            Id = "GP-JOURNEY-001"
+                            Facet = "gameplay"
+                            RequiredEvidence = EvidenceLevel.ProductionJourney
+                            Summary = "boot to outcome"
+                            CoversAc = [ 1 ]
+                        }
+                    ]
 
-          testCase "an external proof cannot self-author an allowlisted production composition"
-          <| fun _ ->
-              let testAssembly = typeof<ExternalConstructedJourneyProof>.Assembly.Location
+                Expect.isFalse
+                    (Coverage.lint required (Map [ "GP-JOURNEY-001", InputDriven ]) None
+                     |> Coverage.passed)
+                    "a simulation/component trace cannot satisfy a user-facing journey"
 
-              match Proofs.loadJourneyReceipts testAssembly with
-              | Error error ->
-                  Expect.stringContains error "without an explicit producer authority" "the convenience loader fails closed"
-              | Ok _ -> failtest "a public convenience loader must not self-authorize its proof assembly"
+                match Proofs.parse "GP-JOURNEY-001 productionJourney" with
+                | Error _ -> ()
+                | Ok _ -> failtest "a hand-authored productionJourney token must be refused"
 
-              match Proofs.loadJourneyReceiptsWithAuthority testAssembly journeyProofAssembly with
-              | Error error ->
-                  Expect.stringContains error "not the allowlisted producer" "the authority mismatch is explicit"
-              | Ok _ -> failtest "an externally composed adapter must not mint production provenance"
+                match Proofs.loadJourneyProofsWithAuthority journeyProofAssembly journeyProofAssembly with
+                | Error e -> failtestf "executable runner proof must validate: %s" e
+                | Ok proofs ->
+                    Expect.isTrue (Coverage.lint required proofs None |> Coverage.passed) "validated receipt satisfies"
 
-          testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
-          <| fun _ ->
-              let critic =
-                  "AC-001 | supported | checkpoints=0,6,11 | terminal=Screen=Won | route=JourneyTests.productionAdapter | reason=observed"
-              Expect.stringContains critic "| supported |" "the independent assessment may support the behavior"
+            testCase "caller-authored receipt text and matching caller key are not accepted provenance inputs"
+            <| fun _ ->
+                Expect.isNone
+                    (Proofs.parseProvenance "productionJourney")
+                    "the text proof grammar has no production token"
 
-              let required =
-                  [ { Id = "GP-JOURNEY-001"
-                      Facet = "gameplay"
-                      RequiredEvidence = EvidenceLevel.ProductionJourney
-                      Summary = "boot to outcome"
-                      CoversAc = [ 1 ] } ]
+            testCase "an external proof cannot self-author an allowlisted production composition"
+            <| fun _ ->
+                let testAssembly = typeof<ExternalConstructedJourneyProof>.Assembly.Location
 
-              Expect.isFalse
-                  (Coverage.lint required Map.empty None |> Coverage.passed)
-                  "without a validated runner receipt, critic support cannot turn the gate green"
+                match Proofs.loadJourneyReceipts testAssembly with
+                | Error error ->
+                    Expect.stringContains
+                        error
+                        "without an explicit producer authority"
+                        "the convenience loader fails closed"
+                | Ok _ -> failtest "a public convenience loader must not self-authorize its proof assembly"
 
-          testCase "critic assessment vetoes unsupported, ambiguous, missing, and mismatched AC rows"
-          <| fun _ ->
-              let required =
-                  [ { Id = "GP-JOURNEY-001"
-                      Facet = "gameplay"
-                      RequiredEvidence = EvidenceLevel.ProductionJourney
-                      Summary = "boot to outcome"
-                      CoversAc = [ 1; 2 ] } ]
-              let row ac disposition =
-                  sprintf "AC-%03d | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed" ac disposition
-              let validate text =
-                  match Critic.parse text with
-                  | Error error -> Error error
-                  | Ok rows -> Critic.validate required rows
+                match Proofs.loadJourneyReceiptsWithAuthority testAssembly journeyProofAssembly with
+                | Error error ->
+                    Expect.stringContains error "not the allowlisted producer" "the authority mismatch is explicit"
+                | Ok _ -> failtest "an externally composed adapter must not mint production provenance"
 
-              Expect.isOk (validate (row 1 "supported" + "\n" + row 2 "supported")) "complete supported rows pass"
-              Expect.isError (validate (row 1 "unsupported" + "\n" + row 2 "supported")) "unsupported vetoes"
-              Expect.isError (validate (row 1 "supported" + "\n" + row 2 "ambiguous")) "ambiguous vetoes"
-              Expect.isError (validate (row 1 "supported")) "missing required AC vetoes"
-              Expect.isError (validate (row 1 "supported" + "\n" + row 3 "supported")) "mismatched AC vetoes"
+            testCase "a supportive acceptance critic cannot mint or upgrade production provenance"
+            <| fun _ ->
+                let critic =
+                    "AC-001 | supported | checkpoints=0,6,11 | terminal=Screen=Won | route=JourneyTests.productionAdapter | reason=observed"
 
-          testCase "coverage-lint executes an opaque proof assembly and binds its receipt to the critic"
-          <| fun _ ->
-              let directory = Path.Combine(Path.GetTempPath(), "fsgg-playtest-" + Guid.NewGuid().ToString("N"))
-              Directory.CreateDirectory directory |> ignore
+                Expect.stringContains critic "| supported |" "the independent assessment may support the behavior"
 
-              try
-                  let manifestPath = Path.Combine(directory, "manifest.txt")
-                  let proofsPath = Path.Combine(directory, "proofs.txt")
-                  let receiptsPath = Path.Combine(directory, "author-receipt.jsonl")
-                  let keyPath = Path.Combine(directory, "author-key")
-                  let manifest =
-                      [ { Id = "GP-JOURNEY-001"
-                          Facet = "gameplay"
-                          RequiredEvidence = EvidenceLevel.ProductionJourney
-                          Summary = "boot to outcome"
-                          CoversAc = [ 1 ] } ]
+                let required =
+                    [
+                        {
+                            Id = "GP-JOURNEY-001"
+                            Facet = "gameplay"
+                            RequiredEvidence = EvidenceLevel.ProductionJourney
+                            Summary = "boot to outcome"
+                            CoversAc = [ 1 ]
+                        }
+                    ]
 
-                  File.WriteAllText(manifestPath, Manifest.render manifest)
-                  File.WriteAllText(proofsPath, "")
-                  File.WriteAllText(receiptsPath, """{"result":"pass","provenance":"production-journey"}""")
-                  File.WriteAllText(keyPath, "author-chosen-key")
+                Expect.isFalse
+                    (Coverage.lint required Map.empty None |> Coverage.passed)
+                    "without a validated runner receipt, critic support cannot turn the gate green"
 
-                  let run assemblyFlag (critic: string) =
-                      let criticPath = Path.Combine(directory, "critic-" + Guid.NewGuid().ToString("N") + ".txt")
-                      File.WriteAllText(criticPath, critic)
-                      FS.GG.Playtest.Program.main
-                          [| "coverage-lint"
-                             "--manifest"; manifestPath
-                             "--proofs"; proofsPath
-                             assemblyFlag; journeyProofAssembly
-                             "--journey-authority-assembly"; journeyProofAssembly
-                             "--critic"; criticPath |]
+            testCase "critic assessment vetoes unsupported, ambiguous, missing, and mismatched AC rows"
+            <| fun _ ->
+                let required =
+                    [
+                        {
+                            Id = "GP-JOURNEY-001"
+                            Facet = "gameplay"
+                            RequiredEvidence = EvidenceLevel.ProductionJourney
+                            Summary = "boot to outcome"
+                            CoversAc = [ 1; 2 ]
+                        }
+                    ]
 
-                  let row disposition =
-                      sprintf "AC-001 | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed" disposition
+                let row ac disposition =
+                    sprintf
+                        "AC-%03d | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed"
+                        ac
+                        disposition
 
-                  Expect.equal (run "--journey-proof-assembly" (row "supported")) 0 "in-process opaque receipt makes the gate green"
-                  Expect.equal (run "--journey-proof-assembly" (row "ambiguous")) 1 "an ambiguous critic veto makes the same proof red"
-                  Expect.equal
-                      (let criticPath = Path.Combine(directory, "critic-author.txt")
-                       File.WriteAllText(criticPath, row "supported")
-                       FS.GG.Playtest.Program.main
-                          [| "coverage-lint"
-                             "--manifest"; manifestPath
-                             "--proofs"; proofsPath
-                             "--journey-receipts"; receiptsPath
-                             "--journey-key-file"; keyPath
-                             "--critic"; criticPath |])
-                      1
-                      "author-controlled receipt text and matching key are refused without executable proof"
-              finally
-                  Directory.Delete(directory, true)
+                let validate text =
+                    match Critic.parse text with
+                    | Error error -> Error error
+                    | Ok rows -> Critic.validate required rows
 
-          testCase "emit-evidence exports the opaque journey receipt bound to the exact TRX bytes"
-          <| fun _ ->
-              let directory = Path.Combine(Path.GetTempPath(), "fsgg-playtest-export-" + Guid.NewGuid().ToString("N"))
-              Directory.CreateDirectory directory |> ignore
+                Expect.isOk (validate (row 1 "supported" + "\n" + row 2 "supported")) "complete supported rows pass"
+                Expect.isError (validate (row 1 "unsupported" + "\n" + row 2 "supported")) "unsupported vetoes"
+                Expect.isError (validate (row 1 "supported" + "\n" + row 2 "ambiguous")) "ambiguous vetoes"
+                Expect.isError (validate (row 1 "supported")) "missing required AC vetoes"
+                Expect.isError (validate (row 1 "supported" + "\n" + row 3 "supported")) "mismatched AC vetoes"
 
-              try
-                  let manifestPath = Path.Combine(directory, "manifest.txt")
-                  let proofsPath = Path.Combine(directory, "proofs.txt")
-                  let criticPath = Path.Combine(directory, "critic.txt")
-                  let trxPath = Path.Combine(directory, "journey.trx")
-                  let journeyReportPath = Path.Combine(directory, "journey.junit.xml")
-                  let outputPath = Path.Combine(directory, "evidence.yml")
-                  let manifest =
-                      [ { Id = "GP-JOURNEY-001"
-                          Facet = "gameplay"
-                          RequiredEvidence = EvidenceLevel.ProductionJourney
-                          Summary = "boot to outcome"
-                          CoversAc = [ 1 ] } ]
-                  let trx =
-                      """<?xml version="1.0"?>
+            testCase "coverage-lint executes an opaque proof assembly and binds its receipt to the critic"
+            <| fun _ ->
+                let directory =
+                    Path.Combine(Path.GetTempPath(), "fsgg-playtest-" + Guid.NewGuid().ToString("N"))
+
+                Directory.CreateDirectory directory |> ignore
+
+                try
+                    let manifestPath = Path.Combine(directory, "manifest.txt")
+                    let proofsPath = Path.Combine(directory, "proofs.txt")
+                    let receiptsPath = Path.Combine(directory, "author-receipt.jsonl")
+                    let keyPath = Path.Combine(directory, "author-key")
+
+                    let manifest =
+                        [
+                            {
+                                Id = "GP-JOURNEY-001"
+                                Facet = "gameplay"
+                                RequiredEvidence = EvidenceLevel.ProductionJourney
+                                Summary = "boot to outcome"
+                                CoversAc = [ 1 ]
+                            }
+                        ]
+
+                    File.WriteAllText(manifestPath, Manifest.render manifest)
+                    File.WriteAllText(proofsPath, "")
+                    File.WriteAllText(receiptsPath, """{"result":"pass","provenance":"production-journey"}""")
+                    File.WriteAllText(keyPath, "author-chosen-key")
+
+                    let run assemblyFlag (critic: string) =
+                        let criticPath =
+                            Path.Combine(directory, "critic-" + Guid.NewGuid().ToString("N") + ".txt")
+
+                        File.WriteAllText(criticPath, critic)
+
+                        FS.GG.Playtest.Program.main
+                            [|
+                                "coverage-lint"
+                                "--manifest"
+                                manifestPath
+                                "--proofs"
+                                proofsPath
+                                assemblyFlag
+                                journeyProofAssembly
+                                "--journey-authority-assembly"
+                                journeyProofAssembly
+                                "--critic"
+                                criticPath
+                            |]
+
+                    let row disposition =
+                        sprintf
+                            "AC-001 | %s | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed"
+                            disposition
+
+                    Expect.equal
+                        (run "--journey-proof-assembly" (row "supported"))
+                        0
+                        "in-process opaque receipt makes the gate green"
+
+                    Expect.equal
+                        (run "--journey-proof-assembly" (row "ambiguous"))
+                        1
+                        "an ambiguous critic veto makes the same proof red"
+
+                    Expect.equal
+                        (let criticPath = Path.Combine(directory, "critic-author.txt")
+                         File.WriteAllText(criticPath, row "supported")
+
+                         FS.GG.Playtest.Program.main
+                             [|
+                                 "coverage-lint"
+                                 "--manifest"
+                                 manifestPath
+                                 "--proofs"
+                                 proofsPath
+                                 "--journey-receipts"
+                                 receiptsPath
+                                 "--journey-key-file"
+                                 keyPath
+                                 "--critic"
+                                 criticPath
+                             |])
+                        1
+                        "author-controlled receipt text and matching key are refused without executable proof"
+                finally
+                    Directory.Delete(directory, true)
+
+            testCase "emit-evidence exports the opaque journey receipt bound to the exact TRX bytes"
+            <| fun _ ->
+                let directory =
+                    Path.Combine(Path.GetTempPath(), "fsgg-playtest-export-" + Guid.NewGuid().ToString("N"))
+
+                Directory.CreateDirectory directory |> ignore
+
+                try
+                    let manifestPath = Path.Combine(directory, "manifest.txt")
+                    let proofsPath = Path.Combine(directory, "proofs.txt")
+                    let criticPath = Path.Combine(directory, "critic.txt")
+                    let trxPath = Path.Combine(directory, "journey.trx")
+                    let journeyReportPath = Path.Combine(directory, "journey.junit.xml")
+                    let outputPath = Path.Combine(directory, "evidence.yml")
+
+                    let manifest =
+                        [
+                            {
+                                Id = "GP-JOURNEY-001"
+                                Facet = "gameplay"
+                                RequiredEvidence = EvidenceLevel.ProductionJourney
+                                Summary = "boot to outcome"
+                                CoversAc = [ 1 ]
+                            }
+                        ]
+
+                    let trx =
+                        """<?xml version="1.0"?>
 <TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
   <ResultSummary><Counters passed="0" failed="1" /></ResultSummary>
   <Results><UnitTestResult testName="unrelated stale caller test" outcome="Failed" /></Results>
 </TestRun>"""
 
-                  File.WriteAllText(manifestPath, Manifest.render manifest)
-                  File.WriteAllText(proofsPath, "")
-                  File.WriteAllText(
-                      criticPath,
-                      "AC-001 | supported | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed"
-                  )
-                  File.WriteAllText(trxPath, trx)
+                    File.WriteAllText(manifestPath, Manifest.render manifest)
+                    File.WriteAllText(proofsPath, "")
 
-                  let missingGeneratedReport =
-                      FS.GG.Playtest.Program.main
-                          [| "emit-evidence"
-                             "--manifest"; manifestPath
-                             "--proofs"; proofsPath
-                             "--trx"; trxPath
-                             "--journey-proof-assembly"; journeyProofAssembly
-                             "--journey-authority-assembly"; journeyProofAssembly
-                             "--critic"; criticPath
-                             "--out"; outputPath |]
-                  Expect.equal
-                      missingGeneratedReport
-                      1
-                      "production evidence fails closed without a generated same-execution report output"
+                    File.WriteAllText(
+                        criticPath,
+                        "AC-001 | supported | checkpoints=0,6,11 | terminal=Screen=Won | route=Composition.adapter | reason=reviewed"
+                    )
 
-                  File.WriteAllText(outputPath, "preserve-existing-evidence")
-                  let equivalentOutputPath = Path.Combine(directory, ".", "evidence.yml")
-                  let aliasedReport =
-                      FS.GG.Playtest.Program.main
-                          [| "emit-evidence"
-                             "--manifest"; manifestPath
-                             "--proofs"; proofsPath
-                             "--trx"; trxPath
-                             "--journey-proof-assembly"; journeyProofAssembly
-                             "--journey-authority-assembly"; journeyProofAssembly
-                             "--critic"; criticPath
-                             "--journey-report-out"; equivalentOutputPath
-                             "--out"; outputPath |]
-                  Expect.equal aliasedReport 1 "canonical report/evidence path aliases fail closed"
-                  Expect.equal
-                      (File.ReadAllText outputPath)
-                      "preserve-existing-evidence"
-                      "alias rejection happens before either artifact is written"
+                    File.WriteAllText(trxPath, trx)
 
-                  if not (OperatingSystem.IsWindows()) then
-                      let danglingAliasPath = Path.Combine(directory, "dangling-evidence.yml")
-                      File.CreateSymbolicLink(danglingAliasPath, journeyReportPath) |> ignore
-                      let danglingAlias =
-                          FS.GG.Playtest.Program.main
-                              [| "emit-evidence"
-                                 "--manifest"; manifestPath
-                                 "--proofs"; proofsPath
-                                 "--trx"; trxPath
-                                 "--journey-proof-assembly"; journeyProofAssembly
-                                 "--journey-authority-assembly"; journeyProofAssembly
-                                 "--critic"; criticPath
-                                 "--journey-report-out"; journeyReportPath
-                                 "--out"; danglingAliasPath |]
-                      Expect.equal danglingAlias 1 "a dangling output symlink to the report fails closed"
-                      Expect.isFalse
-                          (File.Exists journeyReportPath)
-                          "dangling-alias rejection happens before the report target is created"
+                    let missingGeneratedReport =
+                        FS.GG.Playtest.Program.main
+                            [|
+                                "emit-evidence"
+                                "--manifest"
+                                manifestPath
+                                "--proofs"
+                                proofsPath
+                                "--trx"
+                                trxPath
+                                "--journey-proof-assembly"
+                                journeyProofAssembly
+                                "--journey-authority-assembly"
+                                journeyProofAssembly
+                                "--critic"
+                                criticPath
+                                "--out"
+                                outputPath
+                            |]
 
-                      let chainEvidencePath = Path.Combine(directory, "chain-evidence.yml")
-                      let intermediateLinkPath = Path.Combine(directory, "intermediate-link")
-                      let reportLinkPath = Path.Combine(directory, "report-link")
-                      File.CreateSymbolicLink(intermediateLinkPath, chainEvidencePath) |> ignore
-                      File.CreateSymbolicLink(reportLinkPath, intermediateLinkPath) |> ignore
-                      let chainedAlias =
-                          FS.GG.Playtest.Program.main
-                              [| "emit-evidence"
-                                 "--manifest"; manifestPath
-                                 "--proofs"; proofsPath
-                                 "--trx"; trxPath
-                                 "--journey-proof-assembly"; journeyProofAssembly
-                                 "--journey-authority-assembly"; journeyProofAssembly
-                                 "--critic"; criticPath
-                                 "--journey-report-out"; reportLinkPath
-                                 "--out"; chainEvidencePath |]
-                      Expect.equal chainedAlias 1 "a two-hop dangling report chain to evidence fails closed"
-                      Expect.isFalse
-                          (File.Exists chainEvidencePath)
-                          "recursive link rejection happens before the final evidence target is created"
+                    Expect.equal
+                        missingGeneratedReport
+                        1
+                        "production evidence fails closed without a generated same-execution report output"
 
-                  let exitCode =
-                      FS.GG.Playtest.Program.main
-                          [| "emit-evidence"
-                             "--manifest"; manifestPath
-                             "--proofs"; proofsPath
-                             "--trx"; trxPath
-                             "--journey-proof-assembly"; journeyProofAssembly
-                             "--journey-authority-assembly"; journeyProofAssembly
-                             "--critic"; criticPath
-                             "--journey-report-out"; journeyReportPath
-                             "--out"; outputPath |]
+                    File.WriteAllText(outputPath, "preserve-existing-evidence")
+                    let equivalentOutputPath = Path.Combine(directory, ".", "evidence.yml")
 
-                  Expect.equal exitCode 0 "the validated receipt/report pair emits evidence"
-                  let output = File.ReadAllText outputPath
-                  Expect.stringContains output "journeyReceipt:" "the typed receipt is embedded"
-                  Expect.stringContains output "schemaVersion: 1" "the receipt schema is versioned"
-                  Expect.stringContains output "result: pass" "the generated proof, not caller TRX, classifies the row"
-                  Expect.stringContains output "testId: \"GP-JOURNEY-001\"" "the proof identity is bound"
-                  Expect.isTrue (File.Exists journeyReportPath) "the same-execution JUnit is generated"
-                  Expect.stringContains
-                      output
-                      (sprintf "digest: \"sha256:%s\"" (Trx.digest (File.ReadAllBytes journeyReportPath)))
-                      "the receipt is bound to the generated same-execution JUnit bytes"
-                  Expect.notEqual
-                      (Trx.digest (File.ReadAllBytes journeyReportPath))
-                      (Trx.digest (File.ReadAllBytes trxPath))
-                      "the caller TRX cannot stand in for the journey execution report"
-              finally
-                  Directory.Delete(directory, true)
+                    let aliasedReport =
+                        FS.GG.Playtest.Program.main
+                            [|
+                                "emit-evidence"
+                                "--manifest"
+                                manifestPath
+                                "--proofs"
+                                proofsPath
+                                "--trx"
+                                trxPath
+                                "--journey-proof-assembly"
+                                journeyProofAssembly
+                                "--journey-authority-assembly"
+                                journeyProofAssembly
+                                "--critic"
+                                criticPath
+                                "--journey-report-out"
+                                equivalentOutputPath
+                                "--out"
+                                outputPath
+                            |]
 
-          testCase "FR-002/006 tryParse fails closed on a malformed manifest line, parse stays lenient"
-          <| fun _ ->
-              let broken = "GP-001 | gameplay | covers=1 | ok\nthis line is broken\n"
-              match Manifest.tryParse broken with
-              | Error _ -> ()
-              | Ok _ -> failtest "a malformed manifest line must be an error, not a silent drop"
-              // The lenient parse keeps only the well-formed record (used for tool round-trip).
-              Expect.equal (Manifest.parse broken |> List.length) 1 "lenient parse skips the broken line" ]
+                    Expect.equal aliasedReport 1 "canonical report/evidence path aliases fail closed"
+
+                    Expect.equal
+                        (File.ReadAllText outputPath)
+                        "preserve-existing-evidence"
+                        "alias rejection happens before either artifact is written"
+
+                    if not (OperatingSystem.IsWindows()) then
+                        let danglingAliasPath = Path.Combine(directory, "dangling-evidence.yml")
+                        File.CreateSymbolicLink(danglingAliasPath, journeyReportPath) |> ignore
+
+                        let danglingAlias =
+                            FS.GG.Playtest.Program.main
+                                [|
+                                    "emit-evidence"
+                                    "--manifest"
+                                    manifestPath
+                                    "--proofs"
+                                    proofsPath
+                                    "--trx"
+                                    trxPath
+                                    "--journey-proof-assembly"
+                                    journeyProofAssembly
+                                    "--journey-authority-assembly"
+                                    journeyProofAssembly
+                                    "--critic"
+                                    criticPath
+                                    "--journey-report-out"
+                                    journeyReportPath
+                                    "--out"
+                                    danglingAliasPath
+                                |]
+
+                        Expect.equal danglingAlias 1 "a dangling output symlink to the report fails closed"
+
+                        Expect.isFalse
+                            (File.Exists journeyReportPath)
+                            "dangling-alias rejection happens before the report target is created"
+
+                        let chainEvidencePath = Path.Combine(directory, "chain-evidence.yml")
+                        let intermediateLinkPath = Path.Combine(directory, "intermediate-link")
+                        let reportLinkPath = Path.Combine(directory, "report-link")
+                        File.CreateSymbolicLink(intermediateLinkPath, chainEvidencePath) |> ignore
+                        File.CreateSymbolicLink(reportLinkPath, intermediateLinkPath) |> ignore
+
+                        let chainedAlias =
+                            FS.GG.Playtest.Program.main
+                                [|
+                                    "emit-evidence"
+                                    "--manifest"
+                                    manifestPath
+                                    "--proofs"
+                                    proofsPath
+                                    "--trx"
+                                    trxPath
+                                    "--journey-proof-assembly"
+                                    journeyProofAssembly
+                                    "--journey-authority-assembly"
+                                    journeyProofAssembly
+                                    "--critic"
+                                    criticPath
+                                    "--journey-report-out"
+                                    reportLinkPath
+                                    "--out"
+                                    chainEvidencePath
+                                |]
+
+                        Expect.equal chainedAlias 1 "a two-hop dangling report chain to evidence fails closed"
+
+                        Expect.isFalse
+                            (File.Exists chainEvidencePath)
+                            "recursive link rejection happens before the final evidence target is created"
+
+                    let exitCode =
+                        FS.GG.Playtest.Program.main
+                            [|
+                                "emit-evidence"
+                                "--manifest"
+                                manifestPath
+                                "--proofs"
+                                proofsPath
+                                "--trx"
+                                trxPath
+                                "--journey-proof-assembly"
+                                journeyProofAssembly
+                                "--journey-authority-assembly"
+                                journeyProofAssembly
+                                "--critic"
+                                criticPath
+                                "--journey-report-out"
+                                journeyReportPath
+                                "--out"
+                                outputPath
+                            |]
+
+                    Expect.equal exitCode 0 "the validated receipt/report pair emits evidence"
+                    let output = File.ReadAllText outputPath
+                    Expect.stringContains output "journeyReceipt:" "the typed receipt is embedded"
+                    Expect.stringContains output "schemaVersion: 1" "the receipt schema is versioned"
+
+                    Expect.stringContains
+                        output
+                        "result: pass"
+                        "the generated proof, not caller TRX, classifies the row"
+
+                    Expect.stringContains output "testId: \"GP-JOURNEY-001\"" "the proof identity is bound"
+                    Expect.isTrue (File.Exists journeyReportPath) "the same-execution JUnit is generated"
+
+                    Expect.stringContains
+                        output
+                        (sprintf "digest: \"sha256:%s\"" (Trx.digest (File.ReadAllBytes journeyReportPath)))
+                        "the receipt is bound to the generated same-execution JUnit bytes"
+
+                    Expect.notEqual
+                        (Trx.digest (File.ReadAllBytes journeyReportPath))
+                        (Trx.digest (File.ReadAllBytes trxPath))
+                        "the caller TRX cannot stand in for the journey execution report"
+                finally
+                    Directory.Delete(directory, true)
+
+            testCase "FR-002/006 tryParse fails closed on a malformed manifest line, parse stays lenient"
+            <| fun _ ->
+                let broken = "GP-001 | gameplay | covers=1 | ok\nthis line is broken\n"
+
+                match Manifest.tryParse broken with
+                | Error _ -> ()
+                | Ok _ -> failtest "a malformed manifest line must be an error, not a silent drop"
+                // The lenient parse keeps only the well-formed record (used for tool round-trip).
+                Expect.equal (Manifest.parse broken |> List.length) 1 "lenient parse skips the broken line"
+        ]

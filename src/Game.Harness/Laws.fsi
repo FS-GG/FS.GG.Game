@@ -7,22 +7,26 @@ open FS.GG.Game.Core
 /// when a comparison law (determinism, replay) fails, carrying the first step index at which the two
 /// traces diverged (`Trace.firstDivergence`), so a failure is actionable rather than "not equal".
 type LawResult =
-    { /// The law's name — e.g. "determinism", "replay", "fixed-step", "provenance".
-      Law: string
-      /// Whether the law held.
-      Passed: bool
-      /// The first divergence step index when a comparison law fails; `None` on pass or for a law
-      /// with no step dimension.
-      DivergenceStep: int option
-      /// A human-readable detail line for a report.
-      Detail: string }
+    {
+        /// The law's name — e.g. "determinism", "replay", "fixed-step", "provenance".
+        Law: string
+        /// Whether the law held.
+        Passed: bool
+        /// The first divergence step index when a comparison law fails; `None` on pass or for a law
+        /// with no step dimension.
+        DivergenceStep: int option
+        /// A human-readable detail line for a report.
+        Detail: string
+    }
 
 /// Public contract type exposed by the FS.GG.Game.Harness package.
 /// A per-law pass/fail report. Every trace the runner builds is `Origin.InputDriven`, so provenance
 /// is a law the report *checks*, not an assumption it makes.
 type LawReport =
-    { /// One result per law checked, in a stable order (determinism, replay, fixed-step, provenance).
-      Results: LawResult list }
+    {
+        /// One result per law checked, in a stable order (determinism, replay, fixed-step, provenance).
+        Results: LawResult list
+    }
 
 /// Public contract module exposed by the FS.GG.Game.Harness package.
 [<RequireQualifiedAccess>]
@@ -52,9 +56,8 @@ module Laws =
     /// first divergence step. Matrix order-independence is a separate runner (`matrixOrderIndependent`)
     /// because it needs match inputs, not scripts.
     val check:
-        playable: Playable<'world, 'key> ->
-        sampleScripts: 'key list list list ->
-            LawReport when 'world: equality and 'key: comparison
+        playable: Playable<'world, 'key> -> sampleScripts: 'key list list list -> LawReport
+            when 'world: equality and 'key: comparison
 
     /// Public contract function exposed by the FS.GG.Game.Harness package.
     /// Check the matrix order-independence law: running `matches`, then a permutation of them, yields
@@ -62,7 +65,5 @@ module Laws =
     /// a `MatchSetup`, an `outcome` projection, and a set of `Match` values — inputs a scripts-only
     /// runner does not carry.
     val matrixOrderIndependent:
-        setup: MatchSetup<'world, 'view> ->
-        outcome: ('world -> 'o) ->
-        matches: Match<'view> list ->
-            LawResult when 'o: equality
+        setup: MatchSetup<'world, 'view> -> outcome: ('world -> 'o) -> matches: Match<'view> list -> LawResult
+            when 'o: equality

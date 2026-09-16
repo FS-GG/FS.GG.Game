@@ -9,8 +9,10 @@ type SessionRuntimeStatus =
 
 /// Fixed-step and bounded catch-up policy. Time is supplied as integer microseconds by the host.
 type SessionRuntimeConfig =
-    { StepMicroseconds: uint64
-      MaxCatchUpSteps: uint32 }
+    {
+        StepMicroseconds: uint64
+        MaxCatchUpSteps: uint32
+    }
 
 /// A precise refusal which leaves the previously accepted runtime state unchanged.
 [<RequireQualifiedAccess>]
@@ -49,14 +51,16 @@ type SessionRuntimeEffect<'projection> =
 
 /// Runtime-owned state around one product contract. Product state is never inspected or copied.
 type SessionRuntimeState<'state, 'snapshot> =
-    { SessionId: string
-      Compatibility: SessionCompatibility
-      Config: SessionRuntimeConfig
-      Status: SessionRuntimeStatus
-      Current: 'state
-      InitialSnapshot: SessionSnapshot<'snapshot>
-      AccumulatorMicroseconds: uint64
-      LastInputSequence: uint64 option }
+    {
+        SessionId: string
+        Compatibility: SessionCompatibility
+        Config: SessionRuntimeConfig
+        Status: SessionRuntimeStatus
+        Current: 'state
+        InitialSnapshot: SessionSnapshot<'snapshot>
+        AccumulatorMicroseconds: uint64
+        LastInputSequence: uint64 option
+    }
 
 /// Pure fixed-step session execution over a product-supplied <c>SessionContract</c>.
 [<RequireQualifiedAccess>]
@@ -78,9 +82,11 @@ module SessionRuntime =
     /// Read the current product projection without mutating runtime state.
     val project:
         contract: SessionContract<'configuration, 'state, 'input, 'projection, 'snapshot> ->
-        state: SessionRuntimeState<'state, 'snapshot> -> SessionProjection<'projection>
+        state: SessionRuntimeState<'state, 'snapshot> ->
+            SessionProjection<'projection>
 
     /// Read a restorable product snapshot without mutating runtime state.
     val snapshot:
         contract: SessionContract<'configuration, 'state, 'input, 'projection, 'snapshot> ->
-        state: SessionRuntimeState<'state, 'snapshot> -> SessionSnapshot<'snapshot>
+        state: SessionRuntimeState<'state, 'snapshot> ->
+            SessionSnapshot<'snapshot>

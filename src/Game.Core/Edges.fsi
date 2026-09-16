@@ -79,11 +79,23 @@ module Edges =
     /// With an empty `walls` set it matches plain `Pathfinding.bfs` (`FourWay`) reachability and hop
     /// count. Total on degenerate input: a non-walkable `start`/`goal` or `maxVisited <= 0` yields
     /// `None`; a walkable `start = goal` yields `Some [start]`.
-    val bfs: walls: Set<Edge> -> maxVisited: int -> isWalkable: (Cell -> bool) -> start: Cell -> goal: Cell -> Cell list option
+    val bfs:
+        walls: Set<Edge> ->
+        maxVisited: int ->
+        isWalkable: (Cell -> bool) ->
+        start: Cell ->
+        goal: Cell ->
+            Cell list option
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// A* shortest hop path that respects thin walls, using the Manhattan distance as the admissible
     /// heuristic — same contract, endpoint-inclusion, `maxVisited` bound, wall-blocking, and degenerate
     /// behaviour as `Edges.bfs`, and the same shortest-hop result. The frontier is keyed by the total
     /// integer order `(f, h, Col, Row)`, so the path is byte-identical across runs and platforms.
-    val astar: walls: Set<Edge> -> maxVisited: int -> isWalkable: (Cell -> bool) -> start: Cell -> goal: Cell -> Cell list option
+    val astar:
+        walls: Set<Edge> ->
+        maxVisited: int ->
+        isWalkable: (Cell -> bool) ->
+        start: Cell ->
+        goal: Cell ->
+            Cell list option

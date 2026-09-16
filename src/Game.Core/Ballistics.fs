@@ -1,9 +1,11 @@
 namespace FS.GG.Game.Core
 
 type Projectile =
-    { Position: Point
-      Velocity: Point
-      TicksRemaining: int }
+    {
+        Position: Point
+        Velocity: Point
+        TicksRemaining: int
+    }
 
 type ProjectileStep =
     | Flew of Projectile
@@ -20,11 +22,7 @@ module Ballistics =
 
     let private finitePoint (p: Point) = isFinite p.X && isFinite p.Y
 
-    let step
-        (cast: Point -> Point -> RayHit option)
-        (dt: float)
-        (projectile: Projectile)
-        : ProjectileStep =
+    let step (cast: Point -> Point -> RayHit option) (dt: float) (projectile: Projectile) : ProjectileStep =
         // Lifetime before motion: an exhausted round never gets a free final step.
         if projectile.TicksRemaining <= 0 then
             Expired
@@ -36,8 +34,10 @@ module Ballistics =
             let p0 = projectile.Position
 
             let p1 =
-                { X = p0.X + projectile.Velocity.X * d
-                  Y = p0.Y + projectile.Velocity.Y * d }
+                {
+                    X = p0.X + projectile.Velocity.X * d
+                    Y = p0.Y + projectile.Velocity.Y * d
+                }
 
             if not (finitePoint p1) then
                 // Finite position and velocity can still overflow to infinity at absurd dt.
@@ -60,7 +60,8 @@ module Ballistics =
                     Flew
                         { projectile with
                             Position = p1
-                            TicksRemaining = projectile.TicksRemaining - 1 }
+                            TicksRemaining = projectile.TicksRemaining - 1
+                        }
 
     let intercept (shooter: Point) (speed: float) (target: Point) (targetVelocity: Point) : Point voption =
         if not (isFinite speed && speed > 0.0) then
@@ -126,12 +127,21 @@ module Ballistics =
 
             match t with
             | ValueSome t when isFinite t ->
-                let p = { X = target.X + vx * t; Y = target.Y + vy * t }
+                let p =
+                    {
+                        X = target.X + vx * t
+                        Y = target.Y + vy * t
+                    }
+
                 if finitePoint p then ValueSome p else ValueNone
             | _ -> ValueNone
 
     let linearFalloff (edgeScale: float) : float -> float =
-        let e = if isFinite edgeScale then max 0.0 (min 1.0 edgeScale) else 0.0
+        let e =
+            if isFinite edgeScale then
+                max 0.0 (min 1.0 edgeScale)
+            else
+                0.0
 
         fun d ->
             if not (isFinite d) then

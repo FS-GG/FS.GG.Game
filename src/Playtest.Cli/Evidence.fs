@@ -11,12 +11,14 @@ open FS.GG.Playtest.Trx
 
 /// One emitted evidence row for a gameplay-FR.
 type Row =
-    { Id: string
-      RequirementRefs: string list
-      CoversAc: int list
-      Result: string
-      Synthetic: bool
-      Note: string }
+    {
+        Id: string
+        RequirementRefs: string list
+        CoversAc: int list
+        Result: string
+        Synthetic: bool
+        Note: string
+    }
 
 /// Classify one GP against the run and proof report — the satisfaction rule, made mechanical.
 let rowFor (run: TrxRun) (proofs: Map<string, Provenance>) (evId: string) (fr: GameplayFr) : Row =
@@ -31,8 +33,10 @@ let rowFor (run: TrxRun) (proofs: Map<string, Provenance>) (evId: string) (fr: G
     let result, synthetic, note =
         match provenance with
         | Synthetic -> "pass", true, "synthetic proof — disclosed, does not satisfy the gameplay obligation"
-        | ProductionJourney when testedGreen -> "pass", false, "runner-issued production journey receipt and a passing bound test — satisfies"
-        | ProductionJourney when testExists -> "fail", false, "production journey receipt exists but its bound test did not pass"
+        | ProductionJourney when testedGreen ->
+            "pass", false, "runner-issued production journey receipt and a passing bound test — satisfies"
+        | ProductionJourney when testExists ->
+            "fail", false, "production journey receipt exists but its bound test did not pass"
         | ProductionJourney -> "missing", false, "production journey receipt has no matching passing test in the TRX"
         | InputDriven when fr.RequiredEvidence = EvidenceLevel.ProductionJourney ->
             "missing", false, "simulation/component input proof cannot satisfy required production-journey coverage"
@@ -41,12 +45,14 @@ let rowFor (run: TrxRun) (proofs: Map<string, Provenance>) (evId: string) (fr: G
         | InputDriven -> "missing", false, "InputDriven proof declared but no matching passing test in the TRX"
         | Missing -> "missing", false, "no proof entry for this gameplay-FR"
 
-    { Id = evId
-      RequirementRefs = [ fr.Id ]
-      CoversAc = fr.CoversAc
-      Result = result
-      Synthetic = synthetic
-      Note = note }
+    {
+        Id = evId
+        RequirementRefs = [ fr.Id ]
+        CoversAc = fr.CoversAc
+        Result = result
+        Synthetic = synthetic
+        Note = note
+    }
 
 /// Classify production rows from the generated same-execution journey report, never from the
 /// caller-supplied general TRX. Other evidence levels retain their existing TRX classification.
@@ -65,17 +71,20 @@ let rowForWithJourneyReceipts
             else
                 "missing", "production journey receipt has no generated same-execution JUnit binding"
 
-        { Id = evId
-          RequirementRefs = [ fr.Id ]
-          CoversAc = fr.CoversAc
-          Result = result
-          Synthetic = false
-          Note = note }
+        {
+            Id = evId
+            RequirementRefs = [ fr.Id ]
+            CoversAc = fr.CoversAc
+            Result = result
+            Synthetic = false
+            Note = note
+        }
     | _ -> rowFor run proofs evId fr
 
 /// Every emitted row for the manifest, in manifest order (EV ids assigned sequentially).
 let rows (run: TrxRun) (proofs: Map<string, Provenance>) (manifest: GameplayFr list) : Row list =
-    manifest |> List.mapi (fun i fr -> rowFor run proofs (sprintf "EV%03d" (i + 1)) fr)
+    manifest
+    |> List.mapi (fun i fr -> rowFor run proofs (sprintf "EV%03d" (i + 1)) fr)
 
 let rowsWithJourneyReceipts
     (run: TrxRun)
@@ -84,8 +93,7 @@ let rowsWithJourneyReceipts
     (manifest: GameplayFr list)
     : Row list =
     manifest
-    |> List.mapi (fun i fr ->
-        rowForWithJourneyReceipts run journeys proofs (sprintf "EV%03d" (i + 1)) fr)
+    |> List.mapi (fun i fr -> rowForWithJourneyReceipts run journeys proofs (sprintf "EV%03d" (i + 1)) fr)
 
 /// Render the rows as a valid SDD `evidence.yml` document with the TRX `observedRun` receipt and
 /// schema-v1 typed journey receipts for production-journey rows.

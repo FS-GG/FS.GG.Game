@@ -61,10 +61,12 @@ module Edges =
 
     /// A cell's four canonical corner vertices, in NW, NE, SW, SE order.
     let corners (c: Cell) : Vertex list =
-        [ { VCol = c.Col; VRow = c.Row }
-          { VCol = c.Col + 1; VRow = c.Row }
-          { VCol = c.Col; VRow = c.Row + 1 }
-          { VCol = c.Col + 1; VRow = c.Row + 1 } ]
+        [
+            { VCol = c.Col; VRow = c.Row }
+            { VCol = c.Col + 1; VRow = c.Row }
+            { VCol = c.Col; VRow = c.Row + 1 }
+            { VCol = c.Col + 1; VRow = c.Row + 1 }
+        ]
 
     /// The two endpoint vertices of a canonical edge.
     let edgeEndpoints (e: Edge) : Vertex * Vertex =
@@ -77,10 +79,12 @@ module Edges =
 
     /// The up-to-four cells that touch a vertex, in NW, NE, SW, SE order (spatially around the point).
     let vertexCells (v: Vertex) : Cell list =
-        [ { Col = v.VCol - 1; Row = v.VRow - 1 }
-          { Col = v.VCol; Row = v.VRow - 1 }
-          { Col = v.VCol - 1; Row = v.VRow }
-          { Col = v.VCol; Row = v.VRow } ]
+        [
+            { Col = v.VCol - 1; Row = v.VRow - 1 }
+            { Col = v.VCol; Row = v.VRow - 1 }
+            { Col = v.VCol - 1; Row = v.VRow }
+            { Col = v.VCol; Row = v.VRow }
+        ]
 
     /// The four canonical edges meeting at a vertex, in N, E, S, W (segment) order.
     let vertexEdges (v: Vertex) : Edge list =
@@ -89,10 +93,12 @@ module Edges =
         let sw = { Col = v.VCol - 1; Row = v.VRow }
         let se = { Col = v.VCol; Row = v.VRow }
 
-        [ { Lo = min nw ne; Hi = max nw ne } // north segment (between the two upper cells)
-          { Lo = min ne se; Hi = max ne se } // east segment
-          { Lo = min sw se; Hi = max sw se } // south segment
-          { Lo = min nw sw; Hi = max nw sw } ] // west segment
+        [
+            { Lo = min nw ne; Hi = max nw ne } // north segment (between the two upper cells)
+            { Lo = min ne se; Hi = max ne se } // east segment
+            { Lo = min sw se; Hi = max sw se } // south segment
+            { Lo = min nw sw; Hi = max nw sw }
+        ] // west segment
 
     /// The four orthogonally adjacent cells of `c`, in N, E, S, W order.
     let neighbours (c: Cell) : Cell list =
@@ -118,8 +124,7 @@ module Edges =
 
     // The orthogonal neighbours of `c` that are both walkable and reachable across a non-walled edge.
     let private openNeighbours (walls: Set<Edge>) (isWalkable: Cell -> bool) (c: Cell) : Cell list =
-        neighbours c
-        |> List.filter (fun n -> isWalkable n && isEdgePassable walls c n)
+        neighbours c |> List.filter (fun n -> isWalkable n && isEdgePassable walls c n)
 
     /// Public contract function exposed by the FS.GG.Game.Core package.
     /// Breadth-first shortest hop path that respects thin walls: it never crosses an edge in `walls`,

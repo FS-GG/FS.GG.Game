@@ -3,12 +3,14 @@ namespace FS.GG.Game.Core
 /// Versioned identity shared by session initialization and snapshots.
 /// This is portable contract data and has no renderer or transport dependency.
 type SessionCompatibility =
-    { ContractVersion: int
-      EngineId: string
-      EngineVersion: string
-      ProfileId: string
-      SchemaId: string
-      SchemaVersion: int }
+    {
+        ContractVersion: int
+        EngineId: string
+        EngineVersion: string
+        ProfileId: string
+        SchemaId: string
+        SchemaVersion: int
+    }
 
 /// A precise reason why two session identities cannot exchange a snapshot.
 [<RequireQualifiedAccess>]
@@ -42,50 +44,60 @@ type SessionSupport =
 
 /// Input to a product-provided session initializer.
 type SessionInitialization<'configuration> =
-    { SessionId: string
-      Compatibility: SessionCompatibility
-      Configuration: 'configuration }
+    {
+        SessionId: string
+        Compatibility: SessionCompatibility
+        Configuration: 'configuration
+    }
 
 /// One admitted semantic intent. `InputId` is a stable namespaced product identity, not a device token.
 type SessionInput<'input> =
-    { SessionId: string
-      InputId: string
-      Sequence: uint64
-      Value: 'input }
+    {
+        SessionId: string
+        InputId: string
+        Sequence: uint64
+        Value: 'input
+    }
 
 /// One caller-observed deterministic advancement boundary.
 type SessionAdvance =
-    { SessionId: string
-      /// Number of whole deterministic steps the product implementation should apply.
-      StepCount: uint64 }
+    {
+        SessionId: string
+        /// Number of whole deterministic steps the product implementation should apply.
+        StepCount: uint64
+    }
 
 /// A read-only projection of accepted session state.
 type SessionProjection<'projection> =
-    { SessionId: string
-      Revision: uint64
-      Value: 'projection }
+    {
+        SessionId: string
+        Revision: uint64
+        Value: 'projection
+    }
 
 /// A restorable value bound to the exact engine/profile/schema identity that wrote it.
 type SessionSnapshot<'snapshot> =
-    { SessionId: string
-      Revision: uint64
-      Compatibility: SessionCompatibility
-      Value: 'snapshot }
+    {
+        SessionId: string
+        Revision: uint64
+        Compatibility: SessionCompatibility
+        Value: 'snapshot
+    }
 
 /// Product-owned failure data returned through the generic contract.
-type SessionFailure =
-    { Code: string
-      Message: string }
+type SessionFailure = { Code: string; Message: string }
 
 /// The complete portable shape a product implements to expose a deterministic session.
 /// Game.Core does not execute, host, persist, or transport these operations.
 type SessionContract<'configuration, 'state, 'input, 'projection, 'snapshot> =
-    { Initialize: SessionInitialization<'configuration> -> Result<'state, SessionFailure>
-      AdmitInput: SessionInput<'input> -> 'state -> Result<'state, SessionFailure>
-      Advance: SessionAdvance -> 'state -> Result<'state, SessionFailure>
-      Project: 'state -> SessionProjection<'projection>
-      Snapshot: 'state -> SessionSnapshot<'snapshot>
-      Restore: SessionSnapshot<'snapshot> -> Result<'state, SessionFailure> }
+    {
+        Initialize: SessionInitialization<'configuration> -> Result<'state, SessionFailure>
+        AdmitInput: SessionInput<'input> -> 'state -> Result<'state, SessionFailure>
+        Advance: SessionAdvance -> 'state -> Result<'state, SessionFailure>
+        Project: 'state -> SessionProjection<'projection>
+        Snapshot: 'state -> SessionSnapshot<'snapshot>
+        Restore: SessionSnapshot<'snapshot> -> Result<'state, SessionFailure>
+    }
 
 /// Validation and exact compatibility checks for session identities.
 [<RequireQualifiedAccess>]

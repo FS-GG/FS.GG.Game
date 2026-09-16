@@ -31,14 +31,11 @@
 // rect. A gate that typechecks a block against a fiction still shows a green tick, and the tick is
 // what stops anyone looking.
 //
-// VERBATIM, deliberately. The fragment is copied byte-for-byte under a generated banner: no namespace
-// rewrite, no reformatting, no trimming of the parts this repo does not use. Rendering pins exactly
-// that property with a merge-blocking test (`Feature570PublishedScaffoldGeometryTests`) — the file
-// carries no `dotnet new` conditional, has a fixed namespace (`AppRoot`), and compiles outside a
-// generated product against published packages alone. Any transformation here would be a new
-// divergence to defend, and would put this script back in the business the twin was in. The corpora
-// therefore `open AppRoot` (see `AmbientOpens` in typecheck-md-blocks.fsx), which is also what a real
-// product does.
+// The fragment is copied in full under a generated banner and then passed through this repository's
+// pinned Fantomas. There is no namespace rewrite or trimming of the parts this repo does not use. The
+// formatter-only normalization keeps generated F# inside the fleet-wide format contract while the
+// source declarations and semantics remain those shipped by Rendering. The corpora therefore `open
+// AppRoot` (see `AmbientOpens` in typecheck-md-blocks.fsx), which is also what a real product does.
 //
 // The ONE normalisation is line endings (CRLF -> LF). The fragment ships LF today; normalising means
 // a future re-pack on a CRLF machine cannot make the drift gate flap on a file nobody edited. It
@@ -71,11 +68,13 @@ open System.Text.RegularExpressions
 
 let repoRoot =
     let rec find dir =
-        if File.Exists(Path.Combine(dir, "FS.GG.Game.slnx")) then dir
+        if File.Exists(Path.Combine(dir, "FS.GG.Game.slnx")) then
+            dir
         else
             match Directory.GetParent dir |> Option.ofObj with
             | Some p -> find p.FullName
             | None -> failwith "Could not locate repository root (FS.GG.Game.slnx)."
+
     find __SOURCE_DIRECTORY__
 
 let repoPath (rel: string) =
@@ -116,6 +115,7 @@ let pinnedVersion (package: string) =
         [ "Directory.Packages.local.props"; "Directory.Packages.props" ]
         |> List.map repoPath
         |> List.filter File.Exists
+
     let hit =
         props
         |> List.tryPick (fun p ->
@@ -124,7 +124,9 @@ let pinnedVersion (package: string) =
                     File.ReadAllText p,
                     $"""<PackageVersion\s+Include="{Regex.Escape package}"\s+Version="(?<v>[^"]+)"\s*/>"""
                 )
+
             if m.Success then Some m.Groups["v"].Value else None)
+
     match hit with
     | Some v -> v
     | None ->
@@ -147,6 +149,7 @@ let run (fileName: string) (args: string) (workingDir: string) =
             RedirectStandardError = true,
             WorkingDirectory = workingDir
         )
+
     use p = Process.Start psi
     // Drain both pipes concurrently — reading one to completion before the other deadlocks the moment
     // the child fills the other's buffer. Same reasoning as typecheck-md-blocks.fsx.
@@ -155,7 +158,9 @@ let run (fileName: string) (args: string) (workingDir: string) =
     p.WaitForExit()
     p.ExitCode, stdout.Result + stderr.Result
 
-let workDir = Path.Combine(Path.GetTempPath(), $"fsgg-scaffold-gen-{Guid.NewGuid():N}")
+let workDir =
+    Path.Combine(Path.GetTempPath(), $"fsgg-scaffold-gen-{Guid.NewGuid():N}")
+
 Directory.CreateDirectory workDir |> ignore
 
 // Cleanup is hung off ProcessExit, NOT a `try/finally`. `fail` ends in `exit`, which is
@@ -165,7 +170,10 @@ Directory.CreateDirectory workDir |> ignore
 // does raise ProcessExit, so this handler fires on the success path, on every `fail`, and on an
 // unhandled exception alike.
 AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
-    try Directory.Delete(workDir, true) with _ -> ())
+    try
+        Directory.Delete(workDir, true)
+    with _ ->
+        ())
 
 do
     // `PackageDownload` fetches the package WITHOUT putting it in a compile graph — we want the file
@@ -196,12 +204,14 @@ do
 
 </Project>
 """
+
     File.WriteAllText(Path.Combine(workDir, "Directory.Build.props"), "<Project></Project>")
     File.WriteAllText(Path.Combine(workDir, "Directory.Build.targets"), "<Project></Project>")
     File.WriteAllText(Path.Combine(workDir, "fetch.fsproj"), projXml)
 
     printfn "restoring %s %s …" packageId version
     let code, output = run "dotnet" "restore fetch.fsproj" workDir
+
     if code <> 0 then
         fail
             $"restore of {packageId} {version} failed — cannot generate {target} without it. A \
@@ -242,13 +252,15 @@ do
     // Whitespace-tolerant for the same reason in reverse: `Vx : float` is a cosmetic reformat, and a
     // guard that hard-fails on one is a guard someone edits out.
     let required =
-        [ @"^namespace\s+\w", "a namespace declaration (the corpora `open` whatever it declares)"
-          @"^module\s+Geometry\s*=", "`module Geometry` — the module the skills write as `Geometry.Vec2`"
-          @"type\s+Vec2\s*=", "`type Vec2` — the scaffold's vector type"
-          @"\bVx\s*:", "the collision-safe label `Vx` (the whole point of Vec2)"
-          @"\bVy\s*:", "the collision-safe label `Vy` (the whole point of Vec2)"
-          @"^\s*let\s+toPoint\b", "`let toPoint` — the scene edge the corpora compile"
-          @"^\s*let\s+toRect\b", "`let toRect` — the scene edge the corpora compile" ]
+        [
+            @"^namespace\s+\w", "a namespace declaration (the corpora `open` whatever it declares)"
+            @"^module\s+Geometry\s*=", "`module Geometry` — the module the skills write as `Geometry.Vec2`"
+            @"type\s+Vec2\s*=", "`type Vec2` — the scaffold's vector type"
+            @"\bVx\s*:", "the collision-safe label `Vx` (the whole point of Vec2)"
+            @"\bVy\s*:", "the collision-safe label `Vy` (the whole point of Vec2)"
+            @"^\s*let\s+toPoint\b", "`let toPoint` — the scene edge the corpora compile"
+            @"^\s*let\s+toRect\b", "`let toRect` — the scene edge the corpora compile"
+        ]
 
     for pattern, why in required do
         if not (Regex.IsMatch(body, pattern, RegexOptions.Multiline)) then
@@ -263,34 +275,55 @@ do
     // -----------------------------------------------------------------------------------------
 
     let banner =
-        [ "// ─────────────────────────────────────────────────────────────────────────────────────────"
-          "// GENERATED FILE — DO NOT EDIT. Your changes will be overwritten, and CI will fail first."
-          "//"
-          $"// Source:    {packageId} {version} :: {fragmentPath}"
-          "// Generator: dotnet fsi scripts/generate-scaffold-context.fsx"
-          "// Pin:       Directory.Packages.local.props (generator-only group)"
-          "//"
-          "// This is the generated product's REAL collision-safe geometry, copied verbatim from the"
-          "// published template package — not a re-declaration of it. It is the context the md-block"
-          "// gate (scripts/typecheck-md-blocks.fsx) compiles every skill and TestSpec block against, so"
-          "// it has to be the type the reader's product actually ships, byte for byte."
-          "//"
-          "// It used to be a hand-written twin, on the grounds that the real `Vec2` \"cannot be"
-          "// referenced\" — true of a reference, false of the SOURCE, which FS.GG.Rendering packs under"
-          "// `content/`. The twin was an unenforced cross-repo contract: it kept compiling after the real"
-          "// type moved under it, holding the gate green over skills teaching a shape the scaffold no"
-          "// longer shipped. FS.GG.Game#189 / FS.GG.Rendering#570 replaced it with this."
-          "//"
-          "// To change what the gate sees, bump the pin and regenerate. To change the GEOMETRY, change it"
-          "// in FS.GG.Rendering — it is theirs, and every scaffolded product gets it from there."
-          "// ─────────────────────────────────────────────────────────────────────────────────────────"
-          "" ]
+        [
+            "// ─────────────────────────────────────────────────────────────────────────────────────────"
+            "// GENERATED FILE — DO NOT EDIT. Your changes will be overwritten, and CI will fail first."
+            "//"
+            $"// Source:    {packageId} {version} :: {fragmentPath}"
+            "// Generator: dotnet fsi scripts/generate-scaffold-context.fsx"
+            "// Pin:       Directory.Packages.local.props (generator-only group)"
+            "//"
+            "// This is the generated product's REAL collision-safe geometry, copied verbatim from the"
+            "// published template package — not a re-declaration of it. It is the context the md-block"
+            "// gate (scripts/typecheck-md-blocks.fsx) compiles every skill and TestSpec block against, so"
+            "// it has to be the type the reader's product actually ships, byte for byte."
+            "//"
+            "// It used to be a hand-written twin, on the grounds that the real `Vec2` \"cannot be"
+            "// referenced\" — true of a reference, false of the SOURCE, which FS.GG.Rendering packs under"
+            "// `content/`. The twin was an unenforced cross-repo contract: it kept compiling after the real"
+            "// type moved under it, holding the gate green over skills teaching a shape the scaffold no"
+            "// longer shipped. FS.GG.Game#189 / FS.GG.Rendering#570 replaced it with this."
+            "//"
+            "// To change what the gate sees, bump the pin and regenerate. To change the GEOMETRY, change it"
+            "// in FS.GG.Rendering — it is theirs, and every scaffolded product gets it from there."
+            "// ─────────────────────────────────────────────────────────────────────────────────────────"
+            ""
+        ]
         |> String.concat "\n"
 
-    let generated = banner + "\n" + (body.TrimEnd '\n') + "\n"
+    let unformatted = banner + "\n" + (body.TrimEnd '\n') + "\n"
+    let generatedPath = Path.Combine(workDir, "generated-scaffold.fs")
+    File.WriteAllText(generatedPath, unformatted)
+
+    let restoreCode, restoreOutput = run "dotnet" "tool restore" repoRoot
+
+    if restoreCode <> 0 then
+        fail $"restoring the repository-pinned Fantomas failed; cannot normalize {target}.\n{restoreOutput}"
+
+    let formatCode, formatOutput = run "dotnet" $"fantomas \"{generatedPath}\"" repoRoot
+
+    if formatCode <> 0 then
+        fail $"Fantomas could not normalize the generated scaffold.\n{formatOutput}"
+
+    let generated = File.ReadAllText(generatedPath).Replace("\r\n", "\n")
 
     let targetFile = repoPath target
-    let current = if File.Exists targetFile then File.ReadAllText targetFile else ""
+
+    let current =
+        if File.Exists targetFile then
+            File.ReadAllText targetFile
+        else
+            ""
 
     if checkOnly then
         // Note this catches a MISSING target too (`current` is "", which never equals `generated`).
@@ -304,6 +337,7 @@ do
                 $"{target} is STALE or MISSING — it is not what {packageId} {version} ships. It is a \
                   GENERATED file: do not hand-edit it. Regenerate and commit the result:  dotnet fsi \
                   scripts/generate-scaffold-context.fsx"
+
         printfn "OK — %s is up to date with %s %s." target packageId version
     else
         File.WriteAllText(targetFile, generated)

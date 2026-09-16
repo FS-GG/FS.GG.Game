@@ -13,18 +13,20 @@ open FS.GG.Game.Core
 /// is exactly the `integrate: 'world -> dt -> 'world` shape `Loop.advance` drives, so a game already
 /// built on `FS.GG.Game.Core.Loop` hands its own step straight in.
 type Playable<'world, 'key when 'key: comparison> =
-    { /// The world the harness starts every run from.
-      Init: 'world
-      /// The game's keymap: which `Command` (if any) each raw key token produces. An absent key is an
-      /// unbound token that produces no command.
-      Keymap: Map<'key, Command>
-      /// Apply one device-free command intent to the world — the input half of the game's update.
-      Apply: Command -> 'world -> 'world
-      /// Advance the world by one whole fixed step of `dt` seconds — the game's `integrate`.
-      Step: 'world -> float -> 'world
-      /// The fixed step interval in seconds. Constant across a run, so the sim only ever sees whole
-      /// fixed steps and a scripted replay is deterministic.
-      Dt: float }
+    {
+        /// The world the harness starts every run from.
+        Init: 'world
+        /// The game's keymap: which `Command` (if any) each raw key token produces. An absent key is an
+        /// unbound token that produces no command.
+        Keymap: Map<'key, Command>
+        /// Apply one device-free command intent to the world — the input half of the game's update.
+        Apply: Command -> 'world -> 'world
+        /// Advance the world by one whole fixed step of `dt` seconds — the game's `integrate`.
+        Step: 'world -> float -> 'world
+        /// The fixed step interval in seconds. Constant across a run, so the sim only ever sees whole
+        /// fixed steps and a scripted replay is deterministic.
+        Dt: float
+    }
 
 /// Public contract module exposed by the FS.GG.Game.Harness package.
 [<RequireQualifiedAccess>]
@@ -43,6 +45,8 @@ module Playable =
 /// identical commands, because `Rng` is a pure value and `Decide` is a function. Instantiate `'view`
 /// as `Ai.TeamView<_>` to inherit the fog boundary, or as any projection the policy needs.
 type Bot<'view> =
-    { /// Decide the commands to issue this step from the observed view and the current generator,
-      /// returning the commands and the advanced generator.
-      Decide: 'view -> Rng -> struct (Command list * Rng) }
+    {
+        /// Decide the commands to issue this step from the observed view and the current generator,
+        /// returning the commands and the advanced generator.
+        Decide: 'view -> Rng -> struct (Command list * Rng)
+    }

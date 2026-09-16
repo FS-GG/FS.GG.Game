@@ -8,10 +8,12 @@ open FS.GG.Game.Core
 /// `Driver.runCommands` on the same `Playable` and the replay's frames are byte-identical, which is
 /// how a bot (or agent) playthrough becomes a deterministic regression golden.
 type Run<'f> =
-    { /// The trace recorded during the run (`Origin.InputDriven`).
-      Trace: Trace<'f>
-      /// The commands issued at each step, in step order — a script for `runCommands`.
-      Captured: Command list list }
+    {
+        /// The trace recorded during the run (`Origin.InputDriven`).
+        Trace: Trace<'f>
+        /// The commands issued at each step, in step order — a script for `runCommands`.
+        Captured: Command list list
+    }
 
 /// Public contract module exposed by the FS.GG.Game.Harness package.
 /// The scripted and bot single-seat drivers. Every driver advances the world by exactly one whole

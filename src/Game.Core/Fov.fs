@@ -47,10 +47,26 @@ module Fov =
     // rather than being double-counted or dropped.
     let private transform (origin: Cell) (quadrant: int) (depth: int) (col: int) : Cell =
         match quadrant with
-        | 0 -> { Col = origin.Col + col; Row = origin.Row - depth } // north
-        | 1 -> { Col = origin.Col + col; Row = origin.Row + depth } // south
-        | 2 -> { Col = origin.Col + depth; Row = origin.Row + col } // east
-        | _ -> { Col = origin.Col - depth; Row = origin.Row + col } // west
+        | 0 ->
+            {
+                Col = origin.Col + col
+                Row = origin.Row - depth
+            } // north
+        | 1 ->
+            {
+                Col = origin.Col + col
+                Row = origin.Row + depth
+            } // south
+        | 2 ->
+            {
+                Col = origin.Col + depth
+                Row = origin.Row + col
+            } // east
+        | _ ->
+            {
+                Col = origin.Col - depth
+                Row = origin.Row + col
+            } // west
 
     let fov (isTransparent: Cell -> bool) (origin: Cell) (radius: int) : Set<Cell> =
         if radius < 0 then
@@ -107,7 +123,8 @@ module Fov =
                             // clipped to this tile's near edge. (Mutually exclusive with the case above.)
                             let acc =
                                 match prev with
-                                | ValueSome false when isWall -> scanRow quadrant (depth + 1) start (slopeOf depth col) acc
+                                | ValueSome false when isWall ->
+                                    scanRow quadrant (depth + 1) start (slopeOf depth col) acc
                                 | _ -> acc
 
                             walk (col + 1) start (ValueSome isWall) acc

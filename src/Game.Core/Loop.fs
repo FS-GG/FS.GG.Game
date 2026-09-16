@@ -1,17 +1,21 @@
 namespace FS.GG.Game.Core
 
 type StepState<'world> =
-    { Current: 'world
-      Previous: 'world
-      Accumulator: float }
+    {
+        Current: 'world
+        Previous: 'world
+        Accumulator: float
+    }
 
 [<RequireQualifiedAccess>]
 module Loop =
 
     let init (world: 'world) : StepState<'world> =
-        { Current = world
-          Previous = world
-          Accumulator = 0.0 }
+        {
+            Current = world
+            Previous = world
+            Accumulator = 0.0
+        }
 
     let advance
         (dt: float)
@@ -34,9 +38,11 @@ module Loop =
             previous <- current
             current <- integrate current dt
 
-        { Current = current
-          Previous = previous
-          Accumulator = carry }
+        {
+            Current = current
+            Previous = previous
+            Accumulator = carry
+        }
 
     let alpha (dt: float) (state: StepState<'world>) : float =
         // Total for a hand-built StepState too — `advance` guarantees a finite accumulator in [0, dt),

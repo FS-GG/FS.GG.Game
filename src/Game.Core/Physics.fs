@@ -16,16 +16,18 @@ module Physics =
     type Material = { Restitution: float; Friction: float }
 
     type Config =
-        { Gravity: Point
-          VelocityIterations: int
-          PositionIterations: int
-          Slop: float
-          Correction: float
-          BounceThreshold: float
-          SleepLinearSq: float
-          SleepAngular: float
-          SleepTicks: int
-          BroadPhaseCellSize: float }
+        {
+            Gravity: Point
+            VelocityIterations: int
+            PositionIterations: int
+            Slop: float
+            Correction: float
+            BounceThreshold: float
+            SleepLinearSq: float
+            SleepAngular: float
+            SleepTicks: int
+            BroadPhaseCellSize: float
+        }
 
     // Representation hidden by the .fsi (opaque `World`, as `SpatialGrid<'T>` is). Struct-of-arrays, not
     // an array of records: `Loop.advance` copies the world once per step (`previous <- current`), and the
@@ -62,29 +64,31 @@ module Physics =
     // None of the three reaches `checksum`, which hashes body state only (R3). That is a property of
     // `checksum`, not an accident of the layout — see its comment.
     type World =
-        { Config: Config
-          Kinds: BodyKind[]
-          Shapes: Shape[]
-          Materials: Material[]
-          Pos: Point[]
-          Vel: Point[]
-          Rot: float[]
-          AngVel: float[]
-          InvMass: float[]
-          InvInertia: float[]
-          Asleep: bool[]
-          SleepCounter: int[]
-          CacheA: int[]
-          CacheB: int[]
-          CacheFeature: int[]
-          CachePoint: int[]
-          CacheN: float[]
-          CacheT: float[]
-          // The broad-phase index (#94). Derived cross-tick state, like the cache: never presentation, never
-          // hashed, and — because a body ADDED and one that MOVED can reach the same pose by different arrays
-          // — never compared. `Boxes.[i]` is `ValueNone` exactly where body `i` collides with nothing.
-          Boxes: Rect voption[]
-          Grid: SpatialGrid<int> }
+        {
+            Config: Config
+            Kinds: BodyKind[]
+            Shapes: Shape[]
+            Materials: Material[]
+            Pos: Point[]
+            Vel: Point[]
+            Rot: float[]
+            AngVel: float[]
+            InvMass: float[]
+            InvInertia: float[]
+            Asleep: bool[]
+            SleepCounter: int[]
+            CacheA: int[]
+            CacheB: int[]
+            CacheFeature: int[]
+            CachePoint: int[]
+            CacheN: float[]
+            CacheT: float[]
+            // The broad-phase index (#94). Derived cross-tick state, like the cache: never presentation, never
+            // hashed, and — because a body ADDED and one that MOVED can reach the same pose by different arrays
+            // — never compared. `Boxes.[i]` is `ValueNone` exactly where body `i` collides with nothing.
+            Boxes: Rect voption[]
+            Grid: SpatialGrid<int>
+        }
 
     // The presentation projection of a body — `Pos` and `Rot`, nothing else. Public via the `.fsi`.
     type Transform = { Position: Point; Rotation: float }
@@ -133,8 +137,11 @@ module Physics =
             else
                 let c = cos rotation
                 let s = sin rotation
-                { X = c * v.X - s * v.Y
-                  Y = s * v.X + c * v.Y }
+
+                {
+                    X = c * v.X - s * v.Y
+                    Y = s * v.X + c * v.Y
+                }
 
         // A shape's extent about its own origin, as `struct(loX, loY, hiX, hiY)`; `ValueNone` for a degenerate
         // shape — the no-collision input of the `Shape` contract. NaN fails every `>` test, so the guards are
@@ -201,10 +208,12 @@ module Physics =
                             match shape with
                             | SPoly polygon -> polygon.Vertices
                             | _ ->
-                                [| { X = loX; Y = loY }
-                                   { X = hiX; Y = loY }
-                                   { X = hiX; Y = hiY }
-                                   { X = loX; Y = hiY } |]
+                                [|
+                                    { X = loX; Y = loY }
+                                    { X = hiX; Y = loY }
+                                    { X = hiX; Y = hiY }
+                                    { X = loX; Y = hiY }
+                                |]
 
                         let mutable rloX, rloY = infinity, infinity
                         let mutable rhiX, rhiY = -infinity, -infinity
@@ -231,10 +240,12 @@ module Physics =
                 | ValueNone -> ValueNone
                 | ValueSome(struct (loX, loY, hiX, hiY)) ->
                     ValueSome
-                        { X = p.X + loX
-                          Y = p.Y + loY
-                          Width = hiX - loX
-                          Height = hiY - loY }
+                        {
+                            X = p.X + loX
+                            Y = p.Y + loY
+                            Width = hiX - loX
+                            Height = hiY - loY
+                        }
 
         // Only a `Dynamic` body has finite mass, so a pair without one can never resolve.
         let solvable (a: BodyKind) (b: BodyKind) = a = Dynamic || b = Dynamic
@@ -361,26 +372,28 @@ module Physics =
     let empty (config: Config) : World =
         let boxes, grid = broadPhase config [||] [||] [||]
 
-        { Config = config
-          Kinds = [||]
-          Shapes = [||]
-          Materials = [||]
-          Pos = [||]
-          Vel = [||]
-          Rot = [||]
-          AngVel = [||]
-          InvMass = [||]
-          InvInertia = [||]
-          Asleep = [||]
-          SleepCounter = [||]
-          CacheA = [||]
-          CacheB = [||]
-          CacheFeature = [||]
-          CachePoint = [||]
-          CacheN = [||]
-          CacheT = [||]
-          Boxes = boxes
-          Grid = grid }
+        {
+            Config = config
+            Kinds = [||]
+            Shapes = [||]
+            Materials = [||]
+            Pos = [||]
+            Vel = [||]
+            Rot = [||]
+            AngVel = [||]
+            InvMass = [||]
+            InvInertia = [||]
+            Asleep = [||]
+            SleepCounter = [||]
+            CacheA = [||]
+            CacheB = [||]
+            CacheFeature = [||]
+            CachePoint = [||]
+            CacheN = [||]
+            CacheT = [||]
+            Boxes = boxes
+            Grid = grid
+        }
 
     // Append a BATCH of bodies in one pass, returning `struct(indices, world')` where `indices.[k]` is the
     // identity of `bodies.[k]` — dense and ascending from the world's previous body count, exactly the
@@ -445,7 +458,8 @@ module Physics =
                     // invalidated by a body arriving. Clearing it would cold-start every contact in the world
                     // on the tick a body spawns, which is exactly the tick that can least afford it.
                     Boxes = boxes
-                    Grid = grid }
+                    Grid = grid
+                }
 
             struct (Array.init k (fun i -> baseIndex + i), grown)
 
@@ -517,11 +531,16 @@ module Physics =
         match world.Shapes.[i] with
         | SBox halfExtents -> Geometry.obbPolygon p halfExtents r
         | SPoly polygon ->
-            { Vertices = polygon.Vertices |> Array.map (fun v -> vadd p (vrot r v)) }
+            {
+                Vertices = polygon.Vertices |> Array.map (fun v -> vadd p (vrot r v))
+            }
         | SCircle _ -> { Vertices = [||] }
 
     let private worldCircle (world: World) (i: int) (radius: float) : Circle =
-        { Center = world.Pos.[i]; Radius = radius }
+        {
+            Center = world.Pos.[i]
+            Radius = radius
+        }
 
     // A body collides with nothing when its position is non-finite, its shape is degenerate, or its
     // rotation is non-finite — exactly the three `ValueNone`s the broad phase already honours.
@@ -555,13 +574,15 @@ module Physics =
                 let n = vscale (1.0 / dist) d
 
                 ValueSome
-                    { A = a
-                      B = b
-                      Normal = n
-                      Depth = r - dist
-                      Points = [| vadd ca.Center (vscale ca.Radius n) |]
-                      PointCount = 1
-                      FeatureId = featureCircleCircle }
+                    {
+                        A = a
+                        B = b
+                        Normal = n
+                        Depth = r - dist
+                        Points = [| vadd ca.Center (vscale ca.Radius n) |]
+                        PointCount = 1
+                        FeatureId = featureCircleCircle
+                    }
 
     // A circle against a convex polygon, returning `struct(normal, depth, point, featureId)` with the
     // normal directed CIRCLE → POLYGON. The caller orients it to a → b.
@@ -570,10 +591,7 @@ module Physics =
     // candidate, because a convex polygon lies entirely behind each of its faces. Outward normals are
     // taken with the ring's winding — `localBounds` accepted either winding via `ringArea`'s `abs`, so
     // this must too, or a clockwise polygon would push bodies *into* itself.
-    let private circlePolygonParts
-        (c: Circle)
-        (poly: ConvexPolygon)
-        : struct (Point * float * Point * int) voption =
+    let private circlePolygonParts (c: Circle) (poly: ConvexPolygon) : struct (Point * float * Point * int) voption =
         let v = poly.Vertices
 
         if v.Length < 3 then
@@ -655,8 +673,7 @@ module Physics =
             ValueNone
         else
             match world.Shapes.[a], world.Shapes.[b] with
-            | SCircle ra, SCircle rb ->
-                circleCircleManifold a b (worldCircle world a ra) (worldCircle world b rb)
+            | SCircle ra, SCircle rb -> circleCircleManifold a b (worldCircle world a ra) (worldCircle world b rb)
 
             | SCircle ra, _ ->
                 match circlePolygonParts (worldCircle world a ra) (worldPolygon world b) with
@@ -664,13 +681,15 @@ module Physics =
                 | ValueSome(struct (normal, depth, point, feature)) ->
                     // `circlePolygonParts` directs the normal circle → polygon, which here is a → b.
                     ValueSome
-                        { A = a
-                          B = b
-                          Normal = normal
-                          Depth = depth
-                          Points = [| point |]
-                          PointCount = 1
-                          FeatureId = feature }
+                        {
+                            A = a
+                            B = b
+                            Normal = normal
+                            Depth = depth
+                            Points = [| point |]
+                            PointCount = 1
+                            FeatureId = feature
+                        }
 
             | _, SCircle rb ->
                 match circlePolygonParts (worldCircle world b rb) (worldPolygon world a) with
@@ -678,13 +697,15 @@ module Physics =
                 | ValueSome(struct (normal, depth, point, feature)) ->
                     // Here the normal runs circle → polygon, i.e. b → a. Flip it to a → b.
                     ValueSome
-                        { A = a
-                          B = b
-                          Normal = vscale -1.0 normal
-                          Depth = depth
-                          Points = [| point |]
-                          PointCount = 1
-                          FeatureId = feature }
+                        {
+                            A = a
+                            B = b
+                            Normal = vscale -1.0 normal
+                            Depth = depth
+                            Points = [| point |]
+                            PointCount = 1
+                            FeatureId = feature
+                        }
 
             | _, _ ->
                 // `polygonManifold` labels its arguments `0` and `1`; re-label them with the body indices
@@ -699,22 +720,16 @@ module Physics =
 
     // A coefficient a caller may have handed us as NaN, negative, or greater than one. NaN fails both
     // comparisons, so the `not (x > lo)` form — rather than `x < lo` — is what maps it to `lo`.
-    let private clamp01 (x: float) = if not (x > 0.0) then 0.0 elif x > 1.0 then 1.0 else x
+    let private clamp01 (x: float) =
+        if not (x > 0.0) then 0.0
+        elif x > 1.0 then 1.0
+        else x
 
     let private clampLow (x: float) = if not (x > 0.0) then 0.0 else x
 
     // Strict lexicographic `<` on a warm-start cache key. The key is `(A, B, FeatureId, point)`: the pair,
     // the contacting feature pair, and which of the manifold's (up to two) points this is.
-    let inline private keyLess
-        (a1: int)
-        (b1: int)
-        (f1: int)
-        (p1: int)
-        (a2: int)
-        (b2: int)
-        (f2: int)
-        (p2: int)
-        =
+    let inline private keyLess (a1: int) (b1: int) (f1: int) (p1: int) (a2: int) (b2: int) (f2: int) (p2: int) =
         if a1 <> a2 then a1 < a2
         elif b1 <> b2 then b1 < b2
         elif f1 <> f2 then f1 < f2
@@ -741,7 +756,8 @@ module Physics =
                     Pos = pos
                     Vel = vel
                     Rot = rot
-                    AngVel = angVel }
+                    AngVel = angVel
+                }
 
             let invMass = world.InvMass
             let invInertia = world.InvInertia
@@ -837,7 +853,9 @@ module Physics =
             // encoding of "unmoved by any impulse", so sleeping needs no branch anywhere in the solver —
             // only these two arrays, which are what the solver divides by from here on.
             let effInvMass = Array.init n (fun i -> if asleep.[i] then 0.0 else invMass.[i])
-            let effInvInertia = Array.init n (fun i -> if asleep.[i] then 0.0 else invInertia.[i])
+
+            let effInvInertia =
+                Array.init n (fun i -> if asleep.[i] then 0.0 else invInertia.[i])
 
             // 3. Gather the manifolds the solver must see. A pair needs solving exactly when it has an
             //    awake `Dynamic` member — anything else has no finite mass to move. A pair skipped above
@@ -941,13 +959,15 @@ module Physics =
                         let normal = if m > t then nOut else vscale -1.0 nOut
 
                         ValueSome
-                            { A = a
-                              B = b
-                              Normal = normal
-                              Depth = -gap
-                              Points = [| point |]
-                              PointCount = 1
-                              FeatureId = featureSpeculative }
+                            {
+                                A = a
+                                B = b
+                                Normal = normal
+                                Depth = -gap
+                                Points = [| point |]
+                                PointCount = 1
+                                FeatureId = featureSpeculative
+                            }
 
             let fast = Array.zeroCreate<bool> n
             let mutable hasFast = false
@@ -993,10 +1013,12 @@ module Physics =
                                 let d = vscale dt vel.[m]
 
                                 let swept =
-                                    { X = min bm.X (bm.X + d.X)
-                                      Y = min bm.Y (bm.Y + d.Y)
-                                      Width = bm.Width + abs d.X
-                                      Height = bm.Height + abs d.Y }
+                                    {
+                                        X = min bm.X (bm.X + d.X)
+                                        Y = min bm.Y (bm.Y + d.Y)
+                                        Width = bm.Width + abs d.X
+                                        Height = bm.Height + abs d.Y
+                                    }
 
                                 for t in SpatialGrid.queryBounds swept grid do
                                     // One speculative contact per unordered pair — both bodies may be fast
@@ -1089,14 +1111,16 @@ module Physics =
                 // restitution would be unreachable in the one scene that motivates it. `max` says instead
                 // that a bouncy thing bounces off anything, which is both the useful reading and the one
                 // Box2D takes.
-                let e = clamp01 (max world.Materials.[a].Restitution world.Materials.[b].Restitution)
+                let e =
+                    clamp01 (max world.Materials.[a].Restitution world.Materials.[b].Restitution)
 
                 // Coulomb friction combines as the geometric mean of the two coefficients — the usual
                 // choice, and the one that makes a frictionless body (`μ = 0`) frictionless against
                 // everything, however rough the other surface. Note the asymmetry with restitution above:
                 // `max` there lets one bouncy body bounce, `sqrt(μa·μb)` here lets one slippery body slide.
                 // Both say "the more surprising surface wins", which is what a game wants.
-                let mu = sqrt (clampLow world.Materials.[a].Friction * clampLow world.Materials.[b].Friction)
+                let mu =
+                    sqrt (clampLow world.Materials.[a].Friction * clampLow world.Materials.[b].Friction)
 
                 for pi in 0 .. m.PointCount - 1 do
                     let p = m.Points.[pi]
@@ -1332,7 +1356,8 @@ module Physics =
                 CacheN = cAccN
                 CacheT = cAccT
                 Boxes = boxes
-                Grid = grid }
+                Grid = grid
+            }
 
     // ---------------------------------------------------------------------------------------------
     // Presentation interpolation
@@ -1345,8 +1370,10 @@ module Physics =
     // returns `a0`, and `t = 1` is special-cased to `a1` so a wrapped pair still lands bit-for-bit on
     // `current`'s angle rather than a full turn off it.
     let internal lerpAngleShortest (a0: float) (a1: float) (t: float) : float =
-        if t <= 0.0 then a0
-        elif t >= 1.0 then a1
+        if t <= 0.0 then
+            a0
+        elif t >= 1.0 then
+            a1
         else
             let twoPi = 2.0 * System.Math.PI
             let delta = a1 - a0
@@ -1359,8 +1386,10 @@ module Physics =
         // extrapolate past an endpoint. (NaN loses every comparison, so guard it explicitly, else it would
         // fall through to the raw value.)
         let a =
-            if System.Double.IsNaN alpha then 0.0
-            else max 0.0 (min 1.0 alpha)
+            if System.Double.IsNaN alpha then
+                0.0
+            else
+                max 0.0 (min 1.0 alpha)
 
         // Linear blend with exact endpoints, so `interpolate 0 = previous` and `interpolate 1 = current`
         // hold with no float drift from `v0 + (v1 - v0) * 1.0`.
@@ -1376,13 +1405,19 @@ module Physics =
 
         Array.init current.Pos.Length (fun i ->
             if i < prior then
-                { Position =
-                    { X = lerp previous.Pos.[i].X current.Pos.[i].X
-                      Y = lerp previous.Pos.[i].Y current.Pos.[i].Y }
-                  Rotation = lerpAngleShortest previous.Rot.[i] current.Rot.[i] a }
+                {
+                    Position =
+                        {
+                            X = lerp previous.Pos.[i].X current.Pos.[i].X
+                            Y = lerp previous.Pos.[i].Y current.Pos.[i].Y
+                        }
+                    Rotation = lerpAngleShortest previous.Rot.[i] current.Rot.[i] a
+                }
             else
-                { Position = current.Pos.[i]
-                  Rotation = current.Rot.[i] })
+                {
+                    Position = current.Pos.[i]
+                    Rotation = current.Rot.[i]
+                })
 
     // ---------------------------------------------------------------------------------------------
     // The desync tripwire

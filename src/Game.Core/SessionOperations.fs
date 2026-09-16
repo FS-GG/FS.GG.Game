@@ -7,12 +7,16 @@ type SessionOperationTarget =
 
 [<Struct>]
 type SessionOperationId =
-    { Generation: uint64
-      Operation: uint64 }
+    {
+        Generation: uint64
+        Operation: uint64
+    }
 
 type SessionOperationConfig =
-    { Target: SessionOperationTarget
-      MaxPendingRequired: uint32 }
+    {
+        Target: SessionOperationTarget
+        MaxPendingRequired: uint32
+    }
 
 [<RequireQualifiedAccess>]
 type SessionOperationStatus =
@@ -22,14 +26,18 @@ type SessionOperationStatus =
     | Disposed
 
 type SessionRequiredDispatch<'request> =
-    { Id: SessionOperationId
-      Order: uint64
-      Target: SessionOperationTarget
-      Payload: 'request }
+    {
+        Id: SessionOperationId
+        Order: uint64
+        Target: SessionOperationTarget
+        Payload: 'request
+    }
 
 type SessionProjectionDispatch =
-    { Id: SessionOperationId
-      Target: SessionOperationTarget }
+    {
+        Id: SessionOperationId
+        Target: SessionOperationTarget
+    }
 
 [<RequireQualifiedAccess>]
 type SessionOperationObservation<'request, 'record, 'projection> =
@@ -65,54 +73,69 @@ type SessionOperationEffect<'request, 'record, 'projection> =
     | Refused of SessionOperationRefusal
 
 type SessionOperationState<'record> =
-    { Config: SessionOperationConfig
-      Generation: uint64
-      Status: SessionOperationStatus
-      NextOperation: uint64
-      NextRequiredOrder: uint64
-      NextRequiredCommit: uint64
-      PendingRequired: Map<uint64, uint64>
-      BufferedRequired: Map<uint64, 'record>
-      PendingProjection: uint64 option
-      ProjectionDemandQueued: bool
-      LastProjectionRevision: uint64 option }
+    {
+        Config: SessionOperationConfig
+        Generation: uint64
+        Status: SessionOperationStatus
+        NextOperation: uint64
+        NextRequiredOrder: uint64
+        NextRequiredCommit: uint64
+        PendingRequired: Map<uint64, uint64>
+        BufferedRequired: Map<uint64, 'record>
+        PendingProjection: uint64 option
+        ProjectionDemandQueued: bool
+        LastProjectionRevision: uint64 option
+    }
 
 [<RequireQualifiedAccess>]
 module SessionOperations =
     let private maximumPendingRequired = 65_536u
 
     let initialize config =
-        if config.MaxPendingRequired = 0u || config.MaxPendingRequired > maximumPendingRequired then
+        if
+            config.MaxPendingRequired = 0u
+            || config.MaxPendingRequired > maximumPendingRequired
+        then
             Error(SessionOperationRefusal.InvalidMaxPendingRequired config.MaxPendingRequired)
         else
             Ok
-                { Config = config
-                  Generation = 0UL
-                  Status = SessionOperationStatus.Active
-                  NextOperation = 0UL
-                  NextRequiredOrder = 0UL
-                  NextRequiredCommit = 0UL
-                  PendingRequired = Map.empty
-                  BufferedRequired = Map.empty
-                  PendingProjection = None
-                  ProjectionDemandQueued = false
-                  LastProjectionRevision = None }
+                {
+                    Config = config
+                    Generation = 0UL
+                    Status = SessionOperationStatus.Active
+                    NextOperation = 0UL
+                    NextRequiredOrder = 0UL
+                    NextRequiredCommit = 0UL
+                    PendingRequired = Map.empty
+                    BufferedRequired = Map.empty
+                    PendingProjection = None
+                    ProjectionDemandQueued = false
+                    LastProjectionRevision = None
+                }
 
-    let private refused state refusal = state, [ SessionOperationEffect.Refused refusal ]
+    let private refused state refusal =
+        state, [ SessionOperationEffect.Refused refusal ]
 
     let private id state operation =
-        { Generation = state.Generation
-          Operation = operation }
+        {
+            Generation = state.Generation
+            Operation = operation
+        }
 
     let private dispatchProjection state =
         let operation = state.NextOperation
+
         let request =
-            { Id = id state operation
-              Target = state.Config.Target }
+            {
+                Id = id state operation
+                Target = state.Config.Target
+            }
+
         { state with
             NextOperation = operation + 1UL
             PendingProjection = Some operation
-            ProjectionDemandQueued = false },
+            ProjectionDemandQueued = false
+        },
         SessionOperationEffect.DispatchProjection request
 
     let private nextGeneration status state =
@@ -120,6 +143,7 @@ module SessionOperations =
             refused state SessionOperationRefusal.GenerationExhausted
         else
             let current = state.Generation + 1UL
+
             { state with
                 Generation = current
                 Status = status
@@ -130,8 +154,11 @@ module SessionOperations =
                 BufferedRequired = Map.empty
                 PendingProjection = None
                 ProjectionDemandQueued = false
-                LastProjectionRevision = None },
-            [ SessionOperationEffect.GenerationInvalidated(state.Generation, current, status) ]
+                LastProjectionRevision = None
+            },
+            [
+                SessionOperationEffect.GenerationInvalidated(state.Generation, current, status)
+            ]
 
     let private ensureCurrent state (operationId: SessionOperationId) =
         if operationId.Generation <> state.Generation then
@@ -139,13 +166,14 @@ module SessionOperations =
         elif operationId.Operation >= state.NextOperation then
             Error(SessionOperationRefusal.UnknownOrCompletedOperation operationId)
         else
-            Ok ()
+            Ok()
 
     let private drainRequired state =
         let mutable buffered = state.BufferedRequired
         let mutable order = state.NextRequiredCommit
         let effects = ResizeArray()
         let mutable draining = true
+
         while draining do
             match Map.tryFind order buffered with
             | Some record ->
@@ -153,7 +181,12 @@ module SessionOperations =
                 effects.Add(SessionOperationEffect.RequiredCommitted(order, record))
                 order <- order + 1UL
             | None -> draining <- false
-        { state with BufferedRequired = buffered; NextRequiredCommit = order }, List.ofSeq effects
+
+        { state with
+            BufferedRequired = buffered
+            NextRequiredCommit = order
+        },
+        List.ofSeq effects
 
     let update observation state =
         match observation with
@@ -170,30 +203,44 @@ module SessionOperations =
                 | SessionOperationObservation.CompleteRequired _
                 | SessionOperationObservation.CompleteProjection _
                 | SessionOperationObservation.Fail _ -> false
-                | _ -> true) ->
+                | _ -> true)
+            ->
             refused state (SessionOperationRefusal.CoordinatorInactive state.Status)
         | SessionOperationObservation.EnqueueRequired payload ->
-            if state.PendingRequired.Count + state.BufferedRequired.Count >= int state.Config.MaxPendingRequired then
+            if
+                state.PendingRequired.Count + state.BufferedRequired.Count
+                >= int state.Config.MaxPendingRequired
+            then
                 refused state (SessionOperationRefusal.RequiredCapacityReached state.Config.MaxPendingRequired)
-            elif state.NextOperation = System.UInt64.MaxValue || state.NextRequiredOrder = System.UInt64.MaxValue then
+            elif
+                state.NextOperation = System.UInt64.MaxValue
+                || state.NextRequiredOrder = System.UInt64.MaxValue
+            then
                 refused state SessionOperationRefusal.OperationSequenceExhausted
             else
                 let operation = state.NextOperation
                 let order = state.NextRequiredOrder
+
                 let request =
-                    { Id = id state operation
-                      Order = order
-                      Target = state.Config.Target
-                      Payload = payload }
+                    {
+                        Id = id state operation
+                        Order = order
+                        Target = state.Config.Target
+                        Payload = payload
+                    }
+
                 { state with
                     NextOperation = operation + 1UL
                     NextRequiredOrder = order + 1UL
-                    PendingRequired = Map.add operation order state.PendingRequired },
+                    PendingRequired = Map.add operation order state.PendingRequired
+                },
                 [ SessionOperationEffect.DispatchRequired request ]
         | SessionOperationObservation.DemandProjection ->
             match state.PendingProjection with
             | Some operation ->
-                { state with ProjectionDemandQueued = true },
+                { state with
+                    ProjectionDemandQueued = true
+                },
                 [ SessionOperationEffect.ProjectionDemandCoalesced(id state operation) ]
             | None when state.NextOperation = System.UInt64.MaxValue ->
                 refused state SessionOperationRefusal.OperationSequenceExhausted
@@ -203,7 +250,7 @@ module SessionOperations =
         | SessionOperationObservation.CompleteRequired(operationId, record) ->
             match ensureCurrent state operationId with
             | Error refusal -> refused state refusal
-            | Ok () ->
+            | Ok() ->
                 match Map.tryFind operationId.Operation state.PendingRequired with
                 | None when state.PendingProjection = Some operationId.Operation ->
                     refused state (SessionOperationRefusal.UnexpectedReplyKind operationId)
@@ -212,39 +259,54 @@ module SessionOperations =
                     let staged =
                         { state with
                             PendingRequired = Map.remove operationId.Operation state.PendingRequired
-                            BufferedRequired = Map.add order record state.BufferedRequired }
+                            BufferedRequired = Map.add order record state.BufferedRequired
+                        }
+
                     drainRequired staged
         | SessionOperationObservation.CompleteProjection(operationId, revision, projection) ->
             match ensureCurrent state operationId with
             | Error refusal -> refused state refusal
-            | Ok () when Map.containsKey operationId.Operation state.PendingRequired ->
+            | Ok() when Map.containsKey operationId.Operation state.PendingRequired ->
                 refused state (SessionOperationRefusal.UnexpectedReplyKind operationId)
-            | Ok () when state.PendingProjection <> Some operationId.Operation ->
+            | Ok() when state.PendingProjection <> Some operationId.Operation ->
                 refused state (SessionOperationRefusal.UnknownOrCompletedOperation operationId)
-            | Ok () ->
+            | Ok() ->
                 let cleared = { state with PendingProjection = None }
+
                 let accepted, effects =
                     match state.LastProjectionRevision with
                     | Some previous when revision <= previous ->
                         cleared,
-                        [ SessionOperationEffect.Refused(SessionOperationRefusal.StaleProjectionRevision(previous, revision)) ]
+                        [
+                            SessionOperationEffect.Refused(
+                                SessionOperationRefusal.StaleProjectionRevision(previous, revision)
+                            )
+                        ]
                     | _ ->
-                        { cleared with LastProjectionRevision = Some revision },
+                        { cleared with
+                            LastProjectionRevision = Some revision
+                        },
                         [ SessionOperationEffect.ProjectionCommitted(revision, projection) ]
+
                 if accepted.ProjectionDemandQueued then
                     if accepted.NextOperation = System.UInt64.MaxValue then
                         accepted,
-                        effects @ [ SessionOperationEffect.Refused SessionOperationRefusal.OperationSequenceExhausted ]
+                        effects
+                        @ [
+                            SessionOperationEffect.Refused SessionOperationRefusal.OperationSequenceExhausted
+                        ]
                     else
                         let next, dispatch = dispatchProjection accepted
                         next, effects @ [ dispatch ]
-                else accepted, effects
+                else
+                    accepted, effects
         | SessionOperationObservation.Fail(operationId, failure) ->
             match ensureCurrent state operationId with
             | Error refusal -> refused state refusal
-            | Ok () ->
+            | Ok() ->
                 let isRequired = Map.containsKey operationId.Operation state.PendingRequired
                 let isProjection = state.PendingProjection = Some operationId.Operation
+
                 if not isRequired && not isProjection then
                     refused state (SessionOperationRefusal.UnknownOrCompletedOperation operationId)
                 else

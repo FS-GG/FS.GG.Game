@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -120,12 +122,28 @@ module GeneratedCases =
 """
 
 
+def format_fsharp(source: str) -> str:
+    """Normalize generated source with the repository's pinned Fantomas."""
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", suffix=".fs", dir=ROOT, delete=False
+        ) as handle:
+            handle.write(source)
+            temporary = Path(handle.name)
+        subprocess.run(["dotnet", "fantomas", str(temporary)], cwd=ROOT, check=True)
+        return temporary.read_text(encoding="utf-8")
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
 
-    output = render(json.loads(SOURCE.read_text(encoding="utf-8")))
+    output = format_fsharp(render(json.loads(SOURCE.read_text(encoding="utf-8"))))
     if args.check:
         if not TARGET.exists() or TARGET.read_text(encoding="utf-8") != output:
             print(f"{TARGET.relative_to(ROOT)} is stale; run {Path(__file__).name}")

@@ -60,9 +60,11 @@ module Grids =
     /// `Primitives` later is additive; one moved out of it is breaking.
     [<Struct>]
     type Edge =
-        { Col: int
-          Row: int
-          Orientation: EdgeOrientation }
+        {
+            Col: int
+            Row: int
+            Orientation: EdgeOrientation
+        }
 
     /// Public contract type exposed by the FS.GG.Game.Core package.
     /// A grid VERTEX — a corner where edges meet. `(Col, Row)` is the top-left corner of cell

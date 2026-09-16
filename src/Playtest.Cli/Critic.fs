@@ -9,12 +9,14 @@ type Disposition =
     | Ambiguous
 
 type Row =
-    { Ac: int
-      Disposition: Disposition
-      Checkpoints: string
-      Terminal: string
-      Route: string
-      Reason: string }
+    {
+        Ac: int
+        Disposition: Disposition
+        Checkpoints: string
+        Terminal: string
+        Route: string
+        Reason: string
+    }
 
 let private field prefix (value: string) =
     if value.StartsWith(prefix + "=", StringComparison.Ordinal) then
@@ -32,6 +34,7 @@ let private parseLine (line: string) =
                 | _ -> None
             else
                 None
+
         let parsedDisposition =
             match disposition.ToLowerInvariant() with
             | "supported" -> Some Supported
@@ -39,16 +42,32 @@ let private parseLine (line: string) =
             | "ambiguous" -> Some Ambiguous
             | _ -> None
 
-        match acNumber, parsedDisposition, field "checkpoints" checkpoints, field "terminal" terminal, field "route" route, field "reason" reason with
-        | Some acValue, Some dispositionValue, Some checkpointsValue, Some terminalValue, Some routeValue, Some reasonValue
-            when not (String.IsNullOrWhiteSpace routeValue) && not (String.IsNullOrWhiteSpace reasonValue) ->
+        match
+            acNumber,
+            parsedDisposition,
+            field "checkpoints" checkpoints,
+            field "terminal" terminal,
+            field "route" route,
+            field "reason" reason
+        with
+        | Some acValue,
+          Some dispositionValue,
+          Some checkpointsValue,
+          Some terminalValue,
+          Some routeValue,
+          Some reasonValue when
+            not (String.IsNullOrWhiteSpace routeValue)
+            && not (String.IsNullOrWhiteSpace reasonValue)
+            ->
             Ok
-                { Ac = acValue
-                  Disposition = dispositionValue
-                  Checkpoints = checkpointsValue
-                  Terminal = terminalValue
-                  Route = routeValue
-                  Reason = reasonValue }
+                {
+                    Ac = acValue
+                    Disposition = dispositionValue
+                    Checkpoints = checkpointsValue
+                    Terminal = terminalValue
+                    Route = routeValue
+                    Reason = reasonValue
+                }
         | _ -> Error(sprintf "malformed critic row: %s" line)
     | _ -> Error(sprintf "malformed critic row: %s" line)
 
@@ -92,5 +111,7 @@ let validate (manifest: GameplayFr list) (rows: Map<int, Row>) : Result<unit, st
             |> Seq.map (fun row -> sprintf "AC-%03d=%A" row.Ac row.Disposition)
             |> Seq.toList
 
-        if vetoes.IsEmpty then Ok()
-        else Error(sprintf "critic veto: %s" (String.concat ", " vetoes))
+        if vetoes.IsEmpty then
+            Ok()
+        else
+            Error(sprintf "critic veto: %s" (String.concat ", " vetoes))

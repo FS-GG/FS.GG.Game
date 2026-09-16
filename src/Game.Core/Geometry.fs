@@ -26,14 +26,18 @@ module Geometry =
         && point.Y <= rect.Y + rect.Height
 
     let center (rect: Rect) : Point =
-        { X = rect.X + rect.Width / 2.0
-          Y = rect.Y + rect.Height / 2.0 }
+        {
+            X = rect.X + rect.Width / 2.0
+            Y = rect.Y + rect.Height / 2.0
+        }
 
     let ofCenter (center: Point) (width: float) (height: float) : Rect =
-        { X = center.X - width / 2.0
-          Y = center.Y - height / 2.0
-          Width = width
-          Height = height }
+        {
+            X = center.X - width / 2.0
+            Y = center.Y - height / 2.0
+            Width = width
+            Height = height
+        }
 
     // Narrow-phase AABB contact (SAT specialised to two axes). Centre/half-extent form yields the
     // minimum-translation vector directly: overlap depths px,py = (haX+hbX)-|dx|, (haY+hbY)-|dy| over
@@ -49,10 +53,22 @@ module Geometry =
         let dy = (b.Y + hbY) - (a.Y + haY)
         let px = (haX + hbX) - abs dx
         let py = (haY + hbY) - abs dy
+
         if px > 0.0 && py > 0.0 then
             let sign v = if v < 0.0 then -1.0 else 1.0 // +bias on exact zero — the documented tie-break
-            if px <= py then Some { Normal = { X = sign dx; Y = 0.0 }; Depth = px }
-            else Some { Normal = { X = 0.0; Y = sign dy }; Depth = py }
+
+            if px <= py then
+                Some
+                    {
+                        Normal = { X = sign dx; Y = 0.0 }
+                        Depth = px
+                    }
+            else
+                Some
+                    {
+                        Normal = { X = 0.0; Y = sign dy }
+                        Depth = py
+                    }
         else
             None
 
@@ -68,10 +84,22 @@ module Geometry =
         let dy = b.Center.Y - a.Center.Y
         let r = a.Radius + b.Radius
         let d2 = dx * dx + dy * dy
+
         if a.Radius > 0.0 && b.Radius > 0.0 && d2 < r * r then
             let d = sqrt d2
-            if d > 0.0 then Some { Normal = { X = dx / d; Y = dy / d }; Depth = r - d }
-            else Some { Normal = { X = 1.0; Y = 0.0 }; Depth = r }
+
+            if d > 0.0 then
+                Some
+                    {
+                        Normal = { X = dx / d; Y = dy / d }
+                        Depth = r - d
+                    }
+            else
+                Some
+                    {
+                        Normal = { X = 1.0; Y = 0.0 }
+                        Depth = r
+                    }
         else
             None
 
@@ -94,11 +122,17 @@ module Geometry =
             let dx = cx - clampedX
             let dy = cy - clampedY
             let d2 = dx * dx + dy * dy
+
             if d2 < c.Radius * c.Radius then
                 if d2 > 0.0 then
                     // Centre outside the box: normal points circle → box (opposite the clamp offset).
                     let d = sqrt d2
-                    Some { Normal = { X = -dx / d; Y = -dy / d }; Depth = c.Radius - d }
+
+                    Some
+                        {
+                            Normal = { X = -dx / d; Y = -dy / d }
+                            Depth = c.Radius - d
+                        }
                 else
                     // Centre inside the box: least-penetration face. `esc` is the outward escape sign
                     // per axis (strict `<` gives the +bias on a tie); the normal is its opposite.
@@ -106,8 +140,19 @@ module Geometry =
                     let pb, pt = cy - minY, maxY - cy
                     let penX, escX = if pl < pr then pl, -1.0 else pr, 1.0
                     let penY, escY = if pb < pt then pb, -1.0 else pt, 1.0
-                    if penX <= penY then Some { Normal = { X = -escX; Y = 0.0 }; Depth = penX + c.Radius }
-                    else Some { Normal = { X = 0.0; Y = -escY }; Depth = penY + c.Radius }
+
+                    if penX <= penY then
+                        Some
+                            {
+                                Normal = { X = -escX; Y = 0.0 }
+                                Depth = penX + c.Radius
+                            }
+                    else
+                        Some
+                            {
+                                Normal = { X = 0.0; Y = -escY }
+                                Depth = penY + c.Radius
+                            }
             else
                 None
 
@@ -123,22 +168,44 @@ module Geometry =
         // Per-axis slab -> (tNear, tFar) option; None when parallel and outside the slab.
         let slab p d lo hi : (float * float) option =
             if d = 0.0 then
-                if p < lo || p > hi then None
-                else Some(System.Double.NegativeInfinity, System.Double.PositiveInfinity)
+                if p < lo || p > hi then
+                    None
+                else
+                    Some(System.Double.NegativeInfinity, System.Double.PositiveInfinity)
             else
                 let t1 = (lo - p) / d
                 let t2 = (hi - p) / d
                 Some(min t1 t2, max t1 t2)
+
         match slab p0.X dx minX maxX, slab p0.Y dy minY maxY with
         | Some(nx, fx), Some(ny, fy) ->
             let tEnter = max nx ny
             let tExit = min fx fy
+
             if tEnter <= tExit && tEnter >= 0.0 && tEnter <= 1.0 then
                 // The entering axis is the one with the larger near-t; a tie resolves to X (DEC-003).
                 let normal =
-                    if nx >= ny then { X = (if dx > 0.0 then -1.0 else 1.0); Y = 0.0 }
-                    else { X = 0.0; Y = (if dy > 0.0 then -1.0 else 1.0) }
-                Some { T = tEnter; Point = { X = p0.X + dx * tEnter; Y = p0.Y + dy * tEnter }; Normal = normal }
+                    if nx >= ny then
+                        {
+                            X = (if dx > 0.0 then -1.0 else 1.0)
+                            Y = 0.0
+                        }
+                    else
+                        {
+                            X = 0.0
+                            Y = (if dy > 0.0 then -1.0 else 1.0)
+                        }
+
+                Some
+                    {
+                        T = tEnter
+                        Point =
+                            {
+                                X = p0.X + dx * tEnter
+                                Y = p0.Y + dy * tEnter
+                            }
+                        Normal = normal
+                    }
             else
                 None
         | _ -> None
@@ -154,11 +221,23 @@ module Geometry =
         let b = 2.0 * (fx * dx + fy * dy)
         let cc = fx * fx + fy * fy - c.Radius * c.Radius
         let disc = b * b - 4.0 * a * cc
+
         if a > 0.0 && c.Radius > 0.0 && disc >= 0.0 then
             let t = (-b - sqrt disc) / (2.0 * a)
+
             if t >= 0.0 && t <= 1.0 then
                 let px, py = p0.X + dx * t, p0.Y + dy * t
-                Some { T = t; Point = { X = px; Y = py }; Normal = { X = (px - c.Center.X) / c.Radius; Y = (py - c.Center.Y) / c.Radius } }
+
+                Some
+                    {
+                        T = t
+                        Point = { X = px; Y = py }
+                        Normal =
+                            {
+                                X = (px - c.Center.X) / c.Radius
+                                Y = (py - c.Center.Y) / c.Radius
+                            }
+                    }
             else
                 None
         else
@@ -173,22 +252,31 @@ module Geometry =
         let c = cos rotation
         let s = sin rotation
         let hx, hy = halfExtents.X, halfExtents.Y
+
         let corner lx ly : Point =
-            { X = center.X + lx * c - ly * s
-              Y = center.Y + lx * s + ly * c }
-        { Vertices = [| corner -hx -hy; corner hx -hy; corner hx hy; corner -hx hy |] }
+            {
+                X = center.X + lx * c - ly * s
+                Y = center.Y + lx * s + ly * c
+            }
+
+        {
+            Vertices = [| corner -hx -hy; corner hx -hy; corner hx hy; corner -hx hy |]
+        }
 
     // ---- shared convex-polygon plumbing (implementation-only; the .fsi hides it) ----
 
-    let private isFiniteF (x: float) = not (System.Double.IsNaN x) && not (System.Double.IsInfinity x)
+    let private isFiniteF (x: float) =
+        not (System.Double.IsNaN x) && not (System.Double.IsInfinity x)
 
     // Shoelace area magnitude; zero for a collinear/degenerate ring.
     let private ringArea (v: Point[]) =
         let mutable acc = 0.0
+
         for i in 0 .. v.Length - 1 do
             let p = v.[i]
             let q = v.[(i + 1) % v.Length]
             acc <- acc + (p.X * q.Y - q.X * p.Y)
+
         abs acc / 2.0
 
     // The totality guard every convex-polygon function shares: `< 3` vertices, any non-finite
@@ -206,7 +294,11 @@ module Geometry =
         let q = v.[(i + 1) % v.Length]
         let ex, ey = q.X - p.X, q.Y - p.Y
         let len = sqrt (ex * ex + ey * ey)
-        if len > 0.0 then ValueSome { X = ey / len; Y = -ex / len } else ValueNone
+
+        if len > 0.0 then
+            ValueSome { X = ey / len; Y = -ex / len }
+        else
+            ValueNone
 
     // The Separating Axis Theorem scan shared by `polygonContact` and `polygonManifold` — the sole
     // producer of (depth, a→b normal), so the two can never disagree on them. Candidate axes are the
@@ -224,51 +316,64 @@ module Geometry =
     // generation order (DEC-003), for byte-determinism. Callers must have checked `wellFormed` first.
     let private satScan (va: Point[]) (vb: Point[]) : (float * Point) option =
         let edgeNormals (v: Point[]) : Point list =
-            [ for i in 0 .. v.Length - 1 do
-                  match edgeNormalAt v i with
-                  | ValueSome n -> yield n
-                  | ValueNone -> () ]
+            [
+                for i in 0 .. v.Length - 1 do
+                    match edgeNormalAt v i with
+                    | ValueSome n -> yield n
+                    | ValueNone -> ()
+            ]
         // Fold antiparallel/duplicate axes onto one representative, keeping first-seen (generation
         // order) so the tie-break is stable. The stored orientation is irrelevant to the overlap
         // magnitude (projection is symmetric under axis negation); a→b orientation is set below.
         let axes =
             (edgeNormals va @ edgeNormals vb)
-            |> List.fold (fun (acc: Point list) (n: Point) ->
-                let dup =
-                    acc
-                    |> List.exists (fun (m: Point) ->
-                        (abs (m.X - n.X) < 1e-9 && abs (m.Y - n.Y) < 1e-9)
-                        || (abs (m.X + n.X) < 1e-9 && abs (m.Y + n.Y) < 1e-9))
-                if dup then acc else acc @ [ n ])
+            |> List.fold
+                (fun (acc: Point list) (n: Point) ->
+                    let dup =
+                        acc
+                        |> List.exists (fun (m: Point) ->
+                            (abs (m.X - n.X) < 1e-9 && abs (m.Y - n.Y) < 1e-9)
+                            || (abs (m.X + n.X) < 1e-9 && abs (m.Y + n.Y) < 1e-9))
+
+                    if dup then acc else acc @ [ n ])
                 []
+
         let project (v: Point[]) (n: Point) =
             let mutable mn = System.Double.PositiveInfinity
             let mutable mx = System.Double.NegativeInfinity
+
             for pt in v do
                 let d = pt.X * n.X + pt.Y * n.Y
-                if d < mn then mn <- d
-                if d > mx then mx <- d
+
+                if d < mn then
+                    mn <- d
+
+                if d > mx then
+                    mx <- d
+
             mn, mx
         // Scan for the least penetration; a non-overlapping axis short-circuits to separated. Each
         // axis contributes (pen, normal) where `normal` is oriented so -normal*pen separates (the
         // nearer exit). `>= best` keeps the FIRST axis on an exact tie (generation order, DEC-003).
         let mutable best: (float * Point) option = None
         let mutable separated = false
+
         for n in axes do
             if not separated then
                 let aMn, aMx = project va n
                 let bMn, bMx = project vb n
                 let d1 = aMx - bMn // push a toward -n to exit
                 let d2 = bMx - aMn // push a toward +n to exit
+
                 if not (d1 > 0.0 && d2 > 0.0) then
                     separated <- true
                 else
-                    let pen, normal =
-                        if d1 <= d2 then d1, n
-                        else d2, { X = -n.X; Y = -n.Y }
+                    let pen, normal = if d1 <= d2 then d1, n else d2, { X = -n.X; Y = -n.Y }
+
                     match best with
                     | Some(bp, _) when pen >= bp -> ()
                     | _ -> best <- Some(pen, normal)
+
         if separated then None else best
 
     // Narrow-phase convex-polygon contact via the Separating Axis Theorem — the MTV, as a `Contact`.
@@ -336,6 +441,7 @@ module Geometry =
     // branch that reaches it (`d0 <= 0 < d1` or `d1 <= 0 < d0`).
     let polygonManifold (a: ConvexPolygon) (b: ConvexPolygon) : Manifold voption =
         let va, vb = a.Vertices, b.Vertices
+
         if not (wellFormed va && wellFormed vb) then
             ValueNone
         else
@@ -348,18 +454,24 @@ module Geometry =
                 let faceQuery (pv: Point[]) (qv: Point[]) =
                     let mutable bi = 0
                     let mutable bs = System.Double.NegativeInfinity
+
                     for i in 0 .. pv.Length - 1 do
                         match edgeNormalAt pv i with
                         | ValueSome n ->
                             let p0 = pv.[i]
                             let mutable s = System.Double.PositiveInfinity
+
                             for v in qv do
                                 let d = (v.X - p0.X) * n.X + (v.Y - p0.Y) * n.Y
-                                if d < s then s <- d
+
+                                if d < s then
+                                    s <- d
+
                             if s > bs then
                                 bs <- s
                                 bi <- i
                         | ValueNone -> ()
+
                     bi, bs
 
                 let aFace, aSep = faceQuery va vb
@@ -377,10 +489,12 @@ module Geometry =
                 // The incident face: most anti-parallel to the reference normal; first wins on a tie.
                 let mutable incEdge = 0
                 let mutable incAlign = System.Double.PositiveInfinity
+
                 for i in 0 .. incV.Length - 1 do
                     match edgeNormalAt incV i with
                     | ValueSome n ->
                         let d = n.X * rn.X + n.Y * rn.Y
+
                         if d < incAlign then
                             incAlign <- d
                             incEdge <- i
@@ -394,9 +508,15 @@ module Geometry =
                     | ValueSome(q0, q1) ->
                         let d0 = (q0.X - px) * nx + (q0.Y - py) * ny
                         let d1 = (q1.X - px) * nx + (q1.Y - py) * ny
+
                         let cross () =
                             let t = d0 / (d0 - d1)
-                            { X = q0.X + (q1.X - q0.X) * t; Y = q0.Y + (q1.Y - q0.Y) * t }
+
+                            {
+                                X = q0.X + (q1.X - q0.X) * t
+                                Y = q0.Y + (q1.Y - q0.Y) * t
+                            }
+
                         if d0 <= 0.0 && d1 <= 0.0 then ValueSome(q0, q1)
                         elif d0 <= 0.0 then ValueSome(q0, cross ())
                         elif d1 <= 0.0 then ValueSome(cross (), q1)
@@ -408,23 +528,33 @@ module Geometry =
                 // slab, or — when it lies wholly outside the slab — the raw face, whose nearer endpoint
                 // is then the contact. Either way both candidates lie on the incident boundary.
                 let c0, c1 =
-                    match clip (r0.X, r0.Y) (-dirX, -dirY) (ValueSome incFace) |> clip (r1.X, r1.Y) (dirX, dirY) with
+                    match
+                        clip (r0.X, r0.Y) (-dirX, -dirY) (ValueSome incFace)
+                        |> clip (r1.X, r1.Y) (dirX, dirY)
+                    with
                     | ValueSome pair -> pair
                     | ValueNone -> incFace
 
                 // Signed distance above the reference face plane; ≤ 0 means penetrating.
-                let sep (q: Point) = (q.X - r0.X) * rn.X + (q.Y - r0.Y) * rn.Y
+                let sep (q: Point) =
+                    (q.X - r0.X) * rn.X + (q.Y - r0.Y) * rn.Y
                 // Two survivors within this of each other are one contact, not two.
-                let coincident (u: Point) (w: Point) = abs (u.X - w.X) <= 1e-12 && abs (u.Y - w.Y) <= 1e-12
+                let coincident (u: Point) (w: Point) =
+                    abs (u.X - w.X) <= 1e-12 && abs (u.Y - w.Y) <= 1e-12
 
                 let points =
-                    if sep c0 <= 0.0 && sep c1 <= 0.0 && not (coincident c0 c1) then [| c0; c1 |]
-                    elif sep c0 <= 0.0 then [| c0 |]
-                    elif sep c1 <= 0.0 then [| c1 |]
+                    if sep c0 <= 0.0 && sep c1 <= 0.0 && not (coincident c0 c1) then
+                        [| c0; c1 |]
+                    elif sep c0 <= 0.0 then
+                        [| c0 |]
+                    elif sep c1 <= 0.0 then
+                        [| c1 |]
                     // Neither is below the plane: the contact wraps a corner of the reference face, so
                     // the nearer candidate is it. `<=` keeps the first, as every tie-break here does.
-                    elif sep c0 <= sep c1 then [| c0 |]
-                    else [| c1 |]
+                    elif sep c0 <= sep c1 then
+                        [| c0 |]
+                    else
+                        [| c1 |]
 
                 // Opaque packing: flip in bit 30, reference edge in bits 15..29, incident edge in 0..14.
                 let featureId =
@@ -433,13 +563,15 @@ module Geometry =
                     ||| (incEdge &&& 0x7FFF)
 
                 ValueSome
-                    { A = 0
-                      B = 1
-                      Normal = normal
-                      Depth = depth
-                      Points = points
-                      PointCount = points.Length
-                      FeatureId = featureId }
+                    {
+                        A = 0
+                        B = 1
+                        Normal = normal
+                        Depth = depth
+                        Points = points
+                        PointCount = points.Length
+                        FeatureId = featureId
+                    }
 
     // Segment-vs-convex-polygon cast: the slab method generalised from two axis slabs to one half-plane
     // per edge. For a CCW ring the edge v[i]→v[i+1] has outward unit normal (ey, -ex)/|e| — the same
@@ -477,29 +609,37 @@ module Geometry =
         // dimensionless segment parameter, so the bound is scale-free; 1e-9 matches the tolerance
         // polygonContact folds duplicate axes with.
         let cornerTie = 1e-9
-        if not (wellFormed v) then None
-        elif not (isFiniteF p0.X && isFiniteF p0.Y && isFiniteF p1.X && isFiniteF p1.Y) then None
+
+        if not (wellFormed v) then
+            None
+        elif not (isFiniteF p0.X && isFiniteF p0.Y && isFiniteF p1.X && isFiniteF p1.Y) then
+            None
         else
             let dx, dy = p1.X - p0.X, p1.Y - p0.Y
             let mutable tEnter = System.Double.NegativeInfinity
             let mutable tExit = System.Double.PositiveInfinity
             let mutable normal = { X = 0.0; Y = 0.0 }
             let mutable separated = false
+
             for i in 0 .. v.Length - 1 do
                 if not separated then
                     let a = v.[i]
                     let b = v.[(i + 1) % v.Length]
                     let ex, ey = b.X - a.X, b.Y - a.Y
                     let len = sqrt (ex * ex + ey * ey)
+
                     if len > 0.0 then
                         let n: Point = { X = ey / len; Y = -ex / len }
                         let dist = (p0.X - a.X) * n.X + (p0.Y - a.Y) * n.Y
                         let denom = dx * n.X + dy * n.Y
+
                         if denom = 0.0 then
                             // Parallel to this edge: outside its half-plane ⇒ no crossing exists at all.
-                            if dist > 0.0 then separated <- true
+                            if dist > 0.0 then
+                                separated <- true
                         else
                             let t = -dist / denom
+
                             if denom < 0.0 then
                                 // Entering. `tEnter` always takes the true max, so the reported point is
                                 // never short of the boundary. The struck face, though, is the FIRST edge
@@ -511,14 +651,26 @@ module Geometry =
                                 // only on an increase that clears `cornerTie`. On an axis-aligned ring the
                                 // normals are exactly 0/±1, the parameters tie exactly, and this is a no-op.
                                 if t > tEnter then
-                                    if t - tEnter > cornerTie then normal <- n
+                                    if t - tEnter > cornerTie then
+                                        normal <- n
+
                                     tEnter <- t
                             elif t < tExit then
                                 tExit <- t
+
             if separated || not (tEnter < tExit) || tEnter < 0.0 || tEnter > 1.0 then
                 None
             else
-                Some { T = tEnter; Point = { X = p0.X + dx * tEnter; Y = p0.Y + dy * tEnter }; Normal = normal }
+                Some
+                    {
+                        T = tEnter
+                        Point =
+                            {
+                                X = p0.X + dx * tEnter
+                                Y = p0.Y + dy * tEnter
+                            }
+                        Normal = normal
+                    }
 
     // Swept AABB via Minkowski expansion: grow `target` by `moving`'s extents so `moving` collapses to
     // its min-corner point, then clip the motion segment (point → point+velocity) against the expanded

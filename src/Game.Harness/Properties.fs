@@ -3,9 +3,11 @@ namespace FS.GG.Game.Harness
 open FS.GG.Game.Core
 
 type Counterexample =
-    { Seed: uint64
-      Script: Command list list
-      Step: int }
+    {
+        Seed: uint64
+        Script: Command list list
+        Step: int
+    }
 
 [<RequireQualifiedAccess>]
 type PropertyResult =
@@ -13,14 +15,21 @@ type PropertyResult =
     | Falsified of Counterexample
 
 type PropertyConfig =
-    { Runs: int
-      MaxLength: int
-      Moves: Command list list option }
+    {
+        Runs: int
+        MaxLength: int
+        Moves: Command list list option
+    }
 
 [<RequireQualifiedAccess>]
 module Properties =
 
-    let defaultConfig: PropertyConfig = { Runs = 1000; MaxLength = 32; Moves = None }
+    let defaultConfig: PropertyConfig =
+        {
+            Runs = 1000
+            MaxLength = 32
+            Moves = None
+        }
 
     // The first post-step frame index at which the invariant is false, or None if it holds throughout.
     let private firstViolation
@@ -28,7 +37,8 @@ module Properties =
         (invariant: 'world -> bool)
         (script: Command list list)
         : int option =
-        let frames = Driver.runCommands playable Driver.identityFingerprint script |> Trace.frames
+        let frames =
+            Driver.runCommands playable Driver.identityFingerprint script |> Trace.frames
 
         frames
         |> List.mapi (fun i f -> i, f)
@@ -41,7 +51,8 @@ module Properties =
         (invariant: 'world -> bool)
         (script: Command list list)
         : Command list list =
-        let stillViolates s = (firstViolation playable invariant s).IsSome
+        let stillViolates s =
+            (firstViolation playable invariant s).IsSome
 
         let truncated =
             match firstViolation playable invariant script with
@@ -104,7 +115,16 @@ module Properties =
                 | Some _ ->
                     let minimal = shrink playable invariant script
                     let step = (firstViolation playable invariant minimal) |> Option.defaultValue 0
-                    result <- Some(PropertyResult.Falsified { Seed = seed; Script = minimal; Step = step })
+
+                    result <-
+                        Some(
+                            PropertyResult.Falsified
+                                {
+                                    Seed = seed
+                                    Script = minimal
+                                    Step = step
+                                }
+                        )
                 | None -> ()
 
                 run <- run + 1

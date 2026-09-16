@@ -17,12 +17,45 @@ type BossId = BossId of int
 type PickupId = PickupId of int
 
 // --- small states the §4 prose enumerates ---
-type AmbushPhase = Lurking | Winding | Leaping | Recovering
-type EnemyState = Patrolling | Aggro | Attacking | Stunned | Dying
-type PlayerState = Standing | Running | Jumping | Falling | Dashing | WallSliding | Grappling | Hurt
-type WallSide = LeftWall | RightWall
-type CameraMode = RoomLocked | FollowPlayer | Panning
-type Action = Jump | Attack | Dash | Grapple | Interact | OpenMap
+type AmbushPhase =
+    | Lurking
+    | Winding
+    | Leaping
+    | Recovering
+
+type EnemyState =
+    | Patrolling
+    | Aggro
+    | Attacking
+    | Stunned
+    | Dying
+
+type PlayerState =
+    | Standing
+    | Running
+    | Jumping
+    | Falling
+    | Dashing
+    | WallSliding
+    | Grappling
+    | Hurt
+
+type WallSide =
+    | LeftWall
+    | RightWall
+
+type CameraMode =
+    | RoomLocked
+    | FollowPlayer
+    | Panning
+
+type Action =
+    | Jump
+    | Attack
+    | Dash
+    | Grapple
+    | Interact
+    | OpenMap
 
 // --- room contents ---
 type TileLayer = { Tiles: int[,] }

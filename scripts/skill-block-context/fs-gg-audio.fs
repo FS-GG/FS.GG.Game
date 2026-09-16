@@ -40,9 +40,11 @@ open FS.GG.Audio.Core
 open FS.GG.Audio.Core
 
 module AudioCues =
-    let resolver : AssetResolver =
-        { ResolveSound = fun (_: SoundId) -> None
-          ResolveTrack = fun (_: TrackId) -> None }
+    let resolver: AssetResolver =
+        {
+            ResolveSound = fun (_: SoundId) -> None
+            ResolveTrack = fun (_: TrackId) -> None
+        }
 
 //#block 5 "| Started -> [ Audio.setMasterVolume next.Settings.Volume ]"
 // Deriving cues from a model DIFF: most gameplay events (a score, an enemy death) carry no `Msg`,
@@ -60,10 +62,14 @@ module AudioCues =
 open FS.GG.Audio.Core
 
 type Settings = { Volume: float }
+
 type Model =
-    { Settings: Settings
-      Score: int
-      Enemies: int list }
+    {
+        Settings: Settings
+        Score: int
+        Enemies: int list
+    }
+
 type Msg =
     | Started
     | Fired
@@ -84,6 +90,7 @@ type Msg =
 open FS.GG.Audio.Core
 
 type Model = { FloorIndex: int }
+
 type Msg =
     | DescendFloor
     | Tick of float
@@ -106,6 +113,7 @@ open FS.GG.Audio.Core
 
 type Settings = { Volume: float }
 type Model = { Settings: Settings }
+
 type Msg =
     | Started
     | Fired
@@ -146,10 +154,13 @@ open FS.GG.UI.Controls.Elmish
 type LaunchModel = { Score: int }
 type LaunchMsg = Fired
 
-let viewerOptions : ViewerOptions = Unchecked.defaultof<_>
-let audioSink : AudioEffect list -> unit = ignore
-let interactiveHost : InteractiveAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
-let generatedHost : GeneratedAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
+let viewerOptions: ViewerOptions = Unchecked.defaultof<_>
+let audioSink: AudioEffect list -> unit = ignore
+
+let interactiveHost: InteractiveAppHost<LaunchModel, LaunchMsg> =
+    Unchecked.defaultof<_>
+
+let generatedHost: GeneratedAppHost<LaunchModel, LaunchMsg> = Unchecked.defaultof<_>
 
 //#block 10 "GeneratedAppHost.dispatchKey host keyEvent model"
 // The record-only path: the same `AudioEvidence` a headless run yields, so a test can assert on
@@ -167,9 +178,9 @@ open FS.GG.Audio.Core
 type KeyModel = { Score: int }
 type KeyMsg = Fire
 
-let host : GeneratedAppHost<KeyModel, KeyMsg> = Unchecked.defaultof<_>
-let keyEvent : ViewerKeyEvent = Unchecked.defaultof<_>
-let model : KeyModel = { Score = 0 }
+let host: GeneratedAppHost<KeyModel, KeyMsg> = Unchecked.defaultof<_>
+let keyEvent: ViewerKeyEvent = Unchecked.defaultof<_>
+let model: KeyModel = { Score = 0 }
 
 //#block 9 "let generatedPcmSilence sampleRate frames ="
 // The content-completeness example owns ONE product cue inventory and derives both the request

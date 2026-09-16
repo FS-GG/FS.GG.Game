@@ -12,9 +12,11 @@ module Grids =
 
     [<Struct>]
     type Edge =
-        { Col: int
-          Row: int
-          Orientation: EdgeOrientation }
+        {
+            Col: int
+            Row: int
+            Orientation: EdgeOrientation
+        }
 
     [<Struct>]
     type Vertex = { Col: int; Row: int }
@@ -29,16 +31,36 @@ module Grids =
     // -----------------------------------------------------------------------------------------
 
     let cellCorners (c: Cell) : Vertex list =
-        [ { Col = c.Col; Row = c.Row } // TL
-          { Col = c.Col + 1; Row = c.Row } // TR
-          { Col = c.Col + 1; Row = c.Row + 1 } // BR
-          { Col = c.Col; Row = c.Row + 1 } ] // BL
+        [
+            { Col = c.Col; Row = c.Row } // TL
+            { Col = c.Col + 1; Row = c.Row } // TR
+            { Col = c.Col + 1; Row = c.Row + 1 } // BR
+            { Col = c.Col; Row = c.Row + 1 }
+        ] // BL
 
     let cellEdges (c: Cell) : Edge list =
-        [ { Col = c.Col; Row = c.Row; Orientation = Horizontal } // top
-          { Col = c.Col + 1; Row = c.Row; Orientation = Vertical } // right
-          { Col = c.Col; Row = c.Row + 1; Orientation = Horizontal } // bottom
-          { Col = c.Col; Row = c.Row; Orientation = Vertical } ] // left
+        [
+            {
+                Col = c.Col
+                Row = c.Row
+                Orientation = Horizontal
+            } // top
+            {
+                Col = c.Col + 1
+                Row = c.Row
+                Orientation = Vertical
+            } // right
+            {
+                Col = c.Col
+                Row = c.Row + 1
+                Orientation = Horizontal
+            } // bottom
+            {
+                Col = c.Col
+                Row = c.Row
+                Orientation = Vertical
+            }
+        ] // left
 
     let edgeCells (e: Edge) : Cell list =
         match e.Orientation with
@@ -58,16 +80,36 @@ module Grids =
         [ a; b ]
 
     let vertexCells (v: Vertex) : Cell list =
-        [ { Col = v.Col - 1; Row = v.Row - 1 } // TL
-          { Col = v.Col; Row = v.Row - 1 } // TR
-          { Col = v.Col; Row = v.Row } // BR
-          { Col = v.Col - 1; Row = v.Row } ] // BL
+        [
+            { Col = v.Col - 1; Row = v.Row - 1 } // TL
+            { Col = v.Col; Row = v.Row - 1 } // TR
+            { Col = v.Col; Row = v.Row } // BR
+            { Col = v.Col - 1; Row = v.Row }
+        ] // BL
 
     let vertexEdges (v: Vertex) : Edge list =
-        [ { Col = v.Col; Row = v.Row - 1; Orientation = Vertical } // up
-          { Col = v.Col; Row = v.Row; Orientation = Horizontal } // right
-          { Col = v.Col; Row = v.Row; Orientation = Vertical } // down
-          { Col = v.Col - 1; Row = v.Row; Orientation = Horizontal } ] // left
+        [
+            {
+                Col = v.Col
+                Row = v.Row - 1
+                Orientation = Vertical
+            } // up
+            {
+                Col = v.Col
+                Row = v.Row
+                Orientation = Horizontal
+            } // right
+            {
+                Col = v.Col
+                Row = v.Row
+                Orientation = Vertical
+            } // down
+            {
+                Col = v.Col - 1
+                Row = v.Row
+                Orientation = Horizontal
+            }
+        ] // left
 
     // -----------------------------------------------------------------------------------------
     // Pixel map. Total: a non-finite/non-positive CellSize falls back to 1.0 and a non-finite origin
@@ -81,30 +123,42 @@ module Grids =
             1.0
 
     let private safeOriginX (spec: GridSpec) =
-        if System.Double.IsFinite spec.Origin.X then spec.Origin.X else 0.0
+        if System.Double.IsFinite spec.Origin.X then
+            spec.Origin.X
+        else
+            0.0
 
     let private safeOriginY (spec: GridSpec) =
-        if System.Double.IsFinite spec.Origin.Y then spec.Origin.Y else 0.0
+        if System.Double.IsFinite spec.Origin.Y then
+            spec.Origin.Y
+        else
+            0.0
 
     let cellRect (spec: GridSpec) (c: Cell) : Rect =
         let s = safeCellSize spec
 
-        { X = safeOriginX spec + float c.Col * s
-          Y = safeOriginY spec + float c.Row * s
-          Width = s
-          Height = s }
+        {
+            X = safeOriginX spec + float c.Col * s
+            Y = safeOriginY spec + float c.Row * s
+            Width = s
+            Height = s
+        }
 
     let cellCenter (spec: GridSpec) (c: Cell) : Point =
         let s = safeCellSize spec
 
-        { X = safeOriginX spec + (float c.Col + 0.5) * s
-          Y = safeOriginY spec + (float c.Row + 0.5) * s }
+        {
+            X = safeOriginX spec + (float c.Col + 0.5) * s
+            Y = safeOriginY spec + (float c.Row + 0.5) * s
+        }
 
     let vertexPoint (spec: GridSpec) (v: Vertex) : Point =
         let s = safeCellSize spec
 
-        { X = safeOriginX spec + float v.Col * s
-          Y = safeOriginY spec + float v.Row * s }
+        {
+            X = safeOriginX spec + float v.Col * s
+            Y = safeOriginY spec + float v.Row * s
+        }
 
     let edgeSegment (spec: GridSpec) (e: Edge) : Point * Point =
         let a, b = edgeEnds e
@@ -112,7 +166,11 @@ module Grids =
 
     let edgeMidpoint (spec: GridSpec) (e: Edge) : Point =
         let a, b = edgeSegment spec e
-        { X = (a.X + b.X) * 0.5; Y = (a.Y + b.Y) * 0.5 }
+
+        {
+            X = (a.X + b.X) * 0.5
+            Y = (a.Y + b.Y) * 0.5
+        }
 
     let cellAt (spec: GridSpec) (p: Point) : Cell =
         let s = safeCellSize spec
@@ -144,10 +202,15 @@ module Grids =
         else
             let r2 = int64 radius * int64 radius
 
-            [ for dr in -radius..radius do
-                  for dc in -radius..radius do
-                      if int64 dc * int64 dc + int64 dr * int64 dr <= r2 then
-                          { Col = center.Col + dc; Row = center.Row + dr } ]
+            [
+                for dr in -radius .. radius do
+                    for dc in -radius .. radius do
+                        if int64 dc * int64 dc + int64 dr * int64 dr <= r2 then
+                            {
+                                Col = center.Col + dc
+                                Row = center.Row + dr
+                            }
+            ]
 
     // The integer midpoint-circle OUTLINE around `center` (a thin, ~1-cell-thick rasterized circle),
     // deduplicated and sorted by (Col, Row) for a fixed deterministic order. radius 0 => [center];
@@ -159,7 +222,14 @@ module Grids =
             [ center ]
         else
             let pts = System.Collections.Generic.HashSet<Cell>()
-            let add dc dr = pts.Add { Col = center.Col + dc; Row = center.Row + dr } |> ignore
+
+            let add dc dr =
+                pts.Add
+                    {
+                        Col = center.Col + dc
+                        Row = center.Row + dr
+                    }
+                |> ignore
 
             let mutable x = radius
             let mutable y = 0

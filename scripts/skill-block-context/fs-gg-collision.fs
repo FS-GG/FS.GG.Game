@@ -2,8 +2,21 @@
 // Block 2 (the broad-phase resolve pass) is self-contained.
 
 //#block 1 "match Geometry.aabbContact player wall with          // Normal points player → wall along the MTV"
-let player : Rect = { X = 0.0; Y = 0.0; Width = 24.0; Height = 24.0 }
-let wall : Rect = { X = 20.0; Y = 0.0; Width = 100.0; Height = 24.0 }
+let player: Rect =
+    {
+        X = 0.0
+        Y = 0.0
+        Width = 24.0
+        Height = 24.0
+    }
+
+let wall: Rect =
+    {
+        X = 20.0
+        Y = 0.0
+        Width = 100.0
+        Height = 24.0
+    }
 
 //#block 3 "let slideAlong (box: Rect) (vel: Point) (contact: Contact) ="
 // The discrete tile push. `classify` is "the only coupling to your world", so the world predicates

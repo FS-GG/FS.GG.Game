@@ -28,11 +28,13 @@ open System.Text
 
 let repoRoot =
     let rec find dir =
-        if File.Exists(Path.Combine(dir, "FS.GG.Game.slnx")) then dir
+        if File.Exists(Path.Combine(dir, "FS.GG.Game.slnx")) then
+            dir
         else
             match Directory.GetParent dir |> Option.ofObj with
             | Some p -> find p.FullName
             | None -> failwith "Could not locate repository root (FS.GG.Game.slnx)."
+
     find __SOURCE_DIRECTORY__
 
 let repoPath (rel: string) =
@@ -60,37 +62,49 @@ if Environment.GetCommandLineArgs() |> Array.contains "--list" then
 // FS.GG.Game.Skills. `supplied-by` is derived from the source path, so adding a product row here is
 // sufficient to include it in the generated manifest and package without joining another set.
 let catalog =
-    [ "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]"
-      // NOT [game, sample-pack] (FS.GG.Game#204). Audio is the ONE product skill here that is not
-      // simulation-only: FS.GG.Rendering#436 established that it applies to every profile that opens
-      // a viewer window, and so to every profile that can make a sound. The retired Rendering
-      // template path gated it on
-      // `(profile == "app" || profile == "sample-pack" || profile == "game")`, and its generator
-      // normalizes that condition into the row below. This catalog is hand-declared (there is no
-      // `dotnet new fs-gg-game` template to read yet), so it can — and did — drift away from the
-      // materialization it describes. Keep the historical applicability condition, not its neighbours'.
-      "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [app, sample-pack, game]"
-      "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-collision", "template/product-skills/fs-gg-collision/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
-      "fs-gg-effects", "template/product-skills/fs-gg-effects/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-game-fable", "template/product-skills/fs-gg-game-fable/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
-      "fs-gg-game-core", "template/product-skills/fs-gg-game-core/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
-      "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]"
-      // fs-gg-mapcraft (FS.GG.Game map construction & analysis; renamed from fs-gg-mapgen in M7,
-      // work/033) is, like fs-gg-ai and fs-gg-ballistics, NOT a migration: the org registry had no
-      // map-construction skill, so it has no FS.GG.Rendering counterpart. It originates here because the
-      // seeded MapGen generators + the producer-agnostic MapAnalysis machinery sit in FS.GG.Game.Core.
-      // The .github registry/skills.yml gains this as a NEW owner:fs-gg-game row (registry = manifest =
-      // bytes) — the cross-repo follow-up FS-GG/.github#1355 (originally filed as fs-gg-mapgen, renamed).
-      "fs-gg-mapcraft", "template/product-skills/fs-gg-mapcraft/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-persistence", "template/product-skills/fs-gg-persistence/SKILL.md", "profile in [game, sample-pack] or template == fable-game"
-      "fs-gg-replay", "template/product-skills/fs-gg-replay/SKILL.md", "template == fable-game"
-      "fs-gg-rules", "template/product-skills/fs-gg-rules/SKILL.md", "template == fable-game and bundle in [tactical, complete]"
-      "fs-gg-playtest", "template/product-skills/fs-gg-playtest/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-physics", "template/product-skills/fs-gg-physics/SKILL.md", "profile in [game, sample-pack]"
-      "fs-gg-visibility", "template/product-skills/fs-gg-visibility/SKILL.md", "profile in [game, sample-pack]" ]
+    [
+        "fs-gg-ai", "template/product-skills/fs-gg-ai/SKILL.md", "profile in [game, sample-pack]"
+        // NOT [game, sample-pack] (FS.GG.Game#204). Audio is the ONE product skill here that is not
+        // simulation-only: FS.GG.Rendering#436 established that it applies to every profile that opens
+        // a viewer window, and so to every profile that can make a sound. The retired Rendering
+        // template path gated it on
+        // `(profile == "app" || profile == "sample-pack" || profile == "game")`, and its generator
+        // normalizes that condition into the row below. This catalog is hand-declared (there is no
+        // `dotnet new fs-gg-game` template to read yet), so it can — and did — drift away from the
+        // materialization it describes. Keep the historical applicability condition, not its neighbours'.
+        "fs-gg-audio", "template/product-skills/fs-gg-audio/SKILL.md", "profile in [app, sample-pack, game]"
+        "fs-gg-ballistics", "template/product-skills/fs-gg-ballistics/SKILL.md", "profile in [game, sample-pack]"
+        "fs-gg-collision",
+        "template/product-skills/fs-gg-collision/SKILL.md",
+        "profile in [game, sample-pack] or template == fable-game"
+        "fs-gg-effects", "template/product-skills/fs-gg-effects/SKILL.md", "profile in [game, sample-pack]"
+        "fs-gg-game-fable",
+        "template/product-skills/fs-gg-game-fable/SKILL.md",
+        "profile in [game, sample-pack] or template == fable-game"
+        "fs-gg-game-core",
+        "template/product-skills/fs-gg-game-core/SKILL.md",
+        "profile in [game, sample-pack] or template == fable-game"
+        "fs-gg-grids", "template/product-skills/fs-gg-grids/SKILL.md", "profile in [game, sample-pack]"
+        "fs-gg-line-drawing", "template/product-skills/fs-gg-line-drawing/SKILL.md", "profile in [game, sample-pack]"
+        // fs-gg-mapcraft (FS.GG.Game map construction & analysis; renamed from fs-gg-mapgen in M7,
+        // work/033) is, like fs-gg-ai and fs-gg-ballistics, NOT a migration: the org registry had no
+        // map-construction skill, so it has no FS.GG.Rendering counterpart. It originates here because the
+        // seeded MapGen generators + the producer-agnostic MapAnalysis machinery sit in FS.GG.Game.Core.
+        // The .github registry/skills.yml gains this as a NEW owner:fs-gg-game row (registry = manifest =
+        // bytes) — the cross-repo follow-up FS-GG/.github#1355 (originally filed as fs-gg-mapgen, renamed).
+        "fs-gg-mapcraft", "template/product-skills/fs-gg-mapcraft/SKILL.md", "profile in [game, sample-pack]"
+        "fs-gg-model-swap", "template/product-skills/fs-gg-model-swap/SKILL.md", "profile in [game, sample-pack]"
+        "fs-gg-persistence",
+        "template/product-skills/fs-gg-persistence/SKILL.md",
+        "profile in [game, sample-pack] or template == fable-game"
+        "fs-gg-replay", "template/product-skills/fs-gg-replay/SKILL.md", "template == fable-game"
+        "fs-gg-rules",
+        "template/product-skills/fs-gg-rules/SKILL.md",
+        "template == fable-game and bundle in [tactical, complete]"
+        "fs-gg-playtest", "template/product-skills/fs-gg-playtest/SKILL.md", "profile in [game, sample-pack]"
+        "fs-gg-physics", "template/product-skills/fs-gg-physics/SKILL.md", "profile in [game, sample-pack]"
+        "fs-gg-visibility", "template/product-skills/fs-gg-visibility/SKILL.md", "profile in [game, sample-pack]"
+    ]
 
 /// Provider source directory (trailing slash) that holds the canonical SKILL.md — supplied-by.
 let suppliedByOf (source: string) : string =
@@ -108,9 +122,12 @@ let sha256Text (body: string) : string =
 
 let filesOf (source: string) =
     let directory = Path.GetDirectoryName(repoPath source)
+
     Directory.GetFiles(directory, "*", SearchOption.AllDirectories)
     |> Array.map (fun path ->
-        let relative = Path.GetRelativePath(directory, path).Replace(Path.DirectorySeparatorChar, '/')
+        let relative =
+            Path.GetRelativePath(directory, path).Replace(Path.DirectorySeparatorChar, '/')
+
         relative, sha256Text (File.ReadAllText path))
     |> Array.sortBy fst
     |> Array.toList
@@ -132,6 +149,7 @@ let manifestJson =
         |> List.sortBy (fun (id, _, _) -> id)
         |> List.map (fun (id, source, condition) ->
             let body = File.ReadAllText(repoPath source)
+
             let files =
                 filesOf source
                 |> List.map (fun (path, digest) ->
@@ -140,7 +158,12 @@ let manifestJson =
 
             sprintf
                 "    {\n      \"id\": \"%s\",\n      \"scope\": \"product\",\n      \"sha256\": \"%s\",\n      \"resolvablePath\": \".agents/skills/%s/SKILL.md\",\n      \"materializes-when\": \"%s\",\n      \"supplied-by\": \"%s\",\n      \"files\": [\n%s\n      ]\n    }"
-                id (sha256Text body) id (jsonEscape condition) (jsonEscape (suppliedByOf source)) files)
+                id
+                (sha256Text body)
+                id
+                (jsonEscape condition)
+                (jsonEscape (suppliedByOf source))
+                files)
         |> String.concat ",\n"
 
     sprintf "{\n  \"schemaVersion\": 2,\n  \"skills\": [\n%s\n  ]\n}\n" entries
@@ -149,7 +172,11 @@ let manifestPath = repoPath manifestRel
 let check = Environment.GetCommandLineArgs() |> Array.contains "--check"
 
 if check then
-    let current = if File.Exists manifestPath then File.ReadAllText manifestPath else ""
+    let current =
+        if File.Exists manifestPath then
+            File.ReadAllText manifestPath
+        else
+            ""
 
     if current = manifestJson then
         printfn "skill-manifest: up to date (%d skills)" catalog.Length

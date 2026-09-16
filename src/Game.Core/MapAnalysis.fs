@@ -10,12 +10,14 @@ type Rule =
     | MaxComponents of int
 
 type Report =
-    { Passed: bool
-      Failures: string list
-      Connected: bool
-      ComponentCount: int
-      Diameter: int
-      BorderOpenings: int }
+    {
+        Passed: bool
+        Failures: string list
+        Connected: bool
+        ComponentCount: int
+        Diameter: int
+        BorderOpenings: int
+    }
 
 [<RequireQualifiedAccess>]
 module MapAnalysis =
@@ -42,10 +44,12 @@ module MapAnalysis =
 
     /// The `Floor` cells of a map in row-major order — the deterministic enumeration the results follow.
     let private floorCells (map: TileMap) : Cell list =
-        [ for row in 0 .. map.Height - 1 do
-              for col in 0 .. map.Width - 1 do
-                  if map.Cells.[row * map.Width + col] = Floor then
-                      { Col = col; Row = row } ]
+        [
+            for row in 0 .. map.Height - 1 do
+                for col in 0 .. map.Width - 1 do
+                    if map.Cells.[row * map.Width + col] = Floor then
+                        { Col = col; Row = row }
+        ]
 
     let stranded (neighbourhood: Neighbourhood) (from: Cell) (map: TileMap) : Cell list =
         let isFloor c = MapGen.get map c = ValueSome Floor
@@ -76,33 +80,39 @@ module MapAnalysis =
     let private floorNeighbours (neighbourhood: Neighbourhood) (map: TileMap) (c: Cell) : Cell list =
         let w = map.Width
         let h = map.Height
-        let isFloor col row = col >= 0 && row >= 0 && col < w && row < h && map.Cells.[row * w + col] = Floor
+
+        let isFloor col row =
+            col >= 0 && row >= 0 && col < w && row < h && map.Cells.[row * w + col] = Floor
 
         let offsets =
             match neighbourhood with
             | FourWay -> [| struct (0, -1); struct (-1, 0); struct (1, 0); struct (0, 1) |]
             | EightWay ->
-                [| struct (-1, -1)
-                   struct (0, -1)
-                   struct (1, -1)
-                   struct (-1, 0)
-                   struct (1, 0)
-                   struct (-1, 1)
-                   struct (0, 1)
-                   struct (1, 1) |]
+                [|
+                    struct (-1, -1)
+                    struct (0, -1)
+                    struct (1, -1)
+                    struct (-1, 0)
+                    struct (1, 0)
+                    struct (-1, 1)
+                    struct (0, 1)
+                    struct (1, 1)
+                |]
 
-        [ for struct (dc, dr) in offsets do
-              let nc = c.Col + dc
-              let nr = c.Row + dr
+        [
+            for struct (dc, dr) in offsets do
+                let nc = c.Col + dc
+                let nr = c.Row + dr
 
-              let cornerCut =
-                  neighbourhood = EightWay
-                  && dc <> 0
-                  && dr <> 0
-                  && not (isFloor (c.Col + dc) c.Row && isFloor c.Col (c.Row + dr))
+                let cornerCut =
+                    neighbourhood = EightWay
+                    && dc <> 0
+                    && dr <> 0
+                    && not (isFloor (c.Col + dc) c.Row && isFloor c.Col (c.Row + dr))
 
-              if isFloor nc nr && not cornerCut then
-                  { Col = nc; Row = nr } ]
+                if isFloor nc nr && not cornerCut then
+                    { Col = nc; Row = nr }
+        ]
 
     let borderOpenings (map: TileMap) : Cell list =
         let w = map.Width
@@ -111,13 +121,15 @@ module MapAnalysis =
         if w <= 0 || h <= 0 then
             []
         else
-            [ for row in 0 .. h - 1 do
-                  for col in 0 .. w - 1 do
-                      if
-                          (col = 0 || row = 0 || col = w - 1 || row = h - 1)
-                          && map.Cells.[row * w + col] = Floor
-                      then
-                          { Col = col; Row = row } ]
+            [
+                for row in 0 .. h - 1 do
+                    for col in 0 .. w - 1 do
+                        if
+                            (col = 0 || row = 0 || col = w - 1 || row = h - 1)
+                            && map.Cells.[row * w + col] = Floor
+                        then
+                            { Col = col; Row = row }
+            ]
 
     let deadEnds (neighbourhood: Neighbourhood) (map: TileMap) : Cell list =
         floorCells map
@@ -132,7 +144,13 @@ module MapAnalysis =
         else
             let indexOf = Dictionary<Cell, int>()
             cells |> Array.iteri (fun i c -> indexOf.[c] <- i)
-            let adj = cells |> Array.map (fun c -> floorNeighbours neighbourhood map c |> List.map (fun nc -> indexOf.[nc]) |> List.toArray)
+
+            let adj =
+                cells
+                |> Array.map (fun c ->
+                    floorNeighbours neighbourhood map c
+                    |> List.map (fun nc -> indexOf.[nc])
+                    |> List.toArray)
 
             let disc = Array.create n -1
             let low = Array.zeroCreate<int> n
@@ -182,9 +200,11 @@ module MapAnalysis =
                     if rootChildren > 1 then
                         isAp.[root] <- true
 
-            [ for i in 0 .. n - 1 do
-                  if isAp.[i] then
-                      cells.[i] ]
+            [
+                for i in 0 .. n - 1 do
+                    if isAp.[i] then
+                        cells.[i]
+            ]
 
     // ---------------------------------------------------------------------------------------------
     // M10 — path & flow metrics. Unweighted BFS hop distances — the topological "how many steps across",
@@ -250,15 +270,20 @@ module MapAnalysis =
         if pts.Length < 2 then
             struct (0, 0.0)
         else
-            let manhattan (a: Cell) (b: Cell) = abs (a.Col - b.Col) + abs (a.Row - b.Row)
+            let manhattan (a: Cell) (b: Cell) =
+                abs (a.Col - b.Col) + abs (a.Row - b.Row)
 
             // each point's nearest-other-point distance; min/mean are commutative so index order is safe
             let nearest =
-                [ for i in 0 .. pts.Length - 1 ->
-                      [ for j in 0 .. pts.Length - 1 do
-                            if j <> i then
-                                manhattan pts.[i] pts.[j] ]
-                      |> List.min ]
+                [
+                    for i in 0 .. pts.Length - 1 ->
+                        [
+                            for j in 0 .. pts.Length - 1 do
+                                if j <> i then
+                                    manhattan pts.[i] pts.[j]
+                        ]
+                        |> List.min
+                ]
 
             struct (List.min nearest, (List.sumBy float nearest) / float nearest.Length)
 
@@ -306,22 +331,39 @@ module MapAnalysis =
             |> List.choose (fun rule ->
                 match rule with
                 | Rule.Connected ->
-                    if connected then None else Some "not connected: floor is in multiple components"
+                    if connected then
+                        None
+                    else
+                        Some "not connected: floor is in multiple components"
                 | Rule.MinDiameter n ->
-                    if diam >= n then None else Some(sprintf "diameter %d below required minimum %d" diam n)
+                    if diam >= n then
+                        None
+                    else
+                        Some(sprintf "diameter %d below required minimum %d" diam n)
                 | Rule.MaxDiameter n ->
-                    if diam <= n then None else Some(sprintf "diameter %d above allowed maximum %d" diam n)
+                    if diam <= n then
+                        None
+                    else
+                        Some(sprintf "diameter %d above allowed maximum %d" diam n)
                 | Rule.MinBorderOpenings n ->
-                    if borders >= n then None else Some(sprintf "border openings %d below required minimum %d" borders n)
+                    if borders >= n then
+                        None
+                    else
+                        Some(sprintf "border openings %d below required minimum %d" borders n)
                 | Rule.MaxComponents n ->
-                    if comps <= n then None else Some(sprintf "components %d above allowed maximum %d" comps n))
+                    if comps <= n then
+                        None
+                    else
+                        Some(sprintf "components %d above allowed maximum %d" comps n))
 
-        { Passed = List.isEmpty failures
-          Failures = failures
-          Connected = connected
-          ComponentCount = comps
-          Diameter = diam
-          BorderOpenings = borders }
+        {
+            Passed = List.isEmpty failures
+            Failures = failures
+            Connected = connected
+            ComponentCount = comps
+            Diameter = diam
+            BorderOpenings = borders
+        }
 
     // ---------------------------------------------------------------------------------------------
     // M12 — static tactical shape. Geometry-only priors (exposure, cover, killzones), computable with no
@@ -332,47 +374,59 @@ module MapAnalysis =
     let exposureMap (hasLos: Cell -> Cell -> bool) (map: TileMap) : Map<Cell, int> =
         let floors = floorCells map |> List.toArray
 
-        [ for c in floors ->
-              let seenBy = floors |> Array.filter (fun d -> d <> c && hasLos c d) |> Array.length
-              (c, seenBy) ]
+        [
+            for c in floors ->
+                let seenBy = floors |> Array.filter (fun d -> d <> c && hasLos c d) |> Array.length
+                (c, seenBy)
+        ]
         |> Map.ofList
 
     let coverMap (map: TileMap) : Map<Cell, int> =
         let w = map.Width
         let h = map.Height
-        let isWallOrOff col row = not (col >= 0 && row >= 0 && col < w && row < h && map.Cells.[row * w + col] = Floor)
+
+        let isWallOrOff col row =
+            not (col >= 0 && row >= 0 && col < w && row < h && map.Cells.[row * w + col] = Floor)
 
         let offsets =
-            [| struct (-1, -1)
-               struct (0, -1)
-               struct (1, -1)
-               struct (-1, 0)
-               struct (1, 0)
-               struct (-1, 1)
-               struct (0, 1)
-               struct (1, 1) |]
+            [|
+                struct (-1, -1)
+                struct (0, -1)
+                struct (1, -1)
+                struct (-1, 0)
+                struct (1, 0)
+                struct (-1, 1)
+                struct (0, 1)
+                struct (1, 1)
+            |]
 
-        [ for c in floorCells map ->
-              let cover =
-                  offsets
-                  |> Array.filter (fun (struct (dc, dr)) -> isWallOrOff (c.Col + dc) (c.Row + dr))
-                  |> Array.length
+        [
+            for c in floorCells map ->
+                let cover =
+                    offsets
+                    |> Array.filter (fun (struct (dc, dr)) -> isWallOrOff (c.Col + dc) (c.Row + dr))
+                    |> Array.length
 
-              (c, cover) ]
+                (c, cover)
+        ]
         |> Map.ofList
 
     let killzones (hasLos: Cell -> Cell -> bool) (minLength: int) (map: TileMap) : (Cell * Cell) list =
         let floors = floorCells map |> List.toArray
-        let chebyshev (a: Cell) (b: Cell) = max (abs (a.Col - b.Col)) (abs (a.Row - b.Row))
+
+        let chebyshev (a: Cell) (b: Cell) =
+            max (abs (a.Col - b.Col)) (abs (a.Row - b.Row))
 
         // Row-major i<j is NOT the same as `Cell`-order a<b: `Cell` compares (Col, Row), so a cross-row pair
         // can be row-major-ordered yet Col-out-of-order. Canonicalise each pair to (min, max) under Cell
         // comparison, then sort by (a, b) — so the contract's "canonical a<b, in (a, b) order" actually holds.
-        [ for i in 0 .. floors.Length - 1 do
-              for j in i + 1 .. floors.Length - 1 do
-                  let a = floors.[i]
-                  let b = floors.[j]
+        [
+            for i in 0 .. floors.Length - 1 do
+                for j in i + 1 .. floors.Length - 1 do
+                    let a = floors.[i]
+                    let b = floors.[j]
 
-                  if chebyshev a b >= minLength && hasLos a b then
-                      if a <= b then (a, b) else (b, a) ]
+                    if chebyshev a b >= minLength && hasLos a b then
+                        if a <= b then (a, b) else (b, a)
+        ]
         |> List.sortBy (fun (a, b) -> struct (a.Col, a.Row, b.Col, b.Row))
