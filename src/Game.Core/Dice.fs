@@ -9,7 +9,9 @@ module Dice =
     // convolution of many dice (e.g. 6^n) does not overflow the way `int` would — the practical bound
     // is ~24 six-sided dice, far beyond any combat roll.
     let private normalize (m: Map<int, int64>) : Distribution =
-        { Weights = m |> Map.filter (fun _ w -> w > 0L) }
+        {
+            Weights = m |> Map.filter (fun _ w -> w > 0L)
+        }
 
     /// The outcome -> weight pairs, in ascending outcome order.
     let outcomes (d: Distribution) : (int * int64) list = d.Weights |> Map.toList
@@ -24,7 +26,9 @@ module Dice =
         if hi < lo then
             { Weights = Map.empty }
         else
-            { Weights = [ for v in lo..hi -> (v, 1L) ] |> Map.ofList }
+            {
+                Weights = [ for v in lo..hi -> (v, 1L) ] |> Map.ofList
+            }
 
     let die (sides: int) : Distribution = uniform 1 sides
 
@@ -33,13 +37,18 @@ module Dice =
     let private combineBy (op: int -> int -> int) (a: Distribution) (b: Distribution) : Distribution =
         let mutable acc = Map.empty
 
-        for KeyValue (va, wa) in a.Weights do
-            for KeyValue (vb, wb) in b.Weights do
+        for KeyValue(va, wa) in a.Weights do
+            for KeyValue(vb, wb) in b.Weights do
                 let v = op va vb
                 let w = wa * wb
-                acc <- Map.change v (function
-                    | Some x -> Some(x + w)
-                    | None -> Some w) acc
+
+                acc <-
+                    Map.change
+                        v
+                        (function
+                        | Some x -> Some(x + w)
+                        | None -> Some w)
+                        acc
 
         normalize acc
 
@@ -103,7 +112,7 @@ module Dice =
             let mutable chosen = 0
             let mutable found = false
 
-            for KeyValue (v, w) in d.Weights do
+            for KeyValue(v, w) in d.Weights do
                 if not found then
                     acc <- acc + w
 

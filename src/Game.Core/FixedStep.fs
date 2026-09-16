@@ -17,7 +17,10 @@ module FixedStep =
         // never poison the accumulator and permanently wedge the loop, and a nonsense accumulator must
         // never yield a negative step count — so each operand is sanitized before the arithmetic.
         let acc =
-            if System.Double.IsFinite accumulator && accumulator > 0.0 then accumulator else 0.0
+            if System.Double.IsFinite accumulator && accumulator > 0.0 then
+                accumulator
+            else
+                0.0
 
         if not (System.Double.IsFinite interval) || interval <= 0.0 then
             struct (0, acc)
@@ -25,9 +28,17 @@ module FixedStep =
             // A non-finite frame contributes nothing; a runaway frame is capped by maxFrameTime (itself
             // sanitized), so catch-up can never spiral.
             let cap =
-                if System.Double.IsFinite maxFrameTime && maxFrameTime > 0.0 then maxFrameTime else 0.0
+                if System.Double.IsFinite maxFrameTime && maxFrameTime > 0.0 then
+                    maxFrameTime
+                else
+                    0.0
 
-            let frame = if System.Double.IsFinite frameTime then max 0.0 frameTime else 0.0
+            let frame =
+                if System.Double.IsFinite frameTime then
+                    max 0.0 frameTime
+                else
+                    0.0
+
             let total = acc + min cap frame
             // Closed-form whole steps (no drain loop); cap at Int32.MaxValue so a pathologically tiny
             // interval can never wrap the count negative. This saturation is the ONE documented exception

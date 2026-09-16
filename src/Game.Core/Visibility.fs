@@ -44,7 +44,11 @@ module Visibility =
                 if q < 0.0 then struct (1.0, 0.0) else struct (t0, t1)
             else
                 let r = q / p
-                if p < 0.0 then struct (max t0 r, t1) else struct (t0, min t1 r)
+
+                if p < 0.0 then
+                    struct (max t0 r, t1)
+                else
+                    struct (t0, min t1 r)
 
         let window =
             struct (0.0, 1.0)
@@ -94,7 +98,12 @@ module Visibility =
     // finite `dir` can still overflow their product.
     let inline private accept (origin: Point) (dir: Point) (t: float) (u: float) : (Point * float) option =
         if t >= 0.0 && u >= 0.0 && u <= 1.0 then
-            let hit = { X = origin.X + t * dir.X; Y = origin.Y + t * dir.Y }
+            let hit =
+                {
+                    X = origin.X + t * dir.X
+                    Y = origin.Y + t * dir.Y
+                }
+
             if isFinitePoint hit then Some(hit, t) else None
         else
             None
@@ -118,11 +127,18 @@ module Visibility =
             let reach (p: Point) =
                 max (abs (halfDiff p.X origin.X)) (abs (halfDiff p.Y origin.Y))
 
-            if reach seg.A <= reach seg.B then seg.A, seg.B else seg.B, seg.A
+            if reach seg.A <= reach seg.B then
+                seg.A, seg.B
+            else
+                seg.B, seg.A
 
-        let struct (wx, wy, a) = normalise (halfDiff nearer.X origin.X) (halfDiff nearer.Y origin.Y)
+        let struct (wx, wy, a) =
+            normalise (halfDiff nearer.X origin.X) (halfDiff nearer.Y origin.Y)
+
         let struct (dx, dy, b) = normalise dir.X dir.Y
-        let struct (ex, ey, c) = normalise (halfDiff farther.X nearer.X) (halfDiff farther.Y nearer.Y)
+
+        let struct (ex, ey, c) =
+            normalise (halfDiff farther.X nearer.X) (halfDiff farther.Y nearer.Y)
 
         let denom = dx * ey - dy * ex
 
@@ -180,14 +196,22 @@ module Visibility =
                 // input takes: the rescaled path is a fallback, not a replacement, so no currently-computable
                 // result moves by even an ulp and the golden replays stay byte-identical.
                 if
-                    not (System.Double.IsFinite denom && System.Double.IsFinite t && System.Double.IsFinite u)
+                    not (
+                        System.Double.IsFinite denom
+                        && System.Double.IsFinite t
+                        && System.Double.IsFinite u
+                    )
                 then
                     raySegmentRescaled origin dir seg
                 else
                     accept origin dir t u
 
     let isVisible (source: Point) (target: Point) (segments: Segment list) : bool =
-        let dir = { X = target.X - source.X; Y = target.Y - source.Y }
+        let dir =
+            {
+                X = target.X - source.X
+                Y = target.Y - source.Y
+            }
 
         if not (isFinitePoint source && isFinitePoint target) then
             false
@@ -211,7 +235,14 @@ module Visibility =
         let tr = { X = x1; Y = y0 }
         let br = { X = x1; Y = y1 }
         let bl = { X = x0; Y = y1 }
-        [ { A = tl; B = tr }; { A = tr; B = br }; { A = br; B = bl }; { A = bl; B = tl } ], [ tl; tr; br; bl ]
+
+        [
+            { A = tl; B = tr }
+            { A = tr; B = br }
+            { A = br; B = bl }
+            { A = bl; B = tl }
+        ],
+        [ tl; tr; br; bl ]
 
     // Nearest hit of a single ray against every candidate segment (deterministic: `List.fold` keeps the
     // first minimum in list order on a `t` tie). `None` only if the ray hits nothing (guarded away by
@@ -232,8 +263,18 @@ module Visibility =
     let private angleCompare (source: Point) (a: Point * int) (b: Point * int) : int =
         let pa, ia = a
         let pb, ib = b
-        let va = { X = pa.X - source.X; Y = pa.Y - source.Y }
-        let vb = { X = pb.X - source.X; Y = pb.Y - source.Y }
+
+        let va =
+            {
+                X = pa.X - source.X
+                Y = pa.Y - source.Y
+            }
+
+        let vb =
+            {
+                X = pb.X - source.X
+                Y = pb.Y - source.Y
+            }
         // half = 0 for angles in [0, π) (upper, incl. +x axis), 1 for [π, 2π): a consistent CCW start.
         let half (v: Point) =
             if v.Y < 0.0 || (v.Y = 0.0 && v.X < 0.0) then 1 else 0
@@ -245,8 +286,10 @@ module Visibility =
         else
             let cross = va.X * vb.Y - va.Y * vb.X
 
-            if cross > 0.0 then -1
-            elif cross < 0.0 then 1
+            if cross > 0.0 then
+                -1
+            elif cross < 0.0 then
+                1
             else
                 let c = compare (sqLen va) (sqLen vb)
                 if c <> 0 then c else compare ia ib
@@ -263,59 +306,79 @@ module Visibility =
             { Source = source; Vertices = [] }
         else
 
-        // Drop non-finite and zero-length occluders up front (total; they can never occlude).
-        let real =
-            segments
-            |> List.filter (fun s -> isFiniteSeg s && sqLen { X = s.B.X - s.A.X; Y = s.B.Y - s.A.Y } > 0.0)
+            // Drop non-finite and zero-length occluders up front (total; they can never occlude).
+            let real =
+                segments
+                |> List.filter (fun s -> isFiniteSeg s && sqLen { X = s.B.X - s.A.X; Y = s.B.Y - s.A.Y } > 0.0)
 
-        // Clip the occluders to the sight bound box, by an exact segment-vs-box test. NOT a `SpatialGrid`
-        // bucket: the grid indexes *points*, so bucketing a segment by its endpoints drops a wall that
-        // spans the box with both ends outside it — the viewpoint then sees straight through it. Long
-        // walls are the common case, not the corner case, so this test is exact.
-        //
-        // Clipping, rather than merely keeping, is what puts an aim point where a spanning wall crosses
-        // the bound. Rays never travel beyond the bound anyway (they terminate on its edges), so trimming
-        // an occluder to it cannot change which rays it blocks. A wall that only grazes a corner clips to
-        // zero length and is dropped — it occludes nothing.
-        let boundRect =
-            { X = source.X - radius
-              Y = source.Y - radius
-              Width = 2.0 * radius
-              Height = 2.0 * radius }
+            // Clip the occluders to the sight bound box, by an exact segment-vs-box test. NOT a `SpatialGrid`
+            // bucket: the grid indexes *points*, so bucketing a segment by its endpoints drops a wall that
+            // spans the box with both ends outside it — the viewpoint then sees straight through it. Long
+            // walls are the common case, not the corner case, so this test is exact.
+            //
+            // Clipping, rather than merely keeping, is what puts an aim point where a spanning wall crosses
+            // the bound. Rays never travel beyond the bound anyway (they terminate on its edges), so trimming
+            // an occluder to it cannot change which rays it blocks. A wall that only grazes a corner clips to
+            // zero length and is dropped — it occludes nothing.
+            let boundRect =
+                {
+                    X = source.X - radius
+                    Y = source.Y - radius
+                    Width = 2.0 * radius
+                    Height = 2.0 * radius
+                }
 
-        let culled =
-            real
-            |> List.choose (fun s ->
-                clipSegmentToRect boundRect s.A s.B
-                |> Option.map (fun (a, b) -> { A = a; B = b })
-                |> Option.filter (fun s -> sqLen { X = s.B.X - s.A.X; Y = s.B.Y - s.A.Y } > 0.0))
+            let culled =
+                real
+                |> List.choose (fun s ->
+                    clipSegmentToRect boundRect s.A s.B
+                    |> Option.map (fun (a, b) -> { A = a; B = b })
+                    |> Option.filter (fun s -> sqLen { X = s.B.X - s.A.X; Y = s.B.Y - s.A.Y } > 0.0))
 
-        let bEdges, bCorners = boundEdges source radius
-        let allSegs = culled @ bEdges
+            let bEdges, bCorners = boundEdges source radius
+            let allSegs = culled @ bEdges
 
-        // Aim points: every culled-occluder endpoint plus the bound corners.
-        let aimPoints =
-            [ for s in culled do
-                  yield s.A
-                  yield s.B
-              yield! bCorners ]
+            // Aim points: every culled-occluder endpoint plus the bound corners.
+            let aimPoints =
+                [
+                    for s in culled do
+                        yield s.A
+                        yield s.B
+                    yield! bCorners
+                ]
 
-        // For each aim point cast three rays (at it, and nudged either side) to slip past corners.
-        let rays =
-            [ for p in aimPoints do
-                  let d = { X = p.X - source.X; Y = p.Y - source.Y }
+            // For each aim point cast three rays (at it, and nudged either side) to slip past corners.
+            let rays =
+                [
+                    for p in aimPoints do
+                        let d =
+                            {
+                                X = p.X - source.X
+                                Y = p.Y - source.Y
+                            }
 
-                  if sqLen d > 0.0 then
-                      yield d
-                      yield { X = d.X - nudge * d.Y; Y = d.Y + nudge * d.X }
-                      yield { X = d.X + nudge * d.Y; Y = d.Y - nudge * d.X } ]
+                        if sqLen d > 0.0 then
+                            yield d
 
-        let hits =
-            rays
-            |> List.choose (fun d -> nearestHit source d allSegs)
-            |> List.indexed
-            |> List.map (fun (i, p) -> p, i)
+                            yield
+                                {
+                                    X = d.X - nudge * d.Y
+                                    Y = d.Y + nudge * d.X
+                                }
 
-        let ordered = hits |> List.sortWith (angleCompare source) |> List.map fst
+                            yield
+                                {
+                                    X = d.X + nudge * d.Y
+                                    Y = d.Y - nudge * d.X
+                                }
+                ]
 
-        { Source = source; Vertices = ordered }
+            let hits =
+                rays
+                |> List.choose (fun d -> nearestHit source d allSegs)
+                |> List.indexed
+                |> List.map (fun (i, p) -> p, i)
+
+            let ordered = hits |> List.sortWith (angleCompare source) |> List.map fst
+
+            { Source = source; Vertices = ordered }

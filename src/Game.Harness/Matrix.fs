@@ -8,18 +8,22 @@ type Seat =
     | B
 
 type MatchSetup<'world, 'view> =
-    { Dt: float
-      Init: Rng -> 'world
-      Observe: Seat -> 'world -> 'view
-      Apply: Seat -> Command -> 'world -> 'world
-      Step: 'world -> float -> 'world
-      IsOver: 'world -> bool
-      MaxSteps: int }
+    {
+        Dt: float
+        Init: Rng -> 'world
+        Observe: Seat -> 'world -> 'view
+        Apply: Seat -> Command -> 'world -> 'world
+        Step: 'world -> float -> 'world
+        IsOver: 'world -> bool
+        MaxSteps: int
+    }
 
 type Match<'view> =
-    { Seed: uint64
-      A: Bot<'view>
-      B: Bot<'view> }
+    {
+        Seed: uint64
+        A: Bot<'view>
+        B: Bot<'view>
+    }
 
 [<RequireQualifiedAccess>]
 module Matrix =
@@ -39,7 +43,7 @@ module Matrix =
 
     let runMatch (setup: MatchSetup<'world, 'view>) (outcome: 'world -> 'o) (game: Match<'view>) : 'o =
         let mutable world = setup.Init(Rng.ofSeed game.Seed)
-        let mutable rng = Rng.ofSeed(game.Seed ^^^ decisionSalt)
+        let mutable rng = Rng.ofSeed (game.Seed ^^^ decisionSalt)
         let mutable steps = 0
 
         while not (setup.IsOver world) && steps < setup.MaxSteps do

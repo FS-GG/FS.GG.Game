@@ -3,8 +3,10 @@ namespace FS.GG.Game.Harness
 open FS.GG.Game.Core
 
 type Run<'f> =
-    { Trace: Trace<'f>
-      Captured: Command list list }
+    {
+        Trace: Trace<'f>
+        Captured: Command list list
+    }
 
 [<RequireQualifiedAccess>]
 module Driver =
@@ -62,5 +64,7 @@ module Driver =
             world <- stepFrame playable commands world
             frames.Add(fingerprint world)
 
-        { Trace = Trace.create Origin.InputDriven (List.ofSeq frames)
-          Captured = List.ofSeq captured }
+        {
+            Trace = Trace.create Origin.InputDriven (List.ofSeq frames)
+            Captured = List.ofSeq captured
+        }

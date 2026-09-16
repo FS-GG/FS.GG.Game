@@ -6,8 +6,10 @@ open System.IO
 open FS.GG.Playtest
 
 type private ProofInputs =
-    { Provenance: Map<string, Proofs.Provenance>
-      Journeys: Map<string, Proofs.ValidatedJourneyProof> }
+    {
+        Provenance: Map<string, Proofs.Provenance>
+        Journeys: Map<string, Proofs.ValidatedJourneyProof>
+    }
 
 let private readFile (path: string) : Result<string, string> =
     try
@@ -34,6 +36,7 @@ let private canonicalPath (path: string) =
             System.StringComparer.OrdinalIgnoreCase
         else
             System.StringComparer.Ordinal
+
     let visited = System.Collections.Generic.HashSet<string>(comparer)
 
     let rec resolve candidatePath =
@@ -44,6 +47,7 @@ let private canonicalPath (path: string) =
 
         let root = Path.GetPathRoot full |> Option.ofObj |> Option.defaultValue ""
         let relative = full.Substring(root.Length)
+
         let segments =
             relative.Split(
                 [| Path.DirectorySeparatorChar; Path.AltDirectorySeparatorChar |],
@@ -59,18 +63,18 @@ let private canonicalPath (path: string) =
 
                 match fileInfo.LinkTarget |> Option.ofObj with
                 | Some linkTarget ->
-                    let parent =
-                        fileInfo.DirectoryName
-                        |> Option.ofObj
-                        |> Option.defaultValue root
+                    let parent = fileInfo.DirectoryName |> Option.ofObj |> Option.defaultValue root
+
                     let target =
                         if Path.IsPathRooted linkTarget then
                             linkTarget
                         else
                             Path.Combine(parent, linkTarget)
+
                     let targetWithRemainder =
                         segments.[index + 1 ..]
                         |> Array.fold (fun current segment -> Path.Combine(current, segment)) target
+
                     resolve targetWithRemainder
                 | None -> walk candidate (index + 1)
 
@@ -102,41 +106,37 @@ let private parseProofInputs (argv: string[]) (manifest: Manifest.GameplayFr lis
     | Ok simulation ->
         let productionRequired =
             manifest
-            |> List.exists (fun requirement ->
-                requirement.RequiredEvidence = Manifest.EvidenceLevel.ProductionJourney)
+            |> List.exists (fun requirement -> requirement.RequiredEvidence = Manifest.EvidenceLevel.ProductionJourney)
 
-        match
-            flag "--journey-proof-assembly" argv,
-            flag "--journey-authority-assembly" argv,
-            flag "--critic" argv
-        with
+        match flag "--journey-proof-assembly" argv, flag "--journey-authority-assembly" argv, flag "--critic" argv with
         | None, None, None when not productionRequired ->
             Ok
-                { Provenance = simulation
-                  Journeys = Map.empty }
+                {
+                    Provenance = simulation
+                    Journeys = Map.empty
+                }
         | Some assemblyPath, Some authorityAssemblyPath, Some criticPath ->
             match readFile criticPath with
             | Error e -> Error e
             | Ok criticText ->
                 match
-                    Proofs.loadJourneyReceiptsWithAuthority assemblyPath authorityAssemblyPath,
-                    Critic.parse criticText
+                    Proofs.loadJourneyReceiptsWithAuthority assemblyPath authorityAssemblyPath, Critic.parse criticText
                 with
                 | Error e, _
                 | _, Error e -> Error e
                 | Ok journeys, Ok criticRows ->
                     match Critic.validate manifest criticRows with
                     | Error e -> Error e
-                    | Ok () ->
+                    | Ok() ->
                         let provenance =
                             journeys
-                            |> Map.fold
-                                (fun combined key value -> Map.add key value.Provenance combined)
-                                simulation
+                            |> Map.fold (fun combined key value -> Map.add key value.Provenance combined) simulation
 
                         Ok
-                            { Provenance = provenance
-                              Journeys = journeys }
+                            {
+                                Provenance = provenance
+                                Journeys = journeys
+                            }
         | _ when productionRequired ->
             Error(
                 "production-journey coverage requires --journey-proof-assembly, "
@@ -221,10 +221,15 @@ let private coverageLint (argv: string[]) : int =
                         printfn "coverage-lint: PASS — every cited AC has its required evidence level"
                         0
                     else
-                        eprintfn "coverage-lint: FAIL — cited AC(s) without their required evidence level: %A" report.UncoveredAcs
+                        eprintfn
+                            "coverage-lint: FAIL — cited AC(s) without their required evidence level: %A"
+                            report.UncoveredAcs
+
                         1
     | _ ->
-        eprintfn "coverage-lint: --manifest <m> and --proofs <p> required; production rows also require --journey-proof-assembly <dll> --journey-authority-assembly <producer.dll> --critic <assessment>"
+        eprintfn
+            "coverage-lint: --manifest <m> and --proofs <p> required; production rows also require --journey-proof-assembly <dll> --journey-authority-assembly <producer.dll> --critic <assessment>"
+
         2
 
 let private emitEvidence (argv: string[]) : int =
@@ -269,10 +274,7 @@ let private emitEvidence (argv: string[]) : int =
                                 | Some evidencePath ->
                                     match samePath reportPath evidencePath with
                                     | Error error -> Error error
-                                    | Ok true ->
-                                        Error(
-                                            "--journey-report-out and --out must resolve to different files"
-                                        )
+                                    | Ok true -> Error("--journey-report-out and --out must resolve to different files")
                                     | Ok false ->
                                         let generated = JourneyReceiptExport.generate reportPath inputs.Journeys
 
@@ -291,25 +293,27 @@ let private emitEvidence (argv: string[]) : int =
                         eprintfn "emit-evidence: %s" error
                         1
                     | Ok journeys ->
-                        let rows =
-                            Evidence.rowsWithJourneyReceipts
-                                run
-                                journeys
-                                inputs.Provenance
-                                manifest
+                        let rows = Evidence.rowsWithJourneyReceipts run journeys inputs.Provenance manifest
                         let rendered = Evidence.renderWithJourneyReceipts tPath run journeys rows
 
                         match flag "--out" argv with
                         | Some out ->
                             File.WriteAllText(out, rendered)
-                            let satisfying = rows |> List.filter (fun r -> r.Result = "pass" && not r.Synthetic) |> List.length
+
+                            let satisfying =
+                                rows
+                                |> List.filter (fun r -> r.Result = "pass" && not r.Synthetic)
+                                |> List.length
+
                             printfn "wrote %d evidence row(s) to %s (%d satisfying)" (List.length rows) out satisfying
                             0
                         | None ->
                             printf "%s" rendered
                             0
     | _ ->
-        eprintfn "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --journey-authority-assembly <producer.dll> --critic <assessment> --journey-report-out <junit.xml>"
+        eprintfn
+            "emit-evidence: --manifest <m>, --proofs <p>, and --trx <t> required; production rows also require --journey-proof-assembly <dll> --journey-authority-assembly <producer.dll> --critic <assessment> --journey-report-out <junit.xml>"
+
         2
 
 [<EntryPoint>]

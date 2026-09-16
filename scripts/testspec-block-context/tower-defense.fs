@@ -15,7 +15,12 @@ type ProjId = ProjId of int
 type MapId = MapId of int
 
 // --- combat vocabulary (§4) ---
-type DamageType = Physical | Magic | Energy | Siege
+type DamageType =
+    | Physical
+    | Magic
+    | Energy
+    | Siege
+
 type TowerSpecial =
     | NoSpecial
     | Splash of radius: float
@@ -25,11 +30,23 @@ type TowerSpecial =
     | ApplyVulnerable of bonus: float * seconds: float
 
 // --- board + run state (§5) ---
-type TileKind = Buildable | Path | Blocked | Spawn | Goal
+type TileKind =
+    | Buildable
+    | Path
+    | Blocked
+    | Spawn
+    | Goal
+
 type TransientFx =
     | Beam of from: Geometry.Vec2 * to_: Geometry.Vec2 * life: float
     | Explosion of at: Geometry.Vec2 * radius: float * life: float
-type RunStats = { Kills: int; Leaks: int; DamageDealt: float }
+
+type RunStats =
+    {
+        Kills: int
+        Leaks: int
+        DamageDealt: float
+    }
 
 // RE-KEYED 9 -> 8: the §9.1 menu section's `MenuMsg` block was removed when this spec adopted the
 // shared game shell (FS-GG/FS.GG.Rendering#991), so the fixed-step accumulator — previously block 9 —
@@ -42,5 +59,5 @@ let mutable acc = 0.0
 let realDt = 1.0 / 60.0
 let dtFixed = 1.0 / 60.0
 let maxStepsPerFrame = 5
-let model : Model = Unchecked.defaultof<Model>
+let model: Model = Unchecked.defaultof<Model>
 let simStep (_dt: float) (m: Model) : Model = m

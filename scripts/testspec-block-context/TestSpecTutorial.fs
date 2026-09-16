@@ -19,32 +19,38 @@
 // why ("do not put X/Y/Width/Height labels on Paddle… the clash surfaces in LayoutEvidence.fs, a file
 // you must not touch"). Weaken either to an X/Y record here and this gate would go green over exactly
 // the #129/#132/#140/#144 defect it exists to catch.
-type Side = Left | Right
+type Side =
+    | Left
+    | Right
 
-type Direction = Up | Down
+type Direction =
+    | Up
+    | Down
 
 type BallState =
     | Frozen of timer: float
     | Live
 
-type Paddle =
-    { Side: Side
-      TopY: float }          // top edge, px — NOT `Y`: that label collides with Scene's Point/Rect
+type Paddle = { Side: Side; TopY: float } // top edge, px — NOT `Y`: that label collides with Scene's Point/Rect
 
 type Ball =
-    { Pos: Geometry.Vec2     // centre, px — the collision-safe Vx/Vy vector, never an X/Y record
-      Vel: Geometry.Vec2     // px/s
-      State: BallState }
+    {
+        Pos: Geometry.Vec2 // centre, px — the collision-safe Vx/Vy vector, never an X/Y record
+        Vel: Geometry.Vec2 // px/s
+        State: BallState
+    }
 
 /// pong.md §12's tunables, as the data-driven record the tutorial's §12 bullet asks for. A
 /// representative subset: the block only needs the TYPE to exist, and a full transcription of the
 /// table would be a second copy of it to drift from.
 type Config =
-    { PlayfieldW: float      // 1280 — a scalar takes an honest name; `Width` would collide
-      PlayfieldH: float      // 720
-      PlayerSpeed: float     // 600 px/s
-      ServeSpeed: float      // 420 px/s
-      WinScore: int }        // 11
+    {
+        PlayfieldW: float // 1280 — a scalar takes an honest name; `Width` would collide
+        PlayfieldH: float // 720
+        PlayerSpeed: float // 600 px/s
+        ServeSpeed: float // 420 px/s
+        WinScore: int
+    } // 11
 
 //#block 2 "[<Tests>]"
 // Part C teaches how a §14 acceptance scenario becomes an Expecto test, using a Pong-style model the
@@ -66,16 +72,20 @@ type Config =
 // over the very defect it exists to catch.
 type Vec2 = Geometry.Vec2
 
-type Ball =
-    { Pos: Vec2
-      Vel: Vec2 }
+type Ball = { Pos: Vec2; Vel: Vec2 }
 
 type Model = { Ball: Ball }
 
 type Msg = Tick of dt: float
 
-let initial : Model =
-    { Ball = { Pos = { Vx = 640.0; Vy = 360.0 }; Vel = { Vx = 0.0; Vy = 0.0 } } }
+let initial: Model =
+    {
+        Ball =
+            {
+                Pos = { Vx = 640.0; Vy = 360.0 }
+                Vel = { Vx = 0.0; Vy = 0.0 }
+            }
+    }
 
 /// The reader's pure MVU step. The tutorial only ever CALLS it; its body is theirs to write.
 let update (_msg: Msg) (model: Model) : Model = model

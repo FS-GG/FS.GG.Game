@@ -1,9 +1,7 @@
 namespace FS.GG.Game.Core
 
 type Grid<'T> =
-    { Width: int
-      Height: int
-      Cells: 'T[] }
+    { Width: int; Height: int; Cells: 'T[] }
 
 [<Struct>]
 type Tile =
@@ -15,20 +13,26 @@ type TileMap = Grid<Tile>
 type Region = { Id: int; Cells: Cell[] }
 
 type CaveParams =
-    { WallChance: float
-      SmoothingPasses: int
-      Neighbourhood: Neighbourhood }
+    {
+        WallChance: float
+        SmoothingPasses: int
+        Neighbourhood: Neighbourhood
+    }
 
 type BspParams =
-    { MinLeaf: int
-      MaxLeaf: int
-      RoomPadding: int }
+    {
+        MinLeaf: int
+        MaxLeaf: int
+        RoomPadding: int
+    }
 
 type Room = { Id: int; Bounds: Rect }
 
 type RoomGraph =
-    { Rooms: Room[]
-      Corridors: (int * int)[] }
+    {
+        Rooms: Room[]
+        Corridors: (int * int)[]
+    }
 
 type RoomKind =
     | Normal
@@ -39,23 +43,31 @@ type RoomKind =
     | Secret
 
 type FloorRoom =
-    { Cell: Cell
-      Kind: RoomKind
-      TemplateId: int }
+    {
+        Cell: Cell
+        Kind: RoomKind
+        TemplateId: int
+    }
 
 type FloorLayout =
-    { Rooms: FloorRoom[]
-      Adjacency: (Cell * Cell)[] }
+    {
+        Rooms: FloorRoom[]
+        Adjacency: (Cell * Cell)[]
+    }
 
 type FloorParams =
-    { RoomCount: int
-      MaxRooms: int
-      SpecialRooms: RoomKind list }
+    {
+        RoomCount: int
+        MaxRooms: int
+        SpecialRooms: RoomKind list
+    }
 
 type NoiseParams =
-    { Octaves: int
-      Frequency: float
-      Persistence: float }
+    {
+        Octaves: int
+        Frequency: float
+        Persistence: float
+    }
 
 open System.Collections.Generic
 
@@ -71,12 +83,18 @@ module MapGen =
     let filled (width: int) (height: int) (value: 'T) : Grid<'T> =
         let w = max 0 width
         let h = max 0 height
-        { Width = w
-          Height = h
-          Cells = Array.create (w * h) value }
+
+        {
+            Width = w
+            Height = h
+            Cells = Array.create (w * h) value
+        }
 
     let inBounds (grid: Grid<'T>) (cell: Cell) : bool =
-        cell.Col >= 0 && cell.Row >= 0 && cell.Col < grid.Width && cell.Row < grid.Height
+        cell.Col >= 0
+        && cell.Row >= 0
+        && cell.Col < grid.Width
+        && cell.Row < grid.Height
 
     let private indexOf (grid: Grid<'T>) (cell: Cell) : int = cell.Row * grid.Width + cell.Col
 
@@ -104,14 +122,16 @@ module MapGen =
         match neighbourhood with
         | FourWay -> [| struct (0, -1); struct (-1, 0); struct (1, 0); struct (0, 1) |]
         | EightWay ->
-            [| struct (-1, -1)
-               struct (0, -1)
-               struct (1, -1)
-               struct (-1, 0)
-               struct (1, 0)
-               struct (-1, 1)
-               struct (0, 1)
-               struct (1, 1) |]
+            [|
+                struct (-1, -1)
+                struct (0, -1)
+                struct (1, -1)
+                struct (-1, 0)
+                struct (1, 0)
+                struct (-1, 1)
+                struct (0, 1)
+                struct (1, 1)
+            |]
 
     let regions (neighbourhood: Neighbourhood) (map: TileMap) : Region list =
         let w = map.Width
@@ -121,7 +141,8 @@ module MapGen =
             []
         else
             let offs = offsets neighbourhood
-            let visited = Array.zeroCreate<bool> (w * h)
+            let visited = Array.zeroCreate<bool>(w * h)
+
             let isFloor col row =
                 col >= 0 && row >= 0 && col < w && row < h && map.Cells.[row * w + col] = Floor
 
@@ -167,9 +188,7 @@ module MapGen =
                                         queue.Enqueue(struct (nc, nr))
 
                         let ordered =
-                            cells
-                            |> Seq.sortBy (fun cell -> struct (cell.Row, cell.Col))
-                            |> Array.ofSeq
+                            cells |> Seq.sortBy (fun cell -> struct (cell.Row, cell.Col)) |> Array.ofSeq
 
                         acc.Add { Id = nextId; Cells = ordered }
                         nextId <- nextId + 1
@@ -185,9 +204,12 @@ module MapGen =
             tail
             |> List.fold
                 (fun best r ->
-                    if r.Cells.Length > best.Cells.Length then r
-                    elif r.Cells.Length = best.Cells.Length && r.Id < best.Id then r
-                    else best)
+                    if r.Cells.Length > best.Cells.Length then
+                        r
+                    elif r.Cells.Length = best.Cells.Length && r.Id < best.Id then
+                        r
+                    else
+                        best)
                 head
             |> ValueSome
 
@@ -249,9 +271,7 @@ module MapGen =
                         let d = dc * dc + dr * dr
                         let key = struct (fromCell.Col, fromCell.Row, toCell.Col, toCell.Row)
 
-                        let better =
-                            d < bestDist
-                            || (d = bestDist && (bestPair.IsNone || key < bestKey))
+                        let better = d < bestDist || (d = bestDist && (bestPair.IsNone || key < bestKey))
 
                         if better then
                             bestDist <- d
@@ -339,12 +359,7 @@ module MapGen =
     // byte-identical for a seed.
     // ---------------------------------------------------------------------------------------------
 
-    let bspDungeon
-        (width: int)
-        (height: int)
-        (parameters: BspParams)
-        (rng: Rng)
-        : struct (TileMap * RoomGraph * Rng) =
+    let bspDungeon (width: int) (height: int) (parameters: BspParams) (rng: Rng) : struct (TileMap * RoomGraph * Rng) =
         let w = max 0 width
         let h = max 0 height
         let minLeaf = max 1 parameters.MinLeaf
@@ -393,8 +408,10 @@ module MapGen =
                 setFloor b.Col b.Row
 
             let roomCenter (rm: Room) : Cell =
-                { Col = int rm.Bounds.X + int rm.Bounds.Width / 2
-                  Row = int rm.Bounds.Y + int rm.Bounds.Height / 2 }
+                {
+                    Col = int rm.Bounds.X + int rm.Bounds.Width / 2
+                    Row = int rm.Bounds.Y + int rm.Bounds.Height / 2
+                }
 
             let placeRoom x y nw nh : Room voption =
                 let ax = x + pad
@@ -412,12 +429,16 @@ module MapGen =
                     carveRect rx ry rw rh
 
                     let room =
-                        { Id = rooms.Count
-                          Bounds =
-                            { X = float rx
-                              Y = float ry
-                              Width = float rw
-                              Height = float rh } }
+                        {
+                            Id = rooms.Count
+                            Bounds =
+                                {
+                                    X = float rx
+                                    Y = float ry
+                                    Width = float rw
+                                    Height = float rh
+                                }
+                        }
 
                     rooms.Add room
                     ValueSome room
@@ -457,11 +478,14 @@ module MapGen =
 
             // Connectivity safety net: BSP joins already connect every room, so this is a no-op on a
             // well-formed dungeon; it deterministically repairs the rare leaf-too-small-for-a-room gap.
-            let struct (connected, r2) = connect FourWay r { Width = w; Height = h; Cells = cells }
+            let struct (connected, r2) =
+                connect FourWay r { Width = w; Height = h; Cells = cells }
 
             let graph =
-                { Rooms = rooms.ToArray()
-                  Corridors = corridors.ToArray() }
+                {
+                    Rooms = rooms.ToArray()
+                    Corridors = corridors.ToArray()
+                }
 
             struct (connected, graph, r2)
 
@@ -491,13 +515,20 @@ module MapGen =
         order.Add startCell
 
         let dirs: Cell[] =
-            [| { Col = 0; Row = -1 }
-               { Col = 1; Row = 0 }
-               { Col = 0; Row = 1 }
-               { Col = -1; Row = 0 } |]
+            [|
+                { Col = 0; Row = -1 }
+                { Col = 1; Row = 0 }
+                { Col = 0; Row = 1 }
+                { Col = -1; Row = 0 }
+            |]
 
         let neighboursOf (c: Cell) : Cell[] =
-            dirs |> Array.map (fun d -> { Col = c.Col + d.Col; Row = c.Row + d.Row })
+            dirs
+            |> Array.map (fun d ->
+                {
+                    Col = c.Col + d.Col
+                    Row = c.Row + d.Row
+                })
 
         let placedNeighbourCount (c: Cell) =
             neighboursOf c |> Array.sumBy (fun n -> if placed.Contains n then 1 else 0)
@@ -517,7 +548,11 @@ module MapGen =
 
                 for d in dirs do
                     if order.Count < target then
-                        let n: Cell = { Col = c.Col + d.Col; Row = c.Row + d.Row }
+                        let n: Cell =
+                            {
+                                Col = c.Col + d.Col
+                                Row = c.Row + d.Row
+                            }
 
                         if not (placed.Contains n) && placedNeighbourCount n < 2 then
                             let struct (b, next) = Rng.nextBool r
@@ -568,24 +603,37 @@ module MapGen =
                 specialAt.[deadEnds.[i]] <- kind)
 
         let rooms =
-            [| for c in order ->
-                   let kind =
-                       if c = startCell then Start
-                       else
-                           match specialAt.TryGetValue c with
-                           | true, k -> k
-                           | _ -> Normal
+            [|
+                for c in order ->
+                    let kind =
+                        if c = startCell then
+                            Start
+                        else
+                            match specialAt.TryGetValue c with
+                            | true, k -> k
+                            | _ -> Normal
 
-                   { Cell = c; Kind = kind; TemplateId = templateOf.[c] } |]
+                    {
+                        Cell = c
+                        Kind = kind
+                        TemplateId = templateOf.[c]
+                    }
+            |]
 
         // Adjacency: each 4-adjacent placed pair once (right/down probes dedupe), sorted for a fixed order.
         let adjacency =
-            [ for c in order do
-                  for d in [| { Col = 1; Row = 0 }; { Col = 0; Row = 1 } |] do
-                      let n: Cell = { Col = c.Col + d.Col; Row = c.Row + d.Row }
+            [
+                for c in order do
+                    for d in [| { Col = 1; Row = 0 }; { Col = 0; Row = 1 } |] do
+                        let n: Cell =
+                            {
+                                Col = c.Col + d.Col
+                                Row = c.Row + d.Row
+                            }
 
-                      if placed.Contains n then
-                          yield (c, n) ]
+                        if placed.Contains n then
+                            yield (c, n)
+            ]
             |> List.sortBy (fun (a, b) -> struct (a.Col, a.Row, b.Col, b.Row))
             |> Array.ofList
 
@@ -607,11 +655,10 @@ module MapGen =
             let cells = Array.create (w * h) Wall
             let cw = (w - 1) / 2 // maze cells across
             let ch = (h - 1) / 2 // maze cells down
-            let visited = Array.zeroCreate<bool> (cw * ch)
+            let visited = Array.zeroCreate<bool>(cw * ch)
             let mutable r = rng
 
-            let dirs =
-                [| struct (0, -1); struct (1, 0); struct (0, 1); struct (-1, 0) |]
+            let dirs = [| struct (0, -1); struct (1, 0); struct (0, 1); struct (-1, 0) |]
 
             let stack = Stack<struct (int * int)>()
             visited.[0] <- true
@@ -651,7 +698,9 @@ module MapGen =
         if w = 0 || h = 0 then
             { Width = w; Height = h; Cells = [||] }
         else
-            let struct (saltBits, _) = Rng.nextInt System.Int32.MinValue System.Int32.MaxValue rng
+            let struct (saltBits, _) =
+                Rng.nextInt System.Int32.MinValue System.Int32.MaxValue rng
+
             let salt = uint64 (uint32 saltBits)
             let octaves = max 1 parameters.Octaves
 
@@ -677,7 +726,8 @@ module MapGen =
                 let bits = z2 ^^^ (z2 >>> 31)
                 float (bits >>> 11) * (1.0 / 9007199254740992.0)
 
-            let smootherstep (t: float) = t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+            let smootherstep (t: float) =
+                t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 
             let sampleOctave fx fy oct =
                 let x0 = int (floor fx)
@@ -692,7 +742,7 @@ module MapGen =
                 let b = v01 + (v11 - v01) * tx
                 a + (b - a) * ty
 
-            let cells = Array.zeroCreate<int> (w * h)
+            let cells = Array.zeroCreate<int>(w * h)
 
             for row in 0 .. h - 1 do
                 for col in 0 .. w - 1 do
@@ -727,9 +777,11 @@ module MapGen =
 
                 chosen
 
-            { Width = field.Width
-              Height = field.Height
-              Cells = field.Cells |> Array.map classifyOne }
+            {
+                Width = field.Width
+                Height = field.Height
+                Cells = field.Cells |> Array.map classifyOne
+            }
 
     let poissonScatter (mask: Grid<bool>) (minDist: int) (rng: Rng) : struct (Cell list * Rng) =
         let w = mask.Width

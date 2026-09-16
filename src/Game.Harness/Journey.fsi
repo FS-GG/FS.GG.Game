@@ -44,22 +44,21 @@ type ActionCoverageGap =
 /// A product-owned adapter over its real composition root. Unlike `Playable`, it owns boot,
 /// timestamp-free host mapping, message dispatch, fixed ticks, and deterministic effect results.
 type ProductionJourney<'model, 'key, 'pointer, 'menu, 'effectResult, 'message, 'fingerprint> =
-    { RouteId: string
-      ScenarioId: string
-      TestId: string
-      MaxSteps: int
-      Boot: unit -> 'model
-      MapEvent:
-        JourneyEvent<'key, 'pointer, 'menu, 'effectResult> ->
-        'model ->
-            JourneyDispatch<'message>
-      Update: 'message -> 'model -> 'model
-      FixedTick: 'model -> 'model
-      ApplyEffectResult: 'effectResult -> 'model -> 'model
-      IsTerminal: 'model -> bool
-      Fingerprint: 'model -> 'fingerprint
-      EncodeEvent: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> string
-      EncodeFingerprint: 'fingerprint -> string }
+    {
+        RouteId: string
+        ScenarioId: string
+        TestId: string
+        MaxSteps: int
+        Boot: unit -> 'model
+        MapEvent: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> 'model -> JourneyDispatch<'message>
+        Update: 'message -> 'model -> 'model
+        FixedTick: 'model -> 'model
+        ApplyEffectResult: 'effectResult -> 'model -> 'model
+        IsTerminal: 'model -> bool
+        Fingerprint: 'model -> 'fingerprint
+        EncodeEvent: JourneyEvent<'key, 'pointer, 'menu, 'effectResult> -> string
+        EncodeFingerprint: 'fingerprint -> string
+    }
 
 /// Runner outcome. Exhaustion and unbound displayed actions are explicit failures.
 [<RequireQualifiedAccess>]
@@ -132,14 +131,18 @@ type IProductionJourneyProofV1 =
 
 /// A journey trace, captured event stream, final model, and runner-issued receipt.
 type JourneyRun<'model, 'event, 'fingerprint> =
-    { Trace: Trace<'fingerprint>
-      Captured: 'event list
-      Final: 'model
-      Receipt: JourneyReceipt }
+    {
+        Trace: Trace<'fingerprint>
+        Captured: 'event list
+        Final: 'model
+        Receipt: JourneyReceipt
+    }
 
 /// A seeded policy which emits timestamp-free production events from the currently observed model.
 type JourneyPolicy<'model, 'event> =
-    { DecideEvents: 'model -> Rng -> struct ('event list * Rng) }
+    {
+        DecideEvents: 'model -> Rng -> struct ('event list * Rng)
+    }
 
 /// The verdict of `Journey.checkActionCoverage`: every gap found. Empty means the declared
 /// vocabulary is both fully wired, per the committed suite, and rich enough for that proof to mean

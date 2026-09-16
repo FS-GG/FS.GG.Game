@@ -4,8 +4,10 @@ open System.Collections.Generic
 open FS.GG.Game.Core
 
 type Witness =
-    { Script: Command list list
-      Depth: int }
+    {
+        Script: Command list list
+        Depth: int
+    }
 
 [<RequireQualifiedAccess>]
 type FindResult =
@@ -13,13 +15,13 @@ type FindResult =
     | NotFound
     | Truncated of visited: int
 
-type ReachResult<'f when 'f: comparison> =
-    { States: Set<'f>
-      Truncated: bool }
+type ReachResult<'f when 'f: comparison> = { States: Set<'f>; Truncated: bool }
 
 type ExploreConfig =
-    { Moves: Command list list option
-      MaxVisited: int }
+    {
+        Moves: Command list list option
+        MaxVisited: int
+    }
 
 [<RequireQualifiedAccess>]
 module Explore =
@@ -74,7 +76,14 @@ module Explore =
 
                         if not (visited.Contains key) then
                             if goal child then
-                                result <- Some(FindResult.Found { Script = List.rev (move :: revScript); Depth = depth + 1 })
+                                result <-
+                                    Some(
+                                        FindResult.Found
+                                            {
+                                                Script = List.rev (move :: revScript)
+                                                Depth = depth + 1
+                                            }
+                                    )
                             elif depth + 1 < maxDepth then
                                 visited.Add key |> ignore
                                 queue.Enqueue(child, move :: revScript, depth + 1)
@@ -92,7 +101,11 @@ module Explore =
 
             match result with
             | Some r -> r
-            | None -> if depthCutoff then FindResult.Truncated visited.Count else FindResult.NotFound
+            | None ->
+                if depthCutoff then
+                    FindResult.Truncated visited.Count
+                else
+                    FindResult.NotFound
 
     let findScript
         (playable: Playable<'world, 'key>)
@@ -135,12 +148,10 @@ module Explore =
                             else
                                 queue.Enqueue(child, depth + 1)
 
-        { States = Set.ofSeq visited
-          Truncated = truncated }
+        {
+            States = Set.ofSeq visited
+            Truncated = truncated
+        }
 
-    let reachable
-        (playable: Playable<'world, 'key>)
-        (fingerprint: 'world -> 'f)
-        (maxDepth: int)
-        : ReachResult<'f> =
+    let reachable (playable: Playable<'world, 'key>) (fingerprint: 'world -> 'f) (maxDepth: int) : ReachResult<'f> =
         reachableWith defaultConfig playable fingerprint maxDepth

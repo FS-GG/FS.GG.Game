@@ -14,5 +14,5 @@ let mutable acc = 0.0
 let realDt = 1.0 / 60.0
 let dtFixed = 1.0 / 60.0
 let maxStepsPerFrame = 5
-let model : Model = Unchecked.defaultof<Model>
+let model: Model = Unchecked.defaultof<Model>
 let simStep (m: Model) : Model = m

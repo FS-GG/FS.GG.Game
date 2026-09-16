@@ -19,65 +19,75 @@ type WorkloadClass =
 
 /// Per-frame product facts. Counts describe work actually performed, not elapsed time.
 type WorkloadCost =
-    { SimulationSteps: int
-      AiWorkUnits: int
-      PerceptionWorkUnits: int
-      PathfindingWorkUnits: int
-      EntityCount: int
-      SceneNodeCount: int
-      CatchUpSteps: int
-      MovingEntityCount: int
-      InterpolatedMovingEntityCount: int
-      StaticBlockerBuilds: int
-      StaticBlockerQueries: int }
+    {
+        SimulationSteps: int
+        AiWorkUnits: int
+        PerceptionWorkUnits: int
+        PathfindingWorkUnits: int
+        EntityCount: int
+        SceneNodeCount: int
+        CatchUpSteps: int
+        MovingEntityCount: int
+        InterpolatedMovingEntityCount: int
+        StaticBlockerBuilds: int
+        StaticBlockerQueries: int
+    }
 
 /// Expected-workload limits. Wall-clock limits are evaluated separately from deterministic traces.
 type WorkloadBudget =
-    { P95Ms: float
-      P99Ms: float
-      MaximumAiWorkUnits: int
-      MaximumPerceptionWorkUnits: int
-      MaximumPathfindingWorkUnits: int
-      MaximumSceneNodes: int
-      MaximumCatchUpSteps: int
-      MaximumStaticBlockerBuilds: int }
+    {
+        P95Ms: float
+        P99Ms: float
+        MaximumAiWorkUnits: int
+        MaximumPerceptionWorkUnits: int
+        MaximumPathfindingWorkUnits: int
+        MaximumSceneNodes: int
+        MaximumCatchUpSteps: int
+        MaximumStaticBlockerBuilds: int
+    }
 
 /// A named input-driven scenario. `Frames` uses the real raw-key route.
 type ExpectedWorkload<'key> =
-    { Id: string
-      Definition: string
-      Kind: WorkloadKind
-      Class: WorkloadClass
-      WarmupFrames: 'key list list
-      Frames: 'key list list
-      Budget: WorkloadBudget }
+    {
+        Id: string
+        Definition: string
+        Kind: WorkloadKind
+        Class: WorkloadClass
+        WarmupFrames: 'key list list
+        Frames: 'key list list
+        Budget: WorkloadBudget
+    }
 
 /// Product-owned projection joining simulation, AI/perception/pathfinding, presentation, and scene cost.
 type WorkloadAdapter<'world, 'key, 'fingerprint when 'key: comparison> =
-    { Playable: Playable<'world, 'key>
-      Fingerprint: 'world -> 'fingerprint
-      ObserveCost: 'world -> WorkloadCost }
+    {
+        Playable: Playable<'world, 'key>
+        Fingerprint: 'world -> 'fingerprint
+        ObserveCost: 'world -> WorkloadCost
+    }
 
-type WorkloadVerdict =
-    { Passed: bool
-      Reasons: string list }
+type WorkloadVerdict = { Passed: bool; Reasons: string list }
 
 /// Timing/cost evidence kept outside `Trace`, so replay equality remains purely structural.
 type WorkloadObservation =
-    { WorkloadId: string
-      Definition: string
-      Kind: WorkloadKind
-      Class: WorkloadClass
-      SampleFrames: int
-      P50Ms: float
-      P95Ms: float
-      P99Ms: float
-      MaximumCost: WorkloadCost
-      Verdict: WorkloadVerdict }
+    {
+        WorkloadId: string
+        Definition: string
+        Kind: WorkloadKind
+        Class: WorkloadClass
+        SampleFrames: int
+        P50Ms: float
+        P95Ms: float
+        P99Ms: float
+        MaximumCost: WorkloadCost
+        Verdict: WorkloadVerdict
+    }
 
 type WorkloadRun<'fingerprint> =
-    { Trace: Trace<'fingerprint>
-      Observation: WorkloadObservation }
+    {
+        Trace: Trace<'fingerprint>
+        Observation: WorkloadObservation
+    }
 
 [<RequireQualifiedAccess>]
 module Workload =

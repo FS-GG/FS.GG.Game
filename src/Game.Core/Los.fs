@@ -93,8 +93,7 @@ module Los =
         // changes only which tiles between them are consulted — identically for both argument orders.
         let lo, hi = if a <= b then a, b else b, a
 
-        trace mode lo hi
-        |> List.forall (fun c -> c = lo || c = hi || isTransparent c)
+        trace mode lo hi |> List.forall (fun c -> c = lo || c = hi || isTransparent c)
 
     let lineOfSight (isTransparent: Cell -> bool) (a: Cell) (b: Cell) : bool =
         lineOfSightBy Supercover isTransparent a b

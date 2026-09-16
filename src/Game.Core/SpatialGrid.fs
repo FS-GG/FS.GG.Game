@@ -12,11 +12,13 @@ namespace FS.GG.Game.Core
 // them in (or whose bounds are not finite). They are a candidate for EVERY query, and are then rejected
 // by the same exact filter as any other candidate.
 type SpatialGrid<'T> =
-    { CellSize: float
-      Items: (Point * 'T)[]
-      Bounds: Rect[]
-      Buckets: Map<struct (int * int), int list>
-      Oversized: int list }
+    {
+        CellSize: float
+        Items: (Point * 'T)[]
+        Bounds: Rect[]
+        Buckets: Map<struct (int * int), int list>
+        Oversized: int list
+    }
 
 [<RequireQualifiedAccess>]
 module SpatialGrid =
@@ -104,7 +106,8 @@ module SpatialGrid =
                 // `int (floor …)` wraps and breaks the monotonicity that guarantees no false negative.
                 // Cap well below 2^31; anything larger (or a box wider than the grid) uses the exact
                 // O(n) scan, which never consults bucket keys and so is correct at any magnitude.
-                let safe = abs minCf < 1.0e9 && abs maxCf < 1.0e9 && abs minRf < 1.0e9 && abs maxRf < 1.0e9
+                let safe =
+                    abs minCf < 1.0e9 && abs maxCf < 1.0e9 && abs minRf < 1.0e9 && abs maxRf < 1.0e9
 
                 if not safe || boxCells > float (Map.count grid.Buckets) then
                     [ 0 .. grid.Items.Length - 1 ]
@@ -112,11 +115,13 @@ module SpatialGrid =
                     let minC, maxC = int minCf, int maxCf
                     let minR, maxR = int minRf, int maxRf
 
-                    [ for c in minC..maxC do
-                          for r in minR..maxR do
-                              match Map.tryFind (struct (c, r)) grid.Buckets with
-                              | Some v -> yield! v
-                              | None -> () ]
+                    [
+                        for c in minC..maxC do
+                            for r in minR..maxR do
+                                match Map.tryFind (struct (c, r)) grid.Buckets with
+                                | Some v -> yield! v
+                                | None -> ()
+                    ]
 
         // `List.sort |> List.distinct` restores ascending (insertion) order and collapses an item reached
         // through several of its cells — the dedup that bucketing by extent makes necessary.
@@ -152,13 +157,23 @@ module SpatialGrid =
 
         let struct (buckets, oversized) = bucketAll arr.Length cellsFor
 
-        { CellSize = cellSize
-          Items = arr
-          // A position is a zero-size extent at itself, so `queryBounds` on a point grid agrees with
-          // `query` (a degenerate rect intersects exactly what its point is strictly inside of).
-          Bounds = arr |> Array.map (fun (p, _) -> { X = p.X; Y = p.Y; Width = 0.0; Height = 0.0 })
-          Buckets = buckets
-          Oversized = oversized }
+        {
+            CellSize = cellSize
+            Items = arr
+            // A position is a zero-size extent at itself, so `queryBounds` on a point grid agrees with
+            // `query` (a degenerate rect intersects exactly what its point is strictly inside of).
+            Bounds =
+                arr
+                |> Array.map (fun (p, _) ->
+                    {
+                        X = p.X
+                        Y = p.Y
+                        Width = 0.0
+                        Height = 0.0
+                    })
+            Buckets = buckets
+            Oversized = oversized
+        }
 
     let buildBounds (cellSize: float) (items: seq<Rect * 'T>) : SpatialGrid<'T> =
         let arr = Seq.toArray items
@@ -175,12 +190,14 @@ module SpatialGrid =
 
         let struct (buckets, oversized) = bucketAll arr.Length cellsFor
 
-        { CellSize = cellSize
-          // The item's `position` is its bounds' minimum corner; `query`/`queryRadius` read it.
-          Items = arr |> Array.map (fun (r, v) -> ({ X = r.X; Y = r.Y }: Point), v)
-          Bounds = bounds
-          Buckets = buckets
-          Oversized = oversized }
+        {
+            CellSize = cellSize
+            // The item's `position` is its bounds' minimum corner; `query`/`queryRadius` read it.
+            Items = arr |> Array.map (fun (r, v) -> ({ X = r.X; Y = r.Y }: Point), v)
+            Bounds = bounds
+            Buckets = buckets
+            Oversized = oversized
+        }
 
     let query (region: Rect) (grid: SpatialGrid<'T>) : 'T list =
         candidateIndices region.X region.Y (region.X + region.Width) (region.Y + region.Height) grid
@@ -191,17 +208,23 @@ module SpatialGrid =
     let queryBounds (region: Rect) (grid: SpatialGrid<'T>) : 'T list =
         // Normalised for the same reason `span` is: a negative-extent `region` can still intersect, and
         // reading its span backwards would enumerate no cells and lose the hit.
-        let loX, hiX = min region.X (region.X + region.Width), max region.X (region.X + region.Width)
-        let loY, hiY = min region.Y (region.Y + region.Height), max region.Y (region.Y + region.Height)
+        let loX, hiX =
+            min region.X (region.X + region.Width), max region.X (region.X + region.Width)
+
+        let loY, hiY =
+            min region.Y (region.Y + region.Height), max region.Y (region.Y + region.Height)
 
         candidateIndices loX loY hiX hiY grid
         |> List.choose (fun i ->
             let (_, item) = grid.Items.[i]
-            if Geometry.intersects region grid.Bounds.[i] then Some item else None)
+
+            if Geometry.intersects region grid.Bounds.[i] then
+                Some item
+            else
+                None)
 
     let queryRadius (center: Point) (radius: float) (grid: SpatialGrid<'T>) : 'T list =
-        let r =
-            if not (finite radius) then 0.0 else max 0.0 radius
+        let r = if not (finite radius) then 0.0 else max 0.0 radius
 
         let r2 = r * r
 

@@ -8,25 +8,31 @@ type ReplayEventKind<'input> =
 
 /// An accepted operation paired with the canonical product-state digest immediately after it.
 type ReplayEvent<'input> =
-    { Index: uint64
-      Kind: ReplayEventKind<'input>
-      StateDigest: string }
+    {
+        Index: uint64
+        Kind: ReplayEventKind<'input>
+        StateDigest: string
+    }
 
 /// A restorable point after <c>NextEventIndex</c> accepted operations.
 type ReplayCheckpoint<'snapshot> =
-    { NextEventIndex: uint64
-      Snapshot: SessionSnapshot<'snapshot>
-      StateDigest: string }
+    {
+        NextEventIndex: uint64
+        Snapshot: SessionSnapshot<'snapshot>
+        StateDigest: string
+    }
 
 /// Portable recording data. Product codecs own input and snapshot payload serialization.
 type ReplayRecording<'input, 'snapshot> =
-    { FormatVersion: int
-      SessionId: string
-      Compatibility: SessionCompatibility
-      InitialSnapshot: SessionSnapshot<'snapshot>
-      InitialStateDigest: string
-      Events: ReplayEvent<'input> list
-      Checkpoints: ReplayCheckpoint<'snapshot> list }
+    {
+        FormatVersion: int
+        SessionId: string
+        Compatibility: SessionCompatibility
+        InitialSnapshot: SessionSnapshot<'snapshot>
+        InitialStateDigest: string
+        Events: ReplayEvent<'input> list
+        Checkpoints: ReplayCheckpoint<'snapshot> list
+    }
 
 /// A malformed or incompatible recording that is refused before semantic execution.
 [<RequireQualifiedAccess>]
@@ -45,9 +51,11 @@ type ReplayIssue =
 
 /// First point where replayed product state differs from its recorded canonical digest.
 type ReplayDivergence =
-    { EventIndex: uint64
-      ExpectedDigest: string
-      ActualDigest: string }
+    {
+        EventIndex: uint64
+        ExpectedDigest: string
+        ActualDigest: string
+    }
 
 /// Bounded replay result. Cancellation returns an immutable resume cursor and the last accepted state.
 [<RequireQualifiedAccess>]
@@ -62,22 +70,26 @@ type ReplayRunOutcome<'state> =
 module ReplayRecorder =
     val create:
         initialSnapshot: SessionSnapshot<'snapshot> ->
-        initialStateDigest: string -> Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
+        initialStateDigest: string ->
+            Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
 
     val appendInput:
         input: SessionInput<'input> ->
         stateDigest: string ->
-        recording: ReplayRecording<'input, 'snapshot> -> Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
+        recording: ReplayRecording<'input, 'snapshot> ->
+            Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
 
     val appendAdvance:
         stepCount: uint64 ->
         stateDigest: string ->
-        recording: ReplayRecording<'input, 'snapshot> -> Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
+        recording: ReplayRecording<'input, 'snapshot> ->
+            Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
 
     val addCheckpoint:
         snapshot: SessionSnapshot<'snapshot> ->
         stateDigest: string ->
-        recording: ReplayRecording<'input, 'snapshot> -> Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
+        recording: ReplayRecording<'input, 'snapshot> ->
+            Result<ReplayRecording<'input, 'snapshot>, ReplayIssue list>
 
 /// Validation, exact seek and cancellation-safe execution over the product's real session contract.
 [<RequireQualifiedAccess>]
@@ -89,7 +101,8 @@ module Replay =
         stateDigest: ('state -> string) ->
         shouldCancel: (uint64 -> bool) ->
         targetEventCount: uint64 ->
-        recording: ReplayRecording<'input, 'snapshot> -> Result<ReplayRunOutcome<'state>, ReplayIssue list>
+        recording: ReplayRecording<'input, 'snapshot> ->
+            Result<ReplayRunOutcome<'state>, ReplayIssue list>
 
 /// Canonical length-prefixed export text, stable across .NET and Fable for equal product encoders.
 [<RequireQualifiedAccess>]
@@ -97,4 +110,5 @@ module ReplayExport =
     val canonicalText:
         encodeInput: ('input -> string) ->
         encodeSnapshot: ('snapshot -> string) ->
-        recording: ReplayRecording<'input, 'snapshot> -> Result<string, ReplayIssue list>
+        recording: ReplayRecording<'input, 'snapshot> ->
+            Result<string, ReplayIssue list>

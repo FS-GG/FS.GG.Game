@@ -21,31 +21,35 @@ type Seat =
 /// drives only its own seat; `Step` is the fixed step; `IsOver` and `MaxSteps` bound the match (the
 /// `MaxSteps` cap guarantees termination and keeps every match deterministic in length).
 type MatchSetup<'world, 'view> =
-    { /// The fixed step interval in seconds.
-      Dt: float
-      /// Build the match's starting world from its seeded generator.
-      Init: Rng -> 'world
-      /// The view a given seat perceives of the world.
-      Observe: Seat -> 'world -> 'view
-      /// Apply a seat's command to the world.
-      Apply: Seat -> Command -> 'world -> 'world
-      /// Advance the world by one whole fixed step of `dt` seconds.
-      Step: 'world -> float -> 'world
-      /// Whether the match has reached a terminal state.
-      IsOver: 'world -> bool
-      /// The hard cap on fixed steps, so a non-terminating policy still ends deterministically.
-      MaxSteps: int }
+    {
+        /// The fixed step interval in seconds.
+        Dt: float
+        /// Build the match's starting world from its seeded generator.
+        Init: Rng -> 'world
+        /// The view a given seat perceives of the world.
+        Observe: Seat -> 'world -> 'view
+        /// Apply a seat's command to the world.
+        Apply: Seat -> Command -> 'world -> 'world
+        /// Advance the world by one whole fixed step of `dt` seconds.
+        Step: 'world -> float -> 'world
+        /// Whether the match has reached a terminal state.
+        IsOver: 'world -> bool
+        /// The hard cap on fixed steps, so a non-terminating policy still ends deterministically.
+        MaxSteps: int
+    }
 
 /// Public contract type exposed by the FS.GG.Game.Harness package.
 /// One `(bot, bot, seed)` match: the two seated policies and the seed that determines the world's
 /// starting state and the shared decision stream. Equal `Match` values run to equal outcomes.
 type Match<'view> =
-    { /// The seed for this match's world init and decision generator.
-      Seed: uint64
-      /// The policy in seat `A`.
-      A: Bot<'view>
-      /// The policy in seat `B`.
-      B: Bot<'view> }
+    {
+        /// The seed for this match's world init and decision generator.
+        Seed: uint64
+        /// The policy in seat `A`.
+        A: Bot<'view>
+        /// The policy in seat `B`.
+        B: Bot<'view>
+    }
 
 /// Public contract module exposed by the FS.GG.Game.Harness package.
 /// The multi-seed, bot-vs-bot matrix runner — the mini-tanks balance shape. Each match runs

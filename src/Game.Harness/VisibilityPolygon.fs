@@ -10,8 +10,10 @@ module VisibilityPolygon =
     // variance. Undefined only at the origin (dx = dy = 0), which is never an endpoint direction here.
     let private pseudoAngle (dx: float) (dy: float) : float =
         if dy >= 0.0 then
-            if dx >= 0.0 then dy / (dx + dy) // quadrant I  -> [0,1)
-            else 1.0 - dx / (-dx + dy) // quadrant II -> [1,2)
+            if dx >= 0.0 then
+                dy / (dx + dy) // quadrant I  -> [0,1)
+            else
+                1.0 - dx / (-dx + dy) // quadrant II -> [1,2)
         elif dx < 0.0 then
             2.0 - dy / (-dx - dy) // quadrant III -> [2,3)
         else
@@ -33,7 +35,10 @@ module VisibilityPolygon =
             let t = (wx * sy - wy * sx) / denom
             let u = (wx * dy - wy * dx) / denom
 
-            if t >= 0.0 && u >= -1e-9 && u <= 1.0 + 1e-9 then Some t else None
+            if t >= 0.0 && u >= -1e-9 && u <= 1.0 + 1e-9 then
+                Some t
+            else
+                None
 
     /// The 2D visibility polygon from `origin` over `segments`, clipped to `bounds`.
     let polygon (origin: Point) (bounds: Rect) (segments: (Point * Point) list) : Point list =
@@ -42,16 +47,29 @@ module VisibilityPolygon =
 
         // The four bounds edges close the scene, so every ray hits something.
         let corners =
-            [ { X = bounds.X; Y = bounds.Y }
-              { X = bounds.X + bounds.Width; Y = bounds.Y }
-              { X = bounds.X + bounds.Width; Y = bounds.Y + bounds.Height }
-              { X = bounds.X; Y = bounds.Y + bounds.Height } ]
+            [
+                { X = bounds.X; Y = bounds.Y }
+                {
+                    X = bounds.X + bounds.Width
+                    Y = bounds.Y
+                }
+                {
+                    X = bounds.X + bounds.Width
+                    Y = bounds.Y + bounds.Height
+                }
+                {
+                    X = bounds.X
+                    Y = bounds.Y + bounds.Height
+                }
+            ]
 
         let boundsEdges =
-            [ (corners.[0], corners.[1])
-              (corners.[1], corners.[2])
-              (corners.[2], corners.[3])
-              (corners.[3], corners.[0]) ]
+            [
+                (corners.[0], corners.[1])
+                (corners.[1], corners.[2])
+                (corners.[2], corners.[3])
+                (corners.[3], corners.[0])
+            ]
 
         let allSegments = boundsEdges @ segments
 
@@ -75,9 +93,11 @@ module VisibilityPolygon =
                 let c = cos eps
                 let s = sin eps
                 // rotate (dx,dy) by ±eps
-                [ (dx, dy)
-                  (dx * c - dy * s, dx * s + dy * c)
-                  (dx * c + dy * s, -dx * s + dy * c) ])
+                [
+                    (dx, dy)
+                    (dx * c - dy * s, dx * s + dy * c)
+                    (dx * c + dy * s, -dx * s + dy * c)
+                ])
 
         // Cast each ray; keep the NEAREST hit (smallest t) over all segments.
         let hits =

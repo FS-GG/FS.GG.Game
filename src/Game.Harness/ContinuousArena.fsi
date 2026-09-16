@@ -10,19 +10,23 @@ type ContinuousArenaItemKind =
 
 /// A trigger volume and its product outcome.
 type ContinuousArenaItem =
-    { Id: string
-      Bounds: Rect
-      Kind: ContinuousArenaItemKind }
+    {
+        Id: string
+        Bounds: Rect
+        Kind: ContinuousArenaItemKind
+    }
 
 /// Complete deterministic configuration for one neutral arena.
 type ContinuousArenaConfig =
-    { PlayerStart: Rect
-      Speed: float
-      InitialHealth: int
-      WinningScore: int
-      CollisionCellSize: float
-      Obstacles: KinematicCollider list
-      Items: ContinuousArenaItem list }
+    {
+        PlayerStart: Rect
+        Speed: float
+        InitialHealth: int
+        WinningScore: int
+        CollisionCellSize: float
+        Obstacles: KinematicCollider list
+        Items: ContinuousArenaItem list
+    }
 
 /// Terminal state of the representative product.
 [<RequireQualifiedAccess>]
@@ -33,19 +37,23 @@ type ContinuousArenaOutcome =
 
 /// Authority state for the representative continuous game.
 type ContinuousArenaWorld =
-    { Player: Rect
-      Velocity: Point
-      Health: int
-      Score: int
-      Collected: Set<string>
-      Outcome: ContinuousArenaOutcome }
+    {
+        Player: Rect
+        Velocity: Point
+        Health: int
+        Score: int
+        Collected: Set<string>
+        Outcome: ContinuousArenaOutcome
+    }
 
 /// Stable renderer-facing projection with no simulation authority.
 type ContinuousArenaProjection =
-    { Player: Rect
-      Health: int
-      Score: int
-      Outcome: ContinuousArenaOutcome }
+    {
+        Player: Rect
+        Health: int
+        Score: int
+        Outcome: ContinuousArenaOutcome
+    }
 
 /// Pure representative game composed through the standard harness command frontier.
 [<RequireQualifiedAccess>]
@@ -63,7 +71,7 @@ module ContinuousArena =
     /// Adapt the arena to the existing real-input headless harness.
     val playable:
         config: ContinuousArenaConfig -> keymap: Map<'key, Command> -> dt: float -> Playable<ContinuousArenaWorld, 'key>
-        when 'key: comparison
+            when 'key: comparison
 
     /// Project the authority state for a retained renderer.
     val project: world: ContinuousArenaWorld -> ContinuousArenaProjection

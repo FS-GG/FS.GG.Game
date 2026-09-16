@@ -26,10 +26,28 @@ module Host =
 
     /// The host's keyboard key. Opaque to the TestSpecs — see the header.
     type Key =
-        | KeyLeft | KeyRight | KeyUp | KeyDown
-        | KeyW | KeyA | KeyS | KeyD
-        | KeySpace | KeyEnter | KeyEscape | KeyTab | KeyShift | KeyCtrl
-        | KeyP | KeyQ | KeyE | KeyR | KeyF | KeyZ | KeyX | KeyC
+        | KeyLeft
+        | KeyRight
+        | KeyUp
+        | KeyDown
+        | KeyW
+        | KeyA
+        | KeyS
+        | KeyD
+        | KeySpace
+        | KeyEnter
+        | KeyEscape
+        | KeyTab
+        | KeyShift
+        | KeyCtrl
+        | KeyP
+        | KeyQ
+        | KeyE
+        | KeyR
+        | KeyF
+        | KeyZ
+        | KeyX
+        | KeyC
         | KeyDigit of int
 
     /// The host's mouse button. Opaque to the TestSpecs — see the header.

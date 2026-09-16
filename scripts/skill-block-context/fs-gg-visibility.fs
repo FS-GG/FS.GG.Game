@@ -4,4 +4,4 @@
 //#block 3 "let walls : Set<Cell> = model.Walls"
 // Fov + fog-of-war: the walls and the ever-growing seen set live in the reader's Model.
 type Model = { Walls: Set<Cell>; Seen: Set<Cell> }
-let model : Model = { Walls = Set.empty; Seen = Set.empty }
+let model: Model = { Walls = Set.empty; Seen = Set.empty }

@@ -3,9 +3,11 @@ namespace FS.GG.Game.Core
 [<Struct>]
 type Hex =
     private
-        { q: int
-          r: int
-          s: int }
+        {
+            q: int
+            r: int
+            s: int
+        }
 
     member this.Q = this.q
     member this.R = this.r
@@ -31,9 +33,11 @@ module Hex =
         if q + r + s <> 0L then
             invalidArg conversion $"{conversion}: cube coordinates must satisfy Q + R + S = 0."
 
-        { q = narrowCoordinate conversion "Q" q
-          r = narrowCoordinate conversion "R" r
-          s = narrowCoordinate conversion "S" s }
+        {
+            q = narrowCoordinate conversion "Q" q
+            r = narrowCoordinate conversion "R" r
+            s = narrowCoordinate conversion "S" s
+        }
 
     // The ONLY axial constructor: `s` is derived in int64 so the invariant cannot be satisfied merely
     // by Int32 wraparound.
@@ -54,35 +58,25 @@ module Hex =
     let origin: Hex = create 0 0
 
     let add (a: Hex) (b: Hex) : Hex =
-        createCubeChecked
-            "Hex.add"
-            (int64 a.Q + int64 b.Q)
-            (int64 a.R + int64 b.R)
-            (int64 a.S + int64 b.S)
+        createCubeChecked "Hex.add" (int64 a.Q + int64 b.Q) (int64 a.R + int64 b.R) (int64 a.S + int64 b.S)
 
     let subtract (a: Hex) (b: Hex) : Hex =
-        createCubeChecked
-            "Hex.subtract"
-            (int64 a.Q - int64 b.Q)
-            (int64 a.R - int64 b.R)
-            (int64 a.S - int64 b.S)
+        createCubeChecked "Hex.subtract" (int64 a.Q - int64 b.Q) (int64 a.R - int64 b.R) (int64 a.S - int64 b.S)
 
     let scale (h: Hex) (k: int) : Hex =
-        createCubeChecked
-            "Hex.scale"
-            (int64 h.Q * int64 k)
-            (int64 h.R * int64 k)
-            (int64 h.S * int64 k)
+        createCubeChecked "Hex.scale" (int64 h.Q * int64 k) (int64 h.R * int64 k) (int64 h.S * int64 k)
 
     // The six cube unit directions in a FIXED order (index 0 = +Q/−R, rotating clockwise). The order
     // is documented and load-bearing: `neighbours`, `ring`, and `spiral` all enumerate in it.
     let directions: Hex list =
-        [ { q = 1; r = 0; s = -1 }
-          { q = 1; r = -1; s = 0 }
-          { q = 0; r = -1; s = 1 }
-          { q = -1; r = 0; s = 1 }
-          { q = -1; r = 1; s = 0 }
-          { q = 0; r = 1; s = -1 } ]
+        [
+            { q = 1; r = 0; s = -1 }
+            { q = 1; r = -1; s = 0 }
+            { q = 0; r = -1; s = 1 }
+            { q = -1; r = 0; s = 1 }
+            { q = -1; r = 1; s = 0 }
+            { q = 0; r = 1; s = -1 }
+        ]
 
     let neighbours (h: Hex) : Hex list = directions |> List.map (add h)
 
@@ -98,7 +92,11 @@ module Hex =
         let dr = abs (int64 a.R - int64 b.R)
         let ds = abs (int64 a.S - int64 b.S)
         let d = (dq + dr + ds) / 2L
-        if d > int64 System.Int32.MaxValue then System.Int32.MaxValue else int d
+
+        if d > int64 System.Int32.MaxValue then
+            System.Int32.MaxValue
+        else
+            int d
 
     // 60° cube rotations about the origin: right (clockwise) [q,r,s] -> [-s,-q,-r]; left is its inverse
     // [q,r,s] -> [-r,-s,-q]. Six applications are the identity, and one preserves distance to origin.
@@ -114,8 +112,10 @@ module Hex =
         if n < 0 then
             []
         else
-            [ for q in -n..n do
-                  for r in (max -n (-q - n)) .. (min n (-q + n)) -> create q r ]
+            [
+                for q in -n .. n do
+                    for r in (max -n (-q - n)) .. (min n (-q + n)) -> create q r
+            ]
 
     // The hexes exactly `n` steps from the origin (cardinality 6n; the single origin at n = 0). Walks
     // the six edges from a fixed starting corner in `directions` order — a fixed deterministic order.
@@ -127,19 +127,25 @@ module Hex =
         else
             let mutable hex = scale (List.item 4 directions) n
 
-            [ for i in 0..5 do
-                  let dir = List.item i directions
+            [
+                for i in 0..5 do
+                    let dir = List.item i directions
 
-                  for _ in 1..n do
-                      yield hex
-                      hex <- add hex dir ]
+                    for _ in 1..n do
+                        yield hex
+                        hex <- add hex dir
+            ]
 
     // `range n` in ring order: the origin, then ring 1 .. ring n. Fixed deterministic order.
     let spiral (n: int) : Hex list =
         if n < 0 then
             []
         else
-            origin :: [ for k in 1..n do yield! ring k ]
+            origin
+            :: [
+                for k in 1..n do
+                    yield! ring k
+            ]
 
     // Round a FRACTIONAL cube coordinate to the nearest valid `Hex`, resetting the component with the
     // largest rounding error to preserve q + r + s = 0. Ties on the largest error resolve in the fixed
@@ -178,12 +184,14 @@ module Hex =
         else
             let step = 1.0 / float n
 
-            [ for i in 0..n ->
-                  let t = step * float i
-                  let fq = float a.Q + (float b.Q - float a.Q) * t
-                  let fr = float a.R + (float b.R - float a.R) * t
-                  let fs = float a.S + (float b.S - float a.S) * t
-                  round fq fr fs ]
+            [
+                for i in 0..n ->
+                    let t = step * float i
+                    let fq = float a.Q + (float b.Q - float a.Q) * t
+                    let fr = float a.R + (float b.R - float a.R) * t
+                    let fs = float a.S + (float b.S - float a.S) * t
+                    round fq fr fs
+            ]
 
     // Offset (odd-r horizontal layout: odd rows shifted right) and doubled (doubled-width) storage
     // converters, on the shared integer `Cell`. Intermediates are widened to int64 and every destination
@@ -197,8 +205,10 @@ module Hex =
         let row = int64 h.R
         let col = int64 h.Q + (row - (row &&& 1L)) / 2L
 
-        { Col = narrowCoordinate "Hex.toOffset" "Col" col
-          Row = h.R }
+        {
+            Col = narrowCoordinate "Hex.toOffset" "Col" col
+            Row = h.R
+        }
 
     let ofOffset (c: Cell) : Hex =
         let row = int64 c.Row
@@ -208,17 +218,17 @@ module Hex =
     let toDoubled (h: Hex) : Cell =
         let col = 2L * int64 h.Q + int64 h.R
 
-        { Col = narrowCoordinate "Hex.toDoubled" "Col" col
-          Row = h.R }
+        {
+            Col = narrowCoordinate "Hex.toDoubled" "Col" col
+            Row = h.R
+        }
 
     let ofDoubled (c: Cell) : Hex =
         let row = int64 c.Row
         let delta = int64 c.Col - row
 
         if delta % 2L <> 0L then
-            invalidArg
-                (nameof c)
-                $"Hex.ofDoubled: Col - Row must be even, but Col={c.Col} and Row={c.Row}."
+            invalidArg (nameof c) $"Hex.ofDoubled: Col - Row must be even, but Col={c.Col} and Row={c.Row}."
 
         createChecked "Hex.ofDoubled" (delta / 2L) row
 

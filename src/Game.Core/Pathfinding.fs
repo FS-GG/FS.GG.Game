@@ -7,13 +7,13 @@ type Neighbourhood =
 [<RequireQualifiedAccess>]
 module Pathfinding =
 
-    type Step =
-        { Cost: int
-          CameFrom: Cell option }
+    type Step = { Cost: int; CameFrom: Cell option }
 
     type Reach =
-        { Steps: Map<Cell, Step>
-          Endable: Set<Cell> }
+        {
+            Steps: Map<Cell, Step>
+            Endable: Set<Cell>
+        }
 
     // The integer step scale, and the ONE place it is written. Every 10 and 14 below derives from it
     // (#229): the literals used to be copied into `neighbours`, `heuristic` and the docstrings, so a
@@ -33,9 +33,12 @@ module Pathfinding =
     let budgetFor (moveRange: int) : int =
         let scaled = int64 baseStep * int64 moveRange
 
-        if scaled > int64 System.Int32.MaxValue then System.Int32.MaxValue
-        elif scaled < int64 System.Int32.MinValue then System.Int32.MinValue
-        else int scaled
+        if scaled > int64 System.Int32.MaxValue then
+            System.Int32.MaxValue
+        elif scaled < int64 System.Int32.MinValue then
+            System.Int32.MinValue
+        else
+            int scaled
 
     // Shared frontier ordering, neighbour expansion and reconstruction form the private search kernel.
     // The public Pathfinding module remains the stable facade declared by Pathfinding.fsi.
@@ -105,9 +108,12 @@ module Pathfinding =
 
         // Shared guards for the trivial/degenerate cases before a real search runs.
         let trivial (maxVisited: int) (isWalkable: Cell -> bool) (start: Cell) (goal: Cell) : Cell list option option =
-            if maxVisited <= 0 || not (isWalkable start) || not (isWalkable goal) then Some None
-            elif start = goal then Some(Some [ start ])
-            else None
+            if maxVisited <= 0 || not (isWalkable start) || not (isWalkable goal) then
+                Some None
+            elif start = goal then
+                Some(Some [ start ])
+            else
+                None
 
         // The A* engine, parameterised by the admissible heuristic `h` (cell -> estimated remaining cost to
         // `goal`, in `baseStep` units, as int64). `astar` passes the octile/Manhattan `heuristic`;
@@ -330,7 +336,13 @@ module Pathfinding =
             [ (dy, dx); (-dy, -dx) ]
             |> List.exists (fun (ex, ey) ->
                 let side = { Col = n.Col + ex; Row = n.Row + ey }
-                let behind = { Col = n.Col - dx + ex; Row = n.Row - dy + ey }
+
+                let behind =
+                    {
+                        Col = n.Col - dx + ex
+                        Row = n.Row - dy + ey
+                    }
+
                 isWalkable side && not (isWalkable behind))
 
         // Scan from `from` in ONE direction (dx,dy), returning the first jump point reached, or `None` if
@@ -390,9 +402,7 @@ module Pathfinding =
                         let aligned =
                             top && ((dx <> 0 && n.Col = goal.Col) || (dy <> 0 && n.Row = goal.Row))
 
-                        let perpTurn =
-                            top
-                            && ((detect n dy dx).IsSome || (detect n (-dy) (-dx)).IsSome)
+                        let perpTurn = top && ((detect n dy dx).IsSome || (detect n (-dy) (-dx)).IsSome)
 
                         if wallAhead || aligned || perpTurn || hasForcedStraight isWalkable n dx dy then
                             Some n
@@ -409,7 +419,8 @@ module Pathfinding =
                             | None -> go n (budget - 1)
 
             // A one-level detection jump (never goal-aligned, never spawns its own detection).
-            and detect (node: Cell) (sx: int) (sy: int) : Cell option = jump isWalkable goal cap false sx sy node
+            and detect (node: Cell) (sx: int) (sy: int) : Cell option =
+                jump isWalkable goal cap false sx sy node
 
             go from cap
 
@@ -420,7 +431,14 @@ module Pathfinding =
             let sx = sign (b.Col - a.Col)
             let sy = sign (b.Row - a.Row)
             let steps = max (abs (b.Col - a.Col)) (abs (b.Row - a.Row))
-            [ for k in 1..steps -> { Col = a.Col + sx * k; Row = a.Row + sy * k } ]
+
+            [
+                for k in 1..steps ->
+                    {
+                        Col = a.Col + sx * k
+                        Row = a.Row + sy * k
+                    }
+            ]
 
     open JumpKernel
 
@@ -466,7 +484,10 @@ module Pathfinding =
                     if current = goal then
                         // Stitch the jump-point chain (start..goal) into the contiguous cell path.
                         let chain = reconstruct cameFrom current
-                        let stitched = chain |> List.pairwise |> List.collect (fun (a, b) -> interpolate a b)
+
+                        let stitched =
+                            chain |> List.pairwise |> List.collect (fun (a, b) -> interpolate a b)
+
                         Some(List.head chain :: stitched)
                     else
                         let g = gScore.[current]
@@ -564,8 +585,10 @@ module Pathfinding =
                     let settled =
                         Map.add
                             current
-                            { Cost = int d
-                              CameFrom = Map.tryFind current cameFrom }
+                            {
+                                Cost = int d
+                                CameFrom = Map.tryFind current cameFrom
+                            }
                             settled
                     // `cost` is arbitrary caller code; evaluate it once per pop, not once per neighbour.
                     let currentCost = cost current
@@ -608,8 +631,7 @@ module Pathfinding =
 
         // The cost-only projection of a settled field. `distanceField`/`reachableWithin` predate the
         // `Step` tree and are defined in terms of it, so they cannot drift from `reachable`.
-        let costsOf (settled: Map<Cell, Step>) : Map<Cell, int> =
-            settled |> Map.map (fun _ s -> s.Cost)
+        let costsOf (settled: Map<Cell, Step>) : Map<Cell, int> = settled |> Map.map (fun _ s -> s.Cost)
 
     open WeightedKernel
 
@@ -631,7 +653,9 @@ module Pathfinding =
         // one place to be wrong. If a profile ever shows this on a hot path, add the flag then, with a
         // number to justify it — not before.
         let stepWeight (currentCost: int) (_n: Cell) (stepCost: int) = int64 stepCost * int64 currentCost
-        dijkstra neighbourhood cost stepWeight (fun _ -> true) maxVisited goals |> costsOf
+
+        dijkstra neighbourhood cost stepWeight (fun _ -> true) maxVisited goals
+        |> costsOf
 
     // The forward, budgeted walk that BOTH `reachable` and `reachableWithin` are views of — so the move
     // range and the cost map are one search and cannot disagree about what is in budget, which is the
@@ -670,7 +694,8 @@ module Pathfinding =
         // Applied to `start` too, with no exception — a `canEndOn` meaning "unoccupied" excludes the
         // unit's own cell, and whether standing still is legal is the game's call, not ours.
         let endable =
-            steps |> Map.fold (fun acc c _ -> if canEndOn c then Set.add c acc else acc) Set.empty
+            steps
+            |> Map.fold (fun acc c _ -> if canEndOn c then Set.add c acc else acc) Set.empty
 
         { Steps = steps; Endable = endable }
 
@@ -755,8 +780,10 @@ module Pathfinding =
             // Row-major scan (rows outer, columns inner); flood each still-unlabeled walkable cell with
             // the next ascending id. The scan order fixes only the internal ids, which never leak.
             let cells =
-                [ for row in minRow..maxRow do
-                      for col in minCol..maxCol -> { Col = col; Row = row } ]
+                [
+                    for row in minRow..maxRow do
+                        for col in minCol..maxCol -> { Col = col; Row = row }
+                ]
 
             let labels =
                 cells
@@ -804,7 +831,12 @@ module Pathfinding =
     [<RequireQualifiedAccess>]
     module Landmarks =
 
-        let build (neighbourhood: Neighbourhood) (isWalkable: Cell -> bool) (count: int) (bounds: Cell * Cell) : Landmarks =
+        let build
+            (neighbourhood: Neighbourhood)
+            (isWalkable: Cell -> bool)
+            (count: int)
+            (bounds: Cell * Cell)
+            : Landmarks =
             let (a, b) = bounds
             let minCol, maxCol = min a.Col b.Col, max a.Col b.Col
             let minRow, maxRow = min a.Row b.Row, max a.Row b.Row
@@ -835,8 +867,10 @@ module Pathfinding =
                 distanceField neighbourhood cap cost [ from ]
 
             let cells =
-                [ for row in minRow..maxRow do
-                      for col in minCol..maxCol -> { Col = col; Row = row } ]
+                [
+                    for row in minRow..maxRow do
+                        for col in minCol..maxCol -> { Col = col; Row = row }
+                ]
 
             // Deterministic arg-max: the cell of largest score, ties broken by the total `(Col, Row)`
             // order — never a hash-set or float tie-break.
@@ -886,7 +920,10 @@ module Pathfinding =
 
                 match (if count <= 0 then None else pickBest firstScore) with
                 | None -> { Tables = [] }
-                | Some l1 -> { Tables = grow [ field l1 ] (count - 1) }
+                | Some l1 ->
+                    {
+                        Tables = grow [ field l1 ] (count - 1)
+                    }
 
         let heuristic (landmarks: Landmarks) (goal: Cell) (cell: Cell) : int =
             // max over landmarks L of |d(L, goal) - d(L, cell)|. Admissible by the triangle inequality
@@ -913,7 +950,9 @@ module Pathfinding =
             // pointwise maximum is admissible — the path is optimal (same cost as `astar`) and, being
             // >= octile everywhere, it expands no more nodes than `astar` and strictly fewer where ALT
             // is tighter.
-            let combined c = max (octile neighbourhood goal c) (int64 (heuristic landmarks goal c))
+            let combined c =
+                max (octile neighbourhood goal c) (int64 (heuristic landmarks goal c))
+
             astarWith combined noTie neighbourhood maxVisited isWalkable start goal
 
     // ---------------------------------------------------------------------------------------------

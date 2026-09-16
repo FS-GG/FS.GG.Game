@@ -10,45 +10,48 @@
 // Per-agent RNG substream. `AgentId` is a top-level type in FS.GG.Game.Core, not a member of the
 // `Ai` module — the module is [<RequireQualifiedAccess>], its vocabulary is not.
 type Agent = { Id: AgentId }
-let agent : Agent = { Id = AgentId 1 }
-let root : Rng = Rng.ofSeed 1UL
+let agent: Agent = { Id = AgentId 1 }
+let root: Rng = Rng.ofSeed 1UL
 
 //#block 4 "let threat ="
 // The threat field is recomputed on a cadence OR on terrain change — the block is about when, so
 // the field itself and its inputs are the reader's.
 type Terrain = { Version: int }
 let tick = 120
-let terrain : Terrain = { Version = 3 }
+let terrain: Terrain = { Version = 3 }
 let cachedVersion = 3
 let hasLos (_a: Cell) (_b: Cell) = true
-let sources : (Cell * float * int) list = []
-let coarseCells : Cell list = []
-let cached : Map<Cell, float> = Map.empty
+let sources: (Cell * float * int) list = []
+let coarseCells: Cell list = []
+let cached: Map<Cell, float> = Map.empty
 
 //#block 5 "let desire = Pathfinding.distanceField FourWay 2000 cost threatCells |> Map.map (fun _ d -> float d)"
 // Flee field: navigation comes from the substrate (Pathfinding), policy from Ai.
 let cost (_c: Cell) = 1
-let threatCells : Cell list = []
+let threatCells: Cell list = []
 
 //#block 6 "let friendly = Ai.influenceMap FourWay 4096 cost [ for u in allies   -> u.Cell, u.Control ]"
 // Influence/control maps: each unit is a source; `cost` is the same navigation cost the flee field uses.
 type Combatant = { Cell: Cell; Control: int }
 let cost (_c: Cell) = 1
-let allies : Combatant list = []
-let hostiles : Combatant list = []
+let allies: Combatant list = []
+let hostiles: Combatant list = []
 
 //#block 7 "let tension (c: Cell) : int ="
 // Tension is the caller's per-cell difference of two influence maps.
-let friendly : Map<Cell, int> = Map.empty
-let enemy : Map<Cell, int> = Map.empty
+let friendly: Map<Cell, int> = Map.empty
+let enemy: Map<Cell, int> = Map.empty
 
 //#block 8 "type Plan ="
 //#rec
 // Plan enumeration + the total tie-break. `Ability` and the scoring terms are the game's. The
 // scoring functions take the block's OWN `Plan` type, declared below them — hence //#rec.
-type Ability = Shoot | Ram
-let positions : Cell list = []
-let abilities : Ability list = []
+type Ability =
+    | Shoot
+    | Ram
+
+let positions: Cell list = []
+let abilities: Ability list = []
 let targetsOf (_pos: Cell) (_a: Ability) : Cell list = []
 let expectedDamage (_p: Plan) = 0.0
 let expectedBuildingDamage (_p: Plan) = 0.0

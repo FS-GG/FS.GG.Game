@@ -15,14 +15,16 @@ module Composition =
         | Exit
 
     type Model =
-        { Screen: Screen
-          Room: Room
-          X: int
-          DestinationActive: bool
-          CameraTransition: bool
-          VaultClear: bool
-          Aim: int * int
-          Tick: int }
+        {
+            Screen: Screen
+            Room: Room
+            X: int
+            DestinationActive: bool
+            CameraTransition: bool
+            VaultClear: bool
+            Aim: int * int
+            Tick: int
+        }
 
     type Key = Right
     type Pointer = Aim of int * int
@@ -38,14 +40,16 @@ module Composition =
         | AimAt of int * int
 
     let boot () =
-        { Screen = Menu
-          Room = Atrium
-          X = 0
-          DestinationActive = false
-          CameraTransition = false
-          VaultClear = false
-          Aim = 0, 0
-          Tick = 0 }
+        {
+            Screen = Menu
+            Room = Atrium
+            X = 0
+            DestinationActive = false
+            CameraTransition = false
+            VaultClear = false
+            Aim = 0, 0
+            Tick = 0
+        }
 
     let traverseDoor model =
         match model.Room, model.X, model.VaultClear with
@@ -54,13 +58,15 @@ module Composition =
                 Room = Vault
                 X = 0
                 DestinationActive = true
-                CameraTransition = true }
+                CameraTransition = true
+            }
         | Vault, _, true ->
             { model with
                 Room = Exit
                 X = 0
                 DestinationActive = true
-                CameraTransition = true }
+                CameraTransition = true
+            }
         | _ -> model
 
     let update message model =
@@ -90,42 +96,50 @@ module Composition =
         let next =
             { model with
                 CameraTransition = false
-                Tick = model.Tick + 1 }
+                Tick = model.Tick + 1
+            }
 
-        if next.Room = Exit then { next with Screen = Won } else next
+        if next.Room = Exit then
+            { next with Screen = Won }
+        else
+            next
 
     let applyEffectResult effect model =
         match effect with
         | VaultEnemiesDefeated -> { model with VaultClear = true }
 
     let adapter =
-        { RouteId = "FS.GG.Game.Reference/Composition"
-          ScenarioId = "boot-to-vault-exit"
-          TestId = "GP-JOURNEY-001"
-          MaxSteps = 32
-          Boot = boot
-          MapEvent = mapEvent
-          Update = update
-          FixedTick = fixedTick
-          ApplyEffectResult = applyEffectResult
-          IsTerminal = fun model -> model.Screen = Won
-          Fingerprint = id
-          EncodeEvent = sprintf "%A"
-          EncodeFingerprint = sprintf "%A" }
+        {
+            RouteId = "FS.GG.Game.Reference/Composition"
+            ScenarioId = "boot-to-vault-exit"
+            TestId = "GP-JOURNEY-001"
+            MaxSteps = 32
+            Boot = boot
+            MapEvent = mapEvent
+            Update = update
+            FixedTick = fixedTick
+            ApplyEffectResult = applyEffectResult
+            IsTerminal = fun model -> model.Screen = Won
+            Fingerprint = id
+            EncodeEvent = sprintf "%A"
+            EncodeFingerprint = sprintf "%A"
+        }
 
     let script: JourneyEvent<Key, Pointer, MenuAction, EffectResult> list =
-        [ JourneyEvent.Start
-          JourneyEvent.Pause
-          JourneyEvent.Resume
-          JourneyEvent.PointerInput(Aim(12, 7))
-          JourneyEvent.KeyInput(Right, true)
-          JourneyEvent.KeyInput(Right, true)
-          JourneyEvent.Interact
-          JourneyEvent.FixedTick
-          JourneyEvent.Interact
-          JourneyEvent.EffectResult VaultEnemiesDefeated
-          JourneyEvent.Interact
-          JourneyEvent.FixedTick ]
+        [
+            JourneyEvent.Start
+            JourneyEvent.Pause
+            JourneyEvent.Resume
+            JourneyEvent.PointerInput(Aim(12, 7))
+            JourneyEvent.KeyInput(Right, true)
+            JourneyEvent.KeyInput(Right, true)
+            JourneyEvent.Interact
+            JourneyEvent.FixedTick
+            JourneyEvent.Interact
+            JourneyEvent.EffectResult VaultEnemiesDefeated
+            JourneyEvent.Interact
+            JourneyEvent.FixedTick
+        ]
 
     let inputIdentity = "boot-to-vault-exit/fixed-script-v1"
     let terminalPredicateIdentity = "screen-won-v1"
@@ -135,13 +149,18 @@ type ProductionJourneyProof() =
     interface IProductionJourneyProofV1 with
         member _.CompositionAuthority =
             let assembly = typeof<Composition.Model>.Assembly
-            let name = assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+
+            let name =
+                assembly.GetName().Name |> Option.ofObj |> Option.defaultValue "<unnamed>"
+
             name + "/" + assembly.ManifestModule.ModuleVersionId.ToString("N")
+
         member _.RouteId = Composition.adapter.RouteId
         member _.ScenarioId = Composition.adapter.ScenarioId
         member _.InputIdentity = Composition.inputIdentity
         member _.TerminalPredicateIdentity = Composition.terminalPredicateIdentity
         member _.TestId = Composition.adapter.TestId
+
         member _.Run() =
             (Journey.runScriptWithIdentity
                 Composition.inputIdentity

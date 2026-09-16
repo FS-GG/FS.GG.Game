@@ -2,36 +2,48 @@ namespace FS.GG.Game.Core
 
 /// Independently versioned persisted-data families.
 [<RequireQualifiedAccess>]
-type SaveFamily = ProjectDocument | AssetManifest | GameSave | WorkspacePreferences
+type SaveFamily =
+    | ProjectDocument
+    | AssetManifest
+    | GameSave
+    | WorkspacePreferences
 
 /// Compatibility identity carried by every persisted value.
 type SaveIdentity =
-    { Family: SaveFamily
-      EngineId: string
-      EngineVersion: string
-      ProfileId: string
-      SchemaId: string
-      SchemaVersion: int
-      ContentHash: string
-      AssetHash: string }
+    {
+        Family: SaveFamily
+        EngineId: string
+        EngineVersion: string
+        ProfileId: string
+        SchemaId: string
+        SchemaVersion: int
+        ContentHash: string
+        AssetHash: string
+    }
 
 /// Persisted value plus a caller-defined deterministic payload hash.
 type SaveEnvelope<'payload> =
-    { Identity: SaveIdentity
-      PayloadHash: string
-      Payload: 'payload }
+    {
+        Identity: SaveIdentity
+        PayloadHash: string
+        Payload: 'payload
+    }
 
 /// Generation-scoped storage operation identity.
 [<Struct>]
 type SaveOperationId =
-    { Generation: uint64
-      Operation: uint64 }
+    {
+        Generation: uint64
+        Operation: uint64
+    }
 
 /// One adjacent, deterministic schema migration.
 type SaveMigrationStep<'payload> =
-    { FromVersion: int
-      ToVersion: int
-      Apply: 'payload -> Result<'payload, string> }
+    {
+        FromVersion: int
+        ToVersion: int
+        Apply: 'payload -> Result<'payload, string>
+    }
 
 [<RequireQualifiedAccess>]
 type SaveRefusal =
@@ -53,15 +65,22 @@ type SaveRefusal =
     | Inactive
 
 [<RequireQualifiedAccess>]
-type SaveMigrationStatus = Idle | Migrating | Ready | Failed of SaveRefusal | Disposed
+type SaveMigrationStatus =
+    | Idle
+    | Migrating
+    | Ready
+    | Failed of SaveRefusal
+    | Disposed
 
 type SaveMigrationState<'payload> =
-    { Expected: SaveIdentity
-      Generation: uint64
-      NextOperation: uint64
-      Status: SaveMigrationStatus
-      LastCommitted: SaveEnvelope<'payload> option
-      Pending: (SaveOperationId * SaveEnvelope<'payload>) option }
+    {
+        Expected: SaveIdentity
+        Generation: uint64
+        NextOperation: uint64
+        Status: SaveMigrationStatus
+        LastCommitted: SaveEnvelope<'payload> option
+        Pending: (SaveOperationId * SaveEnvelope<'payload>) option
+    }
 
 [<RequireQualifiedAccess>]
 type SaveMigrationObservation<'payload> =
@@ -82,26 +101,36 @@ type SaveMigrationEffect<'payload> =
 [<RequireQualifiedAccess>]
 module SaveMigration =
     val initialize: expected: SaveIdentity -> Result<SaveMigrationState<'payload>, SaveRefusal>
+
     val update:
         hashPayload: ('payload -> string) ->
         steps: SaveMigrationStep<'payload> list ->
         observation: SaveMigrationObservation<'payload> ->
-        state: SaveMigrationState<'payload> -> SaveMigrationState<'payload> * SaveMigrationEffect<'payload> list
+        state: SaveMigrationState<'payload> ->
+            SaveMigrationState<'payload> * SaveMigrationEffect<'payload> list
 
 [<RequireQualifiedAccess>]
-type AutosaveStatus = Clean | Debouncing | Persisting | Failed of string | Cancelled | Disposed
+type AutosaveStatus =
+    | Clean
+    | Debouncing
+    | Persisting
+    | Failed of string
+    | Cancelled
+    | Disposed
 
 type AutosaveConfig = { DebounceMilliseconds: uint64 }
 
 type AutosaveState<'value> =
-    { Config: AutosaveConfig
-      Generation: uint64
-      NextOperation: uint64
-      Status: AutosaveStatus
-      LastCommitted: 'value option
-      Draft: 'value option
-      DueAtMilliseconds: uint64 option
-      InFlight: (SaveOperationId * 'value) option }
+    {
+        Config: AutosaveConfig
+        Generation: uint64
+        NextOperation: uint64
+        Status: AutosaveStatus
+        LastCommitted: 'value option
+        Draft: 'value option
+        DueAtMilliseconds: uint64 option
+        InFlight: (SaveOperationId * 'value) option
+    }
 
 [<RequireQualifiedAccess>]
 type AutosaveObservation<'value> =
@@ -125,4 +154,6 @@ type AutosaveEffect<'value> =
 [<RequireQualifiedAccess>]
 module Autosave =
     val initialize: AutosaveConfig -> 'value option -> Result<AutosaveState<'value>, SaveRefusal>
-    val update: AutosaveObservation<'value> -> AutosaveState<'value> -> AutosaveState<'value> * AutosaveEffect<'value> list
+
+    val update:
+        AutosaveObservation<'value> -> AutosaveState<'value> -> AutosaveState<'value> * AutosaveEffect<'value> list

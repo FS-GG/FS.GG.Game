@@ -2,26 +2,32 @@ namespace FS.GG.Game.Core
 
 /// Immutable authored content identity. It is intentionally distinct from simulation state.
 type AuthoredState<'content> =
-    { ContentId: string
-      Revision: uint64
-      Value: 'content }
+    {
+        ContentId: string
+        Revision: uint64
+        Value: 'content
+    }
 
 /// Last state accepted by the real session authority.
 type AcceptedState<'state> =
-    { SessionId: string
-      Revision: uint64
-      StateDigest: string
-      Value: 'state }
+    {
+        SessionId: string
+        Revision: uint64
+        StateDigest: string
+        Value: 'state
+    }
 
 /// A prediction derived from one exact accepted-state identity.
 type PredictedState<'state> =
-    { ScenarioId: string
-      BasisSessionId: string
-      BasisRevision: uint64
-      BasisDigest: string
-      StepCount: uint64
-      StateDigest: string
-      Value: 'state }
+    {
+        ScenarioId: string
+        BasisSessionId: string
+        BasisRevision: uint64
+        BasisDigest: string
+        StepCount: uint64
+        StateDigest: string
+        Value: 'state
+    }
 
 [<RequireQualifiedAccess>]
 type PlanningScenarioStatus =
@@ -31,20 +37,26 @@ type PlanningScenarioStatus =
 
 /// One scenario branch. Intents remain product-owned semantic data.
 type PlanningScenario<'state, 'intent> =
-    { Prediction: PredictedState<'state>
-      Intents: 'intent list
-      Status: PlanningScenarioStatus }
+    {
+        Prediction: PredictedState<'state>
+        Intents: 'intent list
+        Status: PlanningScenarioStatus
+    }
 
 /// Workspace planning state with authored, accepted and predicted values in separate types.
 type PlanningSession<'content, 'state, 'intent> =
-    { Authored: AuthoredState<'content>
-      Accepted: AcceptedState<'state>
-      Scenarios: PlanningScenario<'state, 'intent> list }
+    {
+        Authored: AuthoredState<'content>
+        Accepted: AcceptedState<'state>
+        Scenarios: PlanningScenario<'state, 'intent> list
+    }
 
 /// Product adapter. <c>Apply</c> should call the same transition function used by the live session.
 type ScenarioAdapter<'state, 'intent> =
-    { Apply: 'intent -> 'state -> Result<'state, SessionFailure>
-      StateDigest: 'state -> string }
+    {
+        Apply: 'intent -> 'state -> Result<'state, SessionFailure>
+        StateDigest: 'state -> string
+    }
 
 [<RequireQualifiedAccess>]
 type PlanningIssue =
@@ -60,51 +72,62 @@ type PlanningIssue =
 
 /// Comparison data between a prediction and its exact accepted basis.
 type PlanningComparison =
-    { ScenarioId: string
-      BasisRevision: uint64
-      BasisDigest: string
-      PredictedDigest: string
-      PredictedSteps: uint64
-      IsUnchanged: bool }
+    {
+        ScenarioId: string
+        BasisRevision: uint64
+        BasisDigest: string
+        PredictedDigest: string
+        PredictedSteps: uint64
+        IsUnchanged: bool
+    }
 
 /// A request for the owning product/session layer. Planning never applies it to accepted state itself.
 type PlanningCommitIntent<'intent> =
-    { ScenarioId: string
-      BasisSessionId: string
-      BasisRevision: uint64
-      BasisDigest: string
-      Intents: 'intent list
-      PredictedDigest: string }
+    {
+        ScenarioId: string
+        BasisSessionId: string
+        BasisRevision: uint64
+        BasisDigest: string
+        Intents: 'intent list
+        PredictedDigest: string
+    }
 
 [<RequireQualifiedAccess>]
 module Planning =
     val create:
         authored: AuthoredState<'content> ->
-        accepted: AcceptedState<'state> -> Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue list>
+        accepted: AcceptedState<'state> ->
+            Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue list>
 
     val beginScenario:
         scenarioId: string ->
-        session: PlanningSession<'content, 'state, 'intent> -> Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue>
+        session: PlanningSession<'content, 'state, 'intent> ->
+            Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue>
 
     val apply:
         adapter: ScenarioAdapter<'state, 'intent> ->
         scenarioId: string ->
         intent: 'intent ->
-        session: PlanningSession<'content, 'state, 'intent> -> Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue>
+        session: PlanningSession<'content, 'state, 'intent> ->
+            Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue>
 
     val compare:
         scenarioId: string ->
-        session: PlanningSession<'content, 'state, 'intent> -> Result<PlanningComparison, PlanningIssue>
+        session: PlanningSession<'content, 'state, 'intent> ->
+            Result<PlanningComparison, PlanningIssue>
 
     val cancel:
         scenarioId: string ->
-        session: PlanningSession<'content, 'state, 'intent> -> Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue>
+        session: PlanningSession<'content, 'state, 'intent> ->
+            Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue>
 
     val proposeCommit:
         scenarioId: string ->
-        session: PlanningSession<'content, 'state, 'intent> -> Result<PlanningCommitIntent<'intent>, PlanningIssue>
+        session: PlanningSession<'content, 'state, 'intent> ->
+            Result<PlanningCommitIntent<'intent>, PlanningIssue>
 
     /// Replace state only after the real session authority accepts it; existing drafts become stale.
     val replaceAccepted:
         accepted: AcceptedState<'state> ->
-        session: PlanningSession<'content, 'state, 'intent> -> Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue list>
+        session: PlanningSession<'content, 'state, 'intent> ->
+            Result<PlanningSession<'content, 'state, 'intent>, PlanningIssue list>

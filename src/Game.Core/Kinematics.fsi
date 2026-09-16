@@ -16,28 +16,32 @@ type KinematicResponse =
 
 /// A stable world collider. Shapes use absolute world coordinates.
 type KinematicCollider =
-    { Id: string
-      Shape: KinematicShape
-      Response: KinematicResponse }
+    {
+        Id: string
+        Shape: KinematicShape
+        Response: KinematicResponse
+    }
 
 /// One detected overlap or swept crossing.
 type KinematicHit =
-    { ColliderId: string
-      Contact: Contact
-      Sweep: RayHit option
-      IsTrigger: bool }
+    {
+        ColliderId: string
+        Contact: Contact
+        Sweep: RayHit option
+        IsTrigger: bool
+    }
 
 /// A moving axis-aligned body and its displacement for one fixed step.
-type KinematicMotion =
-    { Bounds: Rect
-      Displacement: Point }
+type KinematicMotion = { Bounds: Rect; Displacement: Point }
 
 /// The bounded result of advancing one body through the stationary world.
 type KinematicResult =
-    { Bounds: Rect
-      Displacement: Point
-      Hits: KinematicHit list
-      CandidateIds: string list }
+    {
+        Bounds: Rect
+        Displacement: Point
+        Hits: KinematicHit list
+        CandidateIds: string list
+    }
 
 /// Pure collision queries and arcade response over the shared geometry vocabulary.
 [<RequireQualifiedAccess>]
@@ -58,5 +62,4 @@ module Kinematics =
 
     /// Advance once, collecting triggers and applying the earliest solid slide or bounce response.
     /// Ownership is bounded to one spatial query and one response; callers iterate fixed steps.
-    val advance:
-        cellSize: float -> motion: KinematicMotion -> colliders: KinematicCollider list -> KinematicResult
+    val advance: cellSize: float -> motion: KinematicMotion -> colliders: KinematicCollider list -> KinematicResult

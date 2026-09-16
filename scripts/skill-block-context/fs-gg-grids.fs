@@ -5,20 +5,34 @@
 // so the carried-over names are re-bound here, to the SAME values the earlier block gives them.
 
 //#block 2 "let wall : Grids.Edge = { Col = 4; Row = 2; Orientation = Grids.Vertical }"
-let c : Cell = { Col = 3; Row = 2 }
+let c: Cell = { Col = 3; Row = 2 }
 
 //#block 3 "let touching = Grids.edgeCells wall          // [ {Col=3;Row=2}; {Col=4;Row=2} ] — left then right, c is one"
-let c : Cell = { Col = 3; Row = 2 }
-let wall : Grids.Edge = { Col = 4; Row = 2; Orientation = Grids.Vertical }
-let corners : Grids.Vertex list = Grids.cellCorners c
+let c: Cell = { Col = 3; Row = 2 }
+
+let wall: Grids.Edge =
+    {
+        Col = 4
+        Row = 2
+        Orientation = Grids.Vertical
+    }
+
+let corners: Grids.Vertex list = Grids.cellCorners c
 
 //#block 4 "let spec : Grids.GridSpec = { CellSize = 32.0; Origin = { X = 0.0; Y = 0.0 } }"
-let c : Cell = { Col = 3; Row = 2 }
-let wall : Grids.Edge = { Col = 4; Row = 2; Orientation = Grids.Vertical }
-let corners : Grids.Vertex list = Grids.cellCorners c
+let c: Cell = { Col = 3; Row = 2 }
+
+let wall: Grids.Edge =
+    {
+        Col = 4
+        Row = 2
+        Orientation = Grids.Vertical
+    }
+
+let corners: Grids.Vertex list = Grids.cellCorners c
 
 //#block 6 "let wall  = Edges.edgeBetween { Col = 3; Row = 2 } { Col = 4; Row = 2 }   // Some edge — the cells are adjacent"
 // Thin-wall routing (the Edges module): the route endpoints and walkability predicate are the reader's.
 let isWalkable (_c: Cell) = true
-let start : Cell = { Col = 0; Row = 0 }
-let goal : Cell = { Col = 5; Row = 5 }
+let start: Cell = { Col = 0; Row = 0 }
+let goal: Cell = { Col = 5; Row = 5 }

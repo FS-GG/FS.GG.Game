@@ -46,11 +46,15 @@ let repoRoot = Path.GetFullPath(Path.Combine(scriptDir, ".."))
 
 // Every package → its src project folder (assembly name == package name). One row per committed baseline.
 let packages =
-    [ "FS.GG.Game.Core", "Game.Core"
-      "FS.GG.Game.Harness", "Game.Harness"
-      "FS.GG.Game.Render", "Game.Render" ]
+    [
+        "FS.GG.Game.Core", "Game.Core"
+        "FS.GG.Game.Harness", "Game.Harness"
+        "FS.GG.Game.Render", "Game.Render"
+    ]
 
-let binDir proj = Path.Combine(repoRoot, "src", proj, "bin", "Debug", "net10.0")
+let binDir proj =
+    Path.Combine(repoRoot, "src", proj, "bin", "Debug", "net10.0")
+
 let binDirs = packages |> List.map (snd >> binDir)
 
 // `scripts/generated-paths` roster contract (ADR-0044 / .github#498): one `kind<TAB>path<TAB>marker`
@@ -62,6 +66,7 @@ if Environment.GetCommandLineArgs() |> Array.contains "--list" then
     for (packageName, _) in packages do
         printfn "surface-baseline\treadiness/surface-baselines/%s.txt\t" packageName
         printfn "surface-baseline\treadiness/surface-baselines/members/%s.txt\t" packageName
+
     exit 0
 
 // Third-party dependencies are NOT copied into a library project's bin/ (only executables and test
@@ -130,7 +135,9 @@ let private restoredAssemblies () =
 
     for (_, proj) in packages do
         let assets = Path.Combine(repoRoot, "src", proj, "obj", "project.assets.json")
-        if File.Exists assets then harvest assets
+
+        if File.Exists assets then
+            harvest assets
 
     probe
 
@@ -138,7 +145,7 @@ let private restored = restoredAssemblies ()
 
 // Resolve cross-assembly dependencies from a package bin dir first (so FS.GG.Game.* bind to the copies
 // just built), then from the restore graph, so reflection can walk a full public signature.
-AppDomain.CurrentDomain.add_AssemblyResolve(
+AppDomain.CurrentDomain.add_AssemblyResolve (
     ResolveEventHandler(fun _ args ->
         let name = AssemblyName(args.Name).Name
 
@@ -151,7 +158,8 @@ AppDomain.CurrentDomain.add_AssemblyResolve(
             | true, path -> Some path
             | _ -> None)
         |> Option.map Assembly.LoadFrom
-        |> Option.toObj))
+        |> Option.toObj)
+)
 
 // Compiler-generated / anonymous members are EXCLUDED: their names embed a non-deterministic hash
 // (e.g. `<>f__AnonymousType…`) and would make the baseline unstable across builds. The same exclusion
@@ -180,7 +188,8 @@ let displayName (ty: Type) =
         fullName
 
 let exportedTypes (assembly: Assembly) =
-    assembly.GetExportedTypes() |> Array.filter (fun ty -> not (isCompilerGenerated ty))
+    assembly.GetExportedTypes()
+    |> Array.filter (fun ty -> not (isCompilerGenerated ty))
 
 let names (assembly: Assembly) =
     exportedTypes assembly |> Array.map displayName |> Array.distinct |> Array.sort
@@ -222,8 +231,10 @@ let rec typeRef (ty: Type) : string =
             let mutable inArity = false
 
             for c in withoutArguments do
-                if c = '`' then inArity <- true
-                elif inArity && Char.IsDigit c then ()
+                if c = '`' then
+                    inArity <- true
+                elif inArity && Char.IsDigit c then
+                    ()
                 else
                     inArity <- false
                     builder.Append(c) |> ignore
@@ -246,18 +257,23 @@ let private isAccessor (m: MethodInfo) =
        |> List.exists (fun prefix -> m.Name.StartsWith(prefix, StringComparison.Ordinal))
 
 let private memberFlags =
-    BindingFlags.Public ||| BindingFlags.Instance ||| BindingFlags.Static ||| BindingFlags.DeclaredOnly
+    BindingFlags.Public
+    ||| BindingFlags.Instance
+    ||| BindingFlags.Static
+    ||| BindingFlags.DeclaredOnly
 
 // Deliberately NOT `GetMembers`: that also populates nested types, which forces the runtime to
 // resolve every assembly a nested type mentions. Asking for each member kind resolves only what a
 // public signature actually names — and nested types are exported types in their own right anyway,
 // so they already get their own lines.
 let private membersOf (ty: Type) : MemberInfo array =
-    [| yield! ty.GetConstructors(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
-       yield! ty.GetMethods(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
-       yield! ty.GetProperties(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
-       yield! ty.GetFields(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
-       yield! ty.GetEvents(memberFlags) |> Array.map (fun m -> m :> MemberInfo) |]
+    [|
+        yield! ty.GetConstructors(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
+        yield! ty.GetMethods(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
+        yield! ty.GetProperties(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
+        yield! ty.GetFields(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
+        yield! ty.GetEvents(memberFlags) |> Array.map (fun m -> m :> MemberInfo)
+    |]
 
 let private signature (owner: string) (m: MemberInfo) =
     match m with
@@ -274,8 +290,12 @@ let private signature (owner: string) (m: MemberInfo) =
         Some $"{owner}.{method'.Name}{generics}({parameters (method'.GetParameters())}) : {typeRef method'.ReturnType}"
     | :? PropertyInfo as property ->
         let accessors =
-            [ if property.CanRead then "get"
-              if property.CanWrite then "set" ]
+            [
+                if property.CanRead then
+                    "get"
+                if property.CanWrite then
+                    "set"
+            ]
             |> String.concat ", "
 
         Some $"{owner}.{property.Name} : {typeRef property.PropertyType} [{accessors}]"
@@ -303,7 +323,13 @@ let memberSignatures (assembly: Assembly) =
 // baseline is only a baseline if the bytes depend on the surface alone.
 let private writeLines path (values: string array) noun =
     Directory.CreateDirectory(Path.GetDirectoryName(path: string)) |> ignore
-    let text = if Array.isEmpty values then "" else String.concat "\n" values + "\n"
+
+    let text =
+        if Array.isEmpty values then
+            ""
+        else
+            String.concat "\n" values + "\n"
+
     File.WriteAllText(path, text)
     printfn "wrote %s (%d public %s)" path (Array.length values) noun
 
@@ -314,6 +340,8 @@ let write packageName (assembly: Assembly) =
 
 for (packageName, proj) in packages do
     let dll = Path.Combine(binDir proj, packageName + ".dll")
+
     if not (File.Exists dll) then
         failwithf "missing %s — build the solution (Debug) before refreshing baselines" dll
+
     write packageName (Assembly.LoadFrom dll)

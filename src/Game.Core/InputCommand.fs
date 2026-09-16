@@ -21,12 +21,14 @@ module Command =
 
     // The vocabulary, in the stable contract order.
     let all =
-        [ Command.MoveNorth
-          Command.MoveSouth
-          Command.MoveWest
-          Command.MoveEast
-          Command.Fire
-          Command.Pause ]
+        [
+            Command.MoveNorth
+            Command.MoveSouth
+            Command.MoveWest
+            Command.MoveEast
+            Command.Fire
+            Command.Pause
+        ]
 
     // `id` and `label` are total matches over the closed DU, not lookups in a table — the compiler
     // then forces a new case to be given a token/label here rather than falling through to a run-time

@@ -9,7 +9,10 @@ open FS.GG.Playtest.Manifest
 let parseSection14 (text: string) : (int * string) list =
     let lines = text.Replace("\r\n", "\n").Split('\n')
 
-    match lines |> Array.tryFindIndex (fun l -> Regex.IsMatch(l, @"^##\s+14\.\s+Acceptance")) with
+    match
+        lines
+        |> Array.tryFindIndex (fun l -> Regex.IsMatch(l, @"^##\s+14\.\s+Acceptance"))
+    with
     | None -> []
     | Some s ->
         let endIdx =
@@ -35,8 +38,10 @@ let parseSection14 (text: string) : (int * string) list =
 let scaffold (acs: (int * string) list) : GameplayFr list =
     acs
     |> List.map (fun (n, title) ->
-        { Id = sprintf "GP-%03d" n
-          Facet = "gameplay"
-          RequiredEvidence = EvidenceLevel.ProductionJourney
-          Summary = title
-          CoversAc = [ n ] })
+        {
+            Id = sprintf "GP-%03d" n
+            Facet = "gameplay"
+            RequiredEvidence = EvidenceLevel.ProductionJourney
+            Summary = title
+            CoversAc = [ n ]
+        })

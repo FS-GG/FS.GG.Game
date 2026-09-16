@@ -14,12 +14,28 @@ type RoomId = RoomId of int
 type ItemId = ItemId of int
 
 // --- the player's derived/pickup state (§5.1) ---
-type PlayerStats = { Damage: float; FireRate: float; Speed: float; Range: float; Luck: int }
-type Health = { Red: int; Soul: int; Black: int }      // half-hearts
-type RollState = NotRolling | Rolling of since: float | RollCooldown of until: float
+type PlayerStats =
+    {
+        Damage: float
+        FireRate: float
+        Speed: float
+        Range: float
+        Luck: int
+    }
+
+type Health = { Red: int; Soul: int; Black: int } // half-hearts
+
+type RollState =
+    | NotRolling
+    | Rolling of since: float
+    | RollCooldown of until: float
+
 type Currency = { Coins: int; Keys: int; Bombs: int }
 type ActiveItem = { Id: ItemId; ChargeNeeded: int }
-type Owner = PlayerOwned | EnemyOwned
+
+type Owner =
+    | PlayerOwned
+    | EnemyOwned
 
 // --- room contents (§5.3) ---
 //
@@ -33,25 +49,73 @@ type Owner = PlayerOwned | EnemyOwned
 // document's types rather than a friendlier version of them. A 3-field `{ Pos; Hp; Contact }` stand-in
 // under-modelled a roster the document specifies in full, and §8.1's Enemy → Token ChannelMap is the
 // first block to actually bind against it.
-type EnemyKind = Grub | Maggot | Spitter | FlySwarmNode | Charger | Turret | Caster | Brute
+type EnemyKind =
+    | Grub
+    | Maggot
+    | Spitter
+    | FlySwarmNode
+    | Charger
+    | Turret
+    | Caster
+    | Brute
+
 type Enemy =
-    { Pos: Geometry.Vec2
-      Kind: EnemyKind
-      Hp: float
-      MaxHp: float          // §5.2's HP column; `Hp` alone cannot drive a 0..1 Health fraction
-      Threat: int           // §5.2's Threat column, 1..6 — the §6 room-budget currency
-      Contact: float }
+    {
+        Pos: Geometry.Vec2
+        Kind: EnemyKind
+        Hp: float
+        MaxHp: float // §5.2's HP column; `Hp` alone cannot drive a 0..1 Health fraction
+        Threat: int // §5.2's Threat column, 1..6 — the §6 room-budget currency
+        Contact: float
+    }
+
 type Pickup = { Pos: Geometry.Vec2; Item: ItemId }
 type Obstacle = { Pos: Geometry.Vec2; Blocking: bool }
 type Door = { ToRoom: RoomId; Locked: bool }
 type Boss = { Hp: float; Phase: int }
-type Particle = { Pos: Geometry.Vec2; Vel: Geometry.Vec2; Life: float }
-type FloorTheme = Basement | Caves | Depths | Womb
+
+type Particle =
+    {
+        Pos: Geometry.Vec2
+        Vel: Geometry.Vec2
+        Life: float
+    }
+
+type FloorTheme =
+    | Basement
+    | Caves
+    | Depths
+    | Womb
 
 // --- run + meta (§5.4) ---
-type RunSummary = { Floors: int; Kills: int; Seconds: float }
-type RunStats = { Kills: int; DamageTaken: float; Seconds: float }
+type RunSummary =
+    {
+        Floors: int
+        Kills: int
+        Seconds: float
+    }
+
+type RunStats =
+    {
+        Kills: int
+        DamageTaken: float
+        Seconds: float
+    }
+
 type MetaProfile = { Unlocked: Set<ItemId>; Runs: int }
 type Settings = { Volume: float; ScreenShake: bool }
-type InputState = { MoveX: float; MoveY: float; AimX: float; AimY: float; Firing: bool }
-type TitleCmd = NewRun | Continue | OpenOptions | Quit
+
+type InputState =
+    {
+        MoveX: float
+        MoveY: float
+        AimX: float
+        AimY: float
+        Firing: bool
+    }
+
+type TitleCmd =
+    | NewRun
+    | Continue
+    | OpenOptions
+    | Quit

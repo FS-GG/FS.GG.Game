@@ -35,16 +35,18 @@ let private noMaterial: Physics.Material = { Restitution = 0.0; Friction = 0.0 }
 
 /// A config whose only field this slice reads is the cell size; the rest are the solver's contract.
 let private config (cellSize: float) : Physics.Config =
-    { Gravity = p 0.0 -9.81
-      VelocityIterations = 8
-      PositionIterations = 3
-      Slop = 0.01
-      Correction = 0.2
-      BounceThreshold = 1.0
-      SleepLinearSq = 0.01
-      SleepAngular = 0.01
-      SleepTicks = 60
-      BroadPhaseCellSize = cellSize }
+    {
+        Gravity = p 0.0 -9.81
+        VelocityIterations = 8
+        PositionIterations = 3
+        Slop = 0.01
+        Correction = 0.2
+        BounceThreshold = 1.0
+        SleepLinearSq = 0.01
+        SleepAngular = 0.01
+        SleepTicks = 60
+        BroadPhaseCellSize = cellSize
+    }
 
 /// `(kind, shape, position)` triples in insertion order, so a body's index is its position in the list.
 let private worldOf (cellSize: float) (bodies: (Physics.BodyKind * Physics.Shape * Point) list) : Physics.World =
@@ -64,14 +66,19 @@ let private box hx hy = Physics.SBox(p hx hy)
 /// is the case an extent measured as a radius about the origin, rather than from the box corners, would
 /// get wrong.
 let private triangle (size: float) =
-    Physics.SPoly { Vertices = [| p 0.0 0.0; p size 0.0; p 0.0 size |] }
+    Physics.SPoly
+        {
+            Vertices = [| p 0.0 0.0; p size 0.0; p 0.0 size |]
+        }
 
 // ---------------------------------------------------------------------------------------------------
 // The oracle. Recomputes each body's world AABB from its own (shape, position) and brute-forces every
 // pair. It reimplements the contract rather than calling the module, so agreement is evidence.
 // ---------------------------------------------------------------------------------------------------
 
-let private finite (v: float) = not (Double.IsNaN v) && not (Double.IsInfinity v)
+let private finite (v: float) =
+    not (Double.IsNaN v) && not (Double.IsInfinity v)
+
 let private finitePoint (q: Point) = finite q.X && finite q.Y
 
 let private ringArea (v: Point[]) =
@@ -91,16 +98,20 @@ let private oracleAabb (shape: Physics.Shape) (pos: Point) : Rect option =
         match shape with
         | Physics.SCircle r when finite r && r > 0.0 ->
             Some
-                { X = pos.X - r
-                  Y = pos.Y - r
-                  Width = 2.0 * r
-                  Height = 2.0 * r }
+                {
+                    X = pos.X - r
+                    Y = pos.Y - r
+                    Width = 2.0 * r
+                    Height = 2.0 * r
+                }
         | Physics.SBox h when finitePoint h && h.X > 0.0 && h.Y > 0.0 ->
             Some
-                { X = pos.X - h.X
-                  Y = pos.Y - h.Y
-                  Width = 2.0 * h.X
-                  Height = 2.0 * h.Y }
+                {
+                    X = pos.X - h.X
+                    Y = pos.Y - h.Y
+                    Width = 2.0 * h.X
+                    Height = 2.0 * h.Y
+                }
         | Physics.SPoly poly when
             poly.Vertices.Length >= 3
             && poly.Vertices |> Array.forall finitePoint
@@ -109,32 +120,40 @@ let private oracleAabb (shape: Physics.Shape) (pos: Point) : Rect option =
             let v = poly.Vertices
 
             Some
-                { X = pos.X + (v |> Array.map (fun q -> q.X) |> Array.min)
-                  Y = pos.Y + (v |> Array.map (fun q -> q.Y) |> Array.min)
-                  Width = (v |> Array.map (fun q -> q.X) |> Array.max) - (v |> Array.map (fun q -> q.X) |> Array.min)
-                  Height = (v |> Array.map (fun q -> q.Y) |> Array.max) - (v |> Array.map (fun q -> q.Y) |> Array.min) }
+                {
+                    X = pos.X + (v |> Array.map (fun q -> q.X) |> Array.min)
+                    Y = pos.Y + (v |> Array.map (fun q -> q.Y) |> Array.min)
+                    Width =
+                        (v |> Array.map (fun q -> q.X) |> Array.max)
+                        - (v |> Array.map (fun q -> q.X) |> Array.min)
+                    Height =
+                        (v |> Array.map (fun q -> q.Y) |> Array.max)
+                        - (v |> Array.map (fun q -> q.Y) |> Array.min)
+                }
         | _ -> None
 
 let private oraclePairs (bodies: (Physics.BodyKind * Physics.Shape * Point) list) : (int * int) list =
     let arr = List.toArray bodies
 
-    [ for i in 0 .. arr.Length - 1 do
-          for j in i + 1 .. arr.Length - 1 do
-              let (ki, si, pi) = arr.[i]
-              let (kj, sj, pj) = arr.[j]
+    [
+        for i in 0 .. arr.Length - 1 do
+            for j in i + 1 .. arr.Length - 1 do
+                let (ki, si, pi) = arr.[i]
+                let (kj, sj, pj) = arr.[j]
 
-              match oracleAabb si pi, oracleAabb sj pj with
-              | Some bi, Some bj when
-                  (ki = Physics.Dynamic || kj = Physics.Dynamic)
-                  && Geometry.intersects bi bj
-                  ->
-                  yield i, j
-              | _ -> () ]
+                match oracleAabb si pi, oracleAabb sj pj with
+                | Some bi, Some bj when (ki = Physics.Dynamic || kj = Physics.Dynamic) && Geometry.intersects bi bj ->
+                    yield i, j
+                | _ -> ()
+    ]
 
 // ---------------------------------------------------------------------------------------------------
 
 let private clampCoord (v: float) =
-    if Double.IsNaN v || Double.IsInfinity v then 0.0 else max -40.0 (min 40.0 v)
+    if Double.IsNaN v || Double.IsInfinity v then
+        0.0
+    else
+        max -40.0 (min 40.0 v)
 
 /// Keeps generated extents positive, bounded, and comparable to the coordinate range, so the generator
 /// actually produces overlaps rather than a cloud of disjoint specks.
@@ -163,228 +182,298 @@ let tests =
         "Game.Core Physics broad phase (#74)"
         [
 
-          test "an empty world has no pairs" {
-              Expect.isEmpty (Physics.pairs (Physics.empty (config 8.0))) "no bodies, no pairs"
-          }
+            test "an empty world has no pairs" {
+                Expect.isEmpty (Physics.pairs (Physics.empty (config 8.0))) "no bodies, no pairs"
+            }
 
-          test "addBody returns dense ascending indices, and a degenerate body does not shift them" {
-              let w0 = Physics.empty (config 8.0)
-              let struct (i0, w1) = Physics.addBody Physics.Dynamic (Physics.SCircle 1.0) noMaterial (p 0.0 0.0) w0
-              // Degenerate: a zero radius is a no-collision input, but it still occupies an index.
-              let struct (i1, w2) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.0) noMaterial (p 0.0 0.0) w1
-              let struct (i2, _) = Physics.addBody Physics.Dynamic (Physics.SCircle 1.0) noMaterial (p 0.5 0.0) w2
+            test "addBody returns dense ascending indices, and a degenerate body does not shift them" {
+                let w0 = Physics.empty (config 8.0)
 
-              Expect.equal (i0, i1, i2) (0, 1, 2) "indices are dense and ascending in insertion order"
-              // w2 holds bodies 0 and 1 only; body 1 is the zero-radius one, so it pairs with nothing.
-              Expect.equal (pairList w2) [] "a degenerate body occupies an index but collides with nothing"
-          }
+                let struct (i0, w1) =
+                    Physics.addBody Physics.Dynamic (Physics.SCircle 1.0) noMaterial (p 0.0 0.0) w0
+                // Degenerate: a zero radius is a no-collision input, but it still occupies an index.
+                let struct (i1, w2) =
+                    Physics.addBody Physics.Dynamic (Physics.SCircle 0.0) noMaterial (p 0.0 0.0) w1
 
-          test "overlapping dynamic circles are a pair; a gap is not" {
-              let overlapping =
-                  worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                Physics.Dynamic, Physics.SCircle 1.0, p 1.0 0.0 ]
+                let struct (i2, _) =
+                    Physics.addBody Physics.Dynamic (Physics.SCircle 1.0) noMaterial (p 0.5 0.0) w2
 
-              let apart =
-                  worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                Physics.Dynamic, Physics.SCircle 1.0, p 5.0 0.0 ]
+                Expect.equal (i0, i1, i2) (0, 1, 2) "indices are dense and ascending in insertion order"
+                // w2 holds bodies 0 and 1 only; body 1 is the zero-radius one, so it pairs with nothing.
+                Expect.equal (pairList w2) [] "a degenerate body occupies an index but collides with nothing"
+            }
 
-              Expect.equal (pairList overlapping) [ 0, 1 ] "boxes overlap on positive area"
-              Expect.equal (pairList apart) [] "boxes are disjoint"
-          }
+            test "overlapping dynamic circles are a pair; a gap is not" {
+                let overlapping =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 1.0 0.0
+                        ]
 
-          test "boxes that merely touch are NOT a pair, and that agrees with Geometry.intersects" {
-              // Half-extent 1 at x=0 and x=2: the boxes share the plane x=1 and overlap on zero area.
-              let w =
-                  worldOf 8.0 [ Physics.Dynamic, box 1.0 1.0, p 0.0 0.0
-                                Physics.Dynamic, box 1.0 1.0, p 2.0 0.0 ]
+                let apart =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 5.0 0.0
+                        ]
 
-              let a: Rect = { X = -1.0; Y = -1.0; Width = 2.0; Height = 2.0 }
-              let b: Rect = { X = 1.0; Y = -1.0; Width = 2.0; Height = 2.0 }
+                Expect.equal (pairList overlapping) [ 0, 1 ] "boxes overlap on positive area"
+                Expect.equal (pairList apart) [] "boxes are disjoint"
+            }
 
-              Expect.isFalse (Geometry.intersects a b) "the strict-edge convention this inherits"
-              Expect.equal (pairList w) [] "a touch is not a pair — the narrow phase would report no contact either"
-          }
+            test "boxes that merely touch are NOT a pair, and that agrees with Geometry.intersects" {
+                // Half-extent 1 at x=0 and x=2: the boxes share the plane x=1 and overlap on zero area.
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, box 1.0 1.0, p 0.0 0.0
+                            Physics.Dynamic, box 1.0 1.0, p 2.0 0.0
+                        ]
 
-          test "a pair needs at least one Dynamic body" {
-              let kinds = [ Physics.Static; Physics.Kinematic; Physics.Dynamic ]
+                let a: Rect =
+                    {
+                        X = -1.0
+                        Y = -1.0
+                        Width = 2.0
+                        Height = 2.0
+                    }
 
-              for ka in kinds do
-                  for kb in kinds do
-                      let w =
-                          worldOf 8.0 [ ka, Physics.SCircle 1.0, p 0.0 0.0
-                                        kb, Physics.SCircle 1.0, p 1.0 0.0 ]
+                let b: Rect =
+                    {
+                        X = 1.0
+                        Y = -1.0
+                        Width = 2.0
+                        Height = 2.0
+                    }
 
-                      let expected = if ka = Physics.Dynamic || kb = Physics.Dynamic then [ 0, 1 ] else []
+                Expect.isFalse (Geometry.intersects a b) "the strict-edge convention this inherits"
+                Expect.equal (pairList w) [] "a touch is not a pair — the narrow phase would report no contact either"
+            }
 
-                      Expect.equal
-                          (pairList w)
-                          expected
-                          (sprintf "%A vs %A: only a pair with a Dynamic member can ever resolve" ka kb)
-          }
+            test "a pair needs at least one Dynamic body" {
+                let kinds = [ Physics.Static; Physics.Kinematic; Physics.Dynamic ]
 
-          test "a large body at a HIGHER index is still found — the grid buckets it by extent" {
-              // Body 0's box is [89,91]². Body 1's box is [-100,100]², so the two overlap — but body 1's
-              // ORIGIN is (0,0), nowhere near body 0's box. The scan queries body 0's region and takes
-              // j > i, so a grid that filed body 1 under its origin's cell alone would never offer it as a
-              // candidate, and the pair would be silently lost. Ordering matters: swap the two and a
-              // position-bucketed query would find it anyway.
-              let w =
-                  worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 90.0 90.0
-                                Physics.Dynamic, box 100.0 100.0, p 0.0 0.0 ]
+                for ka in kinds do
+                    for kb in kinds do
+                        let w =
+                            worldOf 8.0 [ ka, Physics.SCircle 1.0, p 0.0 0.0; kb, Physics.SCircle 1.0, p 1.0 0.0 ]
 
-              Expect.equal (pairList w) [ 0, 1 ] "body 0's own box must reach the large body's cells"
-          }
+                        let expected =
+                            if ka = Physics.Dynamic || kb = Physics.Dynamic then
+                                [ 0, 1 ]
+                            else
+                                []
 
-          test "an asymmetric polygon's extent is measured from its box corners, not a radius" {
-              // The triangle's origin is its corner, so it extends [0,10]² — entirely to the +X/+Y side.
-              // Body 0's box is [11.5,12.5]²; it overlaps nothing. Body 2 sits inside the triangle.
-              let w =
-                  worldOf 4.0 [ Physics.Dynamic, Physics.SCircle 0.5, p 12.0 12.0
-                                Physics.Dynamic, triangle 10.0, p 0.0 0.0
-                                Physics.Dynamic, Physics.SCircle 0.5, p 9.0 9.0 ]
+                        Expect.equal
+                            (pairList w)
+                            expected
+                            (sprintf "%A vs %A: only a pair with a Dynamic member can ever resolve" ka kb)
+            }
 
-              Expect.equal (pairList w) [ 1, 2 ] "only the triangle and the circle inside its box overlap"
-          }
+            test "a large body at a HIGHER index is still found — the grid buckets it by extent" {
+                // Body 0's box is [89,91]². Body 1's box is [-100,100]², so the two overlap — but body 1's
+                // ORIGIN is (0,0), nowhere near body 0's box. The scan queries body 0's region and takes
+                // j > i, so a grid that filed body 1 under its origin's cell alone would never offer it as a
+                // candidate, and the pair would be silently lost. Ordering matters: swap the two and a
+                // position-bucketed query would find it anyway.
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 90.0 90.0
+                            Physics.Dynamic, box 100.0 100.0, p 0.0 0.0
+                        ]
 
-          test "a chain of boxes yields exactly the consecutive pairs, ascending" {
-              // Half-extent 1, spaced 1.5: neighbours overlap (gap 1.5 < 2.0), next-nearest do not (3.0 > 2.0).
-              let bodies =
-                  [ for i in 0..5 -> Physics.Dynamic, box 1.0 1.0, p (1.5 * float i) 0.0 ]
+                Expect.equal (pairList w) [ 0, 1 ] "body 0's own box must reach the large body's cells"
+            }
 
-              Expect.equal
-                  (pairList (worldOf 8.0 bodies))
-                  [ 0, 1; 1, 2; 2, 3; 3, 4; 4, 5 ]
-                  "consecutive only, sorted ascending by (a, b), no duplicates"
+            test "an asymmetric polygon's extent is measured from its box corners, not a radius" {
+                // The triangle's origin is its corner, so it extends [0,10]² — entirely to the +X/+Y side.
+                // Body 0's box is [11.5,12.5]²; it overlaps nothing. Body 2 sits inside the triangle.
+                let w =
+                    worldOf
+                        4.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 0.5, p 12.0 12.0
+                            Physics.Dynamic, triangle 10.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 0.5, p 9.0 9.0
+                        ]
 
-              Expect.equal (pairList (worldOf 8.0 bodies)) (oraclePairs bodies) "and the oracle agrees"
-          }
+                Expect.equal (pairList w) [ 1, 2 ] "only the triangle and the circle inside its box overlap"
+            }
 
-          test "degenerate shapes and non-finite positions collide with nothing, and never throw" {
-              let bodies =
-                  [ Physics.Dynamic, Physics.SCircle 0.0, p 0.0 0.0 // zero radius
-                    Physics.Dynamic, Physics.SCircle nan, p 0.0 0.0 // NaN radius
-                    Physics.Dynamic, box 0.0 1.0, p 0.0 0.0 // zero half-extent
-                    Physics.Dynamic, Physics.SPoly { Vertices = [| p 0.0 0.0; p 1.0 1.0 |] }, p 0.0 0.0 // < 3 vertices
-                    Physics.Dynamic, Physics.SPoly { Vertices = [| p 0.0 0.0; p 1.0 0.0; p 2.0 0.0 |] }, p 0.0 0.0 // collinear
-                    Physics.Dynamic, Physics.SCircle 1.0, p nan 0.0 // NaN position
-                    Physics.Dynamic, Physics.SCircle 1.0, p infinity 0.0 ] // infinite position
+            test "a chain of boxes yields exactly the consecutive pairs, ascending" {
+                // Half-extent 1, spaced 1.5: neighbours overlap (gap 1.5 < 2.0), next-nearest do not (3.0 > 2.0).
+                let bodies =
+                    [ for i in 0..5 -> Physics.Dynamic, box 1.0 1.0, p (1.5 * float i) 0.0 ]
 
-              Expect.equal (pairList (worldOf 8.0 bodies)) [] "every body here is a no-collision input"
+                Expect.equal
+                    (pairList (worldOf 8.0 bodies))
+                    [ 0, 1; 1, 2; 2, 3; 3, 4; 4, 5 ]
+                    "consecutive only, sorted ascending by (a, b), no duplicates"
 
-              // ...and a real body dropped in among them still finds its real partner, at the right indices.
-              let withReal =
-                  bodies
-                  @ [ Physics.Dynamic, Physics.SCircle 1.0, p 3.0 3.0
-                      Physics.Dynamic, Physics.SCircle 1.0, p 3.5 3.0 ]
+                Expect.equal (pairList (worldOf 8.0 bodies)) (oraclePairs bodies) "and the oracle agrees"
+            }
 
-              Expect.equal (pairList (worldOf 8.0 withReal)) [ 7, 8 ] "degenerate bodies hold their indices"
-          }
+            test "degenerate shapes and non-finite positions collide with nothing, and never throw" {
+                let bodies =
+                    [
+                        Physics.Dynamic, Physics.SCircle 0.0, p 0.0 0.0 // zero radius
+                        Physics.Dynamic, Physics.SCircle nan, p 0.0 0.0 // NaN radius
+                        Physics.Dynamic, box 0.0 1.0, p 0.0 0.0 // zero half-extent
+                        Physics.Dynamic,
+                        Physics.SPoly
+                            {
+                                Vertices = [| p 0.0 0.0; p 1.0 1.0 |]
+                            },
+                        p 0.0 0.0 // < 3 vertices
+                        Physics.Dynamic,
+                        Physics.SPoly
+                            {
+                                Vertices = [| p 0.0 0.0; p 1.0 0.0; p 2.0 0.0 |]
+                            },
+                        p 0.0 0.0 // collinear
+                        Physics.Dynamic, Physics.SCircle 1.0, p nan 0.0 // NaN position
+                        Physics.Dynamic, Physics.SCircle 1.0, p infinity 0.0
+                    ] // infinite position
 
-          test "a degenerate cell size degrades to one bucket, never to a wrong answer" {
-              let bodies =
-                  [ for i in 0..5 -> Physics.Dynamic, box 1.0 1.0, p (1.5 * float i) 0.0 ]
+                Expect.equal (pairList (worldOf 8.0 bodies)) [] "every body here is a no-collision input"
 
-              for cellSize in [ 0.0; -1.0; nan; infinity; 0.001; 1000.0 ] do
-                  Expect.equal
-                      (pairList (worldOf cellSize bodies))
-                      (oraclePairs bodies)
-                      (sprintf "cellSize %f is an acceleration choice, never a correctness one" cellSize)
-          }
+                // ...and a real body dropped in among them still finds its real partner, at the right indices.
+                let withReal =
+                    bodies
+                    @ [
+                        Physics.Dynamic, Physics.SCircle 1.0, p 3.0 3.0
+                        Physics.Dynamic, Physics.SCircle 1.0, p 3.5 3.0
+                    ]
 
-          test "one body with an unboundable extent costs ITSELF acceleration, never pairs" {
-              // Bodies 0 and 1 plainly overlap and one is Dynamic. Body 2's half-extents overflow its box
-              // width to +infinity, so its AABB cannot be filed under any finite set of cells. The grid
-              // defers it — it becomes a candidate for every query and is then settled by the same exact
-              // `Geometry.intersects` filter as anything else. Bodies 0 and 1 keep their own cell queries;
-              // under the `reach` dilation this one body drove the global constant to infinity and cost
-              // the WHOLE world its acceleration.
-              let sane =
-                  [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                    Physics.Dynamic, Physics.SCircle 1.0, p 0.5 0.0 ]
+                Expect.equal (pairList (worldOf 8.0 withReal)) [ 7, 8 ] "degenerate bodies hold their indices"
+            }
 
-              Expect.equal (pairList (worldOf 8.0 sane)) [ 0, 1 ] "the pair every later assertion depends on"
+            test "a degenerate cell size degrades to one bucket, never to a wrong answer" {
+                let bodies =
+                    [ for i in 0..5 -> Physics.Dynamic, box 1.0 1.0, p (1.5 * float i) 0.0 ]
 
-              let withHuge = sane @ [ Physics.Static, box 1e308 1e308, p 0.0 0.0 ]
+                for cellSize in [ 0.0; -1.0; nan; infinity; 0.001; 1000.0 ] do
+                    Expect.equal
+                        (pairList (worldOf cellSize bodies))
+                        (oraclePairs bodies)
+                        (sprintf "cellSize %f is an acceleration choice, never a correctness one" cellSize)
+            }
 
-              // Body 2 is Static and genuinely contains both, so it pairs with each of them.
-              Expect.equal
-                  (pairList (worldOf 8.0 withHuge))
-                  [ 0, 1; 0, 2; 1, 2 ]
-                  "a deferred body still finds every pair when its extent cannot be bucketed"
-          }
+            test "one body with an unboundable extent costs ITSELF acceleration, never pairs" {
+                // Bodies 0 and 1 plainly overlap and one is Dynamic. Body 2's half-extents overflow its box
+                // width to +infinity, so its AABB cannot be filed under any finite set of cells. The grid
+                // defers it — it becomes a candidate for every query and is then settled by the same exact
+                // `Geometry.intersects` filter as anything else. Bodies 0 and 1 keep their own cell queries;
+                // under the `reach` dilation this one body drove the global constant to infinity and cost
+                // the WHOLE world its acceleration.
+                let sane =
+                    [
+                        Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                        Physics.Dynamic, Physics.SCircle 1.0, p 0.5 0.0
+                    ]
 
-          test "the ground-plane scene — one huge floor under N small bodies — stays exact" {
-              // The scene #84 was filed for. Under the old global `reach` dilation the 500-unit floor
-              // widened EVERY body's query to span the world, so the broad phase degenerated to a scan
-              // that was strictly worse than the naive O(n²) double loop it exists to avoid.
-              //
-              // Exactness is what a test can assert here; the cost is what the change is for. Both cell
-              // sizes are checked because they straddle the grid's per-item cell cap: at 1.0 the floor's
-              // 1000×2 box spans ~2000 cells and is deferred as unbucketable, at 16.0 it spans ~63 and is
-              // filed normally. The pairs must not care which.
-              let floor = Physics.Static, box 500.0 1.0, p 0.0 0.0
+                Expect.equal (pairList (worldOf 8.0 sane)) [ 0, 1 ] "the pair every later assertion depends on"
 
-              let resting =
-                  [ for i in 0..24 -> Physics.Dynamic, Physics.SCircle 0.5, p (float i * 2.0 - 24.0) 1.2 ]
+                let withHuge = sane @ [ Physics.Static, box 1e308 1e308, p 0.0 0.0 ]
 
-              let bodies = floor :: resting
+                // Body 2 is Static and genuinely contains both, so it pairs with each of them.
+                Expect.equal
+                    (pairList (worldOf 8.0 withHuge))
+                    [ 0, 1; 0, 2; 1, 2 ]
+                    "a deferred body still finds every pair when its extent cannot be bucketed"
+            }
 
-              for cellSize in [ 1.0; 16.0 ] do
-                  Expect.equal
-                      (pairList (worldOf cellSize bodies))
-                      (oraclePairs bodies)
-                      (sprintf "cellSize %f: the floor is a neighbour of each resting body, and of nothing else" cellSize)
-          }
+            test "the ground-plane scene — one huge floor under N small bodies — stays exact" {
+                // The scene #84 was filed for. Under the old global `reach` dilation the 500-unit floor
+                // widened EVERY body's query to span the world, so the broad phase degenerated to a scan
+                // that was strictly worse than the naive O(n²) double loop it exists to avoid.
+                //
+                // Exactness is what a test can assert here; the cost is what the change is for. Both cell
+                // sizes are checked because they straddle the grid's per-item cell cap: at 1.0 the floor's
+                // 1000×2 box spans ~2000 cells and is deferred as unbucketable, at 16.0 it spans ~63 and is
+                // filed normally. The pairs must not care which.
+                let floor = Physics.Static, box 500.0 1.0, p 0.0 0.0
 
-          test "a polygon whose shoelace overflows to NaN is refused, exactly as Geometry refuses it" {
-              // The shoelace terms of this ring overflow to ±infinity and cancel, so its area is NaN.
-              // `NaN <= 0.0` and `NaN > 0.0` are BOTH false, so only the negated guard rejects it. If
-              // Physics keeps the body while Geometry drops it, `pairs` emits a pair whose narrow phase
-              // can never produce a contact.
-              let ring: ConvexPolygon =
-                  { Vertices = [| p 1e200 1e200; p -1e200 1e200; p -1e200 -1e200 |] }
+                let resting =
+                    [
+                        for i in 0..24 -> Physics.Dynamic, Physics.SCircle 0.5, p (float i * 2.0 - 24.0) 1.2
+                    ]
 
-              Expect.isNone (Geometry.polygonContact ring ring) "Geometry refuses a NaN-area ring"
+                let bodies = floor :: resting
 
-              let w =
-                  worldOf 8.0 [ Physics.Dynamic, Physics.SPoly ring, p 0.0 0.0
-                                Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0 ]
+                for cellSize in [ 1.0; 16.0 ] do
+                    Expect.equal
+                        (pairList (worldOf cellSize bodies))
+                        (oraclePairs bodies)
+                        (sprintf
+                            "cellSize %f: the floor is a neighbour of each resting body, and of nothing else"
+                            cellSize)
+            }
 
-              Expect.equal (pairList w) [] "and so must Physics — the two guards agree on NaN or neither is safe"
-          }
+            test "a polygon whose shoelace overflows to NaN is refused, exactly as Geometry refuses it" {
+                // The shoelace terms of this ring overflow to ±infinity and cancel, so its area is NaN.
+                // `NaN <= 0.0` and `NaN > 0.0` are BOTH false, so only the negated guard rejects it. If
+                // Physics keeps the body while Geometry drops it, `pairs` emits a pair whose narrow phase
+                // can never produce a contact.
+                let ring: ConvexPolygon =
+                    {
+                        Vertices = [| p 1e200 1e200; p -1e200 1e200; p -1e200 -1e200 |]
+                    }
 
-          test "pairs is exact against a brute-force oracle, and strictly ascending" {
-              let prop (raw: (float * float * float * int * int) list) =
-                  // FsCheck's list can be long; the oracle is O(n²), so cap it where the property still bites.
-                  let bodies = raw |> List.truncate 24 |> List.map bodyOf
-                  let got = pairList (worldOf 8.0 bodies)
+                Expect.isNone (Geometry.polygonContact ring ring) "Geometry refuses a NaN-area ring"
 
-                  let exact = got = oraclePairs bodies
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SPoly ring, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                        ]
 
-                  let ascending =
-                      got
-                      |> List.pairwise
-                      |> List.forall (fun ((a1, b1), (a2, b2)) -> a1 < a2 || (a1 = a2 && b1 < b2))
+                Expect.equal (pairList w) [] "and so must Physics — the two guards agree on NaN or neither is safe"
+            }
 
-                  let canonical = got |> List.forall (fun (a, b) -> a < b)
+            test "pairs is exact against a brute-force oracle, and strictly ascending" {
+                let prop (raw: (float * float * float * int * int) list) =
+                    // FsCheck's list can be long; the oracle is O(n²), so cap it where the property still bites.
+                    let bodies = raw |> List.truncate 24 |> List.map bodyOf
+                    let got = pairList (worldOf 8.0 bodies)
 
-                  exact && ascending && canonical
+                    let exact = got = oraclePairs bodies
 
-              Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
-          }
+                    let ascending =
+                        got
+                        |> List.pairwise
+                        |> List.forall (fun ((a1, b1), (a2, b2)) -> a1 < a2 || (a1 = a2 && b1 < b2))
 
-          test "pairs is a pure function of the world — the same world twice is the same array" {
-              let bodies =
-                  [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                    Physics.Static, box 20.0 1.0, p 0.0 -1.5
-                    Physics.Kinematic, triangle 3.0, p -1.0 -1.0
-                    Physics.Dynamic, Physics.SCircle 1.5, p 1.0 0.5 ]
+                    let canonical = got |> List.forall (fun (a, b) -> a < b)
 
-              let a = Physics.pairs (worldOf 8.0 bodies)
-              let b = Physics.pairs (worldOf 8.0 bodies)
+                    exact && ascending && canonical
 
-              Expect.equal a b "byte-identical worlds yield a byte-identical array"
-          } ]
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 500, prop)
+            }
+
+            test "pairs is a pure function of the world — the same world twice is the same array" {
+                let bodies =
+                    [
+                        Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                        Physics.Static, box 20.0 1.0, p 0.0 -1.5
+                        Physics.Kinematic, triangle 3.0, p -1.0 -1.0
+                        Physics.Dynamic, Physics.SCircle 1.5, p 1.0 0.5
+                    ]
+
+                let a = Physics.pairs (worldOf 8.0 bodies)
+                let b = Physics.pairs (worldOf 8.0 bodies)
+
+                Expect.equal a b "byte-identical worlds yield a byte-identical array"
+            }
+        ]
 
 // =====================================================================================================
 // `step`, `manifold`, `checksum` (#75)
@@ -412,16 +501,18 @@ let private material r f : Physics.Material = { Restitution = r; Friction = f }
 /// The tuning the scenes below share. Only `Gravity` and the iteration counts matter to most of them;
 /// `Slop`/`Correction` are named explicitly because two tests assert against them directly.
 let private stepConfig: Physics.Config =
-    { Gravity = p 0.0 -9.81
-      VelocityIterations = 8
-      PositionIterations = 3
-      Slop = 0.01
-      Correction = 0.2
-      BounceThreshold = 1.0
-      SleepLinearSq = 0.01
-      SleepAngular = 0.01
-      SleepTicks = 60
-      BroadPhaseCellSize = 4.0 }
+    {
+        Gravity = p 0.0 -9.81
+        VelocityIterations = 8
+        PositionIterations = 3
+        Slop = 0.01
+        Correction = 0.2
+        BounceThreshold = 1.0
+        SleepLinearSq = 0.01
+        SleepAngular = 0.01
+        SleepTicks = 60
+        BroadPhaseCellSize = 4.0
+    }
 
 /// `stepConfig` with the sleeping lever switched off, so a scene can be watched for as long as it takes
 /// without freezing partway. A non-positive `SleepTicks` is the documented off switch (#76).
@@ -444,7 +535,10 @@ let private floorTop = 1.0
 
 let private dropped (cfg: Physics.Config) (shape: Physics.Shape) (m: Physics.Material) (y: float) =
     let w = Physics.empty cfg
-    let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
+    let struct (_, w) =
+        Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
     let struct (_, w) = Physics.addBody Physics.Dynamic shape m (p 0.0 y) w
     w
 
@@ -456,10 +550,20 @@ let private restingContact (w: Physics.World) = Physics.manifold w 0 1
 /// would pass it. Returns whether the box is still in contact with the ramp after it has had time to slide
 /// off — the only slide/hold readout the public surface offers (no velocity, no position).
 let private holdsOnRamp (rise: float) (rampMu: float) (boxMu: float) =
-    let ramp = Physics.SPoly { Vertices = [| p -5.0 -rise; p 5.0 -rise; p 5.0 rise |] }
+    let ramp =
+        Physics.SPoly
+            {
+                Vertices = [| p -5.0 -rise; p 5.0 -rise; p 5.0 rise |]
+            }
+
     let w = Physics.empty stepConfig
-    let struct (_, w) = Physics.addBody Physics.Static ramp (material 0.0 rampMu) (p 0.0 0.0) w
-    let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.3 0.3) (material 0.0 boxMu) (p 1.0 0.9) w
+
+    let struct (_, w) =
+        Physics.addBody Physics.Static ramp (material 0.0 rampMu) (p 0.0 0.0) w
+
+    let struct (_, w) =
+        Physics.addBody Physics.Dynamic (box 0.3 0.3) (material 0.0 boxMu) (p 1.0 0.9) w
+
     ValueOption.isSome (Physics.manifold (advance 300 w) 0 1)
 
 /// How far a settled box is off level, read as the height difference between the two points of its
@@ -467,7 +571,10 @@ let private holdsOnRamp (rise: float) (rampMu: float) (boxMu: float) =
 /// Gauss-Seidel solver leaves behind, and it is the sharpest thing this module's public surface can see
 /// about solver convergence. Both the `#75` residual test and the `#76` warm-start tests measure it.
 let private tiltAfter (cfg: Physics.Config) iterations =
-    let cfg = { cfg with VelocityIterations = iterations }
+    let cfg =
+        { cfg with
+            VelocityIterations = iterations
+        }
 
     match restingContact (advance 2000 (dropped cfg (box 0.5 0.5) (material 0.0 0.5) 2.0)) with
     | ValueSome m when m.PointCount = 2 -> abs (m.Points.[0].Y - m.Points.[1].Y)
@@ -485,7 +592,9 @@ let private bouncesWithin (n: int) (w0: Physics.World) =
 
         match Physics.manifold w 0 1 with
         | ValueSome _ -> touched <- true
-        | ValueNone -> if touched then left <- true
+        | ValueNone ->
+            if touched then
+                left <- true
 
     touched, left
 
@@ -495,598 +604,769 @@ let stepTests =
         "Game.Core Physics step, narrow phase and checksum (#75)"
         [
 
-          // -----------------------------------------------------------------------------------------
-          // `step` IS `Loop.advance`'s `integrate`
-          // -----------------------------------------------------------------------------------------
-
-          test "step fits Loop.advance's integrate with no adapter" {
-              // The whole reason `Config` is baked into the `World` at `empty`. If this stops compiling,
-              // the signature has drifted and `Physics` has stopped being usable as a `Loop` world —
-              // which is the claim `Physics.fsi` makes in its first paragraph.
-              let w = dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0
-
-              let state: StepState<Physics.World> =
-                  { Current = w
-                    Previous = w
-                    Accumulator = 0.0 }
-
-              // No adapter, no lambda, no shim: `Physics.step` is passed straight in as `integrate`.
-              let advanced = Loop.advance tick Physics.step 0.05 state
-
-              Expect.notEqual
-                  (Physics.checksum advanced.Current)
-                  (Physics.checksum state.Current)
-                  "Loop.advance drove Physics.step, and the world moved"
-          }
-
-          // -----------------------------------------------------------------------------------------
-          // Totality of `step`
-          // -----------------------------------------------------------------------------------------
-
-          test "a non-finite or non-positive dt is a no-op" {
-              let w = advance 90 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
-              let before = Physics.checksum w
-
-              for dt in [ 0.0; -1.0; -0.0; nan; infinity; -infinity ] do
-                  Expect.equal
-                      (Physics.checksum (Physics.step w dt))
-                      before
-                      (sprintf "dt = %f leaves the world untouched" dt)
-          }
-
-          test "an empty world steps to itself" {
-              let e = Physics.empty stepConfig
-              Expect.equal (Physics.checksum (Physics.step e tick)) (Physics.checksum e) "nothing to integrate"
-          }
-
-          test "a static body never moves, however long it is stepped" {
-              // A world of one static floor and nothing else: gravity must not touch it.
-              let w = Physics.empty stepConfig
-              let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
-              Expect.equal (Physics.checksum (advance 600 w)) (Physics.checksum w) "infinite mass, zero motion"
-          }
-
-          test "step is total on degenerate and non-finite bodies, and a real body among them still settles" {
-              // `pairs` totality on these no-collision inputs is asserted in the broad-phase list; this
-              // drives the SAME zoo through the whole solver — integrate, narrow phase, solve, correct,
-              // sleep — for 600 ticks, the thing `pairs` alone never exercises. Every body here is a
-              // no-collision input (zero/NaN shape, degenerate ring, non-finite position), so `step` must
-              // carry them without throwing and without minting a contact.
-              let degenerate =
-                  [ Physics.Dynamic, Physics.SCircle 0.0, p 0.0 5.0 // zero radius
-                    Physics.Dynamic, Physics.SCircle nan, p 1.0 5.0 // NaN radius
-                    Physics.Dynamic, box 0.0 1.0, p 2.0 5.0 // zero half-extent
-                    Physics.Dynamic, Physics.SPoly { Vertices = [| p 0.0 0.0; p 1.0 1.0 |] }, p 3.0 5.0 // < 3 vertices
-                    Physics.Dynamic, Physics.SCircle 1.0, p nan 5.0 // NaN position
-                    Physics.Dynamic, Physics.SCircle 1.0, p infinity 5.0 ] // infinite position
-
-              // A real floor and a real box dropped among the zoo, so the run is not vacuously total over
-              // bodies the solver skips entirely: body 6 is a floor, body 7 falls onto it and must rest.
-              let bodies =
-                  degenerate
-                  @ [ Physics.Static, box 50.0 1.0, p 0.0 0.0
-                      Physics.Dynamic, box 0.5 0.5, p 0.0 3.0 ]
-
-              let w = worldOf 4.0 bodies |> advance 600
-
-              // No throw got us here. The degenerate bodies collide with nothing...
-              for i in 0..5 do
-                  for j in 0..7 do
-                      if i <> j then
-                          Expect.isTrue
-                              (ValueOption.isNone (Physics.manifold w (min i j) (max i j)))
-                              (sprintf "degenerate body %d contacts nothing, even after 600 steps" i)
-
-              // ...and the real box came to rest on the real floor, so the solver genuinely ran.
-              Expect.isTrue (ValueOption.isSome (Physics.manifold w 6 7)) "the real box settled on the real floor"
-          }
-
-          // Kinematic bodies through `step`. The public surface has NO velocity setter — `addBody` seeds
-          // every body at rest and gravity is the only thing that imparts a velocity (the speculative-CCD
-          // section below leans on the same fact) — so the "moved by the game" leg of the Kinematic
-          // contract cannot be driven from here. What CAN be observed is its shadow and the other two
-          // legs: gravity/contacts do not move it (only the game does), and it holds a load unpushed.
-
-          test "a kinematic body is unmoved by gravity — only a dynamic one falls" {
-              // Kinematic, like Static, moves ONLY under a velocity the game gives it; at rest under
-              // gravity it stays put. The control is the identical scene with a Dynamic body, which falls.
-              let build kind =
-                  let w = Physics.empty stepConfig
-                  let struct (_, w) = Physics.addBody kind (box 0.5 0.5) (material 0.0 0.5) (p 0.0 10.0) w
-                  w
-
-              let kin = build Physics.Kinematic
-              Expect.equal (Physics.checksum (advance 600 kin)) (Physics.checksum kin) "kinematic: gravity does not move it"
-              let dyn = build Physics.Dynamic
-              Expect.notEqual (Physics.checksum (advance 600 dyn)) (Physics.checksum dyn) "control: a dynamic body does fall"
-          }
-
-          test "a kinematic floor holds a dynamic load without being pushed by it" {
-              // "unmoved by impulses" + "holds a load": a dynamic box dropped onto a KINEMATIC floor comes
-              // to rest ON it (infinite mass — things pile on it, not through it), and the floor's own pose
-              // is left bit-identical by the resting contact's impulse. Control: a DYNAMIC floor (nothing
-              // holding it up) does move.
-              let build floorKind =
-                  let w = Physics.empty stepConfig
-                  let struct (fi, w) = Physics.addBody floorKind (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
-                  let struct (di, w) = Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 5.0) w
-                  struct (fi, di, w)
-
-              let poseOf i w = (Physics.interpolate 1.0 w w).[i].Position
-
-              let struct (fi, di, w0) = build Physics.Kinematic
-              let floorBefore = poseOf fi w0
-              let settled = advance 600 w0
-              Expect.isTrue
-                  (ValueOption.isSome (Physics.manifold settled fi di))
-                  "the dynamic load rests ON the kinematic floor, not through it"
-              Expect.equal (poseOf fi settled) floorBefore "the kinematic floor is not pushed by the load it holds"
-
-              // Control: a dynamic floor under the same load is NOT held fixed.
-              let struct (fi2, _, w1) = build Physics.Dynamic
-              let dynFloorBefore = poseOf fi2 w1
-              Expect.notEqual (poseOf fi2 (advance 600 w1)) dynFloorBefore "control: a dynamic floor moves"
-          }
-
-          // -----------------------------------------------------------------------------------------
-          // Integrate, solve, correct
-          // -----------------------------------------------------------------------------------------
-
-          test "a dropped box falls, lands, and rests within slop of the floor" {
-              let scene () = dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0
-
-              Expect.isTrue (ValueOption.isNone (restingContact (scene ()))) "starts clear of the floor"
-
-              match restingContact (advance 600 (scene ())) with
-              | ValueNone -> failtest "the box fell through the floor, or never reached it"
-              | ValueSome m ->
-                  // Penetration settles AT the slop — the correction stops there by construction — and
-                  // the box rests on the floor's top surface rather than inside it.
-                  Expect.isLessThanOrEqual m.Depth (stepConfig.Slop + 1e-6) "penetration settles within slop"
-                  Expect.equal m.PointCount 2 "a flat box on a flat floor is a face-on-face contact"
-
-                  // Both contact points sit on the floor's top surface, to within the penetration allowed
-                  // plus the residual tilt described in this section's header (~1e-3 after 600 ticks).
-                  // Demanding they sit at an IDENTICAL height would be asserting the tilt away.
-                  for q in m.Points.[0 .. m.PointCount - 1] do
-                      Expect.isLessThan
-                          (abs (q.Y - floorTop))
-                          (stepConfig.Slop + 1e-3)
-                          "contact sits on the floor surface, within slop"
-          }
-
-          test "a resting box does not sink: penetration is bounded for 5000 ticks" {
-              // The failure this catches is a positional correction that under-pushes, letting each tick's
-              // gravity add a sliver of overlap that never comes back out.
-              //
-              // Measured only AFTER the box has settled. The tick it lands on penetrates well past slop —
-              // it arrives with speed, and one step of gravity carries it in — and the correction takes a
-              // few dozen ticks to push that back out. That transient is not sinking; including it would
-              // make this test pass for the wrong reason (a bound loose enough to cover the impact would
-              // also cover a slow sink).
-              let settleTicks = 300
-              let mutable w = advance settleTicks (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 2.0)
-              let mutable worst = 0.0
-
-              for _ in 1 .. 5000 - settleTicks do
-                  w <- Physics.step w tick
-
-                  match restingContact w with
-                  | ValueSome m -> worst <- max worst m.Depth
-                  | ValueNone -> failtest "the box left the floor"
-
-              Expect.isLessThanOrEqual worst (stepConfig.Slop + 1e-6) "overlap never accumulates once settled"
-          }
-
-          test "a dropped circle rests on the floor with a single contact point" {
-              match restingContact (advance 600 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)) with
-              | ValueNone -> failtest "the circle fell through the floor"
-              | ValueSome m ->
-                  Expect.equal m.PointCount 1 "a circle touches a plane at one point"
-                  Expect.isLessThanOrEqual m.Depth (stepConfig.Slop + 1e-6) "penetration settles within slop"
-                  Expect.floatClose Accuracy.medium m.Normal.Y 1.0 "the floor pushes the circle straight up"
-          }
-
-          test "two stacked boxes both rest within slop" {
-              let w = Physics.empty stepConfig
-              let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
-              let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 1.6) w
-              let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 2.7) w
-              let settled = advance 1200 w
-
-              match Physics.manifold settled 0 1, Physics.manifold settled 1 2 with
-              | ValueSome lower, ValueSome upper ->
-                  Expect.isLessThanOrEqual lower.Depth (stepConfig.Slop + 1e-3) "the lower box rests on the floor"
-                  Expect.isLessThanOrEqual upper.Depth (stepConfig.Slop + 1e-3) "the upper box rests on the lower"
-              | _ -> failtest "the stack collapsed or fell through"
-          }
-
-          test "a polygon's mass is its area, wherever the ring sits relative to its origin" {
-              // Mass is derived from the shape (unit density), and the fan sum that measures a polygon's
-              // area must take the sign off the TOTAL, never off each fan triangle. A triangle whose
-              // winding opposes the ring contributes a negative area, and that cancellation is how the fan
-              // measures a ring the origin lies OUTSIDE of. Summing `abs` per term instead weighs such a
-              // polygon many times over — 21x for `[(10,0); (11,0); (10,1)]`, 2x for the square below.
-              //
-              // Mass is not readable, so this observes it through an impulse. The scene is built so that
-              // every contact normal is vertical and passes through every body's origin, making every
-              // lever arm `r x n = 0`: rotational inertia (which legitimately DOES change when the origin
-              // moves, by the parallel-axis theorem) drops out entirely, and the only thing left that can
-              // move the trace is the polygon's mass.
-              //
-              //   body 0  static floor, top surface at y = 1
-              //   body 1  dynamic circle resting on it at (0, 1.5)
-              //   body 2  dynamic unit square, world centre (0, 3.1), falling onto the circle
-              //
-              // The circle's penetration into the floor is the readout: a heavier square drives it deeper.
-              let scene (vertexOffset: Point) =
-                  let h = 0.5
-
-                  let vs =
-                      [| p -h -h; p h -h; p h h; p -h h |]
-                      |> Array.map (fun v -> p (v.X + vertexOffset.X) (v.Y + vertexOffset.Y))
-
-                  // Move the body by -offset so the WORLD square is identical for every offset.
-                  let bodyPos = p (0.0 - vertexOffset.X) (3.1 - vertexOffset.Y)
-                  let w = Physics.empty stepConfig
-                  let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
-                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.5) (p 0.0 1.5) w
-                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SPoly { Vertices = vs }) (material 0.0 0.5) bodyPos w
-                  w
-
-              let trace (vertexOffset: Point) =
-                  let mutable w = scene vertexOffset
-
-                  [ for _ in 1..200 ->
-                        w <- Physics.step w tick
-
-                        match Physics.manifold w 0 1 with
-                        | ValueSome m -> m.Depth
-                        | ValueNone -> 0.0 ]
-
-              let maxDiff a b = List.map2 (fun x y -> abs (x - y)) a b |> List.max
-
-              let originInside = trace (p 0.0 0.0) // origin at the square's centre
-              let originBelow = trace (p 0.0 1.5) // origin outside the ring, below it
-              let originAbove = trace (p 0.0 -4.0) // origin outside the ring, well above it
-
-              Expect.isLessThan (maxDiff originInside originBelow) 1e-12 "the same square weighs the same with its origin below it"
-              Expect.isLessThan (maxDiff originInside originAbove) 1e-12 "...and with its origin far above it"
-
-              // The readout has teeth: a genuinely heavier square DOES move it. Without this, the two
-              // assertions above would pass just as happily against a trace that ignored mass entirely.
-              let genuinelyHeavier =
-                  let mutable w =
-                      let vs = [| p -0.7 -0.7; p 0.7 -0.7; p 0.7 0.7; p -0.7 0.7 |]
-                      let w = Physics.empty stepConfig
-                      let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
-                      let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.5) (p 0.0 1.5) w
-                      let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SPoly { Vertices = vs }) (material 0.0 0.5) (p 0.0 3.1) w
-                      w
-
-                  [ for _ in 1..200 ->
-                        w <- Physics.step w tick
-
-                        match Physics.manifold w 0 1 with
-                        | ValueSome m -> m.Depth
-                        | ValueNone -> 0.0 ]
-
-              Expect.isGreaterThan (maxDiff originInside genuinelyHeavier) 1e-4 "a square of larger area is a heavier square"
-          }
-
-          // -----------------------------------------------------------------------------------------
-          // Torque: the reason contact points exist at all (design §5 gap 1)
-          // -----------------------------------------------------------------------------------------
-
-          test "an overhanging box tips off a pedestal instead of landing flat" {
-              // A box whose centre of mass overhangs its support must rotate. Without lever arms from the
-              // contact points there is no torque, and it would balance forever. The rotation is visible
-              // in the contact NORMAL swinging away from straight-up, and in the face-on-face contact
-              // collapsing to a single corner point.
-              let w = Physics.empty stepConfig
-              let struct (_, w) = Physics.addBody Physics.Static (box 0.25 1.0) (material 0.0 0.9) (p 0.0 0.0) w
-              let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.5 0.1) (material 0.0 0.9) (p 0.55 1.2) w
-
-              let mutable acc = w
-              let mutable landedFlat = false
-              let mutable maxTiltOfNormal = 0.0
-
-              for _ in 1..30 do
-                  acc <- Physics.step acc tick
-
-                  match Physics.manifold acc 0 1 with
-                  | ValueSome m ->
-                      if m.PointCount = 2 && abs m.Normal.X < 1e-9 then landedFlat <- true
-                      maxTiltOfNormal <- max maxTiltOfNormal (abs m.Normal.X)
-                  | ValueNone -> ()
-
-              Expect.isTrue landedFlat "it first lands flat, normal straight up"
-              Expect.isGreaterThan maxTiltOfNormal 0.5 "then it tips: the contact normal rotates well off vertical"
-          }
-
-          test "the resting tilt is a convergence residual, not a spin-up" {
-              // Documents the artifact the header describes. A resting box holds a small residual angular
-              // velocity at a fixed 8 iterations; it is Gauss-Seidel not yet converged, so it must shrink
-              // toward zero as iterations rise. If this ever fails, the solver has a real torque bug and
-              // no iteration count will save it.
-              //
-              // Sleeping is OFF here. With it on the box stops after ~112 ticks and this measures the pose
-              // it happened to freeze in — which is a fact about the sleep threshold, not about the solver.
-              let coarse = tiltAfter noSleep 8
-              let fine = tiltAfter noSleep 64
-
-              Expect.isLessThan fine coarse "more iterations converge closer to a level rest"
-              Expect.isLessThan fine 1e-9 "and 64 iterations reach a level rest to within float noise"
-          }
-
-          // -----------------------------------------------------------------------------------------
-          // Restitution
-          // -----------------------------------------------------------------------------------------
-
-          test "a bouncy body leaves the floor again; a dead one does not" {
-              let bouncy = dropped stepConfig (Physics.SCircle 0.5) (material 0.9 0.0) 5.0
-              let dead = dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.0) 5.0
-
-              let touchedB, leftB = bouncesWithin 400 bouncy
-              let touchedD, leftD = bouncesWithin 400 dead
-
-              Expect.isTrue touchedB "the bouncy ball reaches the floor"
-              Expect.isTrue leftB "and rebounds off it"
-              Expect.isTrue touchedD "the dead ball reaches the floor"
-              Expect.isFalse leftD "and stays there"
-          }
-
-          test "restitution combines as the MAXIMUM of the two materials" {
-              // The floor `dropped` builds has `Restitution = 0.0`, as floors do. Under a `min` rule the
-              // ball could never bounce off it, and restitution would be unreachable in the very scene it
-              // exists for. This test is the guard on that choice.
-              let _, left = bouncesWithin 400 (dropped stepConfig (Physics.SCircle 0.5) (material 0.9 0.0) 5.0)
-              Expect.isTrue left "a bouncy ball bounces off a dead floor"
-          }
-
-          test "restitution is gated below BounceThreshold" {
-              // Identical ball, identical drop — only the gate moves. Raising the threshold above any
-              // approach speed the fall can produce forces `e = 0` at impact, so the ball that bounced in
-              // the test above now stays down. That gate is what stops a resting box trading a sliver of
-              // approach velocity for a sliver of bounce, forever.
-              let never = { stepConfig with BounceThreshold = 1e9 }
-              let always = stepConfig
-
-              let _, leftGated = bouncesWithin 400 (dropped never (Physics.SCircle 0.5) (material 0.9 0.0) 5.0)
-              let _, leftUngated = bouncesWithin 400 (dropped always (Physics.SCircle 0.5) (material 0.9 0.0) 5.0)
-
-              Expect.isFalse leftGated "an approach below the threshold is perfectly inelastic"
-              Expect.isTrue leftUngated "and the same ball above the threshold does bounce"
-          }
-
-          // -----------------------------------------------------------------------------------------
-          // Friction
-          // -----------------------------------------------------------------------------------------
-
-          test "friction decides whether a box holds on a ramp or slides off it" {
-              // A CCW right triangle whose hypotenuse runs from (-5,-2) up to (5,2): a ramp. The box is
-              // placed on the slope. With no friction it slides off the end; with plenty it stays put.
-              let ramp = Physics.SPoly { Vertices = [| p -5.0 -2.0; p 5.0 -2.0; p 5.0 2.0 |] }
-
-              let onRamp mu =
-                  let w = Physics.empty stepConfig
-                  let struct (_, w) = Physics.addBody Physics.Static ramp (material 0.0 mu) (p 0.0 0.0) w
-                  let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.3 0.3) (material 0.0 mu) (p 1.0 0.9) w
-                  Physics.manifold (advance 300 w) 0 1
-
-              Expect.isTrue (ValueOption.isNone (onRamp 0.0)) "a frictionless box slides off the ramp"
-              Expect.isTrue (ValueOption.isSome (onRamp 0.9)) "a rough box is still on the ramp"
-          }
-
-          test "friction combines from BOTH materials — a frictionless partner frees the pair, in either order" {
-              // The companion to "restitution combines as the MAXIMUM". Friction is the geometric mean
-              // sqrt(μa·μb), so a single frictionless body zeroes the pair however rough the OTHER is — and
-              // the rule must read both bodies' μ to do it. The ramp test above gives the two bodies the
-              // SAME μ; these differ, so a rule that read only one body's μ is caught here.
-              //
-              // A rough box on a frictionless ramp slides: sqrt(0.9·0) = 0, not the max 0.9. Catches a rule
-              // that ignores the ramp's μ.
-              Expect.isFalse (holdsOnRamp 2.0 0.0 0.9) "a rough box slides on a frictionless ramp"
-              // ...and symmetrically, a frictionless box on a rough ramp. Catches a rule that ignores the box's μ.
-              Expect.isFalse (holdsOnRamp 2.0 0.9 0.0) "a frictionless box slides on a rough ramp"
-              // Anti-vacuity: this ramp CAN hold a rough pair, so "everything slides" is not why the two above pass.
-              Expect.isTrue (holdsOnRamp 2.0 0.9 0.9) "and two rough bodies hold — the ramp is not simply too steep"
-          }
-
-          test "the combined friction is the geometric mean, not the minimum" {
-              // sqrt(0.25·1.0) = 0.5 — the SAME effective μ as a symmetric 0.5/0.5 pair, yet a minimum rule
-              // would read the asymmetric pair as 0.25. On a gentler ramp (rise 1.5 over run 10, tan θ = 0.3)
-              // tuned so 0.5 holds and 0.25 slides, the asymmetric 0.25/1.0 pair must HOLD — pinning the
-              // combination as the geometric mean rather than the minimum of the two.
-              Expect.isTrue (holdsOnRamp 1.5 0.5 0.5) "calibration: an effective μ of 0.5 holds on this ramp"
-              Expect.isFalse (holdsOnRamp 1.5 0.25 0.25) "calibration: an effective μ of 0.25 slides on this ramp"
-              Expect.isTrue (holdsOnRamp 1.5 0.25 1.0) "sqrt(0.25·1.0) = 0.5 holds — the geometric mean, not the min 0.25"
-          }
-
-          // -----------------------------------------------------------------------------------------
-          // The narrow phase
-          // -----------------------------------------------------------------------------------------
-
-          test "manifold reports A and B as the body indices, in the order asked" {
-              let w = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                    Physics.Dynamic, Physics.SCircle 1.0, p 1.5 0.0 ]
-
-              match Physics.manifold w 0 1 with
-              | ValueSome m ->
-                  Expect.equal (m.A, m.B) (0, 1) "A and B index the world, not polygonManifold's 0 and 1"
-              | ValueNone -> failtest "the circles overlap"
-          }
-
-          test "the contact normal always points from a toward b" {
-              let w = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                    Physics.Dynamic, Physics.SCircle 1.0, p 1.5 0.0 ]
-
-              match Physics.manifold w 0 1, Physics.manifold w 1 0 with
-              | ValueSome ab, ValueSome ba ->
-                  Expect.floatClose Accuracy.medium ab.Normal.X 1.0 "0 -> 1 points along +x"
-                  Expect.floatClose Accuracy.medium ba.Normal.X -1.0 "1 -> 0 points along -x"
-                  Expect.floatClose Accuracy.medium ab.Depth ba.Depth "depth does not depend on the order"
-              | _ -> failtest "the circles overlap in both orders"
-          }
-
-          test "a circle against a box normals the same way whichever is a" {
-              let cb = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 0.5, p 0.0 0.0
-                                     Physics.Dynamic, box 0.5 0.5, p 0.8 0.0 ]
-
-              let bc = worldOf 8.0 [ Physics.Dynamic, box 0.5 0.5, p 0.0 0.0
-                                     Physics.Dynamic, Physics.SCircle 0.5, p 0.8 0.0 ]
-
-              match Physics.manifold cb 0 1, Physics.manifold bc 0 1 with
-              | ValueSome circleFirst, ValueSome boxFirst ->
-                  Expect.floatClose Accuracy.medium circleFirst.Normal.X 1.0 "circle -> box points at the box"
-                  Expect.floatClose Accuracy.medium boxFirst.Normal.X 1.0 "box -> circle points at the circle"
-              | _ -> failtest "both pairs overlap"
-          }
-
-          test "a touch is not a contact: two circles at exactly d = ra + rb" {
-              // The strict-edge convention `pairs`, `aabbContact` and `polygonManifold` all share. The
-              // coordinates are exact in binary, so this is a real equality, not a near-miss.
-              let w = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                    Physics.Dynamic, Physics.SCircle 1.0, p 2.0 0.0 ]
-
-              Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 1)) "touching circles do not contact"
-          }
-
-          test "coincident circle centres yield no contact rather than an invented normal" {
-              let w = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                    Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0 ]
-
-              Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 1)) "there is no direction to separate along"
-          }
-
-          test "manifold is total on bad indices and degenerate bodies" {
-              let w = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                    Physics.Dynamic, Physics.SCircle 1.0, p 0.5 0.0
-                                    Physics.Dynamic, Physics.SCircle 0.0, p 0.5 0.0
-                                    Physics.Dynamic, Physics.SCircle 1.0, p nan 0.0 ]
-
-              Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 0)) "a body does not contact itself"
-              Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 99)) "an out-of-range index"
-              Expect.isTrue (ValueOption.isNone (Physics.manifold w -1 0)) "a negative index"
-              Expect.isTrue (ValueOption.isNone (Physics.manifold w 1 2)) "a degenerate shape collides with nothing"
-              Expect.isTrue (ValueOption.isNone (Physics.manifold w 1 3)) "a non-finite position collides with nothing"
-          }
-
-          test "manifold agrees with pairs: no pair, no contact" {
-              // The broad phase is exact over AABBs, so a rejected pair cannot have had a contact to lose.
-              let bodies =
-                  [ Physics.Static, box 20.0 1.0, p 0.0 -1.5
-                    Physics.Dynamic, Physics.SCircle 1.5, p 1.0 0.5
-                    Physics.Dynamic, box 0.5 0.5, p 12.0 8.0 ]
-
-              let w = worldOf 8.0 bodies
-              let paired = pairList w |> Set.ofList
-
-              for a in 0..2 do
-                  for b in 0..2 do
-                      if a < b && not (paired.Contains(a, b)) then
-                          Expect.isTrue
-                              (ValueOption.isNone (Physics.manifold w a b))
-                              (sprintf "(%d, %d) is not a pair, so it has no contact" a b)
-          }
-
-          test "circle feature ids never collide with polygonManifold's" {
-              // `polygonManifold` packs a face pair into a NON-NEGATIVE int; the circle cases mint theirs
-              // from the negative half. #76's warm-start cache keys on this, so the disjointness matters.
-              let cc = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                                     Physics.Dynamic, Physics.SCircle 1.0, p 1.5 0.0 ]
-
-              let cb = worldOf 8.0 [ Physics.Dynamic, Physics.SCircle 0.5, p 0.0 0.0
-                                     Physics.Dynamic, box 0.5 0.5, p 0.8 0.0 ]
-
-              let pp = worldOf 8.0 [ Physics.Dynamic, box 0.5 0.5, p 0.0 0.0
-                                     Physics.Dynamic, box 0.5 0.5, p 0.8 0.0 ]
-
-              match Physics.manifold cc 0 1, Physics.manifold cb 0 1, Physics.manifold pp 0 1 with
-              | ValueSome a, ValueSome b, ValueSome c ->
-                  Expect.isLessThan a.FeatureId 0 "circle-circle ids are negative"
-                  Expect.isLessThan b.FeatureId 0 "circle-polygon ids are negative"
-                  Expect.isGreaterThanOrEqual c.FeatureId 0 "polygon-polygon ids come from polygonManifold"
-              | _ -> failtest "all three pairs overlap"
-          }
-
-          test "an unmoving pair keeps its feature id across ticks" {
-              // The warm-start cache key contract. A resting box on a floor must name the same feature
-              // every tick, or #76 would discard its accumulated impulse on every step.
-              let scene = dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 1.6
-              let settled = advance 300 scene
-
-              let ids =
-                  [ 0..20 ]
-                  |> List.map (fun i ->
-                      match restingContact (advance i settled) with
-                      | ValueSome m -> m.FeatureId
-                      | ValueNone -> failtest "the box left the floor")
-                  |> List.distinct
-
-              Expect.equal ids.Length 1 "one stable feature id across 20 ticks of rest"
-          }
-
-          // -----------------------------------------------------------------------------------------
-          // The checksum
-          // -----------------------------------------------------------------------------------------
-
-          test "identical worlds stepped identically checksum identically" {
-              let run () = advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
-              Expect.equal (Physics.checksum (run ())) (Physics.checksum (run ())) "the replay tripwire does not fire on a replay"
-          }
-
-          test "the checksum moves when body state moves" {
-              let scene = dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0
-              let before = Physics.checksum scene
-              let after = Physics.checksum (Physics.step scene tick)
-              Expect.notEqual before after "one tick of gravity changes the world"
-          }
-
-          test "the checksum distinguishes worlds of different body counts" {
-              // The body count is folded in first precisely so that an extra all-zero body cannot hash
-              // like its absence.
-              let one = Physics.empty stepConfig
-              let struct (_, two) = Physics.addBody Physics.Static (box 1.0 1.0) (material 0.0 0.0) (p 0.0 0.0) one
-
-              Expect.notEqual (Physics.checksum one) (Physics.checksum two) "N and N+1 bodies hash apart"
-          }
-
-          // Named `linux-pinned-float-golden` so the Windows CI leg can exclude it by that substring
-          // (gate.yml full-test-suite matrix). The box golden's residual tilt routes through `sin`/`cos`
-          // (Physics.fs), whose libm differs between glibc and ucrt, so this literal is pinned to the
-          // Linux runner ONLY — the cross-platform claim it would otherwise assert is the one this very
-          // contract disclaims (a cross-platform lockstep guarantee needs fixed-point; see below).
-          test "hotspot decomposition baseline (#492): the checksum is stable across the process (linux-pinned-float-golden)" {
-              // Golden values. They are FNV-1a over the IEEE-754 bits of Pos/Vel/Rot/AngVel, so they are
-              // reproducible on any runtime that agrees on IEEE-754 double arithmetic — which is what
-              // `.NET` guarantees on a fixed compiler and ISA. A cross-platform lockstep guarantee needs
-              // fixed-point, and is a later ADR'd decision (design §6).
-              //
-              // #76 MOVED `boxOnFloor`, and this is the deliberate record of it that the slice owed. The
-              // old value was 12790444109480856124UL. Both of the slice's levers move it, independently:
-              //
-              //   warm starting alone (sleeping off)  -> 1048092559667977464UL
-              //   warm starting and sleeping together -> the value asserted below
-              //
-              // The two values below did NOT move, and that is the interesting half. `empty` proves the
-              // eight new `World` fields — two sleep arrays, six cache arrays — stay out of the hash (R3).
-              // `circleOnFloor` proves something sharper: a circle on a floor is a ONE-point contact that
-              // the solver converges exactly, so its rest is a true fixed point. Seeding a fixed point with
-              // its own impulse returns it unchanged, and freezing a body that was not moving changes
-              // nothing. Both levers are therefore exact no-ops on a converged rest — bit-for-bit, at 240
-              // ticks and at 600.
-              //
-              // `boxOnFloor` moves precisely because its rest is NOT converged: it is the two-point contact
-              // whose residual tilt the `#75` test above pins, and #76 both shrinks that residual and stops
-              // the box before it can creep. A scene that had genuinely settled would not have noticed.
-              let boxOnFloor = advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
-              let circleOnFloor = advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
-
-              Expect.equal (Physics.checksum (Physics.empty stepConfig)) 12161962213042174405UL "empty world"
-              Expect.equal (Physics.checksum boxOnFloor) 9427473436406466390UL "a box asleep after 240 ticks"
-              Expect.equal (Physics.checksum circleOnFloor) 12544979940497693507UL "a circle at rest after 240 ticks"
-          } ]
+            // -----------------------------------------------------------------------------------------
+            // `step` IS `Loop.advance`'s `integrate`
+            // -----------------------------------------------------------------------------------------
+
+            test "step fits Loop.advance's integrate with no adapter" {
+                // The whole reason `Config` is baked into the `World` at `empty`. If this stops compiling,
+                // the signature has drifted and `Physics` has stopped being usable as a `Loop` world —
+                // which is the claim `Physics.fsi` makes in its first paragraph.
+                let w = dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0
+
+                let state: StepState<Physics.World> =
+                    {
+                        Current = w
+                        Previous = w
+                        Accumulator = 0.0
+                    }
+
+                // No adapter, no lambda, no shim: `Physics.step` is passed straight in as `integrate`.
+                let advanced = Loop.advance tick Physics.step 0.05 state
+
+                Expect.notEqual
+                    (Physics.checksum advanced.Current)
+                    (Physics.checksum state.Current)
+                    "Loop.advance drove Physics.step, and the world moved"
+            }
+
+            // -----------------------------------------------------------------------------------------
+            // Totality of `step`
+            // -----------------------------------------------------------------------------------------
+
+            test "a non-finite or non-positive dt is a no-op" {
+                let w = advance 90 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+                let before = Physics.checksum w
+
+                for dt in [ 0.0; -1.0; -0.0; nan; infinity; -infinity ] do
+                    Expect.equal
+                        (Physics.checksum (Physics.step w dt))
+                        before
+                        (sprintf "dt = %f leaves the world untouched" dt)
+            }
+
+            test "an empty world steps to itself" {
+                let e = Physics.empty stepConfig
+                Expect.equal (Physics.checksum (Physics.step e tick)) (Physics.checksum e) "nothing to integrate"
+            }
+
+            test "a static body never moves, however long it is stepped" {
+                // A world of one static floor and nothing else: gravity must not touch it.
+                let w = Physics.empty stepConfig
+
+                let struct (_, w) =
+                    Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
+                Expect.equal (Physics.checksum (advance 600 w)) (Physics.checksum w) "infinite mass, zero motion"
+            }
+
+            test "step is total on degenerate and non-finite bodies, and a real body among them still settles" {
+                // `pairs` totality on these no-collision inputs is asserted in the broad-phase list; this
+                // drives the SAME zoo through the whole solver — integrate, narrow phase, solve, correct,
+                // sleep — for 600 ticks, the thing `pairs` alone never exercises. Every body here is a
+                // no-collision input (zero/NaN shape, degenerate ring, non-finite position), so `step` must
+                // carry them without throwing and without minting a contact.
+                let degenerate =
+                    [
+                        Physics.Dynamic, Physics.SCircle 0.0, p 0.0 5.0 // zero radius
+                        Physics.Dynamic, Physics.SCircle nan, p 1.0 5.0 // NaN radius
+                        Physics.Dynamic, box 0.0 1.0, p 2.0 5.0 // zero half-extent
+                        Physics.Dynamic,
+                        Physics.SPoly
+                            {
+                                Vertices = [| p 0.0 0.0; p 1.0 1.0 |]
+                            },
+                        p 3.0 5.0 // < 3 vertices
+                        Physics.Dynamic, Physics.SCircle 1.0, p nan 5.0 // NaN position
+                        Physics.Dynamic, Physics.SCircle 1.0, p infinity 5.0
+                    ] // infinite position
+
+                // A real floor and a real box dropped among the zoo, so the run is not vacuously total over
+                // bodies the solver skips entirely: body 6 is a floor, body 7 falls onto it and must rest.
+                let bodies =
+                    degenerate
+                    @ [
+                        Physics.Static, box 50.0 1.0, p 0.0 0.0
+                        Physics.Dynamic, box 0.5 0.5, p 0.0 3.0
+                    ]
+
+                let w = worldOf 4.0 bodies |> advance 600
+
+                // No throw got us here. The degenerate bodies collide with nothing...
+                for i in 0..5 do
+                    for j in 0..7 do
+                        if i <> j then
+                            Expect.isTrue
+                                (ValueOption.isNone (Physics.manifold w (min i j) (max i j)))
+                                (sprintf "degenerate body %d contacts nothing, even after 600 steps" i)
+
+                // ...and the real box came to rest on the real floor, so the solver genuinely ran.
+                Expect.isTrue (ValueOption.isSome (Physics.manifold w 6 7)) "the real box settled on the real floor"
+            }
+
+            // Kinematic bodies through `step`. The public surface has NO velocity setter — `addBody` seeds
+            // every body at rest and gravity is the only thing that imparts a velocity (the speculative-CCD
+            // section below leans on the same fact) — so the "moved by the game" leg of the Kinematic
+            // contract cannot be driven from here. What CAN be observed is its shadow and the other two
+            // legs: gravity/contacts do not move it (only the game does), and it holds a load unpushed.
+
+            test "a kinematic body is unmoved by gravity — only a dynamic one falls" {
+                // Kinematic, like Static, moves ONLY under a velocity the game gives it; at rest under
+                // gravity it stays put. The control is the identical scene with a Dynamic body, which falls.
+                let build kind =
+                    let w = Physics.empty stepConfig
+
+                    let struct (_, w) =
+                        Physics.addBody kind (box 0.5 0.5) (material 0.0 0.5) (p 0.0 10.0) w
+
+                    w
+
+                let kin = build Physics.Kinematic
+
+                Expect.equal
+                    (Physics.checksum (advance 600 kin))
+                    (Physics.checksum kin)
+                    "kinematic: gravity does not move it"
+
+                let dyn = build Physics.Dynamic
+
+                Expect.notEqual
+                    (Physics.checksum (advance 600 dyn))
+                    (Physics.checksum dyn)
+                    "control: a dynamic body does fall"
+            }
+
+            test "a kinematic floor holds a dynamic load without being pushed by it" {
+                // "unmoved by impulses" + "holds a load": a dynamic box dropped onto a KINEMATIC floor comes
+                // to rest ON it (infinite mass — things pile on it, not through it), and the floor's own pose
+                // is left bit-identical by the resting contact's impulse. Control: a DYNAMIC floor (nothing
+                // holding it up) does move.
+                let build floorKind =
+                    let w = Physics.empty stepConfig
+
+                    let struct (fi, w) =
+                        Physics.addBody floorKind (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
+                    let struct (di, w) =
+                        Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 5.0) w
+
+                    struct (fi, di, w)
+
+                let poseOf i w =
+                    (Physics.interpolate 1.0 w w).[i].Position
+
+                let struct (fi, di, w0) = build Physics.Kinematic
+                let floorBefore = poseOf fi w0
+                let settled = advance 600 w0
+
+                Expect.isTrue
+                    (ValueOption.isSome (Physics.manifold settled fi di))
+                    "the dynamic load rests ON the kinematic floor, not through it"
+
+                Expect.equal (poseOf fi settled) floorBefore "the kinematic floor is not pushed by the load it holds"
+
+                // Control: a dynamic floor under the same load is NOT held fixed.
+                let struct (fi2, _, w1) = build Physics.Dynamic
+                let dynFloorBefore = poseOf fi2 w1
+                Expect.notEqual (poseOf fi2 (advance 600 w1)) dynFloorBefore "control: a dynamic floor moves"
+            }
+
+            // -----------------------------------------------------------------------------------------
+            // Integrate, solve, correct
+            // -----------------------------------------------------------------------------------------
+
+            test "a dropped box falls, lands, and rests within slop of the floor" {
+                let scene () =
+                    dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0
+
+                Expect.isTrue (ValueOption.isNone (restingContact (scene ()))) "starts clear of the floor"
+
+                match restingContact (advance 600 (scene ())) with
+                | ValueNone -> failtest "the box fell through the floor, or never reached it"
+                | ValueSome m ->
+                    // Penetration settles AT the slop — the correction stops there by construction — and
+                    // the box rests on the floor's top surface rather than inside it.
+                    Expect.isLessThanOrEqual m.Depth (stepConfig.Slop + 1e-6) "penetration settles within slop"
+                    Expect.equal m.PointCount 2 "a flat box on a flat floor is a face-on-face contact"
+
+                    // Both contact points sit on the floor's top surface, to within the penetration allowed
+                    // plus the residual tilt described in this section's header (~1e-3 after 600 ticks).
+                    // Demanding they sit at an IDENTICAL height would be asserting the tilt away.
+                    for q in m.Points.[0 .. m.PointCount - 1] do
+                        Expect.isLessThan
+                            (abs (q.Y - floorTop))
+                            (stepConfig.Slop + 1e-3)
+                            "contact sits on the floor surface, within slop"
+            }
+
+            test "a resting box does not sink: penetration is bounded for 5000 ticks" {
+                // The failure this catches is a positional correction that under-pushes, letting each tick's
+                // gravity add a sliver of overlap that never comes back out.
+                //
+                // Measured only AFTER the box has settled. The tick it lands on penetrates well past slop —
+                // it arrives with speed, and one step of gravity carries it in — and the correction takes a
+                // few dozen ticks to push that back out. That transient is not sinking; including it would
+                // make this test pass for the wrong reason (a bound loose enough to cover the impact would
+                // also cover a slow sink).
+                let settleTicks = 300
+
+                let mutable w =
+                    advance settleTicks (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 2.0)
+
+                let mutable worst = 0.0
+
+                for _ in 1 .. 5000 - settleTicks do
+                    w <- Physics.step w tick
+
+                    match restingContact w with
+                    | ValueSome m -> worst <- max worst m.Depth
+                    | ValueNone -> failtest "the box left the floor"
+
+                Expect.isLessThanOrEqual worst (stepConfig.Slop + 1e-6) "overlap never accumulates once settled"
+            }
+
+            test "a dropped circle rests on the floor with a single contact point" {
+                match
+                    restingContact (advance 600 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0))
+                with
+                | ValueNone -> failtest "the circle fell through the floor"
+                | ValueSome m ->
+                    Expect.equal m.PointCount 1 "a circle touches a plane at one point"
+                    Expect.isLessThanOrEqual m.Depth (stepConfig.Slop + 1e-6) "penetration settles within slop"
+                    Expect.floatClose Accuracy.medium m.Normal.Y 1.0 "the floor pushes the circle straight up"
+            }
+
+            test "two stacked boxes both rest within slop" {
+                let w = Physics.empty stepConfig
+
+                let struct (_, w) =
+                    Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
+                let struct (_, w) =
+                    Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 1.6) w
+
+                let struct (_, w) =
+                    Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 2.7) w
+
+                let settled = advance 1200 w
+
+                match Physics.manifold settled 0 1, Physics.manifold settled 1 2 with
+                | ValueSome lower, ValueSome upper ->
+                    Expect.isLessThanOrEqual lower.Depth (stepConfig.Slop + 1e-3) "the lower box rests on the floor"
+                    Expect.isLessThanOrEqual upper.Depth (stepConfig.Slop + 1e-3) "the upper box rests on the lower"
+                | _ -> failtest "the stack collapsed or fell through"
+            }
+
+            test "a polygon's mass is its area, wherever the ring sits relative to its origin" {
+                // Mass is derived from the shape (unit density), and the fan sum that measures a polygon's
+                // area must take the sign off the TOTAL, never off each fan triangle. A triangle whose
+                // winding opposes the ring contributes a negative area, and that cancellation is how the fan
+                // measures a ring the origin lies OUTSIDE of. Summing `abs` per term instead weighs such a
+                // polygon many times over — 21x for `[(10,0); (11,0); (10,1)]`, 2x for the square below.
+                //
+                // Mass is not readable, so this observes it through an impulse. The scene is built so that
+                // every contact normal is vertical and passes through every body's origin, making every
+                // lever arm `r x n = 0`: rotational inertia (which legitimately DOES change when the origin
+                // moves, by the parallel-axis theorem) drops out entirely, and the only thing left that can
+                // move the trace is the polygon's mass.
+                //
+                //   body 0  static floor, top surface at y = 1
+                //   body 1  dynamic circle resting on it at (0, 1.5)
+                //   body 2  dynamic unit square, world centre (0, 3.1), falling onto the circle
+                //
+                // The circle's penetration into the floor is the readout: a heavier square drives it deeper.
+                let scene (vertexOffset: Point) =
+                    let h = 0.5
+
+                    let vs =
+                        [| p -h -h; p h -h; p h h; p -h h |]
+                        |> Array.map (fun v -> p (v.X + vertexOffset.X) (v.Y + vertexOffset.Y))
+
+                    // Move the body by -offset so the WORLD square is identical for every offset.
+                    let bodyPos = p (0.0 - vertexOffset.X) (3.1 - vertexOffset.Y)
+                    let w = Physics.empty stepConfig
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.5) (p 0.0 1.5) w
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Dynamic (Physics.SPoly { Vertices = vs }) (material 0.0 0.5) bodyPos w
+
+                    w
+
+                let trace (vertexOffset: Point) =
+                    let mutable w = scene vertexOffset
+
+                    [
+                        for _ in 1..200 ->
+                            w <- Physics.step w tick
+
+                            match Physics.manifold w 0 1 with
+                            | ValueSome m -> m.Depth
+                            | ValueNone -> 0.0
+                    ]
+
+                let maxDiff a b =
+                    List.map2 (fun x y -> abs (x - y)) a b |> List.max
+
+                let originInside = trace (p 0.0 0.0) // origin at the square's centre
+                let originBelow = trace (p 0.0 1.5) // origin outside the ring, below it
+                let originAbove = trace (p 0.0 -4.0) // origin outside the ring, well above it
+
+                Expect.isLessThan
+                    (maxDiff originInside originBelow)
+                    1e-12
+                    "the same square weighs the same with its origin below it"
+
+                Expect.isLessThan (maxDiff originInside originAbove) 1e-12 "...and with its origin far above it"
+
+                // The readout has teeth: a genuinely heavier square DOES move it. Without this, the two
+                // assertions above would pass just as happily against a trace that ignored mass entirely.
+                let genuinelyHeavier =
+                    let mutable w =
+                        let vs = [| p -0.7 -0.7; p 0.7 -0.7; p 0.7 0.7; p -0.7 0.7 |]
+                        let w = Physics.empty stepConfig
+
+                        let struct (_, w) =
+                            Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
+                        let struct (_, w) =
+                            Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.5) (p 0.0 1.5) w
+
+                        let struct (_, w) =
+                            Physics.addBody
+                                Physics.Dynamic
+                                (Physics.SPoly { Vertices = vs })
+                                (material 0.0 0.5)
+                                (p 0.0 3.1)
+                                w
+
+                        w
+
+                    [
+                        for _ in 1..200 ->
+                            w <- Physics.step w tick
+
+                            match Physics.manifold w 0 1 with
+                            | ValueSome m -> m.Depth
+                            | ValueNone -> 0.0
+                    ]
+
+                Expect.isGreaterThan
+                    (maxDiff originInside genuinelyHeavier)
+                    1e-4
+                    "a square of larger area is a heavier square"
+            }
+
+            // -----------------------------------------------------------------------------------------
+            // Torque: the reason contact points exist at all (design §5 gap 1)
+            // -----------------------------------------------------------------------------------------
+
+            test "an overhanging box tips off a pedestal instead of landing flat" {
+                // A box whose centre of mass overhangs its support must rotate. Without lever arms from the
+                // contact points there is no torque, and it would balance forever. The rotation is visible
+                // in the contact NORMAL swinging away from straight-up, and in the face-on-face contact
+                // collapsing to a single corner point.
+                let w = Physics.empty stepConfig
+
+                let struct (_, w) =
+                    Physics.addBody Physics.Static (box 0.25 1.0) (material 0.0 0.9) (p 0.0 0.0) w
+
+                let struct (_, w) =
+                    Physics.addBody Physics.Dynamic (box 0.5 0.1) (material 0.0 0.9) (p 0.55 1.2) w
+
+                let mutable acc = w
+                let mutable landedFlat = false
+                let mutable maxTiltOfNormal = 0.0
+
+                for _ in 1..30 do
+                    acc <- Physics.step acc tick
+
+                    match Physics.manifold acc 0 1 with
+                    | ValueSome m ->
+                        if m.PointCount = 2 && abs m.Normal.X < 1e-9 then
+                            landedFlat <- true
+
+                        maxTiltOfNormal <- max maxTiltOfNormal (abs m.Normal.X)
+                    | ValueNone -> ()
+
+                Expect.isTrue landedFlat "it first lands flat, normal straight up"
+                Expect.isGreaterThan maxTiltOfNormal 0.5 "then it tips: the contact normal rotates well off vertical"
+            }
+
+            test "the resting tilt is a convergence residual, not a spin-up" {
+                // Documents the artifact the header describes. A resting box holds a small residual angular
+                // velocity at a fixed 8 iterations; it is Gauss-Seidel not yet converged, so it must shrink
+                // toward zero as iterations rise. If this ever fails, the solver has a real torque bug and
+                // no iteration count will save it.
+                //
+                // Sleeping is OFF here. With it on the box stops after ~112 ticks and this measures the pose
+                // it happened to freeze in — which is a fact about the sleep threshold, not about the solver.
+                let coarse = tiltAfter noSleep 8
+                let fine = tiltAfter noSleep 64
+
+                Expect.isLessThan fine coarse "more iterations converge closer to a level rest"
+                Expect.isLessThan fine 1e-9 "and 64 iterations reach a level rest to within float noise"
+            }
+
+            // -----------------------------------------------------------------------------------------
+            // Restitution
+            // -----------------------------------------------------------------------------------------
+
+            test "a bouncy body leaves the floor again; a dead one does not" {
+                let bouncy = dropped stepConfig (Physics.SCircle 0.5) (material 0.9 0.0) 5.0
+                let dead = dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.0) 5.0
+
+                let touchedB, leftB = bouncesWithin 400 bouncy
+                let touchedD, leftD = bouncesWithin 400 dead
+
+                Expect.isTrue touchedB "the bouncy ball reaches the floor"
+                Expect.isTrue leftB "and rebounds off it"
+                Expect.isTrue touchedD "the dead ball reaches the floor"
+                Expect.isFalse leftD "and stays there"
+            }
+
+            test "restitution combines as the MAXIMUM of the two materials" {
+                // The floor `dropped` builds has `Restitution = 0.0`, as floors do. Under a `min` rule the
+                // ball could never bounce off it, and restitution would be unreachable in the very scene it
+                // exists for. This test is the guard on that choice.
+                let _, left =
+                    bouncesWithin 400 (dropped stepConfig (Physics.SCircle 0.5) (material 0.9 0.0) 5.0)
+
+                Expect.isTrue left "a bouncy ball bounces off a dead floor"
+            }
+
+            test "restitution is gated below BounceThreshold" {
+                // Identical ball, identical drop — only the gate moves. Raising the threshold above any
+                // approach speed the fall can produce forces `e = 0` at impact, so the ball that bounced in
+                // the test above now stays down. That gate is what stops a resting box trading a sliver of
+                // approach velocity for a sliver of bounce, forever.
+                let never =
+                    { stepConfig with
+                        BounceThreshold = 1e9
+                    }
+
+                let always = stepConfig
+
+                let _, leftGated =
+                    bouncesWithin 400 (dropped never (Physics.SCircle 0.5) (material 0.9 0.0) 5.0)
+
+                let _, leftUngated =
+                    bouncesWithin 400 (dropped always (Physics.SCircle 0.5) (material 0.9 0.0) 5.0)
+
+                Expect.isFalse leftGated "an approach below the threshold is perfectly inelastic"
+                Expect.isTrue leftUngated "and the same ball above the threshold does bounce"
+            }
+
+            // -----------------------------------------------------------------------------------------
+            // Friction
+            // -----------------------------------------------------------------------------------------
+
+            test "friction decides whether a box holds on a ramp or slides off it" {
+                // A CCW right triangle whose hypotenuse runs from (-5,-2) up to (5,2): a ramp. The box is
+                // placed on the slope. With no friction it slides off the end; with plenty it stays put.
+                let ramp =
+                    Physics.SPoly
+                        {
+                            Vertices = [| p -5.0 -2.0; p 5.0 -2.0; p 5.0 2.0 |]
+                        }
+
+                let onRamp mu =
+                    let w = Physics.empty stepConfig
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static ramp (material 0.0 mu) (p 0.0 0.0) w
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Dynamic (box 0.3 0.3) (material 0.0 mu) (p 1.0 0.9) w
+
+                    Physics.manifold (advance 300 w) 0 1
+
+                Expect.isTrue (ValueOption.isNone (onRamp 0.0)) "a frictionless box slides off the ramp"
+                Expect.isTrue (ValueOption.isSome (onRamp 0.9)) "a rough box is still on the ramp"
+            }
+
+            test "friction combines from BOTH materials — a frictionless partner frees the pair, in either order" {
+                // The companion to "restitution combines as the MAXIMUM". Friction is the geometric mean
+                // sqrt(μa·μb), so a single frictionless body zeroes the pair however rough the OTHER is — and
+                // the rule must read both bodies' μ to do it. The ramp test above gives the two bodies the
+                // SAME μ; these differ, so a rule that read only one body's μ is caught here.
+                //
+                // A rough box on a frictionless ramp slides: sqrt(0.9·0) = 0, not the max 0.9. Catches a rule
+                // that ignores the ramp's μ.
+                Expect.isFalse (holdsOnRamp 2.0 0.0 0.9) "a rough box slides on a frictionless ramp"
+                // ...and symmetrically, a frictionless box on a rough ramp. Catches a rule that ignores the box's μ.
+                Expect.isFalse (holdsOnRamp 2.0 0.9 0.0) "a frictionless box slides on a rough ramp"
+                // Anti-vacuity: this ramp CAN hold a rough pair, so "everything slides" is not why the two above pass.
+                Expect.isTrue (holdsOnRamp 2.0 0.9 0.9) "and two rough bodies hold — the ramp is not simply too steep"
+            }
+
+            test "the combined friction is the geometric mean, not the minimum" {
+                // sqrt(0.25·1.0) = 0.5 — the SAME effective μ as a symmetric 0.5/0.5 pair, yet a minimum rule
+                // would read the asymmetric pair as 0.25. On a gentler ramp (rise 1.5 over run 10, tan θ = 0.3)
+                // tuned so 0.5 holds and 0.25 slides, the asymmetric 0.25/1.0 pair must HOLD — pinning the
+                // combination as the geometric mean rather than the minimum of the two.
+                Expect.isTrue (holdsOnRamp 1.5 0.5 0.5) "calibration: an effective μ of 0.5 holds on this ramp"
+                Expect.isFalse (holdsOnRamp 1.5 0.25 0.25) "calibration: an effective μ of 0.25 slides on this ramp"
+
+                Expect.isTrue
+                    (holdsOnRamp 1.5 0.25 1.0)
+                    "sqrt(0.25·1.0) = 0.5 holds — the geometric mean, not the min 0.25"
+            }
+
+            // -----------------------------------------------------------------------------------------
+            // The narrow phase
+            // -----------------------------------------------------------------------------------------
+
+            test "manifold reports A and B as the body indices, in the order asked" {
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 1.5 0.0
+                        ]
+
+                match Physics.manifold w 0 1 with
+                | ValueSome m -> Expect.equal (m.A, m.B) (0, 1) "A and B index the world, not polygonManifold's 0 and 1"
+                | ValueNone -> failtest "the circles overlap"
+            }
+
+            test "the contact normal always points from a toward b" {
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 1.5 0.0
+                        ]
+
+                match Physics.manifold w 0 1, Physics.manifold w 1 0 with
+                | ValueSome ab, ValueSome ba ->
+                    Expect.floatClose Accuracy.medium ab.Normal.X 1.0 "0 -> 1 points along +x"
+                    Expect.floatClose Accuracy.medium ba.Normal.X -1.0 "1 -> 0 points along -x"
+                    Expect.floatClose Accuracy.medium ab.Depth ba.Depth "depth does not depend on the order"
+                | _ -> failtest "the circles overlap in both orders"
+            }
+
+            test "a circle against a box normals the same way whichever is a" {
+                let cb =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 0.5, p 0.0 0.0
+                            Physics.Dynamic, box 0.5 0.5, p 0.8 0.0
+                        ]
+
+                let bc =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, box 0.5 0.5, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 0.5, p 0.8 0.0
+                        ]
+
+                match Physics.manifold cb 0 1, Physics.manifold bc 0 1 with
+                | ValueSome circleFirst, ValueSome boxFirst ->
+                    Expect.floatClose Accuracy.medium circleFirst.Normal.X 1.0 "circle -> box points at the box"
+                    Expect.floatClose Accuracy.medium boxFirst.Normal.X 1.0 "box -> circle points at the circle"
+                | _ -> failtest "both pairs overlap"
+            }
+
+            test "a touch is not a contact: two circles at exactly d = ra + rb" {
+                // The strict-edge convention `pairs`, `aabbContact` and `polygonManifold` all share. The
+                // coordinates are exact in binary, so this is a real equality, not a near-miss.
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 2.0 0.0
+                        ]
+
+                Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 1)) "touching circles do not contact"
+            }
+
+            test "coincident circle centres yield no contact rather than an invented normal" {
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                        ]
+
+                Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 1)) "there is no direction to separate along"
+            }
+
+            test "manifold is total on bad indices and degenerate bodies" {
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.5 0.0
+                            Physics.Dynamic, Physics.SCircle 0.0, p 0.5 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p nan 0.0
+                        ]
+
+                Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 0)) "a body does not contact itself"
+                Expect.isTrue (ValueOption.isNone (Physics.manifold w 0 99)) "an out-of-range index"
+                Expect.isTrue (ValueOption.isNone (Physics.manifold w -1 0)) "a negative index"
+                Expect.isTrue (ValueOption.isNone (Physics.manifold w 1 2)) "a degenerate shape collides with nothing"
+
+                Expect.isTrue
+                    (ValueOption.isNone (Physics.manifold w 1 3))
+                    "a non-finite position collides with nothing"
+            }
+
+            test "manifold agrees with pairs: no pair, no contact" {
+                // The broad phase is exact over AABBs, so a rejected pair cannot have had a contact to lose.
+                let bodies =
+                    [
+                        Physics.Static, box 20.0 1.0, p 0.0 -1.5
+                        Physics.Dynamic, Physics.SCircle 1.5, p 1.0 0.5
+                        Physics.Dynamic, box 0.5 0.5, p 12.0 8.0
+                    ]
+
+                let w = worldOf 8.0 bodies
+                let paired = pairList w |> Set.ofList
+
+                for a in 0..2 do
+                    for b in 0..2 do
+                        if a < b && not (paired.Contains(a, b)) then
+                            Expect.isTrue
+                                (ValueOption.isNone (Physics.manifold w a b))
+                                (sprintf "(%d, %d) is not a pair, so it has no contact" a b)
+            }
+
+            test "circle feature ids never collide with polygonManifold's" {
+                // `polygonManifold` packs a face pair into a NON-NEGATIVE int; the circle cases mint theirs
+                // from the negative half. #76's warm-start cache keys on this, so the disjointness matters.
+                let cc =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 1.5 0.0
+                        ]
+
+                let cb =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 0.5, p 0.0 0.0
+                            Physics.Dynamic, box 0.5 0.5, p 0.8 0.0
+                        ]
+
+                let pp =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, box 0.5 0.5, p 0.0 0.0
+                            Physics.Dynamic, box 0.5 0.5, p 0.8 0.0
+                        ]
+
+                match Physics.manifold cc 0 1, Physics.manifold cb 0 1, Physics.manifold pp 0 1 with
+                | ValueSome a, ValueSome b, ValueSome c ->
+                    Expect.isLessThan a.FeatureId 0 "circle-circle ids are negative"
+                    Expect.isLessThan b.FeatureId 0 "circle-polygon ids are negative"
+                    Expect.isGreaterThanOrEqual c.FeatureId 0 "polygon-polygon ids come from polygonManifold"
+                | _ -> failtest "all three pairs overlap"
+            }
+
+            test "an unmoving pair keeps its feature id across ticks" {
+                // The warm-start cache key contract. A resting box on a floor must name the same feature
+                // every tick, or #76 would discard its accumulated impulse on every step.
+                let scene = dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 1.6
+                let settled = advance 300 scene
+
+                let ids =
+                    [ 0..20 ]
+                    |> List.map (fun i ->
+                        match restingContact (advance i settled) with
+                        | ValueSome m -> m.FeatureId
+                        | ValueNone -> failtest "the box left the floor")
+                    |> List.distinct
+
+                Expect.equal ids.Length 1 "one stable feature id across 20 ticks of rest"
+            }
+
+            // -----------------------------------------------------------------------------------------
+            // The checksum
+            // -----------------------------------------------------------------------------------------
+
+            test "identical worlds stepped identically checksum identically" {
+                let run () =
+                    advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+
+                Expect.equal
+                    (Physics.checksum (run ()))
+                    (Physics.checksum (run ()))
+                    "the replay tripwire does not fire on a replay"
+            }
+
+            test "the checksum moves when body state moves" {
+                let scene = dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0
+                let before = Physics.checksum scene
+                let after = Physics.checksum (Physics.step scene tick)
+                Expect.notEqual before after "one tick of gravity changes the world"
+            }
+
+            test "the checksum distinguishes worlds of different body counts" {
+                // The body count is folded in first precisely so that an extra all-zero body cannot hash
+                // like its absence.
+                let one = Physics.empty stepConfig
+
+                let struct (_, two) =
+                    Physics.addBody Physics.Static (box 1.0 1.0) (material 0.0 0.0) (p 0.0 0.0) one
+
+                Expect.notEqual (Physics.checksum one) (Physics.checksum two) "N and N+1 bodies hash apart"
+            }
+
+            // Named `linux-pinned-float-golden` so the Windows CI leg can exclude it by that substring
+            // (gate.yml full-test-suite matrix). The box golden's residual tilt routes through `sin`/`cos`
+            // (Physics.fs), whose libm differs between glibc and ucrt, so this literal is pinned to the
+            // Linux runner ONLY — the cross-platform claim it would otherwise assert is the one this very
+            // contract disclaims (a cross-platform lockstep guarantee needs fixed-point; see below).
+            test
+                "hotspot decomposition baseline (#492): the checksum is stable across the process (linux-pinned-float-golden)" {
+                // Golden values. They are FNV-1a over the IEEE-754 bits of Pos/Vel/Rot/AngVel, so they are
+                // reproducible on any runtime that agrees on IEEE-754 double arithmetic — which is what
+                // `.NET` guarantees on a fixed compiler and ISA. A cross-platform lockstep guarantee needs
+                // fixed-point, and is a later ADR'd decision (design §6).
+                //
+                // #76 MOVED `boxOnFloor`, and this is the deliberate record of it that the slice owed. The
+                // old value was 12790444109480856124UL. Both of the slice's levers move it, independently:
+                //
+                //   warm starting alone (sleeping off)  -> 1048092559667977464UL
+                //   warm starting and sleeping together -> the value asserted below
+                //
+                // The two values below did NOT move, and that is the interesting half. `empty` proves the
+                // eight new `World` fields — two sleep arrays, six cache arrays — stay out of the hash (R3).
+                // `circleOnFloor` proves something sharper: a circle on a floor is a ONE-point contact that
+                // the solver converges exactly, so its rest is a true fixed point. Seeding a fixed point with
+                // its own impulse returns it unchanged, and freezing a body that was not moving changes
+                // nothing. Both levers are therefore exact no-ops on a converged rest — bit-for-bit, at 240
+                // ticks and at 600.
+                //
+                // `boxOnFloor` moves precisely because its rest is NOT converged: it is the two-point contact
+                // whose residual tilt the `#75` test above pins, and #76 both shrinks that residual and stops
+                // the box before it can creep. A scene that had genuinely settled would not have noticed.
+                let boxOnFloor =
+                    advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+
+                let circleOnFloor =
+                    advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+                Expect.equal (Physics.checksum (Physics.empty stepConfig)) 12161962213042174405UL "empty world"
+                Expect.equal (Physics.checksum boxOnFloor) 9427473436406466390UL "a box asleep after 240 ticks"
+                Expect.equal (Physics.checksum circleOnFloor) 12544979940497693507UL "a circle at rest after 240 ticks"
+            }
+        ]
 
 // =====================================================================================================
 // Warm starting and sleeping — the performance slice (#76)
@@ -1129,7 +1409,10 @@ let private frozen (w: Physics.World) =
 /// rather than starting in a contact. Body 0 is the floor; bodies 1..n rise from it.
 let private stack (cfg: Physics.Config) (n: int) =
     let w = Physics.empty cfg
-    let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
+    let struct (_, w) =
+        Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
+
     let mutable acc = w
 
     for i in 0 .. n - 1 do
@@ -1149,7 +1432,10 @@ let private freezeTick (limit: int) (w0: Physics.World) =
     while found < 0 && t < limit do
         let next = Physics.step w tick
         t <- t + 1
-        if Physics.checksum next = Physics.checksum w then found <- t
+
+        if Physics.checksum next = Physics.checksum w then
+            found <- t
+
         w <- next
 
     found
@@ -1160,283 +1446,332 @@ let sleepAndWarmStartTests =
         "Game.Core Physics warm starting and sleeping (#76)"
         [
 
-          // -----------------------------------------------------------------------------------------
-          // Sleeping: a settled scene stops integrating
-          // -----------------------------------------------------------------------------------------
+            // -----------------------------------------------------------------------------------------
+            // Sleeping: a settled scene stops integrating
+            // -----------------------------------------------------------------------------------------
 
-          test "a box that comes to rest eventually stops integrating, and stays stopped" {
-              let w = advance 200 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+            test "a box that comes to rest eventually stops integrating, and stays stopped" {
+                let w = advance 200 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
 
-              Expect.isTrue (frozen w) "the box has fallen asleep"
+                Expect.isTrue (frozen w) "the box has fallen asleep"
 
-              // Not merely "asleep this tick": a static floor is not a mover and must never wake it, so the
-              // freeze has to survive an arbitrary wait. 5000 ticks is 83 seconds of game time.
-              Expect.equal
-                  (Physics.checksum (advance 5000 w))
-                  (Physics.checksum w)
-                  "and nothing wakes it, however long the scene is left running"
-          }
+                // Not merely "asleep this tick": a static floor is not a mover and must never wake it, so the
+                // freeze has to survive an arbitrary wait. 5000 ticks is 83 seconds of game time.
+                Expect.equal
+                    (Physics.checksum (advance 5000 w))
+                    (Physics.checksum w)
+                    "and nothing wakes it, however long the scene is left running"
+            }
 
-          test "the same box never stops when the lever is off" {
-              // The control for every freeze assertion above and below. Without it, a bug that froze the
-              // world for the wrong reason — a solver that zeroed velocity, say — would read as a pass.
-              let w = advance 200 (dropped noSleep (box 0.5 0.5) (material 0.0 0.5) 5.0)
-              Expect.isFalse (frozen w) "with SleepTicks = 0 the box keeps creeping on its convergence residual"
-          }
+            test "the same box never stops when the lever is off" {
+                // The control for every freeze assertion above and below. Without it, a bug that froze the
+                // world for the wrong reason — a solver that zeroed velocity, say — would read as a pass.
+                let w = advance 200 (dropped noSleep (box 0.5 0.5) (material 0.0 0.5) 5.0)
+                Expect.isFalse (frozen w) "with SleepTicks = 0 the box keeps creeping on its convergence residual"
+            }
 
-          test "each of the three thresholds disables sleeping on its own" {
-              // `SleepTicks <= 0` is handled in code; the other two need none, because no squared speed is
-              // below zero and NaN fails every `<`. All three are asserted, because "needs no code" is
-              // exactly the claim that rots.
-              let settled (cfg: Physics.Config) =
-                  frozen (advance 400 (dropped cfg (box 0.5 0.5) (material 0.0 0.5) 5.0))
+            test "each of the three thresholds disables sleeping on its own" {
+                // `SleepTicks <= 0` is handled in code; the other two need none, because no squared speed is
+                // below zero and NaN fails every `<`. All three are asserted, because "needs no code" is
+                // exactly the claim that rots.
+                let settled (cfg: Physics.Config) =
+                    frozen (advance 400 (dropped cfg (box 0.5 0.5) (material 0.0 0.5) 5.0))
 
-              Expect.isFalse (settled { stepConfig with SleepTicks = 0 }) "SleepTicks = 0 disables sleeping"
-              Expect.isFalse (settled { stepConfig with SleepTicks = -1 }) "a negative SleepTicks disables it too"
-              Expect.isFalse (settled { stepConfig with SleepLinearSq = 0.0 }) "SleepLinearSq = 0 disables sleeping"
-              Expect.isFalse (settled { stepConfig with SleepAngular = 0.0 }) "SleepAngular = 0 disables sleeping"
-              Expect.isTrue (settled stepConfig) "and the default tuning does sleep"
-          }
+                Expect.isFalse (settled { stepConfig with SleepTicks = 0 }) "SleepTicks = 0 disables sleeping"
+                Expect.isFalse (settled { stepConfig with SleepTicks = -1 }) "a negative SleepTicks disables it too"
+                Expect.isFalse (settled { stepConfig with SleepLinearSq = 0.0 }) "SleepLinearSq = 0 disables sleeping"
+                Expect.isFalse (settled { stepConfig with SleepAngular = 0.0 }) "SleepAngular = 0 disables sleeping"
+                Expect.isTrue (settled stepConfig) "and the default tuning does sleep"
+            }
 
-          test "the sleep counter wants CONSECUTIVE ticks, not a total" {
-              // A bouncy ball passes below the linear sleep threshold at the top of every arc, where its
-              // velocity turns over. A counter that ACCUMULATED those ticks would reach `SleepTicks` and
-              // freeze the ball in mid-air. A counter that demands them in a row never does.
-              //
-              // The horizon is chosen so the test can actually falsify that: it must run long enough for
-              // MORE THAN `SleepTicks` apexes to have gone by, or a cumulative counter would not have
-              // fired either and the assertion would prove nothing. At 1200 ticks there are only ~25.
-              // So the apex count is asserted too — the test checks its own premise rather than trusting a
-              // tick number to stay meaningful.
-              let mutable w = dropped stepConfig (Physics.SCircle 0.5) (material 0.9 0.0) 5.0
-              let mutable inContact = false
-              let mutable apexes = 0
+            test "the sleep counter wants CONSECUTIVE ticks, not a total" {
+                // A bouncy ball passes below the linear sleep threshold at the top of every arc, where its
+                // velocity turns over. A counter that ACCUMULATED those ticks would reach `SleepTicks` and
+                // freeze the ball in mid-air. A counter that demands them in a row never does.
+                //
+                // The horizon is chosen so the test can actually falsify that: it must run long enough for
+                // MORE THAN `SleepTicks` apexes to have gone by, or a cumulative counter would not have
+                // fired either and the assertion would prove nothing. At 1200 ticks there are only ~25.
+                // So the apex count is asserted too — the test checks its own premise rather than trusting a
+                // tick number to stay meaningful.
+                let mutable w = dropped stepConfig (Physics.SCircle 0.5) (material 0.9 0.0) 5.0
+                let mutable inContact = false
+                let mutable apexes = 0
 
-              for _ in 1..4000 do
-                  w <- Physics.step w tick
-                  let touching = (restingContact w).IsSome
-                  if touching && not inContact then apexes <- apexes + 1
-                  inContact <- touching
+                for _ in 1..4000 do
+                    w <- Physics.step w tick
+                    let touching = (restingContact w).IsSome
 
-              Expect.isGreaterThan
-                  apexes
-                  stepConfig.SleepTicks
-                  "the ball left and re-met the floor more often than a cumulative counter would have needed"
+                    if touching && not inContact then
+                        apexes <- apexes + 1
 
-              Expect.isFalse (frozen w) "yet it never slept, because it was never still for SleepTicks in a row"
-          }
+                    inContact <- touching
 
-          test "a body in free fall never sleeps" {
-              // Nothing to rest on, and gravity means the speed threshold is crossed upward, never down.
-              let w = Physics.empty stepConfig
-              let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.0) (p 0.0 0.0) w
+                Expect.isGreaterThan
+                    apexes
+                    stepConfig.SleepTicks
+                    "the ball left and re-met the floor more often than a cumulative counter would have needed"
 
-              Expect.isFalse (frozen (advance 400 w)) "a falling body is not a resting one"
-          }
+                Expect.isFalse (frozen w) "yet it never slept, because it was never still for SleepTicks in a row"
+            }
 
-          // -----------------------------------------------------------------------------------------
-          // Sleeping: a stack, which is where the lever is worth having — and where it is easy to get wrong
-          // -----------------------------------------------------------------------------------------
+            test "a body in free fall never sleeps" {
+                // Nothing to rest on, and gravity means the speed threshold is crossed upward, never down.
+                let w = Physics.empty stepConfig
 
-          test "a stack of any height settles and sleeps, together" {
-              // The regression that matters, and it guards TWO invariants that have no cheaper observable.
-              //
-              // 1. Waking keys on whether a neighbour is MOVING, not on whether it is awake. Keyed on
-              //    "awake", two stacked bodies whose sleep counters filled a tick apart would wake each
-              //    other forever. A stack of two might still sleep, by the luck of both counters filling on
-              //    the same tick; a stack of THREE never would. Hence the sweep over heights — `n = 1` and
-              //    `n = 2` pass under the bug.
-              //
-              // 2. A sleeping body is immovable (zero effective inverse mass), not merely un-integrated.
-              //    A sleeper that kept its real mass would absorb impulses it never spends, so the awake
-              //    body resting on it would never have its gravity fully cancelled, would never come to
-              //    rest, and would never sleep. That is a cumulative effect with no single-tick signature:
-              //    a body woken this tick starts at zero velocity, so the one tick it leans on a still-
-              //    sleeping neighbour carries no impulse worth measuring. This test is where it shows.
-              for n in 1..5 do
-                  let t = freezeTick 1200 (stack stepConfig n)
-                  Expect.isGreaterThan t 0 (sprintf "a stack of %d comes to a complete stop" n)
+                let struct (_, w) =
+                    Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.0) (p 0.0 0.0) w
 
-                  // The control: the same stack with the lever off never stops in that window. Without it,
-                  // a stack that merely converged to a bit-stable pose would pass the freeze above for the
-                  // wrong reason — the assertion would be about the solver, not about sleeping.
-                  Expect.equal
-                      (freezeTick 1200 (stack noSleep n))
-                      -1
-                      (sprintf "and a stack of %d with sleeping off keeps creeping" n)
-          }
+                Expect.isFalse (frozen (advance 400 w)) "a falling body is not a resting one"
+            }
 
-          test "more solver iterations reach sleep sooner, never later" {
-              // A monotonicity check, and the second half of the mutual-waking regression: under the
-              // "awake wakes the sleeper" bug this sequence was not merely slow but UNORDERED, because
-              // whether a stack ever slept turned on counters aligning rather than on convergence.
-              let ticks = [ 4; 8; 16; 32 ] |> List.map (fun it -> freezeTick 1200 (stack { stepConfig with VelocityIterations = it } 4))
+            // -----------------------------------------------------------------------------------------
+            // Sleeping: a stack, which is where the lever is worth having — and where it is easy to get wrong
+            // -----------------------------------------------------------------------------------------
 
-              Expect.allEqual (ticks |> List.map (fun t -> t > 0)) true "every iteration count reaches sleep"
-              Expect.isTrue (ticks = List.sortDescending ticks) (sprintf "sleep arrives no later as iterations rise: %A" ticks)
-          }
+            test "a stack of any height settles and sleeps, together" {
+                // The regression that matters, and it guards TWO invariants that have no cheaper observable.
+                //
+                // 1. Waking keys on whether a neighbour is MOVING, not on whether it is awake. Keyed on
+                //    "awake", two stacked bodies whose sleep counters filled a tick apart would wake each
+                //    other forever. A stack of two might still sleep, by the luck of both counters filling on
+                //    the same tick; a stack of THREE never would. Hence the sweep over heights — `n = 1` and
+                //    `n = 2` pass under the bug.
+                //
+                // 2. A sleeping body is immovable (zero effective inverse mass), not merely un-integrated.
+                //    A sleeper that kept its real mass would absorb impulses it never spends, so the awake
+                //    body resting on it would never have its gravity fully cancelled, would never come to
+                //    rest, and would never sleep. That is a cumulative effect with no single-tick signature:
+                //    a body woken this tick starts at zero velocity, so the one tick it leans on a still-
+                //    sleeping neighbour carries no impulse worth measuring. This test is where it shows.
+                for n in 1..5 do
+                    let t = freezeTick 1200 (stack stepConfig n)
+                    Expect.isGreaterThan t 0 (sprintf "a stack of %d comes to a complete stop" n)
 
-          test "relaxing a sleep threshold never delays sleep" {
-              // The other monotonicity. Under the mutual-waking bug, relaxing BOTH thresholds made a stack
-              // that had slept stop sleeping — bodies dozed off out of step and woke one another. A
-              // threshold is a permission; loosening it cannot take sleep away.
-              let baseline = freezeTick 1200 (stack stepConfig 4)
-              let looserAngular = freezeTick 1200 (stack { stepConfig with SleepAngular = 0.1 } 4)
-              let looserBoth = freezeTick 1200 (stack { stepConfig with SleepAngular = 0.1; SleepLinearSq = 1.0 } 4)
+                    // The control: the same stack with the lever off never stops in that window. Without it,
+                    // a stack that merely converged to a bit-stable pose would pass the freeze above for the
+                    // wrong reason — the assertion would be about the solver, not about sleeping.
+                    Expect.equal
+                        (freezeTick 1200 (stack noSleep n))
+                        -1
+                        (sprintf "and a stack of %d with sleeping off keeps creeping" n)
+            }
 
-              Expect.isGreaterThan baseline 0 "the baseline stack sleeps at all"
-              Expect.isLessThanOrEqual looserAngular baseline "a looser angular threshold sleeps no later"
-              Expect.isLessThanOrEqual looserBoth looserAngular "and loosening both sleeps no later still"
-          }
+            test "more solver iterations reach sleep sooner, never later" {
+                // A monotonicity check, and the second half of the mutual-waking regression: under the
+                // "awake wakes the sleeper" bug this sequence was not merely slow but UNORDERED, because
+                // whether a stack ever slept turned on counters aligning rather than on convergence.
+                let ticks =
+                    [ 4; 8; 16; 32 ]
+                    |> List.map (fun it ->
+                        freezeTick
+                            1200
+                            (stack
+                                { stepConfig with
+                                    VelocityIterations = it
+                                }
+                                4))
 
-          test "a settled stack holds its shape rather than sinking into itself" {
-              // Sleeping must not be a way to hide a sinking stack: freezing a scene mid-penetration would
-              // pass every `frozen` assertion above. Every contact must be resting at the slop.
-              let w = advance 1200 (stack stepConfig 4)
-              Expect.isTrue (frozen w) "the stack is asleep"
+                Expect.allEqual (ticks |> List.map (fun t -> t > 0)) true "every iteration count reaches sleep"
 
-              let mutable contacts = 0
+                Expect.isTrue
+                    (ticks = List.sortDescending ticks)
+                    (sprintf "sleep arrives no later as iterations rise: %A" ticks)
+            }
 
-              for a in 0..4 do
-                  for b in a + 1 .. 4 do
-                      match Physics.manifold w a b with
-                      | ValueSome m ->
-                          contacts <- contacts + 1
-                          Expect.isLessThan m.Depth (stepConfig.Slop + 1e-4) "no contact is penetrating past the slop"
-                      | ValueNone -> ()
+            test "relaxing a sleep threshold never delays sleep" {
+                // The other monotonicity. Under the mutual-waking bug, relaxing BOTH thresholds made a stack
+                // that had slept stop sleeping — bodies dozed off out of step and woke one another. A
+                // threshold is a permission; loosening it cannot take sleep away.
+                let baseline = freezeTick 1200 (stack stepConfig 4)
+                let looserAngular = freezeTick 1200 (stack { stepConfig with SleepAngular = 0.1 } 4)
 
-              // floor-1, 1-2, 2-3, 3-4: a chain, and nothing skipping a link.
-              Expect.equal contacts 4 "the stack is intact: four contacts, each between neighbours"
-          }
+                let looserBoth =
+                    freezeTick
+                        1200
+                        (stack
+                            { stepConfig with
+                                SleepAngular = 0.1
+                                SleepLinearSq = 1.0
+                            }
+                            4)
 
-          // -----------------------------------------------------------------------------------------
-          // Waking
-          // -----------------------------------------------------------------------------------------
+                Expect.isGreaterThan baseline 0 "the baseline stack sleeps at all"
+                Expect.isLessThanOrEqual looserAngular baseline "a looser angular threshold sleeps no later"
+                Expect.isLessThanOrEqual looserBoth looserAngular "and loosening both sleeps no later still"
+            }
 
-          test "a falling body wakes the sleeper it lands on, and the scene re-sleeps" {
-              let settled =
-                  let w = Physics.empty stepConfig
-                  let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
-                  let struct (_, w) = Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 1.5) w
-                  advance 200 w
+            test "a settled stack holds its shape rather than sinking into itself" {
+                // Sleeping must not be a way to hide a sinking stack: freezing a scene mid-penetration would
+                // pass every `frozen` assertion above. Every contact must be resting at the slop.
+                let w = advance 1200 (stack stepConfig 4)
+                Expect.isTrue (frozen w) "the stack is asleep"
 
-              Expect.isTrue (frozen settled) "the first box is asleep before anything is dropped on it"
+                let mutable contacts = 0
 
-              // `addBody` must not disturb the sleeper by itself — only the falling body may.
-              let struct (_, disturbed) =
-                  Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 4.0) settled
+                for a in 0..4 do
+                    for b in a + 1 .. 4 do
+                        match Physics.manifold w a b with
+                        | ValueSome m ->
+                            contacts <- contacts + 1
+                            Expect.isLessThan m.Depth (stepConfig.Slop + 1e-4) "no contact is penetrating past the slop"
+                        | ValueNone -> ()
 
-              let landed = advance 120 disturbed
+                // floor-1, 1-2, 2-3, 3-4: a chain, and nothing skipping a link.
+                Expect.equal contacts 4 "the stack is intact: four contacts, each between neighbours"
+            }
 
-              match Physics.manifold landed 1 2 with
-              | ValueSome m -> Expect.isLessThan m.Depth (stepConfig.Slop + 1e-4) "the dropped box rests ON the sleeper"
-              | ValueNone -> failtest "the dropped box never reached the sleeper"
+            // -----------------------------------------------------------------------------------------
+            // Waking
+            // -----------------------------------------------------------------------------------------
 
-              // It did not tunnel through into the floor, which is what a body treated as absent would let it do.
-              Expect.isTrue (Physics.manifold landed 0 2).IsNone "and never touches the floor through it"
+            test "a falling body wakes the sleeper it lands on, and the scene re-sleeps" {
+                let settled =
+                    let w = Physics.empty stepConfig
 
-              Expect.isTrue (frozen (advance 600 disturbed)) "and the disturbed pair settles back to sleep"
-          }
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.5) (p 0.0 0.0) w
 
-          test "adding a body does not itself wake a settled scene" {
-              // The warm-start cache is keyed on body indices and `addBody` only ever appends, so no entry
-              // is invalidated and no sleeper need be disturbed. A body added far away must change nothing.
-              let settled = advance 200 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
-              let before = Physics.checksum settled
+                    let struct (_, w) =
+                        Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 1.5) w
 
-              let struct (_, grown) =
-                  Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.5) (p 40.0 40.0) settled
+                    advance 200 w
 
-              // The far body falls; the sleeper does not stir. Their state is hashed together, so compare
-              // the sleeper through the contact it holds with the floor instead.
-              match restingContact settled, restingContact (Physics.step grown tick) with
-              | ValueSome a, ValueSome b ->
-                  Expect.equal b.Depth a.Depth "the sleeper's penetration is untouched by a body added across the world"
-              | _ -> failtest "the box left the floor"
+                Expect.isTrue (frozen settled) "the first box is asleep before anything is dropped on it"
 
-              Expect.equal (Physics.checksum settled) before "and `addBody` did not step the world"
-          }
+                // `addBody` must not disturb the sleeper by itself — only the falling body may.
+                let struct (_, disturbed) =
+                    Physics.addBody Physics.Dynamic (box 0.5 0.5) (material 0.0 0.5) (p 0.0 4.0) settled
 
-          // -----------------------------------------------------------------------------------------
-          // Warm starting
-          // -----------------------------------------------------------------------------------------
+                let landed = advance 120 disturbed
 
-          test "warm starting beats the cold solver at a quarter of the iterations" {
-              // The design's own claim: "a warm-started 4-iteration solver beats a cold 10-iteration one on
-              // stacks." Asserted against the #75 build's measured residual, because a warm build cannot
-              // produce a cold number to compare itself against.
-              //
-              // This is also the tripwire for a silently-broken cache: if the merge stops finding last
-              // tick's impulses, every contact starts cold and `warm4` regresses to `coldTiltAt4`, which is
-              // 48x the number asserted here. Nothing else in the suite would notice.
-              let warm4 = tiltAfter noSleep 4
+                match Physics.manifold landed 1 2 with
+                | ValueSome m ->
+                    Expect.isLessThan m.Depth (stepConfig.Slop + 1e-4) "the dropped box rests ON the sleeper"
+                | ValueNone -> failtest "the dropped box never reached the sleeper"
 
-              Expect.isLessThan warm4 coldTiltAt10 "4 warm iterations settle the box flatter than 10 cold ones"
-              Expect.isLessThan (warm4 * 10.0) coldTiltAt4 "and beat 4 cold iterations by more than an order of magnitude"
-          }
+                // It did not tunnel through into the floor, which is what a body treated as absent would let it do.
+                Expect.isTrue (Physics.manifold landed 0 2).IsNone "and never touches the floor through it"
 
-          test "warm starting still converges toward a level rest as iterations rise" {
-              // Warm starting is a convergence accelerator, not a different answer: the sequence must remain
-              // monotone in the iteration count, and must still reach a level rest. If seeding ever pushed
-              // the solver somewhere the cold one would not go, this is where it would show.
-              let tilts = [ 4; 8; 16 ] |> List.map (tiltAfter noSleep)
+                Expect.isTrue (frozen (advance 600 disturbed)) "and the disturbed pair settles back to sleep"
+            }
 
-              Expect.isTrue (tilts = List.sortDescending tilts) (sprintf "more iterations, flatter rest: %A" tilts)
-              Expect.isLessThan (tiltAfter noSleep 64) 1e-12 "and 64 warm iterations reach a level rest"
-          }
+            test "adding a body does not itself wake a settled scene" {
+                // The warm-start cache is keyed on body indices and `addBody` only ever appends, so no entry
+                // is invalidated and no sleeper need be disturbed. A body added far away must change nothing.
+                let settled = advance 200 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+                let before = Physics.checksum settled
 
-          test "warm starting and sleeping are exact no-ops on a converged rest" {
-              // A circle on a floor is a one-point contact the solver converges exactly, so its rest is a
-              // fixed point: seeding it with its own impulse returns it unchanged, and freezing a body that
-              // has stopped moving changes nothing. Bit-for-bit, with each lever alone and with both.
-              //
-              // This is the honest form of the slice's acceptance criterion. A scene that has genuinely
-              // settled does not notice #76; `boxOnFloor` moves only because its rest never converged.
-              let circle cfg = advance 240 (dropped cfg (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+                let struct (_, grown) =
+                    Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.5) (p 40.0 40.0) settled
 
-              Expect.equal
-                  (Physics.checksum (circle noSleep))
-                  12544979940497693507UL
-                  "warm starting alone leaves the #75 checksum bit-identical"
+                // The far body falls; the sleeper does not stir. Their state is hashed together, so compare
+                // the sleeper through the contact it holds with the floor instead.
+                match restingContact settled, restingContact (Physics.step grown tick) with
+                | ValueSome a, ValueSome b ->
+                    Expect.equal
+                        b.Depth
+                        a.Depth
+                        "the sleeper's penetration is untouched by a body added across the world"
+                | _ -> failtest "the box left the floor"
 
-              Expect.equal
-                  (Physics.checksum (circle stepConfig))
-                  (Physics.checksum (circle noSleep))
-                  "and sleeping on top of it changes nothing either"
+                Expect.equal (Physics.checksum settled) before "and `addBody` did not step the world"
+            }
 
-              Expect.equal
-                  (Physics.checksum (advance 600 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)))
-                  (Physics.checksum (advance 600 (dropped noSleep (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)))
-                  "still true at 600 ticks, long after the sleeping one has frozen"
-          }
+            // -----------------------------------------------------------------------------------------
+            // Warm starting
+            // -----------------------------------------------------------------------------------------
 
-          test "the checksum sees neither the sleep flag nor the warm-start cache (R3)" {
-              // Two worlds that differ in solver state BY CONSTRUCTION — one has sleeping enabled and has
-              // fallen asleep, dropping its cache; the other has the lever off and holds a live one — and
-              // whose presentation is then shown to agree independently of the hash, through `manifold`.
-              // Only then does an equal checksum say something: that neither the flag, the counter, nor the
-              // cache reaches it. That is the property which lets a replay tripwire survive an optimisation.
-              let asleep = advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
-              let awake = advance 240 (dropped noSleep (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+            test "warm starting beats the cold solver at a quarter of the iterations" {
+                // The design's own claim: "a warm-started 4-iteration solver beats a cold 10-iteration one on
+                // stacks." Asserted against the #75 build's measured residual, because a warm build cannot
+                // produce a cold number to compare itself against.
+                //
+                // This is also the tripwire for a silently-broken cache: if the merge stops finding last
+                // tick's impulses, every contact starts cold and `warm4` regresses to `coldTiltAt4`, which is
+                // 48x the number asserted here. Nothing else in the suite would notice.
+                let warm4 = tiltAfter noSleep 4
 
-              match restingContact asleep, restingContact awake with
-              | ValueSome a, ValueSome b ->
-                  Expect.equal b.Depth a.Depth "the two worlds present the same pose"
-                  Expect.equal b.Normal a.Normal "...down to the contact normal"
-              | _ -> failtest "the circle left the floor"
+                Expect.isLessThan warm4 coldTiltAt10 "4 warm iterations settle the box flatter than 10 cold ones"
 
-              Expect.equal (Physics.checksum asleep) (Physics.checksum awake) "so they must hash alike"
+                Expect.isLessThan
+                    (warm4 * 10.0)
+                    coldTiltAt4
+                    "and beat 4 cold iterations by more than an order of magnitude"
+            }
 
-              // And the eight fields `World` gained carry no weight in the hash of an empty world.
-              Expect.equal (Physics.checksum (Physics.empty stepConfig)) 12161962213042174405UL "empty world, unchanged since #75"
-          }
+            test "warm starting still converges toward a level rest as iterations rise" {
+                // Warm starting is a convergence accelerator, not a different answer: the sequence must remain
+                // monotone in the iteration count, and must still reach a level rest. If seeding ever pushed
+                // the solver somewhere the cold one would not go, this is where it would show.
+                let tilts = [ 4; 8; 16 ] |> List.map (tiltAfter noSleep)
 
-          test "a warm world replays bit-identically" {
-              // The cache is cross-tick state, and cross-tick state is where a replay diverges. It is held
-              // as sorted parallel arrays and merged linearly precisely so that no hash order can leak in.
-              let run () = Physics.checksum (advance 600 (stack stepConfig 4))
-              Expect.equal (run ()) (run ()) "two runs of a settling stack agree"
-          } ]
+                Expect.isTrue (tilts = List.sortDescending tilts) (sprintf "more iterations, flatter rest: %A" tilts)
+                Expect.isLessThan (tiltAfter noSleep 64) 1e-12 "and 64 warm iterations reach a level rest"
+            }
+
+            test "warm starting and sleeping are exact no-ops on a converged rest" {
+                // A circle on a floor is a one-point contact the solver converges exactly, so its rest is a
+                // fixed point: seeding it with its own impulse returns it unchanged, and freezing a body that
+                // has stopped moving changes nothing. Bit-for-bit, with each lever alone and with both.
+                //
+                // This is the honest form of the slice's acceptance criterion. A scene that has genuinely
+                // settled does not notice #76; `boxOnFloor` moves only because its rest never converged.
+                let circle cfg =
+                    advance 240 (dropped cfg (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+                Expect.equal
+                    (Physics.checksum (circle noSleep))
+                    12544979940497693507UL
+                    "warm starting alone leaves the #75 checksum bit-identical"
+
+                Expect.equal
+                    (Physics.checksum (circle stepConfig))
+                    (Physics.checksum (circle noSleep))
+                    "and sleeping on top of it changes nothing either"
+
+                Expect.equal
+                    (Physics.checksum (advance 600 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)))
+                    (Physics.checksum (advance 600 (dropped noSleep (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)))
+                    "still true at 600 ticks, long after the sleeping one has frozen"
+            }
+
+            test "the checksum sees neither the sleep flag nor the warm-start cache (R3)" {
+                // Two worlds that differ in solver state BY CONSTRUCTION — one has sleeping enabled and has
+                // fallen asleep, dropping its cache; the other has the lever off and holds a live one — and
+                // whose presentation is then shown to agree independently of the hash, through `manifold`.
+                // Only then does an equal checksum say something: that neither the flag, the counter, nor the
+                // cache reaches it. That is the property which lets a replay tripwire survive an optimisation.
+                let asleep =
+                    advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+                let awake =
+                    advance 240 (dropped noSleep (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+                match restingContact asleep, restingContact awake with
+                | ValueSome a, ValueSome b ->
+                    Expect.equal b.Depth a.Depth "the two worlds present the same pose"
+                    Expect.equal b.Normal a.Normal "...down to the contact normal"
+                | _ -> failtest "the circle left the floor"
+
+                Expect.equal (Physics.checksum asleep) (Physics.checksum awake) "so they must hash alike"
+
+                // And the eight fields `World` gained carry no weight in the hash of an empty world.
+                Expect.equal
+                    (Physics.checksum (Physics.empty stepConfig))
+                    12161962213042174405UL
+                    "empty world, unchanged since #75"
+            }
+
+            test "a warm world replays bit-identically" {
+                // The cache is cross-tick state, and cross-tick state is where a replay diverges. It is held
+                // as sorted parallel arrays and merged linearly precisely so that no hash order can leak in.
+                let run () =
+                    Physics.checksum (advance 600 (stack stepConfig 4))
+
+                Expect.equal (run ()) (run ()) "two runs of a settling stack agree"
+            }
+        ]
 
 // =====================================================================================================
 // Speculative contacts — fixed-cost CCD (#77)
@@ -1467,165 +1802,245 @@ let speculativeContactTests =
         "Game.Core Physics speculative contacts / CCD (#77)"
         [
 
-          test "a fast circle fired at a thin wall is stopped at it, not through it — at any dt" {
-              // Bodies: 0 = thin wall at x = 5, 1 = backstop at x = 8, 2 = a small circle flung from the
-              // origin by horizontal gravity. By the time it reaches the wall it moves far more than its own
-              // radius per step, so a discrete-only engine would have it above the wall one tick and past it
-              // the next, touching neither. Three `dt`s, because a larger step is a longer un-swept jump and
-              // so a harder case — the claim is "at any dt the fixed step uses".
-              for dt in [ 1.0 / 30.0; 1.0 / 60.0; 1.0 / 120.0 ] do
-                  let cfg = { stepConfig with Gravity = p 300.0 0.0 }
+            test "a fast circle fired at a thin wall is stopped at it, not through it — at any dt" {
+                // Bodies: 0 = thin wall at x = 5, 1 = backstop at x = 8, 2 = a small circle flung from the
+                // origin by horizontal gravity. By the time it reaches the wall it moves far more than its own
+                // radius per step, so a discrete-only engine would have it above the wall one tick and past it
+                // the next, touching neither. Three `dt`s, because a larger step is a longer un-swept jump and
+                // so a harder case — the claim is "at any dt the fixed step uses".
+                for dt in [ 1.0 / 30.0; 1.0 / 60.0; 1.0 / 120.0 ] do
+                    let cfg =
+                        { stepConfig with
+                            Gravity = p 300.0 0.0
+                        }
 
-                  let w0 =
-                      let w = Physics.empty cfg
-                      let struct (_, w) = Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 5.0 0.0) w
-                      let struct (_, w) = Physics.addBody Physics.Static (box 0.5 5.0) (material 0.0 0.0) (p 8.0 0.0) w
-                      let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
-                      w
+                    let w0 =
+                        let w = Physics.empty cfg
 
-                  let mutable w = w0
-                  let mutable hitWall = false
-                  let mutable hitBackstop = false
+                        let struct (_, w) =
+                            Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 5.0 0.0) w
 
-                  for _ in 1..400 do
-                      w <- Physics.step w dt
-                      if (Physics.manifold w 0 2).IsSome then hitWall <- true
-                      if (Physics.manifold w 1 2).IsSome then hitBackstop <- true
+                        let struct (_, w) =
+                            Physics.addBody Physics.Static (box 0.5 5.0) (material 0.0 0.0) (p 8.0 0.0) w
 
-                  Expect.isTrue hitWall (sprintf "dt = %f: the circle is caught at the thin wall" dt)
-                  Expect.isFalse hitBackstop (sprintf "dt = %f: and never tunnels through to the backstop beyond it" dt)
-          }
+                        let struct (_, w) =
+                            Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
 
-          test "a fast BOX mover is not swept — the documented circle-only scope, verified as a limit" {
-              // The speculative sweep's mover is a CIRCLE by design (`Physics.fs`: "the mover is a
-              // CIRCLE"); a fast polygon mover is an explicit heavier follow-up, not swept today. That is a
-              // documented SCOPE, not a bug — so it is pinned as a characterization test rather than left
-              // unverified: a fast box fired at the same thin wall the circle above is caught at TUNNELS
-              // through it, because no speculative contact is minted for it. This test flips the day linear
-              // polygon CCD lands, which is exactly when its author should be reminded to revisit the scope.
-              //
-              // The contrast is the assertion's teeth: circle and box are fired from rest by the identical
-              // launcher at the identical geometry, and only the mover's SHAPE differs. A generous wall
-              // (half-width 0.4) makes the tunnelling a property of the missing sweep, not of a knife-edge
-              // discrete miss the circle would share.
-              let cfg = { stepConfig with Gravity = p 400.0 0.0 }
+                        w
 
-              let fire moverShape =
-                  let w =
-                      let w = Physics.empty cfg
-                      let struct (_, w) = Physics.addBody Physics.Static (box 0.4 5.0) (material 0.0 0.0) (p 6.0 0.0) w
-                      let struct (_, w) = Physics.addBody Physics.Static (box 0.5 5.0) (material 0.0 0.0) (p 12.0 0.0) w
-                      let struct (_, w) = Physics.addBody Physics.Dynamic moverShape (material 0.0 0.0) (p 0.0 0.0) w
-                      w
+                    let mutable w = w0
+                    let mutable hitWall = false
+                    let mutable hitBackstop = false
 
-                  let mutable acc = w
-                  let mutable hitWall = false
-                  let mutable hitBackstop = false
+                    for _ in 1..400 do
+                        w <- Physics.step w dt
 
-                  for _ in 1..400 do
-                      acc <- Physics.step acc tick
-                      if (Physics.manifold acc 0 2).IsSome then hitWall <- true
-                      if (Physics.manifold acc 1 2).IsSome then hitBackstop <- true
+                        if (Physics.manifold w 0 2).IsSome then
+                            hitWall <- true
 
-                  hitWall, hitBackstop
+                        if (Physics.manifold w 1 2).IsSome then
+                            hitBackstop <- true
 
-              // Control: the circle mover IS swept — caught at the wall, never reaching the backstop.
-              let circleWall, circleBackstop = fire (Physics.SCircle 0.1)
-              Expect.isTrue circleWall "control: the swept circle is caught at the wall"
-              Expect.isFalse circleBackstop "control: the swept circle never reaches the backstop"
+                    Expect.isTrue hitWall (sprintf "dt = %f: the circle is caught at the thin wall" dt)
 
-              // The box mover is not swept, so it tunnels the wall and reaches the backstop beyond.
-              let _, boxBackstop = fire (box 0.1 0.1)
-              Expect.isTrue boxBackstop "a fast box mover tunnels the wall — the documented circle-only sweep scope"
-          }
+                    Expect.isFalse
+                        hitBackstop
+                        (sprintf "dt = %f: and never tunnels through to the backstop beyond it" dt)
+            }
 
-          test "a circle dropped hard onto a thin floor lands on it instead of falling through" {
-              // The canonical tunnel, vertically: a small fast body and a floor thinner than one step's
-              // fall. Discrete-only, the body is above the floor one tick and below it the next and never
-              // contacts it. A catch-floor well below turns "fell through" into an observable — a contact
-              // with body 1 that CCD must never let happen.
-              let cfg = { stepConfig with Gravity = p 0.0 -1500.0 }
+            test "a fast BOX mover is not swept — the documented circle-only scope, verified as a limit" {
+                // The speculative sweep's mover is a CIRCLE by design (`Physics.fs`: "the mover is a
+                // CIRCLE"); a fast polygon mover is an explicit heavier follow-up, not swept today. That is a
+                // documented SCOPE, not a bug — so it is pinned as a characterization test rather than left
+                // unverified: a fast box fired at the same thin wall the circle above is caught at TUNNELS
+                // through it, because no speculative contact is minted for it. This test flips the day linear
+                // polygon CCD lands, which is exactly when its author should be reminded to revisit the scope.
+                //
+                // The contrast is the assertion's teeth: circle and box are fired from rest by the identical
+                // launcher at the identical geometry, and only the mover's SHAPE differs. A generous wall
+                // (half-width 0.4) makes the tunnelling a property of the missing sweep, not of a knife-edge
+                // discrete miss the circle would share.
+                let cfg =
+                    { stepConfig with
+                        Gravity = p 400.0 0.0
+                    }
 
-              let w0 =
-                  let w = Physics.empty cfg
-                  let struct (_, w) = Physics.addBody Physics.Static (box 5.0 0.01) (material 0.0 0.0) (p 0.0 0.0) w
-                  let struct (_, w) = Physics.addBody Physics.Static (box 5.0 0.5) (material 0.0 0.0) (p 0.0 -10.0) w
-                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.02) (material 0.0 0.0) (p 0.0 6.0) w
-                  w
+                let fire moverShape =
+                    let w =
+                        let w = Physics.empty cfg
 
-              let mutable w = w0
-              let mutable onFloor = false
-              let mutable belowFloor = false
+                        let struct (_, w) =
+                            Physics.addBody Physics.Static (box 0.4 5.0) (material 0.0 0.0) (p 6.0 0.0) w
 
-              for _ in 1..400 do
-                  w <- Physics.step w tick
-                  if (Physics.manifold w 0 2).IsSome then onFloor <- true
-                  if (Physics.manifold w 1 2).IsSome then belowFloor <- true
+                        let struct (_, w) =
+                            Physics.addBody Physics.Static (box 0.5 5.0) (material 0.0 0.0) (p 12.0 0.0) w
 
-              Expect.isTrue onFloor "the circle is caught on the thin floor"
-              Expect.isFalse belowFloor "and never reaches the catch-floor below it"
-          }
+                        let struct (_, w) =
+                            Physics.addBody Physics.Dynamic moverShape (material 0.0 0.0) (p 0.0 0.0) w
 
-          test "a fast mover is stopped by what lies in its path, and ignores a wall off to the side" {
-              // The inert half, in motion: the speculative broad phase must not stop a mover with an
-              // obstacle it never sweeps over. The off-axis wall at y = 10 is nowhere near the path along
-              // y = 0, so it must never report a contact, while the backstop that IS in the path catches
-              // the mover. A speculative pass that queried too wide would stop the mover early, on the wall
-              // it passes clear of.
-              let cfg = { stepConfig with Gravity = p 300.0 0.0 }
+                        w
 
-              let w0 =
-                  let w = Physics.empty cfg
-                  let struct (_, w) = Physics.addBody Physics.Static (box 0.5 0.5) (material 0.0 0.0) (p 4.0 10.0) w
-                  let struct (_, w) = Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 8.0 0.0) w
-                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
-                  w
+                    let mutable acc = w
+                    let mutable hitWall = false
+                    let mutable hitBackstop = false
 
-              let mutable w = w0
-              let mutable hitOffPath = false
-              let mutable hitBackstop = false
+                    for _ in 1..400 do
+                        acc <- Physics.step acc tick
 
-              for _ in 1..400 do
-                  w <- Physics.step w tick
-                  if (Physics.manifold w 0 2).IsSome then hitOffPath <- true
-                  if (Physics.manifold w 1 2).IsSome then hitBackstop <- true
+                        if (Physics.manifold acc 0 2).IsSome then
+                            hitWall <- true
 
-              Expect.isFalse hitOffPath "the off-path wall never stops the mover"
-              Expect.isTrue hitBackstop "and the mover is caught by the backstop that is in its path"
-          }
+                        if (Physics.manifold acc 1 2).IsSome then
+                            hitBackstop <- true
 
-          // `linux-pinned-float-golden`: same box/circle literals as above, excluded on the Windows leg.
-          test "the golden checksums are unchanged: speculation is inert when nothing is fast (linux-pinned-float-golden)" {
-              // The scenes of #75/#76 carry no fast mover — a box or circle dropped from y = 5 reaches the
-              // floor at well under a radius per step — so the speculative pass must produce nothing and
-              // leave every bit of their state where #75/#76 recorded it. If the fast-mover threshold ever
-              // fired on ordinary falling gravity, all three of these move; that they do not is the
-              // bit-for-bit form of "inert when nothing is speculative".
-              let boxOnFloor = advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
-              let circleOnFloor = advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+                    hitWall, hitBackstop
 
-              Expect.equal (Physics.checksum (Physics.empty stepConfig)) 12161962213042174405UL "empty world, unchanged since #75"
-              Expect.equal (Physics.checksum boxOnFloor) 9427473436406466390UL "the box checksum is untouched by CCD"
-              Expect.equal (Physics.checksum circleOnFloor) 12544979940497693507UL "the circle checksum is untouched by CCD"
-          }
+                // Control: the circle mover IS swept — caught at the wall, never reaching the backstop.
+                let circleWall, circleBackstop = fire (Physics.SCircle 0.1)
+                Expect.isTrue circleWall "control: the swept circle is caught at the wall"
+                Expect.isFalse circleBackstop "control: the swept circle never reaches the backstop"
 
-          test "a scene with speculative contacts replays bit-identically" {
-              // CCD adds a broad phase, a narrow phase and cache entries, all cross-tick-adjacent state and
-              // so all places a replay can diverge. The speculative pass is built to be as deterministic as
-              // the discrete one: a sorted union, a fixed sentinel feature id, no hash-order dependence.
-              let run () =
-                  let cfg = { stepConfig with Gravity = p 300.0 0.0 }
+                // The box mover is not swept, so it tunnels the wall and reaches the backstop beyond.
+                let _, boxBackstop = fire (box 0.1 0.1)
+                Expect.isTrue boxBackstop "a fast box mover tunnels the wall — the documented circle-only sweep scope"
+            }
 
-                  let w0 =
-                      let w = Physics.empty cfg
-                      let struct (_, w) = Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 5.0 0.0) w
-                      let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
-                      w
+            test "a circle dropped hard onto a thin floor lands on it instead of falling through" {
+                // The canonical tunnel, vertically: a small fast body and a floor thinner than one step's
+                // fall. Discrete-only, the body is above the floor one tick and below it the next and never
+                // contacts it. A catch-floor well below turns "fell through" into an observable — a contact
+                // with body 1 that CCD must never let happen.
+                let cfg =
+                    { stepConfig with
+                        Gravity = p 0.0 -1500.0
+                    }
 
-                  Physics.checksum (advance 300 w0)
+                let w0 =
+                    let w = Physics.empty cfg
 
-              Expect.equal (run ()) (run ()) "two runs of the same fast shot agree to the bit"
-          } ]
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static (box 5.0 0.01) (material 0.0 0.0) (p 0.0 0.0) w
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static (box 5.0 0.5) (material 0.0 0.0) (p 0.0 -10.0) w
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Dynamic (Physics.SCircle 0.02) (material 0.0 0.0) (p 0.0 6.0) w
+
+                    w
+
+                let mutable w = w0
+                let mutable onFloor = false
+                let mutable belowFloor = false
+
+                for _ in 1..400 do
+                    w <- Physics.step w tick
+
+                    if (Physics.manifold w 0 2).IsSome then
+                        onFloor <- true
+
+                    if (Physics.manifold w 1 2).IsSome then
+                        belowFloor <- true
+
+                Expect.isTrue onFloor "the circle is caught on the thin floor"
+                Expect.isFalse belowFloor "and never reaches the catch-floor below it"
+            }
+
+            test "a fast mover is stopped by what lies in its path, and ignores a wall off to the side" {
+                // The inert half, in motion: the speculative broad phase must not stop a mover with an
+                // obstacle it never sweeps over. The off-axis wall at y = 10 is nowhere near the path along
+                // y = 0, so it must never report a contact, while the backstop that IS in the path catches
+                // the mover. A speculative pass that queried too wide would stop the mover early, on the wall
+                // it passes clear of.
+                let cfg =
+                    { stepConfig with
+                        Gravity = p 300.0 0.0
+                    }
+
+                let w0 =
+                    let w = Physics.empty cfg
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static (box 0.5 0.5) (material 0.0 0.0) (p 4.0 10.0) w
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 8.0 0.0) w
+
+                    let struct (_, w) =
+                        Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
+
+                    w
+
+                let mutable w = w0
+                let mutable hitOffPath = false
+                let mutable hitBackstop = false
+
+                for _ in 1..400 do
+                    w <- Physics.step w tick
+
+                    if (Physics.manifold w 0 2).IsSome then
+                        hitOffPath <- true
+
+                    if (Physics.manifold w 1 2).IsSome then
+                        hitBackstop <- true
+
+                Expect.isFalse hitOffPath "the off-path wall never stops the mover"
+                Expect.isTrue hitBackstop "and the mover is caught by the backstop that is in its path"
+            }
+
+            // `linux-pinned-float-golden`: same box/circle literals as above, excluded on the Windows leg.
+            test
+                "the golden checksums are unchanged: speculation is inert when nothing is fast (linux-pinned-float-golden)" {
+                // The scenes of #75/#76 carry no fast mover — a box or circle dropped from y = 5 reaches the
+                // floor at well under a radius per step — so the speculative pass must produce nothing and
+                // leave every bit of their state where #75/#76 recorded it. If the fast-mover threshold ever
+                // fired on ordinary falling gravity, all three of these move; that they do not is the
+                // bit-for-bit form of "inert when nothing is speculative".
+                let boxOnFloor =
+                    advance 240 (dropped stepConfig (box 0.5 0.5) (material 0.0 0.5) 5.0)
+
+                let circleOnFloor =
+                    advance 240 (dropped stepConfig (Physics.SCircle 0.5) (material 0.0 0.5) 5.0)
+
+                Expect.equal
+                    (Physics.checksum (Physics.empty stepConfig))
+                    12161962213042174405UL
+                    "empty world, unchanged since #75"
+
+                Expect.equal (Physics.checksum boxOnFloor) 9427473436406466390UL "the box checksum is untouched by CCD"
+
+                Expect.equal
+                    (Physics.checksum circleOnFloor)
+                    12544979940497693507UL
+                    "the circle checksum is untouched by CCD"
+            }
+
+            test "a scene with speculative contacts replays bit-identically" {
+                // CCD adds a broad phase, a narrow phase and cache entries, all cross-tick-adjacent state and
+                // so all places a replay can diverge. The speculative pass is built to be as deterministic as
+                // the discrete one: a sorted union, a fixed sentinel feature id, no hash-order dependence.
+                let run () =
+                    let cfg =
+                        { stepConfig with
+                            Gravity = p 300.0 0.0
+                        }
+
+                    let w0 =
+                        let w = Physics.empty cfg
+
+                        let struct (_, w) =
+                            Physics.addBody Physics.Static (box 0.05 5.0) (material 0.0 0.0) (p 5.0 0.0) w
+
+                        let struct (_, w) =
+                            Physics.addBody Physics.Dynamic (Physics.SCircle 0.1) (material 0.0 0.0) (p 0.0 0.0) w
+
+                        w
+
+                    Physics.checksum (advance 300 w0)
+
+                Expect.equal (run ()) (run ()) "two runs of the same fast shot agree to the bit"
+            }
+        ]
 
 // -------------------------------------------------------------------------------------------------
 // Presentation interpolation (#78)
@@ -1651,100 +2066,107 @@ let interpolateTests =
         "Game.Core Physics presentation interpolation (#78)"
         [
 
-          // -----------------------------------------------------------------------------------------
-          // Exact endpoints, over positions built through the public API
-          // -----------------------------------------------------------------------------------------
+            // -----------------------------------------------------------------------------------------
+            // Exact endpoints, over positions built through the public API
+            // -----------------------------------------------------------------------------------------
 
-          test "interpolate 0.0 is previous's transforms; interpolate 1.0 is current's" {
-              let prev = posWorld [ p 0.0 0.0; p 10.0 -4.0 ]
-              let curr = posWorld [ p 2.0 6.0; p 12.0 -1.0 ]
+            test "interpolate 0.0 is previous's transforms; interpolate 1.0 is current's" {
+                let prev = posWorld [ p 0.0 0.0; p 10.0 -4.0 ]
+                let curr = posWorld [ p 2.0 6.0; p 12.0 -1.0 ]
 
-              let at0 = Physics.interpolate 0.0 prev curr
-              let at1 = Physics.interpolate 1.0 prev curr
+                let at0 = Physics.interpolate 0.0 prev curr
+                let at1 = Physics.interpolate 1.0 prev curr
 
-              Expect.equal (at0 |> Array.map (fun t -> t.Position)) [| p 0.0 0.0; p 10.0 -4.0 |] "alpha 0 is previous"
-              Expect.equal (at1 |> Array.map (fun t -> t.Position)) [| p 2.0 6.0; p 12.0 -1.0 |] "alpha 1 is current"
-          }
+                Expect.equal (at0 |> Array.map (fun t -> t.Position)) [| p 0.0 0.0; p 10.0 -4.0 |] "alpha 0 is previous"
+                Expect.equal (at1 |> Array.map (fun t -> t.Position)) [| p 2.0 6.0; p 12.0 -1.0 |] "alpha 1 is current"
+            }
 
-          test "the blend is linear at the midpoint, one transform per current body in index order" {
-              let prev = posWorld [ p 0.0 0.0; p -2.0 8.0 ]
-              let curr = posWorld [ p 4.0 2.0; p 2.0 -8.0 ]
+            test "the blend is linear at the midpoint, one transform per current body in index order" {
+                let prev = posWorld [ p 0.0 0.0; p -2.0 8.0 ]
+                let curr = posWorld [ p 4.0 2.0; p 2.0 -8.0 ]
 
-              let mid = Physics.interpolate 0.5 prev curr
+                let mid = Physics.interpolate 0.5 prev curr
 
-              Expect.equal mid.Length 2 "one transform per body"
-              Expect.floatClose Accuracy.high mid.[0].Position.X 2.0 "body 0 x halfway"
-              Expect.floatClose Accuracy.high mid.[0].Position.Y 1.0 "body 0 y halfway"
-              Expect.floatClose Accuracy.high mid.[1].Position.X 0.0 "body 1 x halfway"
-              Expect.floatClose Accuracy.high mid.[1].Position.Y 0.0 "body 1 y halfway"
-          }
+                Expect.equal mid.Length 2 "one transform per body"
+                Expect.floatClose Accuracy.high mid.[0].Position.X 2.0 "body 0 x halfway"
+                Expect.floatClose Accuracy.high mid.[0].Position.Y 1.0 "body 0 y halfway"
+                Expect.floatClose Accuracy.high mid.[1].Position.X 0.0 "body 1 x halfway"
+                Expect.floatClose Accuracy.high mid.[1].Position.Y 0.0 "body 1 y halfway"
+            }
 
-          // -----------------------------------------------------------------------------------------
-          // Totality: the clamp, and a body that only current has
-          // -----------------------------------------------------------------------------------------
+            // -----------------------------------------------------------------------------------------
+            // Totality: the clamp, and a body that only current has
+            // -----------------------------------------------------------------------------------------
 
-          test "alpha is clamped to [0,1] — out of range and non-finite never extrapolate or throw" {
-              let prev = posWorld [ p 0.0 0.0 ]
-              let curr = posWorld [ p 10.0 0.0 ]
+            test "alpha is clamped to [0,1] — out of range and non-finite never extrapolate or throw" {
+                let prev = posWorld [ p 0.0 0.0 ]
+                let curr = posWorld [ p 10.0 0.0 ]
 
-              let x alpha = (Physics.interpolate alpha prev curr).[0].Position.X
+                let x alpha =
+                    (Physics.interpolate alpha prev curr).[0].Position.X
 
-              Expect.equal (x -1.0) 0.0 "alpha below 0 clamps to previous"
-              Expect.equal (x 2.0) 10.0 "alpha above 1 clamps to current"
-              Expect.equal (x infinity) 10.0 "+infinity clamps to current"
-              Expect.equal (x -infinity) 0.0 "-infinity clamps to previous"
-              Expect.equal (x nan) 0.0 "NaN, which loses every comparison, resolves to previous not garbage"
-          }
+                Expect.equal (x -1.0) 0.0 "alpha below 0 clamps to previous"
+                Expect.equal (x 2.0) 10.0 "alpha above 1 clamps to current"
+                Expect.equal (x infinity) 10.0 "+infinity clamps to current"
+                Expect.equal (x -infinity) 0.0 "-infinity clamps to previous"
+                Expect.equal (x nan) 0.0 "NaN, which loses every comparison, resolves to previous not garbage"
+            }
 
-          test "a body present in current but not previous is shown at its current transform" {
-              // The double buffer can gain a body between the two frames (a spawn). It has no prior pose to
-              // blend from, so it must appear where it is now — at every alpha, not just alpha 1.
-              let prev = posWorld [ p 0.0 0.0 ]
-              let curr = posWorld [ p 4.0 0.0; p 9.0 -3.0 ]
+            test "a body present in current but not previous is shown at its current transform" {
+                // The double buffer can gain a body between the two frames (a spawn). It has no prior pose to
+                // blend from, so it must appear where it is now — at every alpha, not just alpha 1.
+                let prev = posWorld [ p 0.0 0.0 ]
+                let curr = posWorld [ p 4.0 0.0; p 9.0 -3.0 ]
 
-              let mid = Physics.interpolate 0.5 prev curr
+                let mid = Physics.interpolate 0.5 prev curr
 
-              Expect.equal mid.Length 2 "the result covers current's bodies, not previous's"
-              Expect.floatClose Accuracy.high mid.[0].Position.X 2.0 "the shared body still blends"
-              Expect.equal mid.[1].Position (p 9.0 -3.0) "the new body is at its current position, unblended"
-          }
+                Expect.equal mid.Length 2 "the result covers current's bodies, not previous's"
+                Expect.floatClose Accuracy.high mid.[0].Position.X 2.0 "the shared body still blends"
+                Expect.equal mid.[1].Position (p 9.0 -3.0) "the new body is at its current position, unblended"
+            }
 
-          test "interpolate reads only presentation state — an empty world yields no transforms, never throws" {
-              let empty = Physics.empty stepConfig
-              Expect.equal (Physics.interpolate 0.5 empty empty) [||] "no bodies, no transforms"
-          }
+            test "interpolate reads only presentation state — an empty world yields no transforms, never throws" {
+                let empty = Physics.empty stepConfig
+                Expect.equal (Physics.interpolate 0.5 empty empty) [||] "no bodies, no transforms"
+            }
 
-          // -----------------------------------------------------------------------------------------
-          // Shortest arc — asserted on the internal blend, since Rot cannot be set through the public API
-          // -----------------------------------------------------------------------------------------
+            // -----------------------------------------------------------------------------------------
+            // Shortest arc — asserted on the internal blend, since Rot cannot be set through the public API
+            // -----------------------------------------------------------------------------------------
 
-          test "rotation takes the short way: +3.13 to -3.13 crosses +pi, not 0" {
-              // The delta is -6.26 rad the long way, but +0.023 rad across +pi. A naive lerp spins a turret
-              // most of the way round the circle at 60 fps; the shortest arc nudges it a hair past pi.
-              let mid = Physics.lerpAngleShortest 3.13 -3.13 0.5
+            test "rotation takes the short way: +3.13 to -3.13 crosses +pi, not 0" {
+                // The delta is -6.26 rad the long way, but +0.023 rad across +pi. A naive lerp spins a turret
+                // most of the way round the circle at 60 fps; the shortest arc nudges it a hair past pi.
+                let mid = Physics.lerpAngleShortest 3.13 -3.13 0.5
 
-              Expect.floatClose Accuracy.medium mid System.Math.PI "the midpoint sits on +pi"
-              Expect.isTrue (mid > 3.13) "it moved UP toward +pi, it did not unwind down through 0"
-          }
+                Expect.floatClose Accuracy.medium mid System.Math.PI "the midpoint sits on +pi"
+                Expect.isTrue (mid > 3.13) "it moved UP toward +pi, it did not unwind down through 0"
+            }
 
-          test "the short way is symmetric: -3.13 to +3.13 crosses -pi" {
-              let mid = Physics.lerpAngleShortest -3.13 3.13 0.5
-              Expect.floatClose Accuracy.medium mid -System.Math.PI "the midpoint sits on -pi"
-              Expect.isTrue (mid < -3.13) "it moved DOWN toward -pi"
-          }
+            test "the short way is symmetric: -3.13 to +3.13 crosses -pi" {
+                let mid = Physics.lerpAngleShortest -3.13 3.13 0.5
+                Expect.floatClose Accuracy.medium mid -System.Math.PI "the midpoint sits on -pi"
+                Expect.isTrue (mid < -3.13) "it moved DOWN toward -pi"
+            }
 
-          test "endpoints are exact, even where the short arc wraps a full turn off the naive value" {
-              // t=0 is a0 and t=1 is a1 bit-for-bit. The wrap case is the one that needs the special-case:
-              // a0 + shortestDelta at t=1 would be +3.153, a full 2pi shy of current's -3.13.
-              Expect.equal (Physics.lerpAngleShortest 3.13 -3.13 0.0) 3.13 "t=0 is exactly a0"
-              Expect.equal (Physics.lerpAngleShortest 3.13 -3.13 1.0) -3.13 "t=1 is exactly a1, not a turn off it"
-          }
+            test "endpoints are exact, even where the short arc wraps a full turn off the naive value" {
+                // t=0 is a0 and t=1 is a1 bit-for-bit. The wrap case is the one that needs the special-case:
+                // a0 + shortestDelta at t=1 would be +3.153, a full 2pi shy of current's -3.13.
+                Expect.equal (Physics.lerpAngleShortest 3.13 -3.13 0.0) 3.13 "t=0 is exactly a0"
+                Expect.equal (Physics.lerpAngleShortest 3.13 -3.13 1.0) -3.13 "t=1 is exactly a1, not a turn off it"
+            }
 
-          test "a sub-pi step matches a naive lerp — the short way IS the direct way when no wrap is needed" {
-              Expect.floatClose Accuracy.high (Physics.lerpAngleShortest 0.0 1.0 0.5) 0.5 "half of a 1 rad turn"
-              Expect.floatClose Accuracy.high (Physics.lerpAngleShortest 1.0 2.0 0.25) 1.25 "a quarter of the way"
-              Expect.floatClose Accuracy.high (Physics.lerpAngleShortest -0.4 0.4 0.5) 0.0 "straddling 0 goes through 0"
-          } ]
+            test "a sub-pi step matches a naive lerp — the short way IS the direct way when no wrap is needed" {
+                Expect.floatClose Accuracy.high (Physics.lerpAngleShortest 0.0 1.0 0.5) 0.5 "half of a 1 rad turn"
+                Expect.floatClose Accuracy.high (Physics.lerpAngleShortest 1.0 2.0 0.25) 1.25 "a quarter of the way"
+
+                Expect.floatClose
+                    Accuracy.high
+                    (Physics.lerpAngleShortest -0.4 0.4 0.5)
+                    0.0
+                    "straddling 0 goes through 0"
+            }
+        ]
 
 // ---------------------------------------------------------------------------------------------------
 // The world-build path and the carried broad phase (#94). Two changes with one common evidence bar:
@@ -1765,97 +2187,124 @@ let private buildQuads (bodies: (Physics.BodyKind * Physics.Shape * Point) list)
 let worldBuildTests =
     testList
         "Game.Core Physics world build and carried broad phase (#94)"
-        [ test "addBodies builds the same world as folding addBody — indices, pairs, checksum, and a replay all agree" {
-              let prop (raw: (float * float * float * int * int) list) =
-                  // The oracle here is `addBody` itself, folded; cap the batch where a fold stays cheap.
-                  let quads = raw |> List.truncate 20 |> List.map bodyOf |> buildQuads
+        [
+            test "addBodies builds the same world as folding addBody — indices, pairs, checksum, and a replay all agree" {
+                let prop (raw: (float * float * float * int * int) list) =
+                    // The oracle here is `addBody` itself, folded; cap the batch where a fold stays cheap.
+                    let quads = raw |> List.truncate 20 |> List.map bodyOf |> buildQuads
 
-                  let folded =
-                      quads
-                      |> List.fold
-                          (fun w (k, s, m, pos) ->
-                              let struct (_, w') = Physics.addBody k s m pos w
-                              w')
-                          (Physics.empty stepConfig)
+                    let folded =
+                        quads
+                        |> List.fold
+                            (fun w (k, s, m, pos) ->
+                                let struct (_, w') = Physics.addBody k s m pos w
+                                w')
+                            (Physics.empty stepConfig)
 
-                  let struct (idxBatch, batched) = Physics.addBodies quads (Physics.empty stepConfig)
+                    let struct (idxBatch, batched) = Physics.addBodies quads (Physics.empty stepConfig)
 
-                  // Indices are dense and ascending from 0 on a fresh world, exactly as N `addBody` calls assign.
-                  let sameIndices = Array.toList idxBatch = [ 0 .. List.length quads - 1 ]
-                  let samePairs = Physics.pairs folded = Physics.pairs batched
-                  let sameChecksum = Physics.checksum folded = Physics.checksum batched
-                  // ...and the two remain identical under the one thing that reads all the derived state: `step`.
-                  let sameAfterReplay = Physics.checksum (advance 30 folded) = Physics.checksum (advance 30 batched)
+                    // Indices are dense and ascending from 0 on a fresh world, exactly as N `addBody` calls assign.
+                    let sameIndices = Array.toList idxBatch = [ 0 .. List.length quads - 1 ]
+                    let samePairs = Physics.pairs folded = Physics.pairs batched
+                    let sameChecksum = Physics.checksum folded = Physics.checksum batched
+                    // ...and the two remain identical under the one thing that reads all the derived state: `step`.
+                    let sameAfterReplay =
+                        Physics.checksum (advance 30 folded) = Physics.checksum (advance 30 batched)
 
-                  sameIndices && samePairs && sameChecksum && sameAfterReplay
+                    sameIndices && samePairs && sameChecksum && sameAfterReplay
 
-              Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
-          }
+                Check.One(Config.QuickThrowOnFailure.WithMaxTest 300, prop)
+            }
 
-          test "addBodies assigns dense ascending indices from the world's current body count" {
-              // Two bodies already in the world (indices 0 and 1); the batch must continue from 2.
-              let w0 =
-                  worldOf
-                      8.0
-                      [ Physics.Static, box 5.0 1.0, p 0.0 0.0
-                        Physics.Dynamic, Physics.SCircle 1.0, p 0.0 3.0 ]
+            test "addBodies assigns dense ascending indices from the world's current body count" {
+                // Two bodies already in the world (indices 0 and 1); the batch must continue from 2.
+                let w0 =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Static, box 5.0 1.0, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 3.0
+                        ]
 
-              let struct (idx, _) =
-                  Physics.addBodies
-                      [ Physics.Dynamic, Physics.SCircle 0.5, noMaterial, p 2.0 3.0
-                        Physics.Dynamic, Physics.SCircle 0.5, noMaterial, p 4.0 3.0 ]
-                      w0
+                let struct (idx, _) =
+                    Physics.addBodies
+                        [
+                            Physics.Dynamic, Physics.SCircle 0.5, noMaterial, p 2.0 3.0
+                            Physics.Dynamic, Physics.SCircle 0.5, noMaterial, p 4.0 3.0
+                        ]
+                        w0
 
-              Expect.equal (Array.toList idx) [ 2; 3 ] "the batch continues the world's index sequence, it does not restart it"
-          }
+                Expect.equal
+                    (Array.toList idx)
+                    [ 2; 3 ]
+                    "the batch continues the world's index sequence, it does not restart it"
+            }
 
-          test "an empty batch is the identity — no indices, and a bit-for-bit unchanged world" {
-              let w =
-                  worldOf
-                      8.0
-                      [ Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
-                        Physics.Static, box 20.0 1.0, p 0.0 -1.5 ]
+            test "an empty batch is the identity — no indices, and a bit-for-bit unchanged world" {
+                let w =
+                    worldOf
+                        8.0
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, p 0.0 0.0
+                            Physics.Static, box 20.0 1.0, p 0.0 -1.5
+                        ]
 
-              let struct (idx, w') = Physics.addBodies [] w
+                let struct (idx, w') = Physics.addBodies [] w
 
-              Expect.isEmpty idx "nothing added, no indices"
-              Expect.equal (Physics.checksum w') (Physics.checksum w) "the world's body state is unchanged"
-              Expect.equal (Physics.pairs w') (Physics.pairs w) "and the broad phase it carries is unchanged"
-          }
+                Expect.isEmpty idx "nothing added, no indices"
+                Expect.equal (Physics.checksum w') (Physics.checksum w) "the world's body state is unchanged"
+                Expect.equal (Physics.pairs w') (Physics.pairs w) "and the broad phase it carries is unchanged"
+            }
 
-          test "a degenerate body in a batch still takes its index, so later bodies do not shift" {
-              // Body 1 has radius 0 — a no-collision input — but it is still indexed, exactly as the single
-              // `addBody` path indexes it, so body 2 keeps index 2 rather than sliding to 1.
-              let struct (idx, w) =
-                  Physics.addBodies
-                      [ Physics.Dynamic, Physics.SCircle 1.0, noMaterial, p 0.0 0.0
-                        Physics.Dynamic, Physics.SCircle 0.0, noMaterial, p 0.0 0.0
-                        Physics.Dynamic, Physics.SCircle 1.0, noMaterial, p 0.5 0.0 ]
-                      (Physics.empty (config 8.0))
+            test "a degenerate body in a batch still takes its index, so later bodies do not shift" {
+                // Body 1 has radius 0 — a no-collision input — but it is still indexed, exactly as the single
+                // `addBody` path indexes it, so body 2 keeps index 2 rather than sliding to 1.
+                let struct (idx, w) =
+                    Physics.addBodies
+                        [
+                            Physics.Dynamic, Physics.SCircle 1.0, noMaterial, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 0.0, noMaterial, p 0.0 0.0
+                            Physics.Dynamic, Physics.SCircle 1.0, noMaterial, p 0.5 0.0
+                        ]
+                        (Physics.empty (config 8.0))
 
-              Expect.equal (Array.toList idx) [ 0; 1; 2 ] "every body is indexed, degenerate or not"
-              Expect.equal (pairList w) [ (0, 2) ] "the zero-radius body pairs with nothing; 0 and 2 still overlap and pair"
-          }
+                Expect.equal (Array.toList idx) [ 0; 1; 2 ] "every body is indexed, degenerate or not"
 
-          test "the broad phase a stepped world carries reflects the poses step integrated, not its opening ones" {
-              // A circle starts far ABOVE the floor, their AABBs disjoint, so the OPENING broad phase reports
-              // no pair. It then falls. If `step` refreshes the grid it hands on, `pairs` reports the contact
-              // once the circle nears the floor; if `step` left a grid keyed on the opening poses, the pair
-              // would never appear however far the circle fell. Two bodies, so `pairs` is `[]` or `[(0,1)]`.
-              let w0 =
-                  let w = Physics.empty stepConfig
-                  let struct (_, w) = Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.0) (p 0.0 0.0) w
-                  let struct (_, w) = Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.0) (p 0.0 20.0) w
-                  w
+                Expect.equal
+                    (pairList w)
+                    [ (0, 2) ]
+                    "the zero-radius body pairs with nothing; 0 and 2 still overlap and pair"
+            }
 
-              Expect.isEmpty (pairList w0) "far apart at rest, the opening broad phase sees no pair"
+            test "the broad phase a stepped world carries reflects the poses step integrated, not its opening ones" {
+                // A circle starts far ABOVE the floor, their AABBs disjoint, so the OPENING broad phase reports
+                // no pair. It then falls. If `step` refreshes the grid it hands on, `pairs` reports the contact
+                // once the circle nears the floor; if `step` left a grid keyed on the opening poses, the pair
+                // would never appear however far the circle fell. Two bodies, so `pairs` is `[]` or `[(0,1)]`.
+                let w0 =
+                    let w = Physics.empty stepConfig
 
-              let mutable w = w0
-              let mutable sawPair = false
+                    let struct (_, w) =
+                        Physics.addBody Physics.Static (box 50.0 1.0) (material 0.0 0.0) (p 0.0 0.0) w
 
-              for _ in 1..120 do
-                  w <- Physics.step w tick
-                  if pairList w = [ (0, 1) ] then sawPair <- true
+                    let struct (_, w) =
+                        Physics.addBody Physics.Dynamic (Physics.SCircle 0.5) (material 0.0 0.0) (p 0.0 20.0) w
 
-              Expect.isTrue sawPair "as the circle nears the floor, the carried broad phase reports the contact — the grid moved with the bodies"
-          } ]
+                    w
+
+                Expect.isEmpty (pairList w0) "far apart at rest, the opening broad phase sees no pair"
+
+                let mutable w = w0
+                let mutable sawPair = false
+
+                for _ in 1..120 do
+                    w <- Physics.step w tick
+
+                    if pairList w = [ (0, 1) ] then
+                        sawPair <- true
+
+                Expect.isTrue
+                    sawPair
+                    "as the circle nears the floor, the carried broad phase reports the contact — the grid moved with the bodies"
+            }
+        ]

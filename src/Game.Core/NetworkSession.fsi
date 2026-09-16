@@ -2,23 +2,34 @@ namespace FS.GG.Game.Core
 
 /// A client identity bound to one session and one opaque reconnect token.
 type NetworkClientBinding =
-    { SessionId: string
-      ClientId: string
-      ReconnectToken: string }
+    {
+        SessionId: string
+        ClientId: string
+        ReconnectToken: string
+    }
 
 /// One transport-delivered semantic input. The inner input remains the Game session contract.
 type NetworkInput<'input> =
-    { Binding: NetworkClientBinding
-      Input: SessionInput<'input> }
+    {
+        Binding: NetworkClientBinding
+        Input: SessionInput<'input>
+    }
 
 /// An input assigned its deterministic server acceptance order.
 type AcceptedNetworkInput<'input> =
-    { AcceptedOrder: uint64
-      ClientId: string
-      Input: SessionInput<'input> }
+    {
+        AcceptedOrder: uint64
+        ClientId: string
+        Input: SessionInput<'input>
+    }
 
 /// Portable admission state. Construction is available only through <c>NetworkAdmission.create</c>.
-type NetworkAdmissionState<'input> = private NetworkAdmissionState of string * NetworkClientBinding list * Map<string, uint64> * AcceptedNetworkInput<'input> list
+type NetworkAdmissionState<'input> =
+    private | NetworkAdmissionState of
+        string *
+        NetworkClientBinding list *
+        Map<string, uint64> *
+        AcceptedNetworkInput<'input> list
 
 [<RequireQualifiedAccess>]
 type NetworkAdmissionIssue =
@@ -48,33 +59,34 @@ type NetworkResyncDecision =
 module NetworkAdmission =
     val create:
         sessionId: string ->
-        bindings: NetworkClientBinding list -> Result<NetworkAdmissionState<'input>, NetworkAdmissionIssue list>
+        bindings: NetworkClientBinding list ->
+            Result<NetworkAdmissionState<'input>, NetworkAdmissionIssue list>
 
     /// Add one runtime-issued client binding without changing accepted history or sequence cursors.
     val bind:
         binding: NetworkClientBinding ->
-        state: NetworkAdmissionState<'input> -> Result<NetworkAdmissionState<'input>, NetworkAdmissionIssue list>
+        state: NetworkAdmissionState<'input> ->
+            Result<NetworkAdmissionState<'input>, NetworkAdmissionIssue list>
 
     /// Retire a client binding and its sequence cursor while preserving the accepted room history.
-    val unbind:
-        clientId: string -> state: NetworkAdmissionState<'input> -> NetworkAdmissionState<'input>
+    val unbind: clientId: string -> state: NetworkAdmissionState<'input> -> NetworkAdmissionState<'input>
 
     /// Validate identity, token, monotonic sequence and product payload before assigning the next order.
     val admit:
         validatePayload: ('input -> Result<unit, string>) ->
         candidate: NetworkInput<'input> ->
-        state: NetworkAdmissionState<'input> -> Result<NetworkAdmissionState<'input> * AcceptedNetworkInput<'input>, NetworkAdmissionIssue>
+        state: NetworkAdmissionState<'input> ->
+            Result<NetworkAdmissionState<'input> * AcceptedNetworkInput<'input>, NetworkAdmissionIssue>
 
     val accepted: state: NetworkAdmissionState<'input> -> AcceptedNetworkInput<'input> list
     val lastSequence: clientId: string -> state: NetworkAdmissionState<'input> -> uint64 option
 
     /// Canonical length-prefixed accepted-stream text, independent of transport arrival representation.
-    val canonicalText:
-        encodeInput: ('input -> string) ->
-        state: NetworkAdmissionState<'input> -> string
+    val canonicalText: encodeInput: ('input -> string) -> state: NetworkAdmissionState<'input> -> string
 
     /// Select a bounded replay suffix when retained history is available; otherwise require a full snapshot.
     val resync:
         retainedAfterRevision: uint64 option ->
         clientRevision: uint64 ->
-        currentRevision: uint64 -> NetworkResyncDecision
+        currentRevision: uint64 ->
+            NetworkResyncDecision

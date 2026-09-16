@@ -7,10 +7,12 @@ type AgentId = AgentId of int
 
 [<Struct>]
 type Sighting<'T> =
-    { Agent: AgentId
-      Position: Point
-      Seen: 'T
-      LastSeenTick: int }
+    {
+        Agent: AgentId
+        Position: Point
+        Seen: 'T
+        LastSeenTick: int
+    }
 
 /// The fog boundary. Abstract in the `.fsi`: no public constructor, no public field, and every member is
 /// internal to this assembly, so no caller can recover the world model from a value of this type.
@@ -22,11 +24,13 @@ type TeamView<'T>(tick: int, spotted: Sighting<'T> list, ghosts: Sighting<'T> li
 
 [<Struct>]
 type Difficulty =
-    { ReactionTicks: int
-      AimErrorSigma: float
-      SpotCycleTicks: int
-      UsesWeakPointTargeting: bool
-      ThreatWeight: float }
+    {
+        ReactionTicks: int
+        AimErrorSigma: float
+        SpotCycleTicks: int
+        UsesWeakPointTargeting: bool
+        ThreatWeight: float
+    }
 
 [<RequireQualifiedAccess>]
 module Ai =
@@ -48,7 +52,7 @@ module Ai =
             |> List.fold
                 (fun acc s ->
                     match Map.tryFind (byAgent s) acc with
-                    | Some (prev: Sighting<'T>) when prev.LastSeenTick >= s.LastSeenTick -> acc
+                    | Some(prev: Sighting<'T>) when prev.LastSeenTick >= s.LastSeenTick -> acc
                     | _ -> Map.add (byAgent s) s acc)
                 Map.empty
             |> Map.toList
@@ -75,7 +79,11 @@ module Ai =
             match xs, ys with
             | [], rest
             | rest, [] -> rest
-            | x :: xt, y :: yt -> if byAgent x <= byAgent y then x :: merge xt ys else y :: merge xs yt
+            | x :: xt, y :: yt ->
+                if byAgent x <= byAgent y then
+                    x :: merge xt ys
+                else
+                    y :: merge xs yt
 
         merge view.Spotted view.Ghosts
 
@@ -153,7 +161,10 @@ module Ai =
                 // differ by ~4.3e9, whose square is ~1.8e19 > Int64.MaxValue) and the product wraps NEGATIVE,
                 // so a cell on the far side of the map would read as in range. After this guard `dc, dr <= r`,
                 // and `2 × (2^31 - 1)^2 < Int64.MaxValue`, so the sum below cannot overflow.
-                if dc > r || dr > r then false else dc * dc + dr * dr <= r * r
+                if dc > r || dr > r then
+                    false
+                else
+                    dc * dc + dr * dr <= r * r
 
         cells
         |> List.fold
@@ -162,7 +173,10 @@ module Ai =
                     ordered
                     |> List.fold
                         (fun total (src, dps, range) ->
-                            if inRange cell src range && hasLos cell src then total + dps else total)
+                            if inRange cell src range && hasLos cell src then
+                                total + dps
+                            else
+                                total)
                         0.0
 
                 Map.add cell danger acc)
@@ -184,28 +198,36 @@ module Ai =
             |> Map.toList
             |> List.choose (fun (c, v) ->
                 let s = v * coefficient
-                if Double.IsFinite v && Double.IsFinite s then Some(c, s) else None)
+
+                if Double.IsFinite v && Double.IsFinite s then
+                    Some(c, s)
+                else
+                    None)
             |> Map.ofList
 
         if maxPasses <= 0 || scaled.IsEmpty then
             scaled
         else
             let orthogonals (c: Cell) =
-                [ { c with Col = c.Col - 1 }
-                  { c with Col = c.Col + 1 }
-                  { c with Row = c.Row - 1 }
-                  { c with Row = c.Row + 1 } ]
+                [
+                    { c with Col = c.Col - 1 }
+                    { c with Col = c.Col + 1 }
+                    { c with Row = c.Row - 1 }
+                    { c with Row = c.Row + 1 }
+                ]
 
             // The same no-corner-cutting rule `Pathfinding.flowField` applies: a diagonal is a neighbour only
             // when both shared orthogonals are also in the field.
             let diagonals (c: Cell) (field: Map<Cell, float>) =
-                [ for dc in [ -1; 1 ] do
-                      for dr in [ -1; 1 ] do
-                          let side1 = { c with Col = c.Col + dc }
-                          let side2 = { c with Row = c.Row + dr }
+                [
+                    for dc in [ -1; 1 ] do
+                        for dr in [ -1; 1 ] do
+                            let side1 = { c with Col = c.Col + dc }
+                            let side2 = { c with Row = c.Row + dr }
 
-                          if field.ContainsKey side1 && field.ContainsKey side2 then
-                              { Col = c.Col + dc; Row = c.Row + dr } ]
+                            if field.ContainsKey side1 && field.ContainsKey side2 then
+                                { Col = c.Col + dc; Row = c.Row + dr }
+                ]
 
             let neighbours (c: Cell) (field: Map<Cell, float>) =
                 match neighbourhood with
@@ -314,25 +336,31 @@ module Ai =
 module Difficulty =
 
     let easy =
-        { ReactionTicks = 30
-          AimErrorSigma = 0.12
-          SpotCycleTicks = 30
-          UsesWeakPointTargeting = false
-          ThreatWeight = 0.25 }
+        {
+            ReactionTicks = 30
+            AimErrorSigma = 0.12
+            SpotCycleTicks = 30
+            UsesWeakPointTargeting = false
+            ThreatWeight = 0.25
+        }
 
     let normal =
-        { ReactionTicks = 12
-          AimErrorSigma = 0.05
-          SpotCycleTicks = 15
-          UsesWeakPointTargeting = false
-          ThreatWeight = 1.0 }
+        {
+            ReactionTicks = 12
+            AimErrorSigma = 0.05
+            SpotCycleTicks = 15
+            UsesWeakPointTargeting = false
+            ThreatWeight = 1.0
+        }
 
     let hard =
-        { ReactionTicks = 3
-          AimErrorSigma = 0.01
-          SpotCycleTicks = 5
-          UsesWeakPointTargeting = true
-          ThreatWeight = 2.0 }
+        {
+            ReactionTicks = 3
+            AimErrorSigma = 0.01
+            SpotCycleTicks = 5
+            UsesWeakPointTargeting = true
+            ThreatWeight = 2.0
+        }
 
     let clamp (difficulty: Difficulty) =
         let nonNegative v =
@@ -342,4 +370,5 @@ module Difficulty =
             ReactionTicks = max 0 difficulty.ReactionTicks
             AimErrorSigma = nonNegative difficulty.AimErrorSigma
             SpotCycleTicks = max 0 difficulty.SpotCycleTicks
-            ThreatWeight = nonNegative difficulty.ThreatWeight }
+            ThreatWeight = nonNegative difficulty.ThreatWeight
+        }

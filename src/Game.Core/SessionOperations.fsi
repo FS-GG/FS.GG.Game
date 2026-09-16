@@ -9,13 +9,17 @@ type SessionOperationTarget =
 /// Generation-scoped identity assigned by the portable coordinator.
 [<Struct>]
 type SessionOperationId =
-    { Generation: uint64
-      Operation: uint64 }
+    {
+        Generation: uint64
+        Operation: uint64
+    }
 
 /// Bounded ownership policy for one operation generation.
 type SessionOperationConfig =
-    { Target: SessionOperationTarget
-      MaxPendingRequired: uint32 }
+    {
+        Target: SessionOperationTarget
+        MaxPendingRequired: uint32
+    }
 
 /// Lifecycle of the current generation.
 [<RequireQualifiedAccess>]
@@ -27,15 +31,19 @@ type SessionOperationStatus =
 
 /// A required request. Its order is independent of transport completion order.
 type SessionRequiredDispatch<'request> =
-    { Id: SessionOperationId
-      Order: uint64
-      Target: SessionOperationTarget
-      Payload: 'request }
+    {
+        Id: SessionOperationId
+        Order: uint64
+        Target: SessionOperationTarget
+        Payload: 'request
+    }
 
 /// A replaceable projection request. At most one is owned at a time.
 type SessionProjectionDispatch =
-    { Id: SessionOperationId
-      Target: SessionOperationTarget }
+    {
+        Id: SessionOperationId
+        Target: SessionOperationTarget
+    }
 
 /// Pure observations from a host or its local-worker/server interpreter.
 [<RequireQualifiedAccess>]
@@ -75,17 +83,19 @@ type SessionOperationEffect<'request, 'record, 'projection> =
 
 /// Portable generation, ordering and backpressure state. Payloads remain product-owned.
 type SessionOperationState<'record> =
-    { Config: SessionOperationConfig
-      Generation: uint64
-      Status: SessionOperationStatus
-      NextOperation: uint64
-      NextRequiredOrder: uint64
-      NextRequiredCommit: uint64
-      PendingRequired: Map<uint64, uint64>
-      BufferedRequired: Map<uint64, 'record>
-      PendingProjection: uint64 option
-      ProjectionDemandQueued: bool
-      LastProjectionRevision: uint64 option }
+    {
+        Config: SessionOperationConfig
+        Generation: uint64
+        Status: SessionOperationStatus
+        NextOperation: uint64
+        NextRequiredOrder: uint64
+        NextRequiredCommit: uint64
+        PendingRequired: Map<uint64, uint64>
+        BufferedRequired: Map<uint64, 'record>
+        PendingProjection: uint64 option
+        ProjectionDemandQueued: bool
+        LastProjectionRevision: uint64 option
+    }
 
 /// Pure coordinator shared by local-worker and authoritative-server interpreters.
 [<RequireQualifiedAccess>]
@@ -98,4 +108,3 @@ module SessionOperations =
         SessionOperationObservation<'request, 'record, 'projection> ->
         SessionOperationState<'record> ->
             SessionOperationState<'record> * SessionOperationEffect<'request, 'record, 'projection> list
-

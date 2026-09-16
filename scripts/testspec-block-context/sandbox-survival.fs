@@ -24,8 +24,22 @@ type ItemStack = { Item: ItemId; Count: int }
 //#rec
 // A generated column of tiles, cached per (chunkX, chunkY) — §3 worldgen.
 type Chunk = { Cx: int; Cy: int; Tiles: Tile[,] }
-type InputState = { Held: Set<Key>; MouseTile: (int * int) option; LeftDown: bool; RightDown: bool }
-type UiState = Playing | InventoryOpen | Paused | Dead | Title
+
+type InputState =
+    {
+        Held: Set<Key>
+        MouseTile: (int * int) option
+        LeftDown: bool
+        RightDown: bool
+    }
+
+type UiState =
+    | Playing
+    | InventoryOpen
+    | Paused
+    | Dead
+    | Title
+
 type WorldEvent =
     | TileBroken of int * int
     | TilePlaced of int * int
