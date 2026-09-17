@@ -1,0 +1,148 @@
+{
+  "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+  "receiver": "FS-GG/FS.GG.Game",
+  "release": {
+    "version": "0.90.0",
+    "url": "https://github.com/FS-GG/.github/releases/tag/coherent-set/v0.90.0",
+    "manifestUrl": "https://github.com/FS-GG/.github/releases/download/coherent-set%2Fv0.90.0/release-manifest.json",
+    "manifestSha256": "1bbb77f3de10ba3116f9de2ea1df3f5edee38be0de07fa0eaf7c173da3a8456a",
+    "contentId": "sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4",
+    "sourceCommit": "3adada5a9738464291088830c47a30a3a8fc9561",
+    "sourceTree": "0f075e251d90a2d33efe556df1dac38394b0a388"
+  },
+  "packages": [
+    {
+      "id": "FS.GG.Coord.Cli",
+      "version": "0.90.0",
+      "pinPath": ".config/dotnet-tools.json",
+      "feed": "https://api.nuget.org/v3/index.json",
+      "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+      "payloadSha256": "sha256:725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+    },
+    {
+      "id": "FS.GG.Kit",
+      "version": "0.90.0",
+      "pinPath": "Directory.Packages.local.props",
+      "feed": "https://api.nuget.org/v3/index.json",
+      "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+      "payloadSha256": "sha256:f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+    }
+  ],
+  "installedCommand": {
+    "command": "dotnet tool run fsgg-coord-engine -- --version",
+    "versionOutput": "0.90.0.0",
+    "executablePath": "${NUGET_PACKAGES}/fs.gg.coord.cli/0.90.0/tools/net10.0/any/fsgg-coord-engine.dll",
+    "executableSha256": "c37d76fa42483e76b91275d8764bdcb04881cb9f3643c6e9fe9b0df3914d3512",
+    "gitHubAssemblySha256": "a11ef52027b9f4485ffc0f959ebf3592002d7b5338723a90c3aaa1240ea9ff49",
+    "resolution": "DOTNET_HOST_TRACE confirms the manifest-selected executable at this path."
+  },
+  "routes": [
+    {
+      "entrypoint": "scripts/fsgg-coord",
+      "sha256": "a0689f0ba8cd0180fd1ca60a63bba55e93513732b36e099c541847336ddb3ccf",
+      "disposition": "bridge-adopted",
+      "behavior": "installed-cli-production-mutations-refused"
+    },
+    {
+      "entrypoint": "scripts/fsgg-coord-report",
+      "sha256": "e1f63cda5b499f4fdd4396626c0bac013c49019daf182336df8c7513d24918ba",
+      "disposition": "read-only-local-only",
+      "behavior": "local report rendering performs no provider mutation"
+    },
+    {
+      "entrypoint": ".github/workflows/release.yml",
+      "sha256": "1942809b5558786be6edb6551e88114bb1182d5f9fe38cd4acae1069f1efdd34",
+      "disposition": "gs2-08.9-sealing",
+      "reason": "Package publication and GitHub Release effects retain their existing credential boundary."
+    },
+    {
+      "entrypoint": ".github/workflows/release-skills.yml",
+      "sha256": "0ae77282741f93390b24c80de847782bf21d034da949b4f89d45d5dd78ccd809",
+      "disposition": "gs2-08.9-sealing",
+      "reason": "Skill package publication retains its existing credential boundary."
+    },
+    {
+      "entrypoint": ".github/workflows/skills-package.yml",
+      "sha256": "4fdbaee168b20af4b58013c1fa20e248d509214cbd723ecb23826cc9ff50475",
+      "disposition": "gs2-08.9-sealing",
+      "reason": "Skill package effects retain their existing workflow authority."
+    }
+  ],
+  "callableRoutes": [
+    {
+      "caller": ".github/workflows/coordination-coherence.yml",
+      "callerSha256": "be835488763b0be0b75688417d7e03401d359f7c30630e432f8bf827887aa318",
+      "target": "FS-GG/.github/.github/workflows/coordination-coherence.yml",
+      "ref": "main",
+      "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "workflowSha256": "400e2d5ef2406d872a0fd45f79fa0a01d1b09f12d30eca66310324e9d795e4c2",
+      "disposition": "gs2-08.9-sealing"
+    },
+    {
+      "caller": ".github/workflows/gate.yml",
+      "callerSha256": "863666cfa72e69d63eac084e9a6c9bac735f2a466478e6df125a6eb22d288f4b",
+      "target": "FS-GG/.github/.github/workflows/lock-range-coherence.yml",
+      "ref": "main",
+      "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "workflowSha256": "dda924b849ab5e2369378088bb1081acad5e9439c0cc13fde9b3d504beadd386",
+      "disposition": "gs2-08.9-sealing"
+    },
+    {
+      "caller": ".github/workflows/gate.yml",
+      "callerSha256": "863666cfa72e69d63eac084e9a6c9bac735f2a466478e6df125a6eb22d288f4b",
+      "target": "FS-GG/.github/.github/workflows/contract-coherence.yml",
+      "ref": "main",
+      "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "workflowSha256": "7ff5e7599bddf8a7e21c70a635b3edba8e73583edc54c74c3bc3fa6d736377a7",
+      "disposition": "gs2-08.9-sealing"
+    },
+    {
+      "caller": ".github/workflows/kit-materialize.yml",
+      "callerSha256": "51e196beb0992e281b90d7f6ada997ae3d1daae6843e7f64de8e21f6e0f79ef2",
+      "target": "FS-GG/.github/.github/workflows/kit-materialize.yml",
+      "ref": "main",
+      "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "workflowSha256": "ebe86011063ced545f37c38c89a939a4e35cb38a9d397959847f67c52746ea37",
+      "disposition": "gs2-08.9-sealing"
+    },
+    {
+      "caller": ".github/workflows/lockfile-sync.yml",
+      "callerSha256": "1c569ba4abae494aed20e9a6b21eb01e0f4ead5cdd0dedf5f0b1f84a708f60c9",
+      "target": "FS-GG/.github/.github/workflows/lockfile-sync.yml",
+      "ref": "main",
+      "observedRevision": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "workflowSha256": "f889e54fc8f33c9c37044584a2130a8c73a5740a6d9b3b7229023a0d59a9c4ec",
+      "disposition": "gs2-08.9-sealing"
+    }
+  ],
+  "qualification": {
+    "publicRestore": true,
+    "installedCommand": true,
+    "productionMutation": "refused-unavailable-fence",
+    "network": "loopback-only",
+    "credentials": "fake",
+    "providerRequests": 0,
+    "probe": "Installed command attempted a REST comment intent; the loopback fixture received zero mutations.",
+    "materializer": {
+      "files": 37,
+      "written": 0,
+      "source": "FS.GG.Kit 0.90.0",
+      "skillRoots": {
+        ".claude/skills": 22,
+        ".agents/skills": 22
+      }
+    },
+    "skillViewSelftest": {
+      "passed": 22,
+      "failed": 0
+    },
+    "lockedRestore": true,
+    "nativeTests": {
+      "bridgePackageRefusalControlsPassed": 6,
+      "failed": 0
+    },
+    "lockfilesChanged": 0,
+    "releaseContractSourceOnly": true
+  },
+  "remainingBoundary": "This receiver selects the published bridge and demonstrates installed refusal. Existing workflow routes and raw operator commands in shipped skills remain for GS2-08.9 sealing; this evidence does not authorize or claim live activation."
+}
