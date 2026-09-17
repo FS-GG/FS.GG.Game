@@ -52,21 +52,21 @@
   "routes": [
     {
       "id": "coordination-cli",
-      "disposition": "adopted",
-      "entrypoint": "fsgg-coord-engine"
+      "disposition": "bridge-adopted",
+      "behavior": "fsgg-coord-engine resolves from the exact 0.90.0 receiver pin"
     },
     {
       "id": "coordination-kit",
-      "disposition": "adopted-deterministic-no-write",
-      "materializedFiles": 37,
-      "writtenFiles": 0
-    },
-    {
-      "id": "solution-lockfiles",
-      "disposition": "unchanged",
-      "reason": "the tool manifest and lockfile-disabled Kit receiver project do not contribute to solution package locks"
+      "disposition": "read-only-local-only",
+      "behavior": "public restore and local materialization examine 37 files and write none"
     }
   ],
+  "deterministicOutputs": {
+    "materializedFiles": 37,
+    "writtenFiles": 0,
+    "solutionLockfiles": "unchanged",
+    "lockfileReason": "the tool manifest and lockfile-disabled Kit receiver project do not contribute to solution package locks"
+  },
   "qualification": {
     "publicRestore": {
       "status": "pass",
