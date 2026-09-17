@@ -63,7 +63,7 @@
     },
     {
       "entrypoint": ".github/workflows/skills-package.yml",
-      "sha256": "4fdbaee168b20af4b58013c1fa20e248d509214cbd723ecb23826cc9ff50475",
+      "sha256": "4fdbaee168b20af4b58013c1fa20e2484d509214cbd723ecb23826cc9ff50475",
       "disposition": "gs2-08.9-sealing",
       "reason": "Skill package effects retain their existing workflow authority."
     }
