@@ -1,0 +1,125 @@
+{
+  "schema": "fsgg.gs2-08.8-receiver-adoption/1",
+  "receiver": {
+    "id": "game",
+    "repository": "FS-GG/FS.GG.Game"
+  },
+  "release": {
+    "tag": "coherent-set/v0.90.0",
+    "version": "0.90.0",
+    "source": {
+      "commit": "3adada5a9738464291088830c47a30a3a8fc9561",
+      "tree": "0f075e251d90a2d33efe556df1dac38394b0a388"
+    },
+    "producerSource": {
+      "commit": "bc881a6ed1b4ce32e99d4c30a664b1db686280d3",
+      "tree": "3e43e1e0126ebe923bae8ce4197f7310b486b7a3"
+    },
+    "contentId": "sha256:52b2774de277855c16a3c0852bc5113deea13d9076b866e6a7de0acc84f4b9c4",
+    "releaseManifestSha256": "1bbb77f3de10ba3116f9de2ea1df3f5edee38be0de07fa0eaf7c173da3a8456a",
+    "bridgeQualificationSha256": "f996b2a496102cddcdfe5a0646b0607d9c16f02b1e428a78b3d7f2678b1a1fa2"
+  },
+  "packages": [
+    {
+      "id": "FS.GG.Coord.Cli",
+      "version": "0.90.0",
+      "releaseArchiveSha256": "5d7ed17671338afdf14b9f824d65cffd4477bd53d49a05abe4117798992edcbe",
+      "publicArchiveSha256": "69a7100358e01c846216cedb3f5ce17f72e99e8328a23be8e75b077dfd82d3e6",
+      "payloadSha256": "725b46203eeccbe1f73b42667d95ed07c6581dc2ca0886ac8011145c278ee481"
+    },
+    {
+      "id": "FS.GG.Kit",
+      "version": "0.90.0",
+      "releaseArchiveSha256": "f8a76276b4770f3a4a5bb1911be95e17ce423e4c2cc0bd1e936e7462b6fa9f9a",
+      "publicArchiveSha256": "bea35100645f1acb459e385e303d0ef4ff7aa6576fa3f032ef8325cfef38b858",
+      "payloadSha256": "f2a318f0b900d049c496618bfdd7c2def5f50ffd9e649d8998f5c6585384f1f4"
+    }
+  ],
+  "pins": [
+    {
+      "path": ".config/dotnet-tools.json",
+      "package": "fs.gg.coord.cli",
+      "version": "0.90.0",
+      "command": "fsgg-coord-engine"
+    },
+    {
+      "path": "Directory.Packages.local.props",
+      "package": "FS.GG.Kit",
+      "version": "0.90.0",
+      "receiverProject": ".config/kit/FS.GG.Kit.receiver.proj"
+    }
+  ],
+  "routes": [
+    {
+      "id": "coordination-cli",
+      "disposition": "adopted",
+      "entrypoint": "fsgg-coord-engine"
+    },
+    {
+      "id": "coordination-kit",
+      "disposition": "adopted-deterministic-no-write",
+      "materializedFiles": 37,
+      "writtenFiles": 0
+    },
+    {
+      "id": "solution-lockfiles",
+      "disposition": "unchanged",
+      "reason": "the tool manifest and lockfile-disabled Kit receiver project do not contribute to solution package locks"
+    }
+  ],
+  "qualification": {
+    "publicRestore": {
+      "status": "pass",
+      "feed": "https://api.nuget.org/v3/index.json",
+      "ambientSources": "cleared",
+      "authentication": "none",
+      "packages": [
+        "FS.GG.Coord.Cli/0.90.0",
+        "FS.GG.Kit/0.90.0"
+      ]
+    },
+    "installedCommand": {
+      "status": "pass",
+      "command": "fsgg-coord-engine --version",
+      "observedVersion": "0.90.0.0",
+      "assemblySha256": "c37d76fa42483e76b91275d8764bdcb04881cb9f3643c6e9fe9b0df3914d3512"
+    },
+    "refusedUnavailableFence": {
+      "status": "pass",
+      "diagnostic": "production v1 admission is not installed",
+      "providerMutationCount": 0
+    },
+    "loopbackOnly": {
+      "status": "pass",
+      "endpoint": "127.0.0.1 ephemeral fixture",
+      "unfencedEscape": "unset",
+      "liveMutation": false
+    },
+    "fake": {
+      "status": "pass",
+      "fixture": "tests/coord-engine-e2e/stateful_server.py",
+      "providerMutationCount": 0,
+      "packedFence": "eligible epochs pass; frozen epoch refuses before send; duplicate settlement refuses"
+    },
+    "identityRefusalControls": {
+      "status": "pass",
+      "count": 6
+    },
+    "materializer": {
+      "status": "pass",
+      "source": "public FS.GG.Kit/0.90.0",
+      "writtenFiles": 0
+    },
+    "skillView": {
+      "status": "pass",
+      "declaredSkills": 22,
+      "roots": 2,
+      "visiblePaths": 44
+    }
+  },
+  "operationBoundary": {
+    "credentialsUsed": false,
+    "liveMutationAttempted": false,
+    "activation": "receiver pin only"
+  }
+}
