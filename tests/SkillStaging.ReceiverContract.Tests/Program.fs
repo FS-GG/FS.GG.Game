@@ -38,6 +38,11 @@ let baseline =
       metadata "skills/audio/SKILL.md" ReceiverContract.RegularFile 0o644u
       metadata "skills/audio/docs" ReceiverContract.Directory 0o755u
       metadata "skills/audio/docs/guide.md" ReceiverContract.RegularFile 0o644u ]
+let payload path bytes: ReceiverContract.Payload = { Path = path; Bytes = bytes }
+let received =
+    [ payload "skill-manifest.json" (Array.copy manifest)
+      payload "skills/audio/SKILL.md" (Array.copy body)
+      payload "skills/audio/docs/guide.md" (Array.copy guide) ]
 
 let mutable count = 0
 let check name expected actual =
@@ -58,6 +63,50 @@ let main _ =
     check "independently authored exact roster, modes, and owner"
         (baseline |> List.sortBy _.Path) contract.Entries
     check "valid observed metadata" (Ok ()) (ReceiverContract.verify contract baseline)
+    let corruptBody = utf8.GetBytes "# changed\n"
+    let corruptReceived =
+        received |> List.map (fun item ->
+            if item.Path = "skills/audio/SKILL.md" then { item with Bytes = corruptBody } else item)
+    // Red-before characterization: #655's metadata-only API accepts the same
+    // entries even though the independently observed receiver bytes changed.
+    check "metadata-only false green for changed bytes" (Ok ())
+        (ReceiverContract.verify contract baseline)
+    check "complete receiver parity" (Ok ())
+        (ReceiverContract.verifyComplete contract baseline received)
+    check "changed SKILL bytes refuse with metadata unchanged"
+        (Error(ReceiverContract.WrongBytes "skills/audio/SKILL.md"))
+        (ReceiverContract.verifyComplete contract baseline corruptReceived)
+    check "changed manifest bytes refuse with metadata unchanged"
+        (Error(ReceiverContract.WrongBytes "skill-manifest.json"))
+        (ReceiverContract.verifyComplete contract baseline
+            (received |> List.map (fun item ->
+                if item.Path = "skill-manifest.json" then
+                    { item with Bytes = utf8.GetBytes "changed" }
+                else item)))
+    check "missing payload refuses"
+        (Error(ReceiverContract.MissingPayload "skills/audio/docs/guide.md"))
+        (ReceiverContract.verifyComplete contract baseline
+            (received |> List.filter (fun item -> item.Path <> "skills/audio/docs/guide.md")))
+    check "extra payload refuses"
+        (Error(ReceiverContract.UnexpectedPayload "obsolete.txt"))
+        (ReceiverContract.verifyComplete contract baseline
+            (payload "obsolete.txt" body :: received))
+    check "duplicate payload refuses"
+        (Error(ReceiverContract.DuplicateObservedPayload "skill-manifest.json"))
+        (ReceiverContract.verifyComplete contract baseline
+            (payload "skill-manifest.json" manifest :: received))
+    check "null payload refuses"
+        (Error(ReceiverContract.WrongBytes "skills/audio/SKILL.md"))
+        (ReceiverContract.verifyComplete contract baseline
+            (received |> List.map (fun item ->
+                if item.Path = "skills/audio/SKILL.md" then
+                    { item with Bytes = Unchecked.defaultof<byte[]> }
+                else item)))
+    check "metadata mismatch still refuses in complete comparison"
+        (Error(ReceiverContract.WrongMode "skills/audio/SKILL.md"))
+        (ReceiverContract.verifyComplete contract
+            (change "skills/audio/SKILL.md" (fun entry -> { entry with Mode = 0o600u }) baseline)
+            received)
     check "wrong file mode refuses"
         (Error(ReceiverContract.WrongMode "skills/audio/SKILL.md"))
         (ReceiverContract.verify contract
