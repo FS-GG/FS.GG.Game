@@ -47,9 +47,62 @@ let expectRefusal expected result =
 [<DllImport("libc", EntryPoint = "mkfifo", SetLastError = true)>]
 extern int mkfifo(string path, uint32 mode)
 
+[<DllImport("libc", EntryPoint = "statx", SetLastError = true, CharSet = CharSet.Ansi)>]
+extern int statx(int parent, string path, int flags, uint32 mask, [<Out>] byte[] buffer)
+
 [<EntryPoint>]
 let main _ =
     let bytes = utf8.GetBytes "# audio\n"
+    check "path probe/read swap characterization" (fun () -> fixture (fun root ->
+        let _, path = setup root bytes
+        let foreignBytes = utf8.GetBytes "# foreign\n"
+        let foreign = write root "foreign.txt" foreignBytes
+        let stat = Array.zeroCreate<byte> 256
+        if statx(-100, path, 0x100, 0x3u, stat) <> 0
+           || (int (BitConverter.ToUInt16(stat, 28)) &&& 0xF000) <> 0x8000 then
+            failwith "original path did not probe as regular"
+        File.Move(path, path + ".held")
+        File.CreateSymbolicLink(path, foreign) |> ignore
+        if File.ReadAllBytes(path) <> foreignBytes then failwith "path read did not follow the swapped link"))
+    check "opened file descriptor resists path swap" (fun () -> fixture (fun root ->
+        let manifest, path = setup root bytes
+        let foreign = write root "foreign.txt" (utf8.GetBytes "# foreign\n")
+        let mutable swapped = false
+        let hook (rel: string) =
+            if rel.EndsWith("/SKILL.md", StringComparison.Ordinal) then
+                File.Move(path, path + ".held")
+                File.CreateSymbolicLink(path, foreign) |> ignore
+                swapped <- true
+        match ReadOnlySource.captureWithOpenHook hook root manifest with
+        | Error issue -> failwithf "pinned file refused: %A" issue
+        | Ok plan ->
+            if not swapped || plan.Skills.Head.Bytes <> bytes then
+                failwith "swapped path changed opened file bytes"))
+    check "opened parent descriptor resists directory swap" (fun () -> fixture (fun root ->
+        let manifest, _ = setup root bytes
+        let foreign = Path.Combine(root, "foreign")
+        write root "foreign/SKILL.md" (utf8.GetBytes "# foreign\n") |> ignore
+        let product = Path.Combine(root, "template/product-skills/audio")
+        let mutable swapped = false
+        let hook (rel: string) =
+            if rel = "template/product-skills/audio" then
+                Directory.Move(product, product + ".held")
+                Directory.CreateSymbolicLink(product, foreign) |> ignore
+                swapped <- true
+        match ReadOnlySource.captureWithOpenHook hook root manifest with
+        | Error issue -> failwithf "pinned directory refused: %A" issue
+        | Ok plan ->
+            if not swapped || plan.Skills.Head.Bytes <> bytes then
+                failwith "swapped parent changed descendant bytes"))
+    check "symlink introduced before child open refuses" (fun () -> fixture (fun root ->
+        let manifest, path = setup root bytes
+        let foreign = write root "foreign.txt" (utf8.GetBytes "# foreign\n")
+        let hook (rel: string) =
+            if rel = "template/product-skills/audio" then
+                File.Move(path, Path.Combine(root, "held.md"))
+                File.CreateSymbolicLink(path, foreign) |> ignore
+        ReadOnlySource.captureWithOpenHook hook root manifest
+        |> expectRefusal (function ReadOnlySource.Symlink path when path.EndsWith("/SKILL.md") -> true | _ -> false)))
     check "valid source preserves exact bytes" (fun () -> fixture (fun root ->
         let raw = utf8.GetBytes "\uFEFF# audio\r\n"
         let manifest, path = setup root raw

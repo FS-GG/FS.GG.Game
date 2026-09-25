@@ -3,11 +3,10 @@ namespace FS.GG.Game.SkillStaging
 open System
 open System.Collections.Generic
 open System.IO
-open System.Runtime.InteropServices
 open System.Text.Json
 
 /// Reads a physical product-skills tree and passes its observed files to the pure staging policy.
-/// This is a path-based, read-only snapshot; concurrent path replacement can invalidate its facts.
+/// Opened source bytes are pinned to descriptors; concurrent changes can still alter the roster.
 module ReadOnlySource =
     open Policy
 
@@ -22,24 +21,6 @@ module ReadOnlySource =
         | Unreadable of string
         | UnsupportedPlatform
         | PolicyRefusal of Policy.Refusal
-
-    type private Kind = Regular | Directory | Link | Special
-
-    [<DllImport("libc", EntryPoint = "statx", SetLastError = true, CharSet = CharSet.Ansi)>]
-    extern int private statx(int dirfd, string path, int flags, uint32 mask, [<Out>] byte[] buffer)
-
-    let private classify path =
-        // Linux statx with AT_SYMLINK_NOFOLLOW rejects FIFO/device/socket sources before any read.
-        // The path can still change between this probe and the later enumeration or read.
-        let buffer = Array.zeroCreate<byte> 256
-        if statx(-100, path, 0x100, 0x3u, buffer) <> 0 then
-            Error(Unreadable path)
-        else
-            match int (BitConverter.ToUInt16(buffer, 28)) &&& 0xF000 with
-            | 0x8000 -> Ok Regular
-            | 0x4000 -> Ok Directory
-            | 0xA000 -> Ok Link
-            | _ -> Ok Special
 
     let private parseRows (raw: byte[]) =
         try
@@ -69,26 +50,13 @@ module ReadOnlySource =
         | :? ArgumentException
         | :? NullReferenceException -> Error InvalidManifest
 
-    let private sortedEntries path =
-        Directory.EnumerateFileSystemEntries path
-        |> Seq.sortWith (fun a b -> StringComparer.Ordinal.Compare(a, b))
-        |> Seq.toList
+    let private mapFailure path = function
+        | LinuxDescriptors.Link -> Symlink path
+        | LinuxDescriptors.NonRegular -> NonRegular path
+        | LinuxDescriptors.Unreadable -> Unreadable path
 
-    let private checkAncestors path =
-        let rec loop current =
-            match classify current with
-            | Error issue -> Error issue
-            | Ok Link -> Error(Symlink current)
-            | Ok Directory ->
-                match Path.GetDirectoryName current |> Option.ofObj with
-                | Some parent when parent <> current -> loop parent
-                | _ -> Ok ()
-            | Ok _ -> Error(NonRegular current)
-        loop path
-
-    /// Snapshot selected product roots under repoRoot. There is no destination argument or write.
-    let capture (repoRoot: string) (manifestBytes: byte[]) : Result<Policy.StagePlan, Refusal> =
-        if not (OperatingSystem.IsLinux()) then Error UnsupportedPlatform
+    let private captureCore (afterOpen: string -> unit) (repoRoot: string) (manifestBytes: byte[]) : Result<Policy.StagePlan, Refusal> =
+        if not (OperatingSystem.IsLinux()) || not BitConverter.IsLittleEndian then Error UnsupportedPlatform
         elif String.IsNullOrWhiteSpace repoRoot then Error(MissingTree "repository root")
         else
             match parseRows manifestBytes with
@@ -96,81 +64,89 @@ module ReadOnlySource =
             | Ok rows ->
                 try
                     let root = Path.GetFullPath repoRoot
-                    let template = Path.Combine(root, "template")
-                    let tree = Path.Combine(template, "product-skills")
-                    let requireDirectory path =
-                        match classify path with
-                        | Ok Directory -> Ok ()
-                        | Ok Link -> Error(Symlink path)
-                        | Ok _ -> Error(NonRegular path)
-                        | Error _ -> Error(MissingTree path)
-                    let result =
-                        match checkAncestors root with
+                    match LinuxDescriptors.openRoot root with
+                    | Error issue -> Error(mapFailure root issue)
+                    | Ok repo ->
+                        use repo = repo
+                        let openRequired parent name label =
+                            match LinuxDescriptors.openChild parent name with
+                            | Error LinuxDescriptors.Unreadable -> Error(MissingTree label)
+                            | Error issue -> Error(mapFailure label issue)
+                            | Ok(handle, LinuxDescriptors.Directory) -> Ok handle
+                            | Ok(handle, _) ->
+                                handle.Dispose()
+                                Error(NonRegular label)
+                        match openRequired repo "template" "template" with
                         | Error issue -> Error issue
-                        | Ok () ->
-                            match requireDirectory template with
+                        | Ok template ->
+                            use template = template
+                            match openRequired template "product-skills" "template/product-skills" with
                             | Error issue -> Error issue
-                            | Ok () -> requireDirectory tree
-                    match result with
-                    | Error issue -> Error issue
-                    | Ok () ->
-                        let expected =
-                            rows |> List.filter (fun row -> row.Scope = "product")
-                            |> List.map (fun row -> row.Id) |> Set.ofList
-                        let observed = ResizeArray<Policy.Source>()
-                        let seen = HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                        let relative path = Path.GetRelativePath(root, path).Replace('\\', '/')
-                        let rec walk path =
-                            let rel = relative path
-                            if not (seen.Add rel) then Error(DuplicatePath rel)
-                            else
-                                match classify path with
-                                | Error issue -> Error issue
-                                | Ok Link -> Error(Symlink rel)
-                                | Ok Special -> Error(NonRegular rel)
-                                | Ok Regular ->
-                                    let bytes = File.ReadAllBytes path
-                                    observed.Add
-                                        { RelativePath = rel; Bytes = bytes
-                                          IsRegularFile = true; IsSymlink = false }
-                                    Ok ()
-                                | Ok Directory ->
-                                    let entries = sortedEntries path
-                                    if List.isEmpty entries then Error(EmptyDirectory rel)
-                                    else
-                                        entries
-                                        |> List.fold (fun state entry ->
-                                            match state with Error _ -> state | Ok () -> walk entry) (Ok ())
-                        let roots = sortedEntries tree
-                        let rootsResult =
-                            roots
-                            |> List.fold (fun state path ->
-                                match state with
-                                | Error _ -> state
-                                | Ok () ->
-                                    let rel = relative path
-                                    let id = Path.GetFileName path
+                            | Ok tree ->
+                                use tree = tree
+                                let expected =
+                                    rows |> List.filter (fun row -> row.Scope = "product")
+                                    |> List.map (fun row -> row.Id) |> Set.ofList
+                                let observed = ResizeArray<Policy.Source>()
+                                let seen = HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                                let rec visit (parent: Microsoft.Win32.SafeHandles.SafeFileHandle) name rel requireDirectory =
                                     if not (seen.Add rel) then Error(DuplicatePath rel)
-                                    elif not (Set.contains id expected) then Error(UnexpectedRoot rel)
                                     else
-                                        match classify path with
-                                        | Ok Directory ->
-                                            let entries = sortedEntries path
-                                            if List.isEmpty entries then Error(EmptyDirectory rel)
+                                        match LinuxDescriptors.openChild parent name with
+                                        | Error issue -> Error(mapFailure rel issue)
+                                        | Ok(handle, kind) ->
+                                            use handle = handle
+                                            if requireDirectory && kind <> LinuxDescriptors.Directory then Error(NonRegular rel)
                                             else
-                                                entries
-                                                |> List.fold (fun state entry ->
-                                                    match state with Error _ -> state | Ok () -> walk entry) (Ok ())
-                                        | Ok Link -> Error(Symlink rel)
-                                        | Ok _ -> Error(NonRegular rel)
-                                        | Error issue -> Error issue) (Ok ())
-                        match rootsResult with
-                        | Error issue -> Error issue
-                        | Ok () ->
-                            match Policy.prepare manifestBytes rows (List.ofSeq observed) with
-                            | Ok plan -> Ok plan
-                            | Error issue -> Error(PolicyRefusal issue)
+                                                afterOpen rel
+                                                match kind with
+                                                | LinuxDescriptors.Special -> Error(NonRegular rel)
+                                                | LinuxDescriptors.Regular ->
+                                                    match LinuxDescriptors.readBytes handle with
+                                                    | Error issue -> Error(mapFailure rel issue)
+                                                    | Ok bytes ->
+                                                        observed.Add
+                                                            { RelativePath = rel; Bytes = bytes
+                                                              IsRegularFile = true; IsSymlink = false }
+                                                        Ok ()
+                                                | LinuxDescriptors.Directory ->
+                                                    match LinuxDescriptors.names handle with
+                                                    | Error issue -> Error(mapFailure rel issue)
+                                                    | Ok [] -> Error(EmptyDirectory rel)
+                                                    | Ok names ->
+                                                        names
+                                                        |> List.fold (fun state child ->
+                                                            match state with
+                                                            | Error _ -> state
+                                                            | Ok () -> visit handle child (rel + "/" + child) false) (Ok ())
+                                let result =
+                                    match LinuxDescriptors.names tree with
+                                    | Error issue -> Error(mapFailure "template/product-skills" issue)
+                                    | Ok roots ->
+                                        roots
+                                        |> List.fold (fun state id ->
+                                            match state with
+                                            | Error _ -> state
+                                            | Ok () ->
+                                                let rel = "template/product-skills/" + id
+                                                if not (Set.contains id expected) then Error(UnexpectedRoot rel)
+                                                else visit tree id rel true) (Ok ())
+                                match result with
+                                | Error issue -> Error issue
+                                | Ok () ->
+                                    match Policy.prepare manifestBytes rows (List.ofSeq observed) with
+                                    | Ok plan -> Ok plan
+                                    | Error issue -> Error(PolicyRefusal issue)
                 with
                 | :? IOException as issue -> Error(Unreadable issue.Message)
                 | :? UnauthorizedAccessException as issue -> Error(Unreadable issue.Message)
                 | :? ArgumentException as issue -> Error(Unreadable issue.Message)
+                | :? DllNotFoundException
+                | :? EntryPointNotFoundException -> Error UnsupportedPlatform
+
+    /// Snapshot selected product roots under repoRoot. There is no destination argument or write.
+    let capture repoRoot manifestBytes = captureCore ignore repoRoot manifestBytes
+
+    // Test seam runs only after a descriptor is open and typed, before its bytes or children are read.
+    let internal captureWithOpenHook afterOpen repoRoot manifestBytes =
+        captureCore afterOpen repoRoot manifestBytes
