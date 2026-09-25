@@ -8,8 +8,15 @@ directory mode as `0777 & ~umask` and file mode as `0666 & ~umask`. The pure
 entry kind, wrong mode, and wrong uid or gid. It reads no filesystem and writes
 no output.
 
+`verifyComplete` binds that metadata result to exact receiver file bytes held
+in the same immutable contract. The prior metadata-only verifier accepts an
+otherwise identical receiver after a file's contents change. The complete
+comparison refuses changed manifest or skill bytes, duplicate, missing, extra,
+or null payloads. Observed metadata and payloads must be supplied from an
+independent receiver observation; this pure function does not perform one.
+
 The test uses independently authored metadata rows for a nested two-file plan,
-then changes each field separately to prove refusal. It also derives a
+then changes each field and payload separately to prove refusal. It also derives a
 contract from the real 17-skill tree through the #650 read-only source capture.
 
 ```sh
@@ -23,6 +30,6 @@ umask `022` to the F# observer, then compares its independently observed
 receiver metadata against the resulting contract. This describes that
 disposable receiver, not a production output transaction. The owner and umask
 are explicit assumptions; setgid parents, ACLs, concurrent chmod/chown,
-adversarial ABA, later mutation, and a crash between renames remain outside
+adversarial ABA, later mutation, a physically pinned receiver read, and a crash between renames remain outside
 the proof. #644 acceptance, #652's stricter unselected-root policy decision,
 and installed-package parity remain separate gates.

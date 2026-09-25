@@ -19,8 +19,12 @@ module ReceiverContract =
         GroupId: uint32
     }
 
-    type Contract internal (entries: Entry list) =
+    type Payload = { Path: string; Bytes: byte[] }
+
+    type Contract internal (entries: Entry list, payloads: Payload list) =
+        let payloads = payloads |> List.map (fun item -> { item with Bytes = Array.copy item.Bytes })
         member _.Entries = entries
+        member internal _.Payloads = payloads
 
     type Refusal =
         | InvalidUmask of uint32
@@ -30,6 +34,10 @@ module ReceiverContract =
         | WrongKind of string
         | WrongMode of string
         | WrongOwner of string
+        | DuplicateObservedPayload of string
+        | MissingPayload of string
+        | UnexpectedPayload of string
+        | WrongBytes of string
 
     let private parentDirectories (file: string) =
         let parts = file.Split '/'
@@ -53,7 +61,12 @@ module ReceiverContract =
             (directories |> List.map (entry Directory))
             @ (files |> List.map (entry RegularFile))
             |> List.sortWith (fun left right -> StringComparer.Ordinal.Compare(left.Path, right.Path))
-            |> Contract
+            |> fun entries ->
+                let payloads =
+                    { Path = "skill-manifest.json"; Bytes = plan.ManifestBytes }
+                    :: (plan.Skills |> List.map (fun skill ->
+                        { Path = skill.Destination; Bytes = skill.Bytes }))
+                Contract(entries, payloads)
             |> Ok
 
     /// Compare independently observed receiver metadata with the planned set.
@@ -80,3 +93,31 @@ module ReceiverContract =
                             Some(WrongOwner want.Path)
                         else None)
                     |> function Some issue -> Error issue | None -> Ok ()
+
+    /// Require both the metadata roster and the exact planned bytes. Observed
+    /// payloads must come from an independent receiver observation; this pure
+    /// check does not establish a stable physical snapshot or safe file opening.
+    let verifyComplete (contract: Contract) (observed: Entry list)
+                       (payloads: Payload list) : Result<unit, Refusal> =
+        match verify contract observed with
+        | Error issue -> Error issue
+        | Ok () ->
+            let expected = contract.Payloads
+            match payloads |> List.groupBy _.Path |> List.tryFind (fun (_, rows) -> rows.Length > 1) with
+            | Some(path, _) -> Error(DuplicateObservedPayload path)
+            | None ->
+                match expected |> List.tryFind (fun want ->
+                    not (payloads |> List.exists (fun item -> item.Path = want.Path))) with
+                | Some missing -> Error(MissingPayload missing.Path)
+                | None ->
+                    match payloads |> List.tryFind (fun item ->
+                        not (expected |> List.exists (fun want -> want.Path = item.Path))) with
+                    | Some extra -> Error(UnexpectedPayload extra.Path)
+                    | None ->
+                        expected
+                        |> List.tryPick (fun want ->
+                            let item = payloads |> List.find (fun item -> item.Path = want.Path)
+                            if obj.ReferenceEquals(item.Bytes, null) || item.Bytes <> want.Bytes then
+                                Some(WrongBytes want.Path)
+                            else None)
+                        |> function Some issue -> Error issue | None -> Ok ()
