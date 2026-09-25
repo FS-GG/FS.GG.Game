@@ -166,21 +166,46 @@ let main _ =
             if plan.ManifestBytes <> manifest then failwith "manifest bytes changed"
             File.WriteAllBytes(path, bytes)
             if plan.Skills.Head.Bytes <> raw then failwith "snapshot changed after source mutation"))
-    check "empty undeclared directory" (fun () -> fixture (fun root ->
+    check "empty nested directory does not change output" (fun () -> fixture (fun root ->
         let manifest, _ = setup root bytes
         Directory.CreateDirectory(Path.Combine(root, "template/product-skills/audio/unused")) |> ignore
-        ReadOnlySource.capture root manifest
-        |> expectRefusal (function ReadOnlySource.EmptyDirectory path when path.EndsWith("/unused") -> true | _ -> false)))
+        match ReadOnlySource.capture root manifest with
+        | Error issue -> failwithf "empty nested directory refused: %A" issue
+        | Ok plan ->
+            if plan.ManifestBytes <> manifest || plan.Skills.Length <> 1 || plan.Skills.Head.Bytes <> bytes then
+                failwith "empty nested directory changed output"))
     check "extra source file" (fun () -> fixture (fun root ->
         let manifest, _ = setup root bytes
         write root "template/product-skills/audio/extra.txt" bytes |> ignore
         ReadOnlySource.capture root manifest
         |> expectRefusal (function ReadOnlySource.PolicyRefusal (Policy.UnexpectedSource path) when path.EndsWith("/extra.txt") -> true | _ -> false)))
-    check "extra empty product root" (fun () -> fixture (fun root ->
+    check "extra empty product root does not change output" (fun () -> fixture (fun root ->
         let manifest, _ = setup root bytes
         Directory.CreateDirectory(Path.Combine(root, "template/product-skills/unused")) |> ignore
+        match ReadOnlySource.capture root manifest with
+        | Error issue -> failwithf "extra empty product root refused: %A" issue
+        | Ok plan ->
+            if plan.ManifestBytes <> manifest || plan.Skills.Length <> 1 || plan.Skills.Head.Bytes <> bytes then
+                failwith "extra empty product root changed output"))
+    check "empty-only extra root subtree does not change output" (fun () -> fixture (fun root ->
+        let manifest, _ = setup root bytes
+        Directory.CreateDirectory(Path.Combine(root, "template/product-skills/unused/nested/empty")) |> ignore
+        match ReadOnlySource.capture root manifest with
+        | Error issue -> failwithf "empty-only extra root refused: %A" issue
+        | Ok plan -> if plan.Skills.Length <> 1 || plan.Skills.Head.Bytes <> bytes then
+                         failwith "empty-only extra root changed output"))
+    check "nonempty undeclared root still refuses" (fun () -> fixture (fun root ->
+        let manifest, _ = setup root bytes
+        write root "template/product-skills/unused/EXTRA.txt" bytes |> ignore
         ReadOnlySource.capture root manifest
         |> expectRefusal (function ReadOnlySource.UnexpectedRoot path when path.EndsWith("/unused") -> true | _ -> false)))
+    check "symlink in extra root still refuses" (fun () -> fixture (fun root ->
+        let manifest, _ = setup root bytes
+        let extra = Path.Combine(root, "template/product-skills/unused")
+        Directory.CreateDirectory extra |> ignore
+        File.CreateSymbolicLink(Path.Combine(extra, "linked.md"), "/etc/hosts") |> ignore
+        ReadOnlySource.capture root manifest
+        |> expectRefusal (function ReadOnlySource.Symlink path when path.EndsWith("/linked.md") -> true | _ -> false)))
     check "case alias product root" (fun () -> fixture (fun root ->
         let manifest, _ = setup root bytes
         Directory.CreateDirectory(Path.Combine(root, "template/product-skills/AUDIO")) |> ignore
@@ -190,6 +215,12 @@ let main _ =
         let manifest, _ = setup root bytes
         write root "template/product-skills/audio/docs/a.txt" bytes |> ignore
         write root "template/product-skills/audio/DOCS/b.txt" bytes |> ignore
+        ReadOnlySource.capture root manifest
+        |> expectRefusal (function ReadOnlySource.DuplicatePath _ -> true | _ -> false)))
+    check "case alias empty directories still refuse" (fun () -> fixture (fun root ->
+        let manifest, _ = setup root bytes
+        Directory.CreateDirectory(Path.Combine(root, "template/product-skills/audio/docs")) |> ignore
+        Directory.CreateDirectory(Path.Combine(root, "template/product-skills/audio/DOCS")) |> ignore
         ReadOnlySource.capture root manifest
         |> expectRefusal (function ReadOnlySource.DuplicatePath _ -> true | _ -> false)))
     check "source symlink" (fun () -> fixture (fun root ->

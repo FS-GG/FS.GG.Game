@@ -5,6 +5,8 @@ draft #644 Python source selector (`e3105bd9d3076f8a6b09b0c3b8835679e2351e70`)
 with the read-only F# observer stacked on #650. It pins the Python file SHA-256 to
 `ba060dff1a12cdff4c51c13e0dc478de0721d7b4193c1e19a4ec75852819ba44`.
 The comparison includes the manifest bytes and each `skills/<id>/<file>` byte payload.
+The [empty-directory disposition](empty-directory-disposition.md) explains why empty
+source directories have no declared output bytes.
 
 Build and run from the Game worktree containing this test:
 
@@ -18,7 +20,7 @@ projects the bytes they select. It never calls `stage()`. Temporary fixtures con
 source files and manifests; the observer writes only JSON to stdout. The real
 17-skill catalog and an independently authored nested BOM/CRLF case require exact
 paths and bytes. Malformed and alias fixtures require both implementations to refuse.
-Two empty-directory fixtures record known Python-accept/F#-refuse differences.
+Four empty-directory fixtures require the same exact output bytes from both.
 
 This is a source-only comparison of candidate logic. #644 acceptance and installed
 package proof remain prerequisites. It does not establish output rollback, production
