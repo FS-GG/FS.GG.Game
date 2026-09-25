@@ -6,7 +6,8 @@ checks the opened descriptor with `statx(AT_EMPTY_PATH)`, and enumerates directo
 through `getdents64` on held descriptors. Each directory scan compares supported
 mtime/ctime and identity fields before and after, seeks the same descriptor to the
 start, repeats the name scan, and refuses a changed stamp or roster. It rejects links,
-nonregular entries, empty or undeclared directories, and case aliases. Regular-file
+nonregular entries, undeclared files, nonempty undeclared product roots, and case aliases.
+Empty directories carry no manifest file bytes and are ignored after a checked scan. Regular-file
 bytes are read twice through a duplicate of the opened descriptor; identity, size,
 mtime, and ctime are compared before, between, and after the reads. The accepted bytes
 then pass to the pure `Policy.prepare` reducer.

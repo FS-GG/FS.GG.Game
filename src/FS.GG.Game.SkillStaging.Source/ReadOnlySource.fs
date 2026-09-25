@@ -14,7 +14,6 @@ module ReadOnlySource =
         | InvalidManifest
         | MissingTree of string
         | UnexpectedRoot of string
-        | EmptyDirectory of string
         | DirectoryUnstable of string
         | FileUnstable of string
         | DuplicatePath of string
@@ -94,6 +93,7 @@ module ReadOnlySource =
                                     |> List.map (fun row -> row.Id) |> Set.ofList
                                 let observed = ResizeArray<Policy.Source>()
                                 let seen = HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                                let seenRoots = HashSet<string>(StringComparer.OrdinalIgnoreCase)
                                 let rec visit (parent: Microsoft.Win32.SafeHandles.SafeFileHandle) name rel requireDirectory =
                                     if not (seen.Add rel) then Error(DuplicatePath rel)
                                     else
@@ -119,13 +119,36 @@ module ReadOnlySource =
                                                 | LinuxDescriptors.Directory ->
                                                     match LinuxDescriptors.namesStable (fun () -> afterFirstBatch rel) handle with
                                                     | Error issue -> Error(mapFailure rel issue)
-                                                    | Ok [] -> Error(EmptyDirectory rel)
+                                                    | Ok [] -> Ok ()
                                                     | Ok names ->
                                                         names
                                                         |> List.fold (fun state child ->
                                                             match state with
                                                             | Error _ -> state
                                                             | Ok () -> visit handle child (rel + "/" + child) false) (Ok ())
+                                let rec hasUndeclaredFiles
+                                        (directory: Microsoft.Win32.SafeHandles.SafeFileHandle) rel =
+                                    afterOpen rel
+                                    match LinuxDescriptors.namesStable (fun () -> afterFirstBatch rel) directory with
+                                    | Error issue -> Error(mapFailure rel issue)
+                                    | Ok names ->
+                                        names
+                                        |> List.fold (fun state child ->
+                                            match state with
+                                            | Error _ | Ok true -> state
+                                            | Ok false ->
+                                                let childRel = rel + "/" + child
+                                                if not (seen.Add childRel) then Error(DuplicatePath childRel)
+                                                else
+                                                    match LinuxDescriptors.openChild directory child with
+                                                    | Error issue -> Error(mapFailure childRel issue)
+                                                    | Ok(handle, kind) ->
+                                                        use handle = handle
+                                                        match kind with
+                                                        | LinuxDescriptors.Regular -> Ok true
+                                                        | LinuxDescriptors.Special -> Error(NonRegular childRel)
+                                                        | LinuxDescriptors.Directory ->
+                                                            hasUndeclaredFiles handle childRel) (Ok false)
                                 let result =
                                     match LinuxDescriptors.namesStable
                                             (fun () -> afterFirstBatch "template/product-skills") tree with
@@ -137,8 +160,20 @@ module ReadOnlySource =
                                             | Error _ -> state
                                             | Ok () ->
                                                 let rel = "template/product-skills/" + id
-                                                if not (Set.contains id expected) then Error(UnexpectedRoot rel)
-                                                else visit tree id rel true) (Ok ())
+                                                if not (seenRoots.Add id) then Error(DuplicatePath rel)
+                                                elif Set.contains id expected then visit tree id rel true
+                                                else
+                                                    match LinuxDescriptors.openChild tree id with
+                                                    | Error issue -> Error(mapFailure rel issue)
+                                                    | Ok(handle, kind) ->
+                                                        use handle = handle
+                                                        match kind with
+                                                        | LinuxDescriptors.Directory ->
+                                                            match hasUndeclaredFiles handle rel with
+                                                            | Error issue -> Error issue
+                                                            | Ok true -> Error(UnexpectedRoot rel)
+                                                            | Ok false -> Ok ()
+                                                        | _ -> Error(UnexpectedRoot rel)) (Ok ())
                                 match result with
                                 | Error issue -> Error issue
                                 | Ok () ->

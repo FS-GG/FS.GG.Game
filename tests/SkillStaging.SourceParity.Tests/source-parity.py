@@ -114,8 +114,12 @@ def fixture(root: Path, variant: str) -> Path:
         (source / "skill.MD").write_bytes(body)
     if variant == "empty-extra-directory":
         (source / "unused").mkdir()
+    if variant == "empty-nested-subtree":
+        (source / "unused/nested/empty").mkdir(parents=True)
     if variant == "empty-extra-root":
         (root / "template/product-skills/unused").mkdir()
+    if variant == "empty-only-root-subtree":
+        (root / "template/product-skills/unused/nested/empty").mkdir(parents=True)
     if variant == "symlink-source":
         foreign = root / "foreign.md"
         foreign.write_bytes(body)
@@ -152,10 +156,6 @@ def compare(name: str, expected: str, module, observer: Path, root: Path, manife
         if python_accepted or fsharp_accepted:
             raise AssertionError(f"{name}: expected both to refuse: {python} != {fsharp}")
         print(f"PASS {name}: both refused")
-    elif expected == "known-divergence":
-        if not python_accepted or fsharp_accepted:
-            raise AssertionError(f"{name}: expected Python accept / F# refusal: {python} != {fsharp}")
-        print(f"PASS {name}: known Python accept / F# refusal")
     else:
         raise AssertionError(f"unknown expectation {expected}")
 
@@ -182,15 +182,18 @@ def main() -> None:
         ("traversal-path", "reject"),
         ("physical-case-alias", "reject"),
         ("symlink-source", "reject"),
-        ("empty-extra-directory", "known-divergence"),
-        ("empty-extra-root", "known-divergence"),
+        ("empty-extra-directory", "exact"),
+        ("empty-nested-subtree", "exact"),
+        ("empty-extra-root", "exact"),
+        ("empty-only-root-subtree", "exact"),
     ]
     for name, expected in cases:
         with tempfile.TemporaryDirectory(prefix="game-source-parity-") as temporary:
             root = Path(temporary)
             manifest = fixture(root, name)
             compare(name, expected, module, observer, root, manifest)
-    print(f"10/10 source-only parity corpus cases passed; candidate SHA-256 {CANDIDATE_SHA256}")
+    total = 1 + len(cases)
+    print(f"{total}/{total} source-only parity corpus cases passed; candidate SHA-256 {CANDIDATE_SHA256}")
 
 
 if __name__ == "__main__":
