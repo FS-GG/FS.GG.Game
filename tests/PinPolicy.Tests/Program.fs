@@ -27,6 +27,9 @@ check "wrong UI version" (Some "incoherent versions") (xml (rows |> List.map (fu
 check "extra UI identity" (Some "unexpected pin") (xml ((rows |> List.map pin) @ [ pin ("FS.GG.UI.Unknown", "0.10.0") ]))
 check "conditional template" (Some "conditional pin") (baseXml.Replace("Include=\"FS.GG.UI.Template\"", "Include=\"FS.GG.UI.Template\" Condition=\"false\""))
 check "conditional group" (Some "conditional pin") (baseXml.Replace("<ItemGroup>", "<ItemGroup Condition=\"false\">"))
+check "conditional root" (Some "conditional pin") (baseXml.Replace("<Project>", "<Project Condition=\"false\">"))
 check "missing version" (Some "missing version") (baseXml.Replace("Include=\"FS.GG.Audio.Host\" Version=\"0.2.0\"", "Include=\"FS.GG.Audio.Host\""))
 check "malformed XML" (Some "malformed XML") "<Project><ItemGroup>"
-printfn "13 pin-policy controls passed"
+check "namespaced root is not the literal Project contract" (Some "missing Project root")
+    (baseXml.Replace("<Project>", "<x:Project xmlns:x=\"urn:foreign\">").Replace("</Project>", "</x:Project>"))
+printfn "15 pin-policy controls passed"

@@ -26,7 +26,10 @@ module PinPolicy =
         try
             let doc = XDocument.Parse(xml)
             let root = doc.Root |> Option.ofObj |> Option.get
-            if root.Name.LocalName <> "Project" then
+            // The installed XML oracle accepts only the literal, unnamespaced
+            // MSBuild Project root. LocalName alone admits a foreign namespace
+            // while unnamespaced PackageVersion children still satisfy the roster.
+            if root.Name <> XName.Get "Project" then
                 Error [ "missing Project root" ]
             else
                 let rows =
