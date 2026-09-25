@@ -8,6 +8,7 @@
 #   1. DERIVED, NOT RESTATED — the staged set is exactly template/skill-manifest/skill-manifest.json's
 #      `scope: product` rows (ADR-0058), and the packed manifest is byte-identical to the committed one.
 #   2. NEW ROWS FLOW — a synthetic product row is staged without joining any hand-maintained set.
+#      Its byte fixture pins the manifest producer's BOM removal and CRLF fold.
 #   3. PACKS — `dotnet pack` produces a nupkg carrying the manifest, every delivered SKILL.md, and the
 #      consumer handle (build/FS.GG.Game.Skills.props) + README.
 #   4. CONTENT-ADDRESSED — every packed SKILL.md's canonical digest matches its manifest sha256
@@ -24,14 +25,14 @@ fail() { echo "verify-package: FAIL — $*" >&2; exit 1; }
 
 [ -f "$MANIFEST" ] || fail "template/skill-manifest/skill-manifest.json not found (is this a FS.GG.Game checkout?)"
 
-# canonical_digest: BOM-stripped body sha256, byte-parity with generate-skill-manifest.fsx / stage-skills.
-# A tiny python helper keeps the digest correct even for a BOM'd body (sha256sum would not).
+# canonical_digest: BOM-stripped and CRLF-folded body sha256, matching the manifest producer and stager.
+# A tiny Python helper applies both rules to BOM/CRLF source bytes (sha256sum alone would not).
 digest() { python3 - "$1" <<'PY'
 import hashlib, sys
 raw = open(sys.argv[1], "rb").read()
 if raw.startswith(b"\xef\xbb\xbf"):
     raw = raw[3:]
-print(hashlib.sha256(raw).hexdigest())
+print(hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest())
 PY
 }
 
@@ -62,13 +63,16 @@ for row in "${DELIVERED_ROWS[@]}"; do
 done
 echo "   ${#DELIVERED_ROWS[@]} product skill(s) staged & content-addressed"
 
-echo "== 2. a newly added product row is staged without joining another set =="
+echo "== 2. a BOM-bearing product row is staged without joining another set =="
 fixture="$WORK/new-row-repo"
 mkdir -p "$fixture/src/FS.GG.Game.Skills" "$fixture/template/skill-manifest" \
          "$fixture/template/product-skills/fs-gg-new-row"
 cp "$HERE/stage-skills.py" "$fixture/src/FS.GG.Game.Skills/stage-skills.py"
-printf 'new row body\n' > "$fixture/template/product-skills/fs-gg-new-row/SKILL.md"
-new_sha="$(digest "$fixture/template/product-skills/fs-gg-new-row/SKILL.md")"
+# Derive the manifest hash from independent BOM-free bytes, not digest() on the
+# variant being tested. The current Game stager strips a UTF-8 BOM but does not
+# fold CRLF; Rendering's stager has a different policy.
+printf '\357\273\277new row body\n' > "$fixture/template/product-skills/fs-gg-new-row/SKILL.md"
+new_sha="$(printf 'new row body\n' | sha256sum | cut -d' ' -f1)"
 python3 - "$fixture/template/skill-manifest/skill-manifest.json" "$new_sha" <<'PY'
 import json, sys
 doc = {"schemaVersion": 1, "skills": [{
@@ -85,7 +89,34 @@ PY
 python3 "$fixture/src/FS.GG.Game.Skills/stage-skills.py" "$fixture/stage" >/dev/null
 [ -f "$fixture/stage/skills/fs-gg-new-row/SKILL.md" ] \
   || fail "a new product row was not staged from the manifest"
-echo "   synthetic product row flowed from manifest to staged bytes"
+cmp "$fixture/template/product-skills/fs-gg-new-row/SKILL.md" \
+    "$fixture/stage/skills/fs-gg-new-row/SKILL.md" >/dev/null \
+  || fail "staging changed the BOM-bearing source bytes"
+echo "   BOM-bearing product row flowed from manifest; staged bytes remain exact"
+
+echo "== 2b. CRLF stages under the same producer digest without changing source bytes =="
+# The F# manifest generator folds CRLF before hashing. This is a red-before
+# control for the old Python stager, which removed a BOM but missed that fold.
+printf '\357\273\277new row body\r\n' > "$fixture/template/product-skills/fs-gg-new-row/SKILL.md"
+python3 "$fixture/src/FS.GG.Game.Skills/stage-skills.py" "$fixture/stage-crlf" \
+  >"$WORK/crlf.out" 2>"$WORK/crlf.err" \
+  || fail "CRLF source was refused despite matching the F# producer's LF digest"
+cmp "$fixture/template/product-skills/fs-gg-new-row/SKILL.md" \
+    "$fixture/stage-crlf/skills/fs-gg-new-row/SKILL.md" >/dev/null \
+  || fail "staging changed CRLF source bytes"
+echo "   BOM/CRLF source accepted under producer digest; staged bytes remain exact"
+
+echo "== 2c. a lone CR or changed body byte still fails canonical staging =="
+for variant in $'new row body\r' $'new row bodY\r\n'; do
+  printf '\357\273\277%s' "$variant" > "$fixture/template/product-skills/fs-gg-new-row/SKILL.md"
+  if python3 "$fixture/src/FS.GG.Game.Skills/stage-skills.py" "$fixture/rejected" \
+      >"$WORK/mutant.out" 2>"$WORK/mutant.err"; then
+    fail "a non-equivalent body mutation passed canonical staging"
+  fi
+  grep -q 'staged bytes sha256' "$WORK/mutant.err" \
+    || fail "a non-equivalent body mutation was refused without digest mismatch"
+done
+echo "   lone CR and changed body bytes rejected"
 
 echo "== 3. pack + content assert =="
 dotnet pack "$HERE/FS.GG.Game.Skills.csproj" -c Release -o "$WORK/out" >/dev/null

@@ -22,9 +22,9 @@ WHAT IT STAGES, under <out-dir> (the package packs it under `game-skills/`):
   skill-manifest.json                 the manifest VERBATIM — the delivered set's authority + sha256s
   skills/<id>/SKILL.md                one per `scope: product` row (id = the row's id)
 
-INTEGRITY AT STAGE TIME. Each staged SKILL.md's canonical digest (BOM-stripped body sha256 — byte-parity
-with generate-skill-manifest.fsx's `Encoding.UTF8.GetBytes(File.ReadAllText …)`, the exact digest the
-SDD CLI verifies against at scaffold time, ADR-0014) is re-checked against the manifest's recorded
+INTEGRITY AT STAGE TIME. Each staged SKILL.md's canonical digest strips a UTF-8 BOM and folds CRLF
+to LF before SHA-256, matching generate-skill-manifest.fsx's `sha256Text` and the digest the SDD CLI
+verifies at scaffold time (ADR-0014). It is re-checked against the manifest's recorded
 `sha256`. A drift here is a build FAILURE, never a silently mis-staged byte.
 
   stage-skills.py <out-dir>
@@ -52,10 +52,10 @@ def die(msg: str) -> "None":
 
 
 def canonical_digest(raw: bytes) -> str:
-    """sha256 over the body text's UTF-8 bytes, BOM-free — byte-parity with generate-skill-manifest."""
+    """Hash BOM-free, CRLF-folded UTF-8 bytes, matching the F# manifest producer."""
     if raw.startswith(b"\xef\xbb\xbf"):
         raw = raw[3:]
-    return hashlib.sha256(raw).hexdigest()
+    return hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
 
 
 def is_delivered(row: dict) -> bool:
