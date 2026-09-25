@@ -5,11 +5,15 @@
   <ItemGroup>
     <Compile Include="LinuxDescriptors.fs" />
     <Compile Include="ReadOnlySource.fs" />
+    <Compile Include="ReadOnlyReceiver.fs" />
     <ProjectReference Include="../FS.GG.Game.SkillStaging.Policy/FS.GG.Game.SkillStaging.Policy.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>SkillStaging.Source.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>SkillStaging.ReceiverObserver.Tests</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 </Project>
