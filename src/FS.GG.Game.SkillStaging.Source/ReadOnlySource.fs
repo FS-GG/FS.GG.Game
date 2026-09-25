@@ -16,6 +16,7 @@ module ReadOnlySource =
         | UnexpectedRoot of string
         | EmptyDirectory of string
         | DirectoryUnstable of string
+        | FileUnstable of string
         | DuplicatePath of string
         | Symlink of string
         | NonRegular of string
@@ -58,6 +59,7 @@ module ReadOnlySource =
         | LinuxDescriptors.Changed -> DirectoryUnstable path
 
     let private captureCore (afterOpen: string -> unit) (afterFirstBatch: string -> unit)
+                            (afterFirstChunk: string -> unit)
                             (repoRoot: string) (manifestBytes: byte[]) : Result<Policy.StagePlan, Refusal> =
         if not (OperatingSystem.IsLinux()) || not BitConverter.IsLittleEndian then Error UnsupportedPlatform
         elif String.IsNullOrWhiteSpace repoRoot then Error(MissingTree "repository root")
@@ -105,7 +107,9 @@ module ReadOnlySource =
                                                 match kind with
                                                 | LinuxDescriptors.Special -> Error(NonRegular rel)
                                                 | LinuxDescriptors.Regular ->
-                                                    match LinuxDescriptors.readBytes handle with
+                                                    match LinuxDescriptors.readBytesStable
+                                                            (fun () -> afterFirstChunk rel) handle with
+                                                    | Error LinuxDescriptors.Changed -> Error(FileUnstable rel)
                                                     | Error issue -> Error(mapFailure rel issue)
                                                     | Ok bytes ->
                                                         observed.Add
@@ -149,11 +153,14 @@ module ReadOnlySource =
                 | :? EntryPointNotFoundException -> Error UnsupportedPlatform
 
     /// Snapshot selected product roots under repoRoot. There is no destination argument or write.
-    let capture repoRoot manifestBytes = captureCore ignore ignore repoRoot manifestBytes
+    let capture repoRoot manifestBytes = captureCore ignore ignore ignore repoRoot manifestBytes
 
     // Test seam runs only after a descriptor is open and typed, before its bytes or children are read.
     let internal captureWithOpenHook afterOpen repoRoot manifestBytes =
-        captureCore afterOpen ignore repoRoot manifestBytes
+        captureCore afterOpen ignore ignore repoRoot manifestBytes
 
     let internal captureWithHooks afterOpen afterFirstBatch repoRoot manifestBytes =
-        captureCore afterOpen afterFirstBatch repoRoot manifestBytes
+        captureCore afterOpen afterFirstBatch ignore repoRoot manifestBytes
+
+    let internal captureWithReadHook afterFirstChunk repoRoot manifestBytes =
+        captureCore ignore ignore afterFirstChunk repoRoot manifestBytes

@@ -162,12 +162,36 @@ module internal LinuxDescriptors =
                         | _, Error issue -> Error issue
                         | _ -> Error Changed
 
-    let readBytes (handle: SafeFileHandle) =
-        let copy = dup(number handle)
-        if copy < 0 then Error Unreadable
-        else
-            use copyHandle = new SafeFileHandle(nativeint copy, true)
-            use stream = new FileStream(copyHandle, FileAccess.Read)
-            use memory = new MemoryStream()
-            stream.CopyTo memory
-            Ok(memory.ToArray())
+    /// Refuses observed content changes across two reads of one opened regular-file identity.
+    let readBytesStable (afterFirstChunk: unit -> unit) (handle: SafeFileHandle) =
+        match stamp handle with
+        | Error issue -> Error issue
+        | Ok before ->
+            let copy = dup(number handle)
+            if copy < 0 then Error Unreadable
+            else
+                use copyHandle = new SafeFileHandle(nativeint copy, true)
+                use stream = new FileStream(copyHandle, FileAccess.Read)
+                let readPass afterChunk =
+                    use memory = new MemoryStream()
+                    let buffer = Array.zeroCreate<byte> 4096
+                    let mutable count = stream.Read(buffer, 0, buffer.Length)
+                    let mutable firstChunk = true
+                    while count > 0 do
+                        memory.Write(buffer, 0, count)
+                        if firstChunk then
+                            firstChunk <- false
+                            afterChunk ()
+                        count <- stream.Read(buffer, 0, buffer.Length)
+                    memory.ToArray()
+                let first = readPass afterFirstChunk
+                match stamp handle with
+                | Error issue -> Error issue
+                | Ok middle when before <> middle -> Error Changed
+                | Ok middle ->
+                    stream.Seek(0L, SeekOrigin.Begin) |> ignore
+                    let second = readPass ignore
+                    match stamp handle with
+                    | Error issue -> Error issue
+                    | Ok after when middle = after && first = second -> Ok first
+                    | Ok _ -> Error Changed

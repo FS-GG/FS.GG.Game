@@ -53,6 +53,29 @@ extern int statx(int parent, string path, int flags, uint32 mask, [<Out>] byte[]
 [<EntryPoint>]
 let main _ =
     let bytes = utf8.GetBytes "# audio\n"
+    check "in-place overwrite during held-fd read refuses" (fun () -> fixture (fun root ->
+        let manifest, path = setup root bytes
+        let replacement = utf8.GetBytes "# other\n"
+        let mutable mutated = false
+        let afterChunk (rel: string) =
+            if rel.EndsWith("/SKILL.md", StringComparison.Ordinal) then
+                use writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+                writer.Write(replacement, 0, replacement.Length)
+                writer.Flush()
+                File.SetLastWriteTimeUtc(path, DateTime(2004, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+                mutated <- true
+        ReadOnlySource.captureWithReadHook afterChunk root manifest
+        |> expectRefusal (function ReadOnlySource.FileUnstable path when mutated && path.EndsWith("/SKILL.md") -> true | _ -> false)))
+    check "same-byte rewrite during held-fd read refuses" (fun () -> fixture (fun root ->
+        let manifest, path = setup root bytes
+        let afterChunk (rel: string) =
+            if rel.EndsWith("/SKILL.md", StringComparison.Ordinal) then
+                use writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+                writer.Write(bytes, 0, bytes.Length)
+                writer.Flush()
+                File.SetLastWriteTimeUtc(path, DateTime(2005, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+        ReadOnlySource.captureWithReadHook afterChunk root manifest
+        |> expectRefusal (function ReadOnlySource.FileUnstable path when path.EndsWith("/SKILL.md") -> true | _ -> false)))
     check "directory rename/restore during enumeration refuses" (fun () -> fixture (fun root ->
         let manifest, path = setup root bytes
         let product = Path.GetDirectoryName path |> Option.ofObj |> Option.defaultWith (fun () -> failwith "missing parent")
