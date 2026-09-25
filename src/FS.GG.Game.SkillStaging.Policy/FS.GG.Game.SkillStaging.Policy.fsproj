@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="StagingPolicy.fs" />
+    <Compile Include="ReceiverContract.fs" />
   </ItemGroup>
 </Project>

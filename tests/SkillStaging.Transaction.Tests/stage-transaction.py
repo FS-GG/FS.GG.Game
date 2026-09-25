@@ -56,15 +56,20 @@ def prepare(module, root: Path, manifest: Path):
     return raw, module.selected_skills(doc)
 
 
-def plan(observer: Path, root: Path, manifest: Path) -> dict[str, bytes]:
+def plan(observer: Path, root: Path, manifest: Path) -> tuple[dict[str, bytes], dict[str, tuple]]:
     result = subprocess.run(
-        ["dotnet", str(observer), str(root), str(manifest)],
+        ["dotnet", str(observer), str(root), str(manifest),
+         str(os.geteuid()), str(os.getegid()), str(0o022)],
         capture_output=True, text=True, check=True,
     )
     doc = json.loads(result.stdout)
     check(doc.get("accepted") is True, f"F# plan refused: {doc}")
-    return {entry["path"]: base64.b64decode(entry["bytesBase64"])
-            for entry in doc["files"]}
+    files = {entry["path"]: base64.b64decode(entry["bytesBase64"])
+             for entry in doc["files"]}
+    metadata = {entry["path"]: (entry["kind"], entry["mode"],
+                                entry["userId"], entry["groupId"])
+                for entry in doc["metadata"]}
+    return files, metadata
 
 
 def snapshot(root: Path) -> dict[str, tuple]:
@@ -82,8 +87,13 @@ def snapshot(root: Path) -> dict[str, tuple]:
     return result
 
 
-def assert_staged(out: Path, expected: dict[str, bytes], title: str) -> None:
+def assert_staged(out: Path, expected: dict[str, bytes],
+                  expected_metadata: dict[str, tuple], title: str) -> None:
     actual = snapshot(out)
+    actual_metadata = {rel: row[:4] for rel, row in actual.items()}
+    check(actual_metadata == expected_metadata,
+          f"{title}: observed receiver metadata differs from F# contract: "
+          f"{actual_metadata} != {expected_metadata}")
     check(set(actual) == {".", *expected, *{
         str(Path(rel).parent) for rel in expected if Path(rel).parent != Path(".")
     }, *{
@@ -147,13 +157,13 @@ def assert_refused(stage_call, out: Path, title: str, expected_exception=SystemE
 
 def check_real_catalog(module, observer: Path) -> None:
     manifest = REPO / "template/skill-manifest/skill-manifest.json"
-    expected = plan(observer, REPO, manifest)
+    expected, metadata = plan(observer, REPO, manifest)
     raw, selected = prepare(module, REPO, manifest)
     check(len(selected) == 17, f"real catalog selection has {len(selected)} product rows")
     with tempfile.TemporaryDirectory(prefix="game-stage-real-") as temporary:
         out = Path(temporary) / "receiver"
         module.stage(out, raw, selected)
-        assert_staged(out, expected, "real 17-skill catalog")
+        assert_staged(out, expected, metadata, "real 17-skill catalog")
         assert_no_stage_debris(out, "real catalog")
 
 
@@ -161,13 +171,13 @@ def check_fixture(module, observer: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="game-stage-fixture-") as temporary:
         root = Path(temporary) / "fixture"
         manifest, source = fixture(root)
-        expected = plan(observer, root, manifest)
+        expected, metadata = plan(observer, root, manifest)
         raw, selected = prepare(module, root, manifest)
         out = Path(temporary) / "receiver"
         out.mkdir()
         (out / "obsolete.txt").write_bytes(b"old receiver")
         module.stage(out, raw, selected)
-        assert_staged(out, expected, "BOM/CRLF/nested replacement")
+        assert_staged(out, expected, metadata, "BOM/CRLF/nested replacement")
         check((source / "SKILL.md").stat().st_mode & 0o777 == 0o600,
               "source mode control changed")
         check((source / "docs/guide.md").stat().st_mode & 0o777 == 0o640,

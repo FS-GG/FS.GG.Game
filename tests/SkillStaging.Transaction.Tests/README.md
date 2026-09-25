@@ -22,9 +22,10 @@ same paths and raw bytes as the F# plan. A separate fixture verifies BOM,
 CRLF, a nested file, and removal of a previous receiver's obsolete file. It
 sets source file modes to `0600` and `0640`; with process umask `022`, the
 staged regular files must be `0644`, directories `0755`, and every path owned
-by the running uid/gid. These mode and owner observations describe #644's
-Python transaction. The F# read-only plan carries paths and bytes, not output
-mode or owner instructions.
+by the running uid/gid. The harness now compares these observed facts with the
+pure F# receiver contract derived from the source plan and the explicit
+uid/gid/umask inputs. These facts describe this disposable Python transaction;
+the F# code still performs no output writes.
 
 With an existing receiver, changed, removed, or symlinked source files,
 changed manifest bytes, and an extra file inside a selected root must refuse
