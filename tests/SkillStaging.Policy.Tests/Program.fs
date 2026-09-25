@@ -7,7 +7,9 @@ open FS.GG.Game.SkillStaging
 let bytes (text: string) = Encoding.UTF8.GetBytes text
 let body = bytes "# skill\n"
 let digest = match Policy.canonicalDigest body with Ok value -> value | Error () -> failwith "invalid fixture"
-let row: Policy.ManifestRow = { Id = "fs-gg-ai"; Scope = "product"; SuppliedBy = "template/product-skills/fs-gg-ai/"; Sha256 = digest }
+let row: Policy.ManifestRow =
+    { Id = "fs-gg-ai"; Scope = "product"; SuppliedBy = "template/product-skills/fs-gg-ai/"
+      Sha256 = digest; Files = [ { Path = "SKILL.md"; Sha256 = digest } ] }
 let source: Policy.Source = { RelativePath = "template/product-skills/fs-gg-ai/SKILL.md"; Bytes = body; IsRegularFile = true; IsSymlink = false }
 let manifest = bytes "{\"skills\":[]}\n"
 let manifestFor (rows: Policy.ManifestRow list) =
@@ -16,7 +18,8 @@ let manifestFor (rows: Policy.ManifestRow list) =
         |> List.map (fun item ->
             dict [ "id", box item.Id; "scope", box item.Scope;
                    "supplied-by", box item.SuppliedBy; "sha256", box item.Sha256;
-                   "files", box [ dict [ "path", box "SKILL.md"; "sha256", box item.Sha256 ] ] ])
+                   "files", box (item.Files |> List.map (fun file ->
+                       dict [ "path", box file.Path; "sha256", box file.Sha256 ])) ])
     JsonSerializer.SerializeToUtf8Bytes(dict [ "schemaVersion", box 2; "skills", box skills ])
 let prepare rows sources = Policy.prepare (manifestFor rows) rows sources
 let check name expected actual =
@@ -40,6 +43,9 @@ let run () =
         (manifestFor [ row ] |> Encoding.UTF8.GetString).Replace("\"SKILL.md\"", "\"../escape.md\"")
         |> bytes
     check "escaping manifest file refuses" (Error Policy.InvalidManifest) (Policy.prepare wrongFile [ row ] [ source ])
+    let validJson = manifestFor [ row ] |> Encoding.UTF8.GetString
+    let duplicateJson = validJson.Replace("\"schemaVersion\":2", "\"schemaVersion\":999,\"schemaVersion\":2") |> bytes
+    check "duplicate JSON key refuses" (Error Policy.InvalidManifest) (Policy.prepare duplicateJson [ row ] [ source ])
     let plan = prepare [ row ] [ source ]
     match plan with
     | Ok value ->
@@ -69,15 +75,42 @@ let run () =
     | Ok value -> check "unrelated scope skipped" [ row.Id ] (value.Skills |> List.map _.Id)
     | Error refusal -> failwithf "unrelated scope refused: %A" refusal
     check "duplicate id" (Error(Policy.DuplicateId row.Id)) (prepare [ row; row ] [ source ])
+    check "case-colliding id" (Error(Policy.DuplicateId "FS-GG-AI"))
+        (prepare [ row; { row with Id = "FS-GG-AI"; SuppliedBy = "template/product-skills/FS-GG-AI/" } ] [ source ])
     check "traversal id" (Error(Policy.InvalidId "../other")) (prepare [ { row with Id = "../other" } ] [ source ])
     check "wrong source root" (Error(Policy.InvalidSourcePath "template/product-skills/other/")) (prepare [ { row with SuppliedBy = "template/product-skills/other/" } ] [ source ])
     check "missing source" (Error(Policy.MissingSource source.RelativePath)) (prepare [ row ] [])
     check "symlink source" (Error(Policy.SymlinkSource source.RelativePath)) (prepare [ row ] [ { source with IsSymlink = true } ])
     check "directory source" (Error(Policy.NonRegularSource source.RelativePath)) (prepare [ row ] [ { source with IsRegularFile = false } ])
     check "wrong digest" (Error(Policy.DigestMismatch row.Id)) (prepare [ row ] [ { source with Bytes = bytes "different" } ])
-    check "invalid digest" (Error(Policy.InvalidDigest row.Id)) (prepare [ { row with Sha256 = "ABC" } ] [ source ])
+    check "invalid digest" (Error Policy.InvalidManifest) (prepare [ { row with Sha256 = "ABC" } ] [ source ])
     check "invalid source UTF-8" (Error(Policy.InvalidUtf8 source.RelativePath)) (prepare [ row ] [ { source with Bytes = [|0xffuy|] } ])
     check "duplicate source facts" (Error(Policy.InvalidSourcePath source.RelativePath)) (prepare [ row ] [ source; source ])
+    let extraSource =
+        { source with RelativePath = "template/product-skills/fs-gg-ai/EXTRA.txt"; Bytes = bytes "unlisted" }
+    check "unlisted source under product root refused"
+        (Error(Policy.UnexpectedSource extraSource.RelativePath))
+        (prepare [ row ] [ source; extraSource ])
+    let extraBody = bytes "nested file\r\n"
+    let extraDigest = match Policy.canonicalDigest extraBody with Ok value -> value | Error () -> failwith "invalid extra"
+    let nested = { source with RelativePath = "template/product-skills/fs-gg-ai/nested/EXTRA.txt"; Bytes = extraBody }
+    let multiRow =
+        { row with Files = row.Files @ [ { Path = "nested/EXTRA.txt"; Sha256 = extraDigest } ] }
+    check "case-colliding file declaration" (Error Policy.InvalidManifest)
+        (prepare [ { row with Files = row.Files @ [ { Path = "skill.md"; Sha256 = digest } ] } ] [ source ])
+    check "manifest file set binds caller facts" (Error Policy.ManifestRowsMismatch)
+        (Policy.prepare (manifestFor [ multiRow ]) [ row ] [ source; nested ])
+    match prepare [ multiRow ] [ source; nested ] with
+    | Error refusal -> failwithf "closed multifile plan refused: %A" refusal
+    | Ok value ->
+        check "all declared files staged" [ "skills/fs-gg-ai/SKILL.md"; "skills/fs-gg-ai/nested/EXTRA.txt" ]
+            (value.Skills |> List.map _.Destination)
+        check "nested original bytes retained" extraBody value.Skills.[1].Bytes
+    check "declared file missing" (Error(Policy.MissingSource nested.RelativePath)) (prepare [ multiRow ] [ source ])
+    check "nested symlink fact" (Error(Policy.SymlinkSource nested.RelativePath))
+        (prepare [ multiRow ] [ source; { nested with IsSymlink = true } ])
+    check "nested nonregular fact" (Error(Policy.NonRegularSource nested.RelativePath))
+        (prepare [ multiRow ] [ source; { nested with IsRegularFile = false } ])
     let repoRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../.."))
     let realManifest = File.ReadAllBytes(Path.Combine(repoRoot, "template/skill-manifest/skill-manifest.json"))
     use document = JsonDocument.Parse realManifest
@@ -87,7 +120,13 @@ let run () =
             ({ Id = item.GetProperty("id").ToString();
               Scope = item.GetProperty("scope").ToString();
               SuppliedBy = item.GetProperty("supplied-by").ToString();
-              Sha256 = item.GetProperty("sha256").ToString() }: Policy.ManifestRow))
+              Sha256 = item.GetProperty("sha256").ToString();
+              Files =
+                item.GetProperty("files").EnumerateArray()
+                |> Seq.map (fun file ->
+                    ({ Path = file.GetProperty("path").ToString()
+                       Sha256 = file.GetProperty("sha256").ToString() }: Policy.ManifestFile))
+                |> Seq.toList }: Policy.ManifestRow))
         |> Seq.toList
     let realSources: Policy.Source list =
         realRows
