@@ -98,6 +98,18 @@ let run () =
         { row with Files = row.Files @ [ { Path = "nested/EXTRA.txt"; Sha256 = extraDigest } ] }
     check "case-colliding file declaration" (Error Policy.InvalidManifest)
         (prepare [ { row with Files = row.Files @ [ { Path = "skill.md"; Sha256 = digest } ] } ] [ source ])
+    let unicodeAliases =
+        { row with Files = row.Files @ [ { Path = "Straße.txt"; Sha256 = digest }; { Path = "STRASSE.txt"; Sha256 = digest } ] }
+    let unicodeSources =
+        [ source
+          { source with RelativePath = "template/product-skills/fs-gg-ai/Straße.txt" }
+          { source with RelativePath = "template/product-skills/fs-gg-ai/STRASSE.txt" } ]
+    check "Unicode casefold-colliding file declarations refuse" (Error Policy.InvalidManifest)
+        (prepare [ unicodeAliases ] unicodeSources)
+    let singleUnicode =
+        { row with Files = row.Files @ [ { Path = "Straße.txt"; Sha256 = digest } ] }
+    check "non-ASCII file declaration refuses until exact casefold parity" (Error Policy.InvalidManifest)
+        (prepare [ singleUnicode ] [ source; unicodeSources.[1] ])
     check "manifest file set binds caller facts" (Error Policy.ManifestRowsMismatch)
         (Policy.prepare (manifestFor [ multiRow ]) [ row ] [ source; nested ])
     match prepare [ multiRow ] [ source; nested ] with

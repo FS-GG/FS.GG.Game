@@ -81,7 +81,11 @@ module Policy =
         not (String.IsNullOrEmpty path)
         && not (path.StartsWith("/", StringComparison.Ordinal))
         && not (path.Contains '\\')
-        && path |> Seq.forall (fun c -> int c >= 32)
+        // Python's live stager uses Unicode casefold for path collisions.
+        // ToLowerInvariant below cannot reproduce multi-character folds such
+        // as ß -> ss. Until this candidate has exact casefold parity, refuse
+        // non-ASCII declarations rather than accept an aliased closed set.
+        && path |> Seq.forall (fun c -> int c >= 32 && int c <= 126)
         && path.Split('/') |> Array.forall (fun part -> part <> "" && part <> "." && part <> "..")
 
     let private validDigest (value: string) =
