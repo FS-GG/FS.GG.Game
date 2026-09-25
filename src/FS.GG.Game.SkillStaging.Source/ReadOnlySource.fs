@@ -15,6 +15,7 @@ module ReadOnlySource =
         | MissingTree of string
         | UnexpectedRoot of string
         | EmptyDirectory of string
+        | DirectoryUnstable of string
         | DuplicatePath of string
         | Symlink of string
         | NonRegular of string
@@ -54,8 +55,10 @@ module ReadOnlySource =
         | LinuxDescriptors.Link -> Symlink path
         | LinuxDescriptors.NonRegular -> NonRegular path
         | LinuxDescriptors.Unreadable -> Unreadable path
+        | LinuxDescriptors.Changed -> DirectoryUnstable path
 
-    let private captureCore (afterOpen: string -> unit) (repoRoot: string) (manifestBytes: byte[]) : Result<Policy.StagePlan, Refusal> =
+    let private captureCore (afterOpen: string -> unit) (afterFirstBatch: string -> unit)
+                            (repoRoot: string) (manifestBytes: byte[]) : Result<Policy.StagePlan, Refusal> =
         if not (OperatingSystem.IsLinux()) || not BitConverter.IsLittleEndian then Error UnsupportedPlatform
         elif String.IsNullOrWhiteSpace repoRoot then Error(MissingTree "repository root")
         else
@@ -110,7 +113,7 @@ module ReadOnlySource =
                                                               IsRegularFile = true; IsSymlink = false }
                                                         Ok ()
                                                 | LinuxDescriptors.Directory ->
-                                                    match LinuxDescriptors.names handle with
+                                                    match LinuxDescriptors.namesStable (fun () -> afterFirstBatch rel) handle with
                                                     | Error issue -> Error(mapFailure rel issue)
                                                     | Ok [] -> Error(EmptyDirectory rel)
                                                     | Ok names ->
@@ -120,7 +123,8 @@ module ReadOnlySource =
                                                             | Error _ -> state
                                                             | Ok () -> visit handle child (rel + "/" + child) false) (Ok ())
                                 let result =
-                                    match LinuxDescriptors.names tree with
+                                    match LinuxDescriptors.namesStable
+                                            (fun () -> afterFirstBatch "template/product-skills") tree with
                                     | Error issue -> Error(mapFailure "template/product-skills" issue)
                                     | Ok roots ->
                                         roots
@@ -145,8 +149,11 @@ module ReadOnlySource =
                 | :? EntryPointNotFoundException -> Error UnsupportedPlatform
 
     /// Snapshot selected product roots under repoRoot. There is no destination argument or write.
-    let capture repoRoot manifestBytes = captureCore ignore repoRoot manifestBytes
+    let capture repoRoot manifestBytes = captureCore ignore ignore repoRoot manifestBytes
 
     // Test seam runs only after a descriptor is open and typed, before its bytes or children are read.
     let internal captureWithOpenHook afterOpen repoRoot manifestBytes =
-        captureCore afterOpen repoRoot manifestBytes
+        captureCore afterOpen ignore repoRoot manifestBytes
+
+    let internal captureWithHooks afterOpen afterFirstBatch repoRoot manifestBytes =
+        captureCore afterOpen afterFirstBatch repoRoot manifestBytes

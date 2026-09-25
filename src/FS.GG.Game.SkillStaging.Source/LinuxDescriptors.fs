@@ -9,7 +9,7 @@ open Microsoft.Win32.SafeHandles
 /// Linux-only descriptor operations. Every child is opened relative to a held directory fd.
 module internal LinuxDescriptors =
     type Kind = Regular | Directory | Special
-    type Failure = Link | NonRegular | Unreadable
+    type Failure = Link | NonRegular | Unreadable | Changed
 
     let private directoryFlags = 0x80000 ||| 0x20000 ||| 0x10000 // CLOEXEC, NOFOLLOW, DIRECTORY
     let private entryFlags = 0x80000 ||| 0x20000 ||| 0x800 // CLOEXEC, NOFOLLOW, NONBLOCK
@@ -26,6 +26,9 @@ module internal LinuxDescriptors =
 
     [<DllImport("libc", EntryPoint = "dup", SetLastError = true)>]
     extern int private dup(int fd)
+
+    [<DllImport("libc", EntryPoint = "lseek", SetLastError = true)>]
+    extern int64 private lseek(int fd, int64 offset, int whence)
 
     let private number (handle: SafeFileHandle) = int (handle.DangerousGetHandle())
 
@@ -88,16 +91,30 @@ module internal LinuxDescriptors =
                         descend child tail
             descend filesystemRoot components
 
-    let names (directory: SafeFileHandle) =
+    let private stamp (directory: SafeFileHandle) =
+        let buffer = Array.zeroCreate<byte> 256
+        // BASIC_STATS requests mtime and ctime. Refuse when the filesystem cannot provide both.
+        if statx(number directory, "", 0x1000, 0x7ffu, buffer) <> 0 then Error Unreadable
+        elif (BitConverter.ToUInt32(buffer, 0) &&& 0xC0u) <> 0xC0u then Error Changed
+        else
+            [| buffer.[16..19]; buffer.[32..47]; buffer.[96..127]; buffer.[136..143] |]
+            |> Array.concat
+            |> Ok
+
+    let private readNames (afterFirstBatch: unit -> unit) (directory: SafeFileHandle) =
         let buffer = Array.zeroCreate<byte> 32768
         let observed = ResizeArray<string>()
         let mutable doneReading = false
         let mutable failure = false
+        let mutable firstBatch = true
         while not doneReading && not failure do
             let count = getdents64(number directory, buffer, uint32 buffer.Length)
             if count < 0 then failure <- true
             elif count = 0 then doneReading <- true
             else
+                if firstBatch then
+                    firstBatch <- false
+                    afterFirstBatch ()
                 let mutable offset = 0
                 while offset < count && not failure do
                     if count - offset < 20 then failure <- true
@@ -122,6 +139,28 @@ module internal LinuxDescriptors =
             |> Seq.sortWith (fun a b -> StringComparer.Ordinal.Compare(a, b))
             |> Seq.toList
             |> Ok
+
+    /// Refuses observed stamp or roster changes across two scans; this is not an atomic snapshot.
+    let namesStable (afterFirstBatch: unit -> unit) (directory: SafeFileHandle) =
+        match stamp directory with
+        | Error issue -> Error issue
+        | Ok before ->
+            let first = readNames afterFirstBatch directory
+            match stamp directory with
+            | Error issue -> Error issue
+            | Ok middle when before <> middle -> Error Changed
+            | Ok middle ->
+                match first with
+                | Error issue -> Error issue
+                | Ok names ->
+                    if lseek(number directory, 0L, 0) < 0L then Error Unreadable
+                    else
+                        let second = readNames ignore directory
+                        match stamp directory, second with
+                        | Ok after, Ok repeated when after = middle && names = repeated -> Ok names
+                        | Error issue, _ -> Error issue
+                        | _, Error issue -> Error issue
+                        | _ -> Error Changed
 
     let readBytes (handle: SafeFileHandle) =
         let copy = dup(number handle)

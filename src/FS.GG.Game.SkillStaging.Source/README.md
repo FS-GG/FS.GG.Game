@@ -3,9 +3,12 @@
 `ReadOnlySource.capture` traverses `template/product-skills` from a repository root.
 It opens each path component relative to a held directory descriptor with `O_NOFOLLOW`,
 checks the opened descriptor with `statx(AT_EMPTY_PATH)`, and enumerates directories
-through `getdents64` on held descriptors. It rejects links, nonregular entries, empty
-or undeclared directories, and case aliases. Regular-file bytes are read through a
-duplicate of the opened descriptor, then passed to the pure `Policy.prepare` reducer.
+through `getdents64` on held descriptors. Each directory scan compares supported
+mtime/ctime and identity fields before and after, seeks the same descriptor to the
+start, repeats the name scan, and refuses a changed stamp or roster. It rejects links,
+nonregular entries, empty or undeclared directories, and case aliases. Regular-file
+bytes are read through a duplicate of the opened descriptor, then passed to the pure
+`Policy.prepare` reducer.
 
 This candidate has no destination path or write operation. Its returned `StagePlan` owns
 copies of the manifest and source bytes. It is stricter than the current Python stager
@@ -16,9 +19,13 @@ regular-file `statx` probe made a path read return foreign bytes. The descriptor
 keeps the opened file and parent directory identities across equivalent swaps, and
 refuses a symlink introduced before the child `openat` call.
 
-The directory roster is not frozen while `getdents64` runs or after it returns. The
-contents of an already opened regular file can also change during a read. Digest checks
-bind the copied bytes to the manifest but do not prove a stable filesystem snapshot.
+The controls show that a rename/restore during one `getdents64` pass was accepted
+before the stamp check; the new reader refuses that mutation, an added entry, and a
+removed entry. This is a best-effort instability check, not an atomic directory
+snapshot: a roster can change after the check, and timestamp granularity or an
+adversarial filesystem can hide a change. The contents of an already opened regular
+file can also change during a read. Digest checks bind the copied bytes to the
+manifest but do not prove a stable filesystem snapshot.
 This candidate requires little-endian Linux and libc `getdents64`/`statx` support; it
 does not establish staging rollback, package publication readiness, or installed package
 parity. The owner must validate those contracts before wiring it to an output-writing

@@ -53,6 +53,36 @@ extern int statx(int parent, string path, int flags, uint32 mask, [<Out>] byte[]
 [<EntryPoint>]
 let main _ =
     let bytes = utf8.GetBytes "# audio\n"
+    check "directory rename/restore during enumeration refuses" (fun () -> fixture (fun root ->
+        let manifest, path = setup root bytes
+        let product = Path.GetDirectoryName path |> Option.ofObj |> Option.defaultWith (fun () -> failwith "missing parent")
+        let mutable mutated = false
+        let afterBatch (rel: string) =
+            if rel = "template/product-skills/audio" then
+                File.Move(path, path + ".held")
+                File.Move(path + ".held", path)
+                Directory.SetLastWriteTimeUtc(product, DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+                mutated <- true
+        ReadOnlySource.captureWithHooks ignore afterBatch root manifest
+        |> expectRefusal (function ReadOnlySource.DirectoryUnstable path when mutated && path.EndsWith("/audio") -> true | _ -> false)))
+    check "added entry during enumeration refuses" (fun () -> fixture (fun root ->
+        let manifest, path = setup root bytes
+        let product = Path.GetDirectoryName path |> Option.ofObj |> Option.defaultWith (fun () -> failwith "missing parent")
+        let afterBatch (rel: string) =
+            if rel = "template/product-skills/audio" then
+                write root "template/product-skills/audio/extra.txt" bytes |> ignore
+                Directory.SetLastWriteTimeUtc(product, DateTime(2002, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+        ReadOnlySource.captureWithHooks ignore afterBatch root manifest
+        |> expectRefusal (function ReadOnlySource.DirectoryUnstable path when path.EndsWith("/audio") -> true | _ -> false)))
+    check "removed entry during enumeration refuses" (fun () -> fixture (fun root ->
+        let manifest, path = setup root bytes
+        let product = Path.GetDirectoryName path |> Option.ofObj |> Option.defaultWith (fun () -> failwith "missing parent")
+        let afterBatch (rel: string) =
+            if rel = "template/product-skills/audio" then
+                File.Delete path
+                Directory.SetLastWriteTimeUtc(product, DateTime(2003, 1, 1, 0, 0, 0, DateTimeKind.Utc))
+        ReadOnlySource.captureWithHooks ignore afterBatch root manifest
+        |> expectRefusal (function ReadOnlySource.DirectoryUnstable path when path.EndsWith("/audio") -> true | _ -> false)))
     check "path probe/read swap characterization" (fun () -> fixture (fun root ->
         let _, path = setup root bytes
         let foreignBytes = utf8.GetBytes "# foreign\n"
