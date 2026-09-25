@@ -58,6 +58,7 @@ coherent_pins() {
   pin FS.GG.UI.Canvas          0.10.0
   pin FS.GG.UI.Controls.Elmish 0.10.0
   pin FS.GG.UI.SkiaViewer      0.10.0
+  pin FS.GG.UI.Symbology       0.10.0
   pin FS.GG.UI.Template        0.10.0
   pin FS.GG.Audio.Core         0.2.0
   pin FS.GG.Audio.Host         0.2.0
@@ -87,8 +88,61 @@ case_start "the coherent set on main today is GREEN, and SAYS WHAT IT READ"
 props < <(coherent_pins)
 run_check
 expect_rc 0 "all six + both audio agreeing → exit 0"
-expect_out_has "FS.GG.UI.* — OK, 6 pin(s), all at 0.10.0"    "counts the UI train and names its version"
+expect_out_has "FS.GG.UI.* — OK, 7 pin(s), all at 0.10.0"    "counts the UI train and names its version"
 expect_out_has "FS.GG.Audio.* — OK, 2 pin(s), all at 0.2.0"  "counts the audio train independently"
+
+case_start "a missing named UI pin is RED even when five coherent rows remain"
+props < <(coherent_pins | sed '/Include="FS.GG.UI.Template"/d')
+run_check
+expect_rc 1 "missing Template → exit 1"
+expect_out_has "FS.GG.UI.Template" "names the missing pin"
+
+case_start "duplicate identical pin rows are RED rather than inflating the count"
+props < <(coherent_pins; pin FS.GG.UI.Scene 0.10.0)
+run_check
+expect_rc 1 "duplicate Scene → exit 1"
+expect_out_has "duplicate" "names duplicate identity"
+
+case_start "case-colliding package identity is RED"
+props < <(coherent_pins; pin fs.gg.ui.scene 0.10.0)
+run_check
+expect_rc 1 "case variant Scene → exit 1"
+expect_out_has "collision" "names case collision"
+
+case_start "a commented-out pin is absent, despite its matching XML text"
+props < <(coherent_pins | sed 's@<PackageVersion Include="FS.GG.UI.Template"\(.*\)/>@<!-- <PackageVersion Include="FS.GG.UI.Template"\1/> -->@')
+run_check
+expect_rc 1 "commented Template → exit 1"
+expect_out_has "FS.GG.UI.Template" "names absent pin"
+
+case_start "reordered XML attributes retain the exact identity and version"
+props < <(coherent_pins | sed 's@Include="FS.GG.UI.Scene" Version="0.10.0"@Version="0.10.0" Include="FS.GG.UI.Scene"@')
+run_check
+expect_rc 0 "valid reordered attributes → exit 0"
+
+case_start "an unexpected UI package is RED even with the full roster"
+props < <(coherent_pins; pin FS.GG.UI.Unknown 0.10.0)
+run_check
+expect_rc 1 "extra package → exit 1"
+expect_out_has "unexpected pin FS.GG.UI.Unknown" "names extra identity"
+
+case_start "a missing Version attribute is RED"
+props < <(coherent_pins | sed 's@Include="FS.GG.Audio.Host" Version="0.2.0"@Include="FS.GG.Audio.Host"@')
+run_check
+expect_rc 1 "missing version → exit 1"
+expect_out_has "no Version" "names missing version"
+
+case_start "malformed XML is RED rather than parsed as partial pin text"
+printf '<Project><ItemGroup><PackageVersion Include="FS.GG.UI.Scene" Version="0.10.0"></Project>\n' >"$TMP/props.xml"
+run_check
+expect_rc 1 "malformed XML → exit 1"
+expect_out_has "malformed XML" "names parse failure"
+
+case_start "a conditional required pin cannot masquerade as an active pin"
+props < <(coherent_pins | sed 's@Include="FS.GG.UI.Template"@Include="FS.GG.UI.Template" Condition="false"@')
+run_check
+expect_rc 1 "conditioned Template → exit 1"
+expect_out_has "conditional" "names uncertain MSBuild activation"
 
 case_start "the two trains are INDEPENDENT — audio moving alone is not a UI incoherence"
 props < <(
@@ -97,6 +151,7 @@ props < <(
   pin FS.GG.UI.Canvas          0.10.0
   pin FS.GG.UI.Controls.Elmish 0.10.0
   pin FS.GG.UI.SkiaViewer      0.10.0
+  pin FS.GG.UI.Symbology       0.10.0
   pin FS.GG.UI.Template        0.10.0
   pin FS.GG.Audio.Core         0.3.0
   pin FS.GG.Audio.Host         0.3.0
@@ -111,6 +166,7 @@ props < <(
   pin FS.GG.UI.Canvas          0.10.0
   pin FS.GG.UI.Controls.Elmish 0.10.0
   pin FS.GG.UI.SkiaViewer      0.10.0
+  pin FS.GG.UI.Symbology       0.10.0
   pin FS.GG.UI.Template        0.10.0
   pin FS.GG.Audio.Core         0.2.0
   pin FS.GG.Audio.Host         0.3.0
@@ -125,7 +181,7 @@ case_start "NO pins at all is a RED, not a pass — a matched-nothing gate repor
 props < <(pin Expecto 11.1.0)
 run_check
 expect_rc 1 "no FS.GG.UI.* pins → exit 1"
-expect_out_has "expected at least"  "says it expected a subject and did not find one"
+expect_out_has "FOUND 0 pin"  "says it expected a subject and did not find one"
 
 case_start "ONE pin is a RED — a coherence claim over a single pin is a claim about nothing"
 props < <(
