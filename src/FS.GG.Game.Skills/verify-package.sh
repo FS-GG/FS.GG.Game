@@ -24,6 +24,7 @@ trap 'rm -rf "$WORK"' EXIT
 fail() { echo "verify-package: FAIL — $*" >&2; exit 1; }
 
 [ -f "$MANIFEST" ] || fail "template/skill-manifest/skill-manifest.json not found (is this a FS.GG.Game checkout?)"
+python3 "$SRC_ROOT/tests/Skills.Package.Tests/stage-closure.py"
 
 # canonical_digest: BOM-stripped and CRLF-folded body sha256, matching the manifest producer and stager.
 # A tiny Python helper applies both rules to BOM/CRLF source bytes (sha256sum alone would not).
@@ -69,19 +70,19 @@ mkdir -p "$fixture/src/FS.GG.Game.Skills" "$fixture/template/skill-manifest" \
          "$fixture/template/product-skills/fs-gg-new-row"
 cp "$HERE/stage-skills.py" "$fixture/src/FS.GG.Game.Skills/stage-skills.py"
 # Derive the manifest hash from independent BOM-free bytes, not digest() on the
-# variant being tested. The current Game stager strips a UTF-8 BOM but does not
-# fold CRLF; Rendering's stager has a different policy.
+# variant being tested. The Game stager now shares the producer's BOM/CRLF policy.
 printf '\357\273\277new row body\n' > "$fixture/template/product-skills/fs-gg-new-row/SKILL.md"
 new_sha="$(printf 'new row body\n' | sha256sum | cut -d' ' -f1)"
 python3 - "$fixture/template/skill-manifest/skill-manifest.json" "$new_sha" <<'PY'
 import json, sys
-doc = {"schemaVersion": 1, "skills": [{
+doc = {"schemaVersion": 2, "skills": [{
     "id": "fs-gg-new-row",
     "scope": "product",
     "sha256": sys.argv[2],
     "resolvablePath": ".agents/skills/fs-gg-new-row/SKILL.md",
     "materializes-when": "profile in [game]",
     "supplied-by": "template/product-skills/fs-gg-new-row/",
+    "files": [{"path": "SKILL.md", "sha256": sys.argv[2]}],
 }]}
 with open(sys.argv[1], "w") as handle:
     json.dump(doc, handle)
@@ -113,7 +114,7 @@ for variant in $'new row body\r' $'new row bodY\r\n'; do
       >"$WORK/mutant.out" 2>"$WORK/mutant.err"; then
     fail "a non-equivalent body mutation passed canonical staging"
   fi
-  grep -q 'staged bytes sha256' "$WORK/mutant.err" \
+  grep -q 'source files do not match closed manifest' "$WORK/mutant.err" \
     || fail "a non-equivalent body mutation was refused without digest mismatch"
 done
 echo "   lone CR and changed body bytes rejected"
