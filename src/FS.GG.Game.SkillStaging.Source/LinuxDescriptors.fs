@@ -10,6 +10,7 @@ open Microsoft.Win32.SafeHandles
 module internal LinuxDescriptors =
     type Kind = Regular | Directory | Special
     type Failure = Link | NonRegular | Unreadable | Changed
+    type Metadata = { Kind: Kind; Mode: uint32; UserId: uint32; GroupId: uint32 }
 
     let private directoryFlags = 0x80000 ||| 0x20000 ||| 0x10000 // CLOEXEC, NOFOLLOW, DIRECTORY
     let private entryFlags = 0x80000 ||| 0x20000 ||| 0x800 // CLOEXEC, NOFOLLOW, NONBLOCK
@@ -52,6 +53,23 @@ module internal LinuxDescriptors =
         | Ok _ -> Ok Special
         | Error issue -> Error issue
 
+    /// Bind type, mode, and owner to an already opened fd, never to its path.
+    let metadata (handle: SafeFileHandle) =
+        let buffer = Array.zeroCreate<byte> 256
+        if statx(number handle, "", 0x1000, 0x7ffu, buffer) <> 0 then Error Unreadable
+        elif (BitConverter.ToUInt32(buffer, 0) &&& 0x1bu) <> 0x1bu then Error Changed
+        else
+            let mode = uint32 (BitConverter.ToUInt16(buffer, 28))
+            let entryKind =
+                match int mode &&& 0xF000 with
+                | 0x8000 -> Regular
+                | 0x4000 -> Directory
+                | _ -> Special
+            Ok { Kind = entryKind
+                 Mode = mode &&& 0o7777u
+                 UserId = BitConverter.ToUInt32(buffer, 20)
+                 GroupId = BitConverter.ToUInt32(buffer, 24) }
+
     let openChild (parent: SafeFileHandle) name =
         let fd = openat(number parent, name, entryFlags, 0u)
         if fd < 0 then Error(diagnose (number parent) name)
@@ -91,7 +109,7 @@ module internal LinuxDescriptors =
                         descend child tail
             descend filesystemRoot components
 
-    let private stamp (directory: SafeFileHandle) =
+    let stamp (directory: SafeFileHandle) =
         let buffer = Array.zeroCreate<byte> 256
         // BASIC_STATS requests mtime and ctime. Refuse when the filesystem cannot provide both.
         if statx(number directory, "", 0x1000, 0x7ffu, buffer) <> 0 then Error Unreadable
