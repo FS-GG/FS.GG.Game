@@ -1,8 +1,10 @@
 namespace FS.GG.Game.SkillStaging
 
 open System
+open System.Collections.Generic
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 
 /// Pure preparation for owner-authored product skill staging. The caller supplies filesystem facts;
 /// this module neither reads paths nor writes package content.
@@ -21,16 +23,16 @@ module Policy =
         IsSymlink: bool
     }
 
-    type StagedSkill = {
-        Id: string
-        Destination: string
-        Bytes: byte[]
-    }
+    type StagedSkill internal (id: string, destination: string, bytes: byte[]) =
+        let snapshot = Array.copy bytes
+        member _.Id = id
+        member _.Destination = destination
+        member _.Bytes = Array.copy snapshot
 
-    type StagePlan = {
-        ManifestBytes: byte[]
-        Skills: StagedSkill list
-    }
+    type StagePlan internal (manifestBytes: byte[], skills: StagedSkill list) =
+        let snapshot = Array.copy manifestBytes
+        member _.ManifestBytes = Array.copy snapshot
+        member _.Skills = skills
 
     type Refusal =
         | EmptyProductSet
@@ -43,6 +45,8 @@ module Policy =
         | InvalidUtf8 of string
         | InvalidDigest of string
         | DigestMismatch of string
+        | InvalidManifest
+        | ManifestRowsMismatch
 
     let private utf8 = UTF8Encoding(false, true)
 
@@ -74,32 +78,82 @@ module Policy =
 
     let private expectedSource id = sprintf "template/product-skills/%s/SKILL.md" id
 
+    let private manifestRows (raw: byte[]) =
+        try
+            use document = JsonDocument.Parse(ReadOnlyMemory<byte>(raw))
+            let root = document.RootElement
+            let required (item: JsonElement) (name: string) =
+                item.GetProperty(name).GetString()
+                |> Option.ofObj
+                |> Option.defaultWith (fun () -> raise (JsonException $"null {name}"))
+            if root.GetProperty("schemaVersion").GetInt32() <> 2 then Error InvalidManifest
+            else
+                let skills = root.GetProperty("skills")
+                if skills.ValueKind <> JsonValueKind.Array then Error InvalidManifest
+                else
+                    skills.EnumerateArray()
+                    |> Seq.map (fun item ->
+                        if item.ValueKind <> JsonValueKind.Object then raise (JsonException "skill row must be an object")
+                        let row =
+                            { Id = required item "id"
+                              Scope = required item "scope"
+                              SuppliedBy = required item "supplied-by"
+                              Sha256 = required item "sha256" }
+                        if row.Scope = "product" then
+                            let files = item.GetProperty("files")
+                            if files.ValueKind <> JsonValueKind.Array || files.GetArrayLength() <> 1 then
+                                raise (JsonException "product files must name one SKILL.md")
+                            let body = files.[0]
+                            if body.ValueKind <> JsonValueKind.Object
+                               || required body "path" <> "SKILL.md"
+                               || required body "sha256" <> row.Sha256 then
+                                raise (JsonException "product file digest is not bound to SKILL.md")
+                        row)
+                    |> Seq.toList
+                    |> Ok
+        with
+        | :? JsonException
+        | :? InvalidOperationException
+        | :? KeyNotFoundException
+        | :? ArgumentException
+        | :? NullReferenceException -> Error InvalidManifest
+
     /// All product rows must resolve to one regular owner-authored source; duplicate or malformed
     /// rows fail the whole plan. Non-product rows belong to other delivery channels.
     let prepare (manifestBytes: byte[]) (rows: ManifestRow list) (sources: Source list) : Result<StagePlan, Refusal> =
-        let productRows = rows |> List.filter (fun row -> row.Scope = "product")
-        if List.isEmpty productRows then Error EmptyProductSet else
-        let rec collect (seen: Set<string>) (staged: StagedSkill list) (remaining: ManifestRow list) =
-            match remaining with
-            | [] -> Ok { ManifestBytes = manifestBytes; Skills = List.rev staged }
-            | row :: tail ->
-                let expected = expectedSource row.Id
-                if not (validId row.Id) then Error(InvalidId row.Id)
-                elif Set.contains row.Id seen then Error(DuplicateId row.Id)
-                elif row.SuppliedBy <> sprintf "template/product-skills/%s/" row.Id then
-                    Error(InvalidSourcePath row.SuppliedBy)
-                elif not (validDigest row.Sha256) then Error(InvalidDigest row.Id)
-                else
-                    match sources |> List.filter (fun source -> source.RelativePath = expected) with
-                    | [] -> Error(MissingSource expected)
-                    | [ source ] when source.IsSymlink -> Error(SymlinkSource expected)
-                    | [ source ] when not source.IsRegularFile -> Error(NonRegularSource expected)
-                    | [ source ] ->
-                        match canonicalDigest source.Bytes with
-                        | Error () -> Error(InvalidUtf8 expected)
-                        | Ok digest when digest <> row.Sha256 -> Error(DigestMismatch row.Id)
-                        | Ok _ ->
-                            let skill = { Id = row.Id; Destination = sprintf "skills/%s/SKILL.md" row.Id; Bytes = source.Bytes }
-                            collect (Set.add row.Id seen) (skill :: staged) tail
-                    | _ -> Error(InvalidSourcePath expected)
-        collect Set.empty [] productRows
+        match manifestRows manifestBytes with
+        | Error issue -> Error issue
+        | Ok authoredRows when authoredRows <> rows -> Error ManifestRowsMismatch
+        | Ok _ ->
+            let manifestSnapshot = Array.copy manifestBytes
+            let sourceSnapshots =
+                sources
+                |> List.map (fun source ->
+                    { source with
+                        Bytes = if obj.ReferenceEquals(source.Bytes, null) then source.Bytes else Array.copy source.Bytes })
+            let productRows = rows |> List.filter (fun row -> row.Scope = "product")
+            if List.isEmpty productRows then Error EmptyProductSet else
+            let rec collect (seen: Set<string>) (staged: StagedSkill list) (remaining: ManifestRow list) =
+                match remaining with
+                | [] -> Ok(StagePlan(manifestSnapshot, List.rev staged))
+                | row :: tail ->
+                    let expected = expectedSource row.Id
+                    if not (validId row.Id) then Error(InvalidId row.Id)
+                    elif Set.contains row.Id seen then Error(DuplicateId row.Id)
+                    elif row.SuppliedBy <> sprintf "template/product-skills/%s/" row.Id then
+                        Error(InvalidSourcePath row.SuppliedBy)
+                    elif not (validDigest row.Sha256) then Error(InvalidDigest row.Id)
+                    else
+                        match sourceSnapshots |> List.filter (fun source -> source.RelativePath = expected) with
+                        | [] -> Error(MissingSource expected)
+                        | [ source ] when source.IsSymlink -> Error(SymlinkSource expected)
+                        | [ source ] when not source.IsRegularFile -> Error(NonRegularSource expected)
+                        | [ source ] ->
+                            match canonicalDigest source.Bytes with
+                            | Error () -> Error(InvalidUtf8 expected)
+                            | Ok digest when digest <> row.Sha256 -> Error(DigestMismatch row.Id)
+                            | Ok _ ->
+                                let skill = StagedSkill(row.Id, sprintf "skills/%s/SKILL.md" row.Id, source.Bytes)
+                                collect (Set.add row.Id seen) (skill :: staged) tail
+                        | _ -> Error(InvalidSourcePath expected)
+            collect Set.empty [] productRows

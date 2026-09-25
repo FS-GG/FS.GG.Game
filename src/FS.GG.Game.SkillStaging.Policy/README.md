@@ -1,10 +1,12 @@
 # Game skill staging policy preparation
 
 This pure F# reducer prepares the `scope: product` subset of the authored skill
-manifest. It validates each product ID, source path, source file fact, and canonical
-digest, then returns the original manifest and skill bytes for a future staging
-adapter. It performs no filesystem or package writes. The manifest remains the
-only delivered-set authority.
+manifest. It parses the exact schema-v2 manifest bytes, binds the caller's row
+facts and each product row's single `SKILL.md` file digest, then validates each
+product ID, source path, source file fact, and canonical digest. The returned
+plan snapshots manifest and skill bytes and exposes defensive copies for a
+future staging adapter. It performs no filesystem or package writes. The
+manifest remains the only delivered-set authority.
 
 The current Python package stager and package verification gate remain live. The
 source-only repair in [Game PR #644](https://github.com/FS-GG/FS.GG.Game/pull/644)
