@@ -33,7 +33,7 @@
     <!-- The coordination kit as a versioned package (ADR-0062, .github#1262). Referenced by
          .config/kit/FS.GG.Kit.receiver.proj, which materializes the kit onto disk; Renovate bumps
          this pin and kit-materialize.yml refreshes the committed kit on that PR. -->
-    <PackageVersion Include="FS.GG.Kit" Version="0.90.0" />
+    <PackageVersion Include="FS.GG.Kit" Version="0.91.4" />
     <PackageVersion Include="FS.GG.UI.Scene" Version="0.10.0" />
     <PackageVersion Include="FS.GG.UI.KeyboardInput" Version="0.10.0" />
   </ItemGroup>
@@ -41,9 +41,9 @@
   <ItemGroup Label="Test-only">
     <PackageVersion Include="Expecto" Version="11.1.0" />
     <PackageVersion Include="Fable.Package.SDK" Version="1.4.0" />
-    <PackageVersion Include="FsCheck" Version="3.3.3" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
-    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.16.0" />
+    <PackageVersion Include="FsCheck" Version="3.4.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="YoloDev.Expecto.TestSdk" Version="0.16.1" />
   </ItemGroup>
 
   <!-- Gate-only — the packages the published SKILLS teach (FS.GG.Game#150).
@@ -129,8 +129,8 @@
        gate-only, these can never reach a packed artefact, so the NU5104 stable-only rule that binds
        the render edge does not bind them; they are on the current stable regardless. -->
   <ItemGroup Label="Gate-only — packages the published skills teach (no project references these)">
-    <PackageVersion Include="FS.GG.Audio.Core" Version="0.2.0" />
-    <PackageVersion Include="FS.GG.Audio.Host" Version="0.2.0" />
+    <PackageVersion Include="FS.GG.Audio.Core" Version="0.6.0" />
+    <PackageVersion Include="FS.GG.Audio.Host" Version="0.6.0" />
     <PackageVersion Include="FS.GG.UI.Canvas" Version="0.10.0" />
     <PackageVersion Include="FS.GG.UI.Controls.Elmish" Version="0.10.0" />
     <PackageVersion Include="FS.GG.UI.SkiaViewer" Version="0.10.0" />

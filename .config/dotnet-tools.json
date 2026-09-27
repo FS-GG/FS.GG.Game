@@ -10,21 +10,21 @@
       "rollForward": false
     },
     "fable": {
-      "version": "5.13.0",
+      "version": "5.18.0",
       "commands": [
         "fable"
       ],
       "rollForward": false
     },
     "fs.gg.coord.cli": {
-      "version": "0.90.0",
+      "version": "0.91.4",
       "commands": [
         "fsgg-coord-engine"
       ],
       "rollForward": false
     },
     "fantomas": {
-      "version": "8.0.0",
+      "version": "8.0.5",
       "commands": [
         "fantomas"
       ],
