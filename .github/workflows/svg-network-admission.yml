@@ -20,7 +20,7 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
       - run: npm install --global @informalsystems/quint@0.32.0
       - run: dotnet restore tests/Game.Core.Tests/Game.Core.Tests.fsproj --locked-mode
       - run: scripts/verify-svg-network-admission.sh
