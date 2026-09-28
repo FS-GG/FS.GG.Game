@@ -1,17 +1,19 @@
 # C3-GAME-01 — Ordinary V2 receiver adoption
 
-Status: source prepared and disabled. CLI release, custody, installation, and activation remain pending.
+Status: activation candidate prepared. Protected merge, first settlement, Authority readback, and
+normal already-complete rerun remain pending.
 
 FS.GG.Game is the fixed C3 source repository (`FS-GG/FS.GG.Game`, repository ID
-`1290990429`) under the code-owned `game-v1` profile. This change adds only repository-owned
-receiver source. It changes no repository setting, environment, secret, branch protection, required
-check, generated workspace content, or protected effect.
+`1290990429`) under the code-owned `game-v1` profile. The activation change binds the prepared
+receiver to the public CLI 0.1.5 archive and Game's dedicated `ordinary-v2` custody. It changes no
+repository setting, environment policy, branch protection, required check, generated workspace
+content, or V1 behavior.
 
-## Prepared source
+## Activation candidate
 
-- The receiver workflow is bound to protected-main pushes, but its only job has an unconditional
-  false guard. It uses read-only GitHub permissions, persists no checkout credential, and contains
-  no credential job, environment binding, secret reference, package download, or settlement command.
+- The receiver remains bound only to protected-main pushes. A secret-free preflight emits a
+  same-run receipt and activation bit; only that exact receipt can admit the environment-bound
+  settlement job. Both checkouts persist no credential, and all GitHub permissions remain read-only.
 - The source pattern comes from Governance receiver commit
   `afa7a965f1c908195bd57c9d9e52d18669edae7e`; the observer retains its repaired Audio bytes,
   and the qualifier replaces only the code-owned source profile. Their SHA-256 digests are
@@ -32,26 +34,29 @@ check, generated workspace content, or protected effect.
 - The shared policy ID remains `v2-ci-i1-ordinary-settlement-v1`; the shared Authority anchor retains
   App `5064713`, installation `164553252`, repository `FS-GG/FS.GG.Coordination.Authority`
   (`1351660651`), `contents:write`, metadata read, and the existing writer/integrity ruleset pins.
-- Read-only API observation at `2026-09-28T12:08:12Z`, against Game main
-  `9b76ecab1bf240643d5b81aaed9b9b9861177446`, found `ordinary-v2` environment ID
-  `22921368593`, restricted to the single `main` branch policy ID `61289298`, with no reviewers
-  and zero secrets. No credential is enrolled.
-- No immutable published CLI release with `game-v1` support is selected. Version and package
-  SHA-256 remain null, and policy explicitly refuses activation rather than borrowing Audio's pin.
-- Game already pins .NET SDK `10.0.401` in the repository's tracked `global.json`. This
-  receiver leaves that pin unchanged and invokes no .NET setup while disabled.
+- Fresh readback against Game main `ec55a10ad5e458944af02c43f48fedeb4b24a430` found
+  `ordinary-v2` environment ID `22921368593`, restricted to the single `main` branch policy ID
+  `61289298`, with no reviewers and exactly the three dedicated secret names. Custody bridge run
+  `36437875033` verified the signed fixed-destination packet against the empty inventory before
+  exactly three encrypted PUTs; an independent names-only readback confirmed the final inventory.
+- Coordination CLI `0.1.5` is published from source
+  `1268908d2d5a38d30a764c927f3e0591e53138aa`. The GitHub release archive is pinned by SHA-256
+  `3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9`; dual-feed payload
+  readback and an independent public-only install passed.
+- Game already pins .NET SDK `10.0.401` in `global.json`. The credential job uses that pin,
+  downloads only the named GitHub release asset, verifies its bytes, constructs a local-only package
+  source, and executes exactly one `game-v1` settlement attempt with the three dedicated secrets.
 
-## Installation boundary
+## Remaining protected boundary
 
-Do not enable the preflight or add a credential job until one reviewed source change verifies all of:
+The receiver becomes active only if this exact candidate passes Game's native checks and is merged to
+protected main. The first push run must then establish all of:
 
-1. an immutable published Coordination CLI supports the exact `game-v1` source profile and its
-   served package SHA-256 is pinned;
-2. all three dedicated ordinary-v2 credentials are enrolled and independently read back without V1
-   or callable-operation credential reuse; and
-3. Game identity, exact current required-check population, producer mappings, and shared
-   Authority binding are freshly read back.
+1. the secret-free preflight accepts the exact merge and current native check producers;
+2. the environment job rechecks that receipt, the installed policy and the shared Authority binding;
+3. installed CLI 0.1.5 appends one valid settlement to the protected Authority journal; and
+4. independent readback verifies the journal entry, followed by one normal rerun that reports the
+   operation already complete without moving the journal head.
 
-The later activation must change policy status, installed state, package evidence, credential
-inventory, observer guard, and the bounded credential job together. This disabled source cannot
-settle work and imports no V1 admission or receiver state.
+Failure at any step remains local to Game and is repaired forward. This activation imports no V1
+admission or receiver state, leaves `OpenV2` unchanged, and makes no fleet-wide completion claim.
