@@ -1,0 +1,249 @@
+{
+  "schema": "fsgg.github.v2-ci-ordinary-settlement-policy/1",
+  "policyId": "v2-ci-i1-ordinary-settlement-v1",
+  "status": "source-qualified-not-installed",
+  "repository": "FS-GG/FS.GG.Game",
+  "repositoryId": 1290990429,
+  "selectedSource": {
+    "profile": "game-v1",
+    "repository": "FS-GG/FS.GG.Game",
+    "repositoryId": 1290990429
+  },
+  "sourceImplementation": {
+    "repository": "FS-GG/FS.GG.Governance",
+    "commit": "afa7a965f1c908195bd57c9d9e52d18669edae7e",
+    "adaptation": "game-v1-code-owned-source-profile",
+    "observerSha256": "6e63f6f724fb267e77ef02f41b4c58a833e0dc5b08c003f07fd16c89e4f7fd55",
+    "qualificationSha256": "642451c72ff01e51c5339f4e42d5fc1ffe3df39a4f965610cc7621601a06b8b9"
+  },
+  "operationClass": "ordinary-post-merge-delivery-settlement",
+  "trigger": {
+    "event": "push",
+    "ref": "refs/heads/main",
+    "associationEndpoint": "GET /repos/FS-GG/FS.GG.Game/commits/{sourceSha}/pulls",
+    "associationCount": 1,
+    "requireMerged": true,
+    "requireMergeCommitMatch": true
+  },
+  "workflow": {
+    "path": ".github/workflows/v2-ci-ordinary-settlement.yml",
+    "revision": "sourceSha",
+    "requestEventsForbidden": [
+      "pull_request",
+      "pull_request_target"
+    ],
+    "manualEventsForbidden": [
+      "workflow_dispatch",
+      "repository_dispatch"
+    ]
+  },
+  "qualification": {
+    "phase": "secret-free-predecessor",
+    "credentialAccess": false,
+    "producerStatus": "trusted-main-push-predecessor",
+    "currentValidatorRole": "native-API-derived-evidence",
+    "requiredCheckAppId": 15368,
+    "requiredChecks": [
+      "Deterministic gate (locked restore + build) (ubuntu-latest)",
+      "Full test suite (dotnet test, headless) (ubuntu-latest)"
+    ],
+    "requiredGateChecks": [
+      "Surface baseline drift (readiness/surface-baselines)",
+      "Build-config drift check (shared-build-config)",
+      "Lock-range coherence (project refs track declared versions) / lock-ranges",
+      "Skill-manifest drift (template/skill-manifest)",
+      "Dangling skill refs (template/product-skills)",
+      "Skill-refs gate tests (scripts/check-skill-refs.sh)",
+      "Skill-refs sweep tests (.github/workflows/skill-refs-sweep.yml)",
+      "Test-harness selftest (scripts/lib/test-harness.sh)",
+      "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)",
+      "Markdown fsharp blocks typecheck (skills + TestSpecs)",
+      "Scaffold drift (_scaffold.fs == published template geometry)",
+      "kit / coordination-kit",
+      "Deterministic gate (locked restore + build) (ubuntu-latest)",
+      "Deterministic gate (locked restore + build) (windows-latest)",
+      "Full test suite (dotnet test, headless) (ubuntu-latest)",
+      "Full test suite (dotnet test, headless) (windows-latest)",
+      "Determinism & property invariants (constraint face) (ubuntu-latest)",
+      "Determinism & property invariants (constraint face) (windows-latest)",
+      "materialize / receiver-validate"
+    ],
+    "checkProducers": {
+      "Surface baseline drift (readiness/surface-baselines)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Build-config drift check (shared-build-config)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Lock-range coherence (project refs track declared versions) / lock-ranges": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Skill-manifest drift (template/skill-manifest)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Dangling skill refs (template/product-skills)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Skill-refs gate tests (scripts/check-skill-refs.sh)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Skill-refs sweep tests (.github/workflows/skill-refs-sweep.yml)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Test-harness selftest (scripts/lib/test-harness.sh)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Markdown fsharp blocks typecheck (skills + TestSpecs)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Scaffold drift (_scaffold.fs == published template geometry)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "kit / coordination-kit": {
+        "workflowId": 308011587,
+        "path": ".github/workflows/coordination-coherence.yml",
+        "event": "pull_request"
+      },
+      "Deterministic gate (locked restore + build) (ubuntu-latest)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Deterministic gate (locked restore + build) (windows-latest)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Full test suite (dotnet test, headless) (ubuntu-latest)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Full test suite (dotnet test, headless) (windows-latest)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Determinism & property invariants (constraint face) (ubuntu-latest)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "Determinism & property invariants (constraint face) (windows-latest)": {
+        "workflowId": 308011589,
+        "path": ".github/workflows/gate.yml",
+        "event": "pull_request"
+      },
+      "materialize / receiver-validate": {
+        "workflowId": 316870217,
+        "path": ".github/workflows/kit-materialize.yml",
+        "event": "pull_request"
+      }
+    }
+  },
+  "credentialJob": {
+    "environment": "ordinary-v2",
+    "runner": "github-hosted-ephemeral",
+    "requiredReviewers": 0,
+    "protectedBranchesOnly": true,
+    "allowedBranches": [
+      "main"
+    ],
+    "installed": false,
+    "liveObservation": {
+      "observedAt": "2026-09-28T12:08:12Z",
+      "environmentPresent": true,
+      "environmentId": 22921368593,
+      "environmentNodeId": "EN_kwDOTPLzXc8AAAAFVjhUEQ",
+      "branchPolicyId": 61289298,
+      "branchPolicyNodeId": "MDE2OkdhdGVCcmFuY2hQb2xpY3k2MTI4OTI5OA==",
+      "customBranchPolicy": "main",
+      "customBranchPolicyCount": 1,
+      "protectedBranches": false,
+      "customBranchPolicies": true,
+      "canAdminsBypass": true,
+      "requiredReviewerCount": 0,
+      "secretCount": 0,
+      "disposition": "main-only-environment-present-custody-pending"
+    }
+  },
+  "packagePin": {
+    "status": "unresolved-game-profile-release",
+    "version": null,
+    "sha256": null,
+    "servedPackageVerified": false,
+    "requiredCapability": "game-v1 selected source",
+    "requiredBeforeActivation": true,
+    "refusal": "no immutable published CLI release with game-v1 support is selected"
+  },
+  "credentialInventory": [],
+  "activationEvidence": {
+    "observedAt": "2026-09-28T12:08:12Z",
+    "sourceMainSha": "9b76ecab1bf240643d5b81aaed9b9b9861177446",
+    "sourceRepositoryId": 1290990429,
+    "requiredCheckAppId": 15368,
+    "requiredGateChecks": [
+      "Surface baseline drift (readiness/surface-baselines)",
+      "Build-config drift check (shared-build-config)",
+      "Lock-range coherence (project refs track declared versions) / lock-ranges",
+      "Skill-manifest drift (template/skill-manifest)",
+      "Dangling skill refs (template/product-skills)",
+      "Skill-refs gate tests (scripts/check-skill-refs.sh)",
+      "Skill-refs sweep tests (.github/workflows/skill-refs-sweep.yml)",
+      "Test-harness selftest (scripts/lib/test-harness.sh)",
+      "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)",
+      "Markdown fsharp blocks typecheck (skills + TestSpecs)",
+      "Scaffold drift (_scaffold.fs == published template geometry)",
+      "kit / coordination-kit",
+      "Deterministic gate (locked restore + build) (ubuntu-latest)",
+      "Deterministic gate (locked restore + build) (windows-latest)",
+      "Full test suite (dotnet test, headless) (ubuntu-latest)",
+      "Full test suite (dotnet test, headless) (windows-latest)",
+      "Determinism & property invariants (constraint face) (ubuntu-latest)",
+      "Determinism & property invariants (constraint face) (windows-latest)",
+      "materialize / receiver-validate"
+    ]
+  },
+  "activationPrerequisites": [
+    "published immutable Coordination CLI with game-v1 support and verified package SHA-256",
+    "all three dedicated ordinary-v2 secrets are enrolled and read back",
+    "current source-check population and shared Authority binding are read back again"
+  ],
+  "forbiddenCredentialReuse": [
+    "CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
+    "V1_ADMISSION_AUTHORIZER_PRIVATE_KEY",
+    "V1_ADMISSION_APP_PRIVATE_KEY"
+  ],
+  "unchangedGates": [
+    "OpenV2"
+  ],
+  "migration": {
+    "v1Admission": false,
+    "receiverStateImport": false
+  }
+}
