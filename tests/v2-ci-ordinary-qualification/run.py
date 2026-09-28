@@ -152,17 +152,18 @@ class GameQualificationTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.Refusal, "population"):
                 self.qualify(evidence=evidence)
 
-    def test_policy_remains_disabled_with_explicit_release_and_custody_refusals(self):
-        self.assertEqual("source-qualified-not-installed", self.policy["status"])
-        self.assertFalse(self.policy["credentialJob"]["installed"])
-        self.assertEqual(0, self.policy["credentialJob"]["liveObservation"]["secretCount"])
-        self.assertEqual([], self.policy["credentialInventory"])
-        self.assertEqual("unresolved-game-profile-release",
+    def test_policy_binds_installed_release_and_dedicated_custody(self):
+        self.assertEqual("installed", self.policy["status"])
+        self.assertTrue(self.policy["credentialJob"]["installed"])
+        self.assertEqual(3, self.policy["credentialJob"]["liveObservation"]["secretCount"])
+        self.assertEqual(3, len(self.policy["credentialInventory"]))
+        self.assertEqual("published-served-verified",
                          self.policy["packagePin"]["status"])
-        self.assertIsNone(self.policy["packagePin"]["version"])
-        self.assertIsNone(self.policy["packagePin"]["sha256"])
-        self.assertIn("no immutable published CLI release",
-                      self.policy["packagePin"]["refusal"])
+        self.assertEqual("0.1.5", self.policy["packagePin"]["version"])
+        self.assertEqual("3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
+                         self.policy["packagePin"]["sha256"])
+        self.assertTrue(self.policy["packagePin"]["servedPackageVerified"])
+        self.assertEqual([], self.policy["activationPrerequisites"])
         self.assertEqual(["OpenV2"], self.policy["unchangedGates"])
         self.assertEqual({"v1Admission": False, "receiverStateImport": False},
                          self.policy["migration"])

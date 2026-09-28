@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.github.v2-ci-ordinary-settlement-policy/1",
   "policyId": "v2-ci-i1-ordinary-settlement-v1",
-  "status": "source-qualified-not-installed",
+  "status": "installed",
   "repository": "FS-GG/FS.GG.Game",
   "repositoryId": 1290990429,
   "selectedSource": {
@@ -174,9 +174,9 @@
     "allowedBranches": [
       "main"
     ],
-    "installed": false,
+    "installed": true,
     "liveObservation": {
-      "observedAt": "2026-09-28T12:08:12Z",
+      "observedAt": "2026-09-28T15:01:22Z",
       "environmentPresent": true,
       "environmentId": 22921368593,
       "environmentNodeId": "EN_kwDOTPLzXc8AAAAFVjhUEQ",
@@ -188,23 +188,77 @@
       "customBranchPolicies": true,
       "canAdminsBypass": true,
       "requiredReviewerCount": 0,
-      "secretCount": 0,
-      "disposition": "main-only-environment-present-custody-pending"
+      "secretCount": 3,
+      "secretNames": [
+        "V2_ORDINARY_APP_ID",
+        "V2_ORDINARY_APP_PRIVATE_KEY",
+        "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY"
+      ],
+      "disposition": "dedicated-custody-enrolled-main-only"
     }
   },
   "packagePin": {
-    "status": "unresolved-game-profile-release",
-    "version": null,
-    "sha256": null,
-    "servedPackageVerified": false,
+    "status": "published-served-verified",
+    "version": "0.1.5",
+    "sha256": "3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
+    "hostedCandidateRunId": 36432670335,
+    "publishRunId": 36437778484,
+    "publishRunAttempt": 3,
+    "publishRunHeadSha": "8335501d94875fa0410087e6d55d3639fcdb7ec4",
+    "publishWorkflow": ".github/workflows/callable-cli-release-publish.yml",
+    "releaseUrl": "https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5",
+    "releasePublishedAt": "2026-09-28T14:59:57Z",
+    "assetName": "FS.GG.Coordination.Cli.0.1.5.nupkg",
+    "assetSize": 6435119,
+    "servedPackageVerified": true,
     "requiredCapability": "game-v1 selected source",
     "requiredBeforeActivation": true,
-    "refusal": "no immutable published CLI release with game-v1 support is selected"
+    "sourceCommit": "1268908d2d5a38d30a764c927f3e0591e53138aa",
+    "sourceTree": "52ef5c36cd3e3eeb94d6b92e3d64df86f81c3f01",
+    "githubPackagesArchiveSha256": "3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
+    "nugetOrgSignedArchiveSha256": "131079cc347eecd6ef0d05a6d481d7ba71e4db38d568744cf5ac6ecb64d7dd2a",
+    "payloadMatch": true,
+    "publicInstallVerified": true
   },
-  "credentialInventory": [],
+  "credentialInventory": [
+    {
+      "name": "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY",
+      "purpose": "sign canonical ordinary-v2 settlement intent",
+      "generation": "new-v2-dedicated",
+      "provisioned": true,
+      "publicIdentity": "ordinary-v2-production-6121c3f2ab38acf3; spki-sha256:6121c3f2ab38acf38a37f782eb7775da78598b9cfabc0054917d3d59fe50e3ee"
+    },
+    {
+      "name": "V2_ORDINARY_APP_ID",
+      "purpose": "identify the repository-scoped ordinary-v2 GitHub App",
+      "generation": "new-v2-dedicated",
+      "provisioned": true,
+      "publicIdentity": "app:5064713; installation:164553252"
+    },
+    {
+      "name": "V2_ORDINARY_APP_PRIVATE_KEY",
+      "purpose": "mint a short-lived repository-scoped installation token",
+      "generation": "new-v2-dedicated",
+      "provisioned": true,
+      "publicIdentity": "app:5064713; installation:164553252"
+    }
+  ],
+  "credentialEnrollmentEvidence": {
+    "status": "installed-and-independently-read-back",
+    "bridgeRepository": "FS-GG/.github",
+    "bridgeRepositoryId": 1269292704,
+    "bridgeCommit": "f09e31879b9b884585e14d0018ccf9e8a41de9d7",
+    "bridgeWorkflow": ".github/workflows/c3-game-ordinary-enrollment-bridge.yml",
+    "bridgeRunId": 36437875033,
+    "bridgeRunAttempt": 1,
+    "bridgeConclusion": "success",
+    "ciphertextPacketVerification": "exact-current-run-policy-key-empty-inventory",
+    "encryptedPutCount": 3,
+    "readBackAt": "2026-09-28T14:42:00Z"
+  },
   "activationEvidence": {
-    "observedAt": "2026-09-28T12:08:12Z",
-    "sourceMainSha": "9b76ecab1bf240643d5b81aaed9b9b9861177446",
+    "observedAt": "2026-09-28T15:01:22Z",
+    "sourceMainSha": "ec55a10ad5e458944af02c43f48fedeb4b24a430",
     "sourceRepositoryId": 1290990429,
     "requiredCheckAppId": 15368,
     "requiredGateChecks": [
@@ -227,13 +281,15 @@
       "Determinism & property invariants (constraint face) (ubuntu-latest)",
       "Determinism & property invariants (constraint face) (windows-latest)",
       "materialize / receiver-validate"
-    ]
+    ],
+    "authorityRepository": "FS-GG/FS.GG.Coordination.Authority",
+    "authorityRepositoryId": 1351660651,
+    "writerRulesetId": 21872113,
+    "writerRulesetEnforcement": "active",
+    "integrityRulesetId": 21872115,
+    "integrityRulesetEnforcement": "active"
   },
-  "activationPrerequisites": [
-    "published immutable Coordination CLI with game-v1 support and verified package SHA-256",
-    "all three dedicated ordinary-v2 secrets are enrolled and read back",
-    "current source-check population and shared Authority binding are read back again"
-  ],
+  "activationPrerequisites": [],
   "forbiddenCredentialReuse": [
     "CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
     "V1_ADMISSION_AUTHORIZER_PRIVATE_KEY",

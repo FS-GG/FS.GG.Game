@@ -110,37 +110,47 @@ class GameObservationSourceTests(unittest.TestCase):
         with patch.object(MODULE, "api", side_effect=api):
             MODULE.current_authority("FS-GG/FS.GG.Game", policy)
 
-    def test_workflow_is_hard_disabled_and_has_no_credential_or_package_surface(self):
+    def test_workflow_installs_only_the_pinned_release_and_uses_dedicated_custody(self):
         workflow = (ROOT / ".github/workflows/v2-ci-ordinary-settlement.yml").read_text()
         self.assertIn("  push:\n    branches: [main]", workflow)
-        self.assertIn("    if: ${{ false }}", workflow)
+        self.assertNotIn("    if: ${{ false }}", workflow)
         self.assertIn("FSGG_V2_SOURCE_PROFILE: game-v1", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("python3 tools/v2-ci-ordinary-observe.py produce", workflow)
+        self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify", workflow)
+        self.assertIn("environment: ordinary-v2", workflow)
+        self.assertIn("PACKAGE_VERSION: 0.1.5", workflow)
+        self.assertIn("PACKAGE_SHA256: 3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9", workflow)
+        self.assertIn("ordinary-settlement execute", workflow)
+        self.assertEqual(3, workflow.count("${{ secrets.V2_ORDINARY_"))
         for forbidden in (
-            "secrets.", "environment:", "ordinary-settlement execute", "PACKAGE_VERSION",
-            "PACKAGE_SHA256", "setup-dotnet", "global.json", "workflow_dispatch:",
-            "repository_dispatch:", "pull_request:", "pull_request_target:",
+            "workflow_dispatch:", "repository_dispatch:", "pull_request:",
+            "pull_request_target:", "CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
+            "V1_ADMISSION_AUTHORIZER_PRIVATE_KEY", "V1_ADMISSION_APP_PRIVATE_KEY",
         ):
             self.assertNotIn(forbidden, workflow)
 
-    def test_policy_anchor_environment_and_unresolved_package_are_bounded(self):
+    def test_policy_anchor_environment_release_and_custody_are_installed(self):
         policy = json.loads((ROOT / "policy/v2-ci-ordinary-settlement.json").read_text())
         anchor = json.loads((ROOT / "policy/v2-ci-ordinary-settlement-anchor.json").read_text())
         self.assertEqual("v2-ci-i1-ordinary-settlement-v1", policy["policyId"])
         self.assertEqual(policy["policyId"], anchor["policyId"])
-        self.assertEqual("source-qualified-not-installed", policy["status"])
-        self.assertFalse(policy["credentialJob"]["installed"])
+        self.assertEqual("installed", policy["status"])
+        self.assertTrue(policy["credentialJob"]["installed"])
         observation = policy["credentialJob"]["liveObservation"]
         self.assertEqual(22921368593, observation["environmentId"])
         self.assertEqual(61289298, observation["branchPolicyId"])
         self.assertEqual("main", observation["customBranchPolicy"])
-        self.assertEqual(0, observation["secretCount"])
-        self.assertEqual("unresolved-game-profile-release", policy["packagePin"]["status"])
-        self.assertIsNone(policy["packagePin"]["version"])
-        self.assertIsNone(policy["packagePin"]["sha256"])
-        self.assertFalse(policy["packagePin"]["servedPackageVerified"])
-        self.assertEqual([], policy["credentialInventory"])
+        self.assertEqual(3, observation["secretCount"])
+        self.assertEqual("published-served-verified", policy["packagePin"]["status"])
+        self.assertEqual("0.1.5", policy["packagePin"]["version"])
+        self.assertEqual("3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
+                         policy["packagePin"]["sha256"])
+        self.assertTrue(policy["packagePin"]["servedPackageVerified"])
+        self.assertEqual(3, len(policy["credentialInventory"]))
+        self.assertEqual("installed-and-independently-read-back",
+                         policy["credentialEnrollmentEvidence"]["status"])
+        self.assertEqual([], policy["activationPrerequisites"])
         self.assertEqual(5064713, anchor["writer"]["appId"])
         self.assertEqual(164553252, anchor["writer"]["installationId"])
         self.assertEqual(1351660651, anchor["writer"]["repositoryId"])
