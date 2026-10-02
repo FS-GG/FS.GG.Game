@@ -126,6 +126,21 @@ type CandidateConfiguration =
       Scheduling: SchedulingPolicy
       Replacement: ReplacementPolicy }
 
+/// Raw values accepted at a JSON/JavaScript boundary. Every value remains text until
+/// the complete envelope has been checked and converted to a validated configuration.
+type CandidateConfigurationBoundary =
+    { Path: string
+      ArtifactSha256: string
+      ConfigurationSha256: string
+      MaximumArtifactBytes: string
+      MaximumMemoryPages: string
+      MaximumInputBytes: string
+      MaximumOutputBytes: string
+      MaximumDeadlineMilliseconds: string
+      Deadline: string
+      Scheduling: string
+      Replacement: string }
+
 type ContractIssue =
     | UnsupportedCompatibilityPath
     | InventoryOnlyPathNotAdmissible of CompatibilityPath
@@ -134,6 +149,7 @@ type ContractIssue =
     | LimitExceedsProfile of fieldName: string * maximum: int * actual: int
     | PolicyDiffersFromProfile of fieldName: string
     | InvalidDescriptor of detail: string
+    | MalformedBoundaryField of fieldName: string
 
 type ValidatedConfiguration = private ValidatedConfiguration of CandidateConfiguration * CompatibilityDescriptor
 
@@ -147,6 +163,7 @@ module Profiles =
 module Validation =
     val validateDescriptor: CompatibilityDescriptor -> ContractIssue list
     val validateConfiguration: CandidateConfiguration -> Result<ValidatedConfiguration, ContractIssue list>
+    val validateBoundary: CandidateConfigurationBoundary -> Result<ValidatedConfiguration, ContractIssue list>
     val configuration: ValidatedConfiguration -> CandidateConfiguration
     val descriptor: ValidatedConfiguration -> CompatibilityDescriptor
 

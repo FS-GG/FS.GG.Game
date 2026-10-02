@@ -13,7 +13,7 @@ dotnet build "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release
 dotnet run --project "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" -c Release --no-restore
 dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$candidate_feed"
 
-package="$candidate_feed/FS.GG.Wasm.Contracts.0.1.0-source.1.nupkg"
+package="$candidate_feed/FS.GG.Wasm.Contracts.0.1.0-source.2.nupkg"
 test -f "$package"
 unzip -Z1 "$package" > "$work/package-files.txt"
 grep -Fxq 'api-surface/Contracts.fsi' "$work/package-files.txt"

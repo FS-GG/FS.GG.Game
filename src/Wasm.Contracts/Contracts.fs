@@ -126,6 +126,19 @@ type CandidateConfiguration =
       Scheduling: SchedulingPolicy
       Replacement: ReplacementPolicy }
 
+type CandidateConfigurationBoundary =
+    { Path: string
+      ArtifactSha256: string
+      ConfigurationSha256: string
+      MaximumArtifactBytes: string
+      MaximumMemoryPages: string
+      MaximumInputBytes: string
+      MaximumOutputBytes: string
+      MaximumDeadlineMilliseconds: string
+      Deadline: string
+      Scheduling: string
+      Replacement: string }
+
 type ContractIssue =
     | UnsupportedCompatibilityPath
     | InventoryOnlyPathNotAdmissible of CompatibilityPath
@@ -134,6 +147,7 @@ type ContractIssue =
     | LimitExceedsProfile of fieldName: string * maximum: int * actual: int
     | PolicyDiffersFromProfile of fieldName: string
     | InvalidDescriptor of detail: string
+    | MalformedBoundaryField of fieldName: string
 
 type ValidatedConfiguration = private ValidatedConfiguration of CandidateConfiguration * CompatibilityDescriptor
 
@@ -167,7 +181,7 @@ module private ContractData =
 
     let safeSpans emptyOutput alignment =
         { DescriptorBytes = 8
-          DescriptorAlignment = RequireFourByteAlignment
+          DescriptorAlignment = alignment
           InputAlignment = alignment
           OutputAlignment = alignment
           EmptyOutput = emptyOutput
@@ -250,14 +264,14 @@ module Profiles =
 
 [<RequireQualifiedAccess>]
 module Validation =
-    let private positiveLimits limits =
+    let private positiveLimits (limits: ResourceLimits) =
         [ "maximumArtifactBytes", limits.MaximumArtifactBytes
           "maximumMemoryPages", limits.MaximumMemoryPages
           "maximumInputBytes", limits.MaximumInputBytes
           "maximumOutputBytes", limits.MaximumOutputBytes
           "maximumDeadlineMilliseconds", limits.MaximumDeadlineMilliseconds ]
 
-    let validateDescriptor descriptor =
+    let validateDescriptor (descriptor: CompatibilityDescriptor) =
         let issues = ResizeArray<ContractIssue>()
         let requiredNames =
             [ descriptor.Abi.VersionExport
@@ -275,11 +289,15 @@ module Validation =
 
         let expectedArities = [ 0, 1; 1, 1; 2, 0; 3, 1; 3, 1; 0, 1 ]
 
-        if
-            List.zip descriptor.Abi.Signatures expectedArities
-            |> List.exists (fun ((_, signature), (parameters, results)) ->
-                signature.Parameters <> List.replicate parameters I32
-                || signature.Results <> List.replicate results I32)
+        if descriptor.Abi.Signatures.Length <> expectedArities.Length then
+            issues.Add(InvalidDescriptor "all ABI signatures must use the frozen i32 shapes")
+        elif
+            List.forall2 (fun (_, signature) (parameters, results) ->
+                signature.Parameters = List.replicate parameters I32
+                && signature.Results = List.replicate results I32)
+                descriptor.Abi.Signatures
+                expectedArities
+            |> not
         then
             issues.Add(InvalidDescriptor "all ABI signatures must use the frozen i32 shapes")
 
@@ -308,7 +326,8 @@ module Validation =
         List.ofSeq issues
 
     let private isSha256 (value: string) =
-        value.Length = 64
+        not (String.IsNullOrEmpty value)
+        && value.Length = 64
         && value
            |> Seq.forall (fun character ->
                (character >= '0' && character <= '9')
@@ -318,7 +337,7 @@ module Validation =
         if actual <= 0 then issues.Add(NonPositiveLimit field)
         elif actual > maximum then issues.Add(LimitExceedsProfile(field, maximum, actual))
 
-    let validateConfiguration candidate =
+    let validateConfiguration (candidate: CandidateConfiguration) =
         match Profiles.tryFind candidate.Path with
         | None -> Error [ UnsupportedCompatibilityPath ]
         | Some descriptor ->
@@ -354,6 +373,81 @@ module Validation =
                 Ok(ValidatedConfiguration(candidate, descriptor))
             else
                 Error(List.ofSeq issues)
+
+    let validateBoundary (boundary: CandidateConfigurationBoundary) =
+        let malformed field = Error [ MalformedBoundaryField field ]
+
+        if obj.ReferenceEquals(boundary, null) then
+            malformed "configuration"
+        else
+            let parseInt field (value: string) =
+                match Int32.TryParse value with
+                | true, parsed when string parsed = value -> Ok parsed
+                | _ -> malformed field
+
+            let path =
+                match boundary.Path with
+                | "bar-protected" -> Ok BarProtected
+                | "sc2-imported-strict" -> Ok Sc2ImportedStrict
+                | "sc2-legacy-direct-url" -> Ok Sc2LegacyDirectUrl
+                | _ -> malformed "path"
+
+            let deadline =
+                match boundary.Deadline with
+                | "phase-watchdog" -> Ok PhaseWatchdog
+                | "end-to-end-from-enqueue" -> Ok EndToEndFromEnqueue
+                | _ -> malformed "deadline"
+
+            let scheduling =
+                match boundary.Scheduling with
+                | "refuse-while-busy" -> Ok RefuseWhileBusy
+                | value when not (String.IsNullOrEmpty value) && value.StartsWith("bounded-fifo:", StringComparison.Ordinal) ->
+                    parseInt "scheduling" (value.Substring("bounded-fifo:".Length)) |> Result.map BoundedFifo
+                | _ -> malformed "scheduling"
+
+            let replacement =
+                match boundary.Replacement with
+                | "destructive-load" -> Ok DestructiveLoad
+                | "transactional-candidate-with-recovery-freeze" -> Ok TransactionalCandidateWithRecoveryFreeze
+                | _ -> malformed "replacement"
+
+            match
+                path,
+                parseInt "maximumArtifactBytes" boundary.MaximumArtifactBytes,
+                parseInt "maximumMemoryPages" boundary.MaximumMemoryPages,
+                parseInt "maximumInputBytes" boundary.MaximumInputBytes,
+                parseInt "maximumOutputBytes" boundary.MaximumOutputBytes,
+                parseInt "maximumDeadlineMilliseconds" boundary.MaximumDeadlineMilliseconds,
+                deadline,
+                scheduling,
+                replacement
+            with
+            | Ok parsedPath, Ok maximumArtifactBytes, Ok maximumMemoryPages, Ok maximumInputBytes,
+              Ok maximumOutputBytes, Ok maximumDeadlineMilliseconds, Ok parsedDeadline,
+              Ok parsedScheduling, Ok parsedReplacement ->
+                let candidate: CandidateConfiguration =
+                    { Path = parsedPath
+                      ArtifactSha256 = boundary.ArtifactSha256
+                      ConfigurationSha256 = boundary.ConfigurationSha256
+                      Limits =
+                        { MaximumArtifactBytes = maximumArtifactBytes
+                          MaximumMemoryPages = maximumMemoryPages
+                          MaximumInputBytes = maximumInputBytes
+                          MaximumOutputBytes = maximumOutputBytes
+                          MaximumDeadlineMilliseconds = maximumDeadlineMilliseconds }
+                      Deadline = parsedDeadline
+                      Scheduling = parsedScheduling
+                      Replacement = parsedReplacement }
+                validateConfiguration candidate
+            | Error issues, _, _, _, _, _, _, _, _
+            | _, Error issues, _, _, _, _, _, _, _
+            | _, _, Error issues, _, _, _, _, _, _
+            | _, _, _, Error issues, _, _, _, _, _
+            | _, _, _, _, Error issues, _, _, _, _
+            | _, _, _, _, _, Error issues, _, _, _
+            | _, _, _, _, _, _, Error issues, _, _
+            | _, _, _, _, _, _, _, Error issues, _
+            | _, _, _, _, _, _, _, _, Error issues -> Error issues
 
     let configuration (ValidatedConfiguration(configuration, _)) = configuration
     let descriptor (ValidatedConfiguration(_, descriptor)) = descriptor

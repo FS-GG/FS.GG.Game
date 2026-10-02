@@ -8,7 +8,7 @@
     <Description>Typed, Fable-compatible ABI profiles and validation contracts for shared FS.GG browser WebAssembly guests.</Description>
     <PackageTags>fsharp;fable-javascript;fable-dotnet;webassembly;wasm;contracts</PackageTags>
     <FablePackageType>library</FablePackageType>
-    <Version>0.1.0-source.1</Version>
+    <Version>0.1.0-source.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
