@@ -9,7 +9,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>fsharp;fable-javascript;webassembly;wasm;browser</PackageTags>
     <FablePackageType>library</FablePackageType>
-    <Version>0.1.0-source.1</Version>
+    <Version>0.1.0-source.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,14 +20,29 @@
   <ItemGroup>
     <Compile Include="RuntimeProtocol.fsi" />
     <Compile Include="RuntimeProtocol.fs" />
+    <Compile Include="Admission.fsi" />
+    <Compile Include="Admission.fs" />
+    <Compile Include="Invocation.fsi" />
+    <Compile Include="Invocation.fs" />
+    <Compile Include="WorkerEntry.fsi" />
+    <Compile Include="WorkerEntry.fs" />
+    <Compile Include="Lifecycle.fsi" />
+    <Compile Include="Lifecycle.fs" />
+    <Compile Include="Host.fsi" />
+    <Compile Include="Host.fs" />
   </ItemGroup>
 
   <Target Name="CurateFableCompatibilityView" AfterTargets="CreateFablePackageFiles">
     <ItemGroup>
       <_PackageFiles Remove="@(_PackageFiles)" />
-      <_PackageFiles Include="RuntimeProtocol.fsi;RuntimeProtocol.fs">
+      <_PackageFiles Include="RuntimeProtocol.fsi;RuntimeProtocol.fs;Admission.fsi;Admission.fs;Invocation.fsi;Invocation.fs;WorkerEntry.fsi;WorkerEntry.fs;Lifecycle.fsi;Lifecycle.fs;Host.fsi;Host.fs">
         <Pack>true</Pack>
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+      <_PackageFiles Include="js/wasm-primitives.js">
+        <Pack>true</Pack>
+        <PackagePath>fable/js/wasm-primitives.js</PackagePath>
         <BuildAction>None</BuildAction>
       </_PackageFiles>
       <_PackageFiles Include="Fable/FS.GG.Wasm.Browser.fsproj">

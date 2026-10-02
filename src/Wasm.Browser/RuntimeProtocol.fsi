@@ -128,6 +128,7 @@ type HostInput =
     | LoadRequested of identity: HostIdentity * intent: LoadIntent * artifact: byte array
     | InvocationRequested of identity: HostIdentity * submission: SubmissionClass * input: byte array
     | ShutdownRequested of identity: HostIdentity
+    | CandidateValidated of transaction: string * candidateGeneration: uint64
     | CandidateCommitRequested of transaction: string * expectedActiveGeneration: uint64 * candidateGeneration: uint64
     | CandidateAbortRequested of transaction: string
     | AdapterOutputRejected of identity: HostIdentity * diagnostic: string

@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="RuntimeProtocolTests.fs" />
+    <Compile Include="LifecycleTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
