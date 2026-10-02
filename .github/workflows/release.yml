@@ -44,7 +44,7 @@ jobs:
     name: Verify (locked restore + headless build + test)
     runs-on: ubuntu-latest
     # Restrict to the canonical repo: fork tags/dispatch never run this (no fork secret exposure).
-    if: github.repository == 'FS-GG/FS.GG.Game'
+    if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v'))
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -80,7 +80,7 @@ jobs:
   publish-packages:
     name: Publish FS.GG.Game.* (org feed + nuget.org, release-only)
     runs-on: ubuntu-latest
-    if: github.repository == 'FS-GG/FS.GG.Game'
+    if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v'))
     needs: [verify]
     permissions:
       actions: read

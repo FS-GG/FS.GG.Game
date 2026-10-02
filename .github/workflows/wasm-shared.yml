@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/wasm-shared.yml"
+      - ".github/workflows/release-wasm.yml"
       - ".config/dotnet-tools.json"
       - "global.json"
       - "Directory.Build.*"
@@ -26,10 +27,14 @@ on:
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
       - "scripts/verify-wasm-package-consumer.sh"
+      - "scripts/wasm-release/**"
+      - "tests/release/wasm/**"
+      - "eng/wasm-shared/version.props"
   pull_request:
     branches: [main]
     paths:
       - ".github/workflows/wasm-shared.yml"
+      - ".github/workflows/release-wasm.yml"
       - ".config/dotnet-tools.json"
       - "global.json"
       - "Directory.Build.*"
@@ -51,6 +56,9 @@ on:
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
       - "scripts/verify-wasm-package-consumer.sh"
+      - "scripts/wasm-release/**"
+      - "tests/release/wasm/**"
+      - "eng/wasm-shared/version.props"
   workflow_dispatch:
 
 concurrency:
@@ -142,4 +150,6 @@ jobs:
         run: tests/Wasm.Browser.Conformance/run.sh
 
       - name: Verify SDK archive and fresh package consumer
-        run: scripts/verify-wasm-package-consumer.sh
+        run: |
+          scripts/wasm-release/prepare.sh artifacts/wasm-release
+          scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release

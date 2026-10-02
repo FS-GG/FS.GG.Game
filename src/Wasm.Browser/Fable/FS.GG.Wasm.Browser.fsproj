@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../../eng/wasm-shared/version.props" Condition="Exists('../../../eng/wasm-shared/version.props')" />
+  <Import Project="eng/wasm-shared/version.props" Condition="'$(WasmSharedVersion)' == '' And Exists('eng/wasm-shared/version.props')" />
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>FS.GG.Wasm.Browser.Fable.Metadata</AssemblyName>
@@ -21,6 +23,9 @@
     <Compile Include="Host.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[0.1.0-source.3]" />
+    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[$(WasmSharedVersion)]" />
   </ItemGroup>
+  <Target Name="RequireWasmSharedVersion" BeforeTargets="CollectFableSources;Build">
+    <Error Condition="'$(WasmSharedVersion)' == ''" Text="WasmSharedVersion metadata is missing." />
+  </Target>
 </Project>

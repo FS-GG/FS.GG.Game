@@ -23,6 +23,7 @@ required = [
     "scripts/verify-wasm-contracts.sh",
     "scripts/verify-wasm-lifecycle.sh",
     "scripts/verify-wasm-package-consumer.sh",
+    "scripts/wasm-release/prepare.sh",
     "tests/Wasm.Browser.Conformance/run.sh",
 ]
 ordered = [
@@ -118,15 +119,16 @@ grep -Fq 'b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4' \
   echo "workflow preflight: WASI SDK 34 archive identity is not pinned" >&2
   exit 1
 }
-grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.0-source.3]" />' \
+grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.0]" />' \
   "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj" || {
-  echo "workflow preflight: fresh consumer does not bind the source.3 browser package" >&2
+  echo "workflow preflight: fresh consumer does not bind the stable 0.1.0 browser package" >&2
   exit 1
 }
 if grep -Fq '<ProjectReference' "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj"; then
   echo "workflow preflight: fresh package consumer has a sibling project reference" >&2
   exit 1
 fi
+"$repo/tests/release/wasm/test-release-wasm.sh" --source-only
 for control in \
   'rust-bar.wasm' 'rust-sc2.wasm' 'c-bar.wasm' 'c-sc2.wasm' \
   'trap remains inside the package Worker' \
@@ -136,7 +138,7 @@ for control in \
     exit 1
   }
 done
-for path in 'sdk/wasm/**' 'examples/wasm/**' 'tests/Wasm.PackageConsumer/**'; do
+for path in 'sdk/wasm/**' 'examples/wasm/**' 'tests/Wasm.PackageConsumer/**' 'scripts/wasm-release/**' 'tests/release/wasm/**'; do
   grep -Fq -- "- \"$path\"" "$workflow" || {
     echo "workflow preflight: missing stage .3 path filter $path" >&2
     exit 1
@@ -148,6 +150,9 @@ bash -n \
   "$repo/scripts/verify-wasm-contracts.sh" \
   "$repo/scripts/verify-wasm-lifecycle.sh" \
   "$repo/scripts/verify-wasm-package-consumer.sh" \
+  "$repo/scripts/wasm-release/prepare.sh" \
+  "$repo/scripts/wasm-release/readback.sh" \
+  "$repo/scripts/wasm-release/stage-assets.sh" \
   "$repo/sdk/wasm/build-source-archive.sh" \
   "$repo/sdk/wasm/verify-sdk.sh" \
   "$repo/sdk/wasm/toolchains/acquire-wasi-sdk.sh" \

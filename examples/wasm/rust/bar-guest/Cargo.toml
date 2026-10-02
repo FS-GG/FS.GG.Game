@@ -1,6 +1,6 @@
 [package]
 name = "fsgg-wasm-bar-example"
-version = "0.1.0-source.3"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 publish = false

@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../eng/wasm-shared/version.props" />
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <IsPackable>true</IsPackable>
@@ -8,7 +9,7 @@
     <Description>Typed, Fable-compatible ABI profiles and validation contracts for shared FS.GG browser WebAssembly guests.</Description>
     <PackageTags>fsharp;fable-javascript;fable-dotnet;webassembly;wasm;contracts</PackageTags>
     <FablePackageType>library</FablePackageType>
-    <Version>0.1.0-source.3</Version>
+    <Version>$(WasmSharedVersion)</Version>
   </PropertyGroup>
 
   <ItemGroup>
