@@ -30,7 +30,7 @@ node "$root/sdk/wasm/tools/strip-unused-table.mjs" \
   "$work/target-sc2/wasm32-unknown-unknown/release/fsgg_wasm_sc2_example.wasm" "$out/rust-sc2.wasm"
 compile_c() {
   local source=$1 output=$2 max=$3 prefix=$4
-  "$wasi/bin/clang" --target=wasm32 -std=c17 -Oz -nostdlib \
+  "$wasi/bin/clang" --target=wasm32 -std=c17 -Oz -nostdlib -mno-bulk-memory -mno-reference-types -mno-multivalue \
     -I "$root/sdk/wasm" "$root/sdk/wasm/fsgg-wasm-guest.c" "$source" \
     -Wl,--no-entry -Wl,--export-memory -Wl,--initial-memory=2097152 -Wl,"--max-memory=$max" \
     -Wl,"--export=${prefix}_abi_version" -Wl,"--export=${prefix}_alloc" -Wl,"--export=${prefix}_free" \
@@ -41,7 +41,7 @@ compile_c "$root/examples/wasm/c/bar_guest.c" "$out/c-bar.wasm" 67108864 barc
 compile_c "$root/examples/wasm/c/sc2_guest.c" "$out/c-sc2.wasm" 8388608 sc2c
 for variant in trap loop; do
   macro=FSGG_WASM_TRAP; [[ "$variant" == loop ]] && macro=FSGG_WASM_LOOP
-  "$wasi/bin/clang" --target=wasm32 -std=c17 -Oz -nostdlib -D"$macro" \
+  "$wasi/bin/clang" --target=wasm32 -std=c17 -Oz -nostdlib -mno-bulk-memory -mno-reference-types -mno-multivalue -D"$macro" \
     -I "$root/sdk/wasm" "$root/sdk/wasm/fsgg-wasm-guest.c" "$root/examples/wasm/c/adversarial_sc2_guest.c" \
     -Wl,--no-entry -Wl,--export-memory -Wl,--initial-memory=2097152 -Wl,--max-memory=8388608 \
     -Wl,--export=sc2c_abi_version -Wl,--export=sc2c_alloc -Wl,--export=sc2c_free \

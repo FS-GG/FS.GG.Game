@@ -2,9 +2,9 @@
 
 This is the source contract for stage `.1` of
 [WASM-SHARED-01](https://github.com/FS-GG/.github/blob/67a78de8d85cc360bac33d39a322dc91bcb37379/docs/roadmaps/2026-10-02-shared-wasm-foundation.md).
-FS.GG.Game is the producer for the proposed `FS.GG.Wasm.Contracts` and
-`FS.GG.Wasm.Browser` packages. This window contains the contracts package only.
-Version `0.1.1` identifies the stable shared-WASM release candidate. It has not
+FS.GG.Game owns the `FS.GG.Wasm.Contracts` and `FS.GG.Wasm.Browser` coherent
+package set. Published `0.1.1` remains the accepted installed baseline.
+Version `0.2.0` identifies the connected shared-WASM producer candidate. It has not
 yet been published, enrolled in the Game solution, or added to the existing
 `0.16.0` coherent release set. See the [publication contract](publication.md).
 
@@ -101,3 +101,24 @@ SHA-256 and matching consumer-output digest. This proves candidate contract
 packaging and Fable compilation. It does not prove a browser host, published
 clean import, native acceptance, product adoption, or package installation from
 either release feed.
+
+
+## Migration from published 0.1.1
+
+Version `0.2.0` intentionally changes four Browser record constructors:
+`WorkerCommand` now carries validated configuration; `RequestProjection` adds
+Worker, operation, phase and correlation; `EffectProjection` adds actual command
+and timer metadata; and `HostProjection` adds compiled/initialized/control state.
+The native published-DLL comparison reports these four `CP0002` changes; the
+Contracts package comparison passes. There is no binary compatibility claim for
+the Browser transition.
+
+Recompile consumers against the coherent `0.2.0` pair and materialize the complete
+installed Worker asset tree, including generated `policy/` dependencies. Use
+`Host.CreateConnected`, load the configured artifact, wait for compilation, and
+explicitly initialize before processing. Shutdown is a distinct guest export.
+Candidate initialization cannot grant current authority before exact validation
+and commit. Products must validate result identity and native effect eligibility
+in their own adapters; this producer correction does not establish BAR/SC2
+product adoption. Published `0.1.1` bytes, tags and installed receipts remain
+unchanged.

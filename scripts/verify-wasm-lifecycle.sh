@@ -41,23 +41,32 @@ if passed != expected or result["failed"] or result["ignored"]:
     )
 print(f"quint-lifecycle-tests: passed={len(passed)} names={','.join(sorted(passed))}")
 PY
-"$quint" run --main=lifecycle --init=init --step=step --invariant=lifecycleSafe \
-  --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout \
-  --max-steps=40 --max-samples=2000 --seed=20261002 "$model" > "$work/quint-sampled.txt"
+# The same 2,000 sample budget covers cold start and reachable initialized work.
+for entry in init initReady; do
+  "$quint" run --main=lifecycle --init="$entry" --step=step --invariant=lifecycleSafe \
+    --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout \
+    --max-steps=40 --max-samples=1000 --seed=20261002 "$model" > "$work/quint-sampled-$entry.txt"
+done
 for witness in sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout; do
-  grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$work/quint-sampled.txt"
+  grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$work/quint-sampled-init.txt" "$work/quint-sampled-initReady.txt"
 done
 
 "$quint" run --main=lifecycle --init=initBar --step=barCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=5 --max-samples=1 --seed=20261002 --out-itf="$traces/bar_{seq}.itf.json" "$model" >/dev/null
+  --max-steps=10 --max-samples=1 --seed=20261002 --out-itf="$traces/bar_{seq}.itf.json" "$model" >/dev/null
 "$quint" run --main=lifecycle --init=initSc2 --step=sc2CorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=14 --max-samples=1 --seed=20261002 --out-itf="$traces/sc2_{seq}.itf.json" "$model" >/dev/null
+  --max-steps=18 --max-samples=1 --seed=20261002 --out-itf="$traces/sc2_{seq}.itf.json" "$model" >/dev/null
 "$quint" run --main=lifecycle --init=initSc2 --step=timeoutCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=5 --max-samples=1 --seed=20261002 --out-itf="$traces/timeout_{seq}.itf.json" "$model" >/dev/null
+  --max-steps=8 --max-samples=1 --seed=20261002 --out-itf="$traces/timeout_{seq}.itf.json" "$model" >/dev/null
+
+"$quint" run --main=lifecycle --init=initBar --step=phaseCorrespondenceStep --invariant=lifecycleSafe \
+  --max-steps=16 --max-samples=1 --seed=20261002 --out-itf="$traces/phase_{seq}.itf.json" "$model" >/dev/null
+
+"$quint" run --main=lifecycle --init=initSc2 --step=cleanupCorrespondenceStep --invariant=lifecycleSafe \
+  --max-steps=15 --max-samples=1 --seed=20261002 --out-itf="$traces/cleanup_{seq}.itf.json" "$model" >/dev/null
 
 python3 "$repo/tests/Wasm.Lifecycle.Correspondence/generate-traces.py" \
   --traces "$traces" --output "$work/GeneratedTraces.fs"
-for name in bar sc2 timeout; do
+for name in bar sc2 timeout phase cleanup; do
   cmp "$traces/${name}_0.itf.json" "$repo/tests/Wasm.Lifecycle.Correspondence/Traces/${name}_0.itf.json"
 done
 cmp "$work/GeneratedTraces.fs" "$repo/tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs"
@@ -70,8 +79,9 @@ dotnet tool run fable "$repo/tests/Wasm.Lifecycle.Correspondence/FS.GG.Wasm.Life
 node "$work/fable/Program.js"
 
 dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$work/package"
-dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$work/package"
-package="$work/package/FS.GG.Wasm.Browser.0.1.1.nupkg"
+"$repo/scripts/wasm-release/build-worker-policy.sh" "$work/policy"
+dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$work/package" -p:WasmWorkerPolicyRoot="$work/policy"
+package="$work/package/FS.GG.Wasm.Browser.0.2.0.nupkg"
 unzip -Z1 "$package" > "$work/package-files.txt"
 for path in \
   fable/RuntimeProtocol.fsi fable/Admission.fsi fable/Invocation.fsi fable/WorkerEntry.fsi \
@@ -88,7 +98,7 @@ cat > "$work/consumer/Consumer.fsproj" <<'EOF'
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.fs" />
-    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.1]" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" />
   </ItemGroup>
 </Project>
 EOF
@@ -113,5 +123,5 @@ dotnet restore "$work/consumer/Consumer.fsproj" --configfile "$work/NuGet.Config
 dotnet tool run fable "$work/consumer/Consumer.fsproj" --outDir "$work/consumer-js" --noCache
 node "$work/consumer-js/Program.js" | grep -Fxq 'fresh-package-consumer'
 
-printf 'wasm-lifecycle: model=sampled seed=20261002 samples=2000 steps=40 correspondence=dotnet,fable-node consumer=fresh-fable-package package-sha256=%s publication=none\n' \
+printf 'wasm-lifecycle: model=sampled seed=20261002 samples=cold1000+initialized1000 steps=40 initialized-prefix=4 correspondence=dotnet,fable-node consumer=fresh-fable-package package-sha256=%s publication=none\n' \
   "$(sha256sum "$package" | cut -d' ' -f1)"

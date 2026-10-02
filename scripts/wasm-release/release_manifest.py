@@ -13,7 +13,9 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path, PurePosixPath
 
-SCHEMA = "fsgg.wasm.release-custody/v1"
+SCHEMA = "fsgg.wasm.release-custody/v2"
+LEGACY_SCHEMA = "fsgg.wasm.release-custody/v1"
+API_POLICY = json.loads((Path(__file__).parent / "api-baseline-policy.json").read_text())
 ROSTER = ("FS.GG.Wasm.Contracts", "FS.GG.Wasm.Browser")
 TOOLS = {
     "dotnet": "10.0.401",
@@ -91,9 +93,14 @@ def inspect_package(path: Path, expected_id: str, version: str, source: str) -> 
             "fable/eng/wasm-shared/version.props",
             "contentFiles/any/any/_content/FS.GG.Wasm.Browser/module-worker.mjs",
             "contentFiles/any/any/_content/FS.GG.Wasm.Browser/worker-client.mjs",
+            "contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js",
+            "contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/Invocation.js",
+            "contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/Admission.js",
             "buildTransitive/FS.GG.Wasm.Browser.targets",
         },
     }[expected_id]
+    if version == "0.1.1":
+        required = {name for name in required if "/policy/" not in name}
     missing = sorted(required.difference(names))
     if missing:
         fail(f"{path.name} missing package closure: {missing}")
@@ -179,7 +186,10 @@ def verify_manifest(path: Path, custody: Path, source: str | None = None) -> dic
 
 def verify_identity(data: dict[str, object], source: str | None = None) -> None:
     required_keys = {"schema", "version", "tag", "source", "tree", "roster", "workflow", "tools", "artifacts", "firstStableBaseline"}
-    if set(data) != required_keys or data.get("schema") != SCHEMA:
+    legacy = data.get("schema") == LEGACY_SCHEMA
+    if not legacy:
+        required_keys.add("publishedApiComparison")
+    if set(data) != required_keys or data.get("schema") not in (SCHEMA, LEGACY_SCHEMA):
         fail("manifest schema or closed key set mismatch")
     version = str(data["version"])
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
@@ -190,14 +200,52 @@ def verify_identity(data: dict[str, object], source: str | None = None) -> None:
         fail("manifest source mismatch")
     if data["tools"] != TOOLS or data["workflow"] != ".github/workflows/wasm-shared.yml":
         fail("manifest tool or source-workflow identity mismatch")
-    if data["firstStableBaseline"] != {"version": version, "publishedApiCompatBaseline": None}:
-        fail("first stable release must explicitly have no published ApiCompat baseline")
+    if legacy:
+        if version != "0.1.1" or data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": None}:
+            fail("legacy manifest must preserve the actual first published 0.1.1 identity")
+    else:
+        if version != API_POLICY["candidateVersion"] or data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": "0.1.1"}:
+            fail("connected migration must preserve and compare the actual 0.1.1 baseline")
+        verify_api_comparison(data["publishedApiComparison"], data["artifacts"])
     artifacts = data["artifacts"]
     if not isinstance(artifacts, list) or len(artifacts) != 3:
         fail("manifest must contain exactly three artifacts")
     expected_names = set(expected_files(version).values())
     if {str(row.get("file")) for row in artifacts if isinstance(row, dict)} != expected_names:
         fail("manifest artifact roster mismatch")
+
+
+def verify_api_comparison(comparison, artifacts):
+    keys = {"schema", "tool", "baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion", "packages"}
+    if not isinstance(comparison, dict) or set(comparison) != keys or comparison["schema"] != "fsgg.wasm.published-api-comparison/v1" or comparison["tool"] != "SDK10.0.401.ApiCompat":
+        fail("published API comparison schema/tool mismatch")
+    for key in ("baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion"):
+        if comparison[key] != API_POLICY[key]:
+            fail("published API baseline provenance mismatch")
+    rows = comparison["packages"]
+    if not isinstance(rows, list) or len(rows) != 2 or {row.get("id") for row in rows} != set(ROSTER):
+        fail("published API comparison roster mismatch")
+    for row in rows:
+        expected = API_POLICY["packages"][row["id"]]
+        if set(row) != {"id", "baselineArchiveSha256", "candidateArchiveSha256", "baselineApiSurface", "candidateApiSurface", "nativeLogSha256", "status", "diagnostics"}:
+            fail("published API comparison row keys mismatch")
+        artifact = next(item for item in artifacts if item["file"] == f"{row['id']}.{comparison['candidateVersion']}.nupkg")
+        if row["baselineArchiveSha256"] != expected["servedArchiveSha256"] or row["candidateArchiveSha256"] != artifact["sha256"] or row["status"] != expected["expectedStatus"]:
+            fail("published API comparison archive/status mismatch")
+        if not re.fullmatch(r"[0-9a-f]{64}", row["nativeLogSha256"]):
+            fail("native API comparison log receipt missing")
+        for field in ("baselineApiSurface", "candidateApiSurface"):
+            surface = row[field]
+            if not isinstance(surface, dict) or not surface or any(not re.fullmatch(r"[0-9a-f]{64}", value) for value in surface.values()):
+                fail("published API source surface inventory missing")
+        removed = []
+        for diagnostic in row["diagnostics"]:
+            match = re.match(r"FS\.GG\.Wasm\.Browser\.(\w+)\.\1\(", diagnostic.get("member", ""))
+            if set(diagnostic) != {"code", "member"} or diagnostic["code"] != "CP0002" or match is None:
+                fail("unexpected public API diagnostic")
+            removed.append(match.group(1))
+        if sorted(removed) != expected["removedConstructorTypes"]:
+            fail("declared public constructor migration mismatch")
 
 
 def prepare(args: argparse.Namespace) -> None:
@@ -218,7 +266,8 @@ def prepare(args: argparse.Namespace) -> None:
         "workflow": ".github/workflows/wasm-shared.yml",
         "tools": TOOLS,
         "artifacts": packages + [sdk],
-        "firstStableBaseline": {"version": version, "publishedApiCompatBaseline": None},
+        "firstStableBaseline": {"version": "0.1.1", "publishedApiCompatBaseline": "0.1.1"},
+        "publishedApiComparison": load_manifest(Path(args.api_comparison)),
     }
     destination = custody / "release-manifest.json"
     destination.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -250,6 +299,7 @@ def main() -> None:
     make.add_argument("--version", required=True)
     make.add_argument("--source", required=True)
     make.add_argument("--tree", required=True)
+    make.add_argument("--api-comparison", required=True)
     check = sub.add_parser("verify")
     check.add_argument("--custody", required=True)
     check.add_argument("--manifest", required=True)

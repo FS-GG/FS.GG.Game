@@ -10,6 +10,6 @@
   <ItemGroup>
     <Compile Include="Program.fs" />
     <PackageReference Update="FSharp.Core" Version="[10.1.302]" />
-    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.1]" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" />
   </ItemGroup>
 </Project>

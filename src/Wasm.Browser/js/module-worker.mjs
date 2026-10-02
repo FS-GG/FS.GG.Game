@@ -1,75 +1,49 @@
-// Mechanical Worker-side WebAssembly calls. The F# host owns admission,
-// scheduling, replacement, settlement, ownership policy and timer decisions.
+// WebAssembly and memory mechanics only. All admission, ownership, limits,
+// invocation order and cleanup decisions execute in the packaged F# policy.
+import { WorkerEntry_createWireRuntime } from "./policy/WorkerEntry.js";
 let instance = null;
-let prefix = null;
-
-function exportsForCurrent() {
-  if (!instance) throw new Error("guest is not loaded");
-  return instance.exports;
-}
-function span(pointer, length, memory) {
-  const end = pointer + length;
-  return Number.isSafeInteger(end) && pointer >= 0 && length >= 0 &&
-    (length === 0 || pointer !== 0) && end <= memory.buffer.byteLength;
-}
-function overlaps(a, b) {
-  return a[1] !== 0 && b[1] !== 0 && a[0] < b[0] + b[1] && b[0] < a[0] + a[1];
-}
-function callable(exports, name) {
-  const value = exports[name];
-  if (typeof value !== "function") throw new TypeError(`missing callable export: ${name}`);
-  return value;
-}
-function reply(requestId, value) { self.postMessage({ requestId, ok: true, value }); }
-function refuse(requestId, error) { self.postMessage({ requestId, ok: false, error: String(error) }); }
-
-self.onmessage = async ({ data }) => {
-  const { requestId, kind } = data;
-  try {
-    if (kind === "load") {
-      const result = await WebAssembly.instantiate(data.bytes, Object.create(null));
-      instance = result.instance;
-      prefix = data.prefix;
-      const version = callable(instance.exports, `${prefix}_abi_version`)() >>> 0;
-      if (version !== data.expectedVersion) throw new Error(`ABI version ${version} does not match ${data.expectedVersion}`);
-      reply(requestId, { version });
-      return;
-    }
-    if (kind === "invoke") {
-      const exports = exportsForCurrent();
-      const memory = exports.memory;
-      if (!(memory instanceof WebAssembly.Memory)) throw new TypeError("missing exported memory");
-      const allocate = callable(exports, `${prefix}_alloc`);
-      const free = callable(exports, `${prefix}_free`);
-      const call = callable(exports, `${prefix}_${data.call}`);
-      const inputBytes = new Uint8Array(data.input);
-      const descriptor = allocate(8) >>> 0;
-      const input = allocate(inputBytes.length) >>> 0;
-      if (!span(descriptor, 8, memory) || !span(input, inputBytes.length, memory) || overlaps([descriptor, 8], [input, inputBytes.length])) {
-        throw new Error("allocator returned an invalid or aliased owned span");
-      }
-      new Uint8Array(memory.buffer, descriptor, 8).fill(0);
-      new Uint8Array(memory.buffer, input, inputBytes.length).set(inputBytes);
-      const status = call(input, inputBytes.length, descriptor) | 0;
-      const view = new DataView(memory.buffer, descriptor, 8);
-      const output = view.getUint32(0, true), length = view.getUint32(4, true);
-      if (!span(output, length, memory) || overlaps([descriptor, 8], [output, length]) || overlaps([input, inputBytes.length], [output, length])) {
-        throw new Error("guest returned an invalid or aliased output span");
-      }
-      const copied = new Uint8Array(memory.buffer, output, length).slice();
-      if (length) free(output, length);
-      free(input, inputBytes.length);
-      free(descriptor, 8);
-      reply(requestId, { status, output: Array.from(copied) });
-      return;
-    }
-    if (kind === "shutdown") {
-      const exports = exportsForCurrent();
-      const status = callable(exports, `${prefix}_shutdown`)() | 0;
-      instance = null; prefix = null;
-      reply(requestId, { status });
-      return;
-    }
-    throw new Error(`unsupported worker mechanics command: ${kind}`);
-  } catch (error) { refuse(requestId, error); }
+let memoryExport = "memory";
+const memory = () => instance.exports[memoryExport];
+const call = (name, args) => {
+  const fn = instance?.exports[name];
+  if (typeof fn !== "function") throw new TypeError(`missing callable export: ${name}`);
+  return fn(...args) | 0;
 };
+const perform = effect => {
+  const reply = { Pointer: 0, MemoryBytes: "0", Status: 0, OutputPointer: 0,
+    OutputLength: 0, Bytes: new Uint8Array(), Diagnostic: "" };
+  try {
+    switch (effect.Kind) {
+      case "allocate": reply.Pointer = call(effect.Export, [effect.Length]) >>> 0; break;
+      case "zero": new Uint8Array(memory().buffer, effect.Pointer, effect.Length).fill(0); break;
+      case "copy-input": new Uint8Array(memory().buffer, effect.Pointer, effect.Bytes.length).set(effect.Bytes); break;
+      case "invoke": reply.Status = call(effect.Export, [effect.Pointer, effect.Length, effect.Descriptor]); break;
+      case "read": {
+        const view = new DataView(memory().buffer, effect.Pointer, 8);
+        reply.OutputPointer = view.getUint32(0, true); reply.OutputLength = view.getUint32(4, true); break;
+      }
+      case "copy-output": reply.Bytes = new Uint8Array(memory().buffer, effect.Pointer, effect.Length).slice(); break;
+      case "free": call(effect.Export, [effect.Pointer, effect.Length]); break;
+      case "shutdown": reply.Status = call(effect.Export, []); break;
+      case "terminate": instance = null; break;
+      default: throw new Error(`unsupported mechanical effect: ${effect.Kind}`);
+    }
+  } catch (error) { reply.Diagnostic = String(error); }
+  if (instance) reply.MemoryBytes = String(memory().buffer.byteLength);
+  return reply;
+};
+const receive = WorkerEntry_createWireRuntime({
+  Sha256(bytes, ok, fail) {
+    crypto.subtle.digest("SHA-256", new Uint8Array(bytes)).then(
+      hash => ok(Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("")),
+      error => fail(String(error)));
+  },
+  Compile(bytes, exportedMemory, versionExport, ok, fail) {
+    WebAssembly.instantiate(new Uint8Array(bytes), Object.create(null)).then(value => {
+      try { instance = value.instance; memoryExport = exportedMemory; ok(call(versionExport, []) >>> 0); }
+      catch (error) { instance = null; fail(String(error)); }
+    }, error => fail(String(error)));
+  },
+  Perform: perform
+}, observation => self.postMessage(observation));
+self.onmessage = ({ data }) => receive(data);

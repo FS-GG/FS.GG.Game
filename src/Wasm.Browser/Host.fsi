@@ -8,10 +8,31 @@ type EffectInterpreter = HostEffect list -> unit
 /// performs effects mechanically; all policy decisions remain in Lifecycle.update.
 [<Sealed>]
 type Host =
+    static member CreateConnected:
+        HostSettings * HostTransport * (BrowserResult -> unit) -> Result<Host, RuntimeIssue list>
+
     static member Create: HostSettings * EffectInterpreter -> Result<Host, RuntimeIssue list>
     member Projection: HostProjection
     member Dispatch: HostEvent -> unit
     member Load: monotonicMilliseconds: int64 * identity: HostIdentity * artifact: byte array -> unit
+
+    member LoadConfigured:
+        monotonicMilliseconds: int64 *
+        identity: HostIdentity *
+        configuration: ValidatedConfiguration *
+        artifact: byte array ->
+            unit
+
+    member Initialize: monotonicMilliseconds: int64 * identity: HostIdentity * input: byte array -> unit
+
+    member PrepareConfiguredCandidate:
+        monotonicMilliseconds: int64 *
+        identity: HostIdentity *
+        transaction: string *
+        expectedActiveGeneration: uint64 option *
+        configuration: ValidatedConfiguration *
+        artifact: byte array ->
+            unit
 
     member PrepareCandidate:
         monotonicMilliseconds: int64 *

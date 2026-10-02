@@ -1,7 +1,7 @@
 # Shared WebAssembly guest SDK source archive
 
 WASM-SHARED-01.3 distributes guest authoring support as a normalized source
-archive. Version `0.1.1` contains a `no_std` Rust crate, a freestanding C
+archive. Version `0.2.0` contains a `no_std` Rust crate, a freestanding C
 header/source pair, BAR ABI 1 and SC2 ABI `0x00010000` examples, provenance, MIT
 license and per-file checksums. It contains no BAR/SC2 wire codec, product role
 grant or native effect authority.

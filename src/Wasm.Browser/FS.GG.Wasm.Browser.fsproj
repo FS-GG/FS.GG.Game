@@ -67,6 +67,15 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="RequireGeneratedWorkerPolicy" BeforeTargets="_GetPackageFiles">
+    <Error Condition="'$(WasmWorkerPolicyRoot)' == '' Or !Exists('$(WasmWorkerPolicyRoot)/WorkerEntry.js')" Text="Pack requires the exact generated F# Worker policy in an isolated WasmWorkerPolicyRoot." />
+
+  </Target>
+
+  <ItemGroup Condition="'$(WasmWorkerPolicyRoot)' != ''">
+    <None Include="$(WasmWorkerPolicyRoot)/**/*.js" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/%(RecursiveDir)%(Filename)%(Extension)" PackageCopyToOutput="true" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="js/module-worker.mjs" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/module-worker.mjs" PackageCopyToOutput="true" />
     <None Include="js/worker-client.mjs" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/worker-client.mjs" PackageCopyToOutput="true" />
