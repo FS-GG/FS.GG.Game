@@ -3,7 +3,7 @@ name: wasm-shared
 on:
   push:
     branches: [main]
-    paths: &wasm_paths
+    paths:
       - ".github/workflows/wasm-shared.yml"
       - ".config/dotnet-tools.json"
       - "global.json"
@@ -24,7 +24,25 @@ on:
       - "scripts/verify-wasm-workflow.sh"
   pull_request:
     branches: [main]
-    paths: *wasm_paths
+    paths:
+      - ".github/workflows/wasm-shared.yml"
+      - ".config/dotnet-tools.json"
+      - "global.json"
+      - "Directory.Build.*"
+      - "src/Wasm.Contracts/**"
+      - "src/Wasm.Browser/**"
+      - "tests/Wasm.Contracts.Tests/**"
+      - "tests/Wasm.Contracts.PortableConsumers/**"
+      - "tests/Wasm.Compatibility/**"
+      - "tests/Wasm.Invocation.Tests/**"
+      - "tests/Wasm.Lifecycle.Tests/**"
+      - "tests/Wasm.Lifecycle.Correspondence/**"
+      - "tests/Wasm.Browser.Conformance/**"
+      - "eng/wasm-shared/**"
+      - "docs/wasm/**"
+      - "scripts/verify-wasm-contracts.sh"
+      - "scripts/verify-wasm-lifecycle.sh"
+      - "scripts/verify-wasm-workflow.sh"
   workflow_dispatch:
 
 concurrency:

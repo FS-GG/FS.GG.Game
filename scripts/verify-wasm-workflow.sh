@@ -4,7 +4,7 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workflow="$repo/.github/workflows/wasm-shared.yml"
 
-python3 - "$workflow" "$repo/global.json" "$repo/.config/dotnet-tools.json" <<'PY'
+python3 - "$workflow" "$repo/global.json" "$repo/.config/dotnet-tools.json" "$repo/.github/workflows/gate.yml" <<'PY'
 import json
 import pathlib
 import sys
@@ -70,7 +70,19 @@ if global_json["sdk"]["version"] != "10.0.401":
 tools = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))["tools"]
 if tools["fable"]["version"] != "5.18.0" or tools["fable"].get("rollForward") is not False:
     raise SystemExit("workflow preflight: Fable manifest pin is not exact 5.18.0")
+
+gate = pathlib.Path(sys.argv[4]).read_text(encoding="utf-8")
+if "ACTIONLINT_VERSION: 1.7.7" not in gate or "SHELLCHECK_VERSION: 0.11.0" not in gate:
+    raise SystemExit("workflow preflight: repository lint tool pins changed")
+if "&wasm_paths" in text or "*wasm_paths" in text:
+    raise SystemExit("workflow preflight: actionlint 1.7.7 requires literal path sequences")
 PY
+
+grep -Fq 'dotnet restore "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" --locked-mode' \
+  "$repo/scripts/verify-wasm-contracts.sh" || {
+  echo "workflow preflight: contract tests lack an explicit locked restore" >&2
+  exit 1
+}
 
 bash -n \
   "$repo/scripts/verify-wasm-workflow.sh" \

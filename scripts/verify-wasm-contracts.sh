@@ -10,6 +10,7 @@ mkdir -p "$candidate_feed"
 export NUGET_PACKAGES="$work/packages"
 
 dotnet build "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release
+dotnet restore "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" --locked-mode
 dotnet run --project "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" -c Release --no-restore
 dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$candidate_feed"
 
