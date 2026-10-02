@@ -1,30 +1,76 @@
 {
   "schema": "fsgg.wasm.canonical-qualification-proof-pending/v1",
-  "status": "CANDIDATE_PENDING_ROOT_AUTHENTICATED_PROOFS",
+  "status": "CANDIDATE_ACTUAL_QUALIFICATION_PASS_PENDING_ROOT_REVIEW",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
-  "modelSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7",
+  "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
   "producerProof": {
-    "status": "HISTORICAL_PREVIOUS_PURE_PRODUCTION_45_NATIVE_PASS",
-    "traces": 45,
-    "scope": "Parent reports previous pure45/native PASS. Historical evidence only; does not qualify latest connected-composition model."
+    "status": "PASS_ACTUAL_DOTNET_FABLE_PRODUCTION_CORRESPONDENCE",
+    "dotnetTraces": 45,
+    "fableTraces": 45,
+    "causalMutants": 16,
+    "fullHostProjection": true,
+    "orderedEffects": true,
+    "dotnetLogSha256": "ba25c0c3b0848996f0128376e00072ac38f99b4e78007cf587a59e1af07bd743",
+    "fableLogSha256": "ba25c0c3b0848996f0128376e00072ac38f99b4e78007cf587a59e1af07bd743",
+    "evidenceOwner": "root-reported actual qualification against exact latest source",
+    "scope": "Actual producer.NET and generatedFable; complete HostProjection and ordered effects; no guest execution or product/native acceptance claim"
   },
   "installedProof": {
-    "status": "HISTORICAL_OLD_CONNECTED_DOTNET_FABLE_FAIL",
-    "finding": "Previous actual connected.NET/Fable comparison failed genuine synchronous WorkerTerminated callback LastAction closure. Latest canonical connected composition has now been regenerated; latest compiled installed qualification remains PENDING."
+    "status": "PASS_ACTUAL_INSTALLED_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
+    "dotnetTraces": 45,
+    "fableTraces": 45,
+    "facades": [
+      "Host.Create",
+      "Host.CreateConnected"
+    ],
+    "fullHostProjection": true,
+    "orderedEffects": true,
+    "mechanicalBeforeEffectFullStates": true,
+    "rawCallbackFields": [
+      "identity",
+      "time",
+      "reason",
+      "outcome",
+      "phase",
+      "dispatch"
+    ],
+    "dotnetLogSha256": "ce0b1cc90df541244a668346ff3e56c98901d323ee8873166bda8953ff22c222",
+    "fableLogSha256": "ce0b1cc90df541244a668346ff3e56c98901d323ee8873166bda8953ff22c222",
+    "evidenceOwner": "root-reported actual immutable installed package qualification",
+    "scope": "Controlled typed observations, including synchronous mechanical Worker termination seam; guest execution excluded; no browser/native product gate claimed"
   },
   "administrativeOwner": {
-    "status": "ROOT_REPORTED_ACTUAL_TYPED_FSHARP_PASS_13_AND_PENDING_REFUSAL",
-    "scope": "Actual owner controls reported by root; not a grant for model approval."
+    "status": "PASS_ACTUAL_TYPED_FSHARP_13_MUTANTS_AND_PENDING_REFUSAL",
+    "logSha256": "6fcf93148e2cbc900be8a4ce3299bcfc6853a96529b826e28813f5dc4482ac3a",
+    "scope": "Actual administrative-owner controls; audit remains pending root review"
   },
   "approval": "Audit status remains pending. Neither existence nor SHA of this report proves producer/installed qualification. Only root-reviewed immutable amendment bytes with independently supplied exact audit digest can authorize administrative eligibility; caller exactHEAD is a separate receipt after commit.",
   "remaining": [
-    "clean committed latest canonical connected-composition candidate",
-    "latest actual producer and installed.NET/Fable full-state ordered-effect qualification",
+    "clean committed exact latest proof/audit candidate",
     "root review and explicit amendment approval",
     "post-commit exactHEAD administrative owner invocation"
   ],
   "latestSourceControls": {
+    "status": "PASS_REGENERATED_45_SOURCE_TRACES",
+    "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
+    "regeneratedITFs": 45,
+    "invariant": "Executed for all45 schedules by producer generator",
+    "scope": "Latest source regeneration with per-trace invariant; no latest eight-test/typecheck or2x1000 sampling claim"
+  },
+  "latestCompiledQualification": {
+    "status": "PASS_ACTUAL_PRODUCER_AND_INSTALLED_DOTNET_FABLE",
+    "resourcePairReleasedAt": "2026-10-02 22:16:32 UTC",
+    "evidenceOwner": "root",
+    "scope": "Exact latest canonical source and installed immutable0.2.0,45 traces per runtime; complete state/ordered causal evidence; guest execution excluded"
+  },
+  "historicalConnectedWorkerFaultCounterexample": {
+    "status": "GENUINE_FIRST_NATIVE_FAILURE_RETAINED",
+    "sha256": "8f854ba6675626d36bdcdd9a508ac2b8aeba840502e77d277209f5c552268b9d",
+    "digestSource": "Exact sanitized historical counterexample file SHA supplied by root; original evidence not modified by this refresh",
+    "finding": "Published workerFailed projection emits settleDiscarded while previous canonical effect kind incorrectly emitted settleFaulted. Raw WorkerFault/Faulted evidence remains distinct and retained. Parent corrected canonical projected effect kind only; no runtime change or normalized comparison."
+  },
+  "historicalPriorSourceControls": {
     "status": "ROOT_REPORTED_SOURCE_ONLY_PASS",
     "modelSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7",
     "typecheck": "PASS",
@@ -37,8 +83,23 @@
     },
     "scope": "Source/typecheck/tests/regeneration/sampled controls only; no latest compiled.NET/Fable qualification claimed."
   },
-  "latestCompiledQualification": {
-    "status": "PENDING_ROOT_NATIVE_GRANT",
-    "scope": "Root-owned actual producer and installed.NET/Fable complete-state/ordered-effect qualification against latest source"
+  "historicalProducerProof": {
+    "status": "HISTORICAL_PREVIOUS_PURE_PRODUCTION_45_NATIVE_PASS",
+    "traces": 45,
+    "scope": "Parent reports previous pure45/native PASS. Historical evidence only; does not qualify latest connected-composition model."
+  },
+  "historicalInstalledProof": {
+    "status": "HISTORICAL_OLD_CONNECTED_DOTNET_FABLE_FAIL",
+    "finding": "Previous actual connected.NET/Fable comparison failed genuine synchronous WorkerTerminated callback LastAction closure. Latest canonical connected composition has now been regenerated; latest compiled installed qualification remains PENDING."
+  },
+  "builds": {
+    "sdk": "10.0.401",
+    "fable": "5.18",
+    "warnings": 0,
+    "errors": 0,
+    "sourceBuildLogSha256": "2e7a9903e394ed8a3063f5cf32117675308082dbbdf8eb25e0d44dc64b8c549f",
+    "installedBuildLogSha256": "ecf7e44b8bcb26350069866306b93f3be7c68232da8a5754a8b21944ff85ba6e",
+    "sourceFableBuildLogSha256": "b96f593314f6c16d543a5825c5daa2506fb2991f129fc5d397eba238d56fbe69",
+    "installedFableBuildLogSha256": "b18b1e384a0b47d00108c81451260b5890044a50963a7e27d33a680419d5f74e"
   }
 }

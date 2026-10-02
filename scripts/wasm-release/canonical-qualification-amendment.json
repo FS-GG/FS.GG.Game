@@ -5,7 +5,7 @@
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
   "version": "0.2.0",
   "publishedModelSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-  "modelSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7",
+  "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
   "producerLink": "FS-GG/FS.GG.Game@4afacb501b9371b4cc81494b7bf91b46c880a663",
   "releaseManifestSha256": "dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853",
   "sdkSha256": "ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3",
@@ -22,7 +22,7 @@
   "model": {
     "path": "eng/wasm-shared/lifecycle.qnt",
     "previousSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-    "qualifierSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7"
+    "qualifierSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94"
   },
   "qualifierInputs": [
     {
@@ -83,7 +83,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs",
       "previousSha256": "8cc3b84d991f6720d19ac19ee4007b1007aa2a21ce66cd7febd3cbfcbd8aeb20",
-      "qualifierSha256": "162a789aec6cead6b1f2ce0bab4149a50c5c7cda7c9aa22145b3f78c16f5f6ae"
+      "qualifierSha256": "06c8a3efcb3f7bcb8e1146f2a8daf897f66cdd11118fb30ae8a97f561a1374d7"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Installed/InstalledHost.fsproj",
@@ -325,7 +325,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "42267788aac8279d768bed51b1cab87d9ac2847a544607e348c9d8280ed9e5f1"
+      "qualifierSha256": "27e30a01ca468e123a8a3f4b8b2ca14c2edddf765c7323323c6baa2f0b7edadc"
     }
   ],
   "originalTraces": [
@@ -337,7 +337,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/cleanup_0.itf.json",
       "previousSha256": "3368c92964cf1040c91c1c2cdb3e9aad3a84786f357c4c3ecc543aef03f389c3",
-      "qualifierSha256": "ddd8611e4cf6212e1212791a457f226916fddeb39694fd5cf80b126301028baa"
+      "qualifierSha256": "b2dee78594f0c8f5ef47971ac5364e17b3b6a14730f3172b56a8377ca6c48b62"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-early_0.itf.json",

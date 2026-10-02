@@ -96,7 +96,7 @@ module lifecycle {
       controls:s.controls.select(r=>r.worker!=worker),current:if(s.current.worker==worker)emptyRequest else s.current,
       ordinary:s.ordinary.select(r=>r.worker!=worker),ordered:s.ordered.select(r=>r.worker!=worker),snapshot:if(s.snapshot.worker==worker)emptyRequest else s.snapshot,
       deliveries:s.deliveries.concat(idsFor(removed)),
-      effects:List(termination(worker)).concat(effectsFor("cancelTimer",controls.concat(current))).concat(removed.foldl(List(),(out,r)=>out.append(if(reason=="settleTimedOut" or reason=="settleFaulted"){...effect(reason,r),reason:if(reason=="settleTimedOut")"DeadlineExpired" else "WorkerFault:worker terminated",outcome:if(reason=="settleTimedOut")"TimedOut" else "Faulted",terminalPhase:r.phase,dispatched:(controls.concat(current).foldl(false,(found,p)=>found or p.id==r.id)) and Set("initialize","process","free","shutdown").contains(r.phase)}else effect(reason,r)))),lastAction:actionName}
+      effects:List(termination(worker)).concat(effectsFor("cancelTimer",controls.concat(current))).concat(removed.foldl(List(),(out,r)=>out.append(if(reason=="settleTimedOut" or reason=="settleFaulted"){...effect(if(reason=="settleFaulted")"settleDiscarded" else reason,r),reason:if(reason=="settleTimedOut")"DeadlineExpired" else "WorkerFault:worker terminated",outcome:if(reason=="settleTimedOut")"TimedOut" else "Faulted",terminalPhase:r.phase,dispatched:(controls.concat(current).foldl(false,(found,p)=>found or p.id==r.id)) and Set("initialize","process","free","shutdown").contains(r.phase)}else effect(reason,r)))),lastAction:actionName}
   }
   pure def expireAtState(s: State,now: int): State = {
     val time=if(now<s.clock)s.clock else now
