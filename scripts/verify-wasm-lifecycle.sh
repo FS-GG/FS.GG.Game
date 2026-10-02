@@ -51,30 +51,8 @@ for witness in sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueued
   grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$work/quint-sampled-init.txt" "$work/quint-sampled-initReady.txt"
 done
 
-"$quint" run --main=lifecycle --init=initBar --step=barCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=10 --max-samples=1 --seed=20261002 --out-itf="$traces/bar_{seq}.itf.json" "$model" >/dev/null
-"$quint" run --main=lifecycle --init=initSc2 --step=sc2CorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=18 --max-samples=1 --seed=20261002 --out-itf="$traces/sc2_{seq}.itf.json" "$model" >/dev/null
-"$quint" run --main=lifecycle --init=initSc2 --step=timeoutCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=8 --max-samples=1 --seed=20261002 --out-itf="$traces/timeout_{seq}.itf.json" "$model" >/dev/null
-
-"$quint" run --main=lifecycle --init=initBar --step=phaseCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=16 --max-samples=1 --seed=20261002 --out-itf="$traces/phase_{seq}.itf.json" "$model" >/dev/null
-
-"$quint" run --main=lifecycle --init=initSc2 --step=cleanupCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=15 --max-samples=1 --seed=20261002 --out-itf="$traces/cleanup_{seq}.itf.json" "$model" >/dev/null
-
-for timing in early late; do
-  "$quint" run --main=expiryQualification --init=initSc2 --step="${timing}Step" --invariant=lifecycleSafe \
-    --max-steps=8 --max-samples=1 --seed=20261002 --out-itf="$traces/expiry-${timing}_{seq}.itf.json" \
-    "$repo/eng/wasm-shared/expiry-qualification.qnt" >/dev/null
-done
-python3 "$repo/tests/Wasm.Lifecycle.Correspondence/generate-traces.py" \
-  --traces "$traces" --output "$work/GeneratedTraces.fs"
-for name in bar sc2 timeout phase cleanup expiry-early expiry-late; do
-  cmp "$traces/${name}_0.itf.json" "$repo/tests/Wasm.Lifecycle.Correspondence/Traces/${name}_0.itf.json"
-done
-cmp "$work/GeneratedTraces.fs" "$repo/tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs"
+# Reproduce every retained fixture through the canonical owner generator.
+QUINT="$quint" python3 "$repo/tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py" --check
 
 dotnet run --project "$repo/tests/Wasm.Lifecycle.Tests/FS.GG.Wasm.Lifecycle.Tests.fsproj" -c Release -- --summary
 dotnet run --project "$repo/tests/Wasm.Invocation.Tests/FS.GG.Wasm.Invocation.Tests.fsproj" -c Release

@@ -6,7 +6,7 @@ open Wasm.Lifecycle.Correspondence.CorrespondenceTypes
 
 let private sha character = String.replicate 64 character
 
-let private settings profile =
+let settings profile =
     let descriptor = Profiles.tryFind profile |> Option.get
 
     let configuration =
@@ -54,186 +54,55 @@ let private successfulOutcome phase request =
 let private requestIdentity (request: RequestProjection) worker =
     identity worker request.Id request.Generation
 
-let private eventFor (previous: ModelStep) (target: ModelStep) =
-    let state = target.State
+// The original typed input survives pre-event expiry; LastAction is an output.
+let eventFor (previous: ModelStep) (target: ModelStep) =
     let prior = previous.State
-
-    let at input =
-        {
-            MonotonicMilliseconds = state.Clock
-            Input = input
-        }
-
-    let id (request: RequestProjection) =
-        identity request.Worker request.Id request.Generation
-
-    let correlation (request: RequestProjection) =
+    let original = target.Input
+    let request = original.Request
+    let id = identity request.Worker request.Id request.Generation
+    let correlation () =
         OperationToken.create request.Correlation
         |> Result.defaultWith (fun value -> failwithf "%A" value)
+    let outcome phase = successfulOutcome phase id
+    let observation input = WorkerObserved(request.Worker, input)
+    let input =
+        match original.Name with
+        | "loadInitial" -> LoadRequested(id, ReplaceCurrent, Array.zeroCreate request.Bytes)
+        | "prepareCandidate" ->
+            LoadRequested(id, PrepareCandidate(string request.Generation, if prior.ActiveWorker = "" then None else Some prior.ActiveGeneration), Array.zeroCreate request.Bytes)
+        | "compiled" -> observation (AbiVersionObserved(id, correlation (), if prior.Profile = "Bar" then 1u else 0x10000u))
+        | "initialize" -> InitializeRequested(id, Array.zeroCreate request.Bytes)
+        | "initialized" -> observation (InvocationObserved(outcome Initialize, correlation ()))
+        | "phase" ->
+            let phase =
+                match original.Phase with
+                | "instantiate" -> Instantiate
+                | "allocate-input" -> AllocateInput
+                | "initialize" -> Initialize
+                | "process" -> Process
+                | "free" -> Free
+                | value -> failwithf "unsupported phase %s" value
+            observation (PhaseObserved(id, correlation (), phase))
+        | "ordinary" | "ordered" | "snapshot" ->
+            let submission = match original.Name with "ordered" -> OrderedEvent | "snapshot" -> ReplaceableSnapshot | _ -> Ordinary
+            InvocationRequested(id, submission, Array.zeroCreate request.Bytes)
+        | "shutdown" -> ShutdownRequested id
+        | "candidateValidated" -> CandidateValidated(prior.CandidateTransaction, prior.CandidateGeneration)
+        | "commitCandidate" -> CandidateCommitRequested(prior.CandidateTransaction, prior.ActiveGeneration, prior.CandidateGeneration)
+        | "complete" -> observation (InvocationObserved(outcome (if request.Operation = "shutdown" then Shutdown else Process), correlation ()))
+        | "rejectedTermination" -> observation (InvocationTerminated({ outcome Process with State = GuestRejected 92 }, correlation ()))
+        | "cleanupFault" -> observation (InvocationObserved({ outcome Process with State = Faulted "cleanup"; CleanupFault = Some { Phase = Free; Diagnostic = "cleanup" } }, correlation ()))
+        | "candidateFailed" -> observation (WorkerFailed(id, Some(correlation ()), "candidate failure"))
+        | "abortCandidate" -> CandidateAbortRequested prior.CandidateTransaction
+        | "terminateRetiring" -> WorkerObserved(original.Worker, WorkerTerminated original.Worker)
+        | "freeze" -> FreezeRequested "7"
+        | "resume" -> ResumeRequested prior.FreezeToken
+        | "dispose" -> DisposeRequested
+        | "timer" -> TimerObserved { Identity = identity prior.ActiveWorker 0UL prior.ActiveGeneration; Correlation = operationToken (); Phase = Process }
+        | value -> failwithf "unsupported original input %s" value
+    { MonotonicMilliseconds = original.Observed; Input = input }
 
-    let removedControl () =
-        prior.Controls
-        |> List.find (fun old -> state.Controls |> List.forall (fun current -> current.Id <> old.Id))
-
-    let addedControl () =
-        state.Controls
-        |> List.find (fun current -> prior.Controls |> List.forall (fun old -> old.Id <> current.Id))
-
-    match state.LastAction with
-    | "loadInitial" ->
-        let request = addedControl ()
-        at (LoadRequested(id request, ReplaceCurrent, Array.zeroCreate request.Bytes))
-    | "prepareCandidate" ->
-        let request = addedControl ()
-
-        let expected =
-            if prior.ActiveWorker = "" then
-                None
-            else
-                Some prior.ActiveGeneration
-
-        at (
-            LoadRequested(
-                id request,
-                PrepareCandidate(state.CandidateTransaction, expected),
-                Array.zeroCreate request.Bytes
-            )
-        )
-    | "compiled" ->
-        let request = removedControl ()
-        let version = if state.Profile = "Bar" then 1u else 0x10000u
-        at (WorkerObserved(request.Worker, AbiVersionObserved(id request, correlation request, version)))
-    | "initialize" ->
-        let request = addedControl ()
-        at (InitializeRequested(id request, Array.zeroCreate request.Bytes))
-    | "candidateInitialized" ->
-        let request = removedControl ()
-
-        at (
-            WorkerObserved(
-                request.Worker,
-                InvocationObserved(successfulOutcome Initialize (id request), correlation request)
-            )
-        )
-    | "phase" ->
-        let priorRequests =
-            prior.Controls @ (if prior.Current.Worker = "" then [] else [ prior.Current ])
-
-        let requests =
-            state.Controls @ (if state.Current.Worker = "" then [] else [ state.Current ])
-
-        let request =
-            requests
-            |> List.find (fun current ->
-                priorRequests
-                |> List.exists (fun old -> old.Id = current.Id && old.Phase <> current.Phase))
-
-        let phase =
-            match request.Phase with
-            | "instantiate" -> Instantiate
-            | "allocate-input" -> AllocateInput
-            | "initialize" -> Initialize
-            | "process" -> Process
-            | "free" -> Free
-            | value -> failwithf "unsupported phase %s" value
-
-        at (WorkerObserved(request.Worker, PhaseObserved(id request, correlation request, phase)))
-    | "begin"
-    | "queueOrdinary"
-    | "queueOrdered"
-    | "queueSnapshot"
-    | "coalesceSnapshot" ->
-        let request =
-            match state.LastAction with
-            | "begin" -> state.Current
-            | "queueOrdinary" -> List.last state.Ordinary
-            | "queueOrdered" -> List.last state.Ordered
-            | _ -> state.Snapshot
-
-        if request.Operation = "shutdown" then
-            at (ShutdownRequested(id request))
-        else
-            let submission =
-                match request.Submission with
-                | "Ordinary" -> Ordinary
-                | "Ordered" -> OrderedEvent
-                | _ -> ReplaceableSnapshot
-
-            at (InvocationRequested(id request, submission, Array.zeroCreate request.Bytes))
-    | "refuse" ->
-        let effect = List.head target.Effects
-        at (InvocationRequested(identity effect.Worker effect.Request effect.Generation, Ordinary, [| 0uy |]))
-    | "candidateValidated" -> at (CandidateValidated(state.CandidateTransaction, state.CandidateGeneration))
-    | "commitCandidate" ->
-        at (CandidateCommitRequested(prior.CandidateTransaction, prior.ActiveGeneration, prior.CandidateGeneration))
-    | "complete" ->
-        let request = prior.Current
-        let phase = if request.Operation = "shutdown" then Shutdown else Process
-
-        let rejected =
-            target.Effects |> List.exists (fun effect -> effect.Kind = "settleRejected")
-
-        let outcome =
-            if rejected then
-                { successfulOutcome phase (id request) with
-                    State = GuestRejected 92
-                }
-            else
-                successfulOutcome phase (id request)
-
-        let observation =
-            if rejected then
-                InvocationTerminated(outcome, correlation request)
-            else
-                InvocationObserved(outcome, correlation request)
-
-        at (WorkerObserved(request.Worker, observation))
-    | "cleanupFault" ->
-        let request = prior.Current
-
-        let outcome =
-            { successfulOutcome Process (id request) with
-                State = Faulted "cleanup"
-                CleanupFault = Some { Phase = Free; Diagnostic = "cleanup" }
-            }
-
-        at (WorkerObserved(request.Worker, InvocationObserved(outcome, correlation request)))
-    | "workerFailed" ->
-        if prior.Controls |> List.exists (fun r -> r.Worker = prior.CandidateWorker) then
-            let request =
-                prior.Controls |> List.find (fun r -> r.Worker = prior.CandidateWorker)
-
-            at (
-                WorkerObserved(request.Worker, WorkerFailed(id request, Some(correlation request), "candidate failure"))
-            )
-        else
-            at (WorkerObserved(prior.Current.Worker, WorkerTerminated prior.Current.Worker))
-    | "abortCandidate" -> at (CandidateAbortRequested prior.CandidateTransaction)
-    | "terminateRetiring" ->
-        let worker =
-            prior.RetiringWorkers
-            |> List.find (fun w -> not (List.contains w state.RetiringWorkers))
-
-        at (WorkerObserved(worker, WorkerTerminated worker))
-    | "freeze" -> at (FreezeRequested state.FreezeToken)
-    | "resume" -> at (ResumeRequested prior.FreezeToken)
-    | "dispose"
-    | "disposeAgain" -> at DisposeRequested
-    | "expireOrdinary"
-    | "expireCurrent"
-    | "expireControl"
-    | "stutter" ->
-        let timer =
-            {
-                Identity = identity prior.ActiveWorker 0UL prior.ActiveGeneration
-                Correlation = operationToken ()
-                Phase = Process
-            }
-
-        at (TimerObserved timer)
-    | value -> failwithf "unsupported correspondence action %s" value
-
-let private replayWithEffectMutation mutate trace =
+let private replayWithEffectMutation (mutate: ModelStep -> EffectProjection list -> EffectProjection list) (trace: ModelTrace) =
     let profile =
         if trace.Name = "bar" || trace.Name = "phase" then
             BarProtected
@@ -257,6 +126,17 @@ let private replayWithEffectMutation mutate trace =
         state <- next
         let actualState = Lifecycle.project state
         let actualEffects = Lifecycle.projectEffects effects |> mutate expected
+        // Check raw cause and dispatch evidence which projectEffects deliberately omits.
+        let terminals =
+            effects |> List.choose (function
+                | Settle result ->
+                    let reason = match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | _ -> ""
+                    if reason = "" then None else
+                        let phase = result.Outcome |> Option.map (fun value -> match value.Phase with Compile -> "compile" | Instantiate -> "instantiate" | AllocateDescriptor -> "allocate-descriptor" | AllocateInput -> "allocate-input" | Initialize -> "initialize" | Process -> "process" | Free -> "free" | Shutdown -> "shutdown") |> Option.defaultValue ""
+                        Some ({ Request = result.Identity.Request; Reason = reason; Outcome = result.Outcome |> Option.map (fun value -> if value.State = TimedOut then "TimedOut" else "unexpected") |> Option.defaultValue ""; Phase = phase; Dispatched = result.Outcome |> Option.exists (fun value -> value.Dispatch = Dispatched) } : TerminalExpectation)
+                | _ -> None)
+        if terminals <> expected.Terminals then
+            failures <- $"step {index + 1} raw terminal cause/outcome/phase/dispatch differs after original {expected.Input.Name}: expected=%A{expected.Terminals} actual=%A{terminals}" :: failures
 
         if actualState <> expected.State then
             failures <-
@@ -323,3 +203,15 @@ let phaseDeadlineMutationIsDetected trace =
                     effect))
         trace
     |> List.exists (fun failure -> failure.Contains("effects differ after phase"))
+
+// Causal corruptions are applied to actual projected effects before the SAME verifier.
+let eventBoundaryMutationsAreDetected (trace: ModelTrace) =
+    let hasFailure mutate = not (replayWithEffectMutation mutate trace).IsEmpty
+    [ "expired-to-disposed", (fun (_: ModelStep) (effects: EffectProjection list) -> effects |> List.map(fun effect -> if effect.Kind = "settleTimedOut" then { effect with Kind = "settleDiscarded" } else effect))
+      "drop-termination", (fun _ effects -> effects |> List.filter(fun effect -> effect.Kind <> "terminate"))
+      "reorder-expiry", (fun _ effects -> if effects |> List.exists(fun effect -> effect.Kind = "settleTimedOut") then List.rev effects else effects)
+      "drop-current-cancel", (fun _ effects -> effects |> List.filter(fun effect -> effect.Kind <> "cancelTimer"))
+      "late-completion-current", (fun expected effects -> if expected.Input.Name = "complete" then effects |> List.map(fun effect -> if effect.Kind = "settleTimedOut" then { effect with Kind = "settleCurrent" } else effect) else effects)
+      "queued-dispatch-after-expiry", (fun _ effects -> match effects |> List.tryFind(fun effect -> effect.Kind = "settleTimedOut") with Some terminal -> effects @ [{ terminal with Kind = "post"; Operation = "process"; Bytes = 1 }] | None -> effects)
+      "wrong-terminal-correlation", (fun _ effects -> effects |> List.map(fun effect -> if effect.Kind = "cancelTimer" then { effect with Correlation = "foreign" } else effect)) ]
+    |> List.map(fun (name,mutate) -> name,hasFailure mutate)

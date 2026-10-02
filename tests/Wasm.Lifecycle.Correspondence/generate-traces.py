@@ -73,7 +73,10 @@ def normalize(path: Path) -> None:
     document = json.loads(path.read_text(encoding="utf-8"))
     document["#meta"].pop("description", None)
     document["#meta"].pop("timestamp", None)
-    if path.name.startswith("expiry-"):
+    if path.name.startswith("boundary-"):
+        document["#meta"]["source"] = "eng/wasm-shared/event-boundary-qualification.qnt"
+        document["#meta"]["canonicalSource"] = "eng/wasm-shared/lifecycle.qnt"
+    elif path.name.startswith("expiry-"):
         document["#meta"]["source"] = "eng/wasm-shared/expiry-qualification.qnt"
         document["#meta"]["canonicalSource"] = "eng/wasm-shared/lifecycle.qnt"
     else:
@@ -124,10 +127,12 @@ def trace(path: Path) -> str:
     for item in document["states"]:
         model = item["state"]
         steps.append(
-            "{ State = (%s : HostProjection); Effects = (%s : EffectProjection list) }"
+            "{ State = (%s : HostProjection); Effects = (%s : EffectProjection list); Input = %s; Terminals = %s }"
             % (
                 state(model),
                 fs_list([effect(value) for value in model["effects"]]),
+                "{ Name = %s; Request = (%s : RequestProjection); Worker = %s; Phase = %s; Observed = %dL }" % (text(model["input"]["name"]), request(model["input"]["request"]), text(worker(bigint(model["input"]["worker"]))), text(model["input"]["phase"]), bigint(model["input"]["observed"])),
+                fs_list(["{ Request = %dUL; Reason = %s; Outcome = %s; Phase = %s; Dispatched = %s }" % (bigint(e["request"]),text(e["reason"]),text(e["outcome"]),text(e["terminalPhase"]),str(e["dispatched"]).lower()) for e in model["effects"] if e["reason"]]),
             )
         )
     name = path.name.split("_", 1)[0]

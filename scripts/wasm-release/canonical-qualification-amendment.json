@@ -1,0 +1,53 @@
+{
+  "schema": "fsgg.wasm.canonical-qualification-amendment/v1",
+  "status": "CANDIDATE_PENDING_PRODUCER_MODEL_AND_PROOF",
+  "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
+  "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
+  "version": "0.2.0",
+  "publishedModelSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
+  "modelSha256": "PENDING_FINAL_PRODUCER_MODEL",
+  "producerLink": "FS-GG/FS.GG.Game@4afacb501b9371b4cc81494b7bf91b46c880a663",
+  "releaseManifestSha256": "dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853",
+  "sdkSha256": "ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3",
+  "packages": [],
+  "model": {
+    "path": "eng/wasm-shared/lifecycle.qnt",
+    "previousSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
+    "qualifierSha256": "PENDING_FINAL_PRODUCER_MODEL"
+  },
+  "qualifierInputs": [
+    {
+      "path": "scripts/wasm-release/CanonicalQualificationPolicy.fs",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "6624a1e6729af729b2838c988f5250e62a02736aea5adcbdfa3aefac77bae037"
+    },
+    {
+      "path": "scripts/wasm-release/decide-canonical-qualification.fsx",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "5d099d22a2e57e45eb13292b85a681aded889f5206feeeb0e3f604ae02122ef0"
+    },
+    {
+      "path": "scripts/wasm-release/bind-canonical-qualification.py",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "eb50f8b9afea4914f64213f0c636668a24713c61e8956aa5193f5ee0b8561be4"
+    },
+    {
+      "path": "scripts/wasm-release/bind-installed-release.py",
+      "previousSha256": "04864b8dd0b69747459f8430955b8a35cfbf896e91468bdc573e5c04791bb883",
+      "qualifierSha256": "e157b130777b4171904a4c21ac2e0d29e74fee4009122b14d6d19f67693e7f08"
+    },
+    {
+      "path": "tests/release/wasm/test-canonical-qualification-policy.fsx",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "def11f5e6318cd56415d617ed297d194946bcc4ed278e8ff4c7d0a1417db6414"
+    },
+    {
+      "path": "tests/release/wasm/test-canonical-qualification-transport.py",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "5456e2109bf54bff2b34f3b088fc4555c4952687e73fe77fecc3e8a334541173"
+    }
+  ],
+  "proofInputs": [],
+  "originalTraces": [],
+  "approvedChangedPaths": []
+}

@@ -38,7 +38,18 @@ exact transaction and generation validation before commit. Retiring workers
 continue to consume capacity until their termination is observed. Completions
 from a frozen or retired generation are historical and cannot become current.
 Every event checks host-observed monotonic time; a request may complete at its
-deadline and expires after it.
+deadline and expires after it. The event boundary first clamps the original
+observation time, expires elapsed work, then handles the same original input.
+Expiry effects precede input effects. This also applies to dispose, completion,
+phase, freeze and resume inputs. A queued request invalidated with its Worker is
+distinct from a queued request whose own deadline elapsed; raw outcome presence,
+dispatch and terminal reason remain observable.
+
+The successor canonical qualification retains each original typed input
+independently of `LastAction`. It corrects the historical model omission without
+changing the published 0.2.0 runtime, package or SDK bytes. Before/at/after
+deterministic boundary traces and raw terminal comparisons supplement full state
+and ordered effect comparison; source acceptance remains pending native replay.
 
 The canonical Quint model is
 [`eng/wasm-shared/lifecycle.qnt`](../../eng/wasm-shared/lifecycle.qnt). Pinned
