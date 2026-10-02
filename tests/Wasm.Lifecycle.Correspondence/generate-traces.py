@@ -120,20 +120,26 @@ def state(value: dict) -> str:
     )
 
 
+def original_input(value):
+    return "{ Name = %s; Request = (%s : RequestProjection); Worker = %s; Phase = %s; Observed = %dL }" % (text(value["name"]), request(value["request"]), text(worker(bigint(value["worker"]))), text(value["phase"]), bigint(value["observed"]))
+
+
+def terminals(values):
+    return fs_list(["{ Request = %dUL; Reason = %s; Outcome = %s; Phase = %s; Dispatched = %s }" % (bigint(e["request"]),text(e["reason"]),text(e["outcome"]),text(e["terminalPhase"]),str(e["dispatched"]).lower()) for e in values if e["reason"]])
+
+
 def trace(path: Path) -> str:
     raw = path.read_bytes()
     document = json.loads(raw)
     steps = []
     for item in document["states"]:
         model = item["state"]
+        connected = item["connection"]
         steps.append(
-            "{ State = (%s : HostProjection); Effects = (%s : EffectProjection list); Input = %s; Terminals = %s }"
-            % (
-                state(model),
-                fs_list([effect(value) for value in model["effects"]]),
-                "{ Name = %s; Request = (%s : RequestProjection); Worker = %s; Phase = %s; Observed = %dL }" % (text(model["input"]["name"]), request(model["input"]["request"]), text(worker(bigint(model["input"]["worker"]))), text(model["input"]["phase"]), bigint(model["input"]["observed"])),
-                fs_list(["{ Request = %dUL; Reason = %s; Outcome = %s; Phase = %s; Dispatched = %s }" % (bigint(e["request"]),text(e["reason"]),text(e["outcome"]),text(e["terminalPhase"]),str(e["dispatched"]).lower()) for e in model["effects"] if e["reason"]]),
-            )
+            "{ State = (%s : HostProjection); Effects = (%s : EffectProjection list); Input = %s; Terminals = %s; Connected = (%s : HostProjection); ConnectedEffects = (%s : EffectProjection list); ConnectedTerminals = %s; ConnectedCallbacks = %s; ConnectedBeforeEffects = %s }"
+            % (state(model),fs_list([effect(value) for value in model["effects"]]),original_input(model["input"]),terminals(model["effects"]),
+               state(connected["host"]),fs_list([effect(value) for value in connected["effects"]]),terminals(connected["effects"]),
+               fs_list([original_input(value) for value in connected["callbacks"]]),fs_list(["("+state(value)+" : HostProjection)" for value in connected["beforeEffects"]]))
         )
     name = path.name.split("_", 1)[0]
     digest = hashlib.sha256(raw).hexdigest()

@@ -12,6 +12,11 @@ type ModelStep =
     {
         State: HostProjection
         Input: OriginalInput
+        Connected: HostProjection
+        ConnectedEffects: EffectProjection list
+        ConnectedTerminals: TerminalExpectation list
+        ConnectedCallbacks: OriginalInput list
+        ConnectedBeforeEffects: HostProjection list
         Effects: EffectProjection list
         Terminals: TerminalExpectation list
     }

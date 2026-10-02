@@ -16,9 +16,9 @@ module eventBoundaryQualification {
     else if(stage==5)submitOrdinary
     else if(stage==6 and kind=="resume")freeze
     else if(stage==6 or (stage==7 and kind=="resume"))
-      state'=eventAt(state,input(kind,state.current,state.current.worker,if(kind=="phase")"allocate-input" else ""),state.current.deadline+offset)
+      eventAtTime(input(kind,state.current,state.current.worker,if(kind=="phase")"allocate-input" else ""),state.current.deadline+offset)
     else if(stage==7 or (stage==8 and kind=="resume"))dispose
-    else state'=eventAt(state,input("complete",captured,captured.worker,""),state.clock+1),
+    else eventAtTime(input("complete",captured,captured.worker,""),state.clock+1),
   }
   action controlStep(kind: str,offset: int): bool = all {
     stage'=stage+1,captured'=captured,
@@ -27,7 +27,7 @@ module eventBoundaryQualification {
     else if(stage==2 and kind=="initialized")initialize
     else if(stage==1 or (stage==3 and kind=="initialized")){
       val r=state.controls.head()
-      state'=eventAt(state,input(kind,r,r.worker,if(kind=="phase")"instantiate" else ""),r.deadline+offset)
+      eventAtTime(input(kind,r,r.worker,if(kind=="phase")"instantiate" else ""),r.deadline+offset)
     }else dispose,
   }
   action disposeBefore = boundaryStep("dispose",-1)
@@ -61,7 +61,7 @@ module eventBoundaryQualification {
     if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
     else if(stage==4)submitOrdinary else if(stage==5)prepareCandidate else if(stage==6)compiled else if(stage==7)initialize
     else if(retiring and stage==8)initialized else if(retiring and stage==9)candidateValidated else if(retiring and stage==10)commitCandidate
-    else if(stage==8 or (retiring and stage==11))state'=eventAt(state,input("dispose",emptyRequest,0,""),state.current.deadline+offset)
+    else if(stage==8 or (retiring and stage==11))eventAtTime(input("dispose",emptyRequest,0,""),state.current.deadline+offset)
     else dispose,
   }
   action candidateBefore = populationStep(false,-1)
@@ -74,7 +74,7 @@ module eventBoundaryQualification {
     stage'=stage+1,captured'=captured,
     if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
     else if(stage==4)submitOrdinary else if(stage==5)submitOrdered else if(stage==6)submitSnapshot
-    else if(stage==7)state'=eventAt(state,input("dispose",emptyRequest,0,""),state.current.deadline+offset)
+    else if(stage==7)eventAtTime(input("dispose",emptyRequest,0,""),state.current.deadline+offset)
     else dispose,
   }
   action mixedCurrentExpired = mixedStep(1)
@@ -83,8 +83,8 @@ module eventBoundaryQualification {
   action clampStep = all {stage'=stage+1,captured'=captured,
     if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
     else if(stage==4)submitOrdinary else if(stage==5)dispose
-    else if(stage==6)state'=eventAt(state,input("dispose",emptyRequest,0,""),state.clock-1)
-    else state'=eventAt(state,input("timer",emptyRequest,0,""),state.clock-1),
+    else if(stage==6)eventAtTime(input("dispose",emptyRequest,0,""),state.clock-1)
+    else eventAtTime(input("timer",emptyRequest,0,""),state.clock-1),
   }
   val originalInputRetained = stage<7 or state.input.name!=""
 }

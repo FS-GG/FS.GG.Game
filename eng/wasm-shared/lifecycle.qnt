@@ -17,7 +17,9 @@ module lifecycle {
     frozen: bool, freezeToken: int, disposed: bool, deliveries: List[int],
     effects: List[Effect], lastAction: str, input: Input,
   }
+  type Connection = {host: State, effects: List[Effect], callbacks: List[Input], beforeEffects: List[State], callbacksQuiescent: bool}
   var state: State
+  var connection: Connection
   pure val emptyRequest: Request = {id:0,worker:0,generation:0,deadline:0,
     submission:Ordinary,bytes:0,operation:"none",phase:"process",correlation:0}
   pure def initial(profile: Profile): State = {
@@ -94,7 +96,7 @@ module lifecycle {
       controls:s.controls.select(r=>r.worker!=worker),current:if(s.current.worker==worker)emptyRequest else s.current,
       ordinary:s.ordinary.select(r=>r.worker!=worker),ordered:s.ordered.select(r=>r.worker!=worker),snapshot:if(s.snapshot.worker==worker)emptyRequest else s.snapshot,
       deliveries:s.deliveries.concat(idsFor(removed)),
-      effects:List(termination(worker)).concat(effectsFor("cancelTimer",controls.concat(current))).concat(removed.foldl(List(),(out,r)=>out.append(if(reason=="settleTimedOut"){...effect(reason,r),outcome:"TimedOut",terminalPhase:r.phase,dispatched:(controls.concat(current).foldl(false,(found,p)=>found or p.id==r.id)) and Set("initialize","process","free","shutdown").contains(r.phase)}else effect(reason,r)))),lastAction:actionName}
+      effects:List(termination(worker)).concat(effectsFor("cancelTimer",controls.concat(current))).concat(removed.foldl(List(),(out,r)=>out.append(if(reason=="settleTimedOut" or reason=="settleFaulted"){...effect(reason,r),reason:if(reason=="settleTimedOut")"DeadlineExpired" else "WorkerFault:worker terminated",outcome:if(reason=="settleTimedOut")"TimedOut" else "Faulted",terminalPhase:r.phase,dispatched:(controls.concat(current).foldl(false,(found,p)=>found or p.id==r.id)) and Set("initialize","process","free","shutdown").contains(r.phase)}else effect(reason,r)))),lastAction:actionName}
   }
   pure def expireAtState(s: State,now: int): State = {
     val time=if(now<s.clock)s.clock else now
@@ -159,8 +161,9 @@ module lifecycle {
       }
     } else if(e.name=="abortCandidate" or e.name=="candidateFailed")
       if(s.candidateWorker!=e.worker)s else invalidate(s,e.worker,if(e.name=="abortCandidate")"settleInvalidated" else "settleDiscarded",if(e.name=="abortCandidate")"abortCandidate" else "workerFailed")
-    else if(e.name=="terminateRetiring")
-      if(not(s.retiringWorkers.contains(e.worker)))s else if(s.current.worker==e.worker)invalidate(s,e.worker,"settleDiscarded","workerFailed")else {...s,retiringWorkers:s.retiringWorkers.exclude(Set(e.worker)),compiledWorkers:s.compiledWorkers.exclude(Set(e.worker)),initializedWorkers:s.initializedWorkers.exclude(Set(e.worker)),lastAction:"terminateRetiring"}
+    else if(e.name=="terminateRetiring" or e.name=="workerTerminated")
+      if(s.controls.foldl(false,(found,pendingControl)=>found or pendingControl.worker==e.worker) or s.current.worker==e.worker or s.activeWorker==e.worker or s.candidateWorker==e.worker)invalidate(s,e.worker,"settleFaulted","workerFailed")
+      else {...s,retiringWorkers:s.retiringWorkers.exclude(Set(e.worker)),compiledWorkers:s.compiledWorkers.exclude(Set(e.worker)),initializedWorkers:s.initializedWorkers.exclude(Set(e.worker)),lastAction:"terminateRetiring"}
     else if(e.name=="freeze"){...s,frozen:true,freezeToken:7,lastAction:"freeze"}
     else if(e.name=="resume")dispatchNext({...s,frozen:false,freezeToken:0,lastAction:"resume"},List())
     else if(e.name=="dispose"){
@@ -182,10 +185,27 @@ module lifecycle {
     val result=handle({...expired,effects:List()},original)
     {...result,effects:expired.effects.concat(result.effects),input:original,lastAction:if(e.name=="timer" and expired.effects.length()>0)expired.lastAction else result.lastAction}
   }
-  action init = {nondet profile=Set(Bar,Sc2).oneOf() state'=initial(profile)}
-  action initBar = state'=initial(Bar)
-  action initSc2 = state'=initial(Sc2)
-  action event(e: Input): bool = state'=eventAt(state,e,state.clock+1)
+  // Observational mechanical composition, using the SAME canonical eventAt.
+  // Connected Host synchronously reports termination before the next ordered effect.
+  pure def connectedEventAt(c: Connection,e: Input,observed: int): Connection = {
+    val base=eventAt(c.host,e,observed)
+    base.effects.foldl({host:base,effects:List(),callbacks:List(),beforeEffects:List(),callbacksQuiescent:true},(out,fx)=>{
+      val ordered={...out,effects:out.effects.append(fx),beforeEffects:out.beforeEffects.append(out.host)}
+      if(fx.kind!="terminate")ordered else {
+        val following=eventAt(out.host,input("workerTerminated",emptyRequest,fx.worker,""),observed)
+        {host:following,effects:ordered.effects.concat(following.effects),callbacks:out.callbacks.append(following.input),beforeEffects:ordered.beforeEffects.concat(following.effects.foldl(List(),(snapshots,nestedEffect)=>snapshots.append(following))),callbacksQuiescent:out.callbacksQuiescent and following.effects.length()==0}
+      }
+    })
+  }
+  pure def initialConnection(profile: Profile): Connection = {host:initial(profile),effects:List(),callbacks:List(),beforeEffects:List(),callbacksQuiescent:true}
+  action init = {nondet profile=Set(Bar,Sc2).oneOf() all {state'=initial(profile),connection'=initialConnection(profile)}}
+  action initBar = all {state'=initial(Bar),connection'=initialConnection(Bar)}
+  action initSc2 = all {state'=initial(Sc2),connection'=initialConnection(Sc2)}
+  action eventAtTime(e: Input,observed: int): bool = {
+    val followingEvent=eventAt(state,e,observed)
+    all {state'=followingEvent,connection'=connectedEventAt(connection,followingEvent.input,observed)}
+  }
+  action event(e: Input): bool = eventAtTime(e,state.clock+1)
   action loadInitial = all {not(state.disposed),not(state.frozen),state.activeWorker==0,event(input("loadInitial",emptyRequest,0,""))}
   action prepareCandidate = all {state.profile==Sc2,not(state.disposed),not(state.frozen),state.candidateWorker==0,live(state).size()<4,event(input("prepareCandidate",emptyRequest,0,""))}
   action compiled = {val rs=state.controls.select(r=>r.operation=="load") nondet index=rs.indices().oneOf() all {rs.length()>0,event(input("compiled",rs.nth(index),rs.nth(index).worker,""))}}
@@ -200,7 +220,7 @@ module lifecycle {
   action cleanupFault = all {state.current.worker!=0,event(input("cleanupFault",state.current,state.current.worker,""))}
   action phaseObserved = {val rs=state.controls.concat(if(state.current.worker==0)List()else List(state.current)) nondet index=rs.indices().oneOf() val r=rs.nth(index) val alternatives=if(r.operation=="load" and r.phase=="compile")Set("instantiate")else if(r.phase=="allocate-descriptor")Set("allocate-input")else if(r.phase=="allocate-input")Set(r.operation)else if(r.phase=="initialize" or r.phase=="process")Set("free")else Set() nondet phase=alternatives.oneOf() all {rs.length()>0,alternatives.size()>0,event(input("phase",r,r.worker,phase))}}
   action expireDeadlines = event(input("timer",emptyRequest,0,""))
-  action advanceAndExpireDeadlines = all {state.current.worker!=0,state'=eventAt(state,input("timer",emptyRequest,0,""),state.current.deadline+1)}
+  action advanceAndExpireDeadlines = all {state.current.worker!=0,eventAtTime(input("timer",emptyRequest,0,""),state.current.deadline+1)}
   action candidateValidated = all {state.candidateWorker!=0,state.candidateInitialized,event(input("candidateValidated",emptyRequest,state.candidateWorker,""))}
   action commitCandidate = all {state.candidateWorker!=0,state.candidateReady,not(state.frozen),event(input("commitCandidate",emptyRequest,state.candidateWorker,""))}
   action abortCandidate = all {state.candidateWorker!=0,event(input("abortCandidate",emptyRequest,state.candidateWorker,""))}
@@ -252,7 +272,7 @@ module lifecycle {
   val readinessRequiresCompilation = state.initializedWorkers.subseteq(state.compiledWorkers) and state.compiledWorkers.subseteq(live(state))
   val currentRequiresReadiness = state.current.worker==0 or state.initializedWorkers.contains(state.current.worker)
   val timeoutTerminates = state.lastAction!="expireCurrent" or hasEffect(state.effects,"terminate")
-  val lifecycleSafe = and { singleTerminalDelivery,staleCannotBeCurrent,candidateHasNoAuthority,workerCapacityIncludesRetiring,queuesBounded,orderedRequestsPreserveOrder,freezeSuppressesCurrentDelivery,cleanupFailureNeverSucceeds,disposedHasNoLiveWork,readinessRequiresCompilation,currentRequiresReadiness,timeoutTerminates }
+  val lifecycleSafe = and {connection.callbacksQuiescent, singleTerminalDelivery,staleCannotBeCurrent,candidateHasNoAuthority,workerCapacityIncludesRetiring,queuesBounded,orderedRequestsPreserveOrder,freezeSuppressesCurrentDelivery,cleanupFailureNeverSucceeds,disposedHasNoLiveWork,readinessRequiresCompilation,currentRequiresReadiness,timeoutTerminates }
   val sawBusyRefusal = hasEffect(state.effects,"refusedBusy")
   val sawSnapshotCoalesced = hasEffect(state.effects,"settleCoalesced")
   val sawHistoricalResult = hasEffect(state.effects,"settleHistorical")

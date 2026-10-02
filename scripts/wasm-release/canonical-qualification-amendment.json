@@ -5,7 +5,7 @@
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
   "version": "0.2.0",
   "publishedModelSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-  "modelSha256": "5a9243c2c877060fcc3ea85a1eac659e36dc189486fb227928d38cecaedc173e",
+  "modelSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7",
   "producerLink": "FS-GG/FS.GG.Game@4afacb501b9371b4cc81494b7bf91b46c880a663",
   "releaseManifestSha256": "dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853",
   "sdkSha256": "ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3",
@@ -22,7 +22,7 @@
   "model": {
     "path": "eng/wasm-shared/lifecycle.qnt",
     "previousSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-    "qualifierSha256": "5a9243c2c877060fcc3ea85a1eac659e36dc189486fb227928d38cecaedc173e"
+    "qualifierSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7"
   },
   "qualifierInputs": [
     {
@@ -38,12 +38,12 @@
     {
       "path": "eng/wasm-shared/event-boundary-qualification.qnt",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "11a691f879d83fa32af5381c2da74f232b3ed7b6b7dd74cd038a0ff0796c5dbe"
+      "qualifierSha256": "86150388295eb102408fe7ddb6b1fcc9fd26fe35a162bb898a6f47f9d209e9cc"
     },
     {
       "path": "eng/wasm-shared/expiry-qualification.qnt",
       "previousSha256": "b26c134df003cf7c56a24236fd67208328bfaf93b69fec2accf3a9d719ffb556",
-      "qualifierSha256": "888a8599906f93bb9476eaa0d5fd3ef7a6910f7205cc1e40c4f61474c6a9157c"
+      "qualifierSha256": "27421a824e16f2ba29d70abcdd2c23a0f63c7118782f44b2f345d46b97f6c851"
     },
     {
       "path": "scripts/verify-wasm-lifecycle.sh",
@@ -73,237 +73,237 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Correspondence.fs",
       "previousSha256": "e21c3e4d2aac97cc8b00e29a4002b5f1b44c38141ad6b0d5f8146d8cc14b50a5",
-      "qualifierSha256": "59c5270588e210e875e86dafc6d76c5e226b9e102c26046fbeba57f884d94175"
+      "qualifierSha256": "9b0ccf225bebd6d09857ea8815de93075fdc0b651cca035d11bb2887048361d2"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/CorrespondenceTypes.fs",
       "previousSha256": "315b511110df288d9754e96f958ce8e4fd7128c38cdc12bd2a329572dd106e9d",
-      "qualifierSha256": "45666f2d3e6d2156b0ba46d911f7c61bb5bbcbbcaa192f3764775e2ee841b6d2"
+      "qualifierSha256": "a85e7261864ff4d97151c5b08caad443c38dd3a8ec4235f5d58aa78a349922e3"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs",
       "previousSha256": "8cc3b84d991f6720d19ac19ee4007b1007aa2a21ce66cd7febd3cbfcbd8aeb20",
-      "qualifierSha256": "c101bd86be1c1857274b58471b92efb4f3c80293581c33791de9594738a4782d"
+      "qualifierSha256": "162a789aec6cead6b1f2ce0bab4149a50c5c7cda7c9aa22145b3f78c16f5f6ae"
     },
     {
-      "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHost.fsproj",
+      "path": "tests/Wasm.Lifecycle.Correspondence/Installed/InstalledHost.fsproj",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "a22f91c3ec6d67cee331fe47a0a47e1615b88679f8549c404a43dde611175c72"
+      "qualifierSha256": "5a09fc9f84695fa2bf2047f5061a74d6ce581493657c396747b5c85aa55812c8"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Installed/packages.lock.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHostControls.fs",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "a496fabb53a31372f68a016e44f8ed838c359863b521936fe15b1d9bf19dc2a0"
+      "qualifierSha256": "a65d3f527a53f4888649a31e7d0bdd6db19b5ea5e75b95c490c7ea0232345a3c"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHostProgram.fs",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "1c901e5b96066300f03e2d61f1ef1b49d8894bb0f2c7789eb3d39319773c5cba"
+      "qualifierSha256": "f3f894b8f55be63c3a24ca14a0f95a07b3411391e89d5b09772f414fa39f7a73"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Program.fs",
       "previousSha256": "fb70dee5492805e69974341fb279b3d71adc12891a4c7a2d0f9a00f88206b300",
-      "qualifierSha256": "1e069aecea6d73b256a0363f5272e78249559e01dda2c604980491c32feb21cb"
+      "qualifierSha256": "75b43a2cb12e9b2d2b54fdb3518fc144fd704b4d680d396ace0ea1be97558851"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "1c3191c843db93e2b5eb86693eb4b9fd5483471855694d1f8fd9557fc2d43847"
+      "qualifierSha256": "312f6009f43ad382ae5f3d5515be19be1c60744fb90e55b80486048ffcb078df"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "7fa3c6551cca7afe9d9ed6a14ef4aabefc6b9146a5eaa83853b9cc463d5a24aa"
+      "qualifierSha256": "5fc847db40da127e7f2d3d20c689ac17279e5c83e532132239a81dba4ea0cf3c"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "b2c64b6dab931e0fee3ec5c383b259d3e28e9b5d4cbf3bca5ab37f974f5f36e8"
+      "qualifierSha256": "493c1b5f5db432e4d12c8fe1e1e6113c6d2e3c51c20bf407501101e8c07ecedc"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "ccf5a3a04e8ff25a8db2f8198c177aa51a8275e42e8249195207ca1b015a617b"
+      "qualifierSha256": "e91f6661abb099641974f2d8f515962452ee7fa824c59757f035285e22b25252"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "52cb6a35aa5d76c9c7db8df2d00b264650d0acbe415389ef86b16a1bcff4b357"
+      "qualifierSha256": "79bfc733cfb9b50fefc8dd7f23cce1835ad62649a470461397909125225e10e8"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "3f45b4c13fed2e4a02c171feb2f96f1eeeb71e9d499f686ac2f14d27759b10cd"
+      "qualifierSha256": "fae11e5965c597feca031580f2dd0313a90e59a745469bd289e34b600fd463a6"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "2ddc4e1998a2507ad4c3141983240c16bab7bd3d2ee6440a7731813f7e73efd4"
+      "qualifierSha256": "47e6e68d1305afcc8798f11d59e303d1b6e0a3eabaceb1203686f516db7c2170"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "2bcc4ba054a2cfa88c1de69e5fdf33a35464f96b5447fe22b7bb22370895ecb4"
+      "qualifierSha256": "516a061fc9aec46defe9a0c69ef75c97c841ebc292deb8ed1cf231a3775ee492"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "d0de7b7df4516f084c3ff8c1b9f4cc8f7ab302e9938ef5d269f3d57b133d4e63"
+      "qualifierSha256": "2ce23ac271962830e55db3cc09bb19fbfac09a16ddd544c523b79ef18b8d3030"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "aa0234c979666dddef799ad1d7d9fa30bd130eaeac6ae08133cd9ddda4761747"
+      "qualifierSha256": "ffeaeb2296b03d669f7246f154f6f3d72c23995c710072da3dac4f0b2ef06670"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "c92fa5bbe47e6f8db6860c1e2fb8caf3e3082ccc7753d7022e2ecab27fe6eee2"
+      "qualifierSha256": "ed1b34c8a9c21b8ebd727ba8df26dd3c1658ea25963daef7f8c4211abfafac77"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "239ed46bb7883979f71614486931ff928237f92d6ab0719cf07416a563fe4fd1"
+      "qualifierSha256": "36aeef6efe8bf4cd57e758ca6e77ff1d0ce801a37d54ec01bd6caa0d070294b8"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "dcd13eb73c419c4e4495b83d218454b6ef881e59b23c39e10398fe81027fdf06"
+      "qualifierSha256": "2a06b115dba763c21bfcd85d0d62d23d5925970a14a5ab4afc0e5cfc26bd2619"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "dd08cc1f1291060027cb779752cc15a1fc8bc4ae5c84ab2f6a9b92663e2ff694"
+      "qualifierSha256": "f2df694fa740c861e5da9e766b239b0dec668f3f4111e6ab8b81c73702111a5f"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "3244cce4ce13b6e03332b4bd41757b4de2e892d4a624ecee96099006933ff9a6"
+      "qualifierSha256": "698ec2feec771bd96caa8ea152747b7c0f4a960a2046e16d9c8b1a4248091331"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-both-expired_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "4b00bf1b57409141942c03c078cf6b83c4d3f1c3284000f171b735ff57ecde24"
+      "qualifierSha256": "4cd6393f626ed685fb6bde2548bce005ff9c1b9eba8b656132f507effdbd5ad3"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "86194d290344d21560d325fc75ff518400bd996c3649b35ab5125e51f6347a81"
+      "qualifierSha256": "05aa632fb934a86b3fae5967712b72dc91ae6b73bcc939dc00c269ca1a4bf244"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "8ff1f28ea07b8c90ee72393ed0acb62132dfb0c12d8df21a15dbb11fea703806"
+      "qualifierSha256": "bd4e1ce16972d838751fefb669f76131ad1b590d9e691f6dc00776633e79bf5a"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "7b62e41482049e71176389f2142a81ba6df373220cc05ecf3c0e1ff40c03e507"
+      "qualifierSha256": "b5ed604e821738b1dbcdc63c6b6c014d3895a00e5daa4b115b7006d065c0a42d"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "4eaefc23574e19e8ad6c507438a393535f18e0c6c5d80971a32bf31dd5fb7422"
+      "qualifierSha256": "7298789d28544b97bd3289885289b15cf1932a24fa79a50a8f7df12c76abd0b4"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "9144e9fc563f98be15663a63c370c148db3f48c8b50a739698bf86e584a550dc"
+      "qualifierSha256": "d90bf00465b737338727445ce7bdf9f063b57e827d47ce1e618ee3e2be7bbdea"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "9d2ea8a01bf68f95ef640c2fa838b13c56ee1d92d10c42b29838844cb5a0dc75"
+      "qualifierSha256": "3f9b703f8535fafa5ed436d02abc079ef66a0a3398ca70be0f9a717c2d6b8706"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-allexpired_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "b58887295203c0f2e3794dcc7578041f4c63df7acfeafa08f2a651f0946e0b15"
+      "qualifierSha256": "e555377a091c2bdba85c34aef86ea820da1d4b68602f973603d90dc0718f8155"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-currentexpired_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "387014e349c63d23c4668e66883e2766ca1a3bdfc854c08d496596f3776784b5"
+      "qualifierSha256": "91ec1bf4de0aeeaadfc8d959da54dbfaae6632054a46c26ccf09c1632a8728d5"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-orderedexpired_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "9acc96b28f297444b3e45ba64054eb0055ed96e4ccbebddea36cc18975ab411e"
+      "qualifierSha256": "83c55f2a2890c44df8b89e270d8577a5d8cbac23e135c1ddedeadd568a2c1118"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-monotonic-clamp_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "4e4e66ffa09236cc29146b04fa9fae32b718ddb11784411a83258e4da2503d93"
+      "qualifierSha256": "3b702fb16fd378005561965cb9909dd05f7a06acc5a487c1c01208a1210cce46"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "f5ada73a412d078f3764dc93c1a4efe2df5dbb716eef284b47f5109d007334e5"
+      "qualifierSha256": "c02119da3e7c21a51ab16d2c34876451eac5587c94eb8dc115de0feb72f7affb"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "d7f031cae4d1ce2d642b34fe6531e84e3f8f803e6addd4f2f93560710d2d88ed"
+      "qualifierSha256": "f7732e30d363fdc36e0b7b73ffebd9b1d27c66aabfb7fb5c586cc59355375400"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "d59d959b3bdbd783d0fc6d8d3ae94ca165ad00de8b34c3b6006935442133b086"
+      "qualifierSha256": "50252adb857fc0ff538ed4b7309e5c8f8bfb9bc4dbd529f9b7a5fc49715e4d98"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "9c56f35cd178886b7058ce107870c58aac97bbf3b01ac5cde70e90336755a213"
+      "qualifierSha256": "db4d1cdcbde81dc29aee6f9ea9f8bbebbd5e3e0cd6aff1010da0cf0ca6a8c49f"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "001e3b95e2f1b29b8f6823ff069ee97cd401dea5b2b2e3e2f7fb92d6baf1611d"
+      "qualifierSha256": "8ca757ce0df60642a2f11a67be11ceef5fe1407a37eceb5bfa93128eb792cffb"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "b45d75cf5622ff254f32d713311d362e57a76f88eace47bbd00dcceaab579ecf"
+      "qualifierSha256": "ca59682c432c48a7e9169f16a73270479bac54dc9cd6c99b50a96c0e802c578d"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "16446742d7b44606158d69221da9369da3128dccf6fde4679571f941442f33c4"
+      "qualifierSha256": "3a9966dff36c9648b8bf3cb2798da2a106d5cfef1e52daa3fcc2ee63f1bd5637"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "9db81ebbd7ec0bfd7db0ad2864281705c882b0951ddc36b337cceb286021ff09"
+      "qualifierSha256": "066c90e99390bae5df57e5b1f00f80109ba3f37c6451f86bf979aeb7226790b3"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "c899da18bc3bee4463c83ba7bb0430113687caca57fd25af4693325a20b9fbb4"
+      "qualifierSha256": "a6bb136eadba85177b22fc4b604ada844f49da19c0e26008fe95e860deada4fe"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-after_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "7ebbc659c4d86ccaae96f1db8643cc73c63b047977951a5ed131be8ca39b95a1"
+      "qualifierSha256": "6ffecf82bd998b3bd1756e8f8fafc304ac85ca82bc704bb5c99fdd8a28a99be6"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-at_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "095d222d8fae60964b9c9157f995e796ca8ff1ca9a9c1aca6837d286d0860bd4"
+      "qualifierSha256": "231b6e175db2620b42e7cb6c786c3699d7899deb0aeec365121c3a564b252f2b"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-before_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "6c9e985c908db655c3238ae2d10faa7ab02690a36b7c07c039c43907ebbb95b3"
+      "qualifierSha256": "abe04a44240c457a444ca724b7dabafd2e8fd14b82ea9d0fdbc44fe5959f0008"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/generate-traces.py",
       "previousSha256": "ffae25575cc2133da6b7f5d83106b61f77a4bc8b18f2722536564a906e9b0dcb",
-      "qualifierSha256": "210030678c810cd172a8d794d8f054805f758c38d3e2802fee2e83c284925535"
-    },
-    {
-      "path": "tests/Wasm.Lifecycle.Correspondence/installed-host.packages.lock.json",
-      "previousSha256": "ABSENT",
-      "qualifierSha256": "d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e"
+      "qualifierSha256": "34b26d0c92c50132a8f47695feb70f72d926988e2d60db04acaff68ef7c8bcaa"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py",
@@ -325,44 +325,44 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "6467c94b843457746399cf7fc6b44aa8b325f45e37231359dd92319762e12bc8"
+      "qualifierSha256": "42267788aac8279d768bed51b1cab87d9ac2847a544607e348c9d8280ed9e5f1"
     }
   ],
   "originalTraces": [
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/bar_0.itf.json",
       "previousSha256": "24a169d9a57ff52b3537d1aaae5787a283f5eb796f21727397b6e3bcb3477676",
-      "qualifierSha256": "8abda9cc8402ff05141f3e9fed84600352c96304fb09b0978db07e1631684051"
+      "qualifierSha256": "c50d27cdfa221e53d1d271d09fbba6756d03842d3961cdb97b07119bb088a6bc"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/cleanup_0.itf.json",
       "previousSha256": "3368c92964cf1040c91c1c2cdb3e9aad3a84786f357c4c3ecc543aef03f389c3",
-      "qualifierSha256": "bac41a390081640ca8e44ccac0fc9dec766f9c68b8173e3cec0695d53402b989"
+      "qualifierSha256": "ddd8611e4cf6212e1212791a457f226916fddeb39694fd5cf80b126301028baa"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-early_0.itf.json",
       "previousSha256": "9b45be91288b8b531f2980f7ad4e274bf91fc99815c8bf0d27394b16c28de20d",
-      "qualifierSha256": "3066f06322f6d9ae37a86f848cfa731972adf0ea8581f199966bc5be31d6e883"
+      "qualifierSha256": "1e154874efe094f3473476f5a6ba29a3caf2060af01cb8763512a5e66c0a2f60"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-late_0.itf.json",
       "previousSha256": "144f48bf2dabaf14004fd06b6ea6e408d736ada3d06176844e2d320d6e995620",
-      "qualifierSha256": "1764e69b163c92db71f54db15dc0d3d3d676060b7bc688c2a9282148bc71f6bc"
+      "qualifierSha256": "89a9b1f0f36779b4f8dd44c07f1b839712408160327157b09b6f483074ace22b"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/phase_0.itf.json",
       "previousSha256": "d67c26e7ebad0fb4169b169d0c994eb2d4bb2fbfaea10ac022ef0d8abaa3a11a",
-      "qualifierSha256": "fe67474bbfd04011887ba02c49e71bb0eec0a5ccc5146bc1f104eb3acda68278"
+      "qualifierSha256": "ab74c803aed91d400e2fa2e4e90510a4d28d5825353d2861a993d796db14ef7b"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/sc2_0.itf.json",
       "previousSha256": "6554d8cd65e1735d0ca8b18d3a0141de991728522f6edd9474e22df36ce00730",
-      "qualifierSha256": "2b570248325bfbf13c273304c5c0a91c8be164558f9ef5b9453bfe3a5f683c0c"
+      "qualifierSha256": "4cc231588a707dd06e76251a436fa2af61ba38d937100ff79a5d92576d0dc10e"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/timeout_0.itf.json",
       "previousSha256": "b95ad410d0f1f7387a50c9266def6deb508dcb85efd68750ed37670f57ac3e18",
-      "qualifierSha256": "ba44c9b397c914e6c032a0ee8081390ab4dc4a7b44992ae3cf319897882d3436"
+      "qualifierSha256": "7e6c988b6bd4f9a448e7bea80fc417881609b265026d39b1858daee5aa61a3f6"
     }
   ],
   "approvedChangedPaths": [
@@ -380,7 +380,8 @@
     "tests/Wasm.Lifecycle.Correspondence/Correspondence.fs",
     "tests/Wasm.Lifecycle.Correspondence/CorrespondenceTypes.fs",
     "tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs",
-    "tests/Wasm.Lifecycle.Correspondence/InstalledHost.fsproj",
+    "tests/Wasm.Lifecycle.Correspondence/Installed/InstalledHost.fsproj",
+    "tests/Wasm.Lifecycle.Correspondence/Installed/packages.lock.json",
     "tests/Wasm.Lifecycle.Correspondence/InstalledHostControls.fs",
     "tests/Wasm.Lifecycle.Correspondence/InstalledHostProgram.fs",
     "tests/Wasm.Lifecycle.Correspondence/Program.fs",
@@ -431,7 +432,6 @@
     "tests/Wasm.Lifecycle.Correspondence/Traces/timeout_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
     "tests/Wasm.Lifecycle.Correspondence/generate-traces.py",
-    "tests/Wasm.Lifecycle.Correspondence/installed-host.packages.lock.json",
     "tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py",
     "tests/release/wasm/test-canonical-qualification-policy.fsx",
     "tests/release/wasm/test-canonical-qualification-transport.py"

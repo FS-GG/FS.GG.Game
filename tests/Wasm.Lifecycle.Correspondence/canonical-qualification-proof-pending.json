@@ -3,15 +3,15 @@
   "status": "CANDIDATE_PENDING_ROOT_AUTHENTICATED_PROOFS",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
-  "modelSha256": "5a9243c2c877060fcc3ea85a1eac659e36dc189486fb227928d38cecaedc173e",
+  "modelSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7",
   "producerProof": {
-    "status": "ROOT_REPORTED_PURE_PRODUCTION_45_NATIVE_PASS_AUTHENTICATION_PENDING",
+    "status": "HISTORICAL_PREVIOUS_PURE_PRODUCTION_45_NATIVE_PASS",
     "traces": 45,
-    "scope": "Parent reports actual pure production45/native pass; exact source-bound native evidence must be joined and reviewed by root before approval. This file is not native proof."
+    "scope": "Parent reports previous pure45/native PASS. Historical evidence only; does not qualify latest connected-composition model."
   },
   "installedProof": {
-    "status": "FAIL_CONNECTED_HOST_CANONICAL_CALLBACK_CLOSURE_OPEN",
-    "finding": "Parent reports genuine synchronous WorkerTerminated interpreter callback changes projected LastAction; canonical closure amendment remains in progress. Full installed connected comparison has not passed."
+    "status": "HISTORICAL_OLD_CONNECTED_DOTNET_FABLE_FAIL",
+    "finding": "Previous actual connected.NET/Fable comparison failed genuine synchronous WorkerTerminated callback LastAction closure. Latest canonical connected composition has now been regenerated; latest compiled installed qualification remains PENDING."
   },
   "administrativeOwner": {
     "status": "ROOT_REPORTED_ACTUAL_TYPED_FSHARP_PASS_13_AND_PENDING_REFUSAL",
@@ -19,10 +19,26 @@
   },
   "approval": "Audit status remains pending. Neither existence nor SHA of this report proves producer/installed qualification. Only root-reviewed immutable amendment bytes with independently supplied exact audit digest can authorize administrative eligibility; caller exactHEAD is a separate receipt after commit.",
   "remaining": [
-    "canonical synchronous connected Worker termination closure",
-    "source/model/trace freeze after closure",
-    "genuine producer and installed full-state ordered-effect proofs",
+    "clean committed latest canonical connected-composition candidate",
+    "latest actual producer and installed.NET/Fable full-state ordered-effect qualification",
     "root review and explicit amendment approval",
     "post-commit exactHEAD administrative owner invocation"
-  ]
+  ],
+  "latestSourceControls": {
+    "status": "ROOT_REPORTED_SOURCE_ONLY_PASS",
+    "modelSha256": "53e592cf08dcdb5ef017ac3dc2cf12ca42d3794d81185e3a1f6984a30fbe4fd7",
+    "typecheck": "PASS",
+    "quintTests": 8,
+    "regeneratedITFs": 45,
+    "boundedSamples": {
+      "runs": 2,
+      "samplesPerRun": 1000,
+      "status": "PASS"
+    },
+    "scope": "Source/typecheck/tests/regeneration/sampled controls only; no latest compiled.NET/Fable qualification claimed."
+  },
+  "latestCompiledQualification": {
+    "status": "PENDING_ROOT_NATIVE_GRANT",
+    "scope": "Root-owned actual producer and installed.NET/Fable complete-state/ordered-effect qualification against latest source"
+  }
 }

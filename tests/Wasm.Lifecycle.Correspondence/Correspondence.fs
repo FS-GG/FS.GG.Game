@@ -94,7 +94,7 @@ let eventFor (previous: ModelStep) (target: ModelStep) =
         | "cleanupFault" -> observation (InvocationObserved({ outcome Process with State = Faulted "cleanup"; CleanupFault = Some { Phase = Free; Diagnostic = "cleanup" } }, correlation ()))
         | "candidateFailed" -> observation (WorkerFailed(id, Some(correlation ()), "candidate failure"))
         | "abortCandidate" -> CandidateAbortRequested prior.CandidateTransaction
-        | "terminateRetiring" -> WorkerObserved(original.Worker, WorkerTerminated original.Worker)
+        | "terminateRetiring" | "workerTerminated" -> WorkerObserved(original.Worker, WorkerTerminated original.Worker)
         | "freeze" -> FreezeRequested "7"
         | "resume" -> ResumeRequested prior.FreezeToken
         | "dispose" -> DisposeRequested
@@ -102,7 +102,7 @@ let eventFor (previous: ModelStep) (target: ModelStep) =
         | value -> failwithf "unsupported original input %s" value
     { MonotonicMilliseconds = original.Observed; Input = input }
 
-let private replayWithEffectMutation (mutate: ModelStep -> EffectProjection list -> EffectProjection list) (trace: ModelTrace) =
+let private replayWithMutations (mutate: ModelStep -> EffectProjection list -> EffectProjection list) (mutateRaw: TerminalExpectation list -> TerminalExpectation list) (trace: ModelTrace) =
     let profile =
         if trace.Steps.Head.State.Profile = "Bar" then
             BarProtected
@@ -130,11 +130,11 @@ let private replayWithEffectMutation (mutate: ModelStep -> EffectProjection list
         let terminals =
             effects |> List.choose (function
                 | Settle result ->
-                    let reason = match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | _ -> ""
+                    let reason = match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:" + diagnostic | _ -> ""
                     if reason = "" then None else
                         let phase = result.Outcome |> Option.map (fun value -> match value.Phase with Compile -> "compile" | Instantiate -> "instantiate" | AllocateDescriptor -> "allocate-descriptor" | AllocateInput -> "allocate-input" | Initialize -> "initialize" | Process -> "process" | Free -> "free" | Shutdown -> "shutdown") |> Option.defaultValue ""
-                        Some ({ Request = result.Identity.Request; Reason = reason; Outcome = result.Outcome |> Option.map (fun value -> if value.State = TimedOut then "TimedOut" else "unexpected") |> Option.defaultValue ""; Phase = phase; Dispatched = result.Outcome |> Option.exists (fun value -> value.Dispatch = Dispatched) } : TerminalExpectation)
-                | _ -> None)
+                        Some ({ Request = result.Identity.Request; Reason = reason; Outcome = result.Outcome |> Option.map (fun value -> match value.State with TimedOut -> "TimedOut" | Faulted _ -> "Faulted" | _ -> "unexpected") |> Option.defaultValue ""; Phase = phase; Dispatched = result.Outcome |> Option.exists (fun value -> value.Dispatch = Dispatched) } : TerminalExpectation)
+                | _ -> None) |> mutateRaw
         if terminals <> expected.Terminals then
             failures <- $"step {index + 1} raw terminal cause/outcome/phase/dispatch differs after original {expected.Input.Name}: expected=%A{expected.Terminals} actual=%A{terminals}" :: failures
 
@@ -149,6 +149,8 @@ let private replayWithEffectMutation (mutate: ModelStep -> EffectProjection list
                 :: failures)
 
     List.rev failures
+
+let private replayWithEffectMutation mutate trace = replayWithMutations mutate id trace
 
 let replay trace =
     replayWithEffectMutation (fun _ effects -> effects) trace
@@ -215,3 +217,13 @@ let eventBoundaryMutationsAreDetected (trace: ModelTrace) =
       "queued-dispatch-after-expiry", (fun _ effects -> match effects |> List.tryFind(fun effect -> effect.Kind = "settleTimedOut") with Some terminal -> effects @ [{ terminal with Kind = "post"; Operation = "process"; Bytes = 1 }] | None -> effects)
       "wrong-terminal-correlation", (fun _ effects -> effects |> List.map(fun effect -> if effect.Kind = "cancelTimer" then { effect with Correlation = "foreign" } else effect)) ]
     |> List.map(fun (name,mutate) -> name,hasFailure mutate)
+
+let rawTerminalMutationsAreDetected (trace: ModelTrace) =
+    let corrupt field =
+        replayWithMutations (fun _ effects -> effects) (List.map field) trace
+        |> List.exists(fun failure -> failure.Contains("raw terminal"))
+    [ "expired-cause-to-disposed", corrupt (fun (terminal: TerminalExpectation) -> if terminal.Reason = "DeadlineExpired" then { terminal with Reason = "HostDisposed" } else terminal)
+      "not-dispatched-to-dispatched", corrupt (fun terminal -> { terminal with Dispatched = true })
+      "invalidation-outcome-dropped", corrupt (fun terminal -> { terminal with Outcome = "" })
+      "queued-own-expiry-invents-outcome", corrupt (fun terminal -> if terminal.Reason = "DeadlineExpired" && terminal.Outcome = "" then { terminal with Outcome = "TimedOut" } else terminal)
+      "terminal-phase-normalized-process", corrupt (fun terminal -> if terminal.Phase <> "" then { terminal with Phase = "process" } else terminal) ]
