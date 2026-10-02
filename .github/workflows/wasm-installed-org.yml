@@ -1,0 +1,75 @@
+name: wasm-installed-org
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: wasm-installed-org-0.1.1
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  installed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    env:
+      PUBLISHED_SOURCE: ea015cbf884b01754bc6615476241450907b6b24
+      WASM_PACKAGE_FEED: https://nuget.pkg.github.com/FS-GG/index.json
+      WASM_RELEASE_BASE_URL: https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v0.1.1
+      NODE_OPTIONS: --max-old-space-size=2048
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Static installed qualification preflight
+        run: |
+          python3 tests/release/wasm/test-consumer-source-mapping.py
+          python3 tests/release/wasm/test-installed-org-workflow.py
+      - name: Bind qualification source and immutable published receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "qualification-source=$(git rev-parse HEAD) published-source=$PUBLISHED_SOURCE"
+          git diff --exit-code "$PUBLISHED_SOURCE" HEAD -- tests/Wasm.PackageConsumer sdk/wasm scripts/wasm-release/release_manifest.py .config/dotnet-tools.json global.json
+          receipt_root="$RUNNER_TEMP/wasm-published-receipts"
+          mkdir -p "$receipt_root"
+          curl --fail --location --proto '=https' --tlsv1.2 "$WASM_RELEASE_BASE_URL/release-manifest.json" --output "$receipt_root/release-manifest.json"
+          curl --fail --location --proto '=https' --tlsv1.2 "$WASM_RELEASE_BASE_URL/fsgg-wasm-sdk-0.1.1.tar.gz" --output "$receipt_root/fsgg-wasm-sdk-0.1.1.tar.gz"
+          printf '%s  %s\n' 975166b2cf53b17c2e5f55b1e020266f4cba78c9d2257d27a751f25deb58c2b5 "$receipt_root/release-manifest.json" 923173219374de6c2f5adc62c930042e18abc17125b0e32ba8d66c57266430d2 "$receipt_root/fsgg-wasm-sdk-0.1.1.tar.gz" | sha256sum --check --strict
+          python3 scripts/wasm-release/release_manifest.py verify-identity --manifest "$receipt_root/release-manifest.json"
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.401'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26'
+      - name: Install exact consumer tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet tool restore
+          rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.90.0
+          scripts/wasm-release/install-browser-tools.sh
+      - name: Qualify fresh org feed installed consumer
+        shell: bash
+        env:
+          NuGetPackageSourceCredentials_wasm: Username=token;Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
+        run: |
+          set -euo pipefail
+          export NUGET_HTTP_CACHE_PATH="$RUNNER_TEMP/wasm-installed-org-http-cache"
+          mkdir -p artifacts/wasm-installed-org
+          scripts/verify-wasm-package-consumer.sh --feed-only 2>&1 | tee artifacts/wasm-installed-org/consumer.log
+      - name: Retain installed qualification output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-installed-org-${{ github.sha }}-0.1.1
+          path: artifacts/wasm-installed-org/
+          if-no-files-found: ignore
+          retention-days: 30

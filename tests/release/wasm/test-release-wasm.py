@@ -138,6 +138,7 @@ def source_checks() -> None:
     require(core.count("github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')") == 2, "core release namespace guard missing")
     consumer = (ROOT / "scripts/verify-wasm-package-consumer.sh").read_text()
     require("--feed-only" in consumer, "feed-only consumer route missing")
+    subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-consumer-source-mapping.py")], check=True)
     require("dotnet pack" not in consumer and "src/Wasm.Browser" not in consumer and "src/Wasm.Contracts" not in consumer, "consumer verifier can rebuild or read producer package sources")
     local_env = dict(os.environ, WASM_PACKAGE_FEED="file:///tmp/packages", WASM_RELEASE_BASE_URL="file:///tmp/release")
     result = subprocess.run([str(ROOT / "scripts/verify-wasm-package-consumer.sh"), "--feed-only"], env=local_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)

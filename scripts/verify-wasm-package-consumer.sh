@@ -50,12 +50,27 @@ else
 fi
 "$repo/sdk/wasm/verify-sdk.sh" "$archive" "$wasi" "$work/modules"
 
-cat > "$work/NuGet.Config" <<CONFIG
-<configuration>
-  <packageSources><clear/><add key="wasm" value="$package_source"/><add key="dependencies" value="https://api.nuget.org/v3/index.json"/></packageSources>
-  <packageSourceMapping><packageSource key="wasm"><package pattern="FS.GG.Wasm.*"/></packageSource><packageSource key="dependencies"><package pattern="FSharp.Core"/></packageSource></packageSourceMapping>
-</configuration>
-CONFIG
+python3 - "$work/NuGet.Config" "$package_source" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+public = "https://api.nuget.org/v3/index.json"
+selected = sys.argv[2]
+root = ET.Element("configuration")
+sources = ET.SubElement(root, "packageSources")
+ET.SubElement(sources, "clear")
+ET.SubElement(sources, "add", key="wasm", value=selected)
+mapping = ET.SubElement(root, "packageSourceMapping")
+wasm = ET.SubElement(mapping, "packageSource", key="wasm")
+ET.SubElement(wasm, "package", pattern="FS.GG.Wasm.*")
+# NuGet deduplicates identical source URLs before applying source mapping.
+if selected.rstrip("/") == public:
+    dependency = wasm
+else:
+    ET.SubElement(sources, "add", key="dependencies", value=public)
+    dependency = ET.SubElement(mapping, "packageSource", key="dependencies")
+ET.SubElement(dependency, "package", pattern="FSharp.Core")
+ET.ElementTree(root).write(sys.argv[1], encoding="unicode")
+PY
 cp "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj" "$work/lock-source/"
 cp "$repo/tests/Wasm.PackageConsumer/Program.fs" "$work/lock-source/"
 NUGET_PACKAGES="$work/lock-packages" dotnet restore "$work/lock-source/Consumer.fsproj" \
