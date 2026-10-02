@@ -4,7 +4,7 @@ This is the source contract for stage `.1` of
 [WASM-SHARED-01](https://github.com/FS-GG/.github/blob/67a78de8d85cc360bac33d39a322dc91bcb37379/docs/roadmaps/2026-10-02-shared-wasm-foundation.md).
 FS.GG.Game is the producer for the proposed `FS.GG.Wasm.Contracts` and
 `FS.GG.Wasm.Browser` packages. This window contains the contracts package only.
-Version `0.1.0` identifies the stable shared-WASM release candidate. It has not
+Version `0.1.1` identifies the stable shared-WASM release candidate. It has not
 yet been published, enrolled in the Game solution, or added to the existing
 `0.16.0` coherent release set. See the [publication contract](publication.md).
 

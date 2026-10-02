@@ -36,34 +36,97 @@ def validate_workflow(text: str) -> None:
     require("needs: [public]" in blocks["assets"], "release assets must follow public readback")
     require("needs: [org, public, assets]" in blocks["complete"], "completion must join all readbacks")
     require("inputs.mode == 'publish' || inputs.mode == 'recovery'" in blocks["org"], "prepare-only dispatch exposes a publisher")
+    require('default: "0.1.1"' in text and "inputs.version || '0.1.1'" in blocks["custody"], "release version selector mismatch")
+    require(text.count("name: wasm-release-custody-${{ github.sha }}-0.1.1") == 4, "download custody selectors disagree")
+    require("gh release edit wasm/v0.1.1" in blocks["complete"], "completion targets another release tag")
+    require("scripts/wasm-release/install-browser-tools.sh" in blocks["custody"] and "cd tests/Wasm.PackageConsumer/browser" not in blocks["custody"], "publisher browser setup writes into source checkout")
     for gate in ("scripts/verify-wasm-contracts.sh", "scripts/verify-wasm-lifecycle.sh", "scripts/verify-wasm-package-consumer.sh --custody"):
         require(gate in blocks["custody"], f"custody qualification is missing {gate}")
+
+
+def browser_setup_checks() -> None:
+    """Exercise the production setup and prepare guard without downloading browsers."""
+    with tempfile.TemporaryDirectory(prefix="wasm-source-clean-control.") as raw:
+        base = Path(raw)
+        source = base / "source"
+        source.mkdir()
+        paths = ["scripts/wasm-release/install-browser-tools.sh", "scripts/wasm-release/prepare.sh",
+                 "tests/Wasm.PackageConsumer/browser/package.json", "tests/Wasm.PackageConsumer/browser/package-lock.json",
+                 "eng/wasm-shared/version.props", "sdk/wasm/VERSION"]
+        for name in paths:
+            target = source / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / name, target)
+        preflight = source / "tests/release/wasm/test-release-wasm.sh"
+        preflight.parent.mkdir(parents=True)
+        preflight.write_text("#!/bin/sh\nexit 0\n")
+        preflight.chmod(0o755)
+        subprocess.run(["git", "init", "-q", str(source)], check=True)
+        subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(source), "-c", "user.name=Control", "-c", "user.email=control@example.invalid", "commit", "-qm", "fixture"], check=True)
+        tools = base / "tools"
+        tools.mkdir()
+        npm = tools / "npm"
+        npm.write_text("#!/bin/sh\nset -eu\n[ \"$1\" = ci ]\ncmp package.json \"$EXPECTED_FIXTURE/package.json\"\ncmp package-lock.json \"$EXPECTED_FIXTURE/package-lock.json\"\nmkdir -p node_modules/.bin\nprintf '#!/bin/sh\\n[ \"$*\" = \"install --with-deps chromium\" ]\\n' > node_modules/.bin/playwright\nchmod +x node_modules/.bin/playwright\n")
+        npm.chmod(0o755)
+        dotnet = tools / "dotnet"
+        dotnet.write_text("#!/bin/sh\necho qualification-tool-sentinel >&2\nexit 17\n")
+        dotnet.chmod(0o755)
+        runner = base / "runner"
+        runner.mkdir()
+        env = dict(os.environ, PATH=f"{tools}:{os.environ['PATH']}", RUNNER_TEMP=str(runner),
+                   EXPECTED_FIXTURE=str(source / "tests/Wasm.PackageConsumer/browser"))
+        setup = str(source / "scripts/wasm-release/install-browser-tools.sh")
+        subprocess.run([setup], env=env, check=True)
+        status = subprocess.check_output(["git", "-C", str(source), "status", "--porcelain"], text=True)
+        require(not status and not list(runner.iterdir()), "browser setup dirtied source or leaked dependency root")
+        prepare = [str(source / "scripts/wasm-release/prepare.sh"), str(base / "custody")]
+        clean = subprocess.run(prepare, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        require("qualification-tool-sentinel" in clean.stdout and "clean exact source" not in clean.stdout,
+                "clean setup did not pass the production source guard")
+        shutil.rmtree(base / "custody")
+        tracked = source / "sdk/wasm/VERSION"
+        tracked.write_text(tracked.read_text() + "tracked-change\n")
+        dirty = subprocess.run(prepare, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        require(dirty.returncode == 2 and "clean exact source checkout" in dirty.stdout and not (base / "custody").exists(),
+                "tracked source edit passed the production clean guard")
+        inside = subprocess.run([setup], env=dict(env, RUNNER_TEMP=str(source)), text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        require(inside.returncode == 2 and "inside source checkout" in inside.stdout,
+                "browser setup accepted a dependency root inside source")
 
 
 def source_checks() -> None:
     workflow = (ROOT / ".github/workflows/release-wasm.yml").read_text()
     core = (ROOT / ".github/workflows/release.yml").read_text()
     props = (ROOT / "eng/wasm-shared/version.props").read_text()
-    require("<WasmSharedVersion>0.1.0</WasmSharedVersion>" in props, "stable version origin mismatch")
+    require("<WasmSharedVersion>0.1.1</WasmSharedVersion>" in props, "stable version origin mismatch")
     for path in (ROOT / "src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj", ROOT / "src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj"):
         require("$(WasmSharedVersion)" in path.read_text(), f"{path} bypasses shared version origin")
-    require((ROOT / "sdk/wasm/VERSION").read_text().strip() == "0.1.0", "SDK version mismatch")
-    require('"sourceVersion": "0.1.0"' in (ROOT / "src/Wasm.Contracts/compatibility-profile.v1.json").read_text(), "profile version mismatch")
+    require((ROOT / "sdk/wasm/VERSION").read_text().strip() == "0.1.1", "SDK version mismatch")
+    require('"sourceVersion": "0.1.1"' in (ROOT / "src/Wasm.Contracts/compatibility-profile.v1.json").read_text(), "profile version mismatch")
     require('Version="[$(WasmSharedVersion)]"' in (ROOT / "src/Wasm.Browser/Fable/FS.GG.Wasm.Browser.fsproj").read_text(), "Fable dependency is not exact")
-    require('Version="[0.1.0]"' in (ROOT / "tests/Wasm.PackageConsumer/Consumer.fsproj").read_text(), "consumer dependency is not exact")
+    require('Version="[0.1.1]"' in (ROOT / "tests/Wasm.PackageConsumer/Consumer.fsproj").read_text(), "consumer dependency is not exact")
     cargo_files = list((ROOT / "sdk/wasm/rust").rglob("Cargo.toml")) + list((ROOT / "sdk/wasm/rust").rglob("Cargo.lock")) + list((ROOT / "examples/wasm/rust").rglob("Cargo.toml")) + list((ROOT / "examples/wasm/rust").rglob("Cargo.lock"))
-    require(all("0.1.0-source" not in path.read_text() for path in cargo_files), "Cargo metadata retains a prerelease identity")
+    require(all("0.1.1-source" not in path.read_text() for path in cargo_files), "Cargo metadata retains a prerelease identity")
     cargo_manifests = [path for path in cargo_files if path.name == "Cargo.toml" and "[package]" in path.read_text()]
-    require(all('version = "0.1.0"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
+    require(all('version = "0.1.1"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
     validate_workflow(workflow)
-    broken = workflow.replace("needs: [org]\n", "needs: [custody]\n", 1)
-    try:
-        validate_workflow(broken)
-    except SystemExit:
-        pass
-    else:
-        raise SystemExit("known-bad publisher ordering was accepted")
-    require("cancel-in-progress: false" in workflow and "group: release-wasm-0.1.0" in workflow, "release concurrency is not version-bound")
+    require("scripts/wasm-release/install-browser-tools.sh" in workflow and "cd tests/Wasm.PackageConsumer/browser" not in workflow, "publisher browser setup writes into source checkout")
+    browser_setup_checks()
+    for broken in (
+        workflow.replace("needs: [org]\n", "needs: [custody]\n", 1),
+        workflow.replace("scripts/wasm-release/install-browser-tools.sh", "(cd tests/Wasm.PackageConsumer/browser && npm ci)"),
+        workflow.replace("name: wasm-release-custody-${{ github.sha }}-0.1.1", "name: wasm-release-custody-${{ github.sha }}-0.1.0", 1),
+        workflow.replace("gh release edit wasm/v0.1.1", "gh release edit wasm/v0.1.0"),
+    ):
+        try:
+            validate_workflow(broken)
+        except SystemExit:
+            pass
+        else:
+            raise SystemExit("known-bad publisher ordering, tool setup or version selector was accepted")
+    require("cancel-in-progress: false" in workflow and "group: release-wasm-0.1.1" in workflow, "release concurrency is not version-bound")
     require("default: prepare" in workflow, "manual execution must default to prepare-only")
     require(workflow.count("dotnet nuget push") == 2, "release workflow must have exactly two package pushes")
     require(workflow.index("needs: [custody]") < workflow.index("needs: [org]") < workflow.index("needs: [public]"), "publisher job ordering mismatch")
@@ -102,19 +165,19 @@ def custody_checks(custody: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="wasm-release-negative.") as raw:
         base = Path(raw)
         missing = base / "missing"; shutil.copytree(custody, missing)
-        (missing / "FS.GG.Wasm.Browser.0.1.0.nupkg").unlink()
+        (missing / "FS.GG.Wasm.Browser.0.1.1.nupkg").unlink()
         refused([*good[:3], str(missing), "--manifest", str(missing / "release-manifest.json"), "--source", source])
         wrong = base / "wrong"; shutil.copytree(custody, wrong)
         manifest = json.loads((wrong / "release-manifest.json").read_text())
-        manifest["version"] = "0.1.0-preview.1"
+        manifest["version"] = "0.1.1-preview.1"
         (wrong / "release-manifest.json").write_text(json.dumps(manifest))
         refused([*good[:3], str(wrong), "--manifest", str(wrong / "release-manifest.json"), "--source", source])
         refused([*good[:-1], "0" * 40])
         changed = base / "changed"; shutil.copytree(custody, changed)
-        with (changed / "fsgg-wasm-sdk-0.1.0.tar.gz").open("ab") as stream: stream.write(b"different")
+        with (changed / "fsgg-wasm-sdk-0.1.1.tar.gz").open("ab") as stream: stream.write(b"different")
         refused([*good[:3], str(changed), "--manifest", str(changed / "release-manifest.json"), "--source", source])
         foreign = base / "foreign"; shutil.copytree(custody, foreign)
-        (foreign / "Foreign.0.1.0.nupkg").write_bytes(b"foreign")
+        (foreign / "Foreign.0.1.1.nupkg").write_bytes(b"foreign")
         refused([*good[:3], str(foreign), "--manifest", str(foreign / "release-manifest.json"), "--source", source])
 
 

@@ -3,7 +3,7 @@
 This is the closed runtime source and stage `.3` package candidate for
 [WASM-SHARED-01](https://github.com/FS-GG/.github/blob/67a78de8d85cc360bac33d39a322dc91bcb37379/docs/roadmaps/2026-10-02-shared-wasm-foundation.md).
 It builds on the [compatibility contract](compatibility.md) and keeps BAR and
-SC2 behavior distinct. Version `0.1.0` identifies the stable shared-WASM release
+SC2 behavior distinct. Version `0.1.1` identifies the stable shared-WASM release
 candidate. The package is unpublished and is outside the existing `0.16.0`
 coherent release set. Its separate release contract is [documented here](publication.md).
 
