@@ -84,6 +84,18 @@ check (Admission.inspect cfg badMagic |> Result.isError) "bad magic must refuse"
 let badLength = Array.copy barBytes
 badLength[9] <- 0xffuy
 check (Admission.inspect cfg badLength |> Result.isError) "malformed section length must refuse"
+let withCustomName (nameBytes: byte array) =
+    check (nameBytes.Length < 127) "test custom name must use one-byte LEB"
+    Array.concat [ barBytes; [|0uy; byte (nameBytes.Length + 1); byte nameBytes.Length|]; nameBytes ]
+let invalidUtf8 =
+    [ "invalid-continuation", [|0xe2uy;0x28uy;0xa1uy|]
+      "overlong", [|0xc0uy;0xafuy|]
+      "surrogate", [|0xeduy;0xa0uy;0x80uy|]
+      "out-of-range", [|0xf4uy;0x90uy;0x80uy;0x80uy|]
+      "incomplete", [|0xe2uy;0x82uy|] ]
+for label, encoded in invalidUtf8 do
+    check (Admission.inspect cfg (withCustomName encoded) |> Result.isError) (label + " UTF-8 must refuse")
+check (Admission.inspect cfg (withCustomName [|0xf0uy;0x9fuy;0x92uy;0xa9uy|]) |> Result.isOk) "valid four-byte UTF-8 must remain admissible"
 let renamedExport = Array.copy barBytes
 let marker = Text.Encoding.UTF8.GetBytes("barc_free")
 let markerOffset =

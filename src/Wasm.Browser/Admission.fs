@@ -78,6 +78,69 @@ module private Binary =
         if count < 0 || count > reader.Limit - reader.Position then fail reader "immediate exceeds function body"
         else reader.Position <- reader.Position + count; Ok()
 
+    let private continuation value = value >= 0x80uy && value <= 0xbfuy
+
+    let private strictUtf8 (reader: Reader) length =
+        let start = reader.Position
+        let finish = start + length
+        let mutable position = start
+        let mutable issue = None
+        let require count =
+            if position + count >= finish then
+                issue <- Some(MalformedModule(position, "incomplete UTF-8 sequence"))
+                false
+            else true
+        while position < finish && issue.IsNone do
+            let first = reader.Bytes[position]
+            if first <= 0x7fuy then
+                position <- position + 1
+            elif first >= 0xc2uy && first <= 0xdfuy then
+                if require 1 then
+                    if continuation reader.Bytes[position + 1] then position <- position + 2
+                    else issue <- Some(MalformedModule(position + 1, "invalid UTF-8 continuation byte"))
+            elif first = 0xe0uy then
+                if require 2 then
+                    let second, third = reader.Bytes[position + 1], reader.Bytes[position + 2]
+                    if second < 0xa0uy || second > 0xbfuy then issue <- Some(MalformedModule(position + 1, "overlong UTF-8 sequence"))
+                    elif not (continuation third) then issue <- Some(MalformedModule(position + 2, "invalid UTF-8 continuation byte"))
+                    else position <- position + 3
+            elif (first >= 0xe1uy && first <= 0xecuy) || (first >= 0xeeuy && first <= 0xefuy) then
+                if require 2 then
+                    if not (continuation reader.Bytes[position + 1]) then issue <- Some(MalformedModule(position + 1, "invalid UTF-8 continuation byte"))
+                    elif not (continuation reader.Bytes[position + 2]) then issue <- Some(MalformedModule(position + 2, "invalid UTF-8 continuation byte"))
+                    else position <- position + 3
+            elif first = 0xeduy then
+                if require 2 then
+                    let second, third = reader.Bytes[position + 1], reader.Bytes[position + 2]
+                    if second < 0x80uy || second > 0x9fuy then issue <- Some(MalformedModule(position + 1, "UTF-8 surrogate is forbidden"))
+                    elif not (continuation third) then issue <- Some(MalformedModule(position + 2, "invalid UTF-8 continuation byte"))
+                    else position <- position + 3
+            elif first = 0xf0uy then
+                if require 3 then
+                    let second = reader.Bytes[position + 1]
+                    if second < 0x90uy || second > 0xbfuy then issue <- Some(MalformedModule(position + 1, "overlong UTF-8 sequence"))
+                    elif not (continuation reader.Bytes[position + 2]) then issue <- Some(MalformedModule(position + 2, "invalid UTF-8 continuation byte"))
+                    elif not (continuation reader.Bytes[position + 3]) then issue <- Some(MalformedModule(position + 3, "invalid UTF-8 continuation byte"))
+                    else position <- position + 4
+            elif first >= 0xf1uy && first <= 0xf3uy then
+                if require 3 then
+                    if not (continuation reader.Bytes[position + 1]) then issue <- Some(MalformedModule(position + 1, "invalid UTF-8 continuation byte"))
+                    elif not (continuation reader.Bytes[position + 2]) then issue <- Some(MalformedModule(position + 2, "invalid UTF-8 continuation byte"))
+                    elif not (continuation reader.Bytes[position + 3]) then issue <- Some(MalformedModule(position + 3, "invalid UTF-8 continuation byte"))
+                    else position <- position + 4
+            elif first = 0xf4uy then
+                if require 3 then
+                    let second = reader.Bytes[position + 1]
+                    if second < 0x80uy || second > 0x8fuy then issue <- Some(MalformedModule(position + 1, "UTF-8 code point exceeds U+10FFFF"))
+                    elif not (continuation reader.Bytes[position + 2]) then issue <- Some(MalformedModule(position + 2, "invalid UTF-8 continuation byte"))
+                    elif not (continuation reader.Bytes[position + 3]) then issue <- Some(MalformedModule(position + 3, "invalid UTF-8 continuation byte"))
+                    else position <- position + 4
+            else
+                issue <- Some(MalformedModule(position, "invalid or overlong UTF-8 leading byte"))
+        match issue with
+        | Some error -> Error error
+        | None -> Ok(Encoding.UTF8.GetString(reader.Bytes, start, length))
+
     let name reader =
         match u32 reader with
         | Error error -> Error error
@@ -86,12 +149,9 @@ module private Binary =
             let length = int length
             if length > reader.Limit - reader.Position then fail reader "name exceeds section"
             else
-                try
-                    let decoder = UTF8Encoding(false, true)
-                    let value = decoder.GetString(reader.Bytes, reader.Position, length)
-                    reader.Position <- reader.Position + length
-                    Ok value
-                with :? DecoderFallbackException -> fail reader "name is not UTF-8"
+                match strictUtf8 reader length with
+                | Error error -> Error error
+                | Ok value -> reader.Position <- reader.Position + length; Ok value
 
     let vectorCount reader label =
         match u32 reader with
