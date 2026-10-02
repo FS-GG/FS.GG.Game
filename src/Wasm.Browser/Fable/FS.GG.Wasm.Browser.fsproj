@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>FS.GG.Wasm.Browser.Fable.Metadata</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="RuntimeProtocol.fsi" />
+    <Compile Include="RuntimeProtocol.fs" />
+    <Compile Include="Admission.fsi" />
+    <Compile Include="Admission.fs" />
+    <Compile Include="Invocation.fsi" />
+    <Compile Include="Invocation.fs" />
+    <Compile Include="WorkerEntry.fsi" />
+    <Compile Include="WorkerEntry.fs" />
+    <Compile Include="Lifecycle.fsi" />
+    <Compile Include="Lifecycle.fs" />
+    <Compile Include="Host.fsi" />
+    <Compile Include="Host.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[0.1.0-source.2]" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,36 @@
+{
+  "schema": "fsgg.wasm.conformance-module-provenance/v1",
+  "compiler": "@RUST_VERSION@",
+  "target": "wasm32-unknown-unknown",
+  "flags": "--edition=2021 --crate-type=cdylib -Copt-level=z -Cpanic=abort -Ctarget-feature=-atomics,-bulk-memory,-exception-handling,-multivalue,-reference-types,-relaxed-simd,-sign-ext,-simd128,-tail-call --no-entry --export-memory --initial-memory=2097152; profile-specific finite max-memory; SC2 --table-base=0 then bounded strip-unused-table.mjs after rejecting element/call_indirect",
+  "builderSha256": "@BUILDER@",
+  "strictTableTransformerSha256": "@TRANSFORMER@",
+  "modules": [
+    {
+      "profile": "bar-abi-1",
+      "upstreamRepository": "FS-GG/FSBarV2",
+      "upstreamRevision": "9f0d8712e2c9a21cbf49f515a65b520516239b5a",
+      "adaptedFrom": "sdk/barc/barc-guest-sdk/src/lib.rs",
+      "sourceSha256": "@BAR_SOURCE@",
+      "outputSha256": "@BAR_OUTPUT@"
+    },
+    {
+      "profile": "sc2-abi-0x00010000",
+      "upstreamRepository": "FS-GG/FS.GG.SC2.Client",
+      "upstreamRevision": "57eadf00bb9e776664e00fe200bb4f2952f72829",
+      "adaptedFrom": "sdk/rust/sc2c-sdk/src/lib.rs",
+      "sourceSha256": "@SC2_SOURCE@",
+      "outputSha256": "@SC2_OUTPUT@"
+    }
+  ],
+  "syntheticConformance": {
+    "sourceSha256": "@HOSTILE_SOURCE@",
+    "outputs": {
+      "loop_forever.wasm": "@LOOP_OUTPUT@",
+      "call_trap.wasm": "@TRAP_OUTPUT@",
+      "grow_memory.wasm": "@GROW_OUTPUT@",
+      "malformed_descriptor.wasm": "@MALFORMED_OUTPUT@",
+      "free_trap.wasm": "@FREE_TRAP_OUTPUT@"
+    }
+  }
+}

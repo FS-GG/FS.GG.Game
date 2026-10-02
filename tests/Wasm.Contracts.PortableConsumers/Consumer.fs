@@ -20,4 +20,9 @@ let render descriptor =
         | Sc2LegacyDirectUrl -> "sc2-legacy-direct-url"
 
     let descriptorRule = if descriptor.Spans.ZeroDescriptorBeforeCall then "zeroed" else "uninitialized"
-    $"{abi}|{path}|{support}|{descriptor.Limits.MaximumMemoryPages}|{descriptorRule}"
+    let descriptorAlignment =
+        match Spans.validate descriptor.Spans 65536UL Descriptor { Pointer = 3UL; Length = 8UL } with
+        | Ok _ -> "unaligned-descriptor-ok"
+        | Error [ MisalignedPointer ] -> "descriptor-aligned"
+        | Error issues -> $"descriptor-error:{issues.Length}"
+    $"{abi}|{path}|{support}|{descriptor.Limits.MaximumMemoryPages}|{descriptorRule}|{descriptorAlignment}"

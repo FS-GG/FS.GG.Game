@@ -16,6 +16,32 @@ let private configuration (descriptor: CompatibilityDescriptor) : CandidateConfi
       Scheduling = descriptor.Scheduling
       Replacement = descriptor.Replacement }
 
+let private boundary (descriptor: CompatibilityDescriptor) : CandidateConfigurationBoundary =
+    { Path =
+        match descriptor.Path with
+        | BarProtected -> "bar-protected"
+        | Sc2ImportedStrict -> "sc2-imported-strict"
+        | Sc2LegacyDirectUrl -> "sc2-legacy-direct-url"
+      ArtifactSha256 = sha "a"
+      ConfigurationSha256 = sha "b"
+      MaximumArtifactBytes = string descriptor.Limits.MaximumArtifactBytes
+      MaximumMemoryPages = string descriptor.Limits.MaximumMemoryPages
+      MaximumInputBytes = string descriptor.Limits.MaximumInputBytes
+      MaximumOutputBytes = string descriptor.Limits.MaximumOutputBytes
+      MaximumDeadlineMilliseconds = string descriptor.Limits.MaximumDeadlineMilliseconds
+      Deadline =
+        match descriptor.Deadline with
+        | PhaseWatchdog -> "phase-watchdog"
+        | EndToEndFromEnqueue -> "end-to-end-from-enqueue"
+      Scheduling =
+        match descriptor.Scheduling with
+        | RefuseWhileBusy -> "refuse-while-busy"
+        | BoundedFifo maximum -> $"bounded-fifo:{maximum}"
+      Replacement =
+        match descriptor.Replacement with
+        | DestructiveLoad -> "destructive-load"
+        | TransactionalCandidateWithRecoveryFreeze -> "transactional-candidate-with-recovery-freeze" }
+
 let private signature parameters results =
     { Parameters = List.replicate parameters I32
       Results = List.replicate results I32 }
@@ -117,18 +143,51 @@ let profiles =
                   Expect.contains issues (InvalidSha256 "artifactSha256") "digest format is closed"
                   Expect.contains issues (LimitExceedsProfile("maximumMemoryPages", 1024, 1025)) "profile ceiling is enforced"
                   Expect.contains issues (PolicyDiffersFromProfile "deadline") "deadline semantics cannot drift"
-                  Expect.contains issues (PolicyDiffersFromProfile "replacement") "replacement semantics cannot drift" ]
+                  Expect.contains issues (PolicyDiffersFromProfile "replacement") "replacement semantics cannot drift"
+
+          testCase "descriptor validation returns issues for short, long, and wrong-shaped signature lists" <| fun _ ->
+              let descriptor = Profiles.tryFind BarProtected |> Option.get
+              let issue = InvalidDescriptor "all ABI signatures must use the frozen i32 shapes"
+              let short = { descriptor with Abi = { descriptor.Abi with Signatures = descriptor.Abi.Signatures |> List.take 5 } }
+              let long = { descriptor with Abi = { descriptor.Abi with Signatures = descriptor.Abi.Signatures @ [ "extra", signature 0 0 ] } }
+              let wrongShape =
+                  { descriptor with
+                      Abi =
+                        { descriptor.Abi with
+                            Signatures =
+                                descriptor.Abi.Signatures
+                                |> List.mapi (fun index (name, value) -> if index = 2 then name, signature 1 0 else name, value) } }
+              Expect.contains (Validation.validateDescriptor short) issue "short lists are rejected without List.zip throwing"
+              Expect.contains (Validation.validateDescriptor long) issue "long lists are rejected without List.zip throwing"
+              Expect.contains (Validation.validateDescriptor wrongShape) issue "wrong i32 shapes remain rejected"
+
+          testCase "raw JavaScript boundary fields fail closed before typed configuration construction" <| fun _ ->
+              let descriptor = Profiles.tryFind Sc2ImportedStrict |> Option.get
+              Expect.isOk (Validation.validateBoundary (boundary descriptor)) "complete raw fields validate"
+              let missing = { boundary descriptor with Path = Unchecked.defaultof<string> }
+              Expect.equal (Validation.validateBoundary missing) (Error [ MalformedBoundaryField "path" ]) "missing fields are rejected"
+              let malformed = { boundary descriptor with MaximumMemoryPages = "128.0" }
+              Expect.equal
+                  (Validation.validateBoundary malformed)
+                  (Error [ MalformedBoundaryField "maximumMemoryPages" ])
+                  "numeric coercion is rejected"
+              Expect.equal
+                  (Validation.validateBoundary Unchecked.defaultof<CandidateConfigurationBoundary>)
+                  (Error [ MalformedBoundaryField "configuration" ])
+                  "null forged objects are rejected" ]
 
 [<Tests>]
 let spansAndCleanup =
     testList
         "span and cleanup decisions"
-        [ testCase "BAR rejects empty and unaligned output while SC2 permits both" <| fun _ ->
+        [ testCase "BAR retains alignment while SC2 accepts unaligned descriptor and output spans" <| fun _ ->
               let bar = (Profiles.tryFind BarProtected |> Option.get).Spans
               let sc2 = (Profiles.tryFind Sc2ImportedStrict |> Option.get).Spans
               Expect.equal (Spans.validate bar 65536UL Output { Pointer = 0UL; Length = 0UL }) (Error [ EmptyOutputRejected ]) "BAR rejects empty success"
               Expect.isOk (Spans.validate sc2 65536UL Output { Pointer = 0UL; Length = 0UL }) "SC2 permits empty worker output"
               Expect.equal (Spans.validate bar 65536UL Output { Pointer = 3UL; Length = 4UL }) (Error [ MisalignedPointer ]) "BAR requires alignment"
+              Expect.equal (Spans.validate bar 65536UL Descriptor { Pointer = 3UL; Length = 8UL }) (Error [ MisalignedPointer ]) "BAR descriptor alignment remains"
+              Expect.isOk (Spans.validate sc2 65536UL Descriptor { Pointer = 3UL; Length = 8UL }) "SC2 descriptor has no extra alignment rule"
               Expect.isOk (Spans.validate sc2 65536UL Output { Pointer = 3UL; Length = 4UL }) "SC2 has no extra alignment rule"
 
           testCase "wasm32 range and memory bounds are independent guards" <| fun _ ->
@@ -152,7 +211,7 @@ let pinnedCorpus =
     testList
         "pinned compatibility corpus"
         [ testCase "baseline source and decision fixtures are versioned and attributed" <| fun _ ->
-              let fixture name = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", "Wasm.Compatibility", "fixtures", name))
+              let fixture name = Path.Combine(System.AppContext.BaseDirectory, "fixtures", name)
               use baselines = JsonDocument.Parse(File.ReadAllText(fixture "baselines.v1.json"))
               use decisions = JsonDocument.Parse(File.ReadAllText(fixture "expected-decisions.v1.json"))
               Expect.equal (jsonString baselines.RootElement "schema") "fsgg.wasm.compatibility-baselines/v1" "baseline schema is pinned"

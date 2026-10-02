@@ -10,10 +10,11 @@ mkdir -p "$candidate_feed"
 export NUGET_PACKAGES="$work/packages"
 
 dotnet build "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release
+dotnet restore "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" --locked-mode
 dotnet run --project "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" -c Release --no-restore
 dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$candidate_feed"
 
-package="$candidate_feed/FS.GG.Wasm.Contracts.0.1.0-source.1.nupkg"
+package="$candidate_feed/FS.GG.Wasm.Contracts.0.1.0-source.2.nupkg"
 test -f "$package"
 unzip -Z1 "$package" > "$work/package-files.txt"
 grep -Fxq 'api-surface/Contracts.fsi' "$work/package-files.txt"
@@ -36,8 +37,7 @@ printf '%s\n' \
 dotnet restore "$work/consumer/DotNet/DotNet.fsproj" --configfile "$config"
 dotnet run --project "$work/consumer/DotNet/DotNet.fsproj" --no-restore > "$work/dotnet.txt"
 dotnet restore "$work/consumer/Fable/Fable.fsproj" --configfile "$config"
-dotnet tool install fable --version 5.17.0 --tool-path "$work/tools" --configfile "$config"
-"$work/tools/fable" "$work/consumer/Fable/Fable.fsproj" --outDir "$work/javascript" --noCache
+dotnet tool run fable -- "$work/consumer/Fable/Fable.fsproj" --outDir "$work/javascript" --noCache
 node "$work/javascript/Program.js" > "$work/fable.txt"
 cmp "$work/dotnet.txt" "$work/fable.txt"
 

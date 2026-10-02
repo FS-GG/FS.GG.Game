@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Wasm.Browser/RuntimeProtocol.fsi" Link="RuntimeProtocol.fsi" />
+    <Compile Include="../../src/Wasm.Browser/RuntimeProtocol.fs" Link="RuntimeProtocol.fs" />
+    <Compile Include="../../src/Wasm.Browser/Lifecycle.fsi" Link="Lifecycle.fsi" />
+    <Compile Include="../../src/Wasm.Browser/Lifecycle.fs" Link="Lifecycle.fs" />
+    <Compile Include="CorrespondenceTypes.fs" />
+    <Compile Include="GeneratedTraces.fs" />
+    <Compile Include="Correspondence.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" />
+  </ItemGroup>
+</Project>

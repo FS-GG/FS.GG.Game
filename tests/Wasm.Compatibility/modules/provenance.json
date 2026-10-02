@@ -1,0 +1,36 @@
+{
+  "schema": "fsgg.wasm.conformance-module-provenance/v1",
+  "compiler": "rustc 1.90.0 (1159e78c4 2025-09-14)",
+  "target": "wasm32-unknown-unknown",
+  "flags": "--edition=2021 --crate-type=cdylib -Copt-level=z -Cpanic=abort -Ctarget-feature=-atomics,-bulk-memory,-exception-handling,-multivalue,-reference-types,-relaxed-simd,-sign-ext,-simd128,-tail-call --no-entry --export-memory --initial-memory=2097152; profile-specific finite max-memory; SC2 --table-base=0 then bounded strip-unused-table.mjs after rejecting element/call_indirect",
+  "builderSha256": "5c195d745d5c4147d54b3056775ce8e9f2d163a66285fea05623367b07774dda",
+  "strictTableTransformerSha256": "fa61c9158ccf3de9151fbede62dcbe679af37cc99ad044812ec8dee9027e1793",
+  "modules": [
+    {
+      "profile": "bar-abi-1",
+      "upstreamRepository": "FS-GG/FSBarV2",
+      "upstreamRevision": "9f0d8712e2c9a21cbf49f515a65b520516239b5a",
+      "adaptedFrom": "sdk/barc/barc-guest-sdk/src/lib.rs",
+      "sourceSha256": "c933236f6d829cc5aee586cca3f2fdcf48943229b1c322bf92fe33f7f7f228b2",
+      "outputSha256": "1557e76b7a97b8e301c31c1e082c9060d8b66258a23308dcf9d2d17dbfd9de7d"
+    },
+    {
+      "profile": "sc2-abi-0x00010000",
+      "upstreamRepository": "FS-GG/FS.GG.SC2.Client",
+      "upstreamRevision": "57eadf00bb9e776664e00fe200bb4f2952f72829",
+      "adaptedFrom": "sdk/rust/sc2c-sdk/src/lib.rs",
+      "sourceSha256": "b3081311643d64873eb0a994470dd10955bab8e36ae38109417ba35751e4a760",
+      "outputSha256": "005a55fdd63fddacfb342e2cb02e12900926c9ba5134aebb9d0088f05223b03c"
+    }
+  ],
+  "syntheticConformance": {
+    "sourceSha256": "58fb6bb636d896129ff86188c1ceabc1ce4650e5b133e598c2674dbbe03a3efd",
+    "outputs": {
+      "loop_forever.wasm": "c0e38b0404c095a9efe93ea665bddb45cb5f77797368c2c695450b99db268353",
+      "call_trap.wasm": "2316e3f4e855b445473d21be9779108244d9ccdc8ec3c3e29a74b633dbb276d5",
+      "grow_memory.wasm": "39af989227927d2bb293bfb0353a28aa412040cbf04252ddd8445f8755cdd0f4",
+      "malformed_descriptor.wasm": "1c63a8f4a975cc4eaf1b778a141210dd3c3f53d3ce6ebc40218c65c7b4bf4664",
+      "free_trap.wasm": "283cf63f8dd7c5d70b8e18c9017849a0a1a2cef7e8c5af19a7762ea65ca985e7"
+    }
+  }
+}

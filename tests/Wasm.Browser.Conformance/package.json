@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "playwright test --workers=1" },
+  "devDependencies": { "@playwright/test": "1.63.0" }
+}

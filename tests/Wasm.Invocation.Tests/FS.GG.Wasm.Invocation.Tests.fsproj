@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Wasm.Browser/RuntimeProtocol.fs" Link="RuntimeProtocol.fs" />
+    <Compile Include="../../src/Wasm.Browser/Admission.fsi" Link="Admission.fsi" />
+    <Compile Include="../../src/Wasm.Browser/Admission.fs" Link="Admission.fs" />
+    <Compile Include="../../src/Wasm.Browser/Invocation.fsi" Link="Invocation.fsi" />
+    <Compile Include="../../src/Wasm.Browser/Invocation.fs" Link="Invocation.fs" />
+    <Compile Include="../../src/Wasm.Browser/WorkerEntry.fsi" Link="WorkerEntry.fsi" />
+    <Compile Include="../../src/Wasm.Browser/WorkerEntry.fs" Link="WorkerEntry.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="../Wasm.Compatibility/modules/**/*.wasm">
+      <Link>modules/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>
