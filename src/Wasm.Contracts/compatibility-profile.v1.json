@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.wasm.compatibility-profile/v1",
   "packageId": "FS.GG.Wasm.Contracts",
-  "sourceVersion": "0.1.0-source.3",
+  "sourceVersion": "0.1.0",
   "published": false,
   "abiProfiles": [
     { "id": "bar-abi-1", "version": 1, "prefix": "barc", "memory": "memory" },

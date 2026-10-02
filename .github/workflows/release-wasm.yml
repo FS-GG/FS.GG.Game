@@ -1,0 +1,220 @@
+name: release-wasm
+
+on:
+  push:
+    tags: ['wasm/v*']
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "prepare (default), publish, readback, or recovery"
+        type: choice
+        options: [prepare, publish, readback, recovery]
+        default: prepare
+      version:
+        description: "Stable shared WASM version"
+        type: string
+        default: "0.1.0"
+      source_run_id:
+        description: "Prior release-wasm run containing exact retained custody (readback/recovery)"
+        type: string
+        required: false
+
+concurrency:
+  group: release-wasm-0.1.0
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Validate release workflow and source contract
+        run: tests/release/wasm/test-release-wasm.sh --source-only
+
+  custody:
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      contents: read
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '0.1.0' }}
+      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'publish' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.401'
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '26'
+      - name: Bind stable source and dispatch mode
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$VERSION" == "$(cat sdk/wasm/VERSION)" ]]
+          case "$MODE" in
+            prepare) [[ -z "$SOURCE_RUN_ID" ]] ;;
+            publish) [[ -z "$SOURCE_RUN_ID" && "$GITHUB_REF_NAME" == "wasm/v$VERSION" ]] ;;
+            readback|recovery) [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]] ;;
+            *) exit 2 ;;
+          esac
+      - name: Install exact source qualification tools
+        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'recovery'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet tool restore
+          npm install --global '@informalsystems/quint@0.32.0'
+          rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-unknown
+          rustup default 1.90.0
+          (cd tests/Wasm.PackageConsumer/browser && npm ci && npx playwright install --with-deps chromium)
+      - name: Pack once and freeze custody
+        if: env.MODE == 'prepare' || env.MODE == 'publish'
+        run: scripts/wasm-release/prepare.sh artifacts/wasm-release
+      - name: Authenticate and download retained recovery custody
+        if: env.MODE == 'recovery' || env.MODE == 'readback'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
+          jq -e --arg source "$source_sha" '.head_sha == $source and .path == ".github/workflows/release-wasm.yml" and .status == "completed"' <<<"$run_json" >/dev/null
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "wasm-release-custody-$source_sha-$VERSION" --dir artifacts/wasm-release
+      - name: Verify retained custody
+        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'readback' || env.MODE == 'recovery'
+        run: python3 scripts/wasm-release/release_manifest.py verify --custody artifacts/wasm-release --manifest artifacts/wasm-release/release-manifest.json --source "$GITHUB_SHA"
+      - name: Verify contracts and production lifecycle correspondence
+        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'recovery'
+        env:
+          QUINT: quint
+        run: |
+          scripts/verify-wasm-contracts.sh
+          scripts/verify-wasm-lifecycle.sh
+      - name: Qualify exact retained package and SDK bytes
+        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'recovery'
+        run: scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release
+      - name: Retain immutable release custody
+        if: always() && (env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'readback' || env.MODE == 'recovery')
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-release-custody-${{ github.sha }}-${{ env.VERSION }}
+          path: artifacts/wasm-release/
+          if-no-files-found: error
+          retention-days: 90
+
+  readback:
+    needs: [custody]
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'readback'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-release-custody-${{ github.sha }}-0.1.0
+          path: artifacts/wasm-release
+      - name: Verify both feeds and release assets without publishing
+        env:
+          FEED_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          scripts/wasm-release/readback.sh org artifacts/wasm-release artifacts/readback/org
+          scripts/wasm-release/readback.sh public artifacts/wasm-release artifacts/readback/public
+          scripts/wasm-release/readback.sh assets artifacts/wasm-release artifacts/readback/assets
+
+  org:
+    needs: [custody]
+    if: github.event_name == 'push' || inputs.mode == 'publish' || inputs.mode == 'recovery'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-release-custody-${{ github.sha }}-0.1.0
+          path: artifacts/wasm-release
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.401'
+      - name: Push exact originals to org feed
+        run: dotnet nuget push 'artifacts/wasm-release/*.nupkg' --source https://nuget.pkg.github.com/FS-GG/index.json --api-key '${{ secrets.GITHUB_TOKEN }}' --no-symbols --skip-duplicate
+      - name: Read back and verify org packages
+        env:
+          FEED_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/wasm-release/readback.sh org artifacts/wasm-release artifacts/readback/org
+
+  public:
+    needs: [org]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-release-custody-${{ github.sha }}-0.1.0
+          path: artifacts/wasm-release
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.401'
+      - name: NuGet login for release-wasm.yml
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      - name: Push same originals to public nuget.org
+        run: dotnet nuget push 'artifacts/wasm-release/*.nupkg' --source https://api.nuget.org/v3/index.json --api-key '${{ steps.nuget-login.outputs.NUGET_API_KEY }}' --no-symbols --skip-duplicate
+      - name: Read back and verify public packages
+        run: scripts/wasm-release/readback.sh public artifacts/wasm-release artifacts/readback/public
+
+  assets:
+    needs: [public]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-release-custody-${{ github.sha }}-0.1.0
+          path: artifacts/wasm-release
+      - name: Upload SDK and manifest release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/wasm-release/stage-assets.sh artifacts/wasm-release
+      - name: Read back exact SDK and manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/wasm-release/readback.sh assets artifacts/wasm-release artifacts/readback/assets
+
+  complete:
+    needs: [org, public, assets]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish verified GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit wasm/v0.1.0 --repo "$GITHUB_REPOSITORY" --draft=false
+      - run: echo 'Both package feeds and immutable SDK release assets passed readback.'

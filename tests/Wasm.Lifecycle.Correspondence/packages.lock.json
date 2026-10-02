@@ -11,7 +11,7 @@
       "fs.gg.wasm.browser": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Wasm.Contracts": "[0.1.0-source.3, )",
+          "FS.GG.Wasm.Contracts": "[0.1.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
