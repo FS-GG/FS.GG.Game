@@ -1,0 +1,22 @@
+{
+  "schema": "fsgg.wasm.installed-qualification-audit/v1",
+  "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
+  "version": "0.2.0",
+  "reason": "Expose existing DeadlineExpired reason and outcome presence; verify both canonical expiry orderings without changing runtime or guest inputs.",
+  "files": [
+    {
+      "path": "tests/Wasm.PackageConsumer/Program.fs",
+      "producerBlob": "726c54f11feb55fade42e4ba9576f492a502198e",
+      "producerSha256": "49f43143fb83150c6910336779b8f92754f6f59c6e3772b8fe4007354f24b2e3",
+      "qualifierBlob": "7163bd027904a2931ebdfbda04476e18f260273e",
+      "qualifierSha256": "b52bd016e413815f9f5c351f6cb5464591b56a935aa9ab64036c55d442db78fb"
+    },
+    {
+      "path": "tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs",
+      "producerBlob": "0cfed777beb04a66acd0ed3863e7b65edf098723",
+      "producerSha256": "2e0835410a7bd652a351a626f67be80467feb28e4042cdd71cd5a104ba0c3929",
+      "qualifierBlob": "a62c89038c3662c0581b44f46d66f21558c21045",
+      "qualifierSha256": "40524632d89fd2abc3a83d00b569d1a069980dc3b90c791668e95bfc9a95e874"
+    }
+  ]
+}

@@ -73,7 +73,11 @@ def normalize(path: Path) -> None:
     document = json.loads(path.read_text(encoding="utf-8"))
     document["#meta"].pop("description", None)
     document["#meta"].pop("timestamp", None)
-    document["#meta"]["source"] = "eng/wasm-shared/lifecycle.qnt"
+    if path.name.startswith("expiry-"):
+        document["#meta"]["source"] = "eng/wasm-shared/expiry-qualification.qnt"
+        document["#meta"]["canonicalSource"] = "eng/wasm-shared/lifecycle.qnt"
+    else:
+        document["#meta"]["source"] = "eng/wasm-shared/lifecycle.qnt"
     path.write_text(
         json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
