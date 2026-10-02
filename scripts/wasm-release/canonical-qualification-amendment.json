@@ -5,7 +5,7 @@
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
   "version": "0.2.0",
   "publishedModelSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-  "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
+  "modelSha256": "39b7f4974d0116e7e8689f2d3f5cc8948b2a6dc4e313b5b9b687efc16bb6f7ca",
   "producerLink": "FS-GG/FS.GG.Game@4afacb501b9371b4cc81494b7bf91b46c880a663",
   "releaseManifestSha256": "dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853",
   "sdkSha256": "ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3",
@@ -22,7 +22,7 @@
   "model": {
     "path": "eng/wasm-shared/lifecycle.qnt",
     "previousSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-    "qualifierSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975"
+    "qualifierSha256": "39b7f4974d0116e7e8689f2d3f5cc8948b2a6dc4e313b5b9b687efc16bb6f7ca"
   },
   "qualifierInputs": [
     {
@@ -43,7 +43,7 @@
     {
       "path": "eng/wasm-shared/event-boundary-qualification.qnt",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "3f99c080e6adf814d6758cf2e70487172d0523430c20e003c91cbdf872153609"
+      "qualifierSha256": "757a28a4863fec9760aec8ab2682a9e9805fcd6d588aaf302f80bc796a7307b7"
     },
     {
       "path": "eng/wasm-shared/expiry-qualification.qnt",
@@ -88,7 +88,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs",
       "previousSha256": "8cc3b84d991f6720d19ac19ee4007b1007aa2a21ce66cd7febd3cbfcbd8aeb20",
-      "qualifierSha256": "787f8a9ffa78546c27a9d4429614fcb6d12117ac2a025731b29337aa6f5f84c0"
+      "qualifierSha256": "317e31b9faf1a8f588dceed17e69fbfb97059d475a86535ed53e2f8ed176bbc6"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Installed/InstalledHost.fsproj",
@@ -108,7 +108,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHostProgram.fs",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "de9f158cfaf9af2c0e58471da6901936640d9769a2955f38426bbc591bf6e3e6"
+      "qualifierSha256": "0ac64caf612ef7754e43b2af818e4f7d2b360df0e42a42141622616deb9d1412"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Program.fs",
@@ -313,7 +313,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "7e8a85acdbd8155a96b07153c64047663ced431659adeb012eee73195499f6e9"
+      "qualifierSha256": "1cfef1658fbe637ea50498be73e9bc850f701176e99ff5bb5f9736bd1580bca7"
     },
     {
       "path": "tests/release/wasm/test-canonical-qualification-policy.fsx",
@@ -330,7 +330,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "bc607448ec93ac0b50d2f89fb28c7fd91d1bcd9ca77f0f07754230c94bc8646a"
+      "qualifierSha256": "576331eeda29aaff422f5947961105cbd079a61602dc9dfdfb90ca6f814cabec"
     }
   ],
   "originalTraces": [
@@ -355,9 +355,14 @@
       "qualifierSha256": "89a9b1f0f36779b4f8dd44c07f1b839712408160327157b09b6f483074ace22b"
     },
     {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/pending-initialize-commit_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "4ed537a153a3709097d9da4cb37581072d888fba27bb8ed09a17ae66f6d29765"
+    },
+    {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/pending-load-commit_0.itf.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "73b43c72898e3494d7c779260956ef2f71603d34aa107bcd8e7812a351c1330a"
+      "qualifierSha256": "70c4480617599d0bfe51fd07911fc9fef0676d003c8fe6db1994d3d7c1f5b743"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/phase_0.itf.json",
@@ -438,6 +443,7 @@
     "tests/Wasm.Lifecycle.Correspondence/Traces/cleanup_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-early_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-late_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/pending-initialize-commit_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/pending-load-commit_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/phase_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/sc2_0.itf.json",

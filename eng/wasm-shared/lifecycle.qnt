@@ -121,7 +121,12 @@ module lifecycle {
     val r=e.request
     if(e.name=="loadInitial" or e.name=="prepareCandidate"){
       val fresh=r
-      if(e.name=="loadInitial") {...startControl(s,fresh,"loadInitial"),activeWorker:fresh.worker,activeGeneration:fresh.generation,nextGeneration:s.nextGeneration+1,effects:List(effect("createActive",fresh),effect("armTimer",fresh),effect("post",fresh))}
+      if(e.name=="loadInitial") {
+        val afterActive=if(s.activeWorker!=0)invalidate(s,s.activeWorker,"settleInvalidated","loadInitial")else {...s,effects:List()}
+        val afterCandidate=if(afterActive.candidateWorker!=0)invalidate(afterActive,afterActive.candidateWorker,"settleInvalidated","loadInitial")else {...afterActive,effects:List()}
+        val prefix=afterActive.effects.concat(afterCandidate.effects)
+        {...startControl(afterCandidate,fresh,"loadInitial"),activeWorker:fresh.worker,activeGeneration:fresh.generation,nextGeneration:s.nextGeneration+1,effects:prefix.concat(List(effect("createActive",fresh),effect("armTimer",fresh),effect("post",fresh)))}
+      }
       else {...startControl(s,fresh,"prepareCandidate"),candidateWorker:fresh.worker,candidateGeneration:fresh.generation,candidateTransaction:fresh.generation,candidateInitialized:false,candidateReady:false,nextGeneration:s.nextGeneration+1,effects:List(effect("createCandidate",fresh),effect("armTimer",fresh),effect("post",fresh))}
     } else if(e.name=="initialize")
       if(not(live(s).contains(e.worker))) refuse(s,r,"refused") else startControl(s,r,"initialize")
@@ -300,4 +305,3 @@ module lifecycleTest {
   run cleanupFaultIsNotSuccessTest = initSc2.then(readyActive).then(submitOrdinary).then(cleanupFault).expect(and {state.activeWorker==0,hasEffect(state.effects,"terminate")})
   run disposalSettlesEverythingOnceTest = initSc2.then(readyActive).then(submitOrdinary).then(submitOrdinary).then(prepareCandidate).then(dispose).then(dispose).expect(and {state.disposed,state.controls.length()==0,singleTerminalDelivery})
 }
-

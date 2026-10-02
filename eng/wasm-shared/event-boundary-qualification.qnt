@@ -125,3 +125,21 @@ module callbackClosureTest {
     not(connectedFinalEffect(unfinished,termination(1),state.clock).callbacksQuiescent)
   })
 }
+
+module pendingInitializeCommitQualification {
+  import lifecycle.* from "./lifecycle"
+  var stage: int
+  action initRegression = all {initSc2,stage'=0}
+  action regressionStep = all {
+    stage'=stage+1,
+    if(stage==0)loadInitial else if(stage==1)compiled
+    else if(stage==2)initialize // Keep the active initialization control pending.
+    else if(stage==3)prepareCandidate else if(stage==4)compiled
+    else if(stage==5)initialize
+    else if(stage==6){
+      val r=state.controls.select(control=>control.worker==state.candidateWorker and control.operation=="initialize").head()
+      event(input("initialized",r,r.worker,""))
+    } else if(stage==7)candidateValidated else if(stage==8)commitCandidate
+    else dispose,
+  }
+}

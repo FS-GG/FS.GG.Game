@@ -4,7 +4,7 @@ open Wasm.Lifecycle.Correspondence.InstalledHostControls
 [<EntryPoint>]
 let main _ =
     let failures = traces |> List.collect(fun trace -> replayFacade false trace @ replayFacade true trace)
-    let regression=traces |> List.find(fun trace -> trace.Name="pending-load-commit")
+    let regression=traces |> List.find(fun trace -> trace.Name="pending-initialize-commit")
     for name,detected in nestedCallbackMutationsAreDetected regression do
         if not detected then failwithf "nested callback causal mutant accepted: %s" name
     if failures.IsEmpty then

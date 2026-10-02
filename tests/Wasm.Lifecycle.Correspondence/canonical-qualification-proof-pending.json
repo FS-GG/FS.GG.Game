@@ -1,17 +1,16 @@
 {
   "schema": "fsgg.wasm.canonical-qualification-proof-pending/v1",
-  "status": "CANDIDATE_PENDING_REPAIRED_MODEL_COMPILED_PROOF_AND_ROOT_REVIEW",
+  "status": "PROOF_REFUSED_PRIOR_RUNTIME_FAILURE_LATEST_47_COMPILED_PENDING",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
-  "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
+  "modelSha256": "39b7f4974d0116e7e8689f2d3f5cc8948b2a6dc4e313b5b9b687efc16bb6f7ca",
   "producerProof": {
-    "status": "PENDING_LATEST_MODEL_DOTNET_FABLE_QUALIFICATION",
-    "scope": "Previous dbfa45/native proof is historical; repaired canonical callback closure and46-trace source requires new compiled proof"
+    "status": "PENDING_LATEST_47_MODEL_DOTNET_FABLE_QUALIFICATION",
+    "scope": "Previous46 source.NET failed; latest47 regenerated model requires fresh actual.NET/Fable full-projection ordered-effect proof"
   },
   "installedProof": {
-    "status": "PENDING_LATEST_MODEL_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
-    "newCallbackMutants": "Two new installed callback mutant controls require actual compilation/execution",
-    "scope": "Controlled typed observations; latest full-state/ordered-effect/mechanical callback qualification pending; guest execution excluded"
+    "status": "PENDING_LATEST_47_MODEL_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
+    "scope": "Latest reachable pending-initialize commit fixture and corrected prior pending-load control require actual installed connected qualification; guest execution excluded"
   },
   "administrativeOwner": {
     "status": "PASS_ACTUAL_TYPED_FSHARP_13_MUTANTS_AND_PENDING_REFUSAL",
@@ -20,14 +19,16 @@
   },
   "approval": "Audit status remains pending. Neither existence nor SHA of this report proves producer/installed qualification. Only root-reviewed immutable amendment bytes with independently supplied exact audit digest can authorize administrative eligibility; caller exactHEAD is a separate receipt after commit.",
   "remaining": [
-    "clean committed repaired callback-closure source and46-trace candidate",
-    "latest actual producer and installed.NET/Fable full-state ordered-effect qualification plus new callback mutants",
+    "clean committed finite LoadInitial ordering correction and47-trace candidate",
+    "fresh root native grant and actual producer/installed.NET/Fable full-state ordered-effect qualification",
     "root review and explicit new amendment approval",
     "post-commit exactHEAD administrative owner invocation"
   ],
   "latestSourceControls": {
-    "status": "PASS_FINAL_SOURCE_SAMPLING_AND_CALLBACK_CONTROLS",
-    "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
+    "status": "PASS_ACTUAL_47_TRACE_SOURCE_CONTROLS_ONLY",
+    "modelSha256": "39b7f4974d0116e7e8689f2d3f5cc8948b2a6dc4e313b5b9b687efc16bb6f7ca",
+    "regeneratedITFs": 47,
+    "quintTests": 8,
     "callbackBoundControls": 3,
     "boundedSamples": {
       "inits": [
@@ -40,21 +41,25 @@
       "backend": "typescript",
       "status": "PASS_NO_VIOLATION_FOUND"
     },
+    "pipelineExit": 0,
+    "pipelineExitEvidence": "Root inspected completed source-control pipeline; individual log PASS independently read during binding refresh",
     "logSha256": {
-      "coldSampling": "23d3ace1b552befface2a6b4d7f0a2fa088dc9720fa71161491ce4b86c9ccaec",
-      "readySampling": "72a2263f056a8159dd6253dd414b3f746fd8c871785d3be22147cd9181f149d2",
-      "callbackControls": "6ee99c05ecb8510f9eb529c6f5c6aa972f27b8219c1cf21b2150b86bf72a583d"
+      "regeneration": "aa2c5af561893408824f8d9ec6c91b55400839f6df5ce57fec085558d180e176",
+      "eightTests": "cc09758ec7f6cb0619e357dc355f19d7781fd414f443901708956feb7bb02cdd",
+      "callbackControls": "6ee99c05ecb8510f9eb529c6f5c6aa972f27b8219c1cf21b2150b86bf72a583d",
+      "coldSampling": "acf6dd4e8431f0ae03aad7f9e37ba772e6117260396f0d54b3559aa991e8d6c9",
+      "readySampling": "2e65722f18801138e8fa6d4399937b67773c4f4a24b5f851b3b0a493712c3022"
     },
-    "regeneratedITFs": {
-      "count": 46,
-      "status": "BYTE_IDENTICAL_TO_PREVIOUS_COMPLETED_46_TRACE_REGENERATION",
-      "note": "Three callback test definitions moved to existing derived qualification module; semantic transition unchanged; no latest regeneration run is invented"
+    "newRegression": {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/pending-initialize-commit_0.itf.json",
+      "sha256": "4ed537a153a3709097d9da4cb37581072d888fba27bb8ed09a17ae66f6d29765",
+      "reachability": "Old active Initialize pending while candidate prepared/initialized/validated, then commit; genuine two-level callback closure"
     },
-    "scope": "Final source sampling/control logs inspected for actualPASS. Previous863 source tests/regeneration retained as historical. New compiled.NET/Fable proof and amendment approval remain pending."
+    "scope": "Actual completed47 regeneration/eight tests/three closure controls/cold-ready sampled logs bound. No latest compiled or approval proof claimed."
   },
   "latestCompiledQualification": {
-    "status": "PENDING_ROOT_NATIVE_GRANT",
-    "scope": "Latest repaired canonical source,46 traces and new installed controls; previous compiled proof does not qualify this source"
+    "status": "PENDING_FRESH_ROOT_NATIVE_GRANT_PRIOR_46_PROOF_REFUSED",
+    "scope": "No actual latest47 compiled proof; unchanged package/native/runtime inputs and new canonical source qualify only after fresh root-owned checks"
   },
   "historicalConnectedWorkerFaultCounterexample": {
     "status": "GENUINE_FIRST_NATIVE_FAILURE_RETAINED",
@@ -194,6 +199,33 @@
         "deterministicRegression": "63990f40eac76dce6cb45f4f189fe055b055beb6a6a3d4bb5b1d5bae86968b9e"
       },
       "scope": "Actual completed generation/test/control/sampling log PASS inspected statically; source controls only, no new compiled.NET/Fable or amendment approval claimed"
+    },
+    {
+      "status": "PASS_FINAL_SOURCE_SAMPLING_AND_CALLBACK_CONTROLS",
+      "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
+      "callbackBoundControls": 3,
+      "boundedSamples": {
+        "inits": [
+          "init",
+          "initReady"
+        ],
+        "samplesPerInit": 1000,
+        "steps": 40,
+        "seed": 20261002,
+        "backend": "typescript",
+        "status": "PASS_NO_VIOLATION_FOUND"
+      },
+      "logSha256": {
+        "coldSampling": "23d3ace1b552befface2a6b4d7f0a2fa088dc9720fa71161491ce4b86c9ccaec",
+        "readySampling": "72a2263f056a8159dd6253dd414b3f746fd8c871785d3be22147cd9181f149d2",
+        "callbackControls": "6ee99c05ecb8510f9eb529c6f5c6aa972f27b8219c1cf21b2150b86bf72a583d"
+      },
+      "regeneratedITFs": {
+        "count": 46,
+        "status": "BYTE_IDENTICAL_TO_PREVIOUS_COMPLETED_46_TRACE_REGENERATION",
+        "note": "Three callback test definitions moved to existing derived qualification module; semantic transition unchanged; no latest regeneration run is invented"
+      },
+      "scope": "Final source sampling/control logs inspected for actualPASS. Previous863 source tests/regeneration retained as historical. New compiled.NET/Fable proof and amendment approval remain pending."
     }
   ],
   "ciEvidenceRetention": {
@@ -227,5 +259,13 @@
       }
     ],
     "scope": "Local bounded evidence-retention controls only; no hosted job/native qualification success implied"
+  },
+  "historicalLoadInitialRuntimeCounterexample": {
+    "status": "ACTUAL_46_TRACE_SOURCE_DOTNET_FAILURE_RETAINED",
+    "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
+    "sha256": "77400722a416f3187314975222d6cf30371290f38b50971c8ec130dd4da6bf1a",
+    "finding": "Canonical LoadInitial differed from frozen published runtime ordered old-active then candidate GenerationRetired invalidation before creation. Finite producer model correction preserves that ordering and raw causal evidence; executable runtime remains unchanged.",
+    "resourcePairReleasedAt": "2026-10-02 23:33:09 UTC",
+    "scope": "Genuine actual source.NET failure. No46 Fable pass inferred; previous45 dbfa compiled proofs remain historical."
   }
 }
