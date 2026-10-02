@@ -1,0 +1,48 @@
+{
+  "schema": "fsgg.wasm.compatibility-baselines/v1",
+  "recordedAt": "2026-10-02",
+  "baselines": [
+    {
+      "product": "BAR",
+      "repository": "FS-GG/FSBarV2",
+      "revision": "9f0d8712e2c9a21cbf49f515a65b520516239b5a",
+      "tree": "644e7bbc7d4e9906934d89453970ae6634ef895b",
+      "protectedSource": "/tmp/bar-infolog-final-refresh-protected-artifact-source-20261002",
+      "qualificationDisposition": "independent-browser-demonstration-recorded-not-rerun",
+      "sources": [
+        { "path": "scripts/build-barc-guests.sh", "sha256": "5e60165473f8b85703eae92a61930356a1430e3c38f73c6936fe7d81a2b86016" },
+        { "path": "sdk/barc/barc-guest-sdk/Cargo.toml", "sha256": "38114b9594690876e2ab5725cff80a02aa8e38eaa8979214bc322d76f11387de" },
+        { "path": "sdk/barc/barc-guest-sdk/src/lib.rs", "sha256": "fdf53c14db6e1fb18087e396ee651cbcd29ca031ce6797d5148fbaf9e460277c" },
+        { "path": "examples/barc-guests/manual-preview/Cargo.toml", "sha256": "4a157ecc81a16cc956b3085378565069b7a14a26122d7e581effd1e8fbd7c139" },
+        { "path": "examples/barc-guests/custom-preview/Cargo.toml", "sha256": "bd7ff1e7898c3a5dd546c4b66648f7de218709c14c1b872f9ce555486384dd5e" }
+      ],
+      "builtArtifacts": [],
+      "artifactDigestDisposition": "no-built-wasm-artifact-present-in-protected-source;do-not-invent"
+    },
+    {
+      "product": "SC2",
+      "repository": "FS-GG/FS.GG.SC2.Client",
+      "revision": "57eadf00bb9e776664e00fe200bb4f2952f72829",
+      "tree": "991ff12af5485203d94749150b29d3e547cdf1cc",
+      "protectedSource": "/tmp/sc2-protected-capture-marshalling-artifact-20261002",
+      "qualificationDisposition": "implemented-tests-and-bounded-demonstrations-not-rerun",
+      "sources": [
+        { "path": "sdk/rust/sc2c-guest/Cargo.toml", "sha256": "36fe1693d2c9e88e81d9cb61f8c08e283d89e2fd8624c13f258123f2dc40e9c0" },
+        { "path": "sdk/rust/sc2c-guest/src/lib.rs", "sha256": "b3bca3eae96b7a64efb28603e65efd8936dbaa9540650a4dc68f5489beec4e01" },
+        { "path": "sdk/rust/sc2c-sdk/Cargo.toml", "sha256": "6b1a4c2a938aa6cda655cc5a7d9e7e565322164b5923a22c5ba1c07621ffbe00" },
+        { "path": "sdk/rust/sc2c-sdk/src/lib.rs", "sha256": "d69424c241f2596e50f3c43266d4a8cb66953cc6ca154df032264e7d1b61e983" },
+        { "path": "sdk/c/include/sc2c.h", "sha256": "e5c3090ac6ad124ba8f545da36a3dcc93cdb224392402ce1cfd039bb3ee9b01a" },
+        { "path": "sdk/c/src/sc2c.c", "sha256": "341eeda462e9fd26e2647654aa3d801f1ebbcb784b724217f61352cf3b1e4033" },
+        { "path": "src/SC2.Client.Browser/module-binary-admission.js", "sha256": "b1ce4fd6c5f2ec2dcdf043a8b144cbea8430e5e1238725c571d8f8c94540888d" },
+        { "path": "fixtures/guest-worker.js", "sha256": "c0bd8c3c0cf607e6d7e0a6aa806fb7d4060d89061c12d289ac5a731888437f47" }
+      ],
+      "builtArtifacts": [],
+      "artifactDigestDisposition": "no-built-wasm-artifact-present-in-protected-source;do-not-invent",
+      "canonicalProfileRepair": {
+        "unmergedTip": "4c6080ca0198884559bbe8a2aaa037b3e1d4c1e2",
+        "acceptedAsBaseline": false,
+        "reason": "full-native standalone advisor compile remains under product-owned repair"
+      }
+    }
+  ]
+}

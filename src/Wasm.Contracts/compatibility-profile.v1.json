@@ -1,0 +1,15 @@
+{
+  "schema": "fsgg.wasm.compatibility-profile/v1",
+  "packageId": "FS.GG.Wasm.Contracts",
+  "sourceVersion": "0.1.0-source.1",
+  "published": false,
+  "abiProfiles": [
+    { "id": "bar-abi-1", "version": 1, "prefix": "barc", "memory": "memory" },
+    { "id": "sc2-abi-0x00010000", "version": 65536, "prefix": "sc2c", "memory": "memory" }
+  ],
+  "compatibilityPaths": [
+    { "id": "bar-protected", "support": "shared-runtime-candidate" },
+    { "id": "sc2-imported-strict", "support": "shared-runtime-candidate" },
+    { "id": "sc2-legacy-direct-url", "support": "inventory-only-migration-required" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "fsgg.wasm.expected-decisions/v1",
+  "cases": [
+    { "id": "bar-exact-abi", "path": "bar-protected", "subject": "exports", "expected": "admit", "guard": "six exact barc signatures plus memory" },
+    { "id": "bar-table-within-bound", "path": "bar-protected", "subject": "table", "expected": "admit", "guard": "at most one finite table no larger than 4096" },
+    { "id": "bar-empty-output", "path": "bar-protected", "subject": "span", "expected": "reject", "guard": "successful output must be nonempty" },
+    { "id": "bar-unaligned-output", "path": "bar-protected", "subject": "span", "expected": "reject", "guard": "nonempty pointers are four-byte aligned" },
+    { "id": "bar-load-failure", "path": "bar-protected", "subject": "replacement", "expected": "no-active-worker", "guard": "destructive load removes the old generation first" },
+    { "id": "sc2-strict-table", "path": "sc2-imported-strict", "subject": "table", "expected": "reject", "guard": "tables are forbidden" },
+    { "id": "sc2-strict-start", "path": "sc2-imported-strict", "subject": "start", "expected": "reject-before-instantiation", "guard": "start section is forbidden" },
+    { "id": "sc2-empty-output", "path": "sc2-imported-strict", "subject": "span", "expected": "admit", "guard": "worker layer permits empty output" },
+    { "id": "sc2-queue-deadline", "path": "sc2-imported-strict", "subject": "scheduler", "expected": "charge-from-enqueue", "guard": "FIFO residence consumes the deadline" },
+    { "id": "sc2-candidate-failure", "path": "sc2-imported-strict", "subject": "replacement", "expected": "preserve-active-worker", "guard": "candidate is authority-free until commit" },
+    { "id": "sc2-unresolved-replacement", "path": "sc2-imported-strict", "subject": "replacement", "expected": "freeze", "guard": "new work waits for product receipt recovery" },
+    { "id": "sc2-legacy-start", "path": "sc2-legacy-direct-url", "subject": "start", "expected": "inventory-only", "guard": "compile/instantiate can execute start before checks" },
+    { "id": "shared-dirty-descriptor", "path": "all-shared-runtime-candidates", "subject": "descriptor", "expected": "zero-before-call", "guard": "unwritten reused bytes are never output" },
+    { "id": "shared-overlap", "path": "all-shared-runtime-candidates", "subject": "cleanup", "expected": "skip-and-terminate", "guard": "rejected or aliased spans are never passed to guest free" },
+    { "id": "shared-cleanup-fault", "path": "all-shared-runtime-candidates", "subject": "cleanup", "expected": "fail-once-and-dispose", "guard": "no successful output is exposed before cleanup succeeds" },
+    { "id": "shared-advisor-role", "path": "all-shared-runtime-candidates", "subject": "authority", "expected": "product-adapter-decision", "guard": "generic role metadata grants no native command capability" }
+  ]
+}
