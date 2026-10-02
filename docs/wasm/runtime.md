@@ -41,5 +41,7 @@ The verifier requires Quint `0.32.0`. It typechecks and tests the model, checks
 the bounded simulation and deterministic trace bytes, runs lifecycle and
 correspondence tests, executes the correspondence suite from Fable output, and
 packs the local browser candidate to check its curated source and JavaScript
-asset closure. This source gate does not establish hosted package publication,
-product adoption, native authority, or a qualified browser host.
+asset closure. It then restores a fresh Fable consumer from the local contracts
+and browser packages and executes the generated JavaScript. This source gate
+does not establish hosted package publication, product adoption, native
+authority, or a qualified browser host.

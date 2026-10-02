@@ -14,6 +14,7 @@ fi
 model="$repo/eng/wasm-shared/lifecycle.qnt"
 traces="$work/traces"
 mkdir -p "$traces" "$work/fable" "$work/package"
+export NUGET_PACKAGES="$work/nuget-packages"
 
 "$quint" typecheck "$model"
 "$quint" test --main=lifecycleTest --seed=20261002 "$model"
@@ -39,11 +40,13 @@ done
 cmp "$work/GeneratedTraces.fs" "$repo/tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs"
 
 dotnet run --project "$repo/tests/Wasm.Lifecycle.Tests/FS.GG.Wasm.Lifecycle.Tests.fsproj" -c Release -- --summary
+dotnet run --project "$repo/tests/Wasm.Invocation.Tests/FS.GG.Wasm.Invocation.Tests.fsproj" -c Release
 dotnet run --project "$repo/tests/Wasm.Lifecycle.Correspondence/FS.GG.Wasm.Lifecycle.Correspondence.fsproj" -c Release
 dotnet tool run fable "$repo/tests/Wasm.Lifecycle.Correspondence/FS.GG.Wasm.Lifecycle.Correspondence.fsproj" \
   --outDir "$work/fable" --noCache
 node "$work/fable/Program.js"
 
+dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$work/package"
 dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$work/package"
 package="$work/package/FS.GG.Wasm.Browser.0.1.0-source.2.nupkg"
 unzip -Z1 "$package" > "$work/package-files.txt"
@@ -53,5 +56,39 @@ for path in \
   grep -Fxq "$path" "$work/package-files.txt"
 done
 
-printf 'wasm-lifecycle: model=sampled seed=20261002 samples=2000 steps=40 correspondence=dotnet,fable-node package-sha256=%s publication=none\n' \
+mkdir -p "$work/consumer"
+cat > "$work/consumer/Consumer.fsproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.0-source.2]" />
+  </ItemGroup>
+</Project>
+EOF
+cat > "$work/consumer/Program.fs" <<'EOF'
+open FS.GG.Wasm.Browser
+
+[<EntryPoint>]
+let main _ =
+    match OperationToken.create "fresh-package-consumer" with
+    | Ok token ->
+        printfn "%s" (OperationToken.value token)
+        0
+    | Error issue -> failwithf "%A" issue
+EOF
+cat > "$work/NuGet.Config" <<EOF
+<configuration>
+  <packageSources><clear/><add key="candidate" value="$work/package"/><add key="nuget" value="https://api.nuget.org/v3/index.json"/></packageSources>
+  <packageSourceMapping><packageSource key="candidate"><package pattern="FS.GG.Wasm.*"/></packageSource><packageSource key="nuget"><package pattern="*"/></packageSource></packageSourceMapping>
+</configuration>
+EOF
+dotnet restore "$work/consumer/Consumer.fsproj" --configfile "$work/NuGet.Config"
+dotnet tool run fable "$work/consumer/Consumer.fsproj" --outDir "$work/consumer-js" --noCache
+node "$work/consumer-js/Program.js" | grep -Fxq 'fresh-package-consumer'
+
+printf 'wasm-lifecycle: model=sampled seed=20261002 samples=2000 steps=40 correspondence=dotnet,fable-node consumer=fresh-fable-package package-sha256=%s publication=none\n' \
   "$(sha256sum "$package" | cut -d' ' -f1)"

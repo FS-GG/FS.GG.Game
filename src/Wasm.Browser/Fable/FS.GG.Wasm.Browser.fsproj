@@ -7,18 +7,18 @@
     <EnableDefaultItems>false</EnableDefaultItems>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../RuntimeProtocol.fsi" Link="RuntimeProtocol.fsi" />
-    <Compile Include="../RuntimeProtocol.fs" Link="RuntimeProtocol.fs" />
-    <Compile Include="../Admission.fsi" Link="Admission.fsi" />
-    <Compile Include="../Admission.fs" Link="Admission.fs" />
-    <Compile Include="../Invocation.fsi" Link="Invocation.fsi" />
-    <Compile Include="../Invocation.fs" Link="Invocation.fs" />
-    <Compile Include="../WorkerEntry.fsi" Link="WorkerEntry.fsi" />
-    <Compile Include="../WorkerEntry.fs" Link="WorkerEntry.fs" />
-    <Compile Include="../Lifecycle.fsi" Link="Lifecycle.fsi" />
-    <Compile Include="../Lifecycle.fs" Link="Lifecycle.fs" />
-    <Compile Include="../Host.fsi" Link="Host.fsi" />
-    <Compile Include="../Host.fs" Link="Host.fs" />
+    <Compile Include="RuntimeProtocol.fsi" />
+    <Compile Include="RuntimeProtocol.fs" />
+    <Compile Include="Admission.fsi" />
+    <Compile Include="Admission.fs" />
+    <Compile Include="Invocation.fsi" />
+    <Compile Include="Invocation.fs" />
+    <Compile Include="WorkerEntry.fsi" />
+    <Compile Include="WorkerEntry.fs" />
+    <Compile Include="Lifecycle.fsi" />
+    <Compile Include="Lifecycle.fs" />
+    <Compile Include="Host.fsi" />
+    <Compile Include="Host.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FS.GG.Wasm.Contracts" Version="[0.1.0-source.2]" />
