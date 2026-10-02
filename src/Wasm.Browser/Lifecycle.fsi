@@ -9,6 +9,10 @@ type RuntimeIssue =
 type RequestProjection =
     {
         Id: uint64
+        Worker: string
+        Operation: string
+        Phase: string
+        Correlation: string
         Generation: uint64
         DeadlineMilliseconds: int64
         Submission: string
@@ -17,6 +21,11 @@ type RequestProjection =
 
 type EffectProjection =
     {
+        Operation: string
+        Phase: string
+        Correlation: string
+        Bytes: int
+        Due: int64
         Kind: string
         Request: uint64
         Generation: uint64
@@ -37,6 +46,9 @@ type HostProjection =
         CandidateInitialized: bool
         CandidateReady: bool
         RetiringWorkers: string list
+        CompiledWorkers: string list
+        InitializedWorkers: string list
+        Controls: RequestProjection list
         Current: RequestProjection
         Ordinary: RequestProjection list
         Ordered: RequestProjection list

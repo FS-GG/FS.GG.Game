@@ -119,9 +119,9 @@ grep -Fq 'b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4' \
   echo "workflow preflight: WASI SDK 34 archive identity is not pinned" >&2
   exit 1
 }
-grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.1]" />' \
+grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" />' \
   "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj" || {
-  echo "workflow preflight: fresh consumer does not bind the stable 0.1.1 browser package" >&2
+  echo "workflow preflight: fresh consumer does not bind the stable 0.2.0 browser package" >&2
   exit 1
 }
 if grep -Fq '<ProjectReference' "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj"; then
@@ -129,6 +129,8 @@ if grep -Fq '<ProjectReference' "$repo/tests/Wasm.PackageConsumer/Consumer.fspro
   exit 1
 fi
 "$repo/tests/release/wasm/test-release-wasm.sh" --source-only
+python3 "$repo/tests/release/wasm/test-installed-org-workflow.py"
+python3 "$repo/tests/release/wasm/test-api-baseline-policy.py"
 for control in \
   'rust-bar.wasm' 'rust-sc2.wasm' 'c-bar.wasm' 'c-sc2.wasm' \
   'trap remains inside the package Worker' \

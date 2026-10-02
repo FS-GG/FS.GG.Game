@@ -1,50 +1,28 @@
-// Thin main-thread mechanics for Lifecycle effects. Callers supply each bounded
-// timeout from the production F# host policy.
+// Thin Worker/timer transport consumed by Host.CreateConnected. This transport
+// owns handles only; F# decides commands, deadlines, identity and settlement.
 export function moduleWorkerUrl(assetBaseUrl = import.meta.url) {
   return new URL("module-worker.mjs", assetBaseUrl);
 }
-
-export class WasmWorkerMechanics {
-  #worker; #next = 1; #pending = new Map(); #disposed = false;
-  constructor(assetBaseUrl = import.meta.url) {
-    this.#worker = new Worker(moduleWorkerUrl(assetBaseUrl), { type: "module", name: "fsgg-wasm-package" });
-    this.#worker.onmessage = ({ data }) => {
-      const pending = this.#pending.get(data.requestId);
-      if (!pending) return;
-      this.#pending.delete(data.requestId); clearTimeout(pending.timer);
-      data.ok ? pending.resolve(data.value) : pending.reject(new Error(data.error));
-    };
-    this.#worker.onerror = event => this.#failAll(new Error(event.message || "module Worker failed"));
-  }
-  #failAll(error) {
-    for (const pending of this.#pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
-    this.#pending.clear();
-  }
-  #send(message, timeoutMilliseconds) {
-    if (this.#disposed) return Promise.reject(new Error("worker mechanics disposed"));
-    if (!Number.isSafeInteger(timeoutMilliseconds) || timeoutMilliseconds <= 0) return Promise.reject(new Error("positive finite timeout required"));
-    const requestId = this.#next++;
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.#pending.delete(requestId); this.#worker.terminate(); this.#disposed = true;
-        reject(new Error("deadline")); this.#failAll(new Error("worker terminated after deadline"));
-      }, timeoutMilliseconds);
-      this.#pending.set(requestId, { resolve, reject, timer });
-      this.#worker.postMessage({ requestId, ...message });
-    });
-  }
-  load(bytes, prefix, expectedVersion, timeoutMilliseconds) {
-    const owned = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
-    return this.#send({ kind: "load", bytes: owned, prefix, expectedVersion }, timeoutMilliseconds);
-  }
-  invoke(call, input, timeoutMilliseconds) {
-    const owned = input instanceof Uint8Array ? input.slice() : new Uint8Array(input);
-    return this.#send({ kind: "invoke", call, input: owned }, timeoutMilliseconds);
-  }
-  shutdown(timeoutMilliseconds) { return this.#send({ kind: "shutdown" }, timeoutMilliseconds); }
-  dispose() {
-    if (this.#disposed) return;
-    this.#disposed = true; this.#worker.terminate(); this.#failAll(new Error("worker mechanics disposed"));
-  }
-  get disposed() { return this.#disposed; }
+export function createHostTransport(assetBaseUrl = import.meta.url) {
+  const workers = new Map(), timers = new Map();
+  return {
+    Now: () => BigInt(Math.floor(performance.now())),
+    CreateWorker(name, receive) {
+      const worker = new Worker(moduleWorkerUrl(assetBaseUrl), { type: "module", name });
+      worker.onmessage = ({ data }) => receive(data);
+      workers.set(name, { worker, receive, command:null });
+      worker.onerror = event => {
+        event.preventDefault();
+        const command=workers.get(name)?.command;
+        if(command) receive({Identity:command.Identity,Correlation:command.Correlation,Kind:"failed",Phase:"compile",Digest:"",Version:0,State:"faulted",Status:0,Diagnostic:event.message,CleanupDiagnostic:"",Dispatched:false,Output:new Uint8Array()});
+      };
+    },
+    PostCommand(name, command) { const handle=workers.get(name); handle.command=command; handle.worker.postMessage(command); },
+    TerminateWorker(name) { workers.get(name)?.worker.terminate(); workers.delete(name); },
+    ArmTimer(key, delay, observe) {
+      clearTimeout(timers.get(key));
+      timers.set(key, setTimeout(() => { timers.delete(key); observe(); }, delay));
+    },
+    CancelTimer(key) { clearTimeout(timers.get(key)); timers.delete(key); }
+  };
 }

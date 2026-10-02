@@ -10,6 +10,10 @@ type RuntimeIssue =
 type RequestProjection =
     {
         Id: uint64
+        Worker: string
+        Operation: string
+        Phase: string
+        Correlation: string
         Generation: uint64
         DeadlineMilliseconds: int64
         Submission: string
@@ -18,6 +22,11 @@ type RequestProjection =
 
 type EffectProjection =
     {
+        Operation: string
+        Phase: string
+        Correlation: string
+        Bytes: int
+        Due: int64
         Kind: string
         Request: uint64
         Generation: uint64
@@ -38,6 +47,9 @@ type HostProjection =
         CandidateInitialized: bool
         CandidateReady: bool
         RetiringWorkers: string list
+        CompiledWorkers: string list
+        InitializedWorkers: string list
+        Controls: RequestProjection list
         Current: RequestProjection
         Ordinary: RequestProjection list
         Ordered: RequestProjection list
@@ -50,11 +62,18 @@ type HostProjection =
     }
 
 type private WorkerRef =
-    { Instance: string; Generation: uint64 }
+    {
+        Instance: string
+        Generation: uint64
+        Configuration: ValidatedConfiguration
+    }
 
 type private PendingRequest =
     {
         Identity: HostIdentity
+        Operation: WorkerOperation
+        Configuration: ValidatedConfiguration
+        Phase: InvocationPhase
         Submission: SubmissionClass
         Input: byte array
         DeadlineMilliseconds: int64
@@ -78,6 +97,9 @@ type private LifecycleState =
         Candidate: CandidateState option
         Retiring: Map<string, WorkerRef>
         Current: PendingRequest option
+        Controls: Map<string, PendingRequest>
+        Compiled: Set<string>
+        Initialized: Set<string>
         Ordinary: PendingRequest list
         Ordered: PendingRequest list
         Snapshot: PendingRequest option
@@ -95,6 +117,10 @@ module Lifecycle =
     let private emptyRequest =
         {
             Id = 0UL
+            Worker = ""
+            Operation = "none"
+            Phase = "process"
+            Correlation = ""
             Generation = 0UL
             DeadlineMilliseconds = 0L
             Submission = "Ordinary"
@@ -122,6 +148,25 @@ module Lifecycle =
     let private requestProjection request =
         {
             Id = request.Identity.Request
+            Worker = request.Identity.WorkerInstance
+            Operation =
+                (match request.Operation with
+                 | InspectAndCompile _ -> "load"
+                 | InitializeGuest _ -> "initialize"
+                 | ProcessGuest _ -> "process"
+                 | ShutdownGuest -> "shutdown"
+                 | _ -> "other")
+            Phase =
+                (match request.Phase with
+                 | Compile -> "compile"
+                 | Instantiate -> "instantiate"
+                 | AllocateDescriptor -> "allocate-descriptor"
+                 | AllocateInput -> "allocate-input"
+                 | Initialize -> "initialize"
+                 | Process -> "process"
+                 | Free -> "free"
+                 | Shutdown -> "shutdown")
+            Correlation = OperationToken.value (token request.Identity)
             Generation = request.Identity.Generation
             DeadlineMilliseconds = request.DeadlineMilliseconds
             Submission =
@@ -159,6 +204,9 @@ module Lifecycle =
                         Candidate = None
                         Retiring = Map.empty
                         Current = None
+                        Controls = Map.empty
+                        Compiled = Set.empty
+                        Initialized = Set.empty
                         Ordinary = []
                         Ordered = []
                         Snapshot = None
@@ -188,6 +236,9 @@ module Lifecycle =
                 state.Candidate
                 |> Option.exists (fun value -> value.Initialized && value.Validated)
             RetiringWorkers = state.Retiring |> Map.toList |> List.map fst |> List.sort
+            CompiledWorkers = state.Compiled |> Set.toList
+            InitializedWorkers = state.Initialized |> Set.toList
+            Controls = state.Controls |> Map.toList |> List.map (snd >> requestProjection)
             Current =
                 state.Current
                 |> Option.map requestProjection
@@ -206,67 +257,147 @@ module Lifecycle =
         }
 
     let private effectProjection effect =
+        let projected =
+            match effect with
+            | CreateWorker(identity, slot) ->
+                {
+                    Operation = ""
+                    Phase = ""
+                    Correlation = ""
+                    Bytes = 0
+                    Due = 0L
+                    Kind =
+                        match slot with
+                        | Active -> "createActive"
+                        | Candidate _ -> "createCandidate"
+                        | Retiring -> "createRetiring"
+                    Request = identity.Request
+                    Generation = identity.Generation
+                    Worker = identity.WorkerInstance
+                }
+            | PostToWorker(worker, command) ->
+                {
+                    Operation = ""
+                    Phase = ""
+                    Correlation = ""
+                    Bytes = 0
+                    Due = 0L
+                    Kind = "post"
+                    Request = command.Identity.Request
+                    Generation = command.Identity.Generation
+                    Worker = worker
+                }
+            | TerminateWorker worker ->
+                {
+                    Operation = ""
+                    Phase = ""
+                    Correlation = ""
+                    Bytes = 0
+                    Due = 0L
+                    Kind = "terminate"
+                    Request = 0UL
+                    Generation = 0UL
+                    Worker = worker
+                }
+            | ArmTimer(timer, _) ->
+                {
+                    Operation = ""
+                    Phase = ""
+                    Correlation = ""
+                    Bytes = 0
+                    Due = 0L
+                    Kind = "armTimer"
+                    Request = timer.Identity.Request
+                    Generation = timer.Identity.Generation
+                    Worker = timer.Identity.WorkerInstance
+                }
+            | CancelTimer timer ->
+                {
+                    Operation = ""
+                    Phase = ""
+                    Correlation = ""
+                    Bytes = 0
+                    Due = 0L
+                    Kind = "cancelTimer"
+                    Request = timer.Identity.Request
+                    Generation = timer.Identity.Generation
+                    Worker = timer.Identity.WorkerInstance
+                }
+            | Settle result ->
+                let kind =
+                    match result.Disposition, result.Reason with
+                    | Current, _ ->
+                        match result.Outcome with
+                        | Some outcome when outcome.CleanupFault.IsSome -> "settleFaulted"
+                        | Some outcome ->
+                            match outcome.State, outcome.Phase with
+                            | Faulted _, _
+                            | TimedOut, _ -> "settleFaulted"
+                            | GuestRejected _, _ -> "settleRejected"
+                            | Succeeded, Shutdown -> "settleShutdown"
+                            | _ -> "settleCurrent"
+                        | None -> "settleCurrent"
+                    | HistoricalOnly, _ -> "settleHistorical"
+                    | Coalesced, _ -> "settleCoalesced"
+                    | Discarded, Some DeadlineExpired -> "settleTimedOut"
+                    | Discarded, Some GenerationRetired -> "settleInvalidated"
+                    | Discarded, _ -> "settleDiscarded"
+                    | Refused, Some Busy -> "refusedBusy"
+                    | Refused, Some QueueFull -> "refusedQueueFull"
+                    | Refused, Some HostFrozen -> "refusedFrozen"
+                    | Refused, Some HostDisposed -> "refusedDisposed"
+                    | Refused, _ -> "refused"
+
+                {
+                    Operation = ""
+                    Phase = ""
+                    Correlation = ""
+                    Bytes = 0
+                    Due = 0L
+                    Kind = kind
+                    Request = result.Identity.Request
+                    Generation = result.Identity.Generation
+                    Worker = result.Identity.WorkerInstance
+                }
+
+        let phaseName =
+            function
+            | Compile -> "compile"
+            | Instantiate -> "instantiate"
+            | AllocateDescriptor -> "allocate-descriptor"
+            | AllocateInput -> "allocate-input"
+            | Initialize -> "initialize"
+            | Process -> "process"
+            | Free -> "free"
+            | Shutdown -> "shutdown"
+
         match effect with
-        | CreateWorker(identity, slot) ->
-            {
-                Kind =
-                    match slot with
-                    | Active -> "createActive"
-                    | Candidate _ -> "createCandidate"
-                    | Retiring -> "createRetiring"
-                Request = identity.Request
-                Generation = identity.Generation
-                Worker = identity.WorkerInstance
+        | PostToWorker(_, command) ->
+            let operation, bytes =
+                match command.Operation with
+                | InspectAndCompile(_, bytes) -> "load", bytes.Length
+                | InitializeGuest bytes -> "initialize", bytes.Length
+                | ProcessGuest(_, bytes) -> "process", bytes.Length
+                | ShutdownGuest -> "shutdown", 0
+                | _ -> "other", 0
+
+            { projected with
+                Operation = operation
+                Bytes = bytes
+                Correlation = OperationToken.value command.Correlation
             }
-        | PostToWorker(worker, command) ->
-            {
-                Kind = "post"
-                Request = command.Identity.Request
-                Generation = command.Identity.Generation
-                Worker = worker
-            }
-        | TerminateWorker worker ->
-            {
-                Kind = "terminate"
-                Request = 0UL
-                Generation = 0UL
-                Worker = worker
-            }
-        | ArmTimer(timer, _) ->
-            {
-                Kind = "armTimer"
-                Request = timer.Identity.Request
-                Generation = timer.Identity.Generation
-                Worker = timer.Identity.WorkerInstance
+        | ArmTimer(timer, due) ->
+            { projected with
+                Phase = phaseName timer.Phase
+                Correlation = OperationToken.value timer.Correlation
+                Due = due
             }
         | CancelTimer timer ->
-            {
-                Kind = "cancelTimer"
-                Request = timer.Identity.Request
-                Generation = timer.Identity.Generation
-                Worker = timer.Identity.WorkerInstance
+            { projected with
+                Phase = phaseName timer.Phase
+                Correlation = OperationToken.value timer.Correlation
             }
-        | Settle result ->
-            let kind =
-                match result.Disposition, result.Reason with
-                | Current, _ -> "settleCurrent"
-                | HistoricalOnly, _ -> "settleHistorical"
-                | Coalesced, _ -> "settleCoalesced"
-                | Discarded, Some DeadlineExpired -> "settleTimedOut"
-                | Discarded, Some GenerationRetired -> "settleInvalidated"
-                | Discarded, _ -> "settleDiscarded"
-                | Refused, Some Busy -> "refusedBusy"
-                | Refused, Some QueueFull -> "refusedQueueFull"
-                | Refused, Some HostFrozen -> "refusedFrozen"
-                | Refused, Some HostDisposed -> "refusedDisposed"
-                | Refused, _ -> "refused"
-
-            {
-                Kind = kind
-                Request = result.Identity.Request
-                Generation = result.Identity.Generation
-                Worker = result.Identity.WorkerInstance
-            }
+        | _ -> projected
 
     let projectEffects effects = effects |> List.map effectProjection
 
@@ -299,14 +430,15 @@ module Lifecycle =
                 {
                     Identity = request.Identity
                     Correlation = token request.Identity
-                    Operation = ProcessGuest(request.Submission, request.Input)
+                    Configuration = request.Configuration
+                    Operation = request.Operation
                 }
 
             let timer =
                 {
                     Identity = request.Identity
                     Correlation = command.Correlation
-                    Phase = Process
+                    Phase = request.Phase
                 }
 
             { state with Current = Some request },
@@ -316,11 +448,16 @@ module Lifecycle =
             ]
 
     let private dispatchNext state =
-        match state.Ordinary, state.Ordered, state.Snapshot with
-        | request :: remaining, _, _ -> dispatch { state with Ordinary = remaining } request
-        | [], request :: remaining, _ -> dispatch { state with Ordered = remaining } request
-        | [], [], Some request -> dispatch { state with Snapshot = None } request
-        | [], [], None -> { state with Current = None }, []
+        if state.Current.IsSome then
+            state, []
+        elif state.FrozenToken.IsSome || state.Disposed then
+            { state with Current = None }, []
+        else
+            match state.Ordinary, state.Ordered, state.Snapshot with
+            | request :: remaining, _, _ -> dispatch { state with Ordinary = remaining } request
+            | [], request :: remaining, _ -> dispatch { state with Ordered = remaining } request
+            | [], [], Some request -> dispatch { state with Snapshot = None } request
+            | [], [], None -> { state with Current = None }, []
 
     let private refuse state request reason action =
         let settled, effects =
@@ -328,12 +465,29 @@ module Lifecycle =
 
         settled, effects
 
-    let private request state identity submission input =
+    let private request state identity submission operation phase input =
+        let configuration =
+            match operation with
+            | InspectAndCompile(configuration, _) -> configuration
+            | _ ->
+                state.Active
+                |> Option.filter (fun w -> w.Instance = identity.WorkerInstance)
+                |> Option.orElseWith (fun () ->
+                    state.Candidate
+                    |> Option.map _.Worker
+                    |> Option.filter (fun w -> w.Instance = identity.WorkerInstance))
+                |> Option.orElseWith (fun () -> state.Retiring.TryFind identity.WorkerInstance)
+                |> Option.map _.Configuration
+                |> Option.defaultValue (HostSettings.configuration state.Settings)
+
         let maximum =
-            (HostSettings.configuration state.Settings |> Validation.configuration).Limits.MaximumDeadlineMilliseconds
+            (Validation.configuration configuration).Limits.MaximumDeadlineMilliseconds
 
         {
             Identity = identity
+            Operation = operation
+            Configuration = configuration
+            Phase = phase
             Submission = submission
             Input = input
             DeadlineMilliseconds = state.Clock + int64 maximum
@@ -355,6 +509,102 @@ module Lifecycle =
         ||> List.fold (fun (current, effects) request ->
             let next, emitted = settle current request None disposition reason
             next, effects @ emitted)
+
+    let private timerFor pending =
+        {
+            Identity = pending.Identity
+            Correlation = token pending.Identity
+            Phase = pending.Phase
+        }
+
+    let private startControl (pending: PendingRequest) (state: LifecycleState) =
+        let next =
+            { state with
+                Controls = state.Controls.Add(pending.Identity.WorkerInstance, pending)
+            }
+
+        let command =
+            {
+                Identity = pending.Identity
+                Correlation = token pending.Identity
+                Configuration = pending.Configuration
+                Operation = pending.Operation
+            }
+
+        next,
+        [
+            ArmTimer(timerFor pending, pending.DeadlineMilliseconds)
+            PostToWorker(pending.Identity.WorkerInstance, command)
+        ]
+
+    let private invalidateWorker worker reason action state =
+        let control = state.Controls.TryFind worker |> Option.toList
+
+        let active =
+            state.Current
+            |> Option.filter (fun p -> p.Identity.WorkerInstance = worker)
+            |> Option.toList
+
+        let queued =
+            (state.Ordinary @ state.Ordered @ (state.Snapshot |> Option.toList))
+            |> List.filter (fun p -> p.Identity.WorkerInstance = worker)
+
+        let cleared =
+            { state with
+                Active = state.Active |> Option.filter (fun w -> w.Instance <> worker)
+                Candidate = state.Candidate |> Option.filter (fun c -> c.Worker.Instance <> worker)
+                Retiring = state.Retiring.Remove worker
+                Current = state.Current |> Option.filter (fun p -> p.Identity.WorkerInstance <> worker)
+                Controls = state.Controls.Remove worker
+                Compiled = state.Compiled.Remove worker
+                Initialized = state.Initialized.Remove worker
+                Ordinary = state.Ordinary |> List.filter (fun p -> p.Identity.WorkerInstance <> worker)
+                Ordered = state.Ordered |> List.filter (fun p -> p.Identity.WorkerInstance <> worker)
+                Snapshot = state.Snapshot |> Option.filter (fun p -> p.Identity.WorkerInstance <> worker)
+                LastAction = action
+            }
+
+        let next, settlements =
+            ((cleared, []), control @ active @ queued)
+            ||> List.fold (fun (current, effects) pending ->
+                let outcome =
+                    match reason with
+                    | DeadlineExpired
+                    | WorkerFault _ ->
+                        let terminal =
+                            match reason with
+                            | DeadlineExpired -> TimedOut
+                            | WorkerFault diagnostic -> Faulted diagnostic
+                            | _ -> TimedOut
+
+                        let dispatched =
+                            (control @ active |> List.exists (fun p -> p.Identity = pending.Identity))
+                            && (match pending.Phase with
+                                | Initialize
+                                | Process
+                                | Free
+                                | Shutdown -> true
+                                | _ -> false)
+
+                        Some
+                            {
+                                Identity = pending.Identity
+                                Phase = pending.Phase
+                                State = terminal
+                                Dispatch = (if dispatched then Dispatched else NotDispatched)
+                                CleanupFault = None
+                                CopiedOutput = Array.empty
+                                EffectEligibility = ProductAdapterMustDecide
+                            }
+                    | _ -> None
+
+                let next, emitted = settle current pending outcome Discarded (Some reason)
+                next, effects @ emitted)
+
+        next,
+        [ TerminateWorker worker ]
+        @ ((control @ active) |> List.map (timerFor >> CancelTimer))
+        @ settlements
 
     let private expireAt now state =
         let expired, retained =
@@ -387,25 +637,31 @@ module Lifecycle =
         let afterQueued, queuedEffects =
             settleList baseState expired Discarded (Some DeadlineExpired)
 
-        match afterQueued.Current with
+        let expiredControls =
+            afterQueued.Controls
+            |> Map.toList
+            |> List.choose (fun (worker, pending) ->
+                if pending.DeadlineMilliseconds < now then
+                    Some worker
+                else
+                    None)
+
+        let afterControls, controlEffects =
+            ((afterQueued, []), expiredControls)
+            ||> List.fold (fun (current, effects) worker ->
+                let next, more = invalidateWorker worker DeadlineExpired "expireControl" current
+                next, effects @ more)
+
+        match afterControls.Current with
         | Some current when current.DeadlineMilliseconds < now ->
-            let afterCurrent, currentEffects =
-                settle
-                    { afterQueued with
-                        Current = None
-                        LastAction = "expireCurrent"
-                    }
-                    current
-                    None
-                    Discarded
-                    (Some DeadlineExpired)
+            let next, effects =
+                invalidateWorker current.Identity.WorkerInstance DeadlineExpired "expireCurrent" afterControls
 
-            let advanced, dispatchEffects = dispatchNext afterCurrent
-            advanced, queuedEffects @ currentEffects @ dispatchEffects
-        | _ -> afterQueued, queuedEffects
+            next, queuedEffects @ controlEffects @ effects
+        | _ -> afterControls, queuedEffects @ controlEffects
 
-    let private submit identity submission input state =
-        let pending = request state identity submission input
+    let private submit identity submission operation phase input state =
+        let pending = request state identity submission operation phase input
         let descriptor = HostSettings.configuration state.Settings |> Validation.descriptor
 
         if state.Disposed then
@@ -415,12 +671,15 @@ module Lifecycle =
         elif
             state.Active.IsNone
             || state.Active
-               |> Option.exists (fun worker -> worker.Generation <> identity.Generation)
+               |> Option.exists (fun worker ->
+                   worker.Generation <> identity.Generation
+                   || worker.Instance <> identity.WorkerInstance)
+            || not (state.Initialized.Contains identity.WorkerInstance)
         then
             refuse state pending GenerationRetired "refuse"
         elif state.Settled.Contains(key identity) then
             state, []
-        elif input.Length > descriptor.Limits.MaximumInputBytes then
+        elif input.Length > (Validation.configuration pending.Configuration).Limits.MaximumInputBytes then
             refuse state pending QueueFull "refuse"
         elif state.Current.IsNone then
             let next, effects = dispatch { state with LastAction = "begin" } pending
@@ -508,91 +767,302 @@ module Lifecycle =
                         after, effects
             | _, _ -> refuse state pending QueueFull "refuse"
 
-    let private applyLoad (identity: HostIdentity) (intent: LoadIntent) (state: LifecycleState) =
+    let private applyLoad (identity: HostIdentity) (intent: LoadIntent) configuration artifact (state: LifecycleState) =
+        let pending =
+            request state identity Ordinary (InspectAndCompile(configuration, Array.copy artifact)) Compile artifact
+
         let worker: WorkerRef =
             {
                 Instance = identity.WorkerInstance
                 Generation = identity.Generation
+                Configuration = configuration
             }
 
-        match intent with
-        | ReplaceCurrent ->
-            let pending =
-                (state.Current |> Option.toList)
-                @ state.Ordinary
-                @ state.Ordered
-                @ (state.Snapshot |> Option.toList)
+        if state.Disposed then
+            refuse state pending HostDisposed "refuse"
+        elif
+            (Validation.descriptor configuration).Path
+            <> (HostSettings.configuration state.Settings |> Validation.descriptor).Path
+            || state.FrozenToken.IsSome
+        then
+            refuse state pending HostFrozen "refuse"
+        elif
+            state.Settled.Contains(key identity)
+            || state.Controls.ContainsKey identity.WorkerInstance
+        then
+            refuse state pending Busy "refuse"
+        elif
+            (state.Active
+             |> Option.exists (fun current -> identity.Generation <= current.Generation))
+            || (state.Retiring
+                |> Map.exists (fun _ current ->
+                    current.Instance = identity.WorkerInstance
+                    || current.Generation = identity.Generation))
+            || (state.Candidate
+                |> Option.exists (fun current ->
+                    current.Worker.Instance = identity.WorkerInstance
+                    || current.Worker.Generation = identity.Generation))
+        then
+            refuse state pending GenerationRetired "refuse"
+        elif
+            (match intent with
+             | PrepareCandidate _ ->
+                 state.Active
+                 |> Option.exists (fun current -> current.Instance = identity.WorkerInstance)
+             | _ -> false)
+        then
+            refuse state pending GenerationRetired "refuse"
+        else
+            match intent with
+            | ReplaceCurrent ->
+                let after, effects =
+                    match state.Active with
+                    | Some old -> invalidateWorker old.Instance GenerationRetired "loadInitial" state
+                    | None -> state, []
 
-            let cleared =
-                { state with
-                    Current = None
-                    Ordinary = []
-                    Ordered = []
-                    Snapshot = None
-                }
+                let after, effects =
+                    match after.Candidate with
+                    | Some old ->
+                        let next, more =
+                            invalidateWorker old.Worker.Instance GenerationRetired "loadInitial" after
 
-            let settled, settleEffects =
-                settleList cleared pending Discarded (Some GenerationRetired)
+                        next, effects @ more
+                    | None -> after, effects
 
-            let terminateEffects =
-                settled.Active
-                |> Option.map (fun value -> TerminateWorker value.Instance)
-                |> Option.toList
+                let next =
+                    { after with
+                        Active = Some worker
+                        NextGeneration = max after.NextGeneration (bump identity.Generation)
+                        LastAction = "loadInitial"
+                    }
 
-            let next =
-                { settled with
-                    Active = Some worker
-                    Candidate = None
-                    NextGeneration = max settled.NextGeneration (bump identity.Generation)
-                    LastAction = "loadInitial"
-                }
+                let started, commands = startControl pending next
+                started, effects @ [ CreateWorker(identity, Active) ] @ commands
+            | PrepareCandidate(transaction, expected) ->
+                if
+                    state.Candidate.IsSome
+                    || liveWorkers state >= capacity state
+                    || expected <> (state.Active |> Option.map _.Generation)
+                then
+                    refuse state pending QueueFull "refuse"
+                else
+                    let next =
+                        { state with
+                            Candidate =
+                                Some
+                                    {
+                                        Worker = worker
+                                        Transaction = transaction
+                                        Initialized = false
+                                        Validated = false
+                                    }
+                            NextGeneration = max state.NextGeneration (bump identity.Generation)
+                            LastAction = "prepareCandidate"
+                        }
 
-            next, terminateEffects @ [ CreateWorker(identity, Active) ] @ settleEffects
-        | PrepareCandidate(transaction, expectedActiveGeneration) ->
-            if state.Disposed || state.Candidate.IsSome || liveWorkers state >= capacity state then
-                state, []
-            elif expectedActiveGeneration <> (state.Active |> Option.map _.Generation) then
-                state, []
-            else
-                { state with
-                    Candidate =
-                        Some
-                            {
-                                Worker = worker
-                                Transaction = transaction
-                                Initialized = false
-                                Validated = false
-                            }
-                    NextGeneration = max state.NextGeneration (bump identity.Generation)
-                    LastAction = "prepareCandidate"
-                },
-                [ CreateWorker(identity, Candidate transaction) ]
+                    let started, commands = startControl pending next
+                    started, [ CreateWorker(identity, Candidate transaction) ] @ commands
+
+    let private initialize identity input state =
+        let pending =
+            request state identity Ordinary (InitializeGuest(Array.copy input)) AllocateDescriptor input
+
+        let owner =
+            state.Active
+            |> Option.filter (fun w -> w.Instance = identity.WorkerInstance && w.Generation = identity.Generation)
+
+        let candidate =
+            state.Candidate
+            |> Option.filter (fun c ->
+                c.Worker.Instance = identity.WorkerInstance
+                && c.Worker.Generation = identity.Generation)
+
+        if state.Disposed then
+            refuse state pending HostDisposed "refuse"
+        elif state.FrozenToken.IsSome then
+            refuse state pending HostFrozen "refuse"
+        elif
+            state.Controls.ContainsKey identity.WorkerInstance
+            || (state.Current
+                |> Option.exists (fun p -> p.Identity.WorkerInstance = identity.WorkerInstance))
+        then
+            refuse state pending Busy "refuse"
+        elif
+            (owner.IsNone && candidate.IsNone)
+            || not (state.Compiled.Contains identity.WorkerInstance)
+        then
+            refuse state pending GenerationRetired "refuse"
+        elif state.Settled.Contains(key identity) then
+            state, []
+        else
+            startControl pending { state with LastAction = "initialize" }
 
     let private observe workerInstance observation state =
-        match observation with
-        | InvocationObserved(outcome, _) ->
-            match state.Candidate with
-            | Some candidate when
-                candidate.Worker.Instance = workerInstance
-                && outcome.Phase = Initialize
-                && outcome.State = Succeeded
-                ->
+        let matching identity correlation pending =
+            pending.Identity = identity
+            && identity.WorkerInstance = workerInstance
+            && token identity = correlation
+
+        let finishControl (pending: PendingRequest) outcome (state: LifecycleState) =
+            let cleared =
                 { state with
-                    Candidate = Some { candidate with Initialized = true }
-                    LastAction = "candidateInitialized"
-                },
-                []
+                    Controls = state.Controls.Remove workerInstance
+                }
+
+            let disposition =
+                if
+                    state.FrozenToken.IsSome
+                    || (state.Candidate |> Option.exists (fun c -> c.Worker.Instance = workerInstance))
+                then
+                    HistoricalOnly
+                else
+                    Current
+
+            let next, effects = settle cleared pending (Some outcome) disposition None
+            next, CancelTimer(timerFor pending) :: effects
+
+        match observation with
+        | PhaseObserved(identity, correlation, phase) ->
+            let selected =
+                match state.Controls.TryFind workerInstance with
+                | Some pending when matching identity correlation pending -> Some(pending, true)
+                | _ ->
+                    state.Current
+                    |> Option.filter (matching identity correlation)
+                    |> Option.map (fun p -> p, false)
+
+            match selected with
+            | None -> state, []
+            | Some(pending, control) ->
+                let permitted =
+                    match pending.Operation, pending.Phase, phase with
+                    | InspectAndCompile _, Compile, Instantiate -> true
+                    | (InitializeGuest _ | ProcessGuest _), AllocateDescriptor, AllocateInput -> true
+                    | InitializeGuest _, AllocateInput, Initialize -> true
+                    | ProcessGuest _, AllocateInput, Process -> true
+                    | (InitializeGuest _ | ProcessGuest _), (Initialize | Process), Free -> true
+                    | _ -> false
+
+                if not permitted || pending.Phase = phase then
+                    state, []
+                else
+                    let deadlinePolicy = (Validation.configuration pending.Configuration).Deadline
+
+                    let maximum =
+                        (Validation.configuration pending.Configuration).Limits.MaximumDeadlineMilliseconds
+
+                    let due =
+                        if deadlinePolicy = PhaseWatchdog then
+                            state.Clock + int64 maximum
+                        else
+                            pending.DeadlineMilliseconds
+
+                    let nextPending =
+                        { pending with
+                            Phase = phase
+                            DeadlineMilliseconds = due
+                        }
+
+                    let next =
+                        if control then
+                            { state with
+                                Controls = state.Controls.Add(workerInstance, nextPending)
+                                LastAction = "phase"
+                            }
+                        else
+                            { state with
+                                Current = Some nextPending
+                                LastAction = "phase"
+                            }
+
+                    next, [ CancelTimer(timerFor pending); ArmTimer(timerFor nextPending, due) ]
+        | AbiVersionObserved(identity, correlation, version) ->
+            match state.Controls.TryFind workerInstance with
+            | Some pending when
+                matching identity correlation pending
+                && (match pending.Operation with
+                    | InspectAndCompile _ -> true
+                    | _ -> false)
+                ->
+                let expected =
+                    (HostSettings.configuration state.Settings |> Validation.descriptor).Abi.Version
+
+                if version <> expected then
+                    invalidateWorker workerInstance (WorkerFault "ABI version mismatch") "workerFailed" state
+                else
+                    let outcome =
+                        {
+                            Identity = identity
+                            Phase = Instantiate
+                            State = Succeeded
+                            Dispatch = NotDispatched
+                            CleanupFault = None
+                            CopiedOutput = Array.empty
+                            EffectEligibility = ProductAdapterMustDecide
+                        }
+
+                    finishControl
+                        pending
+                        outcome
+                        { state with
+                            Compiled = state.Compiled.Add workerInstance
+                            LastAction = "compiled"
+                        }
+            | _ -> state, []
+        | InvocationObserved(outcome, correlation)
+        | InvocationTerminated(outcome, correlation) ->
+            let terminated =
+                match observation with
+                | InvocationTerminated _ -> true
+                | _ -> false
+
+            match state.Controls.TryFind workerInstance with
+            | Some pending when matching outcome.Identity correlation pending ->
+                let isInitialize =
+                    match pending.Operation with
+                    | InitializeGuest _ -> true
+                    | _ -> false
+
+                if
+                    terminated
+                    || not isInitialize
+                    || outcome.Phase <> Initialize
+                    || outcome.State <> Succeeded
+                    || outcome.Dispatch <> Dispatched
+                    || outcome.CleanupFault.IsSome
+                then
+                    let after, effects = finishControl pending outcome state
+
+                    let failed, termination =
+                        invalidateWorker workerInstance (WorkerFault "initialization failed") "candidateFailed" after
+
+                    failed, effects @ termination
+                else
+                    let candidate =
+                        state.Candidate
+                        |> Option.map (fun c ->
+                            if c.Worker.Instance = workerInstance then
+                                { c with Initialized = true }
+                            else
+                                c)
+
+                    finishControl
+                        pending
+                        outcome
+                        { state with
+                            Initialized = state.Initialized.Add workerInstance
+                            Candidate = candidate
+                            LastAction = "candidateInitialized"
+                        }
             | _ ->
                 match state.Current with
-                | Some current when
-                    current.Identity = outcome.Identity
-                    && current.Identity.WorkerInstance = workerInstance
-                    ->
+                | Some current when matching outcome.Identity correlation current ->
                     let disposition =
                         if
                             state.FrozenToken.IsSome
-                            || state.Active
-                               |> Option.forall (fun active -> active.Generation <> current.Identity.Generation)
+                            || (state.Active
+                                |> Option.forall (fun a ->
+                                    a.Generation <> current.Identity.Generation || a.Instance <> workerInstance))
                         then
                             HistoricalOnly
                         else
@@ -604,67 +1074,80 @@ module Lifecycle =
                         else
                             None
 
-                    let after, settleEffects =
+                    let after, effects =
                         settle
                             { state with
                                 Current = None
-                                LastAction = "complete"
+                                LastAction =
+                                    (if outcome.CleanupFault.IsSome then
+                                         "cleanupFault"
+                                     else
+                                         "complete")
                             }
                             current
                             (Some outcome)
                             disposition
                             reason
 
-                    let advanced, dispatchEffects = dispatchNext after
+                    let effects = CancelTimer(timerFor current) :: effects
 
-                    let terminateEffects =
-                        if disposition = HistoricalOnly && after.Retiring.ContainsKey workerInstance then
-                            [ TerminateWorker workerInstance ]
-                        else
-                            []
+                    let shutdown =
+                        match current.Operation with
+                        | ShutdownGuest -> true
+                        | _ -> false
 
-                    advanced, settleEffects @ dispatchEffects @ terminateEffects
+                    let faulted =
+                        match outcome.State with
+                        | Faulted _
+                        | TimedOut -> true
+                        | _ -> false
+
+                    if
+                        terminated
+                        || faulted
+                        || outcome.CleanupFault.IsSome
+                        || shutdown
+                        || (disposition = HistoricalOnly && after.Retiring.ContainsKey workerInstance)
+                    then
+                        let failed, termination =
+                            invalidateWorker workerInstance (WorkerFault "guest stopped") after.LastAction after
+
+                        failed, effects @ termination
+                    else
+                        let advanced, more = dispatchNext after
+                        advanced, effects @ more
                 | _ -> state, []
-        | WorkerFailed(identity, _, diagnostic) ->
-            match state.Candidate with
-            | Some candidate when candidate.Worker.Instance = workerInstance ->
+        | WorkerFailed(identity, Some correlation, diagnostic) ->
+            let current = state.Current |> Option.exists (matching identity correlation)
+
+            let control =
+                state.Controls.TryFind workerInstance
+                |> Option.exists (matching identity correlation)
+
+            if current || control then
+                invalidateWorker workerInstance (WorkerFault diagnostic) "workerFailed" state
+            else
+                state, []
+        | WorkerTerminated instance when instance = workerInstance ->
+            let pending =
+                state.Controls.ContainsKey instance
+                || (state.Current |> Option.exists (fun p -> p.Identity.WorkerInstance = instance))
+
+            if
+                pending
+                || (state.Active |> Option.exists (fun p -> p.Instance = instance))
+                || (state.Candidate |> Option.exists (fun p -> p.Worker.Instance = instance))
+            then
+                invalidateWorker instance (WorkerFault "worker terminated") "workerFailed" state
+            else
                 { state with
-                    Candidate = None
-                    LastAction = "candidateFailed"
+                    Retiring = state.Retiring.Remove instance
+                    Compiled = state.Compiled.Remove instance
+                    Initialized = state.Initialized.Remove instance
+                    LastAction = "terminateRetiring"
                 },
-                [ TerminateWorker workerInstance ]
-            | _ when state.Active |> Option.exists (fun active -> active.Instance = workerInstance) ->
-                let pending =
-                    (state.Current |> Option.toList)
-                    @ state.Ordinary
-                    @ state.Ordered
-                    @ (state.Snapshot |> Option.toList)
-
-                let cleared =
-                    { state with
-                        Active = None
-                        Current = None
-                        Ordinary = []
-                        Ordered = []
-                        Snapshot = None
-                        LastAction = "workerFailed"
-                    }
-
-                let settled, effects =
-                    settleList cleared pending Discarded (Some(WorkerFault diagnostic))
-
-                settled, effects @ [ TerminateWorker identity.WorkerInstance ]
-            | _ -> state, []
-        | WorkerTerminated instance ->
-            { state with
-                Retiring = state.Retiring.Remove instance
-                LastAction = "terminateRetiring"
-            },
-            []
-        | WorkerCreated _
-        | PhaseObserved _
-        | ArtifactDigestObserved _
-        | AbiVersionObserved _ -> state, []
+                []
+        | _ -> state, []
 
     let private validateCandidate transaction generation state =
         match state.Candidate with
@@ -686,6 +1169,7 @@ module Lifecycle =
             candidate.Transaction = transaction
             && candidate.Worker.Generation = candidateGeneration
             && candidate.Initialized
+            && state.FrozenToken.IsNone
             && candidate.Validated
             && (state.Active |> Option.map _.Generation |> Option.defaultValue 0UL) = expectedActive
             ->
@@ -725,11 +1209,7 @@ module Lifecycle =
     let private abortCandidate transaction state =
         match state.Candidate with
         | Some candidate when candidate.Transaction = transaction ->
-            { state with
-                Candidate = None
-                LastAction = "abortCandidate"
-            },
-            [ TerminateWorker candidate.Worker.Instance ]
+            invalidateWorker candidate.Worker.Instance GenerationRetired "abortCandidate" state
         | _ -> state, []
 
     let private dispose state =
@@ -740,7 +1220,8 @@ module Lifecycle =
             []
         else
             let pending =
-                (state.Current |> Option.toList)
+                (state.Controls |> Map.toList |> List.map snd)
+                @ (state.Current |> Option.toList)
                 @ state.Ordinary
                 @ state.Ordered
                 @ (state.Snapshot |> Option.toList)
@@ -754,6 +1235,9 @@ module Lifecycle =
                     Ordinary = []
                     Ordered = []
                     Snapshot = None
+                    Controls = Map.empty
+                    Compiled = Set.empty
+                    Initialized = Set.empty
                     Disposed = true
                     LastAction = "dispose"
                 }
@@ -773,14 +1257,18 @@ module Lifecycle =
                 |> List.distinct
                 |> List.map TerminateWorker
 
-            settled, settleEffects @ workers
+            let cancel = (pending |> List.map (timerFor >> CancelTimer))
+            settled, workers @ cancel @ settleEffects
 
     let update event (HostState original) =
-        let expired, expiryEffects = expireAt event.MonotonicMilliseconds original
+        let now = max original.Clock event.MonotonicMilliseconds
+        let expired, expiryEffects = expireAt now original
 
         let withIds (input: HostInput) (state: LifecycleState) =
             match input with
             | LoadRequested(identity, _, _)
+            | ConfiguredLoadRequested(identity, _, _, _)
+            | InitializeRequested(identity, _)
             | InvocationRequested(identity, _, _)
             | ShutdownRequested identity ->
                 { state with
@@ -793,9 +1281,14 @@ module Lifecycle =
 
         let next, effects =
             match event.Input with
-            | LoadRequested(identity, intent, _) -> applyLoad identity intent state
-            | InvocationRequested(identity, submission, input) -> submit identity submission input state
-            | ShutdownRequested identity -> submit identity Ordinary Array.empty state
+            | LoadRequested(identity, intent, artifact) ->
+                applyLoad identity intent (HostSettings.configuration state.Settings) artifact state
+            | ConfiguredLoadRequested(identity, intent, configuration, artifact) ->
+                applyLoad identity intent configuration artifact state
+            | InitializeRequested(identity, input) -> initialize identity input state
+            | InvocationRequested(identity, submission, input) ->
+                submit identity submission (ProcessGuest(submission, input)) AllocateDescriptor input state
+            | ShutdownRequested identity -> submit identity Ordinary ShutdownGuest Shutdown Array.empty state
             | CandidateValidated(transaction, generation) -> validateCandidate transaction generation state
             | CandidateCommitRequested(transaction, expectedActive, candidateGeneration) ->
                 commitCandidate transaction expectedActive candidateGeneration state
@@ -831,11 +1324,11 @@ module Lifecycle =
                     []
             | ResumeRequested freezeToken ->
                 if state.FrozenToken = Some freezeToken then
-                    { state with
-                        FrozenToken = None
-                        LastAction = "resume"
-                    },
-                    []
+                    dispatchNext
+                        { state with
+                            FrozenToken = None
+                            LastAction = "resume"
+                        }
                 else
                     state, []
             | WorkerObserved(worker, observation) -> observe worker observation state
@@ -846,8 +1339,4 @@ module Lifecycle =
                     state, []
             | DisposeRequested -> dispose state
 
-        HostState
-            { next with
-                Clock = event.MonotonicMilliseconds
-            },
-        expiryEffects @ effects
+        HostState { next with Clock = now }, expiryEffects @ effects

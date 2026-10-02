@@ -9,7 +9,7 @@ value="${2:-}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-package-consumer.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/sdk-artifacts" "$work/modules" "$work/lock-source" "$work/consumer/browser"
-version="0.1.1"
+version="0.2.0"
 manifest="$work/release-manifest.json"
 
 if [[ "$mode" == --custody ]]; then
@@ -49,6 +49,19 @@ else
   wasi="$work/wasi/wasi-sdk-34.0-x86_64-linux"
 fi
 "$repo/sdk/wasm/verify-sdk.sh" "$archive" "$wasi" "$work/modules"
+# Consumer guest controls are inputs only, compiled away from producer source.
+for control in ordinary bad-descriptor bad-input wrong-version; do
+  define=()
+  [[ "$control" != bad-descriptor ]] || define=(-DBAD_DESCRIPTOR)
+  [[ "$control" != bad-input ]] || define=(-DBAD_INPUT)
+  [[ "$control" != wrong-version ]] || define=(-DWRONG_VERSION)
+  "$wasi/bin/clang" --target=wasm32 -std=c17 -Oz -nostdlib -mno-bulk-memory -mno-reference-types -mno-multivalue "${define[@]}" \
+    "$repo/tests/Wasm.PackageConsumer/browser/fixtures/connected-controls.c" \
+    -Wl,--no-entry -Wl,--export-memory -Wl,--initial-memory=2097152 -Wl,--max-memory=8388608 \
+    -Wl,--export=sc2c_abi_version -Wl,--export=sc2c_alloc -Wl,--export=sc2c_free \
+    -Wl,--export=sc2c_initialize -Wl,--export=sc2c_process -Wl,--export=sc2c_shutdown \
+    -o "$work/modules/control-$control.wasm"
+done
 
 python3 - "$work/NuGet.Config" "$package_source" <<'PY'
 import sys
@@ -86,7 +99,7 @@ if grep -Fq "$repo/src/" "$work/consumer/obj/project.assets.json"; then
 fi
 NUGET_PACKAGES="$work/consumer-packages" dotnet build "$work/consumer/Consumer.fsproj" -c Release --no-restore --nologo
 output="$work/consumer/public/sub/app"
-for asset in module-worker.mjs worker-client.mjs; do
+for asset in module-worker.mjs worker-client.mjs policy/WorkerEntry.js policy/Invocation.js policy/Admission.js; do
   test -f "$output/_content/FS.GG.Wasm.Browser/$asset"
 done
 NUGET_PACKAGES="$work/consumer-packages" dotnet tool run fable "$work/consumer/Consumer.fsproj" --outDir "$output/fable" --noCache
@@ -94,6 +107,8 @@ node "$output/fable/Program.js" | grep -Fxq 'fresh-worker:fresh-package-host:fal
 cp "$work/consumer/browser/index.html" "$work/consumer/browser/package-consumer.mjs" "$output/"
 mkdir -p "$output/modules"
 cp "$work/modules/"*.wasm "$output/modules/"
+printf '%s  %s\n' 1557e76b7a97b8e301c31c1e082c9060d8b66258a23308dcf9d2d17dbfd9de7d "$work/consumer/browser/fixtures/bar-conformance.wasm" | sha256sum --check --strict
+cp "$work/consumer/browser/fixtures/bar-conformance.wasm" "$output/modules/"
 (
   cd "$work/consumer/browser"
   npm ci

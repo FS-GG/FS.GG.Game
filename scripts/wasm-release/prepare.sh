@@ -21,11 +21,14 @@ source="$(git -C "$repo" rev-parse HEAD)"
 tree="$(git -C "$repo" rev-parse 'HEAD^{tree}')"
 NUGET_PACKAGES="$(mktemp -d "${TMPDIR:-/tmp}/wasm-release-nuget.XXXXXX")"
 export NUGET_PACKAGES
-trap 'rm -rf "$NUGET_PACKAGES"' EXIT
+policy_work="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/wasm-worker-policy.XXXXXX")"
+trap 'rm -rf "$NUGET_PACKAGES" "$policy_work"' EXIT
+"$repo/scripts/wasm-release/build-worker-policy.sh" "$policy_work/policy"
 dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$custody" --nologo -p:RepositoryCommit="$source"
-dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$custody" --nologo -p:RepositoryCommit="$source"
+dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$custody" --nologo -p:RepositoryCommit="$source" -p:WasmWorkerPolicyRoot="$policy_work/policy"
 "$repo/sdk/wasm/build-source-archive.sh" "$custody"
+python3 "$repo/scripts/wasm-release/compare-published-baseline.py" --custody "$custody" --output "$custody/api-baseline-comparison.json"
 python3 "$repo/scripts/wasm-release/release_manifest.py" prepare \
-  --custody "$custody" --version "$version" --source "$source" --tree "$tree"
+  --custody "$custody" --version "$version" --source "$source" --tree "$tree" --api-comparison "$custody/api-baseline-comparison.json"
 (cd "$custody" && sha256sum -- FS.GG.Wasm.*.nupkg fsgg-wasm-sdk-*.tar.gz release-manifest.json | sort -k2 > SHA256SUMS)
 printf 'wasm-release-custody=%s version=%s source=%s artifacts=3\n' "$custody" "$version" "$source"

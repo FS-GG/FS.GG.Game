@@ -13,14 +13,14 @@ on:
       version:
         description: "Stable shared WASM version"
         type: string
-        default: "0.1.1"
+        default: "0.2.0"
       source_run_id:
         description: "Prior release-wasm run containing exact retained custody (readback/recovery)"
         type: string
         required: false
 
 concurrency:
-  group: release-wasm-0.1.1
+  group: release-wasm-0.2.0
   cancel-in-progress: false
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
       actions: read
       contents: read
     env:
-      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '0.1.1' }}
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '0.2.0' }}
       MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'publish' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -125,7 +125,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/download-artifact@v8
         with:
-          name: wasm-release-custody-${{ github.sha }}-0.1.1
+          name: wasm-release-custody-${{ github.sha }}-0.2.0
           path: artifacts/wasm-release
       - name: Verify both feeds and release assets without publishing
         env:
@@ -148,7 +148,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/download-artifact@v8
         with:
-          name: wasm-release-custody-${{ github.sha }}-0.1.1
+          name: wasm-release-custody-${{ github.sha }}-0.2.0
           path: artifacts/wasm-release
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
@@ -171,7 +171,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/download-artifact@v8
         with:
-          name: wasm-release-custody-${{ github.sha }}-0.1.1
+          name: wasm-release-custody-${{ github.sha }}-0.2.0
           path: artifacts/wasm-release
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
@@ -196,7 +196,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/download-artifact@v8
         with:
-          name: wasm-release-custody-${{ github.sha }}-0.1.1
+          name: wasm-release-custody-${{ github.sha }}-0.2.0
           path: artifacts/wasm-release
       - name: Upload SDK and manifest release assets
         env:
@@ -216,5 +216,5 @@ jobs:
       - name: Publish verified GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit wasm/v0.1.1 --repo "$GITHUB_REPOSITORY" --draft=false
+        run: gh release edit wasm/v0.2.0 --repo "$GITHUB_REPOSITORY" --draft=false
       - run: echo 'Both package feeds and immutable SDK release assets passed readback.'

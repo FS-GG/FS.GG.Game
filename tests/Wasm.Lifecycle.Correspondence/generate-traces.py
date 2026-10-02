@@ -32,10 +32,14 @@ def worker(value: int) -> str:
 
 def request(value: dict) -> str:
     return (
-        "{ Id = %dUL; Generation = %dUL; DeadlineMilliseconds = %dL; "
+        "{ Id = %dUL; Worker = %s; Operation = %s; Phase = %s; Correlation = %s; Generation = %dUL; DeadlineMilliseconds = %dL; "
         "Submission = %s; Bytes = %d }"
         % (
             bigint(value["id"]),
+            text(worker(bigint(value["worker"]))),
+            text(value["operation"]),
+            text(value["phase"]),
+            text("" if bigint(value["worker"]) == 0 else f"request-{bigint(value['generation'])}-{bigint(value['correlation'])}"),
             bigint(value["generation"]),
             bigint(value["deadline"]),
             text(tag(value["submission"])),
@@ -46,12 +50,17 @@ def request(value: dict) -> str:
 
 def effect(value: dict) -> str:
     return (
-        "{ Kind = %s; Request = %dUL; Generation = %dUL; Worker = %s }"
+        "{ Kind = %s; Request = %dUL; Generation = %dUL; Worker = %s; Operation = %s; Phase = %s; Correlation = %s; Bytes = %d; Due = %dL }"
         % (
             text(value["kind"]),
             bigint(value["request"]),
             bigint(value["generation"]),
             text(worker(bigint(value["worker"]))),
+            text(value["operation"]),
+            text(value["phase"]),
+            text("" if bigint(value["correlation"]) == 0 else f"request-{bigint(value['generation'])}-{bigint(value['correlation'])}"),
+            bigint(value["bytes"]),
+            bigint(value["due"]),
         )
     )
 
@@ -88,6 +97,9 @@ def state(value: dict) -> str:
             "  CandidateInitialized = %s" % str(value["candidateInitialized"]).lower(),
             "  CandidateReady = %s" % str(value["candidateReady"]).lower(),
             "  RetiringWorkers = %s" % fs_list([text(worker(item)) for item in retiring]),
+            "  CompiledWorkers = %s" % fs_list(sorted(text(worker(bigint(item))) for item in value["compiledWorkers"]["#set"])),
+            "  InitializedWorkers = %s" % fs_list(sorted(text(worker(bigint(item))) for item in value["initializedWorkers"]["#set"])),
+            "  Controls = %s" % fs_list([request(item) for item in sorted(value["controls"], key=lambda row: worker(bigint(row["worker"])))]),
             "  Current = %s" % request(value["current"]),
             "  Ordinary = %s" % fs_list([request(item) for item in value["ordinary"]]),
             "  Ordered = %s" % fs_list([request(item) for item in value["ordered"]]),

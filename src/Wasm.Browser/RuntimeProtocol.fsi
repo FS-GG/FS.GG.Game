@@ -78,6 +78,7 @@ type WorkerCommand =
     {
         Identity: HostIdentity
         Correlation: OperationToken
+        Configuration: ValidatedConfiguration
         Operation: WorkerOperation
     }
 
@@ -87,6 +88,7 @@ type WorkerObservation =
     | ArtifactDigestObserved of identity: HostIdentity * correlation: OperationToken * sha256: string
     | AbiVersionObserved of identity: HostIdentity * correlation: OperationToken * version: uint32
     | InvocationObserved of outcome: InvocationOutcome * correlation: OperationToken
+    | InvocationTerminated of outcome: InvocationOutcome * correlation: OperationToken
     | WorkerFailed of identity: HostIdentity * correlation: OperationToken option * diagnostic: string
     | WorkerTerminated of workerInstance: string
 
@@ -125,7 +127,13 @@ type BrowserResult =
     }
 
 type HostInput =
+    | ConfiguredLoadRequested of
+        identity: HostIdentity *
+        intent: LoadIntent *
+        configuration: ValidatedConfiguration *
+        artifact: byte array
     | LoadRequested of identity: HostIdentity * intent: LoadIntent * artifact: byte array
+    | InitializeRequested of identity: HostIdentity * input: byte array
     | InvocationRequested of identity: HostIdentity * submission: SubmissionClass * input: byte array
     | ShutdownRequested of identity: HostIdentity
     | CandidateValidated of transaction: string * candidateGeneration: uint64
@@ -153,3 +161,40 @@ type HostEffect =
     | ArmTimer of timer: TimerIdentity * dueMonotonicMilliseconds: int64
     | CancelTimer of timer: TimerIdentity
     | Settle of BrowserResult
+
+/// Closed, primitive wire records preserve identity and policy across structured clone.
+type WorkerWireCommand =
+    {
+        Identity: WireHostIdentity
+        Correlation: string
+        Kind: string
+        Configuration: CandidateConfigurationBoundary
+        Bytes: byte array
+    }
+
+type WorkerWireObservation =
+    {
+        Identity: WireHostIdentity
+        Correlation: string
+        Kind: string
+        Phase: string
+        Digest: string
+        Version: uint32
+        State: string
+        Status: int
+        Diagnostic: string
+        CleanupDiagnostic: string
+        Dispatched: bool
+        Output: byte array
+    }
+
+/// These callbacks perform only Worker, clock and timer mechanics.
+type HostTransport =
+    {
+        Now: unit -> int64
+        CreateWorker: string -> (WorkerWireObservation -> unit) -> unit
+        PostCommand: string -> WorkerWireCommand -> unit
+        TerminateWorker: string -> unit
+        ArmTimer: string -> int -> (unit -> unit) -> unit
+        CancelTimer: string -> unit
+    }

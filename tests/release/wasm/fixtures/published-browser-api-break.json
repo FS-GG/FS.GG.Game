@@ -1,0 +1,23 @@
+{
+  "baseline": "0.1.1",
+  "candidatePrototype": "0.1.2-unpublished",
+  "tool": "SDK10.0.401.ApiCompat",
+  "diagnostics": [
+    {
+      "code": "CP0002",
+      "message": "Member 'FS.GG.Wasm.Browser.WorkerCommand.WorkerCommand(FS.GG.Wasm.Contracts.HostIdentity, FS.GG.Wasm.Browser.OperationToken, FS.GG.Wasm.Browser.WorkerOperation)'"
+    },
+    {
+      "code": "CP0002",
+      "message": "Member 'FS.GG.Wasm.Browser.RequestProjection.RequestProjection(ulong, ulong, long, string, int)'"
+    },
+    {
+      "code": "CP0002",
+      "message": "Member 'FS.GG.Wasm.Browser.EffectProjection.EffectProjection(string, ulong, ulong, string)'"
+    },
+    {
+      "code": "CP0002",
+      "message": "Member 'FS.GG.Wasm.Browser.HostProjection.HostProjection(string, long, ulong, ulong, string, ulong, string, ulong, string, bool, bool, Microsoft.FSharp.Collections.FSharpList<string>, FS.GG.Wasm.Browser.RequestProjection, Microsoft.FSharp.Collections.FSharpList<FS.GG.Wasm.Browser.RequestProjection>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Wasm.Browser.RequestProjection>, FS.GG.Wasm.Browser.RequestProjection, bool, string, bool, Microsoft.FSharp.Collections.FSharpList<ulong>, string)'"
+    }
+  ]
+}
