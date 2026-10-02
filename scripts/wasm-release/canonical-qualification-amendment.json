@@ -1,6 +1,6 @@
 {
   "schema": "fsgg.wasm.canonical-qualification-amendment/v1",
-  "status": "APPROVED",
+  "status": "CANDIDATE_PENDING_PRODUCER_MODEL_AND_PROOF",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
   "version": "0.2.0",
@@ -48,7 +48,7 @@
     {
       "path": "scripts/verify-wasm-lifecycle.sh",
       "previousSha256": "ab22879a3815e8ef2285a61c3c7ac68b5781c2076748d2f962c49bf7d65f35a5",
-      "qualifierSha256": "d4082bc60139fd24d4535fffad6d898f8529f6335eaabee2366e2bd188cfca26"
+      "qualifierSha256": "47edcb48a25099b8c1fa6811134ff18eb98ac28bd0029169d9266bb7c49ec094"
     },
     {
       "path": "scripts/wasm-release/CanonicalQualificationPolicy.fs",
@@ -303,12 +303,12 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/generate-traces.py",
       "previousSha256": "ffae25575cc2133da6b7f5d83106b61f77a4bc8b18f2722536564a906e9b0dcb",
-      "qualifierSha256": "34b26d0c92c50132a8f47695feb70f72d926988e2d60db04acaff68ef7c8bcaa"
+      "qualifierSha256": "88762fc0704c442d10a031b4a29ad26ba8a53a9555625eb082ec22ce3365dd62"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "a1a27d3a28ff54d1b7574f0438e26674f8f800c6120eaa623467408f71adb07a"
+      "qualifierSha256": "2181f7224302fec0354ab592eaa82e441bc89a9ebd16a4e02b3b65dd806b6cfc"
     },
     {
       "path": "tests/release/wasm/test-canonical-qualification-policy.fsx",

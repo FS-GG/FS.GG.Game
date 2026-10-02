@@ -17,7 +17,7 @@ mkdir -p "$traces" "$work/fable" "$work/package"
 export NUGET_PACKAGES="$work/nuget-packages"
 
 "$quint" typecheck "$model"
-"$quint" test --main=lifecycleTest --seed=20261002 --out="$work/quint-tests.json" "$model"
+"$quint" test --backend=typescript --main=lifecycleTest --seed=20261002 --out="$work/quint-tests.json" "$model"
 python3 - "$work/quint-tests.json" <<'PY'
 import json
 import sys
@@ -43,7 +43,7 @@ print(f"quint-lifecycle-tests: passed={len(passed)} names={','.join(sorted(passe
 PY
 # The same 2,000 sample budget covers cold start and reachable initialized work.
 for entry in init initReady; do
-  "$quint" run --main=lifecycle --init="$entry" --step=step --invariant=lifecycleSafe \
+  "$quint" run --backend=typescript --main=lifecycle --init="$entry" --step=step --invariant=lifecycleSafe \
     --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout \
     --max-steps=40 --max-samples=1000 --seed=20261002 "$model" > "$work/quint-sampled-$entry.txt"
 done

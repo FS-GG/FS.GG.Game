@@ -71,6 +71,8 @@ def fs_list(values: list[str]) -> str:
 
 def normalize(path: Path) -> None:
     document = json.loads(path.read_text(encoding="utf-8"))
+    # Backend declaration order does not change the complete named ITF state.
+    document["vars"] = sorted(document["vars"])
     document["#meta"].pop("description", None)
     document["#meta"].pop("timestamp", None)
     if path.name.startswith("boundary-"):
