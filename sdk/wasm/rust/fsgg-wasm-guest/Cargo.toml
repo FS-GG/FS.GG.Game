@@ -1,0 +1,9 @@
+[package]
+name = "fsgg-wasm-guest"
+version = "0.1.0-source.3"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[lib]
+path = "src/lib.rs"

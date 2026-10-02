@@ -21,6 +21,6 @@
     <Compile Include="Host.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[0.1.0-source.2]" />
+    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[0.1.0-source.3]" />
   </ItemGroup>
 </Project>

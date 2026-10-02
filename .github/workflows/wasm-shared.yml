@@ -17,11 +17,15 @@ on:
       - "tests/Wasm.Lifecycle.Tests/**"
       - "tests/Wasm.Lifecycle.Correspondence/**"
       - "tests/Wasm.Browser.Conformance/**"
+      - "tests/Wasm.PackageConsumer/**"
       - "eng/wasm-shared/**"
+      - "sdk/wasm/**"
+      - "examples/wasm/**"
       - "docs/wasm/**"
       - "scripts/verify-wasm-contracts.sh"
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
+      - "scripts/verify-wasm-package-consumer.sh"
   pull_request:
     branches: [main]
     paths:
@@ -38,11 +42,15 @@ on:
       - "tests/Wasm.Lifecycle.Tests/**"
       - "tests/Wasm.Lifecycle.Correspondence/**"
       - "tests/Wasm.Browser.Conformance/**"
+      - "tests/Wasm.PackageConsumer/**"
       - "eng/wasm-shared/**"
+      - "sdk/wasm/**"
+      - "examples/wasm/**"
       - "docs/wasm/**"
       - "scripts/verify-wasm-contracts.sh"
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
+      - "scripts/verify-wasm-package-consumer.sh"
   workflow_dispatch:
 
 concurrency:
@@ -132,3 +140,6 @@ jobs:
 
       - name: Run browser Worker conformance
         run: tests/Wasm.Browser.Conformance/run.sh
+
+      - name: Verify SDK archive and fresh package consumer
+        run: scripts/verify-wasm-package-consumer.sh
