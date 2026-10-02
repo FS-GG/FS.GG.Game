@@ -4,7 +4,7 @@ This is the source contract for stage `.1` of
 [WASM-SHARED-01](https://github.com/FS-GG/.github/blob/67a78de8d85cc360bac33d39a322dc91bcb37379/docs/roadmaps/2026-10-02-shared-wasm-foundation.md).
 FS.GG.Game is the producer for the proposed `FS.GG.Wasm.Contracts` and
 `FS.GG.Wasm.Browser` packages. This window contains the contracts package only.
-Version `0.1.0-source.1` identifies local candidate bytes; it has not been
+Version `0.1.0-source.3` identifies the current local candidate bytes; it has not been
 published, enrolled in the Game solution, or added to the existing `0.16.0`
 coherent release set.
 
@@ -82,6 +82,7 @@ as executable authority.
 The guest SDK distribution selected for stage `.3` is a versioned source archive
 containing the Rust crate and C header/source, examples, license/provenance,
 pinned toolchains and checksums. No crates.io or npm publication is assumed.
+The implementation is documented in [the SDK guide](sdk.md).
 
 Run:
 

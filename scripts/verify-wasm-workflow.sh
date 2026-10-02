@@ -22,6 +22,7 @@ required = [
     "PLAYWRIGHT_VERSION: 1.63.0",
     "scripts/verify-wasm-contracts.sh",
     "scripts/verify-wasm-lifecycle.sh",
+    "scripts/verify-wasm-package-consumer.sh",
     "tests/Wasm.Browser.Conformance/run.sh",
 ]
 ordered = [
@@ -36,6 +37,7 @@ ordered = [
     "Verify compatibility contracts",
     "Verify lifecycle, packages, and Fable consumers",
     "Run browser Worker conformance",
+    "Verify SDK archive and fresh package consumer",
 ]
 def validate(candidate: str) -> None:
     missing = [value for value in required if value not in candidate]
@@ -111,11 +113,46 @@ test "$(grep -Ec '^  run [A-Za-z0-9]+Test =' "$repo/eng/wasm-shared/lifecycle.qn
   exit 1
 }
 
+grep -Fq 'b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4' \
+  "$repo/sdk/wasm/toolchains/acquire-wasi-sdk.sh" || {
+  echo "workflow preflight: WASI SDK 34 archive identity is not pinned" >&2
+  exit 1
+}
+grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.0-source.3]" />' \
+  "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj" || {
+  echo "workflow preflight: fresh consumer does not bind the source.3 browser package" >&2
+  exit 1
+}
+if grep -Fq '<ProjectReference' "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj"; then
+  echo "workflow preflight: fresh package consumer has a sibling project reference" >&2
+  exit 1
+fi
+for control in \
+  'rust-bar.wasm' 'rust-sc2.wasm' 'c-bar.wasm' 'c-sc2.wasm' \
+  'trap remains inside the package Worker' \
+  'deadline terminates and repeated disposal is harmless'; do
+  grep -Fq "$control" "$repo/tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs" || {
+    echo "workflow preflight: missing installed-package browser control $control" >&2
+    exit 1
+  }
+done
+for path in 'sdk/wasm/**' 'examples/wasm/**' 'tests/Wasm.PackageConsumer/**'; do
+  grep -Fq -- "- \"$path\"" "$workflow" || {
+    echo "workflow preflight: missing stage .3 path filter $path" >&2
+    exit 1
+  }
+done
+
 bash -n \
   "$repo/scripts/verify-wasm-workflow.sh" \
   "$repo/scripts/verify-wasm-contracts.sh" \
   "$repo/scripts/verify-wasm-lifecycle.sh" \
+  "$repo/scripts/verify-wasm-package-consumer.sh" \
+  "$repo/sdk/wasm/build-source-archive.sh" \
+  "$repo/sdk/wasm/verify-sdk.sh" \
+  "$repo/sdk/wasm/toolchains/acquire-wasi-sdk.sh" \
   "$repo/tests/Wasm.Compatibility/modules/build-fixtures.sh" \
-  "$repo/tests/Wasm.Browser.Conformance/run.sh"
+  "$repo/tests/Wasm.Browser.Conformance/run.sh" \
+  "$repo/tests/Wasm.PackageConsumer/browser/run.sh"
 
 echo "wasm-workflow-preflight: static=pass jobs=1 order=linear inputs=pinned"

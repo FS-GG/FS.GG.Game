@@ -1,9 +1,9 @@
 # Shared WebAssembly browser runtime
 
-This is the source candidate for stage `.2` of
+This is the closed runtime source and stage `.3` package candidate for
 [WASM-SHARED-01](https://github.com/FS-GG/.github/blob/67a78de8d85cc360bac33d39a322dc91bcb37379/docs/roadmaps/2026-10-02-shared-wasm-foundation.md).
 It builds on the [compatibility contract](compatibility.md) and keeps BAR and
-SC2 behavior distinct. Version `0.1.0-source.2` identifies local candidate
+SC2 behavior distinct. Version `0.1.0-source.3` identifies local candidate
 bytes. The package is unpublished and is outside the existing `0.16.0`
 coherent release set.
 
@@ -55,3 +55,19 @@ asset closure. It then restores a fresh Fable consumer from the local contracts
 and browser packages and executes the generated JavaScript. This source gate
 does not establish hosted package publication, product adoption, native
 authority, or a qualified browser host.
+
+## Package-owned Worker assets
+
+The browser nupkg carries `worker-client.mjs` and `module-worker.mjs` as
+build-transitive content under `_content/FS.GG.Wasm.Browser/`. A consuming build
+materializes both files together. The client resolves the Worker relative to its
+installed asset base, so a deployment below `/sub/app` does not assume a root URL.
+The assets are mechanical: F# remains responsible for validated configuration,
+admission, lifecycle effects, deadlines and settlement decisions.
+
+The stage `.3` verifier restores the local contracts/browser packages in a fresh
+temporary root with no project references, compiles all 15 Fable sources and loads
+the installed asset closure at a non-root URL. Actual Workers call independently
+built Rust and C BAR/SC2 guests; adversarial C guests cover trap, deadline
+termination and repeated disposal. This source verifier does not publish either
+nupkg or qualify an installed feed.

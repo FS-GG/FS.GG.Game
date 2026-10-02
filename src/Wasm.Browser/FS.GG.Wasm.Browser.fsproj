@@ -9,7 +9,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>fsharp;fable-javascript;webassembly;wasm;browser</PackageTags>
     <FablePackageType>library</FablePackageType>
-    <Version>0.1.0-source.2</Version>
+    <Version>0.1.0-source.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -52,4 +52,10 @@
       </_PackageFiles>
     </ItemGroup>
   </Target>
+
+  <ItemGroup>
+    <None Include="js/module-worker.mjs" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/module-worker.mjs" PackageCopyToOutput="true" />
+    <None Include="js/worker-client.mjs" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/worker-client.mjs" PackageCopyToOutput="true" />
+    <None Include="build/FS.GG.Wasm.Browser.targets" Pack="true" PackagePath="buildTransitive/FS.GG.Wasm.Browser.targets" />
+  </ItemGroup>
 </Project>

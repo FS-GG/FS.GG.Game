@@ -5,8 +5,8 @@ SC2 ABI `0x00010000` WebAssembly guests. The package contains contract and
 validation source only; it does not contain a browser host or grant product
 authority.
 
-`0.1.0-source.2` is an unpublished local candidate version containing the runtime-seam
-validation corrections. The accepted `0.1.0-source.1` bytes remain a distinct retained
-candidate. See
+`0.1.0-source.3` is an unpublished local candidate containing the retained runtime-seam
+validation corrections and the stage `.3` package version join. Earlier source candidates remain
+distinct retained bytes. See
 [`docs/wasm/compatibility.md`](../../docs/wasm/compatibility.md) in the source
 repository for the pinned baselines, policy matrix and qualification scope.
