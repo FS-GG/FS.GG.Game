@@ -14,4 +14,10 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="YoloDev.Expecto.TestSdk" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../Wasm.Compatibility/fixtures/*.json">
+      <Link>fixtures/%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

@@ -211,7 +211,7 @@ let pinnedCorpus =
     testList
         "pinned compatibility corpus"
         [ testCase "baseline source and decision fixtures are versioned and attributed" <| fun _ ->
-              let fixture name = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "..", "Wasm.Compatibility", "fixtures", name))
+              let fixture name = Path.Combine(System.AppContext.BaseDirectory, "fixtures", name)
               use baselines = JsonDocument.Parse(File.ReadAllText(fixture "baselines.v1.json"))
               use decisions = JsonDocument.Parse(File.ReadAllText(fixture "expected-decisions.v1.json"))
               Expect.equal (jsonString baselines.RootElement "schema") "fsgg.wasm.compatibility-baselines/v1" "baseline schema is pinned"

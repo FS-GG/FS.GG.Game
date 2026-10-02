@@ -78,9 +78,36 @@ if "&wasm_paths" in text or "*wasm_paths" in text:
     raise SystemExit("workflow preflight: actionlint 1.7.7 requires literal path sequences")
 PY
 
-grep -Fq 'dotnet restore "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" --locked-mode' \
+grep -Fq "dotnet restore \"\$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj\" --locked-mode" \
   "$repo/scripts/verify-wasm-contracts.sh" || {
   echo "workflow preflight: contract tests lack an explicit locked restore" >&2
+  exit 1
+}
+
+if grep -n '__SOURCE_DIRECTORY__' \
+  "$repo/tests/Wasm.Contracts.Tests/ContractTests.fs" \
+  "$repo/tests/Wasm.Invocation.Tests/Program.fs"; then
+  echo "workflow preflight: hosted fixture tests depend on a path-mapped source directory" >&2
+  exit 1
+fi
+
+grep -Fq '<Link>fixtures/%(Filename)%(Extension)</Link>' \
+  "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" || {
+  echo "workflow preflight: contract fixture content boundary is missing" >&2
+  exit 1
+}
+grep -Fq '<Link>modules/%(RecursiveDir)%(Filename)%(Extension)</Link>' \
+  "$repo/tests/Wasm.Invocation.Tests/FS.GG.Wasm.Invocation.Tests.fsproj" || {
+  echo "workflow preflight: invocation module content boundary is missing" >&2
+  exit 1
+}
+
+grep -Fq 'quint-lifecycle-tests: passed=' "$repo/scripts/verify-wasm-lifecycle.sh" || {
+  echo "workflow preflight: Quint gate does not report its selected named-test count" >&2
+  exit 1
+}
+test "$(grep -Ec '^  run [A-Za-z0-9]+Test =' "$repo/eng/wasm-shared/lifecycle.qnt")" -eq 8 || {
+  echo "workflow preflight: expected eight explicitly named Quint lifecycle tests" >&2
   exit 1
 }
 

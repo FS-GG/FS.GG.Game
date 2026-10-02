@@ -560,7 +560,7 @@ module lifecycle {
 module lifecycleTest {
   import lifecycle.*
 
-  run barRefusesBusy =
+  run barRefusesBusyTest =
     initBar.then(loadInitial).then(submitOrdinary).then(submitOrdinary).expect(and {
       state.profile == Bar,
       state.current.id == 1,
@@ -569,14 +569,14 @@ module lifecycleTest {
       lifecycleSafe,
     })
 
-  run sc2OrdinaryQueueIsFour =
+  run sc2OrdinaryQueueIsFourTest =
     initSc2.then(loadInitial).then(submitOrdinary).then(submitOrdinary).then(submitOrdinary).then(submitOrdinary).then(submitOrdinary).then(submitOrdinary).expect(and {
       state.ordinary.length() == 4,
       state.deliveries == List(6),
       lifecycleSafe,
     })
 
-  run latestSnapshotCoalesces =
+  run latestSnapshotCoalescesTest =
     initSc2.then(loadInitial).then(submitOrdinary).then(submitSnapshot).then(submitSnapshot).expect(and {
       state.snapshot.id == 3,
       state.deliveries == List(2),
@@ -584,7 +584,7 @@ module lifecycleTest {
       lifecycleSafe,
     })
 
-  run candidateFailurePreservesActive =
+  run candidateFailurePreservesActiveTest =
     initSc2.then(loadInitial).then(prepareCandidate).then(candidateReady).then(candidateValidated).then(candidateFailed).expect(and {
       state.activeWorker == 1,
       state.activeGeneration == 1,
@@ -592,7 +592,7 @@ module lifecycleTest {
       lifecycleSafe,
     })
 
-  run commitMakesOldCompletionHistorical =
+  run commitMakesOldCompletionHistoricalTest =
     initSc2.then(loadInitial).then(submitOrdinary).then(prepareCandidate).then(candidateReady).then(candidateValidated).then(commitCandidate).then(complete).expect(and {
       state.activeGeneration == 2,
       state.retiringWorkers.contains(1),
@@ -600,20 +600,20 @@ module lifecycleTest {
       lifecycleSafe,
     })
 
-  run freezeBlocksAndSuppresses =
+  run freezeBlocksAndSuppressesTest =
     initSc2.then(loadInitial).then(submitOrdinary).then(freeze).then(complete).then(submitOrdinary).expect(and {
       state.frozen,
       hasEffect(state.effects, "refusedFrozen"),
       lifecycleSafe,
     })
 
-  run cleanupFaultIsNotSuccess =
+  run cleanupFaultIsNotSuccessTest =
     initSc2.then(loadInitial).then(submitOrdinary).then(cleanupFault).expect(and {
       hasEffect(state.effects, "settleFault"),
       lifecycleSafe,
     })
 
-  run disposalSettlesEverythingOnce =
+  run disposalSettlesEverythingOnceTest =
     initSc2.then(loadInitial).then(submitOrdinary).then(submitOrdinary).then(prepareCandidate).then(candidateReady).then(candidateValidated).then(dispose).then(dispose).expect(and {
       state.disposed,
       state.effects.length() == 0,

@@ -17,4 +17,10 @@
     <Compile Include="../../src/Wasm.Browser/WorkerEntry.fs" Link="WorkerEntry.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../Wasm.Compatibility/modules/**/*.wasm">
+      <Link>modules/%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

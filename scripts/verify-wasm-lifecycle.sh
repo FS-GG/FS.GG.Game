@@ -17,7 +17,30 @@ mkdir -p "$traces" "$work/fable" "$work/package"
 export NUGET_PACKAGES="$work/nuget-packages"
 
 "$quint" typecheck "$model"
-"$quint" test --main=lifecycleTest --seed=20261002 "$model"
+"$quint" test --main=lifecycleTest --seed=20261002 --out="$work/quint-tests.json" "$model"
+python3 - "$work/quint-tests.json" <<'PY'
+import json
+import sys
+
+result = json.load(open(sys.argv[1], encoding="utf-8"))
+expected = {
+    "barRefusesBusyTest",
+    "sc2OrdinaryQueueIsFourTest",
+    "latestSnapshotCoalescesTest",
+    "candidateFailurePreservesActiveTest",
+    "commitMakesOldCompletionHistoricalTest",
+    "freezeBlocksAndSuppressesTest",
+    "cleanupFaultIsNotSuccessTest",
+    "disposalSettlesEverythingOnceTest",
+}
+passed = set(result["passed"])
+if passed != expected or result["failed"] or result["ignored"]:
+    raise SystemExit(
+        f"quint lifecycle tests mismatch: passed={sorted(passed)} "
+        f"failed={result['failed']} ignored={result['ignored']}"
+    )
+print(f"quint-lifecycle-tests: passed={len(passed)} names={','.join(sorted(passed))}")
+PY
 "$quint" run --main=lifecycle --init=init --step=step --invariant=lifecycleSafe \
   --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout \
   --max-steps=40 --max-samples=2000 --seed=20261002 "$model" > "$work/quint-sampled.txt"

@@ -60,7 +60,7 @@ match cleanupFault with
     check (outcome.CleanupFault = Some {Phase=Free;Diagnostic="free boom"}) "cleanup fault must remain separate"
 | value -> failwithf "unexpected cleanup fault %A" value
 
-let modules = IO.Path.GetFullPath(IO.Path.Combine(__SOURCE_DIRECTORY__, "../Wasm.Compatibility/modules"))
+let modules = IO.Path.Combine(AppContext.BaseDirectory, "modules")
 let admissionCases =
     [ BarProtected, "bar-rust/bar-conformance.wasm", "1557e76b7a97b8e301c31c1e082c9060d8b66258a23308dcf9d2d17dbfd9de7d"
       Sc2ImportedStrict, "sc2-rust/sc2-conformance.wasm", "005a55fdd63fddacfb342e2cb02e12900926c9ba5134aebb9d0088f05223b03c" ]
