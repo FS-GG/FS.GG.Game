@@ -36,8 +36,7 @@ printf '%s\n' \
 dotnet restore "$work/consumer/DotNet/DotNet.fsproj" --configfile "$config"
 dotnet run --project "$work/consumer/DotNet/DotNet.fsproj" --no-restore > "$work/dotnet.txt"
 dotnet restore "$work/consumer/Fable/Fable.fsproj" --configfile "$config"
-dotnet tool install fable --version 5.17.0 --tool-path "$work/tools" --configfile "$config"
-"$work/tools/fable" "$work/consumer/Fable/Fable.fsproj" --outDir "$work/javascript" --noCache
+dotnet tool run fable -- "$work/consumer/Fable/Fable.fsproj" --outDir "$work/javascript" --noCache
 node "$work/javascript/Program.js" > "$work/fable.txt"
 cmp "$work/dotnet.txt" "$work/fable.txt"
 

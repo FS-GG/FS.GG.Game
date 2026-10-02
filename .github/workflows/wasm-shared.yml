@@ -1,0 +1,116 @@
+name: wasm-shared
+
+on:
+  push:
+    branches: [main]
+    paths: &wasm_paths
+      - ".github/workflows/wasm-shared.yml"
+      - ".config/dotnet-tools.json"
+      - "global.json"
+      - "Directory.Build.*"
+      - "src/Wasm.Contracts/**"
+      - "src/Wasm.Browser/**"
+      - "tests/Wasm.Contracts.Tests/**"
+      - "tests/Wasm.Contracts.PortableConsumers/**"
+      - "tests/Wasm.Compatibility/**"
+      - "tests/Wasm.Invocation.Tests/**"
+      - "tests/Wasm.Lifecycle.Tests/**"
+      - "tests/Wasm.Lifecycle.Correspondence/**"
+      - "tests/Wasm.Browser.Conformance/**"
+      - "eng/wasm-shared/**"
+      - "docs/wasm/**"
+      - "scripts/verify-wasm-contracts.sh"
+      - "scripts/verify-wasm-lifecycle.sh"
+      - "scripts/verify-wasm-workflow.sh"
+  pull_request:
+    branches: [main]
+    paths: *wasm_paths
+  workflow_dispatch:
+
+concurrency:
+  group: wasm-shared-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: Shared WASM source, model, package, and browser qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      QUINT_VERSION: 0.32.0
+      RUST_VERSION: 1.90.0
+      PLAYWRIGHT_VERSION: 1.63.0
+      NODE_OPTIONS: --max-old-space-size=2048
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Static workflow preflight
+        run: scripts/verify-wasm-workflow.sh
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: "10.0.401"
+          cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "26"
+
+      - name: Prepare cold package and tool state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(dotnet --version)" = "10.0.401"
+          node_version="$(node --version)"
+          [[ "$node_version" == v26.* ]]
+          cold_packages="$RUNNER_TEMP/wasm-nuget-packages"
+          mkdir -p "$cold_packages"
+          export NUGET_PACKAGES="$cold_packages"
+          echo "NUGET_PACKAGES=$cold_packages" >> "$GITHUB_ENV"
+          dotnet nuget locals http-cache --clear
+          dotnet tool restore
+          fable_version="$(dotnet tool run fable -- --version | sed -E $'s/\\x1B\\[[0-9;]*[mK]//g' | head -n 1)"
+          test "$fable_version" = "5.18.0"
+
+      - name: Install pinned Quint
+        run: |
+          npm install --global "@informalsystems/quint@${QUINT_VERSION}"
+          test "$(quint --version)" = "$QUINT_VERSION"
+
+      - name: Install pinned Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RUST_VERSION" --profile minimal --target wasm32-unknown-unknown
+          rustup default "$RUST_VERSION"
+          rustc --version | grep -F "rustc ${RUST_VERSION} "
+          rustup target list --installed | grep -Fx wasm32-unknown-unknown
+
+      - name: Install pinned Playwright Chromium
+        working-directory: tests/Wasm.Browser.Conformance
+        run: |
+          npm ci
+          test "$(node -p "require('@playwright/test/package.json').version")" = "$PLAYWRIGHT_VERSION"
+          npx playwright install --with-deps chromium
+
+      - name: Rebuild pinned WebAssembly fixtures
+        run: |
+          tests/Wasm.Compatibility/modules/build-fixtures.sh
+          git diff --exit-code -- tests/Wasm.Compatibility/modules
+
+      - name: Verify compatibility contracts
+        run: scripts/verify-wasm-contracts.sh
+
+      - name: Verify lifecycle, packages, and Fable consumers
+        env:
+          QUINT: quint
+        run: scripts/verify-wasm-lifecycle.sh
+
+      - name: Run browser Worker conformance
+        run: tests/Wasm.Browser.Conformance/run.sh

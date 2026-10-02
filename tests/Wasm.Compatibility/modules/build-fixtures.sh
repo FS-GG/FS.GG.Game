@@ -8,6 +8,7 @@ case "$rust_version" in
   *) echo "expected rustc 1.90.0, found: $rust_version" >&2; exit 2 ;;
 esac
 
+# shellcheck disable=SC2054 # commas belong to rustc's one -Ctarget-feature argument
 flags=(--edition=2021 --crate-type=cdylib --target=wasm32-unknown-unknown -Copt-level=z -Cpanic=abort -Ctarget-feature=-atomics,-bulk-memory,-exception-handling,-multivalue,-reference-types,-relaxed-simd,-sign-ext,-simd128,-tail-call -Clink-arg=--no-entry -Clink-arg=--export-memory -Clink-arg=--initial-memory=2097152)
 rustc "${flags[@]}" -Clink-arg=--max-memory=67108864 "$root/bar-rust/lib.rs" -o "$root/bar-rust/bar-conformance.wasm"
 rustc "${flags[@]}" -Clink-arg=--table-base=0 -Clink-arg=--max-memory=8388608 "$root/sc2-rust/lib.rs" -o "$root/sc2-rust/sc2-compiler-output.wasm"
@@ -15,6 +16,7 @@ node "$root/strip-unused-table.mjs" "$root/sc2-rust/sc2-compiler-output.wasm" "$
 for variant in loop_forever call_trap grow_memory malformed_descriptor free_trap; do
   rustc "${flags[@]}" --cfg "$variant" -Clink-arg=--max-memory=8388608 "$root/synthetic-hostile/lib.rs" -o "$root/synthetic-hostile/$variant.wasm"
 done
+chmod 0644 "$root/bar-rust/bar-conformance.wasm" "$root/sc2-rust/sc2-conformance.wasm" "$root/synthetic-hostile/"*.wasm
 
 bar_source=$(sha256sum "$root/bar-rust/lib.rs" | cut -d' ' -f1)
 bar_output=$(sha256sum "$root/bar-rust/bar-conformance.wasm" | cut -d' ' -f1)

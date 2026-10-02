@@ -3,7 +3,7 @@
   "compiler": "rustc 1.90.0 (1159e78c4 2025-09-14)",
   "target": "wasm32-unknown-unknown",
   "flags": "--edition=2021 --crate-type=cdylib -Copt-level=z -Cpanic=abort -Ctarget-feature=-atomics,-bulk-memory,-exception-handling,-multivalue,-reference-types,-relaxed-simd,-sign-ext,-simd128,-tail-call --no-entry --export-memory --initial-memory=2097152; profile-specific finite max-memory; SC2 --table-base=0 then bounded strip-unused-table.mjs after rejecting element/call_indirect",
-  "builderSha256": "e776e8dd7eb7caacaddc6dd9299d50e033d8a067552212f708a2f39d6bca3cb2",
+  "builderSha256": "5c195d745d5c4147d54b3056775ce8e9f2d163a66285fea05623367b07774dda",
   "strictTableTransformerSha256": "fa61c9158ccf3de9151fbede62dcbe679af37cc99ad044812ec8dee9027e1793",
   "modules": [
     {

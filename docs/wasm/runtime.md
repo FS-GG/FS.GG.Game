@@ -37,6 +37,16 @@ Run:
 ./scripts/verify-wasm-lifecycle.sh
 ```
 
+Pull requests that change this source closure also run the independent
+`wasm-shared` hosted job. It uses exact .NET, Node, Fable, Quint, Rust and
+Playwright versions, rebuilds the checked-in WebAssembly fixtures, runs the
+contract and lifecycle gates from cold package state, restores fresh package
+consumers, and executes the six Chromium module Worker cases. The existing Game
+gate and release workflows remain separate. Because this is one finite linear
+job with no fan-out, artifact reuse, publication or retry protocol, its
+preflight is a static check of required pins, inputs and step order; the runtime
+Quint model remains the behavioral authority.
+
 The verifier requires Quint `0.32.0`. It typechecks and tests the model, checks
 the bounded simulation and deterministic trace bytes, runs lifecycle and
 correspondence tests, executes the correspondence suite from Fable output, and
