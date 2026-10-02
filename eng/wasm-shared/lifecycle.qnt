@@ -187,13 +187,24 @@ module lifecycle {
   }
   // Observational mechanical composition, using the SAME canonical eventAt.
   // Connected Host synchronously reports termination before the next ordered effect.
+  // Production invalidateWorker removes every role and pending item for this worker.
+  // Its emitted second TerminateWorker therefore observes no live/pending work.
+  // Preserve adverse further effects, and refuse rather than truncate this bound.
+  pure def connectedFinalEffect(out: Connection,fx: Effect,observed: int): Connection = {
+    val ordered={...out,effects:out.effects.append(fx),beforeEffects:out.beforeEffects.append(out.host)}
+    if(fx.kind!="terminate")ordered else {
+      val following=eventAt(out.host,input("workerTerminated",emptyRequest,fx.worker,""),observed)
+      {host:following,effects:ordered.effects.concat(following.effects),callbacks:out.callbacks.append(following.input),beforeEffects:ordered.beforeEffects.concat(following.effects.foldl(List(),(snapshots,nestedEffect)=>snapshots.append(following))),callbacksQuiescent:out.callbacksQuiescent and following.effects.length()==0}
+    }
+  }
   pure def connectedEventAt(c: Connection,e: Input,observed: int): Connection = {
     val base=eventAt(c.host,e,observed)
     base.effects.foldl({host:base,effects:List(),callbacks:List(),beforeEffects:List(),callbacksQuiescent:true},(out,fx)=>{
       val ordered={...out,effects:out.effects.append(fx),beforeEffects:out.beforeEffects.append(out.host)}
       if(fx.kind!="terminate")ordered else {
         val following=eventAt(out.host,input("workerTerminated",emptyRequest,fx.worker,""),observed)
-        {host:following,effects:ordered.effects.concat(following.effects),callbacks:out.callbacks.append(following.input),beforeEffects:ordered.beforeEffects.concat(following.effects.foldl(List(),(snapshots,nestedEffect)=>snapshots.append(following))),callbacksQuiescent:out.callbacksQuiescent and following.effects.length()==0}
+        val called={...ordered,host:following,callbacks:out.callbacks.append(following.input)}
+        following.effects.foldl(called,(nested,nestedEffect)=>connectedFinalEffect(nested,nestedEffect,observed))
       }
     })
   }
@@ -289,3 +300,4 @@ module lifecycleTest {
   run cleanupFaultIsNotSuccessTest = initSc2.then(readyActive).then(submitOrdinary).then(cleanupFault).expect(and {state.activeWorker==0,hasEffect(state.effects,"terminate")})
   run disposalSettlesEverythingOnceTest = initSc2.then(readyActive).then(submitOrdinary).then(submitOrdinary).then(prepareCandidate).then(dispose).then(dispose).expect(and {state.disposed,state.controls.length()==0,singleTerminalDelivery})
 }
+

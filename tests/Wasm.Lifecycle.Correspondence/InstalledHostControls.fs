@@ -85,3 +85,15 @@ let replayFacade (connected:bool) (trace:ModelTrace) =
                 let dispatched=result.Outcome |> Option.exists(fun value -> value.Dispatch=Dispatched)
                 if reason<>terminal.Reason || outcome<>terminal.Outcome || phase<>terminal.Phase || dispatched<>terminal.Dispatched then failures <- $"{trace.Name} raw facade cause/outcome/phase/dispatch differs" :: failures
     List.rev failures
+
+// Causal controls pass altered expectations through the same real installed
+// facade validator; neither the Host nor its callback interpreter is copied.
+let nestedCallbackMutationsAreDetected (trace:ModelTrace) =
+    let mutate change =
+        let changed={trace with Steps=trace.Steps |> List.map(fun step -> if step.ConnectedCallbacks.Length>1 then change step else step)}
+        not(List.isEmpty(replayFacade true changed))
+    [ "second-callback-omitted",mutate(fun step -> {step with ConnectedCallbacks=step.ConnectedCallbacks |> List.take 1})
+      "nested-termination-reordered",mutate(fun step ->
+          match step.ConnectedEffects with
+          | first::second::third::rest -> {step with ConnectedEffects=first::third::second::rest}
+          | _ -> step) ]

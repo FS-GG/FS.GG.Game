@@ -21,6 +21,7 @@ for stage in ['CurrentExpired','OrderedExpired','AllExpired']:
 schedules.append(('boundary-monotonic-clamp','eventBoundaryQualification','initBoundary','clampStep',9,'event-boundary-qualification.qnt'))
 for boundary in ['Before','At','After']:
  schedules.append(('boundary-bar-phase-'+boundary.lower(),'eventBoundaryQualification','initBarBoundary','phase'+boundary,10,'event-boundary-qualification.qnt'))
+schedules.append(('pending-load-commit','pendingLoadCommitQualification','initRegression','regressionStep',14,'event-boundary-qualification.qnt'))
 for name,module,initial,step,count,model in schedules:
  subprocess.run([quint,'run','--backend=typescript','--main='+module,'--init='+initial,'--step='+step,'--invariant=lifecycleSafe','--max-steps='+str(count),'--max-samples=1','--seed=20261002','--out-itf='+str(out/(name+'_{seq}.itf.json')),str(ROOT/'eng/wasm-shared'/model)],check=True,stdout=subprocess.DEVNULL)
 target=out/'GeneratedTraces.fs' if check else HERE/'GeneratedTraces.fs'

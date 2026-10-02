@@ -3,7 +3,36 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-lifecycle.XXXXXX")"
-trap 'rm -rf "$work"' EXIT
+proof="$work/model-proof"
+mkdir -p "$proof"
+retain_model_proof() {
+  local status=$?
+  trap - EXIT
+  local retained=0
+  python3 - "$proof" "${WASM_LIFECYCLE_EVIDENCE_DIR:-}" "$status" "$repo" <<'PYPROOF' || retained=$?
+import hashlib,json,pathlib,shutil,subprocess,sys
+source,destination,status,repo=sys.argv[1:]
+source=pathlib.Path(source);repo=pathlib.Path(repo)
+allowed={"qualification-status.json","quint-sampled-init.txt","quint-sampled-initReady.txt","quint-sampled-init.itf.json","quint-sampled-initReady.itf.json"}
+receipt={"schema":"fsgg.wasm.public-model-evidence/v1","exitCode":int(status),"sourceHead":subprocess.check_output(["git","-C",str(repo),"rev-parse","HEAD"],text=True).strip(),"modelSha256":hashlib.sha256((repo/"eng/wasm-shared/lifecycle.qnt").read_bytes()).hexdigest(),"quintVersion":"0.32.0","backend":"typescript","seed":20261002,"maxSamplesPerEntry":1000,"maxSteps":40}
+(source/"qualification-status.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
+files=list(source.iterdir())
+assert len(files)<=5 and all(p.name in allowed and p.is_file() and not p.is_symlink() for p in files),"unexpected model evidence leaf"
+assert sum(p.stat().st_size for p in files)<16*1024*1024,"model evidence exceeds16MiB"
+if destination:
+ target=pathlib.Path(destination);target.mkdir(parents=True,exist_ok=True)
+ assert not any(target.iterdir()),"model evidence destination is not empty"
+ for p in files:shutil.copyfile(p,target/p.name)
+ print("model-evidence: retainedFiles="+str(len(files))+" bytes="+str(sum(p.stat().st_size for p in files)))
+if int(status):
+ for p in files:
+  if p.suffix==".txt":print(p.name+"\n"+p.read_text(),file=sys.stderr)
+PYPROOF
+  rm -rf "$work"
+  if [[ "$status" == 0 && "$retained" != 0 ]]; then status="$retained"; fi
+  exit "$status"
+}
+trap retain_model_proof EXIT
 
 quint="${QUINT:-$(command -v quint || true)}"
 if [[ -z "$quint" || "$($quint --version)" != "0.32.0" ]]; then
@@ -41,14 +70,15 @@ if passed != expected or result["failed"] or result["ignored"]:
     )
 print(f"quint-lifecycle-tests: passed={len(passed)} names={','.join(sorted(passed))}")
 PY
+"$quint" test --backend=typescript --main=callbackClosureTest --seed=20261002 "$repo/eng/wasm-shared/event-boundary-qualification.qnt"
 # The same 2,000 sample budget covers cold start and reachable initialized work.
 for entry in init initReady; do
   "$quint" run --backend=typescript --main=lifecycle --init="$entry" --step=step --invariant=lifecycleSafe \
     --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout \
-    --max-steps=40 --max-samples=1000 --seed=20261002 "$model" > "$work/quint-sampled-$entry.txt"
+    --max-steps=40 --max-samples=1000 --seed=20261002 --out-itf="$proof/quint-sampled-$entry.itf.json" "$model" > "$proof/quint-sampled-$entry.txt" 2>&1
 done
 for witness in sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout; do
-  grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$work/quint-sampled-init.txt" "$work/quint-sampled-initReady.txt"
+  grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$proof/quint-sampled-init.txt" "$proof/quint-sampled-initReady.txt"
 done
 
 # Reproduce every retained fixture through the canonical owner generator.

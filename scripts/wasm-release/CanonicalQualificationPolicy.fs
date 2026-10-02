@@ -37,6 +37,7 @@ let private qualificationPath (value: string) =
     safePath value && (
         value.StartsWith("tests/Wasm.Lifecycle.Correspondence/", StringComparison.Ordinal)
         || (value.StartsWith("eng/wasm-shared/", StringComparison.Ordinal) && value.EndsWith(".qnt", StringComparison.Ordinal))
+        || value = ".github/workflows/wasm-shared.yml"
         || value = "scripts/verify-wasm-lifecycle.sh" || value = "docs/wasm/runtime.md" || value = "docs/roadmaps/wasm-shared-01.md"
         || value = "scripts/wasm-release/bind-installed-release.py"
         || value = "scripts/wasm-release/bind-canonical-qualification.py"

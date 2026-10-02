@@ -1,44 +1,17 @@
 {
   "schema": "fsgg.wasm.canonical-qualification-proof-pending/v1",
-  "status": "CANDIDATE_ACTUAL_QUALIFICATION_PASS_PENDING_ROOT_REVIEW",
+  "status": "CANDIDATE_PENDING_REPAIRED_MODEL_COMPILED_PROOF_AND_ROOT_REVIEW",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
-  "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
+  "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
   "producerProof": {
-    "status": "PASS_ACTUAL_DOTNET_FABLE_PRODUCTION_CORRESPONDENCE",
-    "dotnetTraces": 45,
-    "fableTraces": 45,
-    "causalMutants": 16,
-    "fullHostProjection": true,
-    "orderedEffects": true,
-    "dotnetLogSha256": "ba25c0c3b0848996f0128376e00072ac38f99b4e78007cf587a59e1af07bd743",
-    "fableLogSha256": "ba25c0c3b0848996f0128376e00072ac38f99b4e78007cf587a59e1af07bd743",
-    "evidenceOwner": "root-reported actual qualification against exact latest source",
-    "scope": "Actual producer.NET and generatedFable; complete HostProjection and ordered effects; no guest execution or product/native acceptance claim"
+    "status": "PENDING_LATEST_MODEL_DOTNET_FABLE_QUALIFICATION",
+    "scope": "Previous dbfa45/native proof is historical; repaired canonical callback closure and46-trace source requires new compiled proof"
   },
   "installedProof": {
-    "status": "PASS_ACTUAL_INSTALLED_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
-    "dotnetTraces": 45,
-    "fableTraces": 45,
-    "facades": [
-      "Host.Create",
-      "Host.CreateConnected"
-    ],
-    "fullHostProjection": true,
-    "orderedEffects": true,
-    "mechanicalBeforeEffectFullStates": true,
-    "rawCallbackFields": [
-      "identity",
-      "time",
-      "reason",
-      "outcome",
-      "phase",
-      "dispatch"
-    ],
-    "dotnetLogSha256": "ce0b1cc90df541244a668346ff3e56c98901d323ee8873166bda8953ff22c222",
-    "fableLogSha256": "ce0b1cc90df541244a668346ff3e56c98901d323ee8873166bda8953ff22c222",
-    "evidenceOwner": "root-reported actual immutable installed package qualification",
-    "scope": "Controlled typed observations, including synchronous mechanical Worker termination seam; guest execution excluded; no browser/native product gate claimed"
+    "status": "PENDING_LATEST_MODEL_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
+    "newCallbackMutants": "Two new installed callback mutant controls require actual compilation/execution",
+    "scope": "Controlled typed observations; latest full-state/ordered-effect/mechanical callback qualification pending; guest execution excluded"
   },
   "administrativeOwner": {
     "status": "PASS_ACTUAL_TYPED_FSHARP_13_MUTANTS_AND_PENDING_REFUSAL",
@@ -47,22 +20,41 @@
   },
   "approval": "Audit status remains pending. Neither existence nor SHA of this report proves producer/installed qualification. Only root-reviewed immutable amendment bytes with independently supplied exact audit digest can authorize administrative eligibility; caller exactHEAD is a separate receipt after commit.",
   "remaining": [
-    "clean committed exact latest proof/audit candidate",
-    "root review and explicit amendment approval",
+    "clean committed repaired callback-closure source and46-trace candidate",
+    "latest actual producer and installed.NET/Fable full-state ordered-effect qualification plus new callback mutants",
+    "root review and explicit new amendment approval",
     "post-commit exactHEAD administrative owner invocation"
   ],
   "latestSourceControls": {
-    "status": "PASS_REGENERATED_45_SOURCE_TRACES",
-    "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
-    "regeneratedITFs": 45,
-    "invariant": "Executed for all45 schedules by producer generator",
-    "scope": "Latest source regeneration with per-trace invariant; no latest eight-test/typecheck or2x1000 sampling claim"
+    "status": "PASS_FINAL_SOURCE_SAMPLING_AND_CALLBACK_CONTROLS",
+    "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
+    "callbackBoundControls": 3,
+    "boundedSamples": {
+      "inits": [
+        "init",
+        "initReady"
+      ],
+      "samplesPerInit": 1000,
+      "steps": 40,
+      "seed": 20261002,
+      "backend": "typescript",
+      "status": "PASS_NO_VIOLATION_FOUND"
+    },
+    "logSha256": {
+      "coldSampling": "23d3ace1b552befface2a6b4d7f0a2fa088dc9720fa71161491ce4b86c9ccaec",
+      "readySampling": "72a2263f056a8159dd6253dd414b3f746fd8c871785d3be22147cd9181f149d2",
+      "callbackControls": "6ee99c05ecb8510f9eb529c6f5c6aa972f27b8219c1cf21b2150b86bf72a583d"
+    },
+    "regeneratedITFs": {
+      "count": 46,
+      "status": "BYTE_IDENTICAL_TO_PREVIOUS_COMPLETED_46_TRACE_REGENERATION",
+      "note": "Three callback test definitions moved to existing derived qualification module; semantic transition unchanged; no latest regeneration run is invented"
+    },
+    "scope": "Final source sampling/control logs inspected for actualPASS. Previous863 source tests/regeneration retained as historical. New compiled.NET/Fable proof and amendment approval remain pending."
   },
   "latestCompiledQualification": {
-    "status": "PASS_ACTUAL_PRODUCER_AND_INSTALLED_DOTNET_FABLE",
-    "resourcePairReleasedAt": "2026-10-02 22:16:32 UTC",
-    "evidenceOwner": "root",
-    "scope": "Exact latest canonical source and installed immutable0.2.0,45 traces per runtime; complete state/ordered causal evidence; guest execution excluded"
+    "status": "PENDING_ROOT_NATIVE_GRANT",
+    "scope": "Latest repaired canonical source,46 traces and new installed controls; previous compiled proof does not qualify this source"
   },
   "historicalConnectedWorkerFaultCounterexample": {
     "status": "GENUINE_FIRST_NATIVE_FAILURE_RETAINED",
@@ -92,14 +84,148 @@
     "status": "HISTORICAL_OLD_CONNECTED_DOTNET_FABLE_FAIL",
     "finding": "Previous actual connected.NET/Fable comparison failed genuine synchronous WorkerTerminated callback LastAction closure. Latest canonical connected composition has now been regenerated; latest compiled installed qualification remains PENDING."
   },
-  "builds": {
-    "sdk": "10.0.401",
-    "fable": "5.18",
-    "warnings": 0,
-    "errors": 0,
-    "sourceBuildLogSha256": "2e7a9903e394ed8a3063f5cf32117675308082dbbdf8eb25e0d44dc64b8c549f",
-    "installedBuildLogSha256": "ecf7e44b8bcb26350069866306b93f3be7c68232da8a5754a8b21944ff85ba6e",
-    "sourceFableBuildLogSha256": "b96f593314f6c16d543a5825c5daa2506fb2991f129fc5d397eba238d56fbe69",
-    "installedFableBuildLogSha256": "b18b1e384a0b47d00108c81451260b5890044a50963a7e27d33a680419d5f74e"
+  "historicalCompiledQualificationSnapshots": [
+    {
+      "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
+      "status": "HISTORICAL_PRE_REPAIR_COMPILED_PROOF_AND_ROOT_REVIEW",
+      "producerProof": {
+        "status": "PASS_ACTUAL_DOTNET_FABLE_PRODUCTION_CORRESPONDENCE",
+        "dotnetTraces": 45,
+        "fableTraces": 45,
+        "causalMutants": 16,
+        "fullHostProjection": true,
+        "orderedEffects": true,
+        "dotnetLogSha256": "ba25c0c3b0848996f0128376e00072ac38f99b4e78007cf587a59e1af07bd743",
+        "fableLogSha256": "ba25c0c3b0848996f0128376e00072ac38f99b4e78007cf587a59e1af07bd743",
+        "evidenceOwner": "root-reported actual qualification against exact latest source",
+        "scope": "Actual producer.NET and generatedFable; complete HostProjection and ordered effects; no guest execution or product/native acceptance claim"
+      },
+      "installedProof": {
+        "status": "PASS_ACTUAL_INSTALLED_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
+        "dotnetTraces": 45,
+        "fableTraces": 45,
+        "facades": [
+          "Host.Create",
+          "Host.CreateConnected"
+        ],
+        "fullHostProjection": true,
+        "orderedEffects": true,
+        "mechanicalBeforeEffectFullStates": true,
+        "rawCallbackFields": [
+          "identity",
+          "time",
+          "reason",
+          "outcome",
+          "phase",
+          "dispatch"
+        ],
+        "dotnetLogSha256": "ce0b1cc90df541244a668346ff3e56c98901d323ee8873166bda8953ff22c222",
+        "fableLogSha256": "ce0b1cc90df541244a668346ff3e56c98901d323ee8873166bda8953ff22c222",
+        "evidenceOwner": "root-reported actual immutable installed package qualification",
+        "scope": "Controlled typed observations, including synchronous mechanical Worker termination seam; guest execution excluded; no browser/native product gate claimed"
+      },
+      "compiledQualification": {
+        "status": "PASS_ACTUAL_PRODUCER_AND_INSTALLED_DOTNET_FABLE",
+        "resourcePairReleasedAt": "2026-10-02 22:16:32 UTC",
+        "evidenceOwner": "root",
+        "scope": "Exact latest canonical source and installed immutable0.2.0,45 traces per runtime; complete state/ordered causal evidence; guest execution excluded"
+      },
+      "builds": {
+        "sdk": "10.0.401",
+        "fable": "5.18",
+        "warnings": 0,
+        "errors": 0,
+        "sourceBuildLogSha256": "2e7a9903e394ed8a3063f5cf32117675308082dbbdf8eb25e0d44dc64b8c549f",
+        "installedBuildLogSha256": "ecf7e44b8bcb26350069866306b93f3be7c68232da8a5754a8b21944ff85ba6e",
+        "sourceFableBuildLogSha256": "b96f593314f6c16d543a5825c5daa2506fb2991f129fc5d397eba238d56fbe69",
+        "installedFableBuildLogSha256": "b18b1e384a0b47d00108c81451260b5890044a50963a7e27d33a680419d5f74e"
+      },
+      "sourceControls": {
+        "status": "PASS_REGENERATED_45_SOURCE_TRACES",
+        "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
+        "regeneratedITFs": 45,
+        "invariant": "Executed for all45 schedules by producer generator",
+        "scope": "Latest source regeneration with per-trace invariant; no latest eight-test/typecheck or2x1000 sampling claim"
+      },
+      "rootReviewReferences": {
+        "sourceCommit": "6b28c6578b8dd9940e70fb9bd585e4bd71ee24cb",
+        "oldApprovedAuditReference": "a21",
+        "scope": "Historical root approval only; not approval of repaired callback-closure model"
+      }
+    }
+  ],
+  "historicalHostedInitReadyCounterexample": {
+    "status": "GENUINE_HOSTED_TYPESCRIPT_SAMPLED_FAILURE_RETAINED",
+    "sourceCommit": "6b28c6578b8dd9940e70fb9bd585e4bd71ee24cb",
+    "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
+    "init": "initReady",
+    "sample": 539,
+    "states": 37,
+    "sha256": "af72ff89f88806c36dc8982a142ce0fffa5f5448fb59f1f1687012c58482d478",
+    "finding": "Previously accepted model omitted a second canonical callback level for pending-load commit. Repair uses two callback levels at the same eventAt with strict final callbacksQuiescent bound; runtime remains unchanged."
+  },
+  "historicalSourceControlSnapshots": [
+    {
+      "status": "PASS_ACTUAL_SOURCE_CONTROLS_ONLY",
+      "modelSha256": "863f8948ec8d531c130f9f8df7279dc88682e9059868305d0b2356f5a5254424",
+      "typecheck": "PASS_REPORTED_BY_ROOT",
+      "quintTests": 8,
+      "callbackBoundControls": 3,
+      "deterministicPendingLoadCommitRegression": "PASS",
+      "regeneratedITFs": 46,
+      "boundedSamples": {
+        "inits": [
+          "init",
+          "initReady"
+        ],
+        "samplesPerInit": 1000,
+        "steps": 40,
+        "seed": 20261002,
+        "backend": "typescript",
+        "cpuCount": 1,
+        "status": "PASS_NO_VIOLATION_FOUND"
+      },
+      "logSha256": {
+        "regeneration": "3ab46cc191bfe3f50ad25d2f1302ba31f8ea1f2696df8564e881f71fe860d99f",
+        "eightTests": "3a1d9ff7c09dd7b5685faf30c3b4ae1a831c250a058b7a3847b3e31bc5a04832",
+        "coldSampling": "80f46de4f4888e22530821728508e19e3116444618bc0244e24fc67e36113c0a",
+        "readySampling": "f790f594117ad25ffd834b36e46d8dcf3d2d6c040c0918c7224c41d8bad8cf0e",
+        "callbackControls": "8e245fd8a02d3432f1a011480b44176ba6cc2dba7c424f8dbee6e0fe6632e8a0",
+        "deterministicRegression": "63990f40eac76dce6cb45f4f189fe055b055beb6a6a3d4bb5b1d5bae86968b9e"
+      },
+      "scope": "Actual completed generation/test/control/sampling log PASS inspected statically; source controls only, no new compiled.NET/Fable or amendment approval claimed"
+    }
+  ],
+  "ciEvidenceRetention": {
+    "status": "ROOT_APPROVED_EXACT_WORKFLOW_RETENTION_CHANGE_LOCAL_CONTROLS_PASS",
+    "workflowPath": ".github/workflows/wasm-shared.yml",
+    "workflowSha256": "9882448309dba77462c3decbd8feb797d192bff0705217c50ce2e120e5345df8",
+    "curatedLeaves": 5,
+    "retentionDays": 7,
+    "controlReceiptSha256": "3dbd9d306d4794029eb242589df1427b78c6b51f71967e549271bfeeaddf87b9",
+    "controls": [
+      {
+        "control": "actual-failure",
+        "passed": true,
+        "exit": 1,
+        "retainedFiles": 3,
+        "diagnosticSha256": "48d10c55eb617c35861c380dfc957c808e1ac031284a50256d2ba1443778a381"
+      },
+      {
+        "control": "unexpected-leaf",
+        "passed": true,
+        "exit": 1,
+        "retainedFiles": 0,
+        "diagnosticSha256": "7e31a9a98e268732f3021018eba2800f0e6257feb578805e47d2aae432b7150c"
+      },
+      {
+        "control": "oversized-leaf",
+        "passed": true,
+        "exit": 1,
+        "retainedFiles": 0,
+        "diagnosticSha256": "3255bf71349e2fcdcc264edc0b43cdff5a18b250fc453b0f15e2d8b611c5368e"
+      }
+    ],
+    "scope": "Local bounded evidence-retention controls only; no hosted job/native qualification success implied"
   }
 }

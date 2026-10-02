@@ -144,6 +144,7 @@ jobs:
       - name: Verify lifecycle, packages, and Fable consumers
         env:
           QUINT: quint
+          WASM_LIFECYCLE_EVIDENCE_DIR: ${{ runner.temp }}/wasm-lifecycle-evidence
         run: scripts/verify-wasm-lifecycle.sh
 
       - name: Run browser Worker conformance
@@ -153,3 +154,17 @@ jobs:
         run: |
           scripts/wasm-release/prepare.sh artifacts/wasm-release
           scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release
+
+      - name: Retain bounded public lifecycle model evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: wasm-lifecycle-model-evidence
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/wasm-lifecycle-evidence/qualification-status.json
+            ${{ runner.temp }}/wasm-lifecycle-evidence/quint-sampled-init.txt
+            ${{ runner.temp }}/wasm-lifecycle-evidence/quint-sampled-initReady.txt
+            ${{ runner.temp }}/wasm-lifecycle-evidence/quint-sampled-init.itf.json
+            ${{ runner.temp }}/wasm-lifecycle-evidence/quint-sampled-initReady.itf.json

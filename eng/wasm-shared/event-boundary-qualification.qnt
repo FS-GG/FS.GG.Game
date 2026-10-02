@@ -88,3 +88,40 @@ module eventBoundaryQualification {
   }
   val originalInputRetained = stage<7 or state.input.name!=""
 }
+
+module pendingLoadCommitQualification {
+  import lifecycle.* from "./lifecycle"
+  var stage: int
+  action initRegression = all {initSc2,stage'=0}
+  // Reach the counterexample through public actions: expire old active, retain
+  // ready candidate, load a new active control, then commit that candidate.
+  action regressionStep = all {
+    stage'=stage+1,
+    if(stage==0)loadInitial else if(stage==1)compiled
+    else if(stage==2)initialize else if(stage==3)initialized
+    else if(stage==4)prepareCandidate else if(stage==5)compiled
+    else if(stage==6)initialize else if(stage==7)initialized
+    else if(stage==8)candidateValidated else if(stage==9)submitOrdinary
+    else if(stage==10)advanceAndExpireDeadlines
+    else if(stage==11)loadInitial else if(stage==12)commitCandidate
+    else dispose,
+  }
+}
+
+// Bound controls invoke the same canonical transition and mechanical closure.
+module callbackClosureTest {
+  import lifecycle.* from "./lifecycle"
+  run invalidationClearsWorkerTest = initSc2.then(loadInitial).expect({
+    val cleared=eventAt(state,input("workerTerminated",emptyRequest,1,""),state.clock)
+    and {pending(cleared).length()==0,live(cleared).size()==0,cleared.compiledWorkers.size()==0,cleared.initializedWorkers.size()==0}
+  })
+  run clearedSecondCallbackIsQuiescentTest = initSc2.then(loadInitial).expect({
+    val cleared=eventAt(state,input("workerTerminated",emptyRequest,1,""),state.clock)
+    val again=eventAt(cleared,input("workerTerminated",emptyRequest,1,""),state.clock)
+    again.effects.length()==0
+  })
+  run unfinishedClosureIsRejectedTest = initSc2.then(loadInitial).expect({
+    val unfinished={host:state,effects:List(),callbacks:List(),beforeEffects:List(),callbacksQuiescent:true}
+    not(connectedFinalEffect(unfinished,termination(1),state.clock).callbacksQuiescent)
+  })
+}

@@ -1,11 +1,11 @@
 {
   "schema": "fsgg.wasm.canonical-qualification-amendment/v1",
-  "status": "APPROVED",
+  "status": "CANDIDATE_PENDING_PRODUCER_MODEL_AND_PROOF",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
   "version": "0.2.0",
   "publishedModelSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-  "modelSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94",
+  "modelSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975",
   "producerLink": "FS-GG/FS.GG.Game@4afacb501b9371b4cc81494b7bf91b46c880a663",
   "releaseManifestSha256": "dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853",
   "sdkSha256": "ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3",
@@ -22,9 +22,14 @@
   "model": {
     "path": "eng/wasm-shared/lifecycle.qnt",
     "previousSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
-    "qualifierSha256": "dbfae139202e4cc292971247ba555ee5424522f59171f118b8a55307e3686e94"
+    "qualifierSha256": "d0fbe760e8156ef7b330d09cb0ab040f97a35874a9fb7213f17ab0ba3cca8975"
   },
   "qualifierInputs": [
+    {
+      "path": ".github/workflows/wasm-shared.yml",
+      "previousSha256": "c2afd465bccaae880b9eb1f1d2f7e386c52eba79b55cc0d70f6383a254ae7076",
+      "qualifierSha256": "9882448309dba77462c3decbd8feb797d192bff0705217c50ce2e120e5345df8"
+    },
     {
       "path": "docs/roadmaps/wasm-shared-01.md",
       "previousSha256": "ABSENT",
@@ -38,7 +43,7 @@
     {
       "path": "eng/wasm-shared/event-boundary-qualification.qnt",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "86150388295eb102408fe7ddb6b1fcc9fd26fe35a162bb898a6f47f9d209e9cc"
+      "qualifierSha256": "3f99c080e6adf814d6758cf2e70487172d0523430c20e003c91cbdf872153609"
     },
     {
       "path": "eng/wasm-shared/expiry-qualification.qnt",
@@ -48,12 +53,12 @@
     {
       "path": "scripts/verify-wasm-lifecycle.sh",
       "previousSha256": "ab22879a3815e8ef2285a61c3c7ac68b5781c2076748d2f962c49bf7d65f35a5",
-      "qualifierSha256": "47edcb48a25099b8c1fa6811134ff18eb98ac28bd0029169d9266bb7c49ec094"
+      "qualifierSha256": "f8fb5be0dec99dc76134af4a01a3ad16058f11075a9832dd6f2c0b84f1a32934"
     },
     {
       "path": "scripts/wasm-release/CanonicalQualificationPolicy.fs",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "16dd5e274a1df5c0d41a70a7385b57bd21d9bb1814389132520bb9ed6dbcb390"
+      "qualifierSha256": "93ab428055f58102c94f1832b0e02ec516fbec850e592170a6b877b46c9ef4bd"
     },
     {
       "path": "scripts/wasm-release/bind-canonical-qualification.py",
@@ -83,7 +88,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs",
       "previousSha256": "8cc3b84d991f6720d19ac19ee4007b1007aa2a21ce66cd7febd3cbfcbd8aeb20",
-      "qualifierSha256": "06c8a3efcb3f7bcb8e1146f2a8daf897f66cdd11118fb30ae8a97f561a1374d7"
+      "qualifierSha256": "787f8a9ffa78546c27a9d4429614fcb6d12117ac2a025731b29337aa6f5f84c0"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Installed/InstalledHost.fsproj",
@@ -98,12 +103,12 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHostControls.fs",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "a65d3f527a53f4888649a31e7d0bdd6db19b5ea5e75b95c490c7ea0232345a3c"
+      "qualifierSha256": "d1aa24830a975ea16e1e86ea76836028ac6f5dd8900d86e9ae8678afd6883ac6"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHostProgram.fs",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "f3f894b8f55be63c3a24ca14a0f95a07b3411391e89d5b09772f414fa39f7a73"
+      "qualifierSha256": "de9f158cfaf9af2c0e58471da6901936640d9769a2955f38426bbc591bf6e3e6"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/Program.fs",
@@ -308,7 +313,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "2181f7224302fec0354ab592eaa82e441bc89a9ebd16a4e02b3b65dd806b6cfc"
+      "qualifierSha256": "7e8a85acdbd8155a96b07153c64047663ced431659adeb012eee73195499f6e9"
     },
     {
       "path": "tests/release/wasm/test-canonical-qualification-policy.fsx",
@@ -325,7 +330,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "27e30a01ca468e123a8a3f4b8b2ca14c2edddf765c7323323c6baa2f0b7edadc"
+      "qualifierSha256": "bc607448ec93ac0b50d2f89fb28c7fd91d1bcd9ca77f0f07754230c94bc8646a"
     }
   ],
   "originalTraces": [
@@ -350,6 +355,11 @@
       "qualifierSha256": "89a9b1f0f36779b4f8dd44c07f1b839712408160327157b09b6f483074ace22b"
     },
     {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/pending-load-commit_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "73b43c72898e3494d7c779260956ef2f71603d34aa107bcd8e7812a351c1330a"
+    },
+    {
       "path": "tests/Wasm.Lifecycle.Correspondence/Traces/phase_0.itf.json",
       "previousSha256": "d67c26e7ebad0fb4169b169d0c994eb2d4bb2fbfaea10ac022ef0d8abaa3a11a",
       "qualifierSha256": "ab74c803aed91d400e2fa2e4e90510a4d28d5825353d2861a993d796db14ef7b"
@@ -366,6 +376,7 @@
     }
   ],
   "approvedChangedPaths": [
+    ".github/workflows/wasm-shared.yml",
     "docs/roadmaps/wasm-shared-01.md",
     "docs/wasm/runtime.md",
     "eng/wasm-shared/event-boundary-qualification.qnt",
@@ -427,6 +438,7 @@
     "tests/Wasm.Lifecycle.Correspondence/Traces/cleanup_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-early_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-late_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/pending-load-commit_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/phase_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/sc2_0.itf.json",
     "tests/Wasm.Lifecycle.Correspondence/Traces/timeout_0.itf.json",
