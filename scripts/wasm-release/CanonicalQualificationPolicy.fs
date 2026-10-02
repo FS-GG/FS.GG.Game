@@ -75,8 +75,9 @@ let decide (audit: Audit) (observed: Observation) : Decision =
     require (audit.QualifierInputs.Length > 0 && audit.ProofInputs.Length > 0 && audit.OriginalTraces.Length > 0) "missing qualifier source/proof/original trace binding"
     let expected = Array.concat [ [|audit.Model|]; audit.QualifierInputs; audit.ProofInputs; audit.OriginalTraces ]
     require (unique (expected |> Array.map _.Path) && unique (observed.Inputs |> Array.map _.Path)) "duplicate input binding"
-    require (expected |> Array.forall (fun row -> qualificationPath row.Path && digest row.QualifierSha256
-                    && (row.PreviousSha256 = "ABSENT" || digest row.PreviousSha256))) "invalid input fingerprint"
+    let validBinding (row: FileBinding) =
+        qualificationPath row.Path && digest row.QualifierSha256 && (row.PreviousSha256 = "ABSENT" || digest row.PreviousSha256)
+    require (expected |> Array.forall validBinding) "invalid input fingerprint"
     require ((expected |> Array.sortBy _.Path) = (observed.Inputs |> Array.sortBy _.Path)) "stale qualifier/proof/original trace hash"
     let fingerprinted = expected |> Array.map _.Path |> Set.ofArray
     let administrativeAudit = "scripts/wasm-release/canonical-qualification-amendment.json"

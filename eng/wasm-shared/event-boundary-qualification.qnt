@@ -55,5 +55,36 @@ module eventBoundaryQualification {
   action initializeBefore = controlStep("initialized",-1)
   action initializeAt = controlStep("initialized",0)
   action initializeAfter = controlStep("initialized",1)
+  // Candidate control survives active expiry; retiring current must not gain authority.
+  action populationStep(retiring: bool,offset: int): bool = all {
+    stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
+    else if(stage==4)submitOrdinary else if(stage==5)prepareCandidate else if(stage==6)compiled else if(stage==7)initialize
+    else if(retiring and stage==8)initialized else if(retiring and stage==9)candidateValidated else if(retiring and stage==10)commitCandidate
+    else if(stage==8 or (retiring and stage==11))state'=eventAt(state,input("dispose",emptyRequest,0,""),state.current.deadline+offset)
+    else dispose,
+  }
+  action candidateBefore = populationStep(false,-1)
+  action candidateAt = populationStep(false,0)
+  action candidateAfter = populationStep(false,1)
+  action retiringBefore = populationStep(true,-1)
+  action retiringAt = populationStep(true,0)
+  action retiringAfter = populationStep(true,1)
+  action mixedStep(offset: int): bool = all {
+    stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
+    else if(stage==4)submitOrdinary else if(stage==5)submitOrdered else if(stage==6)submitSnapshot
+    else if(stage==7)state'=eventAt(state,input("dispose",emptyRequest,0,""),state.current.deadline+offset)
+    else dispose,
+  }
+  action mixedCurrentExpired = mixedStep(1)
+  action mixedOrderedExpired = mixedStep(2)
+  action mixedAllExpired = mixedStep(3)
+  action clampStep = all {stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
+    else if(stage==4)submitOrdinary else if(stage==5)dispose
+    else if(stage==6)state'=eventAt(state,input("dispose",emptyRequest,0,""),state.clock-1)
+    else state'=eventAt(state,input("timer",emptyRequest,0,""),state.clock-1),
+  }
   val originalInputRetained = stage<7 or state.input.name!=""
 }

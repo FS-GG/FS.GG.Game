@@ -104,7 +104,7 @@ let eventFor (previous: ModelStep) (target: ModelStep) =
 
 let private replayWithEffectMutation (mutate: ModelStep -> EffectProjection list -> EffectProjection list) (trace: ModelTrace) =
     let profile =
-        if trace.Name = "bar" || trace.Name = "phase" then
+        if trace.Steps.Head.State.Profile = "Bar" then
             BarProtected
         else
             Sc2ImportedStrict
@@ -154,7 +154,7 @@ let replay trace =
     replayWithEffectMutation (fun _ effects -> effects) trace
 
 let staleGenerationMutationIsDetected trace =
-    let mutate expected effects =
+    let mutate (expected: ModelStep) (effects: EffectProjection list) =
         if expected.Effects |> List.exists (fun effect -> effect.Kind = "settleHistorical") then
             effects
             |> List.map (fun effect ->

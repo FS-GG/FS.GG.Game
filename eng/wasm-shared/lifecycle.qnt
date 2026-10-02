@@ -122,7 +122,7 @@ module lifecycle {
       if(e.name=="loadInitial") {...startControl(s,fresh,"loadInitial"),activeWorker:fresh.worker,activeGeneration:fresh.generation,nextGeneration:s.nextGeneration+1,effects:List(effect("createActive",fresh),effect("armTimer",fresh),effect("post",fresh))}
       else {...startControl(s,fresh,"prepareCandidate"),candidateWorker:fresh.worker,candidateGeneration:fresh.generation,candidateTransaction:fresh.generation,candidateInitialized:false,candidateReady:false,nextGeneration:s.nextGeneration+1,effects:List(effect("createCandidate",fresh),effect("armTimer",fresh),effect("post",fresh))}
     } else if(e.name=="initialize")
-      if(not(live(s).contains(e.worker))) s else startControl(s,r,"initialize")
+      if(not(live(s).contains(e.worker))) refuse(s,r,"refused") else startControl(s,r,"initialize")
     else if(e.name=="compiled" or e.name=="initialized"){
       if(not(requestPresent(s,r)))s else {
         val following={...s,controls:s.controls.select(p=>p.id!=r.id),deliveries:s.deliveries.append(r.id),effects:List(effect("cancelTimer",r),effect(if(s.frozen or r.worker==s.candidateWorker)"settleHistorical" else "settleCurrent",r))}

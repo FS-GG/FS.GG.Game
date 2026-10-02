@@ -1,0 +1,28 @@
+{
+  "schema": "fsgg.wasm.canonical-qualification-proof-pending/v1",
+  "status": "CANDIDATE_PENDING_ROOT_AUTHENTICATED_PROOFS",
+  "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
+  "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
+  "modelSha256": "5a9243c2c877060fcc3ea85a1eac659e36dc189486fb227928d38cecaedc173e",
+  "producerProof": {
+    "status": "ROOT_REPORTED_PURE_PRODUCTION_45_NATIVE_PASS_AUTHENTICATION_PENDING",
+    "traces": 45,
+    "scope": "Parent reports actual pure production45/native pass; exact source-bound native evidence must be joined and reviewed by root before approval. This file is not native proof."
+  },
+  "installedProof": {
+    "status": "FAIL_CONNECTED_HOST_CANONICAL_CALLBACK_CLOSURE_OPEN",
+    "finding": "Parent reports genuine synchronous WorkerTerminated interpreter callback changes projected LastAction; canonical closure amendment remains in progress. Full installed connected comparison has not passed."
+  },
+  "administrativeOwner": {
+    "status": "ROOT_REPORTED_ACTUAL_TYPED_FSHARP_PASS_13_AND_PENDING_REFUSAL",
+    "scope": "Actual owner controls reported by root; not a grant for model approval."
+  },
+  "approval": "Audit status remains pending. Neither existence nor SHA of this report proves producer/installed qualification. Only root-reviewed immutable amendment bytes with independently supplied exact audit digest can authorize administrative eligibility; caller exactHEAD is a separate receipt after commit.",
+  "remaining": [
+    "canonical synchronous connected Worker termination closure",
+    "source/model/trace freeze after closure",
+    "genuine producer and installed full-state ordered-effect proofs",
+    "root review and explicit amendment approval",
+    "post-commit exactHEAD administrative owner invocation"
+  ]
+}

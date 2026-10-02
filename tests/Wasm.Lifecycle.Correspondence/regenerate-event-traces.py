@@ -13,6 +13,14 @@ for action in ['dispose','completion','timer','phase','freeze','resume','compile
  for boundary in ['Before','At','After']:
   schedules.append(('boundary-'+action+'-'+boundary.lower(),'eventBoundaryQualification','initBoundary',action+boundary,10,'event-boundary-qualification.qnt'))
 schedules.append(('boundary-dispose-both-expired','eventBoundaryQualification','initBoundary','disposeBothExpired',10,'event-boundary-qualification.qnt'))
+for population in ['candidate','retiring']:
+ for boundary in ['Before','At','After']:
+  schedules.append(('boundary-'+population+'-'+boundary.lower(),'eventBoundaryQualification','initBoundary',population+boundary,13,'event-boundary-qualification.qnt'))
+for stage in ['CurrentExpired','OrderedExpired','AllExpired']:
+ schedules.append(('boundary-mixed-'+stage.lower(),'eventBoundaryQualification','initBoundary','mixed'+stage,9,'event-boundary-qualification.qnt'))
+schedules.append(('boundary-monotonic-clamp','eventBoundaryQualification','initBoundary','clampStep',9,'event-boundary-qualification.qnt'))
+for boundary in ['Before','At','After']:
+ schedules.append(('boundary-bar-phase-'+boundary.lower(),'eventBoundaryQualification','initBarBoundary','phase'+boundary,10,'event-boundary-qualification.qnt'))
 for name,module,initial,step,count,model in schedules:
  subprocess.run([quint,'run','--main='+module,'--init='+initial,'--step='+step,'--invariant=lifecycleSafe','--max-steps='+str(count),'--max-samples=1','--seed=20261002','--out-itf='+str(out/(name+'_{seq}.itf.json')),str(ROOT/'eng/wasm-shared'/model)],check=True,stdout=subprocess.DEVNULL)
 target=out/'GeneratedTraces.fs' if check else HERE/'GeneratedTraces.fs'
