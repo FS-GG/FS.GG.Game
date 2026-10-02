@@ -91,10 +91,18 @@ test("foreign correlation, Worker and generation observations are inert on the i
 });
 test("active expiry settles queued work once without dispatching into expired Worker",async({page})=>{
   const value=await page.evaluate(()=>window.runQueuedExpiry());
-  expect(value.results.map(x=>x.State)).toEqual(["timeout","timeout","timeout"]);
-  expect(value.results.slice(1).every(x=>!x.Dispatched)).toBe(true);
+  // All requests expire; a late timer may expire pending requests before Worker invalidation.
+  expect(value.results.every(x=>x.Reason==="DeadlineExpired" && x.Disposition==="Discarded" && x.Output.length===0)).toBe(true);
+  expect(value.results[0]).toMatchObject({Request:"3",State:"timeout",HasOutcome:true});
+  for(const [index,request] of [[1,"4"],[2,"5"]]) {
+    const result=value.results[index];
+    expect(result).toMatchObject({Request:request,Dispatched:false});
+    expect(result.State).toBe(result.HasOutcome ? "timeout" : "stopped");
+  }
   expect(value.posts.filter(x=>x.Kind==="process").map(x=>x.request)).toEqual(["3"]);
-  expect(value.deliveries).toEqual(["1","2","3","4","5"]);
+  expect(value.deliveries.length).toBe(5);
+  expect(new Set(value.deliveries).size).toBe(5);
+  expect([...value.deliveries].sort()).toEqual(["1","2","3","4","5"]);
   expect(value.active).toBe("");
 });
 test("candidate init, transaction validation, freeze and retiring expiry preserve new installed authority",async({page})=>{

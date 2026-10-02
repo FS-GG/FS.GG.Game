@@ -46,6 +46,61 @@ def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
 
 
+AUDITED_CONSUMER_PATHS = {
+    "tests/Wasm.PackageConsumer/Program.fs",
+    "tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs",
+}
+FROZEN_INPUTS = [
+    "src/Wasm.Browser", "src/Wasm.Contracts", "sdk/wasm", "examples/wasm",
+    "eng/wasm-shared/version.props", "eng/wasm-shared/lifecycle.qnt",
+    "scripts/verify-wasm-package-consumer.sh", "scripts/wasm-release/release_manifest.py",
+    "scripts/wasm-release/api-baseline-policy.json", "scripts/wasm-release/build-worker-policy.sh",
+    "scripts/wasm-release/prepare.sh", ".github/workflows/wasm-installed-org.yml",
+    ".config/dotnet-tools.json", "global.json", "Directory.Build.*",
+    "Directory.Packages.*", "nuget.config", "NuGet.Config",
+]
+
+
+def blob_sha(data):
+    return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+
+
+def fingerprint(data):
+    return {"blob": blob_sha(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+
+def validate_consumer_audit(audit, source, version, changed, producer, qualifier):
+    assert set(audit) == {"schema", "publishedSource", "version", "reason", "files"}, "unreviewed audit fields"
+    assert audit["schema"] == "fsgg.wasm.installed-qualification-audit/v1"
+    assert audit["publishedSource"] == source == "4afacb501b9371b4cc81494b7bf91b46c880a663", "audit names another producer"
+    assert audit["version"] == version == "0.2.0" and audit["reason"]
+    rows = {row["path"]: row for row in audit["files"]}
+    assert len(rows) == len(audit["files"]) == 2 and set(rows) == AUDITED_CONSUMER_PATHS, "unreviewed consumer allowlist"
+    assert set(changed) == AUDITED_CONSUMER_PATHS, "extra or missing consumer change"
+    for path, row in rows.items():
+        assert set(row) == {"path", "producerBlob", "producerSha256", "qualifierBlob", "qualifierSha256"}
+        for prefix, data in (("producer", producer[path]), ("qualifier", qualifier[path])):
+            assert row[prefix + "Blob"] == data["blob"], "consumer Git blob differs from reviewed audit"
+            assert row[prefix + "Sha256"] == data["sha256"], "consumer bytes differ from reviewed audit"
+        assert row["producerBlob"] != row["qualifierBlob"], "audit does not describe a correction"
+    return audit
+
+
+def bind_qualification_inputs(source, qualifier_source, version):
+    subprocess.run(["git", "-C", str(ROOT), "diff", "--exit-code", source, qualifier_source, "--", *FROZEN_INPUTS], check=True)
+    changed = git("diff", "--name-only", source, qualifier_source, "--", "tests/Wasm.PackageConsumer").splitlines()
+    if not changed:
+        return {"consumerInputs": "identical-to-published-source"}
+    audit_path = ROOT / "scripts/wasm-release/installed-qualification-audit.json"
+    audit = json.loads(audit_path.read_text())
+    def read(revision, path):
+        return subprocess.check_output(["git", "-C", str(ROOT), "show", revision + ":" + path])
+    producer = {path: fingerprint(read(source, path)) for path in AUDITED_CONSUMER_PATHS}
+    qualifier = {path: fingerprint(read(qualifier_source, path)) for path in AUDITED_CONSUMER_PATHS}
+    validate_consumer_audit(audit, source, version, changed, producer, qualifier)
+    return {"consumerInputs": "exact-reviewed-qualification-correction", "auditSha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(), "audit": audit}
+
+
 def main():
     tracked = ET.parse(ROOT / "eng/wasm-shared/version.props").findtext(".//WasmSharedVersion")
     values = checked_inputs(os.environ, tracked)
@@ -54,9 +109,10 @@ def main():
     tag = "wasm/v" + values["RELEASE_VERSION"]
     assert git("rev-parse", f"refs/tags/{tag}^{{commit}}") == source, "tag does not name published source"
     subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", source, "origin/main"], check=True)
-    # Repaired qualification runs from its own immutable revision. Consumer,
-    # SDK and toolchain provenance must still match the published producer.
-    subprocess.run(["git", "-C", str(ROOT), "diff", "--exit-code", source, "HEAD", "--", "tests/Wasm.PackageConsumer", "sdk/wasm", "scripts/wasm-release/release_manifest.py", "scripts/wasm-release/api-baseline-policy.json", ".config/dotnet-tools.json", "global.json"], check=True)
+    # Preserve every producer/SDK/toolchain input. Only the two exact reviewed
+    # consumer projection/assertion blobs may differ, bound by the immutable audit.
+    input_audit = bind_qualification_inputs(source, values["QUALIFIER_SOURCE"], values["RELEASE_VERSION"])
+    print("wasm-installed-input-audit: " + json.dumps(input_audit, sort_keys=True))
     request = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/tags/wasm%2Fv{values['RELEASE_VERSION']}", headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + os.environ["GH_TOKEN"], "X-GitHub-Api-Version": "2022-11-28"})
     with urllib.request.urlopen(request) as response:
         release = json.load(response)

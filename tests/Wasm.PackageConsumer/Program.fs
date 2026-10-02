@@ -7,6 +7,8 @@ type ConsumerResult =
         State: string
         Phase: string
         Disposition: string
+        Reason: string
+        HasOutcome: bool
         Output: byte array
         Diagnostic: string
         CleanupDiagnostic: string
@@ -92,6 +94,8 @@ let createHost path digest outputCap deadline (transport: HostTransport) receive
                 State = state
                 Phase = phase
                 Disposition = string result.Disposition
+                Reason = result.Reason |> Option.map string |> Option.defaultValue ""
+                HasOutcome = result.Outcome.IsSome
                 Output = output
                 Diagnostic = diagnostic
                 CleanupDiagnostic = cleanup

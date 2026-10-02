@@ -64,9 +64,14 @@ done
 "$quint" run --main=lifecycle --init=initSc2 --step=cleanupCorrespondenceStep --invariant=lifecycleSafe \
   --max-steps=15 --max-samples=1 --seed=20261002 --out-itf="$traces/cleanup_{seq}.itf.json" "$model" >/dev/null
 
+for timing in early late; do
+  "$quint" run --main=expiryQualification --init=initSc2 --step="${timing}Step" --invariant=lifecycleSafe \
+    --max-steps=8 --max-samples=1 --seed=20261002 --out-itf="$traces/expiry-${timing}_{seq}.itf.json" \
+    "$repo/eng/wasm-shared/expiry-qualification.qnt" >/dev/null
+done
 python3 "$repo/tests/Wasm.Lifecycle.Correspondence/generate-traces.py" \
   --traces "$traces" --output "$work/GeneratedTraces.fs"
-for name in bar sc2 timeout phase cleanup; do
+for name in bar sc2 timeout phase cleanup expiry-early expiry-late; do
   cmp "$traces/${name}_0.itf.json" "$repo/tests/Wasm.Lifecycle.Correspondence/Traces/${name}_0.itf.json"
 done
 cmp "$work/GeneratedTraces.fs" "$repo/tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs"

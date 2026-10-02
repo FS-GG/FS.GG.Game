@@ -71,4 +71,47 @@ for mutant in ("digest", "url", "draft", "version", "missing"):
         pass
     else:
         raise SystemExit(f"native release {mutant} mismatch accepted")
+
+# Exercise the production hash predicate with reviewed producer inventory and actual qualifier bytes.
+# The installed binding separately reads BOTH immutable Git revisions; this static check needs no history fetch.
+import hashlib
+import json
+source = "4afacb501b9371b4cc81494b7bf91b46c880a663"
+audit = json.loads((root / "scripts/wasm-release/installed-qualification-audit.json").read_text())
+producer = {row["path"]: {"blob": row["producerBlob"], "sha256": row["producerSha256"]} for row in audit["files"]}
+qualifier = {path: binding.fingerprint((root / path).read_bytes()) for path in binding.AUDITED_CONSUMER_PATHS}
+changed = sorted(binding.AUDITED_CONSUMER_PATHS)
+binding.validate_consumer_audit(audit, source, "0.2.0", changed, producer, qualifier)
+for mutation in ("extra-consumer", "changed-spec", "changed-projection", "wrong-producer", "extra-audit-path", "duplicate-row", "wrong-blob"):
+    broken = copy.deepcopy(audit)
+    names = list(changed)
+    bytes_ = dict(qualifier)
+    producer_source = source
+    if mutation == "extra-consumer": names.append("tests/Wasm.PackageConsumer/browser/package-consumer.mjs")
+    elif mutation == "changed-spec": bytes_["tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs"] = binding.fingerprint((root / "tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs").read_bytes() + b"\n// unreviewed relaxation")
+    elif mutation == "changed-projection": bytes_["tests/Wasm.PackageConsumer/Program.fs"] = binding.fingerprint((root / "tests/Wasm.PackageConsumer/Program.fs").read_bytes() + b"\n// unreviewed policy")
+    elif mutation == "wrong-producer": producer_source = "a" * 40
+    elif mutation == "extra-audit-path": broken["files"][0]["path"] = "tests/Wasm.PackageConsumer/browser/package-consumer.mjs"
+    elif mutation == "duplicate-row": broken["files"].append(broken["files"][0])
+    else: broken["files"][0]["producerBlob"] = "0" * 40
+    try:
+        binding.validate_consumer_audit(broken, producer_source, "0.2.0", names, producer, bytes_)
+    except (AssertionError, KeyError):
+        pass
+    else:
+        raise SystemExit(f"unreviewed qualification correction {mutation} accepted")
+# Both traces come from schedules over the unchanged canonical model and preserve full ordered effects.
+trace_root = root / "tests/Wasm.Lifecycle.Correspondence/Traces"
+for timing, order, kinds in (
+    ("early", [1, 2, 3, 4, 5], ["terminate", "cancelTimer", "settleTimedOut", "settleTimedOut", "settleTimedOut"]),
+    ("late", [1, 2, 4, 5, 3], ["settleTimedOut", "settleTimedOut", "terminate", "cancelTimer", "settleTimedOut"]),
+):
+    trace = json.loads((trace_root / f"expiry-{timing}_0.itf.json").read_text())
+    state = trace["states"][-1]["state"]
+    assert [int(value["#bigint"]) for value in state["deliveries"]] == order
+    assert [effect["kind"] for effect in state["effects"]] == kinds
+    assert state["activeWorker"] == {"#bigint": "0"} and not state["ordinary"]
+    assert len(set(order)) == 5
+print("wasm-installed-input-audit: exact-two-reviewed-blobs=pass extra-or-unreviewed-consumer=refused expiry-early-late=canonical")
+
 print("wasm-installed-preflight: manual=pass read-only=pass serial-two-feeds=pass qualifier=immutable native-receipts=bound negative-controls=pass")
