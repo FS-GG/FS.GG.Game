@@ -71,7 +71,7 @@ node "$work/fable/Program.js"
 
 dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$work/package"
 dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$work/package"
-package="$work/package/FS.GG.Wasm.Browser.0.1.0.nupkg"
+package="$work/package/FS.GG.Wasm.Browser.0.1.1.nupkg"
 unzip -Z1 "$package" > "$work/package-files.txt"
 for path in \
   fable/RuntimeProtocol.fsi fable/Admission.fsi fable/Invocation.fsi fable/WorkerEntry.fsi \
@@ -88,7 +88,7 @@ cat > "$work/consumer/Consumer.fsproj" <<'EOF'
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.fs" />
-    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.0]" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.1]" />
   </ItemGroup>
 </Project>
 EOF

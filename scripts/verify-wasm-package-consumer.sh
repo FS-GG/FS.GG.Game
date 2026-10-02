@@ -9,7 +9,7 @@ value="${2:-}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-package-consumer.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/sdk-artifacts" "$work/modules" "$work/lock-source" "$work/consumer/browser"
-version="0.1.0"
+version="0.1.1"
 manifest="$work/release-manifest.json"
 
 if [[ "$mode" == --custody ]]; then

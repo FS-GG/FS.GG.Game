@@ -119,9 +119,9 @@ grep -Fq 'b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4' \
   echo "workflow preflight: WASI SDK 34 archive identity is not pinned" >&2
   exit 1
 }
-grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.0]" />' \
+grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.1.1]" />' \
   "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj" || {
-  echo "workflow preflight: fresh consumer does not bind the stable 0.1.0 browser package" >&2
+  echo "workflow preflight: fresh consumer does not bind the stable 0.1.1 browser package" >&2
   exit 1
 }
 if grep -Fq '<ProjectReference' "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj"; then

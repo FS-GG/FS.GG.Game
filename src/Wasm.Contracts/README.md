@@ -5,7 +5,7 @@ SC2 ABI `0x00010000` WebAssembly guests. The package contains contract and
 validation source only; it does not contain a browser host or grant product
 authority.
 
-`0.1.0` is the unpublished stable release candidate containing the retained
+`0.1.1` is the unpublished stable release candidate containing the retained
 runtime-seam validation corrections and package version join. Earlier source
 candidates remain distinct retained bytes. See
 [`docs/wasm/compatibility.md`](../../docs/wasm/compatibility.md) in the source
