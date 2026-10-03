@@ -19,6 +19,16 @@ spec = importlib.util.spec_from_file_location('evaluator_preparation', ROOT / 's
 e = importlib.util.module_from_spec(spec);spec.loader.exec_module(e)
 
 
+PRODUCER_SCRIPT_SHA = 'b1cb0116a4e76c592300f3a950e54af5b661c892fbb816ac3a068ea6e2cbeb62'
+PRODUCER_SCRIPT = ROOT / 'tests/release/wasm/fixtures/producer-16a-verify-wasm-supervisor.sh'
+
+
+def producer_script(path=PRODUCER_SCRIPT):
+    body = path.read_bytes()
+    e.need(e.sha(body) == PRODUCER_SCRIPT_SHA, 'original producer fixture substituted')
+    return body
+
+
 def release():
     return {'id':e.RELEASE, 'tag_name':e.TAG, 'draft':False, 'prerelease':False,
         'html_url':f'https://github.com/{e.REPO}/releases/tag/{e.TAG}', 'assets':[
@@ -87,10 +97,19 @@ class Tests(unittest.TestCase):
                 (root/'package.json').write_text(json.dumps({'version':'0.32.0'}));entry.write_text('foreign')
                 with self.assertRaises(ValueError):e.tool(str(entry))
 
+    def test_original_fixture_substitution_refused(self):
+        original=producer_script()
+        self.assertNotIn(b'--backend=typescript', original)
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'fixture';path.write_bytes(original+b'foreign')
+            with self.assertRaises(ValueError):producer_script(path)
+            path.write_bytes((ROOT/'scripts/verify-wasm-supervisor.sh').read_bytes())
+            with self.assertRaises(ValueError):producer_script(path)
+
     def test_real_P_commands_and_failed_readiness_stops(self):
         with tempfile.TemporaryDirectory() as d:
             base=Path(d);p=base/'P';(p/'scripts').mkdir(parents=True)
-            source=subprocess.check_output(['git','-C',str(ROOT),'show',e.P+':scripts/verify-wasm-supervisor.sh'])
+            source=producer_script()
             (p/'scripts/verify-wasm-supervisor.sh').write_bytes(source)
             plan,witnesses=e.commands(p,'actual-quint');self.assertEqual(len(plan),3)
             for _,args in plan:self.assertEqual(args.count('--backend=rust'),1);self.assertIn('--seed=20261003',args)
