@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export DOTNET_PROCESSOR_COUNT=1 MSBUILDDISABLENODEREUSE=1 UseSharedCompilation=false
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid coherent candidate version" >&2; exit 2; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-lifecycle.XXXXXX")"
 proof="$work/model-proof"
 mkdir -p "$proof"
@@ -91,10 +94,10 @@ dotnet tool run fable "$repo/tests/Wasm.Lifecycle.Correspondence/FS.GG.Wasm.Life
   --outDir "$work/fable" --noCache
 node "$work/fable/Program.js"
 
-dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$work/package"
+dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$work/package" -m:1 -nr:false -p:UseSharedCompilation=false
 "$repo/scripts/wasm-release/build-worker-policy.sh" "$work/policy"
-dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$work/package" -p:WasmWorkerPolicyRoot="$work/policy"
-package="$work/package/FS.GG.Wasm.Browser.0.2.0.nupkg"
+dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$work/package" -p:WasmWorkerPolicyRoot="$work/policy" -m:1 -nr:false -p:UseSharedCompilation=false
+package="$work/package/FS.GG.Wasm.Browser.$version.nupkg"
 unzip -Z1 "$package" > "$work/package-files.txt"
 for path in \
   fable/RuntimeProtocol.fsi fable/Admission.fsi fable/Invocation.fsi fable/WorkerEntry.fsi \
@@ -103,7 +106,7 @@ for path in \
 done
 
 mkdir -p "$work/consumer"
-cat > "$work/consumer/Consumer.fsproj" <<'EOF'
+cat > "$work/consumer/Consumer.fsproj" <<EOF
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -111,7 +114,7 @@ cat > "$work/consumer/Consumer.fsproj" <<'EOF'
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.fs" />
-    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[$version]" />
   </ItemGroup>
 </Project>
 EOF
@@ -132,7 +135,7 @@ cat > "$work/NuGet.Config" <<EOF
   <packageSourceMapping><packageSource key="candidate"><package pattern="FS.GG.Wasm.*"/></packageSource><packageSource key="nuget"><package pattern="*"/></packageSource></packageSourceMapping>
 </configuration>
 EOF
-dotnet restore "$work/consumer/Consumer.fsproj" --configfile "$work/NuGet.Config"
+dotnet restore "$work/consumer/Consumer.fsproj" --configfile "$work/NuGet.Config" -m:1 -nr:false -p:UseSharedCompilation=false
 dotnet tool run fable "$work/consumer/Consumer.fsproj" --outDir "$work/consumer-js" --noCache
 node "$work/consumer-js/Program.js" | grep -Fxq 'fresh-package-consumer'
 

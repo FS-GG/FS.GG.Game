@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export DOTNET_PROCESSOR_COUNT=1 MSBUILDDISABLENODEREUSE=1 UseSharedCompilation=false
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 custody="$(realpath -m "${1:?usage: prepare.sh <empty-custody-directory>}")"
 [[ -z "$(git -C "$repo" status --porcelain)" ]] || { echo "release custody requires a clean exact source checkout" >&2; exit 2; }
@@ -24,8 +25,8 @@ export NUGET_PACKAGES
 policy_work="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/wasm-worker-policy.XXXXXX")"
 trap 'rm -rf "$NUGET_PACKAGES" "$policy_work"' EXIT
 "$repo/scripts/wasm-release/build-worker-policy.sh" "$policy_work/policy"
-dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$custody" --nologo -p:RepositoryCommit="$source"
-dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$custody" --nologo -p:RepositoryCommit="$source" -p:WasmWorkerPolicyRoot="$policy_work/policy"
+dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$custody" --nologo -p:RepositoryCommit="$source" -m:1 -nr:false -p:UseSharedCompilation=false
+dotnet pack "$repo/src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj" -c Release -o "$custody" --nologo -p:RepositoryCommit="$source" -p:WasmWorkerPolicyRoot="$policy_work/policy" -m:1 -nr:false -p:UseSharedCompilation=false
 "$repo/sdk/wasm/build-source-archive.sh" "$custody"
 python3 "$repo/scripts/wasm-release/compare-published-baseline.py" --custody "$custody" --output "$custody/api-baseline-comparison.json"
 python3 "$repo/scripts/wasm-release/release_manifest.py" prepare \

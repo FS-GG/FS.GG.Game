@@ -64,3 +64,13 @@ is administrative source eligibility, with publication and native acceptance fal
 Organization feed occupancy is unresolved when authenticated enumeration returns
 403; absent public version/tag does not reserve the release. No publication is
 claimed by local candidate qualification.
+
+
+Pipeline preflight uses the existing static validator against the actual one-job
+YAML and candidate metadata. It catches omitted supervisor/bootstrap gates,
+wrong ordering, stale candidate package paths and missing version override before
+cold compiler/model/browser work. Historic source/model/browser/SDK consumer gates
+remain required. The implementation is bounded to this linear workflow; a new
+pipeline model would add no ordering coverage. Reuse is expected on each producer
+PR and release preparation; no measured runner savings are claimed. The existing
+canonical lifecycle remains the semantic model authority.

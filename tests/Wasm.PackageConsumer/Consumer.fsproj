@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="Program.fs" />
     <PackageReference Update="FSharp.Core" Version="[10.1.302]" />
-    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" Condition="'$(WasmCandidateVersion)' == ''" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[$(WasmCandidateVersion)]" Condition="'$(WasmCandidateVersion)' != ''" />
   </ItemGroup>
 </Project>

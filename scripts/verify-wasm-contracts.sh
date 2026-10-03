@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export DOTNET_PROCESSOR_COUNT=1 MSBUILDDISABLENODEREUSE=1 UseSharedCompilation=false
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid coherent candidate version" >&2; exit 2; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-contracts.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 candidate_feed="${WASM_CONTRACTS_FEED:-$work/feed}"
@@ -9,12 +12,12 @@ mkdir -p "$candidate_feed"
 
 export NUGET_PACKAGES="$work/packages"
 
-dotnet build "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release
-dotnet restore "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" --locked-mode
+dotnet build "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -m:1 -nr:false -p:UseSharedCompilation=false
+dotnet restore "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" --locked-mode -m:1 -nr:false -p:UseSharedCompilation=false
 dotnet run --project "$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj" -c Release --no-restore
-dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$candidate_feed"
+dotnet pack "$repo/src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj" -c Release -o "$candidate_feed" -m:1 -nr:false -p:UseSharedCompilation=false
 
-package="$candidate_feed/FS.GG.Wasm.Contracts.0.2.0.nupkg"
+package="$candidate_feed/FS.GG.Wasm.Contracts.$version.nupkg"
 test -f "$package"
 unzip -Z1 "$package" > "$work/package-files.txt"
 grep -Fxq 'api-surface/Contracts.fsi' "$work/package-files.txt"
@@ -26,6 +29,7 @@ grep -Fxq 'wasm-compatibility/baselines.v1.json' "$work/package-files.txt"
 grep -Fxq 'wasm-compatibility/expected-decisions.v1.json' "$work/package-files.txt"
 
 cp -R "$repo/tests/Wasm.Contracts.PortableConsumers" "$work/consumer"
+export WasmCandidateVersion="$version"
 
 config="$work/NuGet.Config"
 printf '%s\n' \
@@ -34,9 +38,9 @@ printf '%s\n' \
   '  <packageSourceMapping><packageSource key="candidate"><package pattern="FS.GG.Wasm.Contracts"/></packageSource><packageSource key="nuget"><package pattern="*"/></packageSource></packageSourceMapping>' \
   '</configuration>' > "$config"
 
-dotnet restore "$work/consumer/DotNet/DotNet.fsproj" --configfile "$config"
+dotnet restore "$work/consumer/DotNet/DotNet.fsproj" --configfile "$config" -m:1 -nr:false -p:UseSharedCompilation=false
 dotnet run --project "$work/consumer/DotNet/DotNet.fsproj" --no-restore > "$work/dotnet.txt"
-dotnet restore "$work/consumer/Fable/Fable.fsproj" --configfile "$config"
+dotnet restore "$work/consumer/Fable/Fable.fsproj" --configfile "$config" -m:1 -nr:false -p:UseSharedCompilation=false
 dotnet tool run fable -- "$work/consumer/Fable/Fable.fsproj" --outDir "$work/javascript" --noCache
 node "$work/javascript/Program.js" > "$work/fable.txt"
 cmp "$work/dotnet.txt" "$work/fable.txt"

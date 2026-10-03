@@ -31,10 +31,16 @@ let preparationPaths = Set [
     "scripts/wasm-release/compare-published-baseline.py"; "scripts/wasm-release/release_manifest.py"
     "scripts/wasm-release/SupervisorSourcePolicy.fs"; "scripts/wasm-release/decide-supervisor-source.fsx"
     "scripts/wasm-release/bind-supervisor-source.py"
-    "tests/release/wasm/test-supervisor-source-policy.fsx"; "tests/release/wasm/test-release-wasm.py"
+    "tests/release/wasm/test-supervisor-source-policy.fsx"; "tests/release/wasm/test-api-baseline-policy.py"; "tests/release/wasm/test-release-wasm.py"
     "tests/Wasm.Supervisor.Compatibility/root-canonical-review.json"
     "tests/Wasm.Supervisor.Compatibility/reviewed-source-proof.json"
     "docs/roadmaps/wasm-shared-01.md"
+    "scripts/wasm-release/qualify-supervisor-custody.sh"; "scripts/verify-wasm-contracts.sh"; "scripts/verify-wasm-lifecycle.sh"
+    "scripts/wasm-release/prepare.sh"; "scripts/verify-wasm-supervisor.sh"; "scripts/verify-wasm-package-consumer.sh"; "scripts/verify-wasm-workflow.sh"
+    ".github/workflows/wasm-shared.yml"
+    "tests/Wasm.Contracts.PortableConsumers/DotNet/DotNet.fsproj"
+    "tests/Wasm.Contracts.PortableConsumers/Fable/Fable.fsproj"
+    "tests/Wasm.PackageConsumer/Consumer.fsproj"
 ]
 
 let decide (review: Review) (observed: Observation) : Decision =
