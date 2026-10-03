@@ -12,7 +12,7 @@ root=args.custody.resolve();baselineRoot=args.baseline_feed.resolve();sdk=args.s
 sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 packages=args.packages.resolve();core=packages/'fsharp.core/10.1.302/lib/netstandard2.0/FSharp.Core.dll'
 metadata=json.loads((core.parents[2]/'.nupkg.metadata').read_text());assert metadata['source']=='https://api.nuget.org/v3/index.json'
-expectedCore=json.loads((Path(__file__).resolve().parents[2]/'src/Wasm.Browser/packages.lock.json').read_text())['dependencies']['net10.0']['FSharp.Core']['contentHash']
+expectedCore=json.loads((pathlib.Path(__file__).resolve().parents[2]/'src/Wasm.Browser/packages.lock.json').read_text())['dependencies']['net10.0']['FSharp.Core']['contentHash']
 assert metadata['contentHash']==expectedCore, 'official locked FSharp.Core reference mismatch'
 contracts=work/'FS.GG.Wasm.Contracts.dll'
 with zipfile.ZipFile(root/('FS.GG.Wasm.Contracts.'+args.candidate_version+'.nupkg')) as z:contracts.write_bytes(z.read('lib/net10.0/FS.GG.Wasm.Contracts.dll'))

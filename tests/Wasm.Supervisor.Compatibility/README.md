@@ -42,3 +42,14 @@ completion and expired enclosing admission.
 These checks establish bounded producer and package behavior. Publication,
 fresh qualification from both native feeds, and SC2's complete product API
 acceptance remain separate joins controlled by the programme owner.
+
+The executable gates are `scripts/verify-wasm-supervisor.sh` and
+`scripts/verify-wasm-supervisor-browser.sh`. The first requires an explicit
+baseline qualification root, coherent candidate custody and candidate version,
+and a fresh output outside source. It limits local .NET work to one process
+with node reuse and shared compilation disabled. The second consumes the
+first gate's installed Fable output, requires pinned WASI SDK 34, independently
+builds its guest, extracts the exact candidate Worker assets and runs all eight
+pinned Playwright controls from a fresh external public directory. Its looping
+initialization/process and enclosing-budget cases assert containment, without
+claiming exact wall-clock scheduling latency.
