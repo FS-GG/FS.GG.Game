@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import tempfile
 import warnings
@@ -34,6 +35,34 @@ def validate_workflow(text: str) -> None:
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     try: module.validate_workflow(text)
     except (AssertionError, KeyError, ValueError) as error: raise SystemExit("publisher source contract refused") from error
+
+
+def validate_supervisor_backend(text: str, backend: str) -> None:
+    commands = [shlex.split(line) for line in text.splitlines()
+                if line.lstrip().startswith('"$quint" test ') or line.lstrip().startswith('"$quint" run ')]
+    require([command[1] for command in commands] == ["test", "run"],
+            "supervisor model test or sampled run is missing")
+    require(backend == "typescript" and all(
+        [token for token in command if token.startswith("--backend=")] == ["--backend=" + backend]
+        for command in commands), "supervisor backend differs from the historical selected proof")
+
+
+def supervisor_backend_checks() -> None:
+    text = (ROOT / "scripts/verify-wasm-supervisor.sh").read_text()
+    proof = json.loads((ROOT / "tests/Wasm.Supervisor.Compatibility/reviewed-source-proof.json").read_text())
+    backend = proof["model"]["backend"]
+    validate_supervisor_backend(text, backend)
+    for action in ("test", "run"):
+        original = '"$quint" ' + action + ' --backend=typescript '
+        for replacement in ('"$quint" ' + action + ' ', '"$quint" ' + action + ' --backend=rust '):
+            mutant = text.replace(original, replacement, 1)
+            require(mutant != text, "backend mutation did not reach the production command")
+            try:
+                validate_supervisor_backend(mutant, backend)
+            except SystemExit:
+                pass
+            else:
+                raise SystemExit("supervisor backend omission or replacement was accepted")
 
 
 def browser_setup_checks() -> None:
@@ -104,6 +133,7 @@ def source_checks() -> None:
     cargo_manifests = [path for path in cargo_files if path.name == "Cargo.toml" and "[package]" in path.read_text()]
     require(all('version = "0.3.0"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
     validate_workflow(workflow)
+    supervisor_backend_checks()
     browser_setup_checks()
     subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-release-promotion.py")], check=True)
     require("NuGet/login@8d196754b4036150537f80ac539e15c2f1028841" in workflow, "public push lacks pinned OIDC login")

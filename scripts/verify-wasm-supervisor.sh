@@ -22,12 +22,12 @@ version="${WASM_CANDIDATE_VERSION:?requires exact candidate version}"
 if [[ "$mode" == custody ]]; then
 quint="${QUINT:-quint}"
 [[ "$($quint --version)" == 0.32.0 ]]
-"$quint" test eng/wasm-shared/compatible-qualification.qnt --main=compatibleQualificationTest --seed=20261003 > "$output/model-controls.log" 2>&1
+"$quint" test --backend=typescript eng/wasm-shared/compatible-qualification.qnt --main=compatibleQualificationTest --seed=20261003 > "$output/model-controls.log" 2>&1
 python3 tests/Wasm.Supervisor.Compatibility/check-receipt-mutation.py > "$output/receipt-mutation.log"
 witnesses=(sawSelectedLoad sawSelectedCompile sawSelectedInitialize sawSelectedInitialized sawMixedOrdinary sawMixedOrdered sawAdmittedSnapshot sawHeldSnapshot sawHeldPromotion sawSelectedPhase sawNarrowDeadline sawNarrowOutput sawEnclosingBudget sawCandidatePrepared sawCandidateInitialized sawCandidateValidated sawSelectedFreeze sawAtomicFrozenCommit sawSelectedHistorical sawSelectedResume sawSelectedDisposal sawRefusalAfterExpiry sawInclusiveHeadExpiry sawFrozenCommitExpiryRefused)
 for entry in initCompatible 'initCompatible.then(readyCompatible)'; do
   name=cold; [[ "$entry" == initCompatible ]] || name=ready
-  "$quint" run eng/wasm-shared/lifecycle.qnt --main=compatibleLifecycle --init="$entry" --step=compatibleStep --invariant=compatibilitySafe --witnesses "${witnesses[@]}" --max-samples=1000 --max-steps=40 --seed=20261003 > "$output/model-$name.log" 2>&1
+  "$quint" run --backend=typescript eng/wasm-shared/lifecycle.qnt --main=compatibleLifecycle --init="$entry" --step=compatibleStep --invariant=compatibilitySafe --witnesses "${witnesses[@]}" --max-samples=1000 --max-steps=40 --seed=20261003 > "$output/model-$name.log" 2>&1
 done
 for witness in "${witnesses[@]}"; do
   grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$output/model-cold.log" "$output/model-ready.log"
