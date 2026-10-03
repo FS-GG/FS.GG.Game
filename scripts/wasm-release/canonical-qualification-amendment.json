@@ -1,6 +1,6 @@
 {
   "schema": "fsgg.wasm.canonical-qualification-amendment/v1",
-  "status": "CANDIDATE_PENDING_PRODUCER_MODEL_AND_PROOF",
+  "status": "APPROVED",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
   "version": "0.2.0",
