@@ -18,6 +18,8 @@ def module(name, file):
 
 comparison = module("comparison", ROOT / "scripts/wasm-release/compare-published-baseline.py")
 manifest = module("manifest", ROOT / "scripts/wasm-release/release_manifest.py")
+current_policy = comparison.POLICY
+comparison.POLICY = json.loads((ROOT / "scripts/wasm-release/api-baseline-policy-0.2.0.json").read_text())
 fixture = json.loads((ROOT / "tests/release/wasm/fixtures/published-browser-api-break.json").read_text())
 log = "\n".join("error " + row["code"] + ": " + row["message"] for row in fixture["diagnostics"]) + "\nAPI breaking changes found"
 actual = comparison.classify("FS.GG.Wasm.Browser", 1, log)
@@ -56,3 +58,19 @@ for kind in ("null-baseline", "compatible-browser", "changed-baseline-bytes", "w
     else:
         raise SystemExit(f"invalid API migration receipt accepted: {kind}")
 print("wasm-api-baseline-policy: published=0.1.1 migration=0.2.0 Contracts=compatible Browser=four-declared-constructor-breaks unavailable=refused suppressions=none")
+
+# The receiver-visible compatible successor compares actual 0.2.0, without reuse
+# of the older declared constructor-break disposition.
+comparison.POLICY = current_policy
+for identity in current_policy["packages"]:
+    assert comparison.classify(identity, 0, "APICompat ran successfully") == {"status":"compatible", "diagnostics":[]}
+    for rc, diagnostics in [(1,"unavailable"),(1,log),(0,log)]:
+        try: comparison.classify(identity, rc, diagnostics)
+        except AssertionError: pass
+        else: raise SystemExit("additive successor accepted unavailable/breaking native verdict")
+assert manifest.api_policy("0.3.0")["baselineVersion"] == "0.2.0"
+assert manifest.api_policy("0.2.0")["baselineVersion"] == "0.1.1"
+try: manifest.api_policy("0.2.1")
+except SystemExit: pass
+else: raise SystemExit("unselected patch version accepted")
+print("wasm-api-baseline-policy: additive successor=0.3.0 baseline=0.2.0 breaks/unavailable/unselected-version=refused")

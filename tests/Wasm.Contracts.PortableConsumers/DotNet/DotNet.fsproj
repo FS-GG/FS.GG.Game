@@ -3,6 +3,7 @@
   <ItemGroup>
     <Compile Include="../Consumer.fs" Link="Consumer.fs" />
     <Compile Include="Program.fs" />
-    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[0.2.0]" />
+    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[0.2.0]" Condition="'$(WasmCandidateVersion)' == ''" />
+    <PackageReference Include="FS.GG.Wasm.Contracts" Version="[$(WasmCandidateVersion)]" Condition="'$(WasmCandidateVersion)' != ''" />
   </ItemGroup>
 </Project>

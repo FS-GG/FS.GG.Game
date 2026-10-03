@@ -103,7 +103,16 @@ type SchedulingSettings =
         Realtime: RealtimeScheduling option
     }
 
-type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings
+type HostCompatibility =
+    | DefaultCompatibility
+    | Sc2SupervisorV1
+
+type RequestLimits =
+    { MaximumDeadlineMilliseconds: int
+      MaximumOutputBytes: int
+      EnclosingDeadlineMilliseconds: int64 option }
+
+type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings * HostCompatibility
 
 [<RequireQualifiedAccess>]
 module HostSettings =
@@ -142,13 +151,22 @@ module HostSettings =
                     {
                         Ordinary = descriptor.Scheduling
                         Realtime = realtime
-                    }
+                    },
+                    DefaultCompatibility
                 )
             )
 
-    let configuration (HostSettings(configuration, _, _)) = configuration
-    let role (HostSettings(_, role, _)) = role
-    let scheduling (HostSettings(_, _, scheduling)) = scheduling
+    let configuration (HostSettings(configuration, _, _, _)) = configuration
+    let role (HostSettings(_, role, _, _)) = role
+    let scheduling (HostSettings(_, _, scheduling, _)) = scheduling
+    let compatibility (HostSettings(_, _, _, selected)) = selected
+    let createCompatible configuration role selected =
+        if selected = Sc2SupervisorV1 && (Validation.descriptor configuration).Path <> Sc2ImportedStrict then
+            Error [ InvalidSchedulingLimit "compatibility" ]
+        else
+            create configuration role
+            |> Result.map (fun (HostSettings(configuration, role, scheduling, _)) ->
+                HostSettings(configuration, role, scheduling, selected))
 
 type WorkerSlot =
     | Active
@@ -218,6 +236,22 @@ type BrowserResult =
         Disposition: DeliveryDisposition
         Reason: DeliveryReason option
     }
+
+/// Each request captures its limits independently of the loaded worker ceiling.
+type LimitedRequest =
+    | LimitedLoad of identity: HostIdentity * configuration: ValidatedConfiguration * artifact: byte array
+    | LimitedCandidate of identity: HostIdentity * transaction: string * expectedActiveGeneration: uint64 option * configuration: ValidatedConfiguration * artifact: byte array
+    | LimitedInitialize of identity: HostIdentity * input: byte array
+    | LimitedInvoke of identity: HostIdentity * submission: SubmissionClass * input: byte array
+    | LimitedShutdown of identity: HostIdentity
+
+type RequestAdmissionIssue =
+    | InvalidRequestLimit of fieldName: string
+    | RequestOwnerUnavailable
+    | OversizedSnapshotInput
+    | EnclosingBudgetExpired
+    | RequestDeadlineOverflow
+    | RequestRefused of DeliveryReason
 
 type HostInput =
     | ConfiguredLoadRequested of

@@ -7,16 +7,29 @@ type EffectInterpreter = HostEffect list -> unit
 [<Sealed>]
 type Host private (initialState: HostState, interpret: EffectInterpreter) =
     let mutable state = initialState
+    let applyDecision (decision:HostDecision) =
+        state <- decision.State
+        interpret decision.Effects
+        decision.Result
 
     static member Create(settings, interpret) =
         Lifecycle.create settings |> Result.map (fun state -> Host(state, interpret))
 
     member _.Projection = Lifecycle.project state
+    member _.CompatibilityProjection = Lifecycle.projectCompatibility state
 
     member _.Dispatch(event) =
         let next, effects = Lifecycle.update event state
         state <- next
         interpret effects
+
+    member _.SubmitLimited(monotonicMilliseconds, request, limits) =
+        Lifecycle.submitLimited monotonicMilliseconds request limits state
+        |> applyDecision
+
+    member _.CommitCandidateFrozen(monotonicMilliseconds, recoveryToken, transaction, expectedActiveGeneration, candidateGeneration) =
+        Lifecycle.commitCandidateFrozen monotonicMilliseconds recoveryToken transaction expectedActiveGeneration candidateGeneration state
+        |> applyDecision
 
     member this.Load(monotonicMilliseconds, identity, artifact) =
         this.Dispatch

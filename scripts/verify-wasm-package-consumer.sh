@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export DOTNET_PROCESSOR_COUNT=1 MSBUILDDISABLENODEREUSE=1 UseSharedCompilation=false
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode="${1:-}"
 value="${2:-}"
@@ -9,7 +10,6 @@ value="${2:-}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-package-consumer.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/sdk-artifacts" "$work/modules" "$work/lock-source" "$work/consumer/browser"
-version="0.2.0"
 manifest="$work/release-manifest.json"
 
 if [[ "$mode" == --custody ]]; then
@@ -17,6 +17,7 @@ if [[ "$mode" == --custody ]]; then
   cp "$custody/release-manifest.json" "$manifest"
   python3 "$repo/scripts/wasm-release/release_manifest.py" verify \
     --custody "$custody" --manifest "$manifest" --source "$(git -C "$repo" rev-parse HEAD)"
+  version="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$manifest")"
   package_source="$custody"
   archive="$custody/fsgg-wasm-sdk-$version.tar.gz"
 elif [[ "$mode" == --feed-only ]]; then
@@ -30,6 +31,7 @@ elif [[ "$mode" == --feed-only ]]; then
   }
   curl --fail --location --proto '=https' --tlsv1.2 "$release_base/release-manifest.json" --output "$manifest"
   python3 "$repo/scripts/wasm-release/release_manifest.py" verify-identity --manifest "$manifest"
+  version="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$manifest")"
   archive="$work/sdk-artifacts/fsgg-wasm-sdk-$version.tar.gz"
   curl --fail --location --proto '=https' --tlsv1.2 "$release_base/$(basename "$archive")" --output "$archive"
   python3 - "$manifest" "$archive" <<'PY'
@@ -84,6 +86,7 @@ else:
 ET.SubElement(dependency, "package", pattern="FSharp.Core")
 ET.ElementTree(root).write(sys.argv[1], encoding="unicode")
 PY
+export WasmCandidateVersion="$version"
 cp "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj" "$work/lock-source/"
 cp "$repo/tests/Wasm.PackageConsumer/Program.fs" "$work/lock-source/"
 NUGET_PACKAGES="$work/lock-packages" dotnet restore "$work/lock-source/Consumer.fsproj" \

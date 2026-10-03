@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Exact selected-policy full-state fixtures from canonical Quint executions."""
+import argparse,importlib.util,json,pathlib,hashlib,subprocess,tempfile,sys,gzip,io
+sys.dont_write_bytecode=True
+HERE=pathlib.Path(__file__).resolve().parent;ROOT=HERE.parents[1]
+spec=importlib.util.spec_from_file_location('legacy',ROOT/'tests/Wasm.Lifecycle.Correspondence/generate-traces.py');legacy=importlib.util.module_from_spec(spec);spec.loader.exec_module(legacy)
+b=legacy.bigint;fl=legacy.fs_list;t=legacy.text
+bindings=[];interned={}
+def intern(body,kind,typ):
+ key=(kind,body)
+ if key not in interned:
+  name=kind+str(len(interned));interned[key]=name;bindings.append('let '+name+' : '+typ+' = '+body)
+ return interned[key]
+original_request=legacy.request
+legacy.request=lambda value:intern(original_request(value),'request','RequestProjection')
+original_state=legacy.state
+legacy.state=lambda value:intern(original_state(value),'hostState','HostProjection')
+schedules=[('fifo','fifoStep',11),('owner-expiry-refusal','ownerExpiryRefusalStep',7),('frozen-commit-expiry','frozenCommitExpiryStep',13),('snapshot','snapshotStep',12),('held-enclosing','heldEnclosingStep',8),('freeze-active','freezeActive',19),('freeze-completed','freezeCompleted',19),('head-before','headBefore',14),('head-at','headAt',14),('head-after','headAfter',14),('composite','compositeStep',8),('bytes','bytesStep',21),('capacity','capacityStep',261)]
+def limits(v):return '{ MaximumDeadlineMilliseconds=%d; MaximumOutputBytes=%d; EnclosingDeadlineMilliseconds=%s }'%(b(v['deadline']),b(v['output']),'None' if b(v['enclosing'])==0 else 'Some %dL'%b(v['enclosing']))
+def captured(c):return {b(key):value for key,value in c['limits']['#map']}
+def pending_body(c,r):return '{ Identity={WorkerInstance=%s;Request=%dUL;Generation=%dUL};Limits=%s;DeadlineMilliseconds=%dL }'%(t(legacy.worker(b(r['worker']))),b(r['id']),b(r['generation']),limits(captured(c)[b(r['id'])]),b(r['deadline']))
+def pending(c,r):return intern(pending_body(c,r),'capturedRequest','RequestLimitProjection')
+def option(c,r):return 'None' if b(r['worker'])==0 else 'Some ('+pending(c,r)+')'
+def projection(c):
+ h=c['host'];return '{ Policy=Sc2SupervisorV1;Current=%s;Controls=%s;MixedQueue=%s;HeldSnapshot=%s }'%(option(c,h['current']),fl([pending(c,r) for r in h['controls']]),fl([pending(c,r) for r in h['ordinary']]),option(c,c['held']))
+def host(c):return dict(c['host'],snapshot=c['held'])
+def step(s):
+ c=s['compatibleState'];conn=s['compatibleConnection'];h=host(c);ch=host(conn['host'])
+ model='{ State=(%s : HostProjection);Effects=%s;Input=%s;Terminals=%s;Connected=(%s : HostProjection);ConnectedEffects=%s;ConnectedTerminals=%s;ConnectedCallbacks=%s;ConnectedBeforeEffects=%s }'%(legacy.state(h),fl([legacy.effect(e) for e in h['effects']]),legacy.original_input(h['input']),legacy.terminals(h['effects']),legacy.state(ch),fl([legacy.effect(e) for e in conn['effects']]),legacy.terminals(conn['effects']),fl([legacy.original_input(e) for e in conn['callbacks']]),fl(['('+legacy.state(host(c))+' : HostProjection)' for c in conn['beforeEffects']]))
+ commands=fl(['(%dUL,%s)'%(b(e['request']),limits(captured(c)[b(e['request'])])) for e in h['effects'] if e['kind']=='post'])
+ return '{ Model=%s;Limits=%s;Pure=%s;Connected=%s;Commands=%s }'%(model,limits(c['selected']),projection(c),projection(conn['host']),commands)
+def main():
+ parser=argparse.ArgumentParser();parser.add_argument('--check',action='store_true');args=parser.parse_args()
+ destination=pathlib.Path(tempfile.mkdtemp(prefix='wasm-compatible-traces-')) if args.check else HERE/'Traces';destination.mkdir(exist_ok=True)
+ assert subprocess.check_output(['quint','--version'],text=True).strip()=='0.32.0'
+ values=[]
+ for name,action,count in schedules:
+  path=destination/(name+'_0.itf.json')
+  subprocess.run(['quint','run','--backend=typescript','--main=compatibleQualification','--init=initQualification','--step='+action,'--invariant=compatibilitySafe','--max-samples=1','--max-steps='+str(count),'--seed=20261003','--out-itf='+str(path),str(ROOT/'eng/wasm-shared/compatible-qualification.qnt')],check=True,stdout=subprocess.DEVNULL)
+  d=json.loads(path.read_text());d['vars']=sorted(d['vars']);d['#meta'].pop('description',None);d['#meta'].pop('timestamp',None);d['#meta']['source']='eng/wasm-shared/compatible-qualification.qnt';d['#meta']['canonicalSource']='eng/wasm-shared/lifecycle.qnt';path.write_text(json.dumps(d,sort_keys=True,separators=(',',':'))+'\n')
+  # Stream gzip emits the portable OS header on Python 3.12 as well as 3.14.
+  # gzip.compress(mtime=0) delegates its header to zlib on older runtimes.
+  compressed=path.with_suffix(path.suffix+'.gz');archive=io.BytesIO()
+  with gzip.GzipFile(fileobj=archive,filename='',mode='wb',mtime=0,compresslevel=9) as stream:stream.write(path.read_bytes())
+  compressed.write_bytes(archive.getvalue());path.unlink()
+  values.append('{Name=%s;SourceSha256=%s;Steps=%s}'%(t(name),t(hashlib.sha256(gzip.decompress(compressed.read_bytes())).hexdigest()),fl([step(s) for s in d['states']])))
+ content='// Generated by canonical producer execution; do not hand edit.\nmodule Wasm.Supervisor.Compatibility.GeneratedCompatibilityTraces\nopen FS.GG.Wasm.Browser\nopen Wasm.Lifecycle.Correspondence.CorrespondenceTypes\nopen Wasm.Supervisor.Compatibility.CompatibleTypes\n'+'\n'.join(bindings)+'\nlet traces:CompatibleTrace list = '+fl(values)+'\n'
+ target=destination/'GeneratedCompatibilityTraces.fs' if args.check else HERE/'GeneratedCompatibilityTraces.fs';target.write_text(content)
+ if args.check:
+  assert target.read_bytes()==(HERE/'GeneratedCompatibilityTraces.fs').read_bytes(),'generated selected projection drift'
+  for p in destination.glob('*.itf.json.gz'):assert p.read_bytes()==(HERE/'Traces'/p.name).read_bytes(),p.name+' drift'
+ print('compatible-canonical-traces: PASS schedules='+str(len(schedules)))
+if __name__=='__main__':main()

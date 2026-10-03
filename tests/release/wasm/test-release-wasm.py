@@ -100,17 +100,17 @@ def source_checks() -> None:
     workflow = (ROOT / ".github/workflows/release-wasm.yml").read_text()
     core = (ROOT / ".github/workflows/release.yml").read_text()
     props = (ROOT / "eng/wasm-shared/version.props").read_text()
-    require("<WasmSharedVersion>0.2.0</WasmSharedVersion>" in props, "stable version origin mismatch")
+    require("<WasmSharedVersion>0.3.0</WasmSharedVersion>" in props, "stable version origin mismatch")
     for path in (ROOT / "src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj", ROOT / "src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj"):
         require("$(WasmSharedVersion)" in path.read_text(), f"{path} bypasses shared version origin")
-    require((ROOT / "sdk/wasm/VERSION").read_text().strip() == "0.2.0", "SDK version mismatch")
-    require('"sourceVersion": "0.2.0"' in (ROOT / "src/Wasm.Contracts/compatibility-profile.v1.json").read_text(), "profile version mismatch")
+    require((ROOT / "sdk/wasm/VERSION").read_text().strip() == "0.3.0", "SDK version mismatch")
+    require('"sourceVersion": "0.3.0"' in (ROOT / "src/Wasm.Contracts/compatibility-profile.v1.json").read_text(), "profile version mismatch")
     require('Version="[$(WasmSharedVersion)]"' in (ROOT / "src/Wasm.Browser/Fable/FS.GG.Wasm.Browser.fsproj").read_text(), "Fable dependency is not exact")
     require('Version="[0.2.0]"' in (ROOT / "tests/Wasm.PackageConsumer/Consumer.fsproj").read_text(), "consumer dependency is not exact")
     cargo_files = list((ROOT / "sdk/wasm/rust").rglob("Cargo.toml")) + list((ROOT / "sdk/wasm/rust").rglob("Cargo.lock")) + list((ROOT / "examples/wasm/rust").rglob("Cargo.toml")) + list((ROOT / "examples/wasm/rust").rglob("Cargo.lock"))
     require(all("0.2.0-source" not in path.read_text() for path in cargo_files), "Cargo metadata retains a prerelease identity")
     cargo_manifests = [path for path in cargo_files if path.name == "Cargo.toml" and "[package]" in path.read_text()]
-    require(all('version = "0.2.0"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
+    require(all('version = "0.3.0"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
     validate_workflow(workflow)
     require("scripts/wasm-release/install-browser-tools.sh" in workflow and "cd tests/Wasm.PackageConsumer/browser" not in workflow, "publisher browser setup writes into source checkout")
     browser_setup_checks()
@@ -161,21 +161,22 @@ def source_checks() -> None:
 
 def custody_checks(custody: Path) -> None:
     source = subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip()
+    version = json.loads((custody / "release-manifest.json").read_text())["version"]
     good = ["python3", str(MANIFEST), "verify", "--custody", str(custody), "--manifest", str(custody / "release-manifest.json"), "--source", source]
     subprocess.run(good, check=True)
     with tempfile.TemporaryDirectory(prefix="wasm-release-negative.") as raw:
         base = Path(raw)
         missing = base / "missing"; shutil.copytree(custody, missing)
-        (missing / "FS.GG.Wasm.Browser.0.2.0.nupkg").unlink()
+        (missing / f"FS.GG.Wasm.Browser.{version}.nupkg").unlink()
         refused([*good[:3], str(missing), "--manifest", str(missing / "release-manifest.json"), "--source", source])
         wrong = base / "wrong"; shutil.copytree(custody, wrong)
         manifest = json.loads((wrong / "release-manifest.json").read_text())
-        manifest["version"] = "0.2.0-preview.1"
+        manifest["version"] = version + "-preview.1"
         (wrong / "release-manifest.json").write_text(json.dumps(manifest))
         refused([*good[:3], str(wrong), "--manifest", str(wrong / "release-manifest.json"), "--source", source])
         refused([*good[:-1], "0" * 40])
         changed = base / "changed"; shutil.copytree(custody, changed)
-        with (changed / "fsgg-wasm-sdk-0.2.0.tar.gz").open("ab") as stream: stream.write(b"different")
+        with (changed / f"fsgg-wasm-sdk-{version}.tar.gz").open("ab") as stream: stream.write(b"different")
         refused([*good[:3], str(changed), "--manifest", str(changed / "release-manifest.json"), "--source", source])
         foreign = base / "foreign"; shutil.copytree(custody, foreign)
         (foreign / "Foreign.0.2.0.nupkg").write_bytes(b"foreign")

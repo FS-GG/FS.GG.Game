@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "FS.GG.Wasm.Browser": {
+        "type": "Direct",
+        "requested": "[0.0.0-p2-compat, 0.0.0-p2-compat]",
+        "resolved": "0.0.0-p2-compat",
+        "contentHash": "vOp4kEDMufxsSvE8aUr33jhXXPhxWdlI6GU3ZzZpTQNNzCnziTPMg7uPuz51sQJOs0WkuLcOuVtWE0WUBUevoQ==",
+        "dependencies": {
+          "FS.GG.Wasm.Contracts": "[0.0.0-p2-compat]",
+          "FSharp.Core": "10.1.302"
+        }
+      },
+      "FSharp.Core": {
+        "type": "Direct",
+        "requested": "[10.1.302, 10.1.302]",
+        "resolved": "10.1.302",
+        "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
+      },
+      "FS.GG.Wasm.Contracts": {
+        "type": "Transitive",
+        "resolved": "0.0.0-p2-compat",
+        "contentHash": "ptGtYUdoPIOye5pZn/KlOARhYadcfpwwe0F07AtLP+wFlH86ID/tklxXWESymAxXKrfskDWsi4W8XWZx3XqmMA==",
+        "dependencies": {
+          "FSharp.Core": "10.1.302"
+        }
+      }
+    }
+  }
+}

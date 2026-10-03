@@ -19,6 +19,7 @@ on:
       - "tests/Wasm.Lifecycle.Correspondence/**"
       - "tests/Wasm.Browser.Conformance/**"
       - "tests/Wasm.PackageConsumer/**"
+      - "tests/Wasm.Supervisor.Compatibility/**"
       - "eng/wasm-shared/**"
       - "sdk/wasm/**"
       - "examples/wasm/**"
@@ -27,6 +28,8 @@ on:
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
       - "scripts/verify-wasm-package-consumer.sh"
+      - "scripts/verify-wasm-supervisor.sh"
+      - "scripts/verify-wasm-supervisor-browser.sh"
       - "scripts/wasm-release/**"
       - "tests/release/wasm/**"
       - "eng/wasm-shared/version.props"
@@ -48,6 +51,7 @@ on:
       - "tests/Wasm.Lifecycle.Correspondence/**"
       - "tests/Wasm.Browser.Conformance/**"
       - "tests/Wasm.PackageConsumer/**"
+      - "tests/Wasm.Supervisor.Compatibility/**"
       - "eng/wasm-shared/**"
       - "sdk/wasm/**"
       - "examples/wasm/**"
@@ -56,6 +60,8 @@ on:
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
       - "scripts/verify-wasm-package-consumer.sh"
+      - "scripts/verify-wasm-supervisor.sh"
+      - "scripts/verify-wasm-supervisor-browser.sh"
       - "scripts/wasm-release/**"
       - "tests/release/wasm/**"
       - "eng/wasm-shared/version.props"
@@ -133,6 +139,11 @@ jobs:
           test "$(node -p "require('@playwright/test/package.json').version")" = "$PLAYWRIGHT_VERSION"
           npx playwright install --with-deps chromium
 
+      - name: Prepare compatible supervisor qualification state
+        run: |
+          scripts/wasm-release/qualify-supervisor-custody.sh --bootstrap "$RUNNER_TEMP/wasm-supervisor-baseline"
+          cat "$RUNNER_TEMP/wasm-supervisor-baseline/environment" >> "$GITHUB_ENV"
+
       - name: Rebuild pinned WebAssembly fixtures
         run: |
           tests/Wasm.Compatibility/modules/build-fixtures.sh
@@ -154,6 +165,10 @@ jobs:
         run: |
           scripts/wasm-release/prepare.sh artifacts/wasm-release
           scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release
+
+      - name: Qualify compatible supervisor source and installed custody
+        run: |
+          scripts/wasm-release/qualify-supervisor-custody.sh --custody artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence"
 
       - name: Retain bounded public lifecycle model evidence
         if: always()

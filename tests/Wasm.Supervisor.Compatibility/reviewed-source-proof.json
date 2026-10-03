@@ -1,0 +1,608 @@
+{
+  "schema": "fsgg.wasm.supervisor-compatible-proof/v1",
+  "status": "Pending",
+  "sourceHead": "9638363fd64d1d5d99eb90acb2cdb5a0a19787e8",
+  "sourceTree": "a2f664f2c403b4c62ecc9e52955c32800a2ce6f0",
+  "baselineVersion": "0.2.0",
+  "candidateVersion": "0.3.0",
+  "defaultTraces": 47,
+  "selectedTraces": 13,
+  "model": {
+    "path": "eng/wasm-shared/lifecycle.qnt",
+    "sha256": "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a",
+    "quint": "0.32.0",
+    "backend": "typescript",
+    "seed": 20261003,
+    "samplesPerEntry": 1000,
+    "steps": 40,
+    "entries": [
+      "initCompatible",
+      "initCompatible.then(readyCompatible)"
+    ],
+    "claims": "bounded sampling, no exhaustive or native product acceptance claim",
+    "witnesses": {
+      "cold": {
+        "sawSelectedLoad": 434,
+        "sawSelectedCompile": 303,
+        "sawSelectedInitialize": 116,
+        "sawSelectedInitialized": 62,
+        "sawMixedOrdinary": 13,
+        "sawMixedOrdered": 9,
+        "sawAdmittedSnapshot": 13,
+        "sawHeldSnapshot": 4,
+        "sawHeldPromotion": 0,
+        "sawSelectedPhase": 7,
+        "sawNarrowDeadline": 22,
+        "sawNarrowOutput": 22,
+        "sawEnclosingBudget": 13,
+        "sawCandidatePrepared": 403,
+        "sawCandidateInitialized": 28,
+        "sawCandidateValidated": 11,
+        "sawSelectedFreeze": 473,
+        "sawAtomicFrozenCommit": 6,
+        "sawSelectedHistorical": 207,
+        "sawSelectedResume": 473,
+        "sawSelectedDisposal": 1000,
+        "sawRefusalAfterExpiry": 4,
+        "sawInclusiveHeadExpiry": 0,
+        "sawFrozenCommitExpiryRefused": 0
+      },
+      "ready": {
+        "sawSelectedLoad": 79,
+        "sawSelectedCompile": 213,
+        "sawSelectedInitialize": 410,
+        "sawSelectedInitialized": 1000,
+        "sawMixedOrdinary": 545,
+        "sawMixedOrdered": 383,
+        "sawAdmittedSnapshot": 376,
+        "sawHeldSnapshot": 96,
+        "sawHeldPromotion": 6,
+        "sawSelectedPhase": 328,
+        "sawNarrowDeadline": 1000,
+        "sawNarrowOutput": 1000,
+        "sawEnclosingBudget": 379,
+        "sawCandidatePrepared": 420,
+        "sawCandidateInitialized": 26,
+        "sawCandidateValidated": 11,
+        "sawSelectedFreeze": 490,
+        "sawAtomicFrozenCommit": 2,
+        "sawSelectedHistorical": 294,
+        "sawSelectedResume": 490,
+        "sawSelectedDisposal": 998,
+        "sawRefusalAfterExpiry": 140,
+        "sawInclusiveHeadExpiry": 16,
+        "sawFrozenCommitExpiryRefused": 1
+      }
+    }
+  },
+  "selectedTraceDigests": [
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/bytes_0.itf.json.gz",
+      "compressedSha256": "4e5acea42581d76b38aaebccabccdfa963a2f8e600a873648d250b6ad1f0bd10",
+      "fullItfSha256": "1985855c1b9e4f6b90c2af30aed162b4aa8a797c9e3ef2a908537bdfdae46f0e"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/capacity_0.itf.json.gz",
+      "compressedSha256": "a4fa5c7c1014999fc6fbc86c546a4109830875cdb86654ef498c5b23ed759a63",
+      "fullItfSha256": "30afa792fd18463790e63d2488d12a7cce934d65c7a91918becfda3e92ef9012"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/composite_0.itf.json.gz",
+      "compressedSha256": "4ccfc3b14bfbf7307f54d6e05aa3980730803070e74783957988c0ae3ad23d79",
+      "fullItfSha256": "1f7901495d5a62c05273768e61fdf530b19d355b5ecd9a5ff2a61d7f5089d355"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/fifo_0.itf.json.gz",
+      "compressedSha256": "8e975aebf3cabb05ab3b1e6212e42c06c75713859181b5f9979110b12419e399",
+      "fullItfSha256": "140b12916467aaaf35d497686e10682d06eda2712013dc36445e52507b56f175"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/freeze-active_0.itf.json.gz",
+      "compressedSha256": "e2f9ce3bd38b7b17c29de3f19bd0b3f25a6007e5b7ebad740a2524ef3f5188f3",
+      "fullItfSha256": "c6f5ad4a37efdf46277d0e1818380684b8a10567a1a6f8e51d56e5c2c6cba23a"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/freeze-completed_0.itf.json.gz",
+      "compressedSha256": "1cd7e97a93e2d4b153627069805ed1cf8ab1b222479ea1a18e639ef492f0d2fc",
+      "fullItfSha256": "30a9e51505c2a138655a37d8a7b4d441332ceede506b35433ad22fa11638df17"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/frozen-commit-expiry_0.itf.json.gz",
+      "compressedSha256": "791163454808a739bc3557bded6625b337e2e6ba7d00abd3b1354afcf50a4b2b",
+      "fullItfSha256": "c6b837ba336e7472e3540164e13ec69155826536ba23565c291268bf18c64fa0"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/head-after_0.itf.json.gz",
+      "compressedSha256": "79561b4a93d43f0b720ca96bba6bbc4187f546858cad44e675465722bc222b1e",
+      "fullItfSha256": "3b9427ec78228e9df7d517be3c3d9ac51bc149b8508b15b0bb675c827964cbc4"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/head-at_0.itf.json.gz",
+      "compressedSha256": "a425e956d0d8c2ea518518dbad2896b2543f33d992f11e156dcaa0aed2079be8",
+      "fullItfSha256": "37d60450e4ea0fc3b97cc4ef081c6804f0caf9caec6260889e25d83de26c6569"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/head-before_0.itf.json.gz",
+      "compressedSha256": "250f3fa4814dede54811ea5836c577ab4630c97d72d5317e37efcef1a36e3541",
+      "fullItfSha256": "fc9a7ae1042f9775a4431d77c6a1458c31fed3641e42b1602984491c54e0e056"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/held-enclosing_0.itf.json.gz",
+      "compressedSha256": "42c0840e5bf29dcede1f28caf29d95130b5ff22381aac4cb2b68dbb002812195",
+      "fullItfSha256": "b7f3e1422c7df17c5758364515055fc6aad4076ae28e2acb72e05ec2dddc6dd3"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/owner-expiry-refusal_0.itf.json.gz",
+      "compressedSha256": "2c63d2f9facdd7142299db82660dcd4b42a1ab04b395ad6c926ea0e7bca51dbc",
+      "fullItfSha256": "78ef34bebef72f45b4e05f044e5d5ea5d2603364ae0ba1e71a6b6516a8f50ffd"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/snapshot_0.itf.json.gz",
+      "compressedSha256": "476a6bdca6c544cc44e09c4e7310289ee83a9708c1f16dcc15ff11426058b318",
+      "fullItfSha256": "c0cf9d2118fbb117675a5e91534562080c161454f00fcf4d4b21a85caa4f4f83"
+    }
+  ],
+  "qualificationInputs": [
+    {
+      "path": "eng/wasm-shared/compatible-qualification.qnt",
+      "sha256": "6145f1ee42f1d51e02afd3601ec4dc3624771ae21bedddfbb26f5c410e9894b7"
+    },
+    {
+      "path": "eng/wasm-shared/lifecycle.qnt",
+      "sha256": "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a"
+    },
+    {
+      "path": "scripts/verify-wasm-supervisor-browser.sh",
+      "sha256": "f47e2bdb44f35a4bc7d5b1a7b28d5133582c647adbd2e0f281d6a4ad72d7de49"
+    },
+    {
+      "path": "scripts/verify-wasm-supervisor.sh",
+      "sha256": "b1cb0116a4e76c592300f3a950e54af5b661c892fbb816ac3a068ea6e2cbeb62"
+    },
+    {
+      "path": "src/Wasm.Browser/Admission.fs",
+      "sha256": "fda4d1e3c1dc5f0eb8d00f2efb83ac1cd9fab0b784197981e1c9ed23357f9122"
+    },
+    {
+      "path": "src/Wasm.Browser/Admission.fsi",
+      "sha256": "e89188be2b4162828cbca5d572bdf16b7752ed8b3aaa6f3f51367a511f1320d5"
+    },
+    {
+      "path": "src/Wasm.Browser/Host.fs",
+      "sha256": "0277625422c09dd98fa1e337ad5ea7a2961a8a83498eb63480683f9934fefa10"
+    },
+    {
+      "path": "src/Wasm.Browser/Host.fsi",
+      "sha256": "0153481a6227c68cffc346eb1f17bf404755b05b7ecfe45b85bfadb9e3f66da8"
+    },
+    {
+      "path": "src/Wasm.Browser/Invocation.fs",
+      "sha256": "fa1c132b0bd5288897766166be00f866afe34a24622738b4780f573b48eef4d8"
+    },
+    {
+      "path": "src/Wasm.Browser/Invocation.fsi",
+      "sha256": "0dda3bf3ee435c98896b1115c86875ba230c5f3881f830a8cc933877f043e525"
+    },
+    {
+      "path": "src/Wasm.Browser/Lifecycle.fs",
+      "sha256": "ac964d427e8bfc09acf203ea94b87370dc7edb7ddcd61aefccb5d90d76de3d5e"
+    },
+    {
+      "path": "src/Wasm.Browser/Lifecycle.fsi",
+      "sha256": "47d5fec0a3add15cfece04ed7b5f35dbb9f152d7d6a21b56b2e2db6014715222"
+    },
+    {
+      "path": "src/Wasm.Browser/RuntimeProtocol.fs",
+      "sha256": "2b56a7e06e610422530aefcb3cffed9dd5cfb42941e8c5352f7eeaeeb1abb6de"
+    },
+    {
+      "path": "src/Wasm.Browser/RuntimeProtocol.fsi",
+      "sha256": "342c8425dfc3863ed85880835460827687b9fd257ef1d26fb9d2d37576b9118b"
+    },
+    {
+      "path": "src/Wasm.Browser/WorkerEntry.fs",
+      "sha256": "c5e48001f70a0a438e81c6ce81f9baaebf9c6700ff7dca7dbc5d074d9f44c7d5"
+    },
+    {
+      "path": "src/Wasm.Browser/WorkerEntry.fsi",
+      "sha256": "8f6b12656c2ddb1d15195409a14650325cce81d7ea99f76c1d0ec7513ff98725"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/check-receipt-mutation.py",
+      "sha256": "1dd0048616b12bf81a133cf3b50d5be1d5fa5ad3c9f483607cd65ae90cfd6884"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/native-api-compat.py",
+      "sha256": "a858b847ef3bdd3b5a2dd29dc8d346843aa59770638077aebab925a1caad3a76"
+    }
+  ],
+  "originalInputDelta": [
+    {
+      "path": "scripts/verify-wasm-supervisor.sh",
+      "previousSha256": "299eaad93cb2b743f6ece33fb42cdce6a93730ef531a3028dc71eae8ad1b51ee",
+      "sha256": "b1cb0116a4e76c592300f3a950e54af5b661c892fbb816ac3a068ea6e2cbeb62"
+    }
+  ],
+  "executedGateLeaves": [
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/default-traces.log",
+      "sha256": "aa2c5af561893408824f8d9ec6c91b55400839f6df5ce57fec085558d180e176"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-build.log",
+      "sha256": "718e282984fed41c2ca3c12e80cb0ccd99b3d66ed9d57e01a2bef72b301a34ed"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-dotnet.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-fable-build.log",
+      "sha256": "ed92e7330e36a753c0b955f8488d4eb270e949924a4ccdea1796f532f1d5857c"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-fable.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-lock-refusal.log",
+      "sha256": "591e46ee4c22db8ca4f158a6d04b5bc510aab24b8884e812381e90fda55b2ae3"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-locked-build.log",
+      "sha256": "b9e160be4611f6541fc8c2225f1e88922b02f837e525e24b1bac2a9b4b17cf44"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-raw-numeric.log",
+      "sha256": "4ca1f1eefede9638c0c7b94da646415ae34e2100c66545b94b7142d8eaa31b9f"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/model-cold.log",
+      "sha256": "abfdbbd78b2d45dd07088abbc597c941577bc78eabc3629b5347265fb9a33dcd"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/model-controls.log",
+      "sha256": "e58956adf299d64f8542174c8a2abe4d3b0b049ba91c6d2982e7f2ae98530161"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/model-ready.log",
+      "sha256": "4d27022005a55bdc84ff144bfbbe576e45ed13fd5ba667f32ac7ff72ad894bbb"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/native-api.log",
+      "sha256": "16f73ae7d5f2dbfb0997f71d97930793a6beeb710a99f75ff7319c298f845a0c"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/receipt-mutation.log",
+      "sha256": "2eb48586080735df3778d5c18c46e62e3da8d9cd691cbb8343908695cbf14c2e"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/selected-traces.log",
+      "sha256": "2954b1cf73cd23dbd7e28014781200f010c3258ad3ae8084820ca737b676af6a"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/source-build.log",
+      "sha256": "edfb38de870f931f94ab70c9db8d73d1871f389cee7d739c89b767369d9dd736"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/source-dotnet.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/source-fable-build.log",
+      "sha256": "d6650b4131d83cdccb919564e78140dbf059a8b848873c878a2ef99252de2452"
+    },
+    {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/source-fable.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b"
+    }
+  ],
+  "orchestration": {
+    "exitCode": 0,
+    "mainLog": {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003.log",
+      "sha256": "6334d847146abfccfd1407da3bc6e8c97c87c617672af271fd32cac41c242875"
+    },
+    "logs": [
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/browser-setup.log",
+        "sha256": "8b3b4b04ed97dc3f1173a770fee4642eeb63b434f815f2246fe3c24973e82b69"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/browser.log",
+        "sha256": "450509bf66b1d964e04c91b43806eb06b2a90b7f3b37022f0017f263f6147c9e"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/contracts.log",
+        "sha256": "03aa294ad5b4846453743a4aaca773caf3f0d3cd466f5a8f93cb425e48ddc203"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/fixtures.log",
+        "sha256": "291d3650064eea7910268fc3375897d18b6f429917fa8724212f3c875b162cec"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/lifecycle.log",
+        "sha256": "e2e50ab0134d7349a6271533acd9bfe1d76281b6c15a466c93401754141bb1a0"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/package-consumer.log",
+        "sha256": "625f65063190b2eed9361da102d295398a8f2069d0259a9c5609f8a889320eea"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/preflight.log",
+        "sha256": "d777934043f0901c4f6988328a33acd565bc12f95922eee1fc4f5eb2a8b9f6e0"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/prepare.log",
+        "sha256": "cc8e7cb61d5cb8c801c783283ac81bf5dca3d239b52e229fb50cf8e1ef263001"
+      },
+      {
+        "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor.log",
+        "sha256": "16c1fec86e8f96edb86bda6f066042deffdff12eaf195901261cfe1a919c2a37"
+      }
+    ],
+    "sourceClean": true
+  },
+  "sourcePreparationInputs": [
+    {
+      "path": ".github/workflows/wasm-shared.yml",
+      "sha256": "15b0de2e41b2287ef2cfcf3099fc7f051d2a0d20d96b02aaaa6418ec9d607a0c"
+    },
+    {
+      "path": "docs/roadmaps/wasm-shared-01.md",
+      "sha256": "4dbc48ebe0fe5829413cda1778a5dec28ccd0f9bfe18351bba74bacd5fd0d58c"
+    },
+    {
+      "path": "eng/wasm-shared/version.props",
+      "sha256": "2c74a5b2b0fceac9093e40223d41ef4322fd62a99efef683ce1a7bf10fe59e56"
+    },
+    {
+      "path": "examples/wasm/rust/bar-guest/Cargo.lock",
+      "sha256": "cde19f47490c12936b4812c190f55024e0fa6d192ac901c8bb547296d18e7ec0"
+    },
+    {
+      "path": "examples/wasm/rust/bar-guest/Cargo.toml",
+      "sha256": "fc739985f162426ee805eb00de5c21214cb0542be27f1a61ebfdeb43eef7744a"
+    },
+    {
+      "path": "examples/wasm/rust/sc2-guest/Cargo.lock",
+      "sha256": "8498a0f0a5309a15c72497fba0dbfd302fd643c68f1bd367935fa8dc616e8e46"
+    },
+    {
+      "path": "examples/wasm/rust/sc2-guest/Cargo.toml",
+      "sha256": "af5de12989c9069706d459d15fd6e9ff757fb4bb3d81645ff7528d5c8184e037"
+    },
+    {
+      "path": "scripts/verify-wasm-contracts.sh",
+      "sha256": "d3bbe8994cf8329b9623066b17a0d898ecb5663dcef2c216f22cc509b55b166c"
+    },
+    {
+      "path": "scripts/verify-wasm-lifecycle.sh",
+      "sha256": "b632bfba597177fe693278029dd73c9ecaca938c2743e1d7e0702abf14baae24"
+    },
+    {
+      "path": "scripts/verify-wasm-package-consumer.sh",
+      "sha256": "630055c005f026503653dc363152db1466cd1f566c0198ae61410523cef05eaa"
+    },
+    {
+      "path": "scripts/verify-wasm-supervisor.sh",
+      "sha256": "b1cb0116a4e76c592300f3a950e54af5b661c892fbb816ac3a068ea6e2cbeb62"
+    },
+    {
+      "path": "scripts/verify-wasm-workflow.sh",
+      "sha256": "858b40532e68567a082d9e3bcea0434aa91df6eb4c581e454da0bb82f7f4e47a"
+    },
+    {
+      "path": "scripts/wasm-release/SupervisorSourcePolicy.fs",
+      "sha256": "8feb3122fbadff9fd90f1f6bcf8e56161d80869c01083df9a409a37118d80ef1"
+    },
+    {
+      "path": "scripts/wasm-release/api-baseline-policy-0.2.0.json",
+      "sha256": "9407d0fe33e1843e3ece1866c8cb10752b2e8dbe94c0c149f956b656c82f2729"
+    },
+    {
+      "path": "scripts/wasm-release/api-baseline-policy.json",
+      "sha256": "a344bdd51146c1280b5ea42123e2ca65c0cc999220a59cdefca8deec899bbd1a"
+    },
+    {
+      "path": "scripts/wasm-release/bind-supervisor-source.py",
+      "sha256": "a9e98b98326db786e173b4df3f96c7ba156470afb9b836badb27fb667bf7955f"
+    },
+    {
+      "path": "scripts/wasm-release/compare-published-baseline.py",
+      "sha256": "04e7b41d34adb8aed25bd703dcd30c7ef2c9f1467d744ceed6d5426df40c9600"
+    },
+    {
+      "path": "scripts/wasm-release/decide-supervisor-source.fsx",
+      "sha256": "f74bedd4d79902e2d1a97ba2411b185d20f067a5cf8f4780fb5b3568369d4e1e"
+    },
+    {
+      "path": "scripts/wasm-release/prepare.sh",
+      "sha256": "78fee112bd6c85ca44bd478fbef34a2af62d6e50f7103349e337f00621d8b2a7"
+    },
+    {
+      "path": "scripts/wasm-release/qualify-supervisor-custody.sh",
+      "sha256": "91ab667833f731fc8ced24ea9e0ff2283ee10f2a7d52036bb6cc61d4a8ba50b2"
+    },
+    {
+      "path": "scripts/wasm-release/release_manifest.py",
+      "sha256": "a298dc53eabe0e9815408239ba83fc7c86c01025ff88e12c71315c0ed2917335"
+    },
+    {
+      "path": "sdk/wasm/VERSION",
+      "sha256": "d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0"
+    },
+    {
+      "path": "sdk/wasm/rust/Cargo.lock",
+      "sha256": "9426e3f9a51ba9091ab136055ff3685c38b82fc315d4c034ba93357d35b31e94"
+    },
+    {
+      "path": "sdk/wasm/rust/fsgg-wasm-guest/Cargo.toml",
+      "sha256": "7a2e125f279dc98c2a92be5e84d02b12f731f44abc9736beacd97d4437201687"
+    },
+    {
+      "path": "src/Wasm.Contracts/compatibility-profile.v1.json",
+      "sha256": "a6aa65eac7650b4860b61fffee62ccbba1720de2c6236a1a5aa0fbcf8bb5d19d"
+    },
+    {
+      "path": "tests/Wasm.Contracts.PortableConsumers/DotNet/DotNet.fsproj",
+      "sha256": "b2f1f6306d88e66264602d98b4875ebed7b161bbff3d4aaf670f00c37e2d8481"
+    },
+    {
+      "path": "tests/Wasm.Contracts.PortableConsumers/Fable/Fable.fsproj",
+      "sha256": "b2f1f6306d88e66264602d98b4875ebed7b161bbff3d4aaf670f00c37e2d8481"
+    },
+    {
+      "path": "tests/Wasm.PackageConsumer/Consumer.fsproj",
+      "sha256": "34dadafa6c3f24bca87f80c064ff4eba2dc0b13bfbe1534c6ee0532868cbfde6"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/reviewed-source-proof.json",
+      "sha256": "eb11b68a54578306f421eac2f0a719817be37740143fefc2279a74fb89b47c7f"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/root-canonical-review.json",
+      "sha256": "57d1c6c3e1ab1bd2db939b9b129b5a3166a9e69c9cc3a301524b3851fb056075"
+    },
+    {
+      "path": "tests/release/wasm/test-api-baseline-policy.py",
+      "sha256": "8bf179b767e06001d75254a4484a8cc3cfcb31a68cadbdd0b261237360a5feeb"
+    },
+    {
+      "path": "tests/release/wasm/test-release-wasm.py",
+      "sha256": "5c9c9aa9fecb4bd38c4137bd0c485bb2a02d734f7c751215ce82db771098eced"
+    },
+    {
+      "path": "tests/release/wasm/test-supervisor-source-policy.fsx",
+      "sha256": "80aa917c6e75c04fff4f27acd6b26a5896e35d109fc5d2e8bfa60e76eadbe67f"
+    }
+  ],
+  "coreByteJoins": [
+    {
+      "path": "/tmp/wasm-p2-final-bootstrap-20261003/packages/fsharp.core/10.1.302/lib/netstandard2.0/FSharp.Core.dll",
+      "officialPath": "/tmp/wasm-p2-final-bootstrap-20261003/official-core/FSharp.Core.10.1.302.netstandard2.0.dll",
+      "dllSha256": "430a20ba7c8b7c226e6bcf9a8e854760a799f5da19000c573148144dcce75742",
+      "byteIdentical": true
+    },
+    {
+      "path": "/tmp/wasm-p2-final-bootstrap-20261003/packages/fsharp.core/10.1.302/lib/netstandard2.1/FSharp.Core.dll",
+      "officialPath": "/tmp/wasm-p2-final-bootstrap-20261003/official-core/FSharp.Core.10.1.302.netstandard2.1.dll",
+      "dllSha256": "517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232",
+      "byteIdentical": true
+    },
+    {
+      "path": "/home/developer/projects/worktrees/unified-20261003-wasm-producer/tests/Wasm.Supervisor.Compatibility/bin/Debug/net10.0/FSharp.Core.dll",
+      "officialPath": "/tmp/wasm-p2-final-bootstrap-20261003/official-core/FSharp.Core.10.1.302.netstandard2.1.dll",
+      "dllSha256": "517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232",
+      "byteIdentical": true
+    },
+    {
+      "path": "/home/developer/projects/worktrees/unified-20261003-wasm-producer/tests/Wasm.Supervisor.Compatibility/Installed/bin/Debug/net10.0/FSharp.Core.dll",
+      "officialPath": "/tmp/wasm-p2-final-bootstrap-20261003/official-core/FSharp.Core.10.1.302.netstandard2.1.dll",
+      "dllSha256": "517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232",
+      "byteIdentical": true
+    },
+    {
+      "path": "/tmp/wasm-p2-final-bootstrap-20261003/compiler/FSharp.Core.dll",
+      "officialPath": "/tmp/wasm-p2-final-bootstrap-20261003/official-core/FSharp.Core.10.1.401.netstandard2.0.dll",
+      "dllSha256": "7516a966abc789eab916e95d429bf3a49e996257069d97f7f3eb5d47373fa72b",
+      "byteIdentical": true
+    },
+    {
+      "path": "/tmp/wasm-p2-final-bootstrap-20261003/tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/FSharp.Core.dll",
+      "officialPath": "/tmp/wasm-p2-final-bootstrap-20261003/official-core/FSharp.Core.10.1.203.netstandard2.1.dll",
+      "dllSha256": "4a626d62bb15815b6404567aa1bd37d9f2208e8e3c99c3c346d0efcfca72af6c",
+      "byteIdentical": true
+    }
+  ],
+  "officialCoreArchiveReceipt": {
+    "path": "/tmp/wasm-p2-final-bootstrap-20261003/official-core/receipt.json",
+    "sha256": "62db279e0810415e7ecfc098678231cd4cd509da70118301a739cdc1aa1a9c4b"
+  },
+  "nativeApiReceipt": {
+    "path": "/tmp/wasm-p2-final-native-workflow-20261003/custody/api/receipt.json",
+    "sha256": "a3de91e3edf4e32b691334a1ceddd74fa016352547bb9322edaed0d5fe11685b"
+  },
+  "nativeReleaseApiComparison": {
+    "path": "/tmp/wasm-p2-final-native-workflow-20261003/custody/api-baseline-comparison.json",
+    "sha256": "a3dff71a202aa32f21827e78d0aec2a3a1818053de859881a650a4b984ce6c11"
+  },
+  "candidateCustody": {
+    "path": "/tmp/wasm-p2-final-native-workflow-20261003/custody",
+    "manifestSha256": "3a7cae5b1991ebbc988d71cfeec0a226b55c3e223bf1936a8dc8a28684d3f408",
+    "artifacts": [
+      {
+        "dependencies": {
+          "FSharp.Core": "10.1.302"
+        },
+        "file": "FS.GG.Wasm.Contracts.0.3.0.nupkg",
+        "id": "FS.GG.Wasm.Contracts",
+        "members": 14,
+        "repositoryCommit": "9638363fd64d1d5d99eb90acb2cdb5a0a19787e8",
+        "sha256": "6a9c45985cf81b449fa08bc615d3ebb7af8ba74949db718683a837c2155edc4f"
+      },
+      {
+        "dependencies": {
+          "FS.GG.Wasm.Contracts": "[0.3.0]",
+          "FSharp.Core": "10.1.302"
+        },
+        "file": "FS.GG.Wasm.Browser.0.3.0.nupkg",
+        "id": "FS.GG.Wasm.Browser",
+        "members": 105,
+        "repositoryCommit": "9638363fd64d1d5d99eb90acb2cdb5a0a19787e8",
+        "sha256": "e40b4dd7ab0bc8e4496d2ed5f9f1d44a27d0c8597904f109f6706b1df807ff49"
+      },
+      {
+        "file": "fsgg-wasm-sdk-0.3.0.tar.gz",
+        "members": 40,
+        "sha256": "8091df6824981c0c37131524ffbcbae9bb8b36f672a20edc2efaddd35664f8c8"
+      }
+    ],
+    "exactSource": "9638363fd64d1d5d99eb90acb2cdb5a0a19787e8",
+    "repackRequiredAfterSourceHeadChange": true
+  },
+  "lockCustody": {
+    "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed.packages.lock.json",
+    "sha256": "6a7a10152892dc38531e747358d339cd59b2c41c7cebf57f2206fc5b8ec6dd9f",
+    "badHashPath": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed.bad-hash.lock.json",
+    "refusalLog": {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor/installed-lock-refusal.log",
+      "sha256": "591e46ee4c22db8ca4f158a6d04b5bc510aab24b8884e812381e90fda55b2ae3"
+    },
+    "actualRefusal": "NU1403",
+    "trackedLockUnchanged": true
+  },
+  "browser": {
+    "historicalConformancePassed": 6,
+    "installedSdkConsumerPassed": 25,
+    "selectedPassed": 8,
+    "selectedPublicRoot": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor-browser",
+    "selectedGuest": {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor-browser/limits-guest.wasm",
+      "sha256": "a8e68455cc18a8b353c00a79e78ad6e55c73efcef673026cd960a6182c5a3de5"
+    },
+    "selectedLog": {
+      "path": "/tmp/wasm-p2-final-native-workflow-20261003/supervisor.log",
+      "sha256": "16c1fec86e8f96edb86bda6f066042deffdff12eaf195901261cfe1a919c2a37"
+    }
+  },
+  "historicalReview": {
+    "path": "tests/Wasm.Supervisor.Compatibility/root-canonical-review.json",
+    "sha256": "57d1c6c3e1ab1bd2db939b9b129b5a3166a9e69c9cc3a301524b3851fb056075",
+    "scope": "b72 selected F#/model source review retained; changed gate binding renewal pending"
+  },
+  "historicalOwnerProof": {
+    "path": "tests/Wasm.Supervisor.Compatibility/reviewed-source-proof.json",
+    "sha256": "eb11b68a54578306f421eac2f0a719817be37740143fefc2279a74fb89b47c7f",
+    "status": "Pending",
+    "scope": "original b72 ephemeral candidate qualification"
+  },
+  "publication": false,
+  "nativeAcceptance": false,
+  "remaining": [
+    "root narrow gate/source binding review and typed eligibility renewal",
+    "source PR admission and native merge",
+    "authenticated org occupancy guard; version not reserved",
+    "repack exact admitted final source head; dual publication and fresh both-feed installed qualification"
+  ]
+}

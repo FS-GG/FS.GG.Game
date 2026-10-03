@@ -1,0 +1,530 @@
+{
+  "schema": "fsgg.wasm.supervisor-compatible-proof/v1",
+  "status": "Pending",
+  "sourceHead": "b72f6155c3e38d84f37dcfd1a10c01799feb690f",
+  "sourceTree": "a9dfa286d8dd656dd698bf09f609a1ef7852eb31",
+  "baselineVersion": "0.2.0",
+  "candidateVersion": "0.0.0-p2-compat",
+  "defaultTraces": 47,
+  "selectedTraces": 13,
+  "model": {
+    "path": "eng/wasm-shared/lifecycle.qnt",
+    "sha256": "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a",
+    "backend": "typescript",
+    "quint": "0.32.0",
+    "seed": 20261003,
+    "samplesPerEntry": 1000,
+    "steps": 40,
+    "entries": [
+      "initCompatible",
+      "initCompatible.then(readyCompatible)"
+    ],
+    "claims": "bounded sampling; no exhaustive/native guest proof",
+    "witnesses": {
+      "cold": {
+        "sawSelectedLoad": 434,
+        "sawSelectedCompile": 303,
+        "sawSelectedInitialize": 116,
+        "sawSelectedInitialized": 62,
+        "sawMixedOrdinary": 13,
+        "sawMixedOrdered": 9,
+        "sawAdmittedSnapshot": 13,
+        "sawHeldSnapshot": 4,
+        "sawHeldPromotion": 0,
+        "sawSelectedPhase": 7,
+        "sawNarrowDeadline": 22,
+        "sawNarrowOutput": 22,
+        "sawEnclosingBudget": 13,
+        "sawCandidatePrepared": 403,
+        "sawCandidateInitialized": 28,
+        "sawCandidateValidated": 11,
+        "sawSelectedFreeze": 473,
+        "sawAtomicFrozenCommit": 6,
+        "sawSelectedHistorical": 207,
+        "sawSelectedResume": 473,
+        "sawSelectedDisposal": 1000,
+        "sawRefusalAfterExpiry": 4,
+        "sawInclusiveHeadExpiry": 0,
+        "sawFrozenCommitExpiryRefused": 0
+      },
+      "ready": {
+        "sawSelectedLoad": 79,
+        "sawSelectedCompile": 213,
+        "sawSelectedInitialize": 410,
+        "sawSelectedInitialized": 1000,
+        "sawMixedOrdinary": 545,
+        "sawMixedOrdered": 383,
+        "sawAdmittedSnapshot": 376,
+        "sawHeldSnapshot": 96,
+        "sawHeldPromotion": 6,
+        "sawSelectedPhase": 328,
+        "sawNarrowDeadline": 1000,
+        "sawNarrowOutput": 1000,
+        "sawEnclosingBudget": 379,
+        "sawCandidatePrepared": 420,
+        "sawCandidateInitialized": 26,
+        "sawCandidateValidated": 11,
+        "sawSelectedFreeze": 490,
+        "sawAtomicFrozenCommit": 2,
+        "sawSelectedHistorical": 294,
+        "sawSelectedResume": 490,
+        "sawSelectedDisposal": 998,
+        "sawRefusalAfterExpiry": 140,
+        "sawInclusiveHeadExpiry": 16,
+        "sawFrozenCommitExpiryRefused": 1
+      }
+    }
+  },
+  "selectedTraceDigests": [
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/bytes_0.itf.json.gz",
+      "compressedSha256": "4e5acea42581d76b38aaebccabccdfa963a2f8e600a873648d250b6ad1f0bd10",
+      "fullItfSha256": "1985855c1b9e4f6b90c2af30aed162b4aa8a797c9e3ef2a908537bdfdae46f0e"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/capacity_0.itf.json.gz",
+      "compressedSha256": "a4fa5c7c1014999fc6fbc86c546a4109830875cdb86654ef498c5b23ed759a63",
+      "fullItfSha256": "30afa792fd18463790e63d2488d12a7cce934d65c7a91918becfda3e92ef9012"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/composite_0.itf.json.gz",
+      "compressedSha256": "4ccfc3b14bfbf7307f54d6e05aa3980730803070e74783957988c0ae3ad23d79",
+      "fullItfSha256": "1f7901495d5a62c05273768e61fdf530b19d355b5ecd9a5ff2a61d7f5089d355"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/fifo_0.itf.json.gz",
+      "compressedSha256": "8e975aebf3cabb05ab3b1e6212e42c06c75713859181b5f9979110b12419e399",
+      "fullItfSha256": "140b12916467aaaf35d497686e10682d06eda2712013dc36445e52507b56f175"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/freeze-active_0.itf.json.gz",
+      "compressedSha256": "e2f9ce3bd38b7b17c29de3f19bd0b3f25a6007e5b7ebad740a2524ef3f5188f3",
+      "fullItfSha256": "c6f5ad4a37efdf46277d0e1818380684b8a10567a1a6f8e51d56e5c2c6cba23a"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/freeze-completed_0.itf.json.gz",
+      "compressedSha256": "1cd7e97a93e2d4b153627069805ed1cf8ab1b222479ea1a18e639ef492f0d2fc",
+      "fullItfSha256": "30a9e51505c2a138655a37d8a7b4d441332ceede506b35433ad22fa11638df17"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/frozen-commit-expiry_0.itf.json.gz",
+      "compressedSha256": "791163454808a739bc3557bded6625b337e2e6ba7d00abd3b1354afcf50a4b2b",
+      "fullItfSha256": "c6b837ba336e7472e3540164e13ec69155826536ba23565c291268bf18c64fa0"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/head-after_0.itf.json.gz",
+      "compressedSha256": "79561b4a93d43f0b720ca96bba6bbc4187f546858cad44e675465722bc222b1e",
+      "fullItfSha256": "3b9427ec78228e9df7d517be3c3d9ac51bc149b8508b15b0bb675c827964cbc4"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/head-at_0.itf.json.gz",
+      "compressedSha256": "a425e956d0d8c2ea518518dbad2896b2543f33d992f11e156dcaa0aed2079be8",
+      "fullItfSha256": "37d60450e4ea0fc3b97cc4ef081c6804f0caf9caec6260889e25d83de26c6569"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/head-before_0.itf.json.gz",
+      "compressedSha256": "250f3fa4814dede54811ea5836c577ab4630c97d72d5317e37efcef1a36e3541",
+      "fullItfSha256": "fc9a7ae1042f9775a4431d77c6a1458c31fed3641e42b1602984491c54e0e056"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/held-enclosing_0.itf.json.gz",
+      "compressedSha256": "42c0840e5bf29dcede1f28caf29d95130b5ff22381aac4cb2b68dbb002812195",
+      "fullItfSha256": "b7f3e1422c7df17c5758364515055fc6aad4076ae28e2acb72e05ec2dddc6dd3"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/owner-expiry-refusal_0.itf.json.gz",
+      "compressedSha256": "2c63d2f9facdd7142299db82660dcd4b42a1ab04b395ad6c926ea0e7bca51dbc",
+      "fullItfSha256": "78ef34bebef72f45b4e05f044e5d5ea5d2603364ae0ba1e71a6b6516a8f50ffd"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/Traces/snapshot_0.itf.json.gz",
+      "compressedSha256": "476a6bdca6c544cc44e09c4e7310289ee83a9708c1f16dcc15ff11426058b318",
+      "fullItfSha256": "c0cf9d2118fbb117675a5e91534562080c161454f00fcf4d4b21a85caa4f4f83"
+    }
+  ],
+  "evidence": [
+    {
+      "name": "baselineGaps",
+      "sha256": "255e5c5372ced41518fd9e8abf8d35f24b529cb91e794aecf7a055dbcb0560db",
+      "localLog": "/tmp/wasm-p2-installed-baseline-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "sourceDotnet",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-source-47-11-dotnet-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "sourceFable",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-source-47-11-fable-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "installedDotnet",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-installed-47-11-dotnet-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "installedFable",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-installed-47-11-fable-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "installedRawNumeric",
+      "sha256": "4ca1f1eefede9638c0c7b94da646415ae34e2100c66545b94b7142d8eaa31b9f",
+      "localLog": "/tmp/wasm-p2-installed-raw-numeric-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "browser",
+      "sha256": "a40ff14325d47b5e86a9471d09ac0a5589e895591ae53b49fb779a4e432524b7",
+      "localLog": "/tmp/wasm-p2-browser-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "defaultRegeneration",
+      "sha256": "aa2c5af561893408824f8d9ec6c91b55400839f6df5ce57fec085558d180e176",
+      "localLog": "/tmp/wasm-p2-default-47-trace-check-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "selectedRegeneration",
+      "sha256": "664c80e281ec1563aea1dcdea53b868e3a5be286b85f4d0d70db496b886d236f",
+      "localLog": "/tmp/wasm-p2-traces-check-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "coldModel",
+      "sha256": "5ff236bf0c94a55282cafcef479d13f3959554d975b60c3b2b83d1309495c205",
+      "localLog": "/tmp/wasm-p2-model-cold-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "readyModel",
+      "sha256": "f682d40856cae4fb7bc88290865a609227c4879d29b65510341d58a9dc15c65e",
+      "localLog": "/tmp/wasm-p2-model-ready-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "modelGuards",
+      "sha256": "a0e93b07f011e216c6b65adfa7980c0cefbcca6de3f75dc06b7a2c10b2432838",
+      "localLog": "/tmp/wasm-p2-model-controls-20261003.log",
+      "meaning": "actual execution log; independent review pending",
+      "historicalPreExpiryRepair": true
+    },
+    {
+      "name": "wrongTokenCanonicalMutation",
+      "sha256": "2eb48586080735df3778d5c18c46e62e3da8d9cd691cbb8343908695cbf14c2e",
+      "localLog": "/tmp/wasm-p2-receipt-mutation-20261003.log",
+      "meaning": "canonical token equality removal rejected by actual negative receipt test",
+      "historicalPreExpiryRepair": true
+    }
+  ],
+  "nativeApiReceipt": {
+    "tool": "SDK10.0.401.ApiCompat",
+    "baseline": "0.2.0",
+    "candidate": "0.0.0-p2-compat",
+    "suppressions": false,
+    "officialCore": {
+      "version": "10.1.302",
+      "archiveSha256": "f4eda1b2efb28b38a5526b0b678e889434aa71113a4c2fa8660b62ca75cc7dfc",
+      "archiveEntry": "lib/netstandard2.0/FSharp.Core.dll",
+      "referencePath": "/home/developer/.local/share/fs-gg-private/wasm020-canonical-event-boundary-qualifier-20261002/packages/fsharp.core/10.1.302/lib/netstandard2.0/FSharp.Core.dll",
+      "referenceDllSha256": "430a20ba7c8b7c226e6bcf9a8e854760a799f5da19000c573148144dcce75742",
+      "byteIdentical": true
+    },
+    "packages": [
+      {
+        "id": "FS.GG.Wasm.Contracts",
+        "baselineSha256": "b5bb9d0217dc31de9649b7c952db514bab5c99d32b30e6480da1f313d446fba4",
+        "candidateSha256": "d7f685d1715632653a2d6649e1591bafe461b8efbd132e0a85882cdcc8bf9377",
+        "nativeLogSha256": "d4cca78df451ad6fc6ec7855d90f199d9918991e2208a6ea806dc0652d941a9b",
+        "status": "compatible"
+      },
+      {
+        "id": "FS.GG.Wasm.Browser",
+        "baselineSha256": "40d11feebb07b01c0846b1b9716db10badc5dfbce1a450eb5319ab89b8f041e6",
+        "candidateSha256": "cb3c3cf795c90a746fd9f2c9594aa1d6c81bae2d703d2f37ce2f83fde340a0e4",
+        "nativeLogSha256": "c176e706a4ffb72ef48e919cb12025f5d6174e2359226f064ac423b447cff755",
+        "status": "compatible"
+      }
+    ]
+  },
+  "browserGuest": {
+    "source": "tests/Wasm.Supervisor.Compatibility/browser/limits-guest.c",
+    "sourceSha256": "bcc3d425a15770cf258f7bb659cdd164a68125680aa608a71506ed71c1926362",
+    "toolchain": "WASI SDK 34 clang 23.1.0",
+    "wasmSha256": "a8e68455cc18a8b353c00a79e78ad6e55c73efcef673026cd960a6182c5a3de5",
+    "qualifiedWasmPath": "/tmp/wasm-p2-repair-browser-gate-20261003/limits-guest.wasm"
+  },
+  "publication": "none",
+  "remaining": [
+    "independent canonical model/root approval",
+    "root release reservation/pins",
+    "release exact candidate validation and publication",
+    "fresh installed qualification from both feeds",
+    "SC2 complete product acceptance"
+  ],
+  "browserTests": 8,
+  "qualificationInputs": [
+    {
+      "path": "eng/wasm-shared/compatible-qualification.qnt",
+      "sha256": "6145f1ee42f1d51e02afd3601ec4dc3624771ae21bedddfbb26f5c410e9894b7"
+    },
+    {
+      "path": "eng/wasm-shared/lifecycle.qnt",
+      "sha256": "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a"
+    },
+    {
+      "path": "scripts/verify-wasm-supervisor-browser.sh",
+      "sha256": "f47e2bdb44f35a4bc7d5b1a7b28d5133582c647adbd2e0f281d6a4ad72d7de49"
+    },
+    {
+      "path": "scripts/verify-wasm-supervisor.sh",
+      "sha256": "299eaad93cb2b743f6ece33fb42cdce6a93730ef531a3028dc71eae8ad1b51ee"
+    },
+    {
+      "path": "src/Wasm.Browser/Admission.fs",
+      "sha256": "fda4d1e3c1dc5f0eb8d00f2efb83ac1cd9fab0b784197981e1c9ed23357f9122"
+    },
+    {
+      "path": "src/Wasm.Browser/Admission.fsi",
+      "sha256": "e89188be2b4162828cbca5d572bdf16b7752ed8b3aaa6f3f51367a511f1320d5"
+    },
+    {
+      "path": "src/Wasm.Browser/Host.fs",
+      "sha256": "0277625422c09dd98fa1e337ad5ea7a2961a8a83498eb63480683f9934fefa10"
+    },
+    {
+      "path": "src/Wasm.Browser/Host.fsi",
+      "sha256": "0153481a6227c68cffc346eb1f17bf404755b05b7ecfe45b85bfadb9e3f66da8"
+    },
+    {
+      "path": "src/Wasm.Browser/Invocation.fs",
+      "sha256": "fa1c132b0bd5288897766166be00f866afe34a24622738b4780f573b48eef4d8"
+    },
+    {
+      "path": "src/Wasm.Browser/Invocation.fsi",
+      "sha256": "0dda3bf3ee435c98896b1115c86875ba230c5f3881f830a8cc933877f043e525"
+    },
+    {
+      "path": "src/Wasm.Browser/Lifecycle.fs",
+      "sha256": "ac964d427e8bfc09acf203ea94b87370dc7edb7ddcd61aefccb5d90d76de3d5e"
+    },
+    {
+      "path": "src/Wasm.Browser/Lifecycle.fsi",
+      "sha256": "47d5fec0a3add15cfece04ed7b5f35dbb9f152d7d6a21b56b2e2db6014715222"
+    },
+    {
+      "path": "src/Wasm.Browser/RuntimeProtocol.fs",
+      "sha256": "2b56a7e06e610422530aefcb3cffed9dd5cfb42941e8c5352f7eeaeeb1abb6de"
+    },
+    {
+      "path": "src/Wasm.Browser/RuntimeProtocol.fsi",
+      "sha256": "342c8425dfc3863ed85880835460827687b9fd257ef1d26fb9d2d37576b9118b"
+    },
+    {
+      "path": "src/Wasm.Browser/WorkerEntry.fs",
+      "sha256": "c5e48001f70a0a438e81c6ce81f9baaebf9c6700ff7dca7dbc5d074d9f44c7d5"
+    },
+    {
+      "path": "src/Wasm.Browser/WorkerEntry.fsi",
+      "sha256": "8f6b12656c2ddb1d15195409a14650325cce81d7ea99f76c1d0ec7513ff98725"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/check-receipt-mutation.py",
+      "sha256": "1dd0048616b12bf81a133cf3b50d5be1d5fa5ad3c9f483607cd65ae90cfd6884"
+    },
+    {
+      "path": "tests/Wasm.Supervisor.Compatibility/native-api-compat.py",
+      "sha256": "a858b847ef3bdd3b5a2dd29dc8d346843aa59770638077aebab925a1caad3a76"
+    }
+  ],
+  "executedGateLeaves": [
+    {
+      "name": "default-traces.log",
+      "sha256": "aa2c5af561893408824f8d9ec6c91b55400839f6df5ce57fec085558d180e176",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/default-traces.log"
+    },
+    {
+      "name": "installed-build.log",
+      "sha256": "e770a7556c6ebbabaae738b8979ecf16877474e4293d0022069007fbdd763dfc",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/installed-build.log"
+    },
+    {
+      "name": "installed-dotnet.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/installed-dotnet.log"
+    },
+    {
+      "name": "installed-fable-build.log",
+      "sha256": "28aeb3ec0964162306774157876f6d50d2602c32fae4bc724c5d0ab7df07e73f",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/installed-fable-build.log"
+    },
+    {
+      "name": "installed-fable.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/installed-fable.log"
+    },
+    {
+      "name": "installed-locked-build.log",
+      "sha256": "baf4f97b33721d5808a4b3a063d8187f9054031851d1725d8370a512f3c90afd",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/installed-locked-build.log"
+    },
+    {
+      "name": "installed-raw-numeric.log",
+      "sha256": "4ca1f1eefede9638c0c7b94da646415ae34e2100c66545b94b7142d8eaa31b9f",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/installed-raw-numeric.log"
+    },
+    {
+      "name": "model-cold.log",
+      "sha256": "a27b152f0e9dd2facf97b3b0f5470cee47e90701761e1b2bb323750efc1d638b",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/model-cold.log"
+    },
+    {
+      "name": "model-controls.log",
+      "sha256": "4eb7650f3db4f0e4b93ebfdf092361658867db30cc72f3bf6ea90a246ff3f269",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/model-controls.log"
+    },
+    {
+      "name": "model-ready.log",
+      "sha256": "8fa9b93ed28db6f40342a8d2ed9d4f18563819b8c2235afc11881ede1d1330ca",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/model-ready.log"
+    },
+    {
+      "name": "native-api.log",
+      "sha256": "16f73ae7d5f2dbfb0997f71d97930793a6beeb710a99f75ff7319c298f845a0c",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/native-api.log"
+    },
+    {
+      "name": "receipt-mutation.log",
+      "sha256": "2eb48586080735df3778d5c18c46e62e3da8d9cd691cbb8343908695cbf14c2e",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/receipt-mutation.log"
+    },
+    {
+      "name": "selected-traces.log",
+      "sha256": "2954b1cf73cd23dbd7e28014781200f010c3258ad3ae8084820ca737b676af6a",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/selected-traces.log"
+    },
+    {
+      "name": "source-build.log",
+      "sha256": "3d08f95c3813cfc8a329e6809897f4cfe83b0b44a2ef0597696ad06d7b896b71",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/source-build.log"
+    },
+    {
+      "name": "source-dotnet.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/source-dotnet.log"
+    },
+    {
+      "name": "source-fable-build.log",
+      "sha256": "7c116535b8f0a2f5c44b7d02bdb421855f616e66589f87f20be4261b9d5a72dd",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/source-fable-build.log"
+    },
+    {
+      "name": "source-fable.log",
+      "sha256": "9f7ee67587841e5ed988d02ef1ee3b062beb1ba91a6a40dd0702a21eb18c493b",
+      "localLog": "/tmp/wasm-p2-repair-full-gate-20261003/source-fable.log"
+    }
+  ],
+  "orchestration": {
+    "completeCorrectedGateExit": 0,
+    "localGateLog": "/tmp/wasm-p2-repair-full-gate-20261003.log",
+    "gateLogSha256": "14f7ef9b9ef288a63088f27eb50fedd8ea6e1c3f86564aea6c1ad10722f046b9",
+    "browserGateExit": 0,
+    "browserTests": 8,
+    "localBrowserLog": "/tmp/wasm-p2-repair-browser-gate-20261003.log",
+    "browserLogSha256": "23dddc3e3922ebb8a1c1e7dd99a20c2b31d03c03f2c0abbedb70b43057846fce",
+    "historicalFirstGateFailure": "Path NameError before repair; preserved in earlier logs, superseded by complete exit-0 repaired gate"
+  },
+  "candidateMetadata": {
+    "repositoryCommit": "2236a51fa69c6c10a95ce5a42fdd8fc045cd3e00",
+    "custody": "ephemeral repaired implementation qualification only; exact admitted release head must be repacked"
+  },
+  "repairBoundary": {
+    "pureSignature": "HostDecision {State;Effects;Result}",
+    "publicHostSignature": "unchanged Result<unit,issues>",
+    "cause": "valid clock-advanced refused actions discarded expiry transitions",
+    "sourceAndInstalledTraceNames": [
+      "owner-expiry-refusal",
+      "frozen-commit-expiry"
+    ],
+    "originalReproducerLog": "/tmp/wasm-p2-expiry-refusal-official-core-review-20261003.log",
+    "originalReproducerSha256": "1bed0768568ed3a7a0a0e2594483cf61475fc0b43304a8da410da9f920d7ea44",
+    "repairedReproducerLog": "/tmp/wasm-p2-expiry-refusal-official-core-repaired-20261003.log",
+    "repairedReproducerSha256": "d4060476a1cf7b3c4bee5f8c9066823c302d060de1e2e1a6b422e9f94be41c4c"
+  },
+  "coreByteJoins": [
+    {
+      "version": "10.1.401",
+      "officialUrl": "https://api.nuget.org/v3-flatcontainer/fsharp.core/10.1.401/fsharp.core.10.1.401.nupkg",
+      "archiveSha256": "cf1f4e69fc2d1351af9fa9923ac90ed466088730a00867cbe0eb1b3b2c68963e",
+      "officialDllSha256": "7516a966abc789eab916e95d429bf3a49e996257069d97f7f3eb5d47373fa72b",
+      "localPath": "/usr/share/dotnet/sdk/10.0.401/FSharp/FSharp.Core.dll",
+      "localDllSha256": "2232698f623c28b8bcca32fa3cc8943cdd8529b20b487b5938106aae1c2ab256",
+      "dllByteEqual": false,
+      "use": "historical/shared installation comparison; not used by repaired private compiler or FSI"
+    },
+    {
+      "version": "10.1.302",
+      "officialUrl": "https://api.nuget.org/v3-flatcontainer/fsharp.core/10.1.302/fsharp.core.10.1.302.nupkg",
+      "archiveSha256": "f4eda1b2efb28b38a5526b0b678e889434aa71113a4c2fa8660b62ca75cc7dfc",
+      "officialDllSha256": "430a20ba7c8b7c226e6bcf9a8e854760a799f5da19000c573148144dcce75742",
+      "localPath": "/home/developer/.local/share/fs-gg-private/wasm020-canonical-event-boundary-qualifier-20261002/packages/fsharp.core/10.1.302/lib/netstandard2.0/FSharp.Core.dll",
+      "localDllSha256": "430a20ba7c8b7c226e6bcf9a8e854760a799f5da19000c573148144dcce75742",
+      "dllByteEqual": true
+    },
+    {
+      "version": "10.1.302",
+      "archiveEntry": "lib/netstandard2.1/FSharp.Core.dll",
+      "localPath": "/home/developer/.local/share/fs-gg-private/wasm020-canonical-event-boundary-qualifier-20261002/packages/fsharp.core/10.1.302/lib/netstandard2.1/FSharp.Core.dll",
+      "officialDllSha256": "517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232",
+      "localDllSha256": "517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232",
+      "dllByteEqual": true
+    },
+    {
+      "version": "10.1.302",
+      "archiveEntry": "lib/netstandard2.1/FSharp.Core.dll",
+      "localPath": "/home/developer/projects/worktrees/unified-20261003-wasm-producer/tests/Wasm.Supervisor.Compatibility/bin/Debug/net10.0/FSharp.Core.dll",
+      "officialDllSha256": "517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232",
+      "localDllSha256": "517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232",
+      "dllByteEqual": true
+    },
+    {
+      "version": "10.1.203",
+      "officialUrl": "https://api.nuget.org/v3-flatcontainer/fsharp.core/10.1.203/fsharp.core.10.1.203.nupkg",
+      "archiveSha256": "b8ecba5c6b8713aad28c8f3c2b98a633aeeffa877ae389ea429b99650202fcd5",
+      "archiveEntry": "lib/netstandard2.1/FSharp.Core.dll",
+      "localPath": "/home/developer/.local/share/fs-gg-private/wasm020-canonical-event-boundary-qualifier-20261002/tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/FSharp.Core.dll",
+      "officialDllSha256": "4a626d62bb15815b6404567aa1bd37d9f2208e8e3c99c3c346d0efcfca72af6c",
+      "localDllSha256": "4a626d62bb15815b6404567aa1bd37d9f2208e8e3c99c3c346d0efcfca72af6c",
+      "dllByteEqual": true
+    },
+    {
+      "version": "10.1.401",
+      "archiveEntry": "lib/netstandard2.0/FSharp.Core.dll",
+      "localPath": "/tmp/wasm-p2-official-core-fsi-20261003/FSharp.Core.dll",
+      "localDllSha256": "7516a966abc789eab916e95d429bf3a49e996257069d97f7f3eb5d47373fa72b",
+      "officialDllSha256": "7516a966abc789eab916e95d429bf3a49e996257069d97f7f3eb5d47373fa72b",
+      "dllByteEqual": true,
+      "use": "private source compiler and reproducer FSI host",
+      "fscPath": "/tmp/wasm-p2-official-core-fsi-20261003/fsc.dll",
+      "fscSha256": "2bd6190eafa94f47739538467f5a7cd52de233a627789c69f07959d7578e4d6b"
+    }
+  ]
+}

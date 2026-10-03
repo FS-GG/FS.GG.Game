@@ -533,7 +533,14 @@ module WorkerEntry =
                                 else
                                     match loaded with
                                     | Some(current, owner) when
-                                        current = configuration
+                                        (let ceiling = Validation.configuration current
+                                         let selected = Validation.configuration configuration
+                                         selected.Limits.MaximumDeadlineMilliseconds > 0
+                                         && selected.Limits.MaximumDeadlineMilliseconds <= ceiling.Limits.MaximumDeadlineMilliseconds
+                                         && selected.Limits.MaximumOutputBytes > 0
+                                         && selected.Limits.MaximumOutputBytes <= ceiling.Limits.MaximumOutputBytes
+                                         && { selected with Limits = ceiling.Limits } = ceiling
+                                         && { selected.Limits with MaximumDeadlineMilliseconds = ceiling.Limits.MaximumDeadlineMilliseconds; MaximumOutputBytes = ceiling.Limits.MaximumOutputBytes } = ceiling.Limits)
                                         && owner.WorkerInstance = identity.WorkerInstance
                                         && owner.Generation = identity.Generation
                                         ->

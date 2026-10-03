@@ -305,3 +305,237 @@ module lifecycleTest {
   run cleanupFaultIsNotSuccessTest = initSc2.then(readyActive).then(submitOrdinary).then(cleanupFault).expect(and {state.activeWorker==0,hasEffect(state.effects,"terminate")})
   run disposalSettlesEverythingOnceTest = initSc2.then(readyActive).then(submitOrdinary).then(submitOrdinary).then(prepareCandidate).then(dispose).then(dispose).expect(and {state.disposed,state.controls.length()==0,singleTerminalDelivery})
 }
+
+// Opt-in SC2 Supervisor V1 refinement. The legacy module and its retained traces
+// remain unchanged. Selected limits are scoped to requests, never worker ceilings.
+module compatibleLifecycle {
+  import lifecycle.*
+  type Limits = {deadline: int, output: int, enclosing: int}
+  type CompatibleState = {host: State, limits: int -> Limits, held: Request, selected: Limits, admitted: List[int]}
+  type CompatibleConnection = {host: CompatibleState, effects: List[Effect], callbacks: List[Input], beforeEffects: List[CompatibleState], callbacksQuiescent: bool}
+  pure val defaultLimits: Limits = {deadline:250,output:65536,enclosing:0}
+  pure def initialCompatible: CompatibleState = {host:initial(Sc2),limits:Map(0->defaultLimits),held:emptyRequest,selected:defaultLimits,admitted:List()}
+  var compatibleState: CompatibleState
+  var compatibleConnection: CompatibleConnection
+  action initCompatible = all {initSc2,compatibleState'=initialCompatible,compatibleConnection'={host:initialCompatible,effects:List(),callbacks:List(),beforeEffects:List(),callbacksQuiescent:true}}
+  pure def selectedFor(c: CompatibleState,r: Request): Limits = if(c.limits.keys().contains(r.id))c.limits.get(r.id)else defaultLimits
+  pure def dueFor(time: int,limits: Limits): int = if(limits.enclosing==0)time+limits.deadline else if(time+limits.deadline<limits.enclosing)time+limits.deadline else limits.enclosing
+  pure def projectedHost(c: CompatibleState): State = {...c.host,snapshot:c.held}
+  pure def expireCompatible(s: State,time: int): State = {
+    val base={...s,clock:time,effects:List()}
+    val expiredControls=base.controls.select(r=>r.deadline<time)
+    val afterControls=expiredControls.foldl(base,(current,r)=>{
+      val following=invalidate(current,r.worker,"settleTimedOut","expireControl")
+      {...following,effects:current.effects.concat(following.effects)}
+    })
+    if(afterControls.current.worker!=0 and afterControls.current.deadline<time){
+      val following=invalidate(afterControls,afterControls.current.worker,"settleTimedOut","expireCurrent")
+      {...following,effects:afterControls.effects.concat(following.effects)}
+    }else afterControls
+  }
+  pure def disposeCompatible(c: CompatibleState): CompatibleState = {
+    val following=handle(projectedHost(c),input("dispose",emptyRequest,0,""))
+    {...c,host:{...following,snapshot:emptyRequest},held:emptyRequest}
+  }
+  pure def expireHeadCompatible(c: CompatibleState,r: Request): CompatibleState = {
+    val terminal={...effect("settleTimedOut",r),outcome:"TimedOut",terminalPhase:r.phase,dispatched:false}
+    val timed={...c,host:{...c.host,deliveries:c.host.deliveries.append(r.id)}}
+    val destroyed=disposeCompatible(timed)
+    val mechanics=destroyed.host.effects.select(fx=>fx.kind!="settleDiscarded")
+    val settlements=destroyed.host.effects.select(fx=>fx.kind=="settleDiscarded")
+    {...destroyed,host:{...destroyed.host,effects:mechanics.concat(List(terminal)).concat(settlements)}}
+  }
+  pure def pumpCompatible(c: CompatibleState): CompatibleState = {
+    val h=c.host
+    val pumped=if(h.current.worker!=0 or h.frozen or h.disposed)c
+      else if(h.ordinary.length()==0)c
+      else {
+        val r=h.ordinary.head()
+        val cleared={...c,host:{...h,ordinary:h.ordinary.tail()}}
+        if(h.clock>=r.deadline){
+          expireHeadCompatible(cleared,r)
+        }else {...cleared,host:{...cleared.host,current:r,effects:List(effect("post",r),effect("armTimer",r))}}
+      }
+    val hasSnapshot=(pumped.host.current.worker!=0 and pumped.host.current.submission==Snapshot) or pumped.host.ordinary.foldl(false,(found,r)=>found or r.submission==Snapshot)
+    if(pumped.held.worker==0 or pumped.host.disposed or pumped.host.frozen or hasSnapshot)pumped
+    else {
+      val r={...pumped.held,deadline:dueFor(pumped.host.clock,selectedFor(pumped,pumped.held))}
+      val cleared={...pumped,held:emptyRequest,admitted:pumped.admitted.append(r.id)}
+      if(pumped.host.ordinary.length()>=4){...cleared,host:refuse(cleared.host,r,"refusedQueueFull")}
+      else if(pumped.host.current.worker==0 and pumped.host.ordinary.length()==0){
+        if(pumped.host.clock>=r.deadline){
+          val expired=expireHeadCompatible(cleared,r)
+          {...expired,host:{...expired.host,effects:pumped.host.effects.concat(expired.host.effects)}}
+        }else {...cleared,host:{...cleared.host,current:r,effects:pumped.host.effects.concat(List(effect("post",r),effect("armTimer",r)))}}
+      }else {...cleared,host:{...cleared.host,ordinary:cleared.host.ordinary.append(r),lastAction:"queueSnapshot"}}
+    }
+  }
+  pure def submitCompatible(c: CompatibleState,r: Request): CompatibleState = {
+    val h=c.host
+    val population=(if(h.current.worker==0)List()else List(h.current)).concat(h.ordinary)
+    val existingSnapshot=population.foldl(false,(found,p)=>found or p.submission==Snapshot)
+    if(h.disposed){...c,host:refuse(h,r,"refusedDisposed")}
+    else if(h.frozen){...c,host:refuse(h,r,"refusedFrozen")}
+    else if(h.activeWorker==0 or not(h.initializedWorkers.contains(h.activeWorker))){...c,host:refuse(h,r,"refused")}
+    else if(r.submission==Snapshot and existingSnapshot){
+      val held={...r,deadline:0}
+      {...c,held:held,host:{...h,nextRequest:h.nextRequest+1,deliveries:if(c.held.worker==0)h.deliveries else h.deliveries.append(c.held.id),effects:if(c.held.worker==0)List()else List(effect("settleCoalesced",c.held)),lastAction:"holdSnapshot"}}
+    }else pumpCompatible({...c,admitted:c.admitted.append(r.id),host:{...h,nextRequest:h.nextRequest+1,ordinary:h.ordinary.append(r),effects:List(),lastAction:"queueMixed"}})
+  }
+  pure def handleCompatible(c: CompatibleState,e: Input): CompatibleState = {
+    val h=c.host
+    val r=e.request
+    if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown")submitCompatible(c,r)
+    else if(e.name=="complete" and h.current.id==r.id and h.current.worker==r.worker){
+      val historical=h.frozen or r.worker!=h.activeWorker or r.generation!=h.activeGeneration
+      val kind=if(historical)"settleHistorical"else if(r.operation=="shutdown")"settleShutdown"else "settleCurrent"
+      val prefix=List(effect("cancelTimer",r),effect(kind,r))
+      val base={...c,host:{...h,current:emptyRequest,deliveries:h.deliveries.append(r.id),effects:List(),lastAction:"complete"}}
+      if(r.operation=="shutdown" or (historical and h.retiringWorkers.contains(r.worker))){
+        val removed=invalidate(base.host,r.worker,"settleDiscarded","complete")
+        {...base,host:{...removed,effects:prefix.concat(removed.effects)}}
+      }else {
+        val pumped=pumpCompatible(base)
+        {...pumped,host:{...pumped.host,effects:prefix.concat(pumped.host.effects)}}
+      }
+    }else if(e.name=="freeze" and not(h.disposed) and not(h.frozen)){
+      val pending=h.ordinary.concat(if(c.held.worker==0)List()else List(c.held))
+      {...c,held:emptyRequest,host:{...h,frozen:true,freezeToken:7,ordinary:List(),effects:effectsFor("settleInvalidated",pending),deliveries:h.deliveries.concat(idsFor(pending)),lastAction:"freeze"}}
+    }else if(e.name=="frozenCommit"){
+      if(not(canCommitFrozen(c,7,e.request.id,e.request.generation,e.worker)))c
+      else {
+        val promoted=handle({...h,frozen:false},input("commitCandidate",emptyRequest,h.candidateWorker,""))
+        {...c,host:{...promoted,frozen:true,freezeToken:h.freezeToken}}
+      }
+    }else if(e.name=="resume")pumpCompatible({...c,host:{...h,frozen:false,freezeToken:0,lastAction:"resume"}})
+    else if(e.name=="dispose")disposeCompatible(c)
+    else {
+      val following=handle(h,e)
+      val retained=c.held.worker==0 or live(following).contains(c.held.worker)
+      if(retained){...c,host:following}
+      else {...c,held:emptyRequest,host:{...following,deliveries:following.deliveries.append(c.held.id),effects:following.effects.append(effect("settleDiscarded",c.held))}}
+    }
+  }
+  pure def compatibleEventAt(c: CompatibleState,e: Input,observed: int,limits: Limits,bytes: int): CompatibleState = {
+    val time=if(observed<c.host.clock)c.host.clock else observed
+    val captured={...c.host,clock:time}
+    val r=if(e.name=="loadInitial" or e.name=="prepareCandidate")requestFor(captured,c.host.nextGeneration,c.host.nextGeneration,"load","compile",Ordinary)
+      else if(e.name=="initialize")requestFor(captured,e.worker,if(e.worker==c.host.activeWorker)c.host.activeGeneration else c.host.candidateGeneration,"initialize","allocate-descriptor",Ordinary)
+      else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown")requestFor(captured,c.host.activeWorker,c.host.activeGeneration,if(e.name=="shutdown")"shutdown"else "process",if(e.name=="shutdown")"shutdown"else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
+      else e.request
+    val admission=Set("loadInitial","prepareCandidate","initialize","ordinary","ordered","snapshot","shutdown").contains(e.name)
+    val selected=if(admission){...r,deadline:dueFor(time,limits),bytes:bytes}else r
+    val original={...e,request:selected,observed:observed}
+    val expired=expireCompatible(c.host,time)
+    val following=handleCompatible({...c,host:{...expired,effects:List()},limits:if(admission)c.limits.put(selected.id,limits)else c.limits,selected:limits},original)
+    {...following,host:{...following.host,input:original,effects:expired.effects.concat(following.host.effects),lastAction:if(e.name=="timer" and expired.effects.length()>0)expired.lastAction else following.host.lastAction}}
+  }
+  pure def canAdmit(c: CompatibleState,name: str,limits: Limits,bytes: int): bool = {
+    val h=c.host
+    val population=(if(h.current.worker==0)List()else List(h.current)).concat(h.ordinary)
+    val hasSnapshot=population.foldl(false,(found,r)=>found or r.submission==Snapshot)
+    and {
+      not(h.disposed),not(h.frozen),limits.deadline>=1,limits.deadline<=250,limits.output>=1,limits.output<=65536,
+      limits.enclosing==0 or limits.enclosing>h.clock,
+      if(Set("ordinary","ordered","snapshot","shutdown").contains(name))h.activeWorker!=0 and h.initializedWorkers.contains(h.activeWorker)else true,
+      bytes>=0,bytes<=262144,
+      if(name=="ordered")population.length()<256 and population.foldl(0,(total,r)=>total+r.bytes)+bytes<=4194304
+      else if(name=="ordinary" or name=="shutdown" or (name=="snapshot" and not(hasSnapshot)))h.ordinary.length()<4
+      else true,
+    }
+  }
+  pure def compatibleFinalEffect(out: CompatibleConnection,fx: Effect,observed: int): CompatibleConnection = {
+    val ordered={...out,effects:out.effects.append(fx),beforeEffects:out.beforeEffects.append(out.host)}
+    if(fx.kind!="terminate")ordered else {
+      val following=compatibleEventAt(out.host,input("workerTerminated",emptyRequest,fx.worker,""),observed,defaultLimits,0)
+      {...ordered,host:following,effects:ordered.effects.concat(following.host.effects),callbacks:ordered.callbacks.append(following.host.input),beforeEffects:ordered.beforeEffects.concat(following.host.effects.foldl(List(),(states,unused)=>states.append(following))),callbacksQuiescent:out.callbacksQuiescent and following.host.effects.length()==0}
+    }
+  }
+  pure def connectedCompatibleAt(c: CompatibleConnection,e: Input,observed: int,limits: Limits,bytes: int): CompatibleConnection = {
+    val base=compatibleEventAt(c.host,e,observed,limits,bytes)
+    base.host.effects.foldl({host:base,effects:List(),callbacks:List(),beforeEffects:List(),callbacksQuiescent:true},(out,fx)=>{
+      val ordered={...out,effects:out.effects.append(fx),beforeEffects:out.beforeEffects.append(out.host)}
+      if(fx.kind!="terminate")ordered else {
+        val following=compatibleEventAt(out.host,input("workerTerminated",emptyRequest,fx.worker,""),observed,defaultLimits,0)
+        val called={...ordered,host:following,callbacks:out.callbacks.append(following.host.input)}
+        following.host.effects.foldl(called,(nested,nestedEffect)=>compatibleFinalEffect(nested,nestedEffect,observed))
+      }
+    })
+  }
+  action compatibleEvent(e: Input,observed: int,limits: Limits,bytes: int): bool = {
+    val following=compatibleEventAt(compatibleState,e,observed,limits,bytes)
+    all {state'=state,connection'=connection,compatibleState'=following,compatibleConnection'=connectedCompatibleAt(compatibleConnection,following.host.input,observed,limits,bytes)}
+  }
+  action compatibleLoad = all {canAdmit(compatibleState,"loadInitial",defaultLimits,1),compatibleState.host.activeWorker==0,compatibleEvent(input("loadInitial",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,1)}
+  action compatibleCompiled = {
+    val requests=compatibleState.host.controls.select(r=>r.operation=="load")
+    nondet index=requests.indices().oneOf()
+    all {requests.length()>0,compatibleEvent(input("compiled",requests.nth(index),requests.nth(index).worker,""),compatibleState.host.clock,defaultLimits,0)}
+  }
+  action compatibleInitialize(worker: int,limits: Limits): bool = all {canAdmit(compatibleState,"initialize",limits,1),compatibleState.host.compiledWorkers.contains(worker),not(compatibleState.host.controls.foldl(false,(found,r)=>found or r.worker==worker)),compatibleEvent(input("initialize",emptyRequest,worker,""),compatibleState.host.clock,limits,1)}
+  action compatibleInitialized(worker: int): bool = {
+    val requests=compatibleState.host.controls.select(r=>r.worker==worker and r.operation=="initialize")
+    all {requests.length()>0,compatibleEvent(input("initialized",requests.head(),worker,""),compatibleState.host.clock,defaultLimits,0)}
+  }
+  action compatibleSubmitAt(name: str,limits: Limits,bytes: int,observed: int): bool = all {canAdmit(compatibleState,name,limits,bytes),limits.enclosing==0 or limits.enclosing>observed,compatibleEvent(input(name,emptyRequest,0,""),observed,limits,bytes)}
+  action compatibleSubmit(name: str,limits: Limits,bytes: int): bool = compatibleSubmitAt(name,limits,bytes,compatibleState.host.clock)
+  action compatibleComplete(observed: int): bool = all {compatibleState.host.current.worker!=0,compatibleEvent(input("complete",compatibleState.host.current,compatibleState.host.current.worker,""),observed,defaultLimits,0)}
+  action compatiblePhase(phase: str,observed: int): bool = all {compatibleState.host.current.worker!=0,compatibleEvent(input("phase",compatibleState.host.current,compatibleState.host.current.worker,phase),observed,defaultLimits,0)}
+  action compatiblePrepare = all {canAdmit(compatibleState,"prepareCandidate",defaultLimits,1),compatibleState.host.candidateWorker==0,live(compatibleState.host).size()<4,compatibleEvent(input("prepareCandidate",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,1)}
+  action compatibleValidate = all {compatibleState.host.candidateInitialized,compatibleEvent(input("candidateValidated",emptyRequest,compatibleState.host.candidateWorker,""),compatibleState.host.clock,defaultLimits,0)}
+  action compatibleFreeze = all {not(compatibleState.host.disposed),not(compatibleState.host.frozen),compatibleEvent(input("freeze",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,0)}
+  pure def canCommitFrozen(c: CompatibleState,token: int,transaction: int,expectedActive: int,candidateGeneration: int): bool = and {
+    not(c.host.disposed),c.host.frozen,c.host.freezeToken==token,
+    c.host.candidateReady,c.host.candidateInitialized,
+    c.host.candidateTransaction==transaction,c.host.activeGeneration==expectedActive,c.host.candidateGeneration==candidateGeneration,
+  }
+  action compatibleFrozenCommitAt(observed: int): bool = all {canCommitFrozen(compatibleState,7,compatibleState.host.candidateTransaction,compatibleState.host.activeGeneration,compatibleState.host.candidateGeneration),compatibleEvent(input("frozenCommit",{...emptyRequest,id:compatibleState.host.candidateTransaction,generation:compatibleState.host.activeGeneration},compatibleState.host.candidateWorker,""),observed,defaultLimits,0)}
+  action compatibleFrozenCommit = compatibleFrozenCommitAt(compatibleState.host.clock)
+  action compatibleResume = all {compatibleState.host.frozen,compatibleEvent(input("resume",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,0)}
+  action compatibleDispose = compatibleEvent(input("dispose",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,0)
+  action compatibleTimer(observed: int): bool = compatibleEvent(input("timer",emptyRequest,0,""),observed,defaultLimits,0)
+  action readyCompatible = compatibleLoad.then(compatibleCompiled).then(compatibleInitialize(1,{deadline:10,output:44,enclosing:0})).then(compatibleInitialized(1))
+  action compatibleProgressPhase = {
+    val r=compatibleState.host.current
+    val following=if(r.phase=="allocate-descriptor")"allocate-input" else if(r.phase=="allocate-input")r.operation else if(r.phase=="process")"free" else ""
+    all {r.worker!=0,following!="",compatiblePhase(following,compatibleState.host.clock+1)}
+  }
+  action compatibleStep = any {compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
+  val selectedSingleSettlement = compatibleState.host.deliveries.foldl(Set(),(seen,id)=>seen.union(Set(id))).size()==compatibleState.host.deliveries.length()
+  pure def admissionPosition(c: CompatibleState,id: int): int = c.admitted.foldl({next:1,found:0},(p,current)=>{next:p.next+1,found:if(current==id)p.next else p.found}).found
+  val mixedFifoOrdered = compatibleState.host.ordinary.foldl({ok:true,last:0},(p,r)=>{
+    val position=admissionPosition(compatibleState,r.id)
+    {ok:p.ok and position>p.last,last:position}
+  }).ok
+  val admittedSnapshotUnique = (if(compatibleState.host.current.submission==Snapshot and compatibleState.host.current.worker!=0)1 else 0)+compatibleState.host.ordinary.select(r=>r.submission==Snapshot).length()<=1
+  val frozenQueuesEmpty = not(compatibleState.host.frozen) or (compatibleState.host.ordinary.length()==0 and compatibleState.held.worker==0)
+  val frozenHasNoCurrentDelivery = not(compatibleState.host.frozen) or not(hasEffect(compatibleState.host.effects,"settleCurrent"))
+  val completeDisposal = not(compatibleState.host.disposed) or (live(compatibleState.host).size()==0 and pending(compatibleState.host).length()==0 and compatibleState.held.worker==0)
+  val capturedLimitsBounded = compatibleState.limits.keys().forall(id=>{val selected=compatibleState.limits.get(id) selected.deadline>=1 and selected.deadline<=250 and selected.output>=1 and selected.output<=65536})
+  val selectedCapacityBounded = compatibleState.host.ordinary.length()+(if(compatibleState.host.current.worker==0)0 else 1)<=256 and compatibleState.held.bytes<=262144
+  val sawSelectedLoad = hasEffect(compatibleState.host.effects,"createActive")
+  val sawSelectedCompile = compatibleState.host.lastAction=="compiled"
+  val sawSelectedInitialize = compatibleState.host.controls.foldl(false,(found,r)=>found or r.operation=="initialize")
+  val sawSelectedInitialized = compatibleState.host.initializedWorkers.size()>0
+  val sawMixedOrdinary = compatibleState.host.current.worker!=0 and compatibleState.host.current.submission==Ordinary
+  val sawMixedOrdered = compatibleState.host.ordinary.foldl(false,(found,r)=>found or r.submission==Ordered) or (compatibleState.host.current.worker!=0 and compatibleState.host.current.submission==Ordered)
+  val sawAdmittedSnapshot = compatibleState.host.ordinary.foldl(false,(found,r)=>found or r.submission==Snapshot) or (compatibleState.host.current.worker!=0 and compatibleState.host.current.submission==Snapshot)
+  val sawHeldSnapshot = compatibleState.held.worker!=0
+  val sawHeldPromotion = compatibleState.host.lastAction=="queueSnapshot"
+  val sawSelectedPhase = compatibleState.host.lastAction=="phase" and (compatibleState.host.current.phase=="allocate-input" or compatibleState.host.current.phase=="process" or compatibleState.host.current.phase=="free")
+  val sawNarrowDeadline = compatibleState.limits.keys().exists(id=>id!=0 and compatibleState.limits.get(id).deadline<250)
+  val sawNarrowOutput = compatibleState.limits.keys().exists(id=>id!=0 and compatibleState.limits.get(id).output<65536)
+  val sawEnclosingBudget = compatibleState.limits.keys().exists(id=>id!=0 and compatibleState.limits.get(id).enclosing>0)
+  val sawCandidatePrepared = compatibleState.host.candidateWorker!=0
+  val sawCandidateInitialized = compatibleState.host.candidateInitialized
+  val sawCandidateValidated = compatibleState.host.candidateReady
+  val sawSelectedFreeze = compatibleState.host.frozen
+  val sawAtomicFrozenCommit = compatibleState.host.frozen and compatibleState.host.freezeToken==7 and compatibleState.host.lastAction=="commitCandidate"
+  val sawSelectedHistorical = hasEffect(compatibleState.host.effects,"settleHistorical")
+  val sawSelectedResume = compatibleState.host.lastAction=="resume"
+  val sawSelectedDisposal = compatibleState.host.disposed
+  val sawRefusalAfterExpiry = hasEffect(compatibleState.host.effects,"refused") and hasEffect(compatibleState.host.effects,"settleTimedOut")
+  val sawInclusiveHeadExpiry = compatibleState.host.disposed and compatibleState.host.effects.foldl(false,(found,fx)=>found or (fx.kind=="settleTimedOut" and fx.outcome=="TimedOut" and not(fx.dispatched)))
+  val sawFrozenCommitExpiryRefused = compatibleState.host.input.name=="frozenCommit" and compatibleState.host.frozen and compatibleState.host.candidateReady and compatibleState.host.activeWorker==0 and hasEffect(compatibleState.host.effects,"settleTimedOut")
+  val compatibilitySafe = and {compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
+}
