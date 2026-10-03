@@ -27,6 +27,18 @@ def validate_workflow(text):
     for job,dependency in [('prepare','preflight'),('admission','preflight'),('begin','admission'),('org','begin'),('public','org'),('assets','public'),('complete','org, public, assets'),('readback','admission')]:
         assert 'needs: ['+dependency+']' in jobs[job]
     assert "if: inputs.mode == 'prepare'" in jobs['prepare']
+    assert '      - name: Read-only pinned Rust model readiness\n' in jobs['prepare']
+    assert '      - name: Prepare protected originals once\n' in jobs['prepare']
+    assert jobs['prepare'].index('Read-only pinned Rust model readiness') < jobs['prepare'].index('Prepare protected originals once')
+    readiness = jobs['prepare'].split('      - name: Read-only pinned Rust model readiness\n', 1)[1].split('      - name: Prepare protected originals once\n', 1)[0]
+    assert 'timeout-minutes: 10' in readiness and 'GH_TOKEN: ${{ github.token }}' in readiness
+    assert 'python3 ../executor/scripts/wasm-release/prepare-quint-evaluator.py --producer "$PWD" --quint-home "$QUINT_HOME" --evidence "$RUNNER_TEMP/wasm-prepack-rust"' in readiness
+    assert 'QUINT_HOME: ${{ runner.temp }}/wasm-quint' in readiness
+    assert '''printf 'QUINT_HOME=%s\\n' "$QUINT_HOME" >> "$GITHUB_ENV"''' in readiness
+    assert 'continue-on-error' not in readiness and '|| true' not in readiness
+    assert jobs['prepare'].index('Read-only pinned Rust model readiness') < jobs['prepare'].index('Prepare protected originals once')
+    assert '"$RUNNER_TEMP/wasm-prepack-rust" "$RUNNER_TEMP/wasm-selected"' in jobs['prepare']
+    assert '${{ runner.temp }}/wasm-prepack-rust/' in jobs['prepare']
     assert text.count('scripts/wasm-release/prepare.sh')==1 and 'scripts/wasm-release/prepare.sh "$RUNNER_TEMP/wasm-release"' in jobs['prepare']
     assert "ref: "+p.P in jobs['prepare'] and p.TREE in jobs['prepare']
     assert 'EXECUTOR_TREE=' in jobs['prepare'] and 'python3 scripts/wasm-release/promotion.py freeze' in jobs['prepare']
@@ -35,7 +47,8 @@ def validate_workflow(text):
     assert 'scripts/verify-wasm-package-consumer.sh --custody' in jobs['prepare'] and 'scripts/wasm-release/qualify-supervisor-custody.sh --custody' in jobs['prepare']
     assert jobs['prepare'].index('Qualify full selected custody') < jobs['prepare'].index('Freeze eligible binding') < jobs['prepare'].index('Retain eligible originals')
     assert 'if: failure()' in jobs['prepare'] and 'wasm-ineligible-' in jobs['prepare']
-    assert all(x not in jobs['prepare'] for x in ['contents: write','packages: write','id-token: write','GH_TOKEN:','NUGET_API_KEY:'])
+    assert jobs['prepare'].count('GH_TOKEN:') == 1, 'only the authenticated read-only readiness step may receive token'
+    assert all(x not in jobs['prepare'] for x in ['contents: write','packages: write','id-token: write','NUGET_API_KEY:'])
     assert 'id-token: write' in jobs['admission'] and 'NuGet/login@8d196754b4036150537f80ac539e15c2f1028841' in jobs['admission']
     assert 'NUGET_EXCHANGE_VERIFIED:' in jobs['admission'] and 'promotion.py admit' in jobs['admission']
     for job in ['begin','org','public','assets','complete']:
@@ -86,12 +99,19 @@ class Tests(unittest.TestCase):
             ('needs: [org]\n','needs: [begin]\n'),('options: [prepare, promote, readback, recovery]','options: [prepare, publish]'),
             ('DOTNET_PROCESSOR_COUNT: 1','DOTNET_PROCESSOR_COUNT: 2'),
             ('DOTNET_PROCESSOR_COUNT: 1','actions/setup-dotnet@bad_PROCESSOR_COUNT: 1'),
+            ('Read-only pinned Rust model readiness','Skipped Rust readiness'),
+            ('timeout-minutes: 10','timeout-minutes: 11'),
+            ('QUINT_HOME: ${{ runner.temp }}/wasm-quint','QUINT_HOME: $HOME/.quint'),
             ('default: prepare','default: promote'),('contents: read\n    defaults:','contents: write\n    defaults:'),
             ('Qualify full selected custody','Skipped selected custody'),('TAG_CREDENTIAL_ROUTE: workflow-github-token','TAG_CREDENTIAL_ROUTE: PAT'),
             ('p.download(p.Native()','p.foreign(p.Native()'),('NUGET_EXCHANGE_VERIFIED:','EXCHANGE_ASSUMED:'),
             ('group: release-wasm-0.3.0','group: release-wasm-0.2.0'),('GH_TOKEN: ${{ github.token }}','GH_TOKEN: ${{ secrets.APP_TOKEN }}')]:
             self.assertIn(before,text)
             with self.subTest(before=before),self.assertRaises((AssertionError,KeyError,ValueError)): validate_workflow(text.replace(before,after))
+        block=text.split('      - name: Read-only pinned Rust model readiness\n',1)[1].split('      - name: Prepare protected originals once\n',1)[0]
+        full='      - name: Read-only pinned Rust model readiness\n'+block
+        moved=text.replace(full,'',1).replace('      - name: Qualify contracts and lifecycle\n',full+'      - name: Qualify contracts and lifecycle\n',1)
+        with self.assertRaises(AssertionError):validate_workflow(moved)
         with self.assertRaises(AssertionError):validate_workflow(text.replace('on:\n','on:\n  push:\n    tags: [wasm/v*]\n',1))
     def test_closed_binding(self):
         p.validate_tuple(reviewed())

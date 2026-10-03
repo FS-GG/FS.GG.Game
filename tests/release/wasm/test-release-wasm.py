@@ -134,6 +134,7 @@ def source_checks() -> None:
     require(all('version = "0.3.0"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
     validate_workflow(workflow)
     supervisor_backend_checks()
+    subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-quint-evaluator-preparation.py")], check=True)
     browser_setup_checks()
     subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-release-promotion.py")], check=True)
     require("NuGet/login@8d196754b4036150537f80ac539e15c2f1028841" in workflow, "public push lacks pinned OIDC login")

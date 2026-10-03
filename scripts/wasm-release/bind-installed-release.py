@@ -102,6 +102,8 @@ def validate_consumer_audit(audit, source, version, changed, producer, qualifier
 # only this finite publisher/qualification glue delta can differ from P at 0.3.
 PUBLISHER_SOURCE = "16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c"
 EXECUTOR_GLUE = {
+    "tests/release/wasm/fixtures/producer-16a-verify-wasm-supervisor.sh",
+    "scripts/wasm-release/prepare-quint-evaluator.py", "tests/release/wasm/test-quint-evaluator-preparation.py",
     ".github/workflows/release-wasm.yml", ".github/workflows/wasm-installed-org.yml",
     "scripts/wasm-release/promotion.py", "scripts/wasm-release/readback.sh",
     "scripts/wasm-release/stage-assets.sh", "scripts/wasm-release/bind-installed-release.py",

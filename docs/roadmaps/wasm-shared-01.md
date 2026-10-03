@@ -95,7 +95,7 @@ The compatible supervisor source landed through Game PR 683 at protected produce
 passed the equivalent candidate tree at d87f9e3. Its private candidate archives
 retain d87 provenance; they are not protected-producer release custody.
 
-- [ ] R1: land the bounded publisher-route source repair and read back protected executor E.
+- [x] R1: publisher-route source closed through [Game #685](https://github.com/FS-GG/FS.GG.Game/pull/685), protected executor `ccdec51db27e7fbcce8fcfda71a36aa9a2ca7b95`; full native [37132653543](https://github.com/FS-GG/FS.GG.Game/actions/runs/37132653543) passed.
 - [ ] R2: prepare once from protected producer P; qualify and retain its exact native originals.
 - [ ] R3: review original custody, authenticate current permissions/occupancy, promote without repacking, and qualify fresh installed consumers from both feeds.
 - [ ] R4: project actual publication and installed acceptance into the programme and published registry.
@@ -134,3 +134,12 @@ payload allowance, installed member/lock/worker substitutions and interrupted
 promotion replay. These checks establish source behavior only. Native preparation,
 current authentication, release effects and genuine both-feed acceptance remain
 pending. Current published WASM is still 0.2.0; no product adoption is activated.
+
+The R2 cold preparation route first obtains the exact official `quint-co/quint`
+`evaluator/v0.6.0` release asset into a fresh private `QUINT_HOME`, verifies its
+archive and sole regular binary member, and runs producer P's test and cold/ready
+model/witness bounds through the Rust backend before packing. This additional
+Rust qualification is separate from the unchanged historical TypeScript proof.
+Failure retains diagnostics and prevents packing; successful native preparation
+still packs P once and runs all unchanged custody gates before eligible retention.
+The bootstrap source does not establish a completed R2 run or publication.

@@ -28,7 +28,7 @@ TREE = 'f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a'
 VERSION = '0.3.0'
 PACKAGES = ('FS.GG.Wasm.Contracts', 'FS.GG.Wasm.Browser')
 FILES = tuple(x + '.0.3.0.nupkg' for x in PACKAGES) + ('fsgg-wasm-sdk-0.3.0.tar.gz',)
-GATES = ('Prepare protected originals once', 'Qualify contracts and lifecycle',
+GATES = ('Read-only pinned Rust model readiness', 'Prepare protected originals once', 'Qualify contracts and lifecycle',
          'Qualify historical packages and SDK', 'Qualify full selected custody', 'Freeze eligible binding')
 SCHEMA = 'fsgg.wasm.preparation/v1'
 STAGE_END = time.monotonic() + 600
