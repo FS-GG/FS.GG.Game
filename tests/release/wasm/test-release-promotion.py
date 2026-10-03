@@ -67,6 +67,12 @@ def validate_workflow(text):
         assert grants==expected, 'wrong package permission for '+job
     assert text.count('packages: write')==len(write_jobs)
     assert text.split('\nenv:\n',1)[0].split('\npermissions:\n',1)[1]=='  contents: read\n', 'global permission widening'
+    # Disable bytecode before SourceFileLoader runs: the module's own setting is
+    # too late to prevent an inline import from dirtying the exact checkout.
+    for job in ('begin','org','public','assets','complete','readback'):
+        imports=re.findall(r"(?m)^          python3(?: -B)? -c 'import importlib\.util,json,pathlib;.*$",jobs[job])
+        assert len(imports)==1 and imports[0].startswith("          python3 -B -c "), 'bytecode-writing custody import in '+job
+    assert text.count("python3 -B -c 'import importlib.util,json,pathlib;")==6
     assert 'NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}' in jobs['public']
     assert 'secrets.NUGET_API_KEY' not in text and '--skip-duplicate' not in text
     assert '$GITHUB_SHA" == "$ACCEPTED_EXECUTOR' in jobs['preflight'] and 'git/ref/heads/main' in jobs['preflight']
@@ -143,6 +149,62 @@ class Tests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             validate_workflow(text.replace('permissions:\n  contents: read',
                                            'permissions:\n  contents: read\n  packages: write',1))
+
+    def test_each_inline_custody_import_requires_no_bytecode(self):
+        text=(ROOT/'.github/workflows/release-wasm.yml').read_text()
+        for job in ('begin','org','public','assets','complete','readback'):
+            block=re.search(r'(?ms)^  '+job+r':\n.*?(?=^  [a-z]+:\n|\Z)',text)[0]
+            mutant=block.replace("python3 -B -c 'import importlib.util,json,pathlib;",
+                                 "python3 -c 'import importlib.util,json,pathlib;")
+            self.assertNotEqual(block,mutant)
+            with self.subTest(job=job),self.assertRaises(AssertionError):
+                validate_workflow(text.replace(block,mutant,1))
+
+    def test_cold_inline_import_preserves_exact_checkout_guards(self):
+        import subprocess
+        # A fresh process exercises Python's loader before the adapter body runs.
+        # These private Git fixtures contain actual adapter bytes; no native API
+        # or product command is invoked.
+        code=("import importlib.util,json,os; "
+              "s=importlib.util.spec_from_file_location('p','scripts/wasm-release/promotion.py'); "
+              "p=importlib.util.module_from_spec(s); s.loader.exec_module(p); "
+              "p.executor_checkout(json.loads(os.environ['CONTROL_BINDING']))")
+        with tempfile.TemporaryDirectory(prefix='wasm-cold-custody-import.') as raw:
+            for no_bytecode in (False,True):
+                fixture=pathlib.Path(raw)/('safe' if no_bytecode else 'original')
+                source=fixture/'scripts/wasm-release/promotion.py';source.parent.mkdir(parents=True)
+                source.write_bytes((ROOT/'scripts/wasm-release/promotion.py').read_bytes())
+                def git(*args):
+                    return subprocess.check_output(['git','-C',str(fixture),*args],text=True,stderr=subprocess.PIPE).strip()
+                git('init','-q');git('add','.')
+                git('-c','user.name=Control','-c','user.email=control@example.invalid','commit','-qm','actual adapter fixture')
+                head=git('rev-parse','HEAD');tree=git('rev-parse','HEAD^{tree}')
+                binding={'executor':head,'executorTree':tree}
+                env={'PATH':os.environ['PATH'],'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':head,
+                     'CONTROL_BINDING':json.dumps(binding)}
+                args=[sys.executable,*(['-B'] if no_bytecode else []),'-c',code]
+                def invoke(selected_env):
+                    return subprocess.run(args,cwd=fixture,env=selected_env,text=True,
+                                          stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)
+                result=invoke(env)
+                if not no_bytecode:
+                    self.assertNotEqual(result.returncode,0)
+                    self.assertIn('dirty or different executor tree',result.stderr)
+                    self.assertEqual(git('status','--porcelain'),'?? scripts/wasm-release/__pycache__/')
+                    continue
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(git('status','--porcelain'),'')
+                for change in ('tree','head','dirty'):
+                    changed=dict(env)
+                    if change=='tree':changed['CONTROL_BINDING']=json.dumps({**binding,'executorTree':'9'*40})
+                    elif change=='head':changed['GITHUB_SHA']='9'*40
+                    else:source.write_bytes(source.read_bytes()+b'\n# genuine source drift\n')
+                    result=invoke(changed)
+                    with self.subTest(change=change):
+                        self.assertNotEqual(result.returncode,0)
+                        self.assertIn('wrong executor checkout' if change=='head' else
+                                      'dirty or different executor tree',result.stderr)
+                self.assertFalse((fixture/'scripts/wasm-release/__pycache__').exists())
 
     def test_closed_binding(self):
         p.validate_tuple(reviewed())

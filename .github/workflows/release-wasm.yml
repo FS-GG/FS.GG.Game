@@ -214,7 +214,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
-          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 -B -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
           args=(); [[ "$MODE" == promote ]] || args=(--recovery)
           python3 scripts/wasm-release/promotion.py begin --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" "${args[@]}"
       - name: Retain actual transaction receipts
@@ -249,7 +249,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
-          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 -B -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
           python3 scripts/wasm-release/promotion.py org --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
       - name: Retain actual transaction receipts
         if: always()
@@ -289,7 +289,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
-          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 -B -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
           python3 scripts/wasm-release/promotion.py public --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
       - name: Retain actual transaction receipts
         if: always()
@@ -323,7 +323,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
-          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 -B -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
           python3 scripts/wasm-release/promotion.py assets --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
       - name: Retain actual transaction receipts
         if: always()
@@ -357,7 +357,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
-          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 -B -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
           python3 scripts/wasm-release/promotion.py complete --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
       - name: Retain actual transaction receipts
         if: always()
@@ -391,7 +391,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
-          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 -B -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
           python3 scripts/wasm-release/promotion.py readback --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
       - name: Retain actual transaction receipts
         if: always()
