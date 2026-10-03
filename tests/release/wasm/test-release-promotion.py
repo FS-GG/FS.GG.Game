@@ -57,7 +57,16 @@ def validate_workflow(text):
         assert 'gh release create' not in jobs[job] and 'prepare.sh' not in jobs[job] and 'dotnet pack' not in jobs[job]
         assert 'GH_TOKEN: ${{ github.token }}' in jobs[job]
     assert 'TAG_CREDENTIAL_ROUTE: workflow-github-token' in jobs['begin'] and 'contents: write' in jobs['begin']
-    assert text.count('packages: write')==1 and 'packages: write' in jobs['org']
+    # Every caller of complete active/deleted occupancy needs the workflow-token
+    # grant established by native diagnostic 37154778966; scope it to those jobs.
+    write_jobs={'admission','begin','org','public'}
+    read_jobs={'assets','complete','readback'}
+    for job,block in jobs.items():
+        expected=['write'] if job in write_jobs else ['read'] if job in read_jobs else []
+        grants=re.findall(r'(?m)^      packages: (\S+)$',block)
+        assert grants==expected, 'wrong package permission for '+job
+    assert text.count('packages: write')==len(write_jobs)
+    assert text.split('\nenv:\n',1)[0].split('\npermissions:\n',1)[1]=='  contents: read\n', 'global permission widening'
     assert 'NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}' in jobs['public']
     assert 'secrets.NUGET_API_KEY' not in text and '--skip-duplicate' not in text
     assert '$GITHUB_SHA" == "$ACCEPTED_EXECUTOR' in jobs['preflight'] and 'git/ref/heads/main' in jobs['preflight']
@@ -113,6 +122,28 @@ class Tests(unittest.TestCase):
         moved=text.replace(full,'',1).replace('      - name: Qualify contracts and lifecycle\n',full+'      - name: Qualify contracts and lifecycle\n',1)
         with self.assertRaises(AssertionError):validate_workflow(moved)
         with self.assertRaises(AssertionError):validate_workflow(text.replace('on:\n','on:\n  push:\n    tags: [wasm/v*]\n',1))
+    def test_deleted_occupancy_permissions_are_exactly_job_scoped(self):
+        text=(ROOT/'.github/workflows/release-wasm.yml').read_text()
+        validate_workflow(text)
+        for job in ('preflight','prepare','admission','begin','org','public','assets','complete','readback'):
+            pattern=r'(?ms)(^  '+job+r':\n.*?)(?=^  [a-z]+:\n|\Z)'
+            block=re.search(pattern,text)[1]
+            if job in ('admission','begin','org','public'):
+                mutants=[block.replace('      packages: write\n',''),
+                         block.replace('      packages: write','      packages: read')]
+            else:
+                mutants=[block.replace('      packages: read','      packages: write')
+                         if '      packages: read' in block else
+                         block.replace('    permissions:\n','    permissions:\n      packages: write\n')]
+                if '    permissions:\n' not in block:
+                    mutants=[block.replace('    runs-on:', '    permissions:\n      packages: write\n    runs-on:')]
+            for mutant in mutants:
+                with self.subTest(job=job),self.assertRaises(AssertionError):
+                    validate_workflow(text.replace(block,mutant,1))
+        with self.assertRaises(AssertionError):
+            validate_workflow(text.replace('permissions:\n  contents: read',
+                                           'permissions:\n  contents: read\n  packages: write',1))
+
     def test_closed_binding(self):
         p.validate_tuple(reviewed())
         for key,value in [('producer','9'*40),('executor','main'),('producerTree','9'*40),('version','0.2.0'),('mode','publish'),('runAttempt',0),('repository','foreign/repo')]:

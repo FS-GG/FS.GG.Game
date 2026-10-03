@@ -169,3 +169,40 @@ fresh preparation, then authenticate its genuine run/attempt, retained archive
 and custody before any promotion decision. The old E archive cannot be relabeled
 or reused as preparation evidence for the new E. Publication, installed acceptance
 and consumer activation remain pending.
+
+
+The fresh protected preparation [37150982238](https://github.com/FS-GG/FS.GG.Game/actions/runs/37150982238)
+at executor `f8b6f5e1ec579fb54d22d4c2b5bb22505cfbb685` passed all six genuine
+gates and retained eligible artifact `11284177576`, outer SHA256
+`4b0cb76934498e740f6c4c7ca22ecdc088a14e4135945dcad183a2e64033765e`.
+Root authenticated the run/attempt, original outer archive and all 159 inventory
+members. These originals remain preserved for that executor; the earlier
+duplicate-name-refused preparation remains historical and refused.
+
+Promotion [37152503839](https://github.com/FS-GG/FS.GG.Game/actions/runs/37152503839)
+at the same executor passed preflight and genuine NuGet trusted-publisher login,
+then refused admission on the first authenticated deleted Contracts version
+query with HTTP 403. All transaction and publication jobs were skipped. No tag,
+draft transaction or package publication was admitted by this failed attempt.
+
+The authentic read-only diagnostic
+[37154778966](https://github.com/FS-GG/FS.GG.Game/actions/runs/37154778966)
+used the existing workflow token and pinned `2022-11-28` API for both packages:
+active queries returned 200 under read and write grants; deleted queries returned
+403 under read and 200 with empty first pages under write. This establishes the
+job permission correction in this repository without changing credentials or
+package access settings. The diagnostic sampled first pages; production still
+requires complete pagination and every existing occupancy and non-200 refusal.
+
+The bounded source repair grants job-local `packages: write` to admission,
+begin and public, whose adapter paths enumerate active and deleted versions;
+org already has that grant. Offline preflight requires exactly those four write
+jobs and refuses missing or spurious grants. Global permissions, remaining jobs,
+credentials, producer P, helper logic and custody checks retain their existing
+bindings. This source correction does not complete R3 or authorize publication.
+
+After source closure, root must review the new protected executor and perform
+fresh preparation and original-custody authentication before promotion. The
+accepted f8 originals cannot be relabeled as preparation evidence for the changed
+executor. Genuine publication, fresh both-feed installed acceptance and consumer
+activation remain pending.
