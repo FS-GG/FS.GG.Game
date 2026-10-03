@@ -307,17 +307,41 @@ class Tests(unittest.TestCase):
         head=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
         tree=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD^{tree}'],text=True).strip()
         b=binding();b['executor']=head;b['executorTree']=tree
-        spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
-        binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
         with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':head}):
             p.executor_checkout(b)
-            audit=binder.bind_executor(p.P,head,'0.3.0')
-            self.assertTrue(audit['executorDelta'])
-            for row in audit['executorDelta']:self.assertEqual(row['sha256'],p.digest((ROOT/row['path']).read_bytes()))
             wrong=dict(b);wrong['executorTree']='9'*40
             with self.assertRaises(p.Refusal):p.executor_checkout(wrong)
-            with patch.object(binder,'git',return_value='src/Wasm.Contracts/Contracts.fs'),self.assertRaises(AssertionError):binder.bind_executor(p.P,head,'0.3.0')
         with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':'9'*40}),self.assertRaises(p.Refusal):p.executor_checkout(b)
+        # Source-only preflight must also work on the native depth-one merge
+        # checkout. Exercise the real immutable Git/blob predicates in a complete
+        # local fixture; production installed qualification still requires P's
+        # actual history and preserves its immutable producer constant.
+        spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
+        binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
+        self.assertEqual(binder.PUBLISHER_SOURCE,p.P)
+        with tempfile.TemporaryDirectory(prefix='wasm-executor-history-control.') as raw:
+            fixture=pathlib.Path(raw)/'source';fixture.mkdir()
+            def git(*args):return subprocess.check_output(['git','-C',str(fixture),*args],text=True,stderr=subprocess.PIPE).strip()
+            git('init','-q');git('config','user.name','Fixture');git('config','user.email','fixture@example.invalid')
+            path='scripts/wasm-release/readback.sh';file=fixture/path;file.parent.mkdir(parents=True);file.write_text('original glue\n')
+            git('add','.');git('commit','-qm','producer fixture');producer=git('rev-parse','HEAD')
+            file.write_text('qualified glue\n');git('add','.');git('commit','-qm','executor glue fixture');executor=git('rev-parse','HEAD')
+            env={'GITHUB_SHA':executor,'ACCEPTED_EXECUTOR':executor}
+            with patch.object(binder,'ROOT',fixture),patch.object(binder,'PUBLISHER_SOURCE',producer),patch.dict(os.environ,env):
+                audit=binder.bind_executor(producer,executor,'0.3.0')
+                self.assertEqual([r['path'] for r in audit['executorDelta']],[path])
+                self.assertEqual(audit['executorDelta'][0]['sha256'],p.digest(file.read_bytes()))
+                shallow=pathlib.Path(raw)/'shallow'
+                subprocess.run(['git','clone','--quiet','--depth','1',fixture.as_uri(),str(shallow)],check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                self.assertEqual(subprocess.check_output(['git','-C',str(shallow),'rev-list','--count','HEAD'],text=True).strip(),'1')
+                # Missing P must still refuse the actual installed binder. It is
+                # not replaced by a shallow HEAD/tree-equivalence waiver.
+                with patch.object(binder,'ROOT',shallow),patch.object(binder,'git',side_effect=lambda *args:subprocess.check_output(['git','-C',str(shallow),*args],text=True,stderr=subprocess.PIPE).strip()),self.assertRaises(subprocess.CalledProcessError):
+                    binder.bind_executor(producer,executor,'0.3.0')
+                semantic=fixture/'src/Wasm.Contracts/Contracts.fs';semantic.parent.mkdir(parents=True);semantic.write_text('unreviewed semantic change\n')
+                git('add','.');git('commit','-qm','unadmitted source fixture');changed=git('rev-parse','HEAD')
+                with patch.dict(os.environ,{'GITHUB_SHA':changed,'ACCEPTED_EXECUTOR':changed}),self.assertRaises(AssertionError):binder.bind_executor(producer,changed,'0.3.0')
+        self.assertEqual(binder.PUBLISHER_SOURCE,p.P)
 
     def test_native_cross_host_redirect_drops_token(self):
         import urllib.request
