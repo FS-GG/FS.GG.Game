@@ -1,6 +1,6 @@
 import * as bridge from './fable/BrowserBridge.js';
 import {createHostTransport} from './_content/FS.GG.Wasm.Browser/worker-client.mjs';
-async function session(){
+async function session(initialization=44,initDeadline=250){
   const artifact=new Uint8Array(await(await fetch('./limits-guest.wasm')).arrayBuffer());
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',artifact)),x=>x.toString(16).padStart(2,'0')).join('');
   const transport=createHostTransport(new URL('./_content/FS.GG.Wasm.Browser/',import.meta.url));
@@ -10,7 +10,7 @@ async function session(){
   const host=bridge.create(digest,transport,result=>{results.push({...result,Output:Array.from(result.Output)});waiting.get(result.Request)?.(result);waiting.delete(result.Request);});
   const send=(id,call)=>new Promise((resolve,reject)=>{waiting.set(String(id),resolve);try{call(transport.Now());}catch(error){waiting.delete(String(id));reject(error);}});
   const loaded=await send(1,now=>bridge.load(host,now,'active',1n,1n,digest,artifact,250));
-  const initialized=await send(2,now=>bridge.initialize(host,now,'active',2n,1n,new Uint8Array([44]),250,44));
+  const initialized=await send(2,now=>bridge.initialize(host,now,'active',2n,1n,new Uint8Array([initialization]),initDeadline,44));
   return {host,transport,send,results,posts,digest,artifact,loaded,initialized,workers:()=>workers,dispose:()=>bridge.dispose(host,transport.Now())};
 }
 window.runLimits=async overcap=>{
@@ -43,3 +43,16 @@ window.runFrozenCommit=async()=>{
 };
 window.runExpiredAdmission=async()=>{const s=await session();try{const before=s.posts.length;return {refused:bridge.expiredAdmission(s.host,s.transport.Now()),postsUnchanged:s.posts.length===before};}finally{s.dispose();}};
 window.compatibleReady=true;
+
+window.runSelectedDeadline=async initialize=>{
+ const s=await session(initialize?255:44,initialize?10:250);try{
+  const result=initialize?s.initialized:await s.send(3,now=>bridge.invoke(s.host,now,'active',3n,1n,0,new Uint8Array([255]),5,64,undefined));
+  return {state:result.State,output:Array.from(result.Output),active:bridge.projection(s.host).ActiveWorker};
+ }finally{s.dispose();}
+};
+window.runEnclosingDeadline=async()=>{
+ const s=await session();try{
+  const result=await s.send(3,now=>bridge.invoke(s.host,now,'active',3n,1n,0,new Uint8Array([255]),250,64,now+10n));
+  return {state:result.State,output:Array.from(result.Output),active:bridge.projection(s.host).ActiveWorker};
+ }finally{s.dispose();}
+};

@@ -15,3 +15,10 @@ test('atomic matching-token promotion retains freeze and never posts invalidated
 test('expired enclosing budget admits no further actual guest work',async({page})=>{
  expect(await page.evaluate(()=>window.runExpiredAdmission())).toEqual({refused:true,postsUnchanged:true});
 });
+
+for(const initialize of [true,false])test(`selected ${initialize?'10 ms initialize':'5 ms process'} deadline contains actual looping guest`,async({page})=>{
+ const r=await page.evaluate(initialize=>window.runSelectedDeadline(initialize),initialize);expect(r.state).toBe('TimedOut');expect(r.output).toEqual([]);expect(r.active).toBe('');
+});
+test('absolute enclosing deadline contains a looping guest within a larger selected request ceiling',async({page})=>{
+ const r=await page.evaluate(()=>window.runEnclosingDeadline());expect(r).toEqual({state:'TimedOut',output:[],active:''});
+});
