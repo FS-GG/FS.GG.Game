@@ -56,21 +56,49 @@ PY
   printf 'WASM_WASI_SDK_ROOT=%s\n' "$q/wasi/wasi-sdk-34.0-x86_64-linux" >> "$q/environment"
   printf 'supervisor-bootstrap: official baseline0.2.0 Fable5.18.0 Core401-TFM20+21 Core302-TFM20+21 Core203-TFM21 pinned; commonSDK=unchanged\n'
 }
+report_custody_exit() {
+  local status=$1 leaf
+  trap - EXIT
+  if (( status != 0 )); then
+    printf 'supervisor custody failed: stage=%s exit=%s\n' "$stage" "$status" >&2
+    if [[ "$diagnostic_fresh" == true && -d "$output" && ! -L "$output" && "$(stat -c '%u' -- "$output")" == "$(id -u)" ]]; then
+      for leaf in model-controls.log receipt-mutation.log model-cold.log model-ready.log \
+          default-traces.log selected-traces.log source-build.log source-dotnet.log \
+          source-fable-build.log source-fable.log installed-build.log installed-locked-build.log \
+          installed-dotnet.log installed-fable-build.log installed-fable.log \
+          installed-raw-numeric.log native-api.log installed-lock-refusal.log; do
+        if [[ -f "$output/$leaf" && ! -L "$output/$leaf" ]]; then
+          printf 'supervisor diagnostic: %s (last 60 lines, at most 16384 bytes)\n' "$leaf" >&2
+          { tail -c 16384 -- "$output/$leaf" | tail -n 60; } >&2 || printf 'supervisor diagnostic unavailable: %s\n' "$leaf" >&2
+        fi
+      done
+    fi
+  fi
+  exit "$status"
+}
 case "${1:-}" in
   --bootstrap) bootstrap "$(realpath -m "${2:?requires new private baseline root}")";;
   --custody)
     custody="$(realpath -e "${2:?requires exact coherent custody}")"
     output="$(realpath -m "${3:?requires new private output}")"
+    stage='baseline preparation'
+    diagnostic_fresh=false
+    [[ -e "$output" ]] || diagnostic_fresh=true
+    trap 'report_custody_exit "$?"' EXIT
     q="${WASM_SUPERVISOR_BASELINE_ROOT:-${output}-baseline}"
     [[ -d "$q" ]] || bootstrap "$q"
     version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
+    stage='coherent custody verification'
     python3 "$repo/scripts/wasm-release/release_manifest.py" verify --custody "$custody" --manifest "$custody/release-manifest.json" --source "$(git -C "$repo" rev-parse HEAD)"
+    stage='candidate feed configuration'
     python3 - "$custody" <<'PYCONFIG'
 import pathlib,sys,xml.etree.ElementTree as ET
 custody=pathlib.Path(sys.argv[1]);root=ET.Element('configuration');sources=ET.SubElement(root,'packageSources');ET.SubElement(sources,'clear');ET.SubElement(sources,'add',key='candidate',value=str(custody));ET.SubElement(sources,'add',key='official',value='https://api.nuget.org/v3/index.json');mapping=ET.SubElement(root,'packageSourceMapping');ET.SubElement(ET.SubElement(mapping,'packageSource',key='candidate'),'package',pattern='FS.GG.Wasm.*');ET.SubElement(ET.SubElement(mapping,'packageSource',key='official'),'package',pattern='*');ET.ElementTree(root).write(custody/'NuGet.Config',encoding='unicode')
 PYCONFIG
     export WASM_BASELINE_QUALIFICATION_ROOT="$q" WASM_CANDIDATE_CUSTODY="$custody" WASM_CANDIDATE_VERSION="$version" WASM_FSC_COMPILER_PATH="$q/compiler/fsc.dll"
+    stage='source/model/installed supervisor qualification'
     "$repo/scripts/verify-wasm-supervisor.sh" "$output"
+    stage='official Core byte joins'
     python3 - "$repo" "$q" <<'PYJOIN'
 import hashlib,json,pathlib,sys
 repo,q=map(pathlib.Path,sys.argv[1:]);rows=[]
@@ -85,9 +113,12 @@ for path,expected in [
 print('supervisor-core-joins: actual reference/runtime DLLs byte-identical to official TFM archives')
 PYJOIN
     export WASM_WASI_SDK_ROOT="${WASM_WASI_SDK_ROOT:-$q/wasi/wasi-sdk-34.0-x86_64-linux}"
+    stage='browser dependencies'
     npm ci --ignore-scripts --prefix "$repo/tests/Wasm.Supervisor.Compatibility/browser"
     (cd "$repo/tests/Wasm.Supervisor.Compatibility/browser" && npx playwright install chromium)
+    stage='installed browser qualification'
     "$repo/scripts/verify-wasm-supervisor-browser.sh" "$output" "${output}-browser"
+    stage='source cleanliness'
     [[ -z "$(git -C "$repo" status --porcelain)" ]] || { echo 'supervisor browser qualification dirtied source' >&2; exit 2; }
     ;;
   *) echo 'usage: qualify-supervisor-custody.sh --bootstrap NEW_ROOT | --custody CUSTODY NEW_OUTPUT' >&2; exit 2;;
