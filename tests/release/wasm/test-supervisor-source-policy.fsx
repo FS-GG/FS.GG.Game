@@ -39,4 +39,8 @@ refuse {review with ReviewSha256="448a31ffd745e09b16ad88cc568bc46a5f1b580e07c887
 let priorHelper = Array.map (fun row -> if row.Path="scripts/wasm-release/qualify-supervisor-custody.sh" then {row with Sha256="66f5526d3255a1701791ac8af5e3fd54660b543d265ebe1605fefeda3510325c"} else row) reviewedGateRepairs
 refuse review {observation with GateRepairs=priorHelper}
 refuse {review with GateRepairs=priorHelper} observation
+refuse {review with ReviewSha256="1c896e19eb79f0dac793f909c0f32a14cf4af163fe64cb901f8cd7911d25400a"} observation
+let unboundHostHelper = Array.map (fun row -> if row.Path="scripts/wasm-release/qualify-supervisor-custody.sh" then {row with Sha256="6001e794d1a09eb24176bcb549bec1edf1eab721eb096b1158c87feeb111dd5f"} else row) reviewedGateRepairs
+refuse review {observation with GateRepairs=unboundHostHelper}
+refuse {review with GateRepairs=unboundHostHelper} observation
 printfn "supervisor-source-policy: reviewed scope accepted; old amendment/patch/stale model/source/out-of-scope refused; public/native authority absent"

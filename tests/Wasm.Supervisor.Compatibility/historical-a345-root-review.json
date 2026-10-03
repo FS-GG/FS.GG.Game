@@ -18,10 +18,9 @@
     "Read actual cold bootstrap/YAML ordering; full historical plus selected local orchestration exits0,24 ready witnesses reached and selected eight actual browser controls pass; exact final-head artifacts require repack after source change.",
     "Independently checked all three exact6d native gate repairs, all18 unchanged qualified source inputs and allseven focused evidence hashes. Read secure staging source/control outcomes; actual cold/locked source restores and native lock-range checker pass, all42 owned shellfiles lint clean and old helper causally refuses. Exact admitted repairs must be hashed at source use; no broad preparation-path exemption.",
     "Read6-line portable GzipFile producer repair and independently checked actual3.12 canonical/cross-runtime logs. All13 retained compressed traces retain exact bytes; old3.12gzip.compress differs only OS header byte9, with identical deflate/trailer/decompressedJSON. New producer uses documented empty filename/mtime0/compresslevel9, without expected-byte patching. All18 qualified semantic inputs remain unchanged; pin fourth exact repair generator at use-time.",
-    "Read exact31-line failure diagnostic change in the already-admitted custody helper; gate order/assertions/deadlines unchanged. Independently rehashed actual native4477 log/artifact and offline exit0/1/2/23/137/boundedtail/exclusion/status-preservation controls. Replace this one reviewed helper hash; semantic18 inputs and originalbdf proof unchanged. Underlying native failure remains unobserved until instrumented qualification.",
-    "Read exact helper-only host-routing export and actual Microsoft.FSharp.NetSdk.props72\u201381. Independently observed instrumented native a345 failure MSB6004: direct MSBuild selected nonexistent fsc.exe when DOTNET_HOST_PATH was absent. Export the already-used literal /usr/share/dotnet/dotnet host, preserving explicit private fsc.dll, all18 qualification inputs, gates, model/default traces and four-path repair scope. Fresh causal routing and focused final-head qualification remain required before native acceptance."
+    "Read exact31-line failure diagnostic change in the already-admitted custody helper; gate order/assertions/deadlines unchanged. Independently rehashed actual native4477 log/artifact and offline exit0/1/2/23/137/boundedtail/exclusion/status-preservation controls. Replace this one reviewed helper hash; semantic18 inputs and originalbdf proof unchanged. Underlying native failure remains unobserved until instrumented qualification."
   ],
-  "scope": "Historical963 compatible supervisor qualification plus four exact gate repair paths, now including explicit host routing for direct MSBuild. Exact final native checks and publication pending.",
+  "scope": "Historical963 compatible supervisor qualification plus four exact gate repair paths, with custody-helper failure diagnostics. Exact final native checks and publication pending.",
   "provisionalRelease": "0.3.0",
   "releaseReservation": "not granted; exact final source packs and authenticated occupancy/custody gates required",
   "nativeAcceptance": false,
@@ -31,13 +30,12 @@
   "historicalReviewSha256s": [
     "57d1c6c3e1ab1bd2db939b9b129b5a3166a9e69c9cc3a301524b3851fb056075",
     "e7b1af81ccde9da3c9d51bce6316d54c43c48798925e84b6ce3904e4983979df",
-    "448a31ffd745e09b16ad88cc568bc46a5f1b580e07c8877f63d0484c8f549eef",
-    "1c896e19eb79f0dac793f909c0f32a14cf4af163fe64cb901f8cd7911d25400a"
+    "448a31ffd745e09b16ad88cc568bc46a5f1b580e07c8877f63d0484c8f549eef"
   ],
   "admittedGateRepairs": [
     {
       "path": "scripts/wasm-release/qualify-supervisor-custody.sh",
-      "sha256": "420c259b52e7656b01bc60f33d51654ea1946b5fe06f429f05c34e66e325f988"
+      "sha256": "6001e794d1a09eb24176bcb549bec1edf1eab721eb096b1158c87feeb111dd5f"
     },
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/packages.lock.json",
@@ -91,16 +89,5 @@
       "actualProductCause": "unobserved: redirected selected logs were not retained",
       "verifiedBoundary": "inside verify-wasm-supervisor before its success marker; helper has only reported custody verification"
     }
-  },
-  "hostRoutingRepair": {
-    "failedNativeHead": "a345818960435ac85228598e2d15c2bc6addcbff",
-    "failedNativeRun": 37117239019,
-    "actualFailure": "MSB6004 nonexistent SDK FSharp/fsc.exe from direct MSBuild without DOTNET_HOST_PATH",
-    "logSha256": "fb80bebd71d5b71572999da377954874331b931fab21c98d077064a7b3dcbbc6",
-    "selectedHost": "/usr/share/dotnet/dotnet",
-    "sdkPropsSha256": "33ada1b731562bc74362c2a45ccf8b844f41af914b3a6ab992f491a3bdedd097",
-    "previousReviewSha256": "1c896e19eb79f0dac793f909c0f32a14cf4af163fe64cb901f8cd7911d25400a",
-    "privateCompilerPreserved": true,
-    "nativeAcceptance": false
   }
 }

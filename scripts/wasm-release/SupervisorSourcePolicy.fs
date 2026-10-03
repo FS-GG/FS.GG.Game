@@ -19,10 +19,10 @@ type Decision = { Accepted: bool; Kind: string; Reasons: string array; ExactHead
 let reviewedHead = "9638363fd64d1d5d99eb90acb2cdb5a0a19787e8"
 let reviewedTree = "a2f664f2c403b4c62ecc9e52955c32800a2ce6f0"
 let reviewedModel = "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a"
-let reviewDigest = "1c896e19eb79f0dac793f909c0f32a14cf4af163fe64cb901f8cd7911d25400a"
+let reviewDigest = "7457baba75e762f2ffbfb54d63b5ff336c35e82ad705bfd15744084de2ab534e"
 let proofDigest = "bdf76d88362a3a9512b3deddbb074310c4eee2c0afe63cdaf7f73871892cbf92"
 let reviewedGateRepairs: Binding array = [|
-    { Path = "scripts/wasm-release/qualify-supervisor-custody.sh"; Sha256 = "6001e794d1a09eb24176bcb549bec1edf1eab721eb096b1158c87feeb111dd5f" }
+    { Path = "scripts/wasm-release/qualify-supervisor-custody.sh"; Sha256 = "420c259b52e7656b01bc60f33d51654ea1946b5fe06f429f05c34e66e325f988" }
     { Path = "tests/Wasm.Lifecycle.Correspondence/packages.lock.json"; Sha256 = "f174c7bbe6cf624741eb5eb2d541b288ea6e8eb7b0fbc6b51918138838f14194" }
     { Path = "tests/Wasm.Lifecycle.Tests/packages.lock.json"; Sha256 = "4b6621bf5adac09ea5cc175a3fd4311873d68e34c6fc68ae6c6ab167c85f7d58" }
     { Path = "tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py"; Sha256 = "e267992707b2abcb4256b039661e4cca74c93b2ccb1f96aef7c4c087faca1b0e" }
@@ -39,6 +39,7 @@ let preparationPaths = Set [
     "tests/Wasm.Supervisor.Compatibility/historical-963-root-review.json"
     "tests/Wasm.Supervisor.Compatibility/historical-6d-root-review.json"
     "tests/Wasm.Supervisor.Compatibility/historical-4477-root-review.json"
+    "tests/Wasm.Supervisor.Compatibility/historical-a345-root-review.json"
     "docs/roadmaps/wasm-shared-01.md"
 ]
 
