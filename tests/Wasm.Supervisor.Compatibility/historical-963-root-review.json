@@ -1,0 +1,27 @@
+{
+  "schema": "fsgg.wasm.root-canonical-review/v1",
+  "status": "reviewed",
+  "sourceHead": "9638363fd64d1d5d99eb90acb2cdb5a0a19787e8",
+  "sourceTree": "a2f664f2c403b4c62ecc9e52955c32800a2ce6f0",
+  "modelSha256": "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a",
+  "ownerProofSha256": "bdf76d88362a3a9512b3deddbb074310c4eee2c0afe63cdaf7f73871892cbf92",
+  "reviewer": "programme integrator /root",
+  "review": [
+    "Read canonical selected transitions, admission/deadline/freeze guards and effects; read F# submitLimited/commitCandidateFrozen and Host.applyDecision.",
+    "Found and retained original discarded-expiry counterexample; reviewed repair separating State/Effects from Result, invalid/wrong-token unchanged, matching expiry retained.",
+    "Independently rehashed exact source/tree, qualifier inputs, all13 full/compressed ITFs,17 gate leaves, complete orchestration/browser logs and six actual Core DLLs.",
+    "All24 ready-entry reachability witnesses reached; cold zeros retained;1000x40 per entry is bounded sampling only.",
+    "Native ApiCompat old0.2.0 against ephemeral repaired candidate passes without suppressions; Host public signatures unchanged; pure Lifecycle shape additive/unpublished.",
+    "Existing47 default trace bytes preserved; genuine fresh locked installed .NET/Fable plus8 actual browser controls passed.",
+    "Independently verified final exact 9638363/tree a2f664, all90 recorded file hashes,18 inputs,13 full/compressed ITFs,18 gate leaves,six official TFM-specific Core joins and three exact source-bound coherent0.3 archives.",
+    "Only original qualifier input delta is reviewed verify-wasm-supervisor.sh outside-source lock repair; actual NU1403 refusal, true locked restore and source cleanliness observed. F#/.fsi/model/default trace source bytes unchanged from b72.",
+    "Read actual cold bootstrap/YAML ordering; full historical plus selected local orchestration exits0,24 ready witnesses reached and selected eight actual browser controls pass; exact final-head artifacts require repack after source change."
+  ],
+  "scope": "Renewed narrow compatible supervisor source/model and local gate binding; protected native CI, publication, public installation and native product acceptance remain pending.",
+  "provisionalRelease": "0.3.0",
+  "releaseReservation": "not granted; exact final source packs and authenticated occupancy/custody gates required",
+  "nativeAcceptance": false,
+  "versionClassification": "MINOR: actual published Browser .fsi additions are new receiver-visible capabilities; additive native ApiCompat does not imply PATCH",
+  "apiDeltaSha256": "2c46a9f25e20e393186c22c1514f1f1ea8e90262a1438239b4017fd69d0d4afd",
+  "historicalReviewSha256": "57d1c6c3e1ab1bd2db939b9b129b5a3166a9e69c9cc3a301524b3851fb056075"
+}

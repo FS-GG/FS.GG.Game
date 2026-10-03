@@ -16,8 +16,7 @@
     "Independently verified final exact 9638363/tree a2f664, all90 recorded file hashes,18 inputs,13 full/compressed ITFs,18 gate leaves,six official TFM-specific Core joins and three exact source-bound coherent0.3 archives.",
     "Only original qualifier input delta is reviewed verify-wasm-supervisor.sh outside-source lock repair; actual NU1403 refusal, true locked restore and source cleanliness observed. F#/.fsi/model/default trace source bytes unchanged from b72.",
     "Read actual cold bootstrap/YAML ordering; full historical plus selected local orchestration exits0,24 ready witnesses reached and selected eight actual browser controls pass; exact final-head artifacts require repack after source change.",
-    "Independently checked all three exact6d native gate repairs, all18 unchanged qualified source inputs and allseven focused evidence hashes. Read secure staging source/control outcomes; actual cold/locked source restores and native lock-range checker pass, all42 owned shellfiles lint clean and old helper causally refuses. Exact admitted repairs must be hashed at source use; no broad preparation-path exemption.",
-    "Read6-line portable GzipFile producer repair and independently checked actual3.12 canonical/cross-runtime logs. All13 retained compressed traces retain exact bytes; old3.12gzip.compress differs only OS header byte9, with identical deflate/trailer/decompressedJSON. New producer uses documented empty filename/mtime0/compresslevel9, without expected-byte patching. All18 qualified semantic inputs remain unchanged; pin fourth exact repair generator at use-time."
+    "Independently checked all three exact6d native gate repairs, all18 unchanged qualified source inputs and allseven focused evidence hashes. Read secure staging source/control outcomes; actual cold/locked source restores and native lock-range checker pass, all42 owned shellfiles lint clean and old helper causally refuses. Exact admitted repairs must be hashed at source use; no broad preparation-path exemption."
   ],
   "scope": "Renewed narrow historical963 compatible supervisor qualification plus exact6d source-lock/private-staging repairs. Final exact-head required native CI, publication/public-installed/native product acceptance remain pending.",
   "provisionalRelease": "0.3.0",
@@ -42,10 +41,6 @@
     {
       "path": "tests/Wasm.Lifecycle.Tests/packages.lock.json",
       "sha256": "4b6621bf5adac09ea5cc175a3fd4311873d68e34c6fc68ae6c6ab167c85f7d58"
-    },
-    {
-      "path": "tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py",
-      "sha256": "e267992707b2abcb4256b039661e4cca74c93b2ccb1f96aef7c4c087faca1b0e"
     }
   ],
   "nativeGateRepair": {
@@ -65,14 +60,7 @@
       {
         "path": "tests/Wasm.Lifecycle.Tests/packages.lock.json",
         "sha256": "4b6621bf5adac09ea5cc175a3fd4311873d68e34c6fc68ae6c6ab167c85f7d58"
-      },
-      {
-        "path": "tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py",
-        "sha256": "e267992707b2abcb4256b039661e4cca74c93b2ccb1f96aef7c4c087faca1b0e"
       }
-    ],
-    "finalRepairHead": "cf554124fc6b12997456da66dd0f2c6f88e28bab",
-    "finalRepairTree": "00f2c314a7c124c0854af5e98cef7d7dc6450838",
-    "gzipReceiptSha256": "a9dbcf6bc98512c39e68d7b6c6116273b0434cb2db446def11304c806082cb20"
+    ]
   }
 }

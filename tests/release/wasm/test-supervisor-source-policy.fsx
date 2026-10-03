@@ -1,8 +1,8 @@
 #load "../../../scripts/wasm-release/SupervisorSourcePolicy.fs"
 open SupervisorSourcePolicy
 let inputs = [| for n in 1..18 -> { Path = string n; Sha256 = String.replicate 64 "a" } |]
-let review: Review = { ReviewSha256=reviewDigest; ProofSha256=proofDigest; SourceHead=reviewedHead; SourceTree=reviewedTree; ModelSha256=reviewedModel; Version="0.3.0"; Inputs=inputs }
-let observation: Observation = { CallerHead=reviewedHead; ExactHead=reviewedHead; Clean=true; ReviewedAncestor=true; ReviewSha256=reviewDigest; ProofSha256=proofDigest; ModelSha256=reviewedModel; Inputs=inputs; ChangedPaths=[|"tests/Wasm.Supervisor.Compatibility/root-canonical-review.json"|] }
+let review: Review = { ReviewSha256=reviewDigest; ProofSha256=proofDigest; SourceHead=reviewedHead; SourceTree=reviewedTree; ModelSha256=reviewedModel; Version="0.3.0"; Inputs=inputs; GateRepairs=reviewedGateRepairs }
+let observation: Observation = { CallerHead=reviewedHead; ExactHead=reviewedHead; Clean=true; ReviewedAncestor=true; ReviewSha256=reviewDigest; ProofSha256=proofDigest; ModelSha256=reviewedModel; Inputs=inputs; GateRepairs=reviewedGateRepairs; ChangedPaths=[|"tests/Wasm.Supervisor.Compatibility/root-canonical-review.json"|] }
 let accepted = decide review observation
 assert (accepted.Accepted && not accepted.PublicationAuthorized && not accepted.NativeAccepted)
 let refuse r o = assert (not (decide r o).Accepted)
@@ -22,4 +22,17 @@ refuse {review with SourceTree=String.replicate 40 "0"} observation
 refuse review {observation with Inputs=Array.append inputs[..16] [|inputs[0]|]}
 refuse review {observation with Inputs=Array.mapi (fun n row -> if n=0 then {row with Sha256=String.replicate 64 "0"} else row) inputs}
 refuse review {observation with ChangedPaths=[|"eng/wasm-shared/version.props"|]}
+refuse {review with ReviewSha256="e7b1af81ccde9da3c9d51bce6316d54c43c48798925e84b6ce3904e4983979df"} observation
+refuse review {observation with GateRepairs=reviewedGateRepairs[..2]}
+refuse {review with GateRepairs=Array.append reviewedGateRepairs[..2] [|reviewedGateRepairs[0]|]} observation
+refuse review {observation with GateRepairs=Array.append reviewedGateRepairs[..2] [|reviewedGateRepairs[0]|]}
+refuse review {observation with GateRepairs=Array.append reviewedGateRepairs [|{Path="extra";Sha256=String.replicate 64 "a"}|]}
+for n in 0..3 do
+    let mutation = Array.mapi (fun i row -> if i=n then {row with Sha256=String.replicate 64 "0"} else row) reviewedGateRepairs
+    refuse review {observation with GateRepairs=mutation}
+    refuse {review with GateRepairs=mutation} observation
+    let allowedChange = {observation with ChangedPaths=[|reviewedGateRepairs[n].Path|]}
+    assert ((decide review allowedChange).Accepted)
+    refuse review {allowedChange with GateRepairs=mutation}
+refuse {review with ReviewSha256="7beeb8bf1145490ab752c0378726620c3052fa33a96c99549be1ea2b350917c4"} observation
 printfn "supervisor-source-policy: reviewed scope accepted; old amendment/patch/stale model/source/out-of-scope refused; public/native authority absent"
