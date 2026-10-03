@@ -206,3 +206,42 @@ fresh preparation and original-custody authentication before promotion. The
 accepted f8 originals cannot be relabeled as preparation evidence for the changed
 executor. Genuine publication, fresh both-feed installed acceptance and consumer
 activation remain pending.
+
+
+Fresh preparation [37157871393](https://github.com/FS-GG/FS.GG.Game/actions/runs/37157871393),
+attempt 1, succeeded at protected executor
+`9fc4c6d8bd7b0643226d3ba4b4dee99f2aca563c`. Root accepted all six native gates,
+artifact `11287095456` with SHA256
+`dd040e206f1cc2e73366c94347a172ec7027428baee8f5a49c2e4d0fe0730ff2`,
+and all 590 outer and 159 original archive members. This custody remains bound
+to that executor and the unchanged producer P.
+
+Fresh promotion [37159983975](https://github.com/FS-GG/FS.GG.Game/actions/runs/37159983975),
+attempt 1, passed preflight and native admission, including genuine NuGet login
+and authenticated complete active/deleted/public occupancy. Its admission artifact
+`11287676062`, SHA256
+`fc112c8bbc49418dca88789a0bc89f0c21d0b1e2d3ad8a266a69a746579b5034`,
+retains the exact reviewed tuple and all six occupancy values false. Begin then
+failed in the inline custody downloader's unchanged clean-checkout guard, before
+reaching tag or draft creation. Every package and asset writer was skipped.
+
+The original inline import creates an untracked Python bytecode cache before the
+adapter's module body disables bytecode writing. A cold private fixture with the
+actual adapter bytes reproduces the same dirty-checkout refusal; `python3 -B`
+keeps the checkout clean and passes the unchanged guard. The native failure log
+did not print the dirty filename, so that filename is established by the pure
+reproduction rather than direct native observation.
+
+This bounded repair adds `-B` to all six inline custody imports. Focused controls
+reject its omission in each job and retain genuine dirty-source, wrong-tree and
+wrong-head refusals. Permissions, credentials, producer, custody helpers and
+publication guards retain their existing behavior. No cache ignore or cleanup
+bypasses the clean-checkout boundary.
+
+After source closure and the immediate Unified progress projection, root must
+review the new protected executor, run fresh preparation and authenticate its
+new originals and tuple before any promotion. The 9fc originals, successful
+admission and failed begin remain historical; they cannot be relabeled under the
+changed executor. No rerun or recovery is admitted by this source repair.
+Publication, genuine both-feed installed acceptance and consumer activation remain
+pending; public/default WASM stays 0.2.0.
