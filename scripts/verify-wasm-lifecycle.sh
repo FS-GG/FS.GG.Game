@@ -3,7 +3,36 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-lifecycle.XXXXXX")"
-trap 'rm -rf "$work"' EXIT
+proof="$work/model-proof"
+mkdir -p "$proof"
+retain_model_proof() {
+  local status=$?
+  trap - EXIT
+  local retained=0
+  python3 - "$proof" "${WASM_LIFECYCLE_EVIDENCE_DIR:-}" "$status" "$repo" <<'PYPROOF' || retained=$?
+import hashlib,json,pathlib,shutil,subprocess,sys
+source,destination,status,repo=sys.argv[1:]
+source=pathlib.Path(source);repo=pathlib.Path(repo)
+allowed={"qualification-status.json","quint-sampled-init.txt","quint-sampled-initReady.txt","quint-sampled-init.itf.json","quint-sampled-initReady.itf.json"}
+receipt={"schema":"fsgg.wasm.public-model-evidence/v1","exitCode":int(status),"sourceHead":subprocess.check_output(["git","-C",str(repo),"rev-parse","HEAD"],text=True).strip(),"modelSha256":hashlib.sha256((repo/"eng/wasm-shared/lifecycle.qnt").read_bytes()).hexdigest(),"quintVersion":"0.32.0","backend":"typescript","seed":20261002,"maxSamplesPerEntry":1000,"maxSteps":40}
+(source/"qualification-status.json").write_text(json.dumps(receipt,sort_keys=True)+"\n")
+files=list(source.iterdir())
+assert len(files)<=5 and all(p.name in allowed and p.is_file() and not p.is_symlink() for p in files),"unexpected model evidence leaf"
+assert sum(p.stat().st_size for p in files)<16*1024*1024,"model evidence exceeds16MiB"
+if destination:
+ target=pathlib.Path(destination);target.mkdir(parents=True,exist_ok=True)
+ assert not any(target.iterdir()),"model evidence destination is not empty"
+ for p in files:shutil.copyfile(p,target/p.name)
+ print("model-evidence: retainedFiles="+str(len(files))+" bytes="+str(sum(p.stat().st_size for p in files)))
+if int(status):
+ for p in files:
+  if p.suffix==".txt":print(p.name+"\n"+p.read_text(),file=sys.stderr)
+PYPROOF
+  rm -rf "$work"
+  if [[ "$status" == 0 && "$retained" != 0 ]]; then status="$retained"; fi
+  exit "$status"
+}
+trap retain_model_proof EXIT
 
 quint="${QUINT:-$(command -v quint || true)}"
 if [[ -z "$quint" || "$($quint --version)" != "0.32.0" ]]; then
@@ -17,7 +46,7 @@ mkdir -p "$traces" "$work/fable" "$work/package"
 export NUGET_PACKAGES="$work/nuget-packages"
 
 "$quint" typecheck "$model"
-"$quint" test --main=lifecycleTest --seed=20261002 --out="$work/quint-tests.json" "$model"
+"$quint" test --backend=typescript --main=lifecycleTest --seed=20261002 --out="$work/quint-tests.json" "$model"
 python3 - "$work/quint-tests.json" <<'PY'
 import json
 import sys
@@ -41,40 +70,19 @@ if passed != expected or result["failed"] or result["ignored"]:
     )
 print(f"quint-lifecycle-tests: passed={len(passed)} names={','.join(sorted(passed))}")
 PY
+"$quint" test --backend=typescript --main=callbackClosureTest --seed=20261002 "$repo/eng/wasm-shared/event-boundary-qualification.qnt"
 # The same 2,000 sample budget covers cold start and reachable initialized work.
 for entry in init initReady; do
-  "$quint" run --main=lifecycle --init="$entry" --step=step --invariant=lifecycleSafe \
+  "$quint" run --backend=typescript --main=lifecycle --init="$entry" --step=step --invariant=lifecycleSafe \
     --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout \
-    --max-steps=40 --max-samples=1000 --seed=20261002 "$model" > "$work/quint-sampled-$entry.txt"
+    --max-steps=40 --max-samples=1000 --seed=20261002 --out-itf="$proof/quint-sampled-$entry.itf.json" "$model" > "$proof/quint-sampled-$entry.txt" 2>&1
 done
 for witness in sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout; do
-  grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$work/quint-sampled-init.txt" "$work/quint-sampled-initReady.txt"
+  grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$proof/quint-sampled-init.txt" "$proof/quint-sampled-initReady.txt"
 done
 
-"$quint" run --main=lifecycle --init=initBar --step=barCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=10 --max-samples=1 --seed=20261002 --out-itf="$traces/bar_{seq}.itf.json" "$model" >/dev/null
-"$quint" run --main=lifecycle --init=initSc2 --step=sc2CorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=18 --max-samples=1 --seed=20261002 --out-itf="$traces/sc2_{seq}.itf.json" "$model" >/dev/null
-"$quint" run --main=lifecycle --init=initSc2 --step=timeoutCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=8 --max-samples=1 --seed=20261002 --out-itf="$traces/timeout_{seq}.itf.json" "$model" >/dev/null
-
-"$quint" run --main=lifecycle --init=initBar --step=phaseCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=16 --max-samples=1 --seed=20261002 --out-itf="$traces/phase_{seq}.itf.json" "$model" >/dev/null
-
-"$quint" run --main=lifecycle --init=initSc2 --step=cleanupCorrespondenceStep --invariant=lifecycleSafe \
-  --max-steps=15 --max-samples=1 --seed=20261002 --out-itf="$traces/cleanup_{seq}.itf.json" "$model" >/dev/null
-
-for timing in early late; do
-  "$quint" run --main=expiryQualification --init=initSc2 --step="${timing}Step" --invariant=lifecycleSafe \
-    --max-steps=8 --max-samples=1 --seed=20261002 --out-itf="$traces/expiry-${timing}_{seq}.itf.json" \
-    "$repo/eng/wasm-shared/expiry-qualification.qnt" >/dev/null
-done
-python3 "$repo/tests/Wasm.Lifecycle.Correspondence/generate-traces.py" \
-  --traces "$traces" --output "$work/GeneratedTraces.fs"
-for name in bar sc2 timeout phase cleanup expiry-early expiry-late; do
-  cmp "$traces/${name}_0.itf.json" "$repo/tests/Wasm.Lifecycle.Correspondence/Traces/${name}_0.itf.json"
-done
-cmp "$work/GeneratedTraces.fs" "$repo/tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs"
+# Reproduce every retained fixture through the canonical owner generator.
+QUINT="$quint" python3 "$repo/tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py" --check
 
 dotnet run --project "$repo/tests/Wasm.Lifecycle.Tests/FS.GG.Wasm.Lifecycle.Tests.fsproj" -c Release -- --summary
 dotnet run --project "$repo/tests/Wasm.Invocation.Tests/FS.GG.Wasm.Invocation.Tests.fsproj" -c Release

@@ -1,4 +1,4 @@
-// Qualification schedules over the unchanged authoritative published lifecycle.
+// Qualification schedules over the successor authoritative lifecycle; immutable published runtime remains unchanged.
 // Queue deadlines are 256/257; active deadline is 255. Both timer timings are valid.
 module expiryQualification {
   import lifecycle.* from "./lifecycle"
@@ -8,6 +8,6 @@ module expiryQualification {
     else if (state.clock == 2) initialize
     else if (state.clock == 3) initialized
     else submitOrdinary
-  action earlyStep = if (state.clock < 7) queuedPrefix else state' = expireAtState(state, 256)
-  action lateStep = if (state.clock < 7) queuedPrefix else state' = expireAtState(state, 259)
+  action earlyStep = if (state.clock < 7) queuedPrefix else eventAtTime(input("timer",emptyRequest,0,""),256)
+  action lateStep = if (state.clock < 7) queuedPrefix else eventAtTime(input("timer",emptyRequest,0,""),259)
 }

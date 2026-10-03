@@ -86,11 +86,19 @@ def validate_consumer_audit(audit, source, version, changed, producer, qualifier
     return audit
 
 
-def bind_qualification_inputs(source, qualifier_source, version):
-    subprocess.run(["git", "-C", str(ROOT), "diff", "--exit-code", source, qualifier_source, "--", *FROZEN_INPUTS], check=True)
+def bind_qualification_inputs(source, qualifier_source, version, release_binding=None):
+    canonical = None
+    if os.environ.get("CANONICAL_QUALIFICATION_AUDIT"):
+        assert release_binding is not None, "model amendment requires genuine release receipts"
+        spec = importlib.util.spec_from_file_location("canonical_transport", ROOT / "scripts/wasm-release/bind-canonical-qualification.py")
+        transport = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(transport)
+        canonical = transport.bind(source, qualifier_source, version, FROZEN_INPUTS, release_binding)
+    frozen = FROZEN_INPUTS if canonical is None else [path for path in FROZEN_INPUTS if path != "eng/wasm-shared/lifecycle.qnt"]
+    subprocess.run(["git", "-C", str(ROOT), "diff", "--exit-code", source, qualifier_source, "--", *frozen], check=True)
     changed = git("diff", "--name-only", source, qualifier_source, "--", "tests/Wasm.PackageConsumer").splitlines()
     if not changed:
-        return {"consumerInputs": "identical-to-published-source"}
+        return dict({"consumerInputs": "identical-to-published-source"}, **(canonical or {}))
     audit_path = ROOT / "scripts/wasm-release/installed-qualification-audit.json"
     audit = json.loads(audit_path.read_text())
     def read(revision, path):
@@ -98,7 +106,7 @@ def bind_qualification_inputs(source, qualifier_source, version):
     producer = {path: fingerprint(read(source, path)) for path in AUDITED_CONSUMER_PATHS}
     qualifier = {path: fingerprint(read(qualifier_source, path)) for path in AUDITED_CONSUMER_PATHS}
     validate_consumer_audit(audit, source, version, changed, producer, qualifier)
-    return {"consumerInputs": "exact-reviewed-qualification-correction", "auditSha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(), "audit": audit}
+    return dict({"consumerInputs": "exact-reviewed-qualification-correction", "auditSha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(), "audit": audit}, canonicalAmendment=canonical) if canonical else {"consumerInputs": "exact-reviewed-qualification-correction", "auditSha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(), "audit": audit}
 
 
 def main():
@@ -111,8 +119,7 @@ def main():
     subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", source, "origin/main"], check=True)
     # Preserve every producer/SDK/toolchain input. Only the two exact reviewed
     # consumer projection/assertion blobs may differ, bound by the immutable audit.
-    input_audit = bind_qualification_inputs(source, values["QUALIFIER_SOURCE"], values["RELEASE_VERSION"])
-    print("wasm-installed-input-audit: " + json.dumps(input_audit, sort_keys=True))
+    # Model amendments are decided only after genuine immutable release receipts are acquired.
     request = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/tags/wasm%2Fv{values['RELEASE_VERSION']}", headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + os.environ["GH_TOKEN"], "X-GitHub-Api-Version": "2022-11-28"})
     with urllib.request.urlopen(request) as response:
         release = json.load(response)
@@ -132,6 +139,10 @@ def main():
     assert manifest["version"] == values["RELEASE_VERSION"] and manifest["tree"] == git("rev-parse", f"{source}^{{tree}}")
     sdk = next(row for row in manifest["artifacts"] if row["file"] == f"fsgg-wasm-sdk-{values['RELEASE_VERSION']}.tar.gz")
     assert sdk["sha256"] == values["SDK_SHA256"]
+    release_binding = {"manifestSha256": values["MANIFEST_SHA256"], "sdkSha256": values["SDK_SHA256"],
+                       "packages": [{"name": row["file"], "sha256": row["sha256"]} for row in manifest["artifacts"] if row["file"].endswith(".nupkg")]}
+    input_audit = bind_qualification_inputs(source, values["QUALIFIER_SOURCE"], values["RELEASE_VERSION"], release_binding)
+    print("wasm-installed-input-audit: " + json.dumps(input_audit, sort_keys=True))
     print(f"wasm-installed-binding: qualifier={values['QUALIFIER_SOURCE']} published={source} tag={tag} native-assets=verified manifest={values['MANIFEST_SHA256']} sdk={values['SDK_SHA256']}")
 
 

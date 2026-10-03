@@ -1,0 +1,457 @@
+{
+  "schema": "fsgg.wasm.canonical-qualification-amendment/v1",
+  "status": "APPROVED",
+  "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
+  "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
+  "version": "0.2.0",
+  "publishedModelSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
+  "modelSha256": "39b7f4974d0116e7e8689f2d3f5cc8948b2a6dc4e313b5b9b687efc16bb6f7ca",
+  "producerLink": "FS-GG/FS.GG.Game@4afacb501b9371b4cc81494b7bf91b46c880a663",
+  "releaseManifestSha256": "dee8b02ad0e43e7d279492ed6378eb873f76edeb5a72c29e9c336409d5907853",
+  "sdkSha256": "ddd7b0ea76a1811ec3cdd45c373ac0ee556cf90eb9ae4cecad48dec1095475a3",
+  "packages": [
+    {
+      "name": "FS.GG.Wasm.Browser.0.2.0.nupkg",
+      "sha256": "40d11feebb07b01c0846b1b9716db10badc5dfbce1a450eb5319ab89b8f041e6"
+    },
+    {
+      "name": "FS.GG.Wasm.Contracts.0.2.0.nupkg",
+      "sha256": "b5bb9d0217dc31de9649b7c952db514bab5c99d32b30e6480da1f313d446fba4"
+    }
+  ],
+  "model": {
+    "path": "eng/wasm-shared/lifecycle.qnt",
+    "previousSha256": "e463e49a44ded21e1f30379aef25043e2bab2471538b9affde71a721ecfae8a8",
+    "qualifierSha256": "39b7f4974d0116e7e8689f2d3f5cc8948b2a6dc4e313b5b9b687efc16bb6f7ca"
+  },
+  "qualifierInputs": [
+    {
+      "path": ".github/workflows/wasm-shared.yml",
+      "previousSha256": "c2afd465bccaae880b9eb1f1d2f7e386c52eba79b55cc0d70f6383a254ae7076",
+      "qualifierSha256": "9882448309dba77462c3decbd8feb797d192bff0705217c50ce2e120e5345df8"
+    },
+    {
+      "path": "docs/roadmaps/wasm-shared-01.md",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "c9ae05d7af3a5154186135f41eb24630109074ab6148a79309b6aa0a78552fee"
+    },
+    {
+      "path": "docs/wasm/runtime.md",
+      "previousSha256": "6bf102f6e9136e5b19940312e3a39607d9d316c4eae795e7bdf5f2a9eb4d012c",
+      "qualifierSha256": "4df2c53d7a572eb7c7c5a7770f499462c717cfcee389271e7cc30967a55f2c21"
+    },
+    {
+      "path": "eng/wasm-shared/event-boundary-qualification.qnt",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "757a28a4863fec9760aec8ab2682a9e9805fcd6d588aaf302f80bc796a7307b7"
+    },
+    {
+      "path": "eng/wasm-shared/expiry-qualification.qnt",
+      "previousSha256": "b26c134df003cf7c56a24236fd67208328bfaf93b69fec2accf3a9d719ffb556",
+      "qualifierSha256": "27421a824e16f2ba29d70abcdd2c23a0f63c7118782f44b2f345d46b97f6c851"
+    },
+    {
+      "path": "scripts/verify-wasm-lifecycle.sh",
+      "previousSha256": "ab22879a3815e8ef2285a61c3c7ac68b5781c2076748d2f962c49bf7d65f35a5",
+      "qualifierSha256": "f8fb5be0dec99dc76134af4a01a3ad16058f11075a9832dd6f2c0b84f1a32934"
+    },
+    {
+      "path": "scripts/wasm-release/CanonicalQualificationPolicy.fs",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "93ab428055f58102c94f1832b0e02ec516fbec850e592170a6b877b46c9ef4bd"
+    },
+    {
+      "path": "scripts/wasm-release/bind-canonical-qualification.py",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "eb50f8b9afea4914f64213f0c636668a24713c61e8956aa5193f5ee0b8561be4"
+    },
+    {
+      "path": "scripts/wasm-release/bind-installed-release.py",
+      "previousSha256": "04864b8dd0b69747459f8430955b8a35cfbf896e91468bdc573e5c04791bb883",
+      "qualifierSha256": "e157b130777b4171904a4c21ac2e0d29e74fee4009122b14d6d19f67693e7f08"
+    },
+    {
+      "path": "scripts/wasm-release/decide-canonical-qualification.fsx",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "5d099d22a2e57e45eb13292b85a681aded889f5206feeeb0e3f604ae02122ef0"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Correspondence.fs",
+      "previousSha256": "e21c3e4d2aac97cc8b00e29a4002b5f1b44c38141ad6b0d5f8146d8cc14b50a5",
+      "qualifierSha256": "9b0ccf225bebd6d09857ea8815de93075fdc0b651cca035d11bb2887048361d2"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/CorrespondenceTypes.fs",
+      "previousSha256": "315b511110df288d9754e96f958ce8e4fd7128c38cdc12bd2a329572dd106e9d",
+      "qualifierSha256": "a85e7261864ff4d97151c5b08caad443c38dd3a8ec4235f5d58aa78a349922e3"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs",
+      "previousSha256": "8cc3b84d991f6720d19ac19ee4007b1007aa2a21ce66cd7febd3cbfcbd8aeb20",
+      "qualifierSha256": "317e31b9faf1a8f588dceed17e69fbfb97059d475a86535ed53e2f8ed176bbc6"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Installed/InstalledHost.fsproj",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "5a09fc9f84695fa2bf2047f5061a74d6ce581493657c396747b5c85aa55812c8"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Installed/packages.lock.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "d6a4e7dde5754ac50c73f9887c4aedf2e1f845b967ecbd6b26f9eb150667439e"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHostControls.fs",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "d1aa24830a975ea16e1e86ea76836028ac6f5dd8900d86e9ae8678afd6883ac6"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/InstalledHostProgram.fs",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "0ac64caf612ef7754e43b2af818e4f7d2b360df0e42a42141622616deb9d1412"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Program.fs",
+      "previousSha256": "fb70dee5492805e69974341fb279b3d71adc12891a4c7a2d0f9a00f88206b300",
+      "qualifierSha256": "75b43a2cb12e9b2d2b54fdb3518fc144fd704b4d680d396ace0ea1be97558851"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "312f6009f43ad382ae5f3d5515be19be1c60744fb90e55b80486048ffcb078df"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "5fc847db40da127e7f2d3d20c689ac17279e5c83e532132239a81dba4ea0cf3c"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "493c1b5f5db432e4d12c8fe1e1e6113c6d2e3c51c20bf407501101e8c07ecedc"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "e91f6661abb099641974f2d8f515962452ee7fa824c59757f035285e22b25252"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "79bfc733cfb9b50fefc8dd7f23cce1835ad62649a470461397909125225e10e8"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "fae11e5965c597feca031580f2dd0313a90e59a745469bd289e34b600fd463a6"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "47e6e68d1305afcc8798f11d59e303d1b6e0a3eabaceb1203686f516db7c2170"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "516a061fc9aec46defe9a0c69ef75c97c841ebc292deb8ed1cf231a3775ee492"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "2ce23ac271962830e55db3cc09bb19fbfac09a16ddd544c523b79ef18b8d3030"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "ffeaeb2296b03d669f7246f154f6f3d72c23995c710072da3dac4f0b2ef06670"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "ed1b34c8a9c21b8ebd727ba8df26dd3c1658ea25963daef7f8c4211abfafac77"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "36aeef6efe8bf4cd57e758ca6e77ff1d0ce801a37d54ec01bd6caa0d070294b8"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "2a06b115dba763c21bfcd85d0d62d23d5925970a14a5ab4afc0e5cfc26bd2619"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "f2df694fa740c861e5da9e766b239b0dec668f3f4111e6ab8b81c73702111a5f"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "698ec2feec771bd96caa8ea152747b7c0f4a960a2046e16d9c8b1a4248091331"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-both-expired_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "4cd6393f626ed685fb6bde2548bce005ff9c1b9eba8b656132f507effdbd5ad3"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "05aa632fb934a86b3fae5967712b72dc91ae6b73bcc939dc00c269ca1a4bf244"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "bd4e1ce16972d838751fefb669f76131ad1b590d9e691f6dc00776633e79bf5a"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "b5ed604e821738b1dbcdc63c6b6c014d3895a00e5daa4b115b7006d065c0a42d"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "7298789d28544b97bd3289885289b15cf1932a24fa79a50a8f7df12c76abd0b4"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "d90bf00465b737338727445ce7bdf9f063b57e827d47ce1e618ee3e2be7bbdea"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "3f9b703f8535fafa5ed436d02abc079ef66a0a3398ca70be0f9a717c2d6b8706"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-allexpired_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "e555377a091c2bdba85c34aef86ea820da1d4b68602f973603d90dc0718f8155"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-currentexpired_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "91ec1bf4de0aeeaadfc8d959da54dbfaae6632054a46c26ccf09c1632a8728d5"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-orderedexpired_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "83c55f2a2890c44df8b89e270d8577a5d8cbac23e135c1ddedeadd568a2c1118"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-monotonic-clamp_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "3b702fb16fd378005561965cb9909dd05f7a06acc5a487c1c01208a1210cce46"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "c02119da3e7c21a51ab16d2c34876451eac5587c94eb8dc115de0feb72f7affb"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "f7732e30d363fdc36e0b7b73ffebd9b1d27c66aabfb7fb5c586cc59355375400"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "50252adb857fc0ff538ed4b7309e5c8f8bfb9bc4dbd529f9b7a5fc49715e4d98"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "db4d1cdcbde81dc29aee6f9ea9f8bbebbd5e3e0cd6aff1010da0cf0ca6a8c49f"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "8ca757ce0df60642a2f11a67be11ceef5fe1407a37eceb5bfa93128eb792cffb"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "ca59682c432c48a7e9169f16a73270479bac54dc9cd6c99b50a96c0e802c578d"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "3a9966dff36c9648b8bf3cb2798da2a106d5cfef1e52daa3fcc2ee63f1bd5637"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "066c90e99390bae5df57e5b1f00f80109ba3f37c6451f86bf979aeb7226790b3"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "a6bb136eadba85177b22fc4b604ada844f49da19c0e26008fe95e860deada4fe"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-after_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "6ffecf82bd998b3bd1756e8f8fafc304ac85ca82bc704bb5c99fdd8a28a99be6"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-at_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "231b6e175db2620b42e7cb6c786c3699d7899deb0aeec365121c3a564b252f2b"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-before_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "abe04a44240c457a444ca724b7dabafd2e8fd14b82ea9d0fdbc44fe5959f0008"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/generate-traces.py",
+      "previousSha256": "ffae25575cc2133da6b7f5d83106b61f77a4bc8b18f2722536564a906e9b0dcb",
+      "qualifierSha256": "88762fc0704c442d10a031b4a29ad26ba8a53a9555625eb082ec22ce3365dd62"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "1cfef1658fbe637ea50498be73e9bc850f701176e99ff5bb5f9736bd1580bca7"
+    },
+    {
+      "path": "tests/release/wasm/test-canonical-qualification-policy.fsx",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "def11f5e6318cd56415d617ed297d194946bcc4ed278e8ff4c7d0a1417db6414"
+    },
+    {
+      "path": "tests/release/wasm/test-canonical-qualification-transport.py",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "5456e2109bf54bff2b34f3b088fc4555c4952687e73fe77fecc3e8a334541173"
+    }
+  ],
+  "proofInputs": [
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "227c27bf4e7a67f511e72d44150198070ea5bc1124129dc39b2d7496d7e7ce78"
+    }
+  ],
+  "originalTraces": [
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/bar_0.itf.json",
+      "previousSha256": "24a169d9a57ff52b3537d1aaae5787a283f5eb796f21727397b6e3bcb3477676",
+      "qualifierSha256": "c50d27cdfa221e53d1d271d09fbba6756d03842d3961cdb97b07119bb088a6bc"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/cleanup_0.itf.json",
+      "previousSha256": "3368c92964cf1040c91c1c2cdb3e9aad3a84786f357c4c3ecc543aef03f389c3",
+      "qualifierSha256": "b2dee78594f0c8f5ef47971ac5364e17b3b6a14730f3172b56a8377ca6c48b62"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-early_0.itf.json",
+      "previousSha256": "9b45be91288b8b531f2980f7ad4e274bf91fc99815c8bf0d27394b16c28de20d",
+      "qualifierSha256": "1e154874efe094f3473476f5a6ba29a3caf2060af01cb8763512a5e66c0a2f60"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-late_0.itf.json",
+      "previousSha256": "144f48bf2dabaf14004fd06b6ea6e408d736ada3d06176844e2d320d6e995620",
+      "qualifierSha256": "89a9b1f0f36779b4f8dd44c07f1b839712408160327157b09b6f483074ace22b"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/pending-initialize-commit_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "4ed537a153a3709097d9da4cb37581072d888fba27bb8ed09a17ae66f6d29765"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/pending-load-commit_0.itf.json",
+      "previousSha256": "ABSENT",
+      "qualifierSha256": "70c4480617599d0bfe51fd07911fc9fef0676d003c8fe6db1994d3d7c1f5b743"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/phase_0.itf.json",
+      "previousSha256": "d67c26e7ebad0fb4169b169d0c994eb2d4bb2fbfaea10ac022ef0d8abaa3a11a",
+      "qualifierSha256": "ab74c803aed91d400e2fa2e4e90510a4d28d5825353d2861a993d796db14ef7b"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/sc2_0.itf.json",
+      "previousSha256": "6554d8cd65e1735d0ca8b18d3a0141de991728522f6edd9474e22df36ce00730",
+      "qualifierSha256": "4cc231588a707dd06e76251a436fa2af61ba38d937100ff79a5d92576d0dc10e"
+    },
+    {
+      "path": "tests/Wasm.Lifecycle.Correspondence/Traces/timeout_0.itf.json",
+      "previousSha256": "b95ad410d0f1f7387a50c9266def6deb508dcb85efd68750ed37670f57ac3e18",
+      "qualifierSha256": "7e6c988b6bd4f9a448e7bea80fc417881609b265026d39b1858daee5aa61a3f6"
+    }
+  ],
+  "approvedChangedPaths": [
+    ".github/workflows/wasm-shared.yml",
+    "docs/roadmaps/wasm-shared-01.md",
+    "docs/wasm/runtime.md",
+    "eng/wasm-shared/event-boundary-qualification.qnt",
+    "eng/wasm-shared/expiry-qualification.qnt",
+    "eng/wasm-shared/lifecycle.qnt",
+    "scripts/verify-wasm-lifecycle.sh",
+    "scripts/wasm-release/CanonicalQualificationPolicy.fs",
+    "scripts/wasm-release/bind-canonical-qualification.py",
+    "scripts/wasm-release/bind-installed-release.py",
+    "scripts/wasm-release/canonical-qualification-amendment.json",
+    "scripts/wasm-release/decide-canonical-qualification.fsx",
+    "tests/Wasm.Lifecycle.Correspondence/Correspondence.fs",
+    "tests/Wasm.Lifecycle.Correspondence/CorrespondenceTypes.fs",
+    "tests/Wasm.Lifecycle.Correspondence/GeneratedTraces.fs",
+    "tests/Wasm.Lifecycle.Correspondence/Installed/InstalledHost.fsproj",
+    "tests/Wasm.Lifecycle.Correspondence/Installed/packages.lock.json",
+    "tests/Wasm.Lifecycle.Correspondence/InstalledHostControls.fs",
+    "tests/Wasm.Lifecycle.Correspondence/InstalledHostProgram.fs",
+    "tests/Wasm.Lifecycle.Correspondence/Program.fs",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/bar_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-bar-phase-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-candidate-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-compile-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-completion-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-dispose-both-expired_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-freeze-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-initialize-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-allexpired_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-currentexpired_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-mixed-orderedexpired_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-monotonic-clamp_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-phase-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-resume-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-retiring-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-after_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-at_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/boundary-timer-before_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/cleanup_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-early_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/expiry-late_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/pending-initialize-commit_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/pending-load-commit_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/phase_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/sc2_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/Traces/timeout_0.itf.json",
+    "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
+    "tests/Wasm.Lifecycle.Correspondence/generate-traces.py",
+    "tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py",
+    "tests/release/wasm/test-canonical-qualification-policy.fsx",
+    "tests/release/wasm/test-canonical-qualification-transport.py"
+  ]
+}

@@ -6,6 +6,11 @@ open Wasm.Lifecycle.Correspondence.GeneratedTraces
 [<EntryPoint>]
 let main _ =
     let failures = traces |> List.collect replay
+    for name in ["expired-to-disposed"; "drop-termination"; "reorder-expiry"; "drop-current-cancel"; "late-completion-current"; "queued-dispatch-after-expiry"; "wrong-terminal-correlation"] do
+        if not (traces |> List.exists(fun trace -> eventBoundaryMutationsAreDetected trace |> List.exists(fun (control,detected) -> control = name && detected))) then failwithf "event-boundary causal mutant accepted: %s" name
+
+    for name in ["expired-cause-to-disposed"; "not-dispatched-to-dispatched"; "invalidation-outcome-dropped"; "queued-own-expiry-invents-outcome"; "terminal-phase-normalized-process"] do
+        if not (traces |> List.exists(fun trace -> rawTerminalMutationsAreDetected trace |> List.exists(fun (control,detected) -> control = name && detected))) then failwithf "raw terminal causal mutant accepted: %s" name
 
     if
         not (

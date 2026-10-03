@@ -71,9 +71,14 @@ def fs_list(values: list[str]) -> str:
 
 def normalize(path: Path) -> None:
     document = json.loads(path.read_text(encoding="utf-8"))
+    # Backend declaration order does not change the complete named ITF state.
+    document["vars"] = sorted(document["vars"])
     document["#meta"].pop("description", None)
     document["#meta"].pop("timestamp", None)
-    if path.name.startswith("expiry-"):
+    if path.name.startswith("boundary-"):
+        document["#meta"]["source"] = "eng/wasm-shared/event-boundary-qualification.qnt"
+        document["#meta"]["canonicalSource"] = "eng/wasm-shared/lifecycle.qnt"
+    elif path.name.startswith("expiry-"):
         document["#meta"]["source"] = "eng/wasm-shared/expiry-qualification.qnt"
         document["#meta"]["canonicalSource"] = "eng/wasm-shared/lifecycle.qnt"
     else:
@@ -117,18 +122,26 @@ def state(value: dict) -> str:
     )
 
 
+def original_input(value):
+    return "{ Name = %s; Request = (%s : RequestProjection); Worker = %s; Phase = %s; Observed = %dL }" % (text(value["name"]), request(value["request"]), text(worker(bigint(value["worker"]))), text(value["phase"]), bigint(value["observed"]))
+
+
+def terminals(values):
+    return fs_list(["{ Request = %dUL; Reason = %s; Outcome = %s; Phase = %s; Dispatched = %s }" % (bigint(e["request"]),text(e["reason"]),text(e["outcome"]),text(e["terminalPhase"]),str(e["dispatched"]).lower()) for e in values if e["reason"]])
+
+
 def trace(path: Path) -> str:
     raw = path.read_bytes()
     document = json.loads(raw)
     steps = []
     for item in document["states"]:
         model = item["state"]
+        connected = item["connection"]
         steps.append(
-            "{ State = (%s : HostProjection); Effects = (%s : EffectProjection list) }"
-            % (
-                state(model),
-                fs_list([effect(value) for value in model["effects"]]),
-            )
+            "{ State = (%s : HostProjection); Effects = (%s : EffectProjection list); Input = %s; Terminals = %s; Connected = (%s : HostProjection); ConnectedEffects = (%s : EffectProjection list); ConnectedTerminals = %s; ConnectedCallbacks = %s; ConnectedBeforeEffects = %s }"
+            % (state(model),fs_list([effect(value) for value in model["effects"]]),original_input(model["input"]),terminals(model["effects"]),
+               state(connected["host"]),fs_list([effect(value) for value in connected["effects"]]),terminals(connected["effects"]),
+               fs_list([original_input(value) for value in connected["callbacks"]]),fs_list(["("+state(value)+" : HostProjection)" for value in connected["beforeEffects"]]))
         )
     name = path.name.split("_", 1)[0]
     digest = hashlib.sha256(raw).hexdigest()
