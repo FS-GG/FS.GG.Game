@@ -35,4 +35,8 @@ for n in 0..3 do
     assert ((decide review allowedChange).Accepted)
     refuse review {allowedChange with GateRepairs=mutation}
 refuse {review with ReviewSha256="7beeb8bf1145490ab752c0378726620c3052fa33a96c99549be1ea2b350917c4"} observation
+refuse {review with ReviewSha256="448a31ffd745e09b16ad88cc568bc46a5f1b580e07c8877f63d0484c8f549eef"} observation
+let priorHelper = Array.map (fun row -> if row.Path="scripts/wasm-release/qualify-supervisor-custody.sh" then {row with Sha256="66f5526d3255a1701791ac8af5e3fd54660b543d265ebe1605fefeda3510325c"} else row) reviewedGateRepairs
+refuse review {observation with GateRepairs=priorHelper}
+refuse {review with GateRepairs=priorHelper} observation
 printfn "supervisor-source-policy: reviewed scope accepted; old amendment/patch/stale model/source/out-of-scope refused; public/native authority absent"
