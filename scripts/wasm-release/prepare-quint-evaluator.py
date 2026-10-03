@@ -119,8 +119,20 @@ def commands(producer, quint):
     result = [('model-controls', [quint, test[0], '--backend=rust', *test[1:]])]
     for name, entry in [('cold', 'initCompatible'), ('ready', 'initCompatible.then(readyCompatible)')]:
         args = [token.replace('$entry', entry) for token in run]
-        result.append(('model-' + name, [quint, args[0], '--backend=rust', '--nthreads=1', *args[1:]]))
+        result.append(('model-' + name, [quint, args[0], '--backend=rust', '--n-threads=1', *args[1:]]))
     return result, witnesses
+
+def durable_json(path, value):
+    temporary = path.with_suffix(path.suffix + '.pending')
+    with temporary.open('w') as stream:
+        json.dump(value, stream, indent=2);stream.write('\n');stream.flush();os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
 
 def readiness(producer, quint, cache, evidence, run=subprocess.run):
     deadline = time.monotonic() + 600
@@ -128,10 +140,23 @@ def readiness(producer, quint, cache, evidence, run=subprocess.run):
     plan, witnesses = commands(producer, quint)
     need(all(args[0] == quint and [token for token in args if token.startswith("--backend=")] == ["--backend=rust"]
              for _, args in plan), "readiness backend/executable changed")
+    need(all([token for token in args if token.startswith('--n')] == ['--n-threads=1']
+             for _, args in plan[1:]), 'readiness thread option changed')
+    leaves = []
+    status_path = evidence / 'leaf-status.json'
     for name, args in plan:
-        with (evidence / (name + '.log')).open('wb') as log:
-            result = run(args, cwd=producer, env=env, stdout=log, stderr=subprocess.STDOUT,
-                         timeout=max(1, deadline - time.monotonic()))
+        leaf = {'name': name, 'argv': args, 'status': 'Running', 'exitCode': None}
+        leaves.append(leaf);durable_json(status_path, leaves)
+        try:
+            with (evidence / (name + '.log')).open('wb') as log:
+                result = run(args, cwd=producer, env=env, stdout=log, stderr=subprocess.STDOUT,
+                             timeout=max(1, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            leaf['status'] = 'Timeout'  # No numeric child exit was observed.
+            durable_json(status_path, leaves)
+            raise
+        leaf.update(status='Completed', exitCode=result.returncode)
+        durable_json(status_path, leaves)
         need(result.returncode == 0, 'pre-pack Rust readiness failed: ' + name)
     logs = [(evidence / ('model-' + name + '.log')).read_text() for name in ['cold', 'ready']]
     for witness in witnesses:
@@ -173,11 +198,12 @@ def main():
         'producerInputs': {name: sha((producer / name).read_bytes()) for name in [
             'eng/wasm-shared/lifecycle.qnt', 'eng/wasm-shared/compatible-qualification.qnt',
             'scripts/verify-wasm-supervisor.sh', 'tests/Wasm.Supervisor.Compatibility/reviewed-source-proof.json']}}
-    receipt_path = args.evidence / 'readiness.json';receipt_path.write_text(json.dumps(receipt, indent=2) + '\n')
+    receipt['commands'], _ = commands(producer, quint)
+    receipt_path = args.evidence / 'readiness.json';durable_json(receipt_path, receipt)
     receipt['commands'] = readiness(producer, quint, args.quint_home, args.evidence)
     need(not git('status', '--porcelain'), 'readiness dirtied producer')
     need(sha(target.read_bytes()) == MEMBER_SHA, 'evaluator changed during readiness')
-    receipt['status'] = 'Passed';receipt_path.write_text(json.dumps(receipt, indent=2) + '\n')
+    receipt['status'] = 'Passed';durable_json(receipt_path, receipt)
     print('pre-pack readiness: pinned official Rust evaluator; P unchanged; full model/witness checks passed')
 
 if __name__ == '__main__':
