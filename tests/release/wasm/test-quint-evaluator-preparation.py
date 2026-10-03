@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -97,6 +98,24 @@ class Tests(unittest.TestCase):
                 (root/'package.json').write_text(json.dumps({'version':'0.32.0'}));entry.write_text('foreign')
                 with self.assertRaises(ValueError):e.tool(str(entry))
 
+    def test_thread_option_from_pinned_primary_CLI(self):
+        fixture=ROOT/'tests/release/wasm/fixtures/quint-0.32.0-cli.js'
+        source=fixture.read_bytes()
+        self.assertEqual(e.sha(source),e.TOOL['dist/src/cli.js'])
+        # The exact published parser declaration identifies the resource option;
+        # static CI need not install Quint or load its model-executing entrypoint.
+        option=re.search(r"\.option\('([^']+)', \{\s*desc: 'the number of threads to use when running simulations",source.decode()).group(1)
+        with tempfile.TemporaryDirectory() as d:
+            producer=Path(d);(producer/'scripts').mkdir()
+            (producer/'scripts/verify-wasm-supervisor.sh').write_bytes(producer_script())
+            plan,_=e.commands(producer,'quint')
+            for _,argv in plan[1:]:
+                self.assertEqual([x for x in argv if x.startswith('--n')],['--'+option+'=1'])
+                mutant=[x.replace('--'+option+'=1','--nthreads=1') for x in argv]
+                self.assertNotEqual([x for x in mutant if x.startswith('--n')],['--'+option+'=1'])
+            foreign=source.replace(b".option('n-threads',",b".option('nthreads',")
+            self.assertNotEqual(e.sha(foreign),e.TOOL['dist/src/cli.js'])
+
     def test_original_fixture_substitution_refused(self):
         original=producer_script()
         self.assertNotIn(b'--backend=typescript', original)
@@ -129,9 +148,22 @@ class Tests(unittest.TestCase):
             for fail_at in range(3):
                 calls.clear()
                 def fail(args,**kwargs):
-                    calls.append(args);return subprocess.CompletedProcess(args,1 if len(calls)-1==fail_at else 0)
+                    calls.append(args);return subprocess.CompletedProcess(args,7 if len(calls)-1==fail_at else 0)
                 with self.assertRaises(ValueError):e.readiness(p,'actual-quint',base/'cache',evidence,run=fail)
                 self.assertEqual(len(calls),fail_at+1)
+                leaves=json.loads((evidence/'leaf-status.json').read_text())
+                self.assertEqual(len(leaves),fail_at+1);self.assertEqual(leaves[-1]['exitCode'],7)
+                self.assertEqual(leaves[-1]['argv'],calls[-1]);self.assertEqual(leaves[-1]['status'],'Completed')
+            wrong_threads=copy.deepcopy(plan);wrong_threads[1][1][3]='--nthreads=1'
+            with patch.object(e,'commands',return_value=(wrong_threads,witnesses)),self.assertRaises(ValueError):
+                e.readiness(p,'actual-quint',base/'cache',evidence,run=runner)
+            def timed_out(args,**kwargs):
+                leaves=json.loads((evidence/'leaf-status.json').read_text())
+                self.assertEqual(leaves[-1]['argv'],args);self.assertEqual(leaves[-1]['status'],'Running')
+                raise subprocess.TimeoutExpired(args,600)
+            with self.assertRaises(subprocess.TimeoutExpired):e.readiness(p,'actual-quint',base/'cache',evidence,run=timed_out)
+            leaf=json.loads((evidence/'leaf-status.json').read_text())[-1]
+            self.assertEqual(leaf['status'],'Timeout');self.assertIsNone(leaf['exitCode'])
             def empty(args,**kwargs):return subprocess.CompletedProcess(args,0)
             with self.assertRaises(ValueError):e.readiness(p,'actual-quint',base/'cache',evidence,run=empty)
 
