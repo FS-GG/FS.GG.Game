@@ -330,7 +330,7 @@
     {
       "path": "tests/Wasm.Lifecycle.Correspondence/canonical-qualification-proof-pending.json",
       "previousSha256": "ABSENT",
-      "qualifierSha256": "576331eeda29aaff422f5947961105cbd079a61602dc9dfdfb90ca6f814cabec"
+      "qualifierSha256": "227c27bf4e7a67f511e72d44150198070ea5bc1124129dc39b2d7496d7e7ce78"
     }
   ],
   "originalTraces": [

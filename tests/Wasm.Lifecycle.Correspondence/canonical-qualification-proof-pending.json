@@ -1,16 +1,46 @@
 {
   "schema": "fsgg.wasm.canonical-qualification-proof-pending/v1",
-  "status": "PROOF_REFUSED_PRIOR_RUNTIME_FAILURE_LATEST_47_COMPILED_PENDING",
+  "status": "CANDIDATE_ACTUAL_47_QUALIFICATION_PASS_PENDING_ROOT_REVIEW",
   "publishedSource": "4afacb501b9371b4cc81494b7bf91b46c880a663",
   "protectedSource": "7397d4b408b8e7b44393fee9f837278723934867",
   "modelSha256": "39b7f4974d0116e7e8689f2d3f5cc8948b2a6dc4e313b5b9b687efc16bb6f7ca",
   "producerProof": {
-    "status": "PENDING_LATEST_47_MODEL_DOTNET_FABLE_QUALIFICATION",
-    "scope": "Previous46 source.NET failed; latest47 regenerated model requires fresh actual.NET/Fable full-projection ordered-effect proof"
+    "status": "PASS_ACTUAL_DOTNET_FABLE_PRODUCTION_CORRESPONDENCE",
+    "qualifiedCodeHead": "d57f1a6944a0d748082a9746d2428d1f30b77f06",
+    "dotnetTraces": 47,
+    "fableTraces": 47,
+    "causalMutants": 16,
+    "fullHostProjection": true,
+    "orderedEffects": true,
+    "dotnetLogSha256": "cdf7825b7ec30458675d18b3420de6444472cc96da27bddf24df2c21a2c7f219",
+    "fableLogSha256": "cdf7825b7ec30458675d18b3420de6444472cc96da27bddf24df2c21a2c7f219",
+    "evidenceOwner": "accountable producer worker under root granted serial qualification slot",
+    "scope": "Actual producer.NET and Fable/Node full-state ordered-effect proof; no guest execution or product adoption claim"
   },
   "installedProof": {
-    "status": "PENDING_LATEST_47_MODEL_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
-    "scope": "Latest reachable pending-initialize commit fixture and corrected prior pending-load control require actual installed connected qualification; guest execution excluded"
+    "status": "PASS_ACTUAL_INSTALLED_DOTNET_FABLE_HOST_CREATE_AND_CONNECTED",
+    "dotnetTraces": 47,
+    "fableTraces": 47,
+    "facades": [
+      "Host.Create",
+      "Host.CreateConnected"
+    ],
+    "fullHostProjection": true,
+    "orderedEffects": true,
+    "mechanicalBeforeEffectFullStates": true,
+    "rawCallbackFields": [
+      "identity",
+      "time",
+      "reason",
+      "outcome",
+      "phase",
+      "dispatch"
+    ],
+    "nestedCallbackCausalMutants": 2,
+    "dotnetLogSha256": "8dcabde7c87d83f6e889a47d36cc1be192a75ded5304016d1e606d0672d4a253",
+    "fableLogSha256": "8dcabde7c87d83f6e889a47d36cc1be192a75ded5304016d1e606d0672d4a253",
+    "evidenceOwner": "accountable producer worker; installed public0.2.0 feed and signed package inputs unchanged",
+    "scope": "Actual installed immutable public0.2.0 full pure/connected comparison including nested callback ordering; controlled observations, no guest execution"
   },
   "administrativeOwner": {
     "status": "PASS_ACTUAL_TYPED_FSHARP_13_MUTANTS_AND_PENDING_REFUSAL",
@@ -19,10 +49,9 @@
   },
   "approval": "Audit status remains pending. Neither existence nor SHA of this report proves producer/installed qualification. Only root-reviewed immutable amendment bytes with independently supplied exact audit digest can authorize administrative eligibility; caller exactHEAD is a separate receipt after commit.",
   "remaining": [
-    "clean committed finite LoadInitial ordering correction and47-trace candidate",
-    "fresh root native grant and actual producer/installed.NET/Fable full-state ordered-effect qualification",
     "root review and explicit new amendment approval",
-    "post-commit exactHEAD administrative owner invocation"
+    "post-commit exactHEAD administrative owner invocation",
+    "exact new hosted qualification and native merge readback"
   ],
   "latestSourceControls": {
     "status": "PASS_ACTUAL_47_TRACE_SOURCE_CONTROLS_ONLY",
@@ -55,11 +84,28 @@
       "sha256": "4ed537a153a3709097d9da4cb37581072d888fba27bb8ed09a17ae66f6d29765",
       "reachability": "Old active Initialize pending while candidate prepared/initialized/validated, then commit; genuine two-level callback closure"
     },
-    "scope": "Actual completed47 regeneration/eight tests/three closure controls/cold-ready sampled logs bound. No latest compiled or approval proof claimed."
+    "scope": "Actual completed47 regeneration/eight tests/three closure controls/cold-ready sampled logs bound. No latest compiled or approval proof claimed.",
+    "freshExactCandidateRecheck": {
+      "qualifiedCodeHead": "d57f1a6944a0d748082a9746d2428d1f30b77f06",
+      "typecheck": "PASS",
+      "quintTests": 8,
+      "callbackBoundControls": 3,
+      "traceBytecheck": 47,
+      "coldSamples": 1000,
+      "initializedSamples": 1000,
+      "unchangedInvariant": "lifecycleSafe",
+      "aggregateWitnesses": 4,
+      "eightTestJsonSha256": "ed5b1dad17d21ded520ace83a369183651baaa86fcd89e0f8ea0f4a72bd27d75",
+      "callbackControlJsonSha256": "7f95ebe0c17c591a66ff6c3f13c22ed7c0b70dc0a60053240eb224810dea8cf0",
+      "coldSamplingLogSha256": "6f710b8ca9db01386e096977e3ac4fb34886dc45cdd81198e0ebf025f5227f2a",
+      "readySamplingLogSha256": "739dbe6d385ec4d0429f78bab2ec2d123f8ce1de741322b5782e40fddc6c8d15"
+    }
   },
   "latestCompiledQualification": {
-    "status": "PENDING_FRESH_ROOT_NATIVE_GRANT_PRIOR_46_PROOF_REFUSED",
-    "scope": "No actual latest47 compiled proof; unchanged package/native/runtime inputs and new canonical source qualify only after fresh root-owned checks"
+    "status": "PASS_ACTUAL_PRODUCER_AND_INSTALLED_DOTNET_FABLE_47",
+    "qualifiedCodeHead": "d57f1a6944a0d748082a9746d2428d1f30b77f06",
+    "evidenceOwner": "accountable producer worker",
+    "scope": "SDK10.0.401/Fable5.18 official tools; 47 complete-state schedules per runtime and both installed facades; prior failures retained below"
   },
   "historicalConnectedWorkerFaultCounterexample": {
     "status": "GENUINE_FIRST_NATIVE_FAILURE_RETAINED",
@@ -267,5 +313,15 @@
     "finding": "Canonical LoadInitial differed from frozen published runtime ordered old-active then candidate GenerationRetired invalidation before creation. Finite producer model correction preserves that ordering and raw causal evidence; executable runtime remains unchanged.",
     "resourcePairReleasedAt": "2026-10-02 23:33:09 UTC",
     "scope": "Genuine actual source.NET failure. No46 Fable pass inferred; previous45 dbfa compiled proofs remain historical."
+  },
+  "builds": {
+    "sdk": "10.0.401",
+    "fable": "5.18.0",
+    "warnings": 0,
+    "errors": 0,
+    "sourceBuildLogSha256": "1ac3b908e729b236070d1ce1915a47734fa39badacf48dbbd1654c60108faead",
+    "installedBuildLogSha256": "1a60b949129cb3529cd09196dd5d0da71ac316b8a0ccdc685c194e68d9edf8e3",
+    "sourceFableBuildLogSha256": "38b38679373e2438ac96a40989e8890ed0f9c3ac95ec468f0b4ae4fcdb08dceb",
+    "installedFableBuildLogSha256": "3cab2dfb09af117ba9ba2d558697f4c64aa80730659b28997dac2ca1d6c9ec21"
   }
 }
