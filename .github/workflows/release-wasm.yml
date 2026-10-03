@@ -75,10 +75,12 @@ jobs:
       artifact_sha256: ${{ steps.eligible.outputs.artifact-digest }}
       binding_sha256: ${{ steps.binding.outputs.binding_sha256 }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Checkout protected executor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           path: executor
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Checkout protected producer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c
           path: producer

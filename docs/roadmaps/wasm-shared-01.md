@@ -143,3 +143,29 @@ Rust qualification is separate from the unchanged historical TypeScript proof.
 Failure retains diagnostics and prevents packing; successful native preparation
 still packs P once and runs all unchanged custody gates before eligible retention.
 The bootstrap source does not establish a completed R2 run or publication.
+
+
+R2 native preparation [37146128965](https://github.com/FS-GG/FS.GG.Game/actions/runs/37146128965)
+succeeded at protected executor `94bce296fbdfacdff8492ae02ad62789ac051cb9` and retained
+eligible artifact `11282417557`. Root verified the original outer archive and all
+159 inventory members across the three original archives, but promotion admission
+refused duplicate native step names: the two unnamed pinned checkout actions
+produced duplicate run and post-run names. The original archive remains preserved;
+no promotion was admitted or executed. R2/R3 acceptance remains pending.
+
+The bounded source repair gives preparation's executor and producer checkouts
+explicit unique names. Static preflight checks the actual linear preparation job
+and existing duplicate-name refusal before another cold preparation. Existing
+source-only release controls pass; the recorded native metadata still refuses,
+while a prospective name-only projection satisfies the unchanged validator. This
+projection is a source control, not a new native qualification. No custom model is
+needed for two step labels; scope and investment are limited to those labels, this
+evidence note and existing offline checks, with reuse on future preparations and
+no measured runner savings claimed. The six gates, original custody, producer P,
+executor binding, permissions and action pins retain their existing behavior.
+
+After this repair lands, root must review a fresh protected executor E and run
+fresh preparation, then authenticate its genuine run/attempt, retained archive
+and custody before any promotion decision. The old E archive cannot be relabeled
+or reused as preparation evidence for the new E. Publication, installed acceptance
+and consumer activation remain pending.
