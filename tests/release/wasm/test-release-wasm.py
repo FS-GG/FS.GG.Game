@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
+sys.dont_write_bytecode = True
 import json
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import tempfile
 import warnings
@@ -27,21 +30,39 @@ def refused(command: list[str]) -> None:
 
 
 def validate_workflow(text: str) -> None:
-    blocks = {match.group(1): match.group(2) for match in re.finditer(r"(?ms)^  ([a-z]+):\n(.*?)(?=^  [a-z]+:\n|\Z)", text[text.index("jobs:\n") + 6:])}
-    for name in ("preflight", "custody", "readback", "org", "public", "assets", "complete"):
-        require(name in blocks, f"release workflow job missing: {name}")
-    require("needs: [preflight]" in blocks["custody"], "custody must follow preflight")
-    require("needs: [custody]" in blocks["org"], "org publication must follow custody")
-    require("needs: [org]" in blocks["public"], "public publication must follow org readback")
-    require("needs: [public]" in blocks["assets"], "release assets must follow public readback")
-    require("needs: [org, public, assets]" in blocks["complete"], "completion must join all readbacks")
-    require("inputs.mode == 'publish' || inputs.mode == 'recovery'" in blocks["org"], "prepare-only dispatch exposes a publisher")
-    require('default: "0.2.0"' in text and "inputs.version || '0.2.0'" in blocks["custody"], "release version selector mismatch")
-    require(text.count("name: wasm-release-custody-${{ github.sha }}-0.2.0") == 4, "download custody selectors disagree")
-    require("gh release edit wasm/v0.2.0" in blocks["complete"], "completion targets another release tag")
-    require("scripts/wasm-release/install-browser-tools.sh" in blocks["custody"] and "cd tests/Wasm.PackageConsumer/browser" not in blocks["custody"], "publisher browser setup writes into source checkout")
-    for gate in ("scripts/verify-wasm-contracts.sh", "scripts/verify-wasm-lifecycle.sh", "scripts/verify-wasm-package-consumer.sh --custody"):
-        require(gate in blocks["custody"], f"custody qualification is missing {gate}")
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("promotion_controls", ROOT / "tests/release/wasm/test-release-promotion.py")
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    try: module.validate_workflow(text)
+    except (AssertionError, KeyError, ValueError) as error: raise SystemExit("publisher source contract refused") from error
+
+
+def validate_supervisor_backend(text: str, backend: str) -> None:
+    commands = [shlex.split(line) for line in text.splitlines()
+                if line.lstrip().startswith('"$quint" test ') or line.lstrip().startswith('"$quint" run ')]
+    require([command[1] for command in commands] == ["test", "run"],
+            "supervisor model test or sampled run is missing")
+    require(backend == "typescript" and all(
+        [token for token in command if token.startswith("--backend=")] == ["--backend=" + backend]
+        for command in commands), "supervisor backend differs from the historical selected proof")
+
+
+def supervisor_backend_checks() -> None:
+    text = (ROOT / "scripts/verify-wasm-supervisor.sh").read_text()
+    proof = json.loads((ROOT / "tests/Wasm.Supervisor.Compatibility/reviewed-source-proof.json").read_text())
+    backend = proof["model"]["backend"]
+    validate_supervisor_backend(text, backend)
+    for action in ("test", "run"):
+        original = '"$quint" ' + action + ' --backend=typescript '
+        for replacement in ('"$quint" ' + action + ' ', '"$quint" ' + action + ' --backend=rust '):
+            mutant = text.replace(original, replacement, 1)
+            require(mutant != text, "backend mutation did not reach the production command")
+            try:
+                validate_supervisor_backend(mutant, backend)
+            except SystemExit:
+                pass
+            else:
+                raise SystemExit("supervisor backend omission or replacement was accepted")
 
 
 def browser_setup_checks() -> None:
@@ -112,29 +133,11 @@ def source_checks() -> None:
     cargo_manifests = [path for path in cargo_files if path.name == "Cargo.toml" and "[package]" in path.read_text()]
     require(all('version = "0.3.0"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
     validate_workflow(workflow)
-    require("scripts/wasm-release/install-browser-tools.sh" in workflow and "cd tests/Wasm.PackageConsumer/browser" not in workflow, "publisher browser setup writes into source checkout")
+    supervisor_backend_checks()
     browser_setup_checks()
-    for broken in (
-        workflow.replace("needs: [org]\n", "needs: [custody]\n", 1),
-        workflow.replace("scripts/wasm-release/install-browser-tools.sh", "(cd tests/Wasm.PackageConsumer/browser && npm ci)"),
-        workflow.replace("name: wasm-release-custody-${{ github.sha }}-0.2.0", "name: wasm-release-custody-${{ github.sha }}-0.1.0", 1),
-        workflow.replace("gh release edit wasm/v0.2.0", "gh release edit wasm/v0.1.0"),
-    ):
-        try:
-            validate_workflow(broken)
-        except SystemExit:
-            pass
-        else:
-            raise SystemExit("known-bad publisher ordering, tool setup or version selector was accepted")
-    require("cancel-in-progress: false" in workflow and "group: release-wasm-0.2.0" in workflow, "release concurrency is not version-bound")
-    require("default: prepare" in workflow, "manual execution must default to prepare-only")
-    require(workflow.count("dotnet nuget push") == 2, "release workflow must have exactly two package pushes")
-    require(workflow.index("needs: [custody]") < workflow.index("needs: [org]") < workflow.index("needs: [public]"), "publisher job ordering mismatch")
-    require("needs: [org, public, assets]" in workflow, "completion does not join all readbacks")
+    subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-release-promotion.py")], check=True)
     require("NuGet/login@8d196754b4036150537f80ac539e15c2f1028841" in workflow, "public push lacks pinned OIDC login")
-    require("NUGET_API_KEY" in workflow and "NUGET_API_KEY }}" in workflow, "public push does not use OIDC output")
     require("secrets.NUGET_API_KEY" not in workflow, "long-lived public API key fallback is forbidden")
-    require(workflow.count("packages: write") == 1 and workflow.count("id-token: write") == 1, "publisher permissions are not job-scoped")
     require(core.count("github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')") == 2, "core release namespace guard missing")
     consumer = (ROOT / "scripts/verify-wasm-package-consumer.sh").read_text()
     require("--feed-only" in consumer, "feed-only consumer route missing")

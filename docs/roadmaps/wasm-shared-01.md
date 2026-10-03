@@ -84,3 +84,53 @@ exact reviewed-source bindings. Original b72 review 57d1c6c3 and Pending owner
 proof eb11b68a remain byte-identical historical records. Renewed typed eligibility
 allows only binding metadata after the reviewed source; publication and native
 product acceptance remain false. Final source admission and publication are pending.
+
+
+## 0.3 publisher route — WASM-SHARED-01.3-R1
+
+The compatible supervisor source landed through Game PR 683 at protected producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, tree
+`f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a`. Native shared qualification
+[37119471374](https://github.com/FS-GG/FS.GG.Game/actions/runs/37119471374)
+passed the equivalent candidate tree at d87f9e3. Its private candidate archives
+retain d87 provenance; they are not protected-producer release custody.
+
+- [ ] R1: land the bounded publisher-route source repair and read back protected executor E.
+- [ ] R2: prepare once from protected producer P; qualify and retain its exact native originals.
+- [ ] R3: review original custody, authenticate current permissions/occupancy, promote without repacking, and qualify fresh installed consumers from both feeds.
+- [ ] R4: project actual publication and installed acceptance into the programme and published registry.
+
+The source repair separates producer P from the accepted protected executor E.
+[Release preparation](../../.github/workflows/release-wasm.yml) uses read permissions
+and P's unchanged preparation and full qualification helpers. Promotion, recovery
+and readback consume a successful exact run attempt and artifact digest, including
+all original archive member inventories. The
+[promotion adapter](../../scripts/wasm-release/promotion.py) creates the literal P
+tag through the workflow token, retains an immutable draft transaction binding,
+verifies both GitHub Packages members before public NuGet, and publishes exact
+SDK assets after readback. Recovery admission verifies every occupied org/public
+member against the originals; beginning recovery repeats those readbacks before
+any draft or binding write. Package stages also verify occupied members before
+writing a missing sibling. Unknown or foreign state refuses; it does not repack
+or delete.
+
+Public preflight discovers the package-base resource and reads complete version
+indices, including unlisted versions, together with consistent exact endpoints.
+Exceptional moderator-removal history and atomic version reservation remain
+Unknown. Actual server rejection leaves a partial transaction for same-custody
+recovery. GitHub active and deleted occupancy require authenticated complete reads;
+NuGet authorization requires a real current trusted-publisher exchange.
+
+[Installed qualification](../../.github/workflows/wasm-installed-org.yml) adds the
+unchanged 47 default and 13 selected .NET/Fable schedules and both Host facades,
+real lock refusal, official Core byte joins and eight browser controls. The selected
+worker comes from the actual fresh restored cache. The protected 0.2 consumer pins,
+producer/model/SDK inputs and historical audits stay unchanged. An explicit
+accepted-executor binding permits only the finite release/qualification glue delta.
+
+Offline source controls cover actual workflow ordering/privileges, native
+run-attempt and artifact eligibility, occupancy refusals, signature trust before
+payload allowance, installed member/lock/worker substitutions and interrupted
+promotion replay. These checks establish source behavior only. Native preparation,
+current authentication, release effects and genuine both-feed acceptance remain
+pending. Current published WASM is still 0.2.0; no product adoption is activated.

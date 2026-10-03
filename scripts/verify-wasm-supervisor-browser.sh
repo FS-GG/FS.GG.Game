@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mode=custody
+if [[ "${1:-}" == --feed-only ]]; then mode=feed-only; shift; fi
 compiled="$(realpath -e "${1:?usage: verify-wasm-supervisor-browser.sh <supervisor-gate-output> <new-private-public-root>}")"
 public="$(realpath -m "${2:?requires fresh private public root}")"
 case "$public/" in "$repo/"*) echo 'browser qualification requires private output outside source' >&2; exit 2;; esac
@@ -8,8 +10,15 @@ case "$public/" in "$repo/"*) echo 'browser qualification requires private outpu
 [[ -f "$compiled/installed-fable/BrowserBridge.js" ]]
 wasi="${WASM_WASI_SDK_ROOT:?requires pinned WASI SDK 34 root}"
 [[ "$("$wasi/bin/clang" --version | head -n 1)" == 'clang version 23.1.0-wasi-sdk (https://github.com/llvm/llvm-project 895aa2c896ada719451be2e3673c83da8ddf1141)' ]]
-custody="${WASM_CANDIDATE_CUSTODY:?requires exact packed candidate feed}"
 version="${WASM_CANDIDATE_VERSION:?requires exact candidate version}"
+if [[ "$mode" == feed-only ]]; then
+  [[ -z "${WASM_CANDIDATE_CUSTODY:-}" && -z "${WASM_RELEASE_CUSTODY:-}" && -z "${WASM_SOURCE3_FEED:-}" ]] || { echo "feed-only refuses local custody/source injection" >&2; exit 2; }
+  browser_archive="${WASM_INSTALLED_BROWSER_ARCHIVE:?requires actual restored browser package}"
+  [[ "$browser_archive" == "$compiled/packages/fs.gg.wasm.browser/"* ]] || { echo "worker must come from the actual fresh restored cache" >&2; exit 2; }
+else
+  custody="${WASM_CANDIDATE_CUSTODY:?requires exact packed candidate feed}"
+  browser_archive="$custody/FS.GG.Wasm.Browser.$version.nupkg"
+fi
 mkdir -p "$public"
 cp -a "$compiled/installed-fable" "$public/fable"
 cp "$repo/tests/Wasm.Supervisor.Compatibility/browser/index.html" "$repo/tests/Wasm.Supervisor.Compatibility/browser/compatible-consumer.mjs" "$public/"
@@ -18,7 +27,7 @@ cp "$repo/tests/Wasm.Supervisor.Compatibility/browser/index.html" "$repo/tests/W
   -Wl,--no-entry -Wl,--export-memory -Wl,--initial-memory=2097152 -Wl,--max-memory=8388608 \
   -Wl,--export=sc2c_abi_version -Wl,--export=sc2c_alloc -Wl,--export=sc2c_free \
   -Wl,--export=sc2c_initialize -Wl,--export=sc2c_process -Wl,--export=sc2c_shutdown -o "$public/limits-guest.wasm"
-python3 - "$custody/FS.GG.Wasm.Browser.$version.nupkg" "$public" <<'PY'
+python3 - "$browser_archive" "$public" <<'PY'
 import pathlib,sys,zipfile
 root=pathlib.Path(sys.argv[2])
 with zipfile.ZipFile(sys.argv[1]) as archive:

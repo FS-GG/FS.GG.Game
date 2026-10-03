@@ -17,12 +17,13 @@ def validate(candidate):
     assert "on:\n  workflow_dispatch:\n    inputs:" in candidate and "  push:" not in candidate
     assert "packages: read" in candidate and candidate.count("    runs-on:") == 1
     assert all(value not in candidate for value in ("packages: write", "contents: write", "id-token:", "dotnet pack", "nuget push", "gh release", "git tag"))
-    for name in ("version", "published_source", "qualifier_source", "manifest_sha256", "sdk_sha256"):
+    for name in ("version", "published_source", "qualifier_source", "manifest_sha256", "sdk_sha256", "accepted_executor", "promotion_binding_sha256"):
         assert f"      {name}:" in candidate and f"${{{{ inputs.{name} }}}}" in candidate
     assert "feed: [org, public]" in candidate and "max-parallel: 1" in candidate
     assert "https://nuget.pkg.github.com/FS-GG/index.json" in candidate and "https://api.nuget.org/v3/index.json" in candidate
     assert "run: python3 scripts/wasm-release/bind-installed-release.py" in candidate
     assert "scripts/verify-wasm-package-consumer.sh --feed-only" in candidate
+    assert "scripts/wasm-release/qualify-supervisor-installed.sh --feed-only" in candidate
     assert "matrix.feed == 'org'" in candidate and "NuGetPackageSourceCredentials_wasm:" in candidate
     steps = ["Static installed qualification preflight", "Bind qualification source and immutable published receipts", "Install exact consumer tools", "Qualify fresh installed consumer"]
     positions = [candidate.index(value) for value in steps]
@@ -34,6 +35,7 @@ validate(text)
 for broken in (
     text.replace("packages: read", "packages: write"),
     text.replace("--feed-only", "--custody artifacts/wasm-release"),
+    text.replace("scripts/wasm-release/qualify-supervisor-installed.sh --feed-only", "true"),
     text.replace("max-parallel: 1", "max-parallel: 2"),
     text.replace("python3 scripts/wasm-release/bind-installed-release.py", "true"),
     text.replace("          fetch-depth: 0", "          fetch-depth: 0\n          ref: wasm/v0.1.1"),

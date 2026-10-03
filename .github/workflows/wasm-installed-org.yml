@@ -15,6 +15,14 @@ on:
         description: Exact immutable qualification commit selected by this dispatch
         required: true
         type: string
+      accepted_executor:
+        description: Root accepted protected publisher/qualification executor E
+        required: true
+        type: string
+      promotion_binding_sha256:
+        description: Exact immutable published transaction binding SHA-256
+        required: true
+        type: string
       manifest_sha256:
         description: Root verified release manifest SHA-256
         required: true
@@ -38,7 +46,7 @@ jobs:
       matrix:
         feed: [org, public]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: read
@@ -47,6 +55,8 @@ jobs:
       PUBLISHED_SOURCE: ${{ inputs.published_source }}
       QUALIFIER_SOURCE: ${{ inputs.qualifier_source }}
       MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+      ACCEPTED_EXECUTOR: ${{ inputs.accepted_executor }}
+      PROMOTION_BINDING_SHA256: ${{ inputs.promotion_binding_sha256 }}
       SDK_SHA256: ${{ inputs.sdk_sha256 }}
       WASM_PACKAGE_FEED: ${{ matrix.feed == 'org' && 'https://nuget.pkg.github.com/FS-GG/index.json' || 'https://api.nuget.org/v3/index.json' }}
       WASM_RELEASE_BASE_URL: https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v${{ inputs.version }}
@@ -86,6 +96,8 @@ jobs:
           export NUGET_HTTP_CACHE_PATH="$RUNNER_TEMP/wasm-installed-${{ matrix.feed }}-http-cache"
           mkdir -p artifacts/wasm-installed-${{ matrix.feed }}
           scripts/verify-wasm-package-consumer.sh --feed-only 2>&1 | tee artifacts/wasm-installed-${{ matrix.feed }}/consumer.log
+          scripts/wasm-release/qualify-supervisor-installed.sh --feed-only "$RUNNER_TEMP/selected-${{ matrix.feed }}" 2>&1 | tee artifacts/wasm-installed-${{ matrix.feed }}/selected.log
+          cp -a "$RUNNER_TEMP/selected-${{ matrix.feed }}" "$RUNNER_TEMP/selected-${{ matrix.feed }}-browser" "$RUNNER_TEMP/wasm-installed-receipts" artifacts/wasm-installed-${{ matrix.feed }}/
       - name: Retain installed qualification output
         if: always()
         uses: actions/upload-artifact@v7
