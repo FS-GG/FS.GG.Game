@@ -19,6 +19,9 @@ p=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)
 def validate_workflow(text):
     assert '  push:' not in text and 'options: [prepare, promote, readback, recovery]' in text and 'default: prepare' in text
     assert 'group: release-wasm-0.3.0' in text and 'cancel-in-progress: false' in text
+    env = text.split("\nenv:\n",1)[1].split("\njobs:\n",1)[0]
+    assert re.findall(r"(?m)^  DOTNET_PROCESSOR_COUNT: (.+)$",env)==['1'], "actual CPU bound must be one"
+    assert not re.search(r"(?m)^  .*[/@].*:",env), "action identifier substituted for an environment key"
     jobs={m[1]:m[2] for m in re.finditer(r'(?ms)^  ([a-z]+):\n(.*?)(?=^  [a-z]+:\n|\Z)',text.split('jobs:\n',1)[1])}
     assert set(jobs)=={'preflight','prepare','admission','begin','org','public','assets','complete','readback'}
     for job,dependency in [('prepare','preflight'),('admission','preflight'),('begin','admission'),('org','begin'),('public','org'),('assets','public'),('complete','org, public, assets'),('readback','admission')]:
@@ -81,6 +84,8 @@ class Tests(unittest.TestCase):
         text=(ROOT/'.github/workflows/release-wasm.yml').read_text();validate_workflow(text)
         for before,after in [
             ('needs: [org]\n','needs: [begin]\n'),('options: [prepare, promote, readback, recovery]','options: [prepare, publish]'),
+            ('DOTNET_PROCESSOR_COUNT: 1','DOTNET_PROCESSOR_COUNT: 2'),
+            ('DOTNET_PROCESSOR_COUNT: 1','actions/setup-dotnet@bad_PROCESSOR_COUNT: 1'),
             ('default: prepare','default: promote'),('contents: read\n    defaults:','contents: write\n    defaults:'),
             ('Qualify full selected custody','Skipped selected custody'),('TAG_CREDENTIAL_ROUTE: workflow-github-token','TAG_CREDENTIAL_ROUTE: PAT'),
             ('p.download(p.Native()','p.foreign(p.Native()'),('NUGET_EXCHANGE_VERIFIED:','EXCHANGE_ASSUMED:'),

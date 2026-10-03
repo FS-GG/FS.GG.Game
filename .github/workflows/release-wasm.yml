@@ -39,7 +39,7 @@ env:
   FIRST_PROMOTION_RUN: ${{ inputs.first_promotion_run }}
   FIRST_PROMOTION_ATTEMPT: ${{ inputs.first_promotion_attempt }}
   NUGET_ACCOUNT: ${{ secrets.NUGET_USER || 'Paradigma11' }}
-  actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68_PROCESSOR_COUNT: 1
+  DOTNET_PROCESSOR_COUNT: 1
   MSBUILDDISABLENODEREUSE: 1
   UseSharedCompilation: false
 
