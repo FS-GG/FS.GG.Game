@@ -98,6 +98,15 @@ jobs:
           rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-unknown
           rustup default 1.90.0
           scripts/wasm-release/install-browser-tools.sh
+      - name: Read-only pinned Rust model readiness
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUINT_HOME: ${{ runner.temp }}/wasm-quint
+        run: |
+          set -euo pipefail
+          python3 ../executor/scripts/wasm-release/prepare-quint-evaluator.py --producer "$PWD" --quint-home "$QUINT_HOME" --evidence "$RUNNER_TEMP/wasm-prepack-rust"
+          printf 'QUINT_HOME=%s\n' "$QUINT_HOME" >> "$GITHUB_ENV"
       - name: Prepare protected originals once
         run: scripts/wasm-release/prepare.sh "$RUNNER_TEMP/wasm-release"
       - name: Qualify contracts and lifecycle
@@ -120,7 +129,7 @@ jobs:
           python3 scripts/wasm-release/promotion.py freeze --custody "$RUNNER_TEMP/wasm-release" --output "$RUNNER_TEMP/wasm-release/preparation-binding.json"
           mkdir "$RUNNER_TEMP/wasm-release/evidence"
           cp "$RUNNER_TEMP/wasm-contracts.log" "$RUNNER_TEMP/wasm-lifecycle.log" "$RUNNER_TEMP/wasm-sdk-consumer.log" "$RUNNER_TEMP/wasm-selected.log" "$RUNNER_TEMP/wasm-release/evidence/"
-          cp -a "$RUNNER_TEMP/wasm-selected" "$RUNNER_TEMP/wasm-selected-browser" "$RUNNER_TEMP/wasm-selected-baseline/official-core" "$RUNNER_TEMP/wasm-release/evidence/"
+          cp -a "$RUNNER_TEMP/wasm-prepack-rust" "$RUNNER_TEMP/wasm-selected" "$RUNNER_TEMP/wasm-selected-browser" "$RUNNER_TEMP/wasm-selected-baseline/official-core" "$RUNNER_TEMP/wasm-release/evidence/"
       - name: Retain eligible originals
         id: eligible
         uses: actions/upload-artifact@v7
@@ -137,6 +146,7 @@ jobs:
           path: |
             ${{ runner.temp }}/wasm-*.log
             ${{ runner.temp }}/wasm-selected/
+            ${{ runner.temp }}/wasm-prepack-rust/
           if-no-files-found: ignore
           retention-days: 14
 
