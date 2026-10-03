@@ -8,13 +8,6 @@
         "resolved": "10.1.302",
         "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
       },
-      "fs.gg.wasm.browser": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Wasm.Contracts": "[0.2.0, )",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
       "fs.gg.wasm.contracts": {
         "type": "Project",
         "dependencies": {

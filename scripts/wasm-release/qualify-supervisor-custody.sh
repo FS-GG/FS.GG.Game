@@ -8,7 +8,19 @@ bootstrap() {
   case "$q/" in "$repo/"*) echo 'supervisor bootstrap must be outside source' >&2; exit 2;; esac
   [[ ! -e "$q" ]] || { echo 'supervisor bootstrap requires a fresh root' >&2; exit 2; }
   [[ "$(dotnet --version)" == 10.0.401 ]]
-  mkdir -m 700 -p "$q/feed" "$q/packages" "$q/official-core"
+  (
+    umask 077
+    mkdir -p -- "$(dirname "$q")"
+    mkdir -m 700 -- "$q"
+    mkdir -- "$q/feed" "$q/packages" "$q/official-core"
+    local staging
+    for staging in "$q" "$q/feed" "$q/packages" "$q/official-core"; do
+      [[ ! -L "$staging" && "$(stat -c '%a:%u' -- "$staging")" == "700:$(id -u)" ]] || {
+        echo 'supervisor bootstrap staging must be private and owned by the current user' >&2
+        exit 2
+      }
+    done
+  )
   python3 - "$q" <<'PY'
 import hashlib,json,pathlib,shutil,subprocess,sys,urllib.request,xml.etree.ElementTree as ET,zipfile
 q=pathlib.Path(sys.argv[1]);sha=lambda b:hashlib.sha256(b).hexdigest();rows=[]
