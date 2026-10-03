@@ -46,7 +46,7 @@ let decide (review: Review) (observed: Observation) : Decision =
     require (review.ModelSha256 = reviewedModel && observed.ModelSha256 = reviewedModel) "reviewed model changed"
     require (review.Version = "0.3.0") "receiver-visible additive API requires selected minor version"
     require (Regex.IsMatch(observed.CallerHead, "^[0-9a-f]{40}$") && observed.CallerHead = observed.ExactHead && observed.Clean) "dirty or mismatched exact source head"
-    require (review.Inputs.Length = 19 && Array.distinctBy _.Path review.Inputs |> Array.length = review.Inputs.Length) "incomplete reviewed input set"
+    require (review.Inputs.Length = 18 && Array.distinctBy _.Path review.Inputs |> Array.length = review.Inputs.Length) "incomplete reviewed input set"
     require ((Array.sortBy _.Path review.Inputs) = (Array.sortBy _.Path observed.Inputs)) "reviewed semantic input changed"
     require (Array.distinct observed.ChangedPaths |> Array.length = observed.ChangedPaths.Length
              && observed.ChangedPaths |> Array.forall (fun path -> preparationPaths.Contains path)) "change outside admitted source preparation"
