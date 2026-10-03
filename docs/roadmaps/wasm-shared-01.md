@@ -108,8 +108,11 @@ all original archive member inventories. The
 [promotion adapter](../../scripts/wasm-release/promotion.py) creates the literal P
 tag through the workflow token, retains an immutable draft transaction binding,
 verifies both GitHub Packages members before public NuGet, and publishes exact
-SDK assets after readback. Recovery verifies every occupied member before writing
-a missing sibling. Unknown or foreign state refuses; it does not repack or delete.
+SDK assets after readback. Recovery admission verifies every occupied org/public
+member against the originals; beginning recovery repeats those readbacks before
+any draft or binding write. Package stages also verify occupied members before
+writing a missing sibling. Unknown or foreign state refuses; it does not repack
+or delete.
 
 Public preflight discovers the package-base resource and reads complete version
 indices, including unlisted versions, together with consistent exact endpoints.

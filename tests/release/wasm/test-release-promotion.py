@@ -246,6 +246,57 @@ class Tests(unittest.TestCase):
             with self.assertRaises(p.Refusal):p.perform(Transport(),'org',reviewed(),raw,raw)
         self.assertEqual(len(calls),1);self.assertTrue(str(calls[0]).endswith('readback.sh'))
 
+    def test_recovery_begin_checks_occupied_payload_before_any_writer(self):
+        for draft in (False,True):
+            for feed in ('org','public'):
+                for outcome in ('foreign','unknown','same-original'):
+                    events=[];r=reviewed();release={'id':1,'draft':True,'assets':[]} if draft else None
+                    class Transport(Occupancy):
+                        def pages(self,path,key=None):
+                            if outcome=='unknown':raise p.Refusal('403 occupancy Unknown')
+                            return [{'name':'0.3.0','id':1}] if feed=='org' and 'browser' in path and 'state=active' in path else []
+                        def request(self,url,**kwargs):
+                            if feed!='public' or url.endswith('/v3/index.json'):return super().request(url,**kwargs)
+                            exists='browser' in url
+                            return (200,{'versions':['0.2.0']+(['0.3.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
+                        def checked(self,path,method='GET',data=None):
+                            if method=='POST':events.append(('writer','draft'))
+                            return {'id':1,'draft':True,'assets':[]}
+                    def cmd(args,**kwargs):
+                        if str(args[0]).endswith('readback.sh'):
+                            events.append(('readback',args[1],args[-1]))
+                            if outcome=='foreign':raise p.Refusal('occupied payload differs from original')
+                        else:events.append(('writer','binding'))
+                    with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'TAG_CREDENTIAL_ROUTE':'workflow-github-token','RUNNER_TEMP':raw,'GITHUB_RUN_ID':'201','GITHUB_RUN_ATTEMPT':'1','FIRST_PROMOTION_RUN':'200','FIRST_PROMOTION_ATTEMPT':'2'}),patch.object(p,'verify_originals'),patch.object(p,'verify_transaction'),patch.object(p,'interrupted_begin',return_value=(200,2)),patch.object(p,'release_state',return_value=(200,release)),patch.object(p,'command',side_effect=cmd):
+                        if outcome=='same-original':
+                            p.begin(Transport(),r,raw,True)
+                            self.assertEqual(events[0],('readback',feed,p.PACKAGES[1]))
+                            self.assertTrue(any(e[0]=='writer' for e in events))
+                        else:
+                            with self.assertRaises(p.Refusal):p.begin(Transport(),r,raw,True)
+                            self.assertFalse(any(e[0]=='writer' for e in events))
+    def test_recovery_admission_requires_occupied_payload_readback(self):
+        for outcome in ('foreign','unknown','same-original'):
+            events=[]
+            class Transport(Occupancy):
+                def pages(self,path,key=None):
+                    if outcome=='unknown':raise p.Refusal('403 occupancy Unknown')
+                    return [{'name':'0.3.0','id':1}] if 'browser' in path and 'state=active' in path else []
+            def cmd(args,**kwargs):
+                self.assertTrue(str(args[0]).endswith('readback.sh'))
+                events.append(('readback',args[1],args[-1]))
+                if outcome=='foreign':raise p.Refusal('foreign occupied archive')
+            with tempfile.TemporaryDirectory() as raw:
+                receipt=pathlib.Path(raw)/'admission-binding.json';request=pathlib.Path(raw)/'reviewed.json';request.write_text(json.dumps(reviewed()))
+                argv=['promotion.py','admit','--reviewed',str(request),'--custody',raw,'--output',str(receipt),'--recovery']
+                env={'RUNNER_TEMP':raw,'NUGET_EXCHANGE_VERIFIED':'true','GITHUB_RUN_ID':'201','GITHUB_RUN_ATTEMPT':'1','NUGET_ACCOUNT':'offline'}
+                with patch.dict(os.environ,env),patch.object(sys,'argv',argv),patch.object(p,'Native',return_value=Transport()),patch.object(p,'download'),patch.object(p,'release_state',return_value=(200,None)),patch.object(p,'interrupted_begin',return_value=(200,2)),patch.object(p,'command',side_effect=cmd):
+                    if outcome=='same-original':
+                        p.main();self.assertTrue(receipt.exists());self.assertEqual(events,[('readback','org',p.PACKAGES[1])])
+                    else:
+                        with self.assertRaises(p.Refusal):p.main()
+                        self.assertFalse(receipt.exists())
+
     def test_actual_clean_executor_and_finite_glue_delta(self):
         import subprocess
         head=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()

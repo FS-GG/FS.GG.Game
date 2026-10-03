@@ -272,11 +272,24 @@ def interrupted_begin(native,reviewed,release=None):
     return first,attempt
 
 
+def readback_occupied(observed,custody,output,feeds=('org','public')):
+    # Recovery may only recognize occupancy after actual same-original payload
+    # readback, including repository-signature verification on the public feed.
+    for feed in feeds:
+        for ident in PACKAGES:
+            key=ident+(':active' if feed=='org' else ':public')
+            if observed[key]:
+                command([str(ROOT/'scripts/wasm-release/readback.sh'),feed,str(custody),str(pathlib.Path(output)/feed/ident),ident],
+                        env=dict(os.environ,WASM_READBACK_DEADLINE=str(int(time.time()+max(0,STAGE_END-time.monotonic())))))
+
+
 def begin(native,reviewed,custody,recovery):
     need(os.environ.get('TAG_CREDENTIAL_ROUTE')=='workflow-github-token','PAT/App/manual tag path refuses')
     verify_originals(custody,reviewed['binding'])
     ref,release=release_state(native)
-    occupancy(native,reviewed,recovery or release is not None)
+    observed=occupancy(native,reviewed,recovery or release is not None)
+    if recovery or release is not None:
+        readback_occupied(observed,custody,pathlib.Path(os.environ['RUNNER_TEMP'])/'begin-occupied-readback')
     if release:
         rows=[a for a in release['assets'] if a['name']=='promotion-binding.json']
         if not rows:
@@ -324,10 +337,7 @@ def perform(native,kind,reviewed,custody,output):
         occupied=occupancy(native,reviewed,True)
         # Verify EVERY occupied member before the first missing-member writer.
         # A foreign second sibling cannot permit a first-sibling partial push.
-        for ident in PACKAGES:
-            key=ident+(':active' if kind=='org' else ':public')
-            if occupied[key]:
-                command([str(ROOT/'scripts/wasm-release/readback.sh'),kind,str(custody),str(pathlib.Path(output)/ident),ident])
+        readback_occupied(occupied,custody,output,(kind,))
         for ident in PACKAGES:
             key=ident+(':active' if kind=='org' else ':public')
             original=pathlib.Path(custody)/(ident+'.0.3.0.nupkg')
@@ -426,6 +436,7 @@ def main():
                 else: interrupted_begin(native,reviewed,release)
             else: interrupted_begin(native,reviewed)
             observed=occupancy(native,reviewed,True)
+            readback_occupied(observed,args.custody,pathlib.Path(os.environ['RUNNER_TEMP'])/'admission-occupied-readback')
         else:
             need(ref==404 and release is None,'fresh tag/release occupied'); observed=occupancy(native,reviewed)
         save(args.output,{'schema':'fsgg.wasm.admission/v1','reviewed':reviewed,'mode':'recovery' if args.recovery else 'promote','run':int(os.environ['GITHUB_RUN_ID']),'attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'exchangeVerified':True,'occupancy':observed,'observedAt':dt.datetime.now(dt.timezone.utc).isoformat(),'nugetAccountSha256':digest(os.environ['NUGET_ACCOUNT'].encode()),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown'})
