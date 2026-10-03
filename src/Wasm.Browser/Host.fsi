@@ -12,7 +12,10 @@ type Host =
         HostSettings * HostTransport * (BrowserResult -> unit) -> Result<Host, RuntimeIssue list>
 
     static member Create: HostSettings * EffectInterpreter -> Result<Host, RuntimeIssue list>
+    member SubmitLimited: monotonicMilliseconds: int64 * request: LimitedRequest * limits: RequestLimits -> Result<unit, RequestAdmissionIssue list>
+    member CommitCandidateFrozen: monotonicMilliseconds: int64 * recoveryToken: string * transaction: string * expectedActiveGeneration: uint64 * candidateGeneration: uint64 -> Result<unit, RequestAdmissionIssue list>
     member Projection: HostProjection
+    member CompatibilityProjection: CompatibilityProjection
     member Dispatch: HostEvent -> unit
     member Load: monotonicMilliseconds: int64 * identity: HostIdentity * artifact: byte array -> unit
 

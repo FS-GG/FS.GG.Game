@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><IsPackable>false</IsPackable><GenerateProgramFile>false</GenerateProgramFile></PropertyGroup>
+<ItemGroup><ProjectReference Include="../../src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj"/></ItemGroup>
+<ItemGroup>
+<Compile Include="../../src/Wasm.Browser/RuntimeProtocol.fsi"/><Compile Include="../../src/Wasm.Browser/RuntimeProtocol.fs"/>
+<Compile Include="../../src/Wasm.Browser/Admission.fsi"/><Compile Include="../../src/Wasm.Browser/Admission.fs"/>
+<Compile Include="../../src/Wasm.Browser/Invocation.fsi"/><Compile Include="../../src/Wasm.Browser/Invocation.fs"/>
+<Compile Include="../../src/Wasm.Browser/Lifecycle.fsi"/><Compile Include="../../src/Wasm.Browser/Lifecycle.fs"/>
+<Compile Include="../../src/Wasm.Browser/WorkerEntry.fsi"/><Compile Include="../../src/Wasm.Browser/WorkerEntry.fs"/>
+<Compile Include="../../src/Wasm.Browser/Host.fsi"/><Compile Include="../../src/Wasm.Browser/Host.fs"/>
+<Compile Include="../Wasm.Lifecycle.Correspondence/CorrespondenceTypes.fs"/>
+<Compile Include="../Wasm.Lifecycle.Correspondence/GeneratedTraces.fs"/>
+<Compile Include="../Wasm.Lifecycle.Correspondence/Correspondence.fs"/>
+<Compile Include="../Wasm.Lifecycle.Correspondence/InstalledHostControls.fs"/>
+<Compile Include="CompatibleTypes.fs"/><Compile Include="GeneratedCompatibilityTraces.fs"/><Compile Include="CompatibilityCorrespondence.fs"/>
+<Compile Include="Fixtures.fs"/><Compile Include="Program.fs"/>
+</ItemGroup>
+</Project>

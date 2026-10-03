@@ -32,8 +32,7 @@ let private mechanicalExpectation (observed:int64) (state:HostProjection) (effec
         {empty with Kind="settle";Request=effect.Request;Generation=effect.Generation;Disposition=disposition}
     | value -> failwithf "unmapped mechanical effect %s" value
 
-let replayFacade (connected:bool) (trace:ModelTrace) =
-    let profile=if trace.Steps.Head.State.Profile="Bar" then BarProtected else Sc2ImportedStrict
+let replayFacadeWith (selectedSettings:HostSettings) dispatch (connected:bool) (trace:ModelTrace) =
     let mutable emitted:HostEffect list=[]
     let mutable delivered:BrowserResult list=[]
     let mutable mechanical:Mechanical list=[]
@@ -51,16 +50,16 @@ let replayFacade (connected:bool) (trace:ModelTrace) =
           ArmTimer=(fun key delay _ -> append {record "armTimer" (key.Split(':').[0]) with Timer=key;Delay=delay})
           CancelTimer=(fun key -> append {record "cancelTimer" (key.Split(':').[0]) with Timer=key}) }
     let host =
-        (if connected then Host.CreateConnected(settings profile,transport,fun result ->
+        (if connected then Host.CreateConnected(selectedSettings,transport,fun result ->
             delivered <- delivered @ [result]
             append {record "settle" result.Identity.WorkerInstance with Request=result.Identity.Request;Generation=result.Identity.Generation;Disposition=string result.Disposition})
-         else Host.Create(settings profile,fun effects -> emitted <- emitted @ effects))
+         else Host.Create(selectedSettings,fun effects -> emitted <- emitted @ effects))
         |> Result.defaultWith(fun issues -> failwithf "%A" issues)
     capturedHost <- Some host
     let mutable failures=[]
     for (previous,expected) in List.pairwise trace.Steps do
         emitted <- [];delivered <- [];mechanical <- [];terminations <- [];now <- expected.Input.Observed
-        host.Dispatch(eventFor previous expected)
+        dispatch host previous expected
         let target=if connected then expected.Connected else expected.State
         let effects=if connected then expected.ConnectedEffects else expected.Effects
         let terminals=if connected then expected.ConnectedTerminals else expected.Terminals
@@ -85,6 +84,10 @@ let replayFacade (connected:bool) (trace:ModelTrace) =
                 let dispatched=result.Outcome |> Option.exists(fun value -> value.Dispatch=Dispatched)
                 if reason<>terminal.Reason || outcome<>terminal.Outcome || phase<>terminal.Phase || dispatched<>terminal.Dispatched then failures <- $"{trace.Name} raw facade cause/outcome/phase/dispatch differs" :: failures
     List.rev failures
+
+let replayFacade connected (trace:ModelTrace) =
+    let profile=if trace.Steps.Head.State.Profile="Bar" then BarProtected else Sc2ImportedStrict
+    replayFacadeWith (settings profile) (fun host previous expected -> host.Dispatch(eventFor previous expected)) connected trace
 
 // Causal controls pass altered expectations through the same real installed
 // facade validator; neither the Host nor its callback interpreter is copied.

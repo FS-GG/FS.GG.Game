@@ -12,11 +12,20 @@ type Host private (initialState: HostState, interpret: EffectInterpreter) =
         Lifecycle.create settings |> Result.map (fun state -> Host(state, interpret))
 
     member _.Projection = Lifecycle.project state
+    member _.CompatibilityProjection = Lifecycle.projectCompatibility state
 
     member _.Dispatch(event) =
         let next, effects = Lifecycle.update event state
         state <- next
         interpret effects
+
+    member _.SubmitLimited(monotonicMilliseconds, request, limits) =
+        Lifecycle.submitLimited monotonicMilliseconds request limits state
+        |> Result.map (fun (next,effects) -> state<-next;interpret effects)
+
+    member _.CommitCandidateFrozen(monotonicMilliseconds, recoveryToken, transaction, expectedActiveGeneration, candidateGeneration) =
+        Lifecycle.commitCandidateFrozen monotonicMilliseconds recoveryToken transaction expectedActiveGeneration candidateGeneration state
+        |> Result.map (fun (next,effects) -> state<-next;interpret effects)
 
     member this.Load(monotonicMilliseconds, identity, artifact) =
         this.Dispatch

@@ -48,11 +48,22 @@ type SchedulingSettings =
         Realtime: RealtimeScheduling option
     }
 
-type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings
+type HostCompatibility =
+    | DefaultCompatibility
+    | Sc2SupervisorV1
+
+type RequestLimits =
+    { MaximumDeadlineMilliseconds: int
+      MaximumOutputBytes: int
+      EnclosingDeadlineMilliseconds: int64 option }
+
+type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings * HostCompatibility
 
 [<RequireQualifiedAccess>]
 module HostSettings =
     val create: ValidatedConfiguration -> ProductRole option -> Result<HostSettings, ProtocolIssue list>
+    val createCompatible: ValidatedConfiguration -> ProductRole option -> HostCompatibility -> Result<HostSettings, ProtocolIssue list>
+    val compatibility: HostSettings -> HostCompatibility
     val configuration: HostSettings -> ValidatedConfiguration
     val role: HostSettings -> ProductRole option
     val scheduling: HostSettings -> SchedulingSettings
@@ -125,6 +136,22 @@ type BrowserResult =
         Disposition: DeliveryDisposition
         Reason: DeliveryReason option
     }
+
+/// Each request captures its limits independently of the loaded worker ceiling.
+type LimitedRequest =
+    | LimitedLoad of identity: HostIdentity * configuration: ValidatedConfiguration * artifact: byte array
+    | LimitedCandidate of identity: HostIdentity * transaction: string * expectedActiveGeneration: uint64 option * configuration: ValidatedConfiguration * artifact: byte array
+    | LimitedInitialize of identity: HostIdentity * input: byte array
+    | LimitedInvoke of identity: HostIdentity * submission: SubmissionClass * input: byte array
+    | LimitedShutdown of identity: HostIdentity
+
+type RequestAdmissionIssue =
+    | InvalidRequestLimit of fieldName: string
+    | RequestOwnerUnavailable
+    | OversizedSnapshotInput
+    | EnclosingBudgetExpired
+    | RequestDeadlineOverflow
+    | RequestRefused of DeliveryReason
 
 type HostInput =
     | ConfiguredLoadRequested of

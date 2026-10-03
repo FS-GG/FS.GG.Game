@@ -60,6 +60,19 @@ type HostProjection =
         LastAction: string
     }
 
+/// Additional state for selected compatibility; existing projections remain intact.
+type RequestLimitProjection =
+    { Identity: HostIdentity
+      Limits: RequestLimits
+      DeadlineMilliseconds: int64 }
+
+type CompatibilityProjection =
+    { Policy: HostCompatibility
+      Current: RequestLimitProjection option
+      Controls: RequestLimitProjection list
+      MixedQueue: RequestLimitProjection list
+      HeldSnapshot: RequestLimitProjection option }
+
 type HostState
 
 [<RequireQualifiedAccess>]
@@ -67,4 +80,8 @@ module Lifecycle =
     val create: HostSettings -> Result<HostState, RuntimeIssue list>
     val update: HostEvent -> HostState -> HostState * HostEffect list
     val project: HostState -> HostProjection
+    val projectCompatibility: HostState -> CompatibilityProjection
     val projectEffects: HostEffect list -> EffectProjection list
+
+    val submitLimited: int64 -> LimitedRequest -> RequestLimits -> HostState -> Result<HostState * HostEffect list, RequestAdmissionIssue list>
+    val commitCandidateFrozen: int64 -> string -> string -> uint64 -> uint64 -> HostState -> Result<HostState * HostEffect list, RequestAdmissionIssue list>

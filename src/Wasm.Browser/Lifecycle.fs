@@ -61,6 +61,19 @@ type HostProjection =
         LastAction: string
     }
 
+/// Additional state for selected compatibility; existing projections remain intact.
+type RequestLimitProjection =
+    { Identity: HostIdentity
+      Limits: RequestLimits
+      DeadlineMilliseconds: int64 }
+
+type CompatibilityProjection =
+    { Policy: HostCompatibility
+      Current: RequestLimitProjection option
+      Controls: RequestLimitProjection list
+      MixedQueue: RequestLimitProjection list
+      HeldSnapshot: RequestLimitProjection option }
+
 type private WorkerRef =
     {
         Instance: string
@@ -77,6 +90,7 @@ type private PendingRequest =
         Submission: SubmissionClass
         Input: byte array
         DeadlineMilliseconds: int64
+        SelectedLimits: RequestLimits
     }
 
 type private CandidateState =
@@ -90,6 +104,7 @@ type private CandidateState =
 type private LifecycleState =
     {
         Settings: HostSettings
+        AdmissionLimits: RequestLimits option
         Clock: int64
         NextRequest: uint64
         NextGeneration: uint64
@@ -197,6 +212,7 @@ module Lifecycle =
                 HostState
                     {
                         Settings = settings
+                        AdmissionLimits = None
                         Clock = 0L
                         NextRequest = 1UL
                         NextGeneration = 1UL
@@ -447,18 +463,6 @@ module Lifecycle =
                 ArmTimer(timer, request.DeadlineMilliseconds)
             ]
 
-    let private dispatchNext state =
-        if state.Current.IsSome then
-            state, []
-        elif state.FrozenToken.IsSome || state.Disposed then
-            { state with Current = None }, []
-        else
-            match state.Ordinary, state.Ordered, state.Snapshot with
-            | request :: remaining, _, _ -> dispatch { state with Ordinary = remaining } request
-            | [], request :: remaining, _ -> dispatch { state with Ordered = remaining } request
-            | [], [], Some request -> dispatch { state with Snapshot = None } request
-            | [], [], None -> { state with Current = None }, []
-
     let private refuse state request reason action =
         let settled, effects =
             settle { state with LastAction = action } request None Refused (Some reason)
@@ -480,18 +484,30 @@ module Lifecycle =
                 |> Option.map _.Configuration
                 |> Option.defaultValue (HostSettings.configuration state.Settings)
 
-        let maximum =
-            (Validation.configuration configuration).Limits.MaximumDeadlineMilliseconds
-
-        {
-            Identity = identity
-            Operation = operation
-            Configuration = configuration
-            Phase = phase
-            Submission = submission
-            Input = input
-            DeadlineMilliseconds = state.Clock + int64 maximum
-        }
+        let ceiling = Validation.configuration configuration
+        let selected =
+            state.AdmissionLimits |> Option.defaultValue
+                { MaximumDeadlineMilliseconds = ceiling.Limits.MaximumDeadlineMilliseconds
+                  MaximumOutputBytes = ceiling.Limits.MaximumOutputBytes
+                  EnclosingDeadlineMilliseconds = None }
+        let effective =
+            match operation with
+            | InitializeGuest _ | ProcessGuest _ ->
+                Validation.validateConfiguration
+                    { ceiling with Limits = { ceiling.Limits with MaximumDeadlineMilliseconds = selected.MaximumDeadlineMilliseconds; MaximumOutputBytes = selected.MaximumOutputBytes } }
+                |> Result.defaultWith (fun _ -> failwith "validated request narrowing became invalid")
+            | _ -> configuration
+        let due =
+            if state.Clock > Int64.MaxValue - int64 selected.MaximumDeadlineMilliseconds then Int64.MaxValue
+            else state.Clock + int64 selected.MaximumDeadlineMilliseconds
+        { Identity = identity
+          Operation = operation
+          Configuration = effective
+          Phase = phase
+          Submission = submission
+          Input = Array.copy input
+          DeadlineMilliseconds = selected.EnclosingDeadlineMilliseconds |> Option.map (min due) |> Option.defaultValue due
+          SelectedLimits = selected }
 
     let private capacity state =
         HostSettings.configuration state.Settings
@@ -606,10 +622,58 @@ module Lifecycle =
         @ ((control @ active) |> List.map (timerFor >> CancelTimer))
         @ settlements
 
+    let private dispose state =
+        if state.Disposed then
+            { state with
+                LastAction = "disposeAgain"
+            },
+            []
+        else
+            let pending =
+                (state.Controls |> Map.toList |> List.map snd)
+                @ (state.Current |> Option.toList)
+                @ state.Ordinary
+                @ state.Ordered
+                @ (state.Snapshot |> Option.toList)
+
+            let cleared =
+                { state with
+                    Active = None
+                    Candidate = None
+                    Retiring = Map.empty
+                    Current = None
+                    Ordinary = []
+                    Ordered = []
+                    Snapshot = None
+                    Controls = Map.empty
+                    Compiled = Set.empty
+                    Initialized = Set.empty
+                    Disposed = true
+                    LastAction = "dispose"
+                }
+
+            let settled, settleEffects =
+                settleList cleared pending Discarded (Some HostDisposed)
+
+            let workers =
+                [
+                    yield! state.Active |> Option.map _.Instance |> Option.toList
+                    yield!
+                        state.Candidate
+                        |> Option.map (fun value -> value.Worker.Instance)
+                        |> Option.toList
+                    yield! state.Retiring |> Map.toList |> List.map fst
+                ]
+                |> List.distinct
+                |> List.map TerminateWorker
+
+            let cancel = (pending |> List.map (timerFor >> CancelTimer))
+            settled, workers @ cancel @ settleEffects
+
     let private expireAt now state =
         let expired, retained =
             (state.Ordinary @ state.Ordered @ (state.Snapshot |> Option.toList))
-            |> List.partition (fun request -> request.DeadlineMilliseconds < now)
+            |> List.partition (fun request -> HostSettings.compatibility state.Settings = DefaultCompatibility && request.DeadlineMilliseconds < now)
 
         let ordinary =
             retained |> List.filter (fun request -> request.Submission = Ordinary)
@@ -623,9 +687,9 @@ module Lifecycle =
 
         let baseState =
             { state with
-                Ordinary = ordinary
-                Ordered = ordered
-                Snapshot = snapshot
+                Ordinary = if HostSettings.compatibility state.Settings=Sc2SupervisorV1 then state.Ordinary else ordinary
+                Ordered = if HostSettings.compatibility state.Settings=Sc2SupervisorV1 then state.Ordered else ordered
+                Snapshot = if HostSettings.compatibility state.Settings=Sc2SupervisorV1 then state.Snapshot else snapshot
                 Clock = now
                 LastAction =
                     if expired.IsEmpty then
@@ -660,6 +724,57 @@ module Lifecycle =
             next, queuedEffects @ controlEffects @ effects
         | _ -> afterControls, queuedEffects @ controlEffects
 
+    let private compatible (state: LifecycleState) = HostSettings.compatibility state.Settings = Sc2SupervisorV1
+
+    let private enqueueSnapshot (state: LifecycleState) (pending: PendingRequest) =
+        if state.Ordinary.Length >= 4 then refuse state pending QueueFull "refuse"
+        else
+            let budget = int64 pending.SelectedLimits.MaximumDeadlineMilliseconds
+            let due = if state.Clock > Int64.MaxValue-budget then Int64.MaxValue else state.Clock+budget
+            let admitted = { pending with DeadlineMilliseconds = pending.SelectedLimits.EnclosingDeadlineMilliseconds |> Option.map (min due) |> Option.defaultValue due }
+            { state with Ordinary = state.Ordinary @ [admitted]; LastAction = "queueSnapshot" }, []
+
+    let private dispatchNext (state: LifecycleState) =
+        if state.Current.IsSome || state.FrozenToken.IsSome || state.Disposed then state, []
+        elif not (compatible state) then
+            match state.Ordinary, state.Ordered, state.Snapshot with
+            | request::remaining, _, _ -> dispatch { state with Ordinary=remaining } request
+            | [], request::remaining, _ -> dispatch { state with Ordered=remaining } request
+            | [], [], Some request -> dispatch { state with Snapshot=None } request
+            | _ -> state, []
+        else
+            let pumped, effects =
+                match state.Ordinary with
+                | request::remaining when state.Clock >= request.DeadlineMilliseconds ->
+                    let cleared = { state with Ordinary=remaining }
+                    let outcome = { Identity=request.Identity; Phase=request.Phase; State=TimedOut; Dispatch=NotDispatched; CleanupFault=None; CopiedOutput=Array.empty; EffectEligibility=ProductAdapterMustDecide }
+                    let timed, terminal = settle cleared request (Some outcome) Discarded (Some DeadlineExpired)
+                    let destroyed, destruction = dispose timed
+                    let mechanics, settlements = destruction |> List.splitAt (destruction |> List.takeWhile(function Settle _ -> false | _ -> true) |> List.length)
+                    destroyed, mechanics @ terminal @ settlements
+                | request::remaining -> dispatch { state with Ordinary=remaining } request
+                | [] -> state, []
+            let snapshotAdmitted =
+                pumped.Current |> Option.exists (fun r -> r.Submission=ReplaceableSnapshot)
+                || (pumped.Ordinary |> List.exists (fun r -> r.Submission=ReplaceableSnapshot))
+            match pumped.Snapshot with
+            | Some held when not pumped.Disposed && not snapshotAdmitted ->
+                let queued, added = enqueueSnapshot { pumped with Snapshot=None } held
+                // With no earlier FIFO work the newly admitted snapshot can dispatch now.
+                if queued.Current.IsNone && not queued.Ordinary.IsEmpty then
+                    let request = queued.Ordinary.Head
+                    if queued.Clock >= request.DeadlineMilliseconds then
+                        let outcome = { Identity=request.Identity; Phase=request.Phase; State=TimedOut; Dispatch=NotDispatched; CleanupFault=None; CopiedOutput=Array.empty; EffectEligibility=ProductAdapterMustDecide }
+                        let timed, terminal = settle { queued with Ordinary=queued.Ordinary.Tail } request (Some outcome) Discarded (Some DeadlineExpired)
+                        let destroyed, destruction = dispose timed
+                        let mechanics, settlements = destruction |> List.splitAt (destruction |> List.takeWhile(function Settle _ -> false | _ -> true) |> List.length)
+                        destroyed, effects @ added @ mechanics @ terminal @ settlements
+                    else
+                        let started, posts = dispatch { queued with Ordinary=queued.Ordinary.Tail } request
+                        started, effects @ added @ posts
+                else queued, effects @ added
+            | _ -> pumped, effects
+
     let private submit identity submission operation phase input state =
         let pending = request state identity submission operation phase input
         let descriptor = HostSettings.configuration state.Settings |> Validation.descriptor
@@ -680,7 +795,24 @@ module Lifecycle =
         elif state.Settled.Contains(key identity) then
             state, []
         elif input.Length > (Validation.configuration pending.Configuration).Limits.MaximumInputBytes then
-            refuse state pending QueueFull "refuse"
+            refuse state pending QueueFull (if compatible state && submission=ReplaceableSnapshot then "refuseOversizedSnapshot" else "refuse")
+        elif compatible state then
+            let population = (state.Current |> Option.toList) @ state.Ordinary
+            let scheduling = HostSettings.scheduling state.Settings |> _.Realtime |> Option.get
+            let oversized = input.Length > min scheduling.MaximumIndividualInputBytes (Validation.configuration pending.Configuration).Limits.MaximumInputBytes
+            let admittedSnapshot = population |> List.exists (fun r -> r.Submission=ReplaceableSnapshot)
+            if submission=ReplaceableSnapshot && oversized then refuse state pending QueueFull "refuseOversizedSnapshot"
+            elif submission=ReplaceableSnapshot && admittedSnapshot then
+                let next = { state with Snapshot=Some {pending with DeadlineMilliseconds=0L}; LastAction="holdSnapshot" }
+                match state.Snapshot with
+                | Some replaced -> settle next replaced None Coalesced (Some SnapshotReplaced)
+                | None -> next, []
+            elif submission=OrderedEvent && (oversized || population.Length >= scheduling.MaximumOrderedIncludingActive || (population |> List.sumBy (fun r -> int64 r.Input.Length)) + int64 input.Length > int64 scheduling.MaximumRetainedBytesIncludingActive) then
+                refuse state pending QueueFull "refuse"
+            elif submission<>OrderedEvent && state.Ordinary.Length>=4 then refuse state pending QueueFull "refuse"
+            else
+                let queued = { state with Ordinary=state.Ordinary@[pending]; LastAction="queueMixed" }
+                if queued.Current.IsNone then dispatchNext queued else queued, []
         elif state.Current.IsNone then
             let next, effects = dispatch { state with LastAction = "begin" } pending
             next, effects
@@ -948,14 +1080,12 @@ module Lifecycle =
                 else
                     let deadlinePolicy = (Validation.configuration pending.Configuration).Deadline
 
-                    let maximum =
-                        (Validation.configuration pending.Configuration).Limits.MaximumDeadlineMilliseconds
-
                     let due =
                         if deadlinePolicy = PhaseWatchdog then
-                            state.Clock + int64 maximum
-                        else
-                            pending.DeadlineMilliseconds
+                            let budget = int64 pending.SelectedLimits.MaximumDeadlineMilliseconds
+                            let relative = if state.Clock > Int64.MaxValue-budget then Int64.MaxValue else state.Clock+budget
+                            pending.SelectedLimits.EnclosingDeadlineMilliseconds |> Option.map (min relative) |> Option.defaultValue relative
+                        else pending.DeadlineMilliseconds
 
                     let nextPending =
                         { pending with
@@ -1212,54 +1342,6 @@ module Lifecycle =
             invalidateWorker candidate.Worker.Instance GenerationRetired "abortCandidate" state
         | _ -> state, []
 
-    let private dispose state =
-        if state.Disposed then
-            { state with
-                LastAction = "disposeAgain"
-            },
-            []
-        else
-            let pending =
-                (state.Controls |> Map.toList |> List.map snd)
-                @ (state.Current |> Option.toList)
-                @ state.Ordinary
-                @ state.Ordered
-                @ (state.Snapshot |> Option.toList)
-
-            let cleared =
-                { state with
-                    Active = None
-                    Candidate = None
-                    Retiring = Map.empty
-                    Current = None
-                    Ordinary = []
-                    Ordered = []
-                    Snapshot = None
-                    Controls = Map.empty
-                    Compiled = Set.empty
-                    Initialized = Set.empty
-                    Disposed = true
-                    LastAction = "dispose"
-                }
-
-            let settled, settleEffects =
-                settleList cleared pending Discarded (Some HostDisposed)
-
-            let workers =
-                [
-                    yield! state.Active |> Option.map _.Instance |> Option.toList
-                    yield!
-                        state.Candidate
-                        |> Option.map (fun value -> value.Worker.Instance)
-                        |> Option.toList
-                    yield! state.Retiring |> Map.toList |> List.map fst
-                ]
-                |> List.distinct
-                |> List.map TerminateWorker
-
-            let cancel = (pending |> List.map (timerFor >> CancelTimer))
-            settled, workers @ cancel @ settleEffects
-
     let update event (HostState original) =
         let now = max original.Clock event.MonotonicMilliseconds
         let expired, expiryEffects = expireAt now original
@@ -1317,11 +1399,11 @@ module Lifecycle =
                 if state.Disposed || state.FrozenToken.IsSome then
                     state, []
                 else
-                    { state with
-                        FrozenToken = Some freezeToken
-                        LastAction = "freeze"
-                    },
-                    []
+                    let queued = state.Ordinary @ state.Ordered @ (state.Snapshot |> Option.toList)
+                    let frozen = { state with FrozenToken=Some freezeToken; LastAction="freeze" }
+                    if compatible state then
+                        settleList { frozen with Ordinary=[]; Ordered=[]; Snapshot=None } queued Discarded (Some GenerationRetired)
+                    else frozen, []
             | ResumeRequested freezeToken ->
                 if state.FrozenToken = Some freezeToken then
                     dispatchNext
@@ -1340,3 +1422,70 @@ module Lifecycle =
             | DisposeRequested -> dispose state
 
         HostState { next with Clock = now }, expiryEffects @ effects
+
+    let projectCompatibility (HostState state) =
+        let projectRequest (request:PendingRequest) : RequestLimitProjection =
+            { Identity=request.Identity; Limits=request.SelectedLimits; DeadlineMilliseconds=request.DeadlineMilliseconds }
+        { Policy=HostSettings.compatibility state.Settings
+          Current=state.Current |> Option.map projectRequest
+          Controls=state.Controls |> Map.toList |> List.map(snd >> projectRequest)
+          MixedQueue=state.Ordinary |> List.map projectRequest
+          HeldSnapshot=if compatible state then state.Snapshot |> Option.map projectRequest else None }
+
+    /// Typed admission captures a fresh request budget without mutating any loaded ceiling.
+    let submitLimited now requested (limits: RequestLimits) (HostState original) =
+        let identity, configuration, input =
+            match requested with
+            | LimitedLoad(identity, configuration, artifact) -> identity, Some configuration, ConfiguredLoadRequested(identity, ReplaceCurrent, configuration, artifact)
+            | LimitedCandidate(identity, transaction, expected, configuration, artifact) -> identity, Some configuration, ConfiguredLoadRequested(identity, PrepareCandidate(transaction, expected), configuration, artifact)
+            | LimitedInitialize(identity, bytes) -> identity, None, InitializeRequested(identity, bytes)
+            | LimitedInvoke(identity, submission, bytes) -> identity, None, InvocationRequested(identity, submission, bytes)
+            | LimitedShutdown identity -> identity, None, ShutdownRequested identity
+        let owner =
+            original.Active |> Option.filter (fun w -> w.Instance=identity.WorkerInstance && w.Generation=identity.Generation)
+            |> Option.orElseWith (fun () -> original.Candidate |> Option.map _.Worker |> Option.filter (fun w -> w.Instance=identity.WorkerInstance && w.Generation=identity.Generation))
+        let ceiling = configuration |> Option.orElseWith (fun () -> owner |> Option.map _.Configuration)
+        let clock = max original.Clock now
+        let issues = ResizeArray<RequestAdmissionIssue>()
+        match requested, ceiling with
+        | LimitedInvoke(_, ReplaceableSnapshot, bytes), Some configuration when compatible original ->
+            let inputCeiling = min (256*1024) (Validation.configuration configuration).Limits.MaximumInputBytes
+            if bytes.Length > inputCeiling then issues.Add OversizedSnapshotInput
+        | _ -> ()
+        if original.Settled.Contains(key identity) then issues.Add(RequestRefused Busy)
+        match ceiling with
+        | None -> issues.Add RequestOwnerUnavailable
+        | Some ceiling ->
+            let maximum = (Validation.configuration ceiling).Limits
+            // int values arriving through erased Fable types must still be finite integers.
+            let integral value = let number=float value in not(Double.IsNaN number || Double.IsInfinity number) && floor number=number
+            if not(integral limits.MaximumDeadlineMilliseconds) || limits.MaximumDeadlineMilliseconds<1 || limits.MaximumDeadlineMilliseconds>maximum.MaximumDeadlineMilliseconds then issues.Add(InvalidRequestLimit "maximumDeadlineMilliseconds")
+            if not(integral limits.MaximumOutputBytes) || limits.MaximumOutputBytes<1 || limits.MaximumOutputBytes>maximum.MaximumOutputBytes then issues.Add(InvalidRequestLimit "maximumOutputBytes")
+        if issues.Count=0 && clock > Int64.MaxValue-int64 limits.MaximumDeadlineMilliseconds then issues.Add RequestDeadlineOverflow
+        if limits.EnclosingDeadlineMilliseconds |> Option.exists (fun due -> due<=clock) then issues.Add EnclosingBudgetExpired
+        if original.Disposed then issues.Add(RequestRefused HostDisposed)
+        elif original.FrozenToken.IsSome then issues.Add(RequestRefused HostFrozen)
+        if issues.Count>0 then Error(List.ofSeq issues)
+        else
+            let next, effects = update {MonotonicMilliseconds=now;Input=input} (HostState {original with AdmissionLimits=Some limits})
+            let (HostState nextState)=next
+            match effects |> List.tryPick(function Settle value when value.Identity=identity && value.Disposition=Refused -> value.Reason | _->None) with
+            | Some reason -> Error [RequestRefused reason]
+            | None -> Ok(HostState {nextState with AdmissionLimits=None},effects)
+
+    /// Atomic matching-token promotion preserves the recovery fence throughout.
+    let commitCandidateFrozen now freezeToken transaction expectedActive candidateGeneration (HostState original) =
+        let valid =
+            compatible original && not original.Disposed && original.FrozenToken=Some freezeToken
+            && (original.Active |> Option.map _.Generation |> Option.defaultValue 0UL)=expectedActive
+            && (original.Candidate |> Option.exists(fun c -> c.Transaction=transaction && c.Worker.Generation=candidateGeneration && c.Initialized && c.Validated))
+        if not valid then Error [RequestOwnerUnavailable]
+        else
+            let clock=max original.Clock now
+            let expired, expiryEffects=expireAt clock original
+            // Expiry may remove the candidate or active; recheck the exact receipt.
+            if (expired.Active |> Option.map _.Generation |> Option.defaultValue 0UL)<>expectedActive || not(expired.Candidate |> Option.exists(fun c -> c.Transaction=transaction && c.Worker.Generation=candidateGeneration && c.Initialized && c.Validated)) then
+                Error [RequestOwnerUnavailable]
+            else
+                let promoted, effects=commitCandidate transaction expectedActive candidateGeneration {expired with FrozenToken=None}
+                Ok(HostState {promoted with FrozenToken=Some freezeToken;Clock=clock},expiryEffects@effects)
