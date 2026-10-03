@@ -1,0 +1,20 @@
+{
+  "baselineVersion": "0.1.1",
+  "baselineTag": "wasm/v0.1.1",
+  "baselineSource": "ea015cbf884b01754bc6615476241450907b6b24",
+  "baselineTree": "9526ed555e877080e79b7234b4ec0dac613991ec",
+  "baselineManifestSha256": "975166b2cf53b17c2e5f55b1e020266f4cba78c9d2257d27a751f25deb58c2b5",
+  "candidateVersion": "0.2.0",
+  "packages": {
+    "FS.GG.Wasm.Contracts": {
+      "servedArchiveSha256": "a675196b5e4f0caa295e8df0d10e2400aca8b9780b855fcb8dedb81444e017cc",
+      "expectedStatus": "compatible",
+      "removedConstructorTypes": []
+    },
+    "FS.GG.Wasm.Browser": {
+      "servedArchiveSha256": "bf550bc627a85adb4537a8f765299f7da0450bc647e459955df2886c7512769e",
+      "expectedStatus": "breaking-intentionally-versioned",
+      "removedConstructorTypes": ["EffectProjection", "HostProjection", "RequestProjection", "WorkerCommand"]
+    }
+  }
+}

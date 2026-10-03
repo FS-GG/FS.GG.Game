@@ -21,7 +21,7 @@ def classify(identity, returncode, log):
     all_codes = re.findall(r"error ([A-Z]+[0-9]+):", log)
     expected = POLICY["packages"][identity]["removedConstructorTypes"]
     if not expected:
-        assert returncode == 0 and not all_codes, "Contracts baseline comparison did not pass"
+        assert returncode == 0 and not all_codes, "native baseline comparison did not pass"
         return {"status": "compatible", "diagnostics": []}
     members = sorted(re.match(r"FS\.GG\.Wasm\.Browser\.(\w+)\.\1\(", member).group(1) for code, member in errors if code == "CP0002" and re.match(r"FS\.GG\.Wasm\.Browser\.(\w+)\.\1\(", member))
     assert returncode != 0 and members == expected and all_codes == ["CP0002"] * len(expected), "unexpected/indeterminate Browser baseline delta"
@@ -50,6 +50,12 @@ def compare(custody, output):
     assert metadata["contentHash"] == expected_core, "ApiCompat FSharp.Core locked reference mismatch"
     core = core_root / "lib/netstandard2.0/FSharp.Core.dll"
     assert core.is_file(), "locked reference assembly missing"
+    with urllib.request.urlopen("https://api.nuget.org/v3-flatcontainer/fsharp.core/10.1.302/fsharp.core.10.1.302.nupkg") as response:
+        official_archive = response.read()
+    assert hashlib.sha256(official_archive).hexdigest() == "f4eda1b2efb28b38a5526b0b678e889434aa71113a4c2fa8660b62ca75cc7dfc", "official reference archive mismatch"
+    import io
+    with zipfile.ZipFile(io.BytesIO(official_archive)) as archive:
+        assert core.read_bytes() == archive.read("lib/netstandard2.0/FSharp.Core.dll"), "actual reference DLL differs from official archive"
     sdk_root = pathlib.Path(subprocess.check_output(["dotnet", "--list-sdks"], text=True).split("10.0.401 [", 1)[1].split("]", 1)[0]) / "10.0.401"
     task = sdk_root / "Sdks/Microsoft.NET.Sdk/tools/net10.0/Microsoft.DotNet.ApiCompat.Task.dll"
     framework = sorted((sdk_root.parents[1] / "packs/Microsoft.NETCore.App.Ref").glob("10.*/ref/net10.0"), key=lambda path: tuple(map(int, path.parents[1].name.split("."))))[-1]
@@ -61,8 +67,8 @@ def compare(custody, output):
             contracts.write_bytes(archive.read("lib/net10.0/FS.GG.Wasm.Contracts.dll"))
         references = [*sorted(framework.glob("*.dll")), core, contracts]
         for identity, candidate in candidates.items():
-            baseline = work / f"{identity}.0.1.1.nupkg"
-            url = f"https://api.nuget.org/v3-flatcontainer/{identity.lower()}/0.1.1/{identity.lower()}.0.1.1.nupkg"
+            baseline = work / f"{identity}.{POLICY['baselineVersion']}.nupkg"
+            url = f"https://api.nuget.org/v3-flatcontainer/{identity.lower()}/{POLICY['baselineVersion']}/{identity.lower()}.{POLICY['baselineVersion']}.nupkg"
             with urllib.request.urlopen(url) as response:
                 baseline.write_bytes(response.read())
             assert sha(baseline) == POLICY["packages"][identity]["servedArchiveSha256"], "published baseline archive differs from accepted receipt"
@@ -77,13 +83,13 @@ def compare(custody, output):
             ET.SubElement(target, "Microsoft.DotNet.ApiCompat.Task.ValidatePackageTask", PackageTargetPath=str(candidate), BaselinePackageTargetPath=str(baseline), RuntimeGraph=str(sdk_root / "PortableRuntimeIdentifierGraph.json"), RoslynAssembliesPath=str(sdk_root / "Roslyn/bincore"), PackageAssemblyReferences="@(References)", RunApiCompat="true", GenerateSuppressionFile="false", EnableStrictModeForBaselineValidation="false")
             project_path = work / "compare.proj"
             ET.ElementTree(project).write(project_path, encoding="unicode")
-            run = subprocess.run(["dotnet", "msbuild", str(project_path), "-t:Compare", "-nologo", "-m:1", "-nodeReuse:false", "-verbosity:minimal"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            run = subprocess.run(["dotnet", "msbuild", str(project_path), "-t:Compare", "-nologo", "-m:1", "-nodeReuse:false", "-p:UseSharedCompilation=false", "-verbosity:normal"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             result = classify(identity, run.returncode, run.stdout)
             (custody / f"{identity}.published-baseline.log").write_text(run.stdout)
             rows.append({"id": identity, "baselineArchiveSha256": sha(baseline), "candidateArchiveSha256": sha(candidate), "baselineApiSurface": surfaces(baseline), "candidateApiSurface": surfaces(candidate), "nativeLogSha256": hashlib.sha256(run.stdout.encode()).hexdigest(), **result})
     receipt = {"schema": "fsgg.wasm.published-api-comparison/v1", "tool": "SDK10.0.401.ApiCompat", "baselineVersion": POLICY["baselineVersion"], "baselineSource": POLICY["baselineSource"], "baselineTree": POLICY["baselineTree"], "baselineManifestSha256": POLICY["baselineManifestSha256"], "candidateVersion": POLICY["candidateVersion"], "packages": rows}
     output.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
-    print("wasm-published-api-comparison: baseline=0.1.1 Contracts=compatible Browser=breaking-intentionally-versioned candidate=0.2.0 suppressions=none")
+    print(f"wasm-published-api-comparison: baseline={POLICY['baselineVersion']} Contracts=compatible Browser=compatible candidate={POLICY['candidateVersion']} suppressions=none")
 
 
 if __name__ == "__main__":

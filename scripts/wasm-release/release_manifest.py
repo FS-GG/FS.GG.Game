@@ -16,6 +16,15 @@ from pathlib import Path, PurePosixPath
 SCHEMA = "fsgg.wasm.release-custody/v2"
 LEGACY_SCHEMA = "fsgg.wasm.release-custody/v1"
 API_POLICY = json.loads((Path(__file__).parent / "api-baseline-policy.json").read_text())
+HISTORICAL_API_POLICY = json.loads((Path(__file__).parent / "api-baseline-policy-0.2.0.json").read_text())
+
+def api_policy(version):
+    if version == API_POLICY["candidateVersion"]:
+        return API_POLICY
+    if version == HISTORICAL_API_POLICY["candidateVersion"]:
+        return HISTORICAL_API_POLICY
+    fail("candidate has no admitted published API baseline")
+
 ROSTER = ("FS.GG.Wasm.Contracts", "FS.GG.Wasm.Browser")
 TOOLS = {
     "dotnet": "10.0.401",
@@ -204,8 +213,8 @@ def verify_identity(data: dict[str, object], source: str | None = None) -> None:
         if version != "0.1.1" or data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": None}:
             fail("legacy manifest must preserve the actual first published 0.1.1 identity")
     else:
-        if version != API_POLICY["candidateVersion"] or data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": "0.1.1"}:
-            fail("connected migration must preserve and compare the actual 0.1.1 baseline")
+        if data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": api_policy(version)["baselineVersion"]}:
+            fail("release must preserve first stable identity and compare its actual admitted baseline")
         verify_api_comparison(data["publishedApiComparison"], data["artifacts"])
     artifacts = data["artifacts"]
     if not isinstance(artifacts, list) or len(artifacts) != 3:
@@ -219,14 +228,15 @@ def verify_api_comparison(comparison, artifacts):
     keys = {"schema", "tool", "baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion", "packages"}
     if not isinstance(comparison, dict) or set(comparison) != keys or comparison["schema"] != "fsgg.wasm.published-api-comparison/v1" or comparison["tool"] != "SDK10.0.401.ApiCompat":
         fail("published API comparison schema/tool mismatch")
+    policy = api_policy(comparison["candidateVersion"])
     for key in ("baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion"):
-        if comparison[key] != API_POLICY[key]:
+        if comparison[key] != policy[key]:
             fail("published API baseline provenance mismatch")
     rows = comparison["packages"]
     if not isinstance(rows, list) or len(rows) != 2 or {row.get("id") for row in rows} != set(ROSTER):
         fail("published API comparison roster mismatch")
     for row in rows:
-        expected = API_POLICY["packages"][row["id"]]
+        expected = policy["packages"][row["id"]]
         if set(row) != {"id", "baselineArchiveSha256", "candidateArchiveSha256", "baselineApiSurface", "candidateApiSurface", "nativeLogSha256", "status", "diagnostics"}:
             fail("published API comparison row keys mismatch")
         artifact = next(item for item in artifacts if item["file"] == f"{row['id']}.{comparison['candidateVersion']}.nupkg")
@@ -266,7 +276,7 @@ def prepare(args: argparse.Namespace) -> None:
         "workflow": ".github/workflows/wasm-shared.yml",
         "tools": TOOLS,
         "artifacts": packages + [sdk],
-        "firstStableBaseline": {"version": "0.1.1", "publishedApiCompatBaseline": "0.1.1"},
+        "firstStableBaseline": {"version": "0.1.1", "publishedApiCompatBaseline": api_policy(version)["baselineVersion"]},
         "publishedApiComparison": load_manifest(Path(args.api_comparison)),
     }
     destination = custody / "release-manifest.json"
