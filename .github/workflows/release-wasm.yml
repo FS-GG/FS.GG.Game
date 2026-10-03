@@ -1,220 +1,387 @@
 name: release-wasm
 
 on:
-  push:
-    tags: ['wasm/v*']
   workflow_dispatch:
     inputs:
       mode:
-        description: "prepare (default), publish, readback, or recovery"
+        description: Read-only prepare by default; promotion requires reviewed original custody
         type: choice
-        options: [prepare, publish, readback, recovery]
+        options: [prepare, promote, readback, recovery]
         default: prepare
-      version:
-        description: "Stable shared WASM version"
+      executor:
+        description: Exact root-accepted protected executor E
+        required: true
         type: string
-        default: "0.2.0"
-      source_run_id:
-        description: "Prior release-wasm run containing exact retained custody (readback/recovery)"
-        type: string
+      reviewed_tuple:
+        description: Root-reviewed preparation/run-attempt/artifact/digest tuple; empty only for prepare
         required: false
+        type: string
+      first_promotion_run:
+        description: Original promotion run for interrupted tag-before-draft recovery
+        required: false
+        type: string
+
+      first_promotion_attempt:
+        description: Exact original attempt for interrupted tag-before-draft recovery
+        required: false
+        type: string
 
 concurrency:
-  group: release-wasm-0.2.0
+  group: release-wasm-0.3.0
   cancel-in-progress: false
 
 permissions:
   contents: read
 
+env:
+  ACCEPTED_EXECUTOR: ${{ inputs.executor }}
+  REVIEWED_TUPLE: ${{ inputs.reviewed_tuple }}
+  FIRST_PROMOTION_RUN: ${{ inputs.first_promotion_run }}
+  FIRST_PROMOTION_ATTEMPT: ${{ inputs.first_promotion_attempt }}
+  NUGET_ACCOUNT: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+  actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68_PROCESSOR_COUNT: 1
+  MSBUILDDISABLENODEREUSE: 1
+  UseSharedCompilation: false
+
 jobs:
   preflight:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - name: Validate release workflow and source contract
-        run: tests/release/wasm/test-release-wasm.sh --source-only
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Bind protected executor and source-only operation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_SHA" == "$ACCEPTED_EXECUTOR" ]]
+          [[ "$(git rev-parse HEAD)" == "$ACCEPTED_EXECUTOR" && -z "$(git status --porcelain)" ]]
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" == "$ACCEPTED_EXECUTOR" ]]
+          if [[ "$MODE" == prepare ]]; then [[ -z "$REVIEWED_TUPLE" ]]; else [[ -n "$REVIEWED_TUPLE" ]]; fi
+          bash tests/release/wasm/test-release-wasm.sh --source-only
 
-  custody:
+  prepare:
     needs: [preflight]
+    if: inputs.mode == 'prepare'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     permissions:
-      actions: read
       contents: read
-    env:
-      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '0.2.0' }}
-      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'publish' }}
+    defaults:
+      run:
+        working-directory: producer
+    outputs:
+      artifact_id: ${{ steps.eligible.outputs.artifact-id }}
+      artifact_sha256: ${{ steps.eligible.outputs.artifact-digest }}
+      binding_sha256: ${{ steps.binding.outputs.binding_sha256 }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: executor
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c
+          path: producer
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: '10.0.401'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '26'
-      - name: Bind stable source and dispatch mode
-        shell: bash
-        env:
-          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      - name: Install exact preparation tools
         run: |
           set -euo pipefail
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$VERSION" == "$(cat sdk/wasm/VERSION)" ]]
-          case "$MODE" in
-            prepare) [[ -z "$SOURCE_RUN_ID" ]] ;;
-            publish) [[ -z "$SOURCE_RUN_ID" && "$GITHUB_REF_NAME" == "wasm/v$VERSION" ]] ;;
-            readback|recovery) [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]] ;;
-            *) exit 2 ;;
-          esac
-      - name: Install exact source qualification tools
-        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'recovery'
-        shell: bash
-        run: |
-          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c ]]
+          [[ "$(git rev-parse 'HEAD^{tree}')" == f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a ]]
           dotnet tool restore
           npm install --global '@informalsystems/quint@0.32.0'
           rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-unknown
           rustup default 1.90.0
           scripts/wasm-release/install-browser-tools.sh
-      - name: Pack once and freeze custody
-        if: env.MODE == 'prepare' || env.MODE == 'publish'
-        run: scripts/wasm-release/prepare.sh artifacts/wasm-release
-      - name: Authenticate and download retained recovery custody
-        if: env.MODE == 'recovery' || env.MODE == 'readback'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      - name: Prepare protected originals once
+        run: scripts/wasm-release/prepare.sh "$RUNNER_TEMP/wasm-release"
+      - name: Qualify contracts and lifecycle
         run: |
           set -euo pipefail
-          source_sha="$(git rev-parse HEAD)"
-          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID")"
-          jq -e --arg source "$source_sha" '.head_sha == $source and .path == ".github/workflows/release-wasm.yml" and .status == "completed"' <<<"$run_json" >/dev/null
-          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "wasm-release-custody-$source_sha-$VERSION" --dir artifacts/wasm-release
-      - name: Verify retained custody
-        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'readback' || env.MODE == 'recovery'
-        run: python3 scripts/wasm-release/release_manifest.py verify --custody artifacts/wasm-release --manifest artifacts/wasm-release/release-manifest.json --source "$GITHUB_SHA"
-      - name: Verify contracts and production lifecycle correspondence
-        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'recovery'
-        env:
-          QUINT: quint
+          scripts/verify-wasm-contracts.sh > "$RUNNER_TEMP/wasm-contracts.log" 2>&1
+          scripts/verify-wasm-lifecycle.sh > "$RUNNER_TEMP/wasm-lifecycle.log" 2>&1
+      - name: Qualify historical packages and SDK
+        run: scripts/verify-wasm-package-consumer.sh --custody "$RUNNER_TEMP/wasm-release" > "$RUNNER_TEMP/wasm-sdk-consumer.log" 2>&1
+      - name: Qualify full selected custody
+        run: scripts/wasm-release/qualify-supervisor-custody.sh --custody "$RUNNER_TEMP/wasm-release" "$RUNNER_TEMP/wasm-selected" > "$RUNNER_TEMP/wasm-selected.log" 2>&1
+      - name: Freeze eligible binding
+        id: binding
+        working-directory: executor
         run: |
-          scripts/verify-wasm-contracts.sh
-          scripts/verify-wasm-lifecycle.sh
-      - name: Qualify exact retained package and SDK bytes
-        if: env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'recovery'
-        run: scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release
-      - name: Retain immutable release custody
-        if: always() && (env.MODE == 'prepare' || env.MODE == 'publish' || env.MODE == 'readback' || env.MODE == 'recovery')
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$ACCEPTED_EXECUTOR" ]]
+          EXECUTOR_TREE="$(git rev-parse 'HEAD^{tree}')"
+          export EXECUTOR_TREE
+          python3 scripts/wasm-release/promotion.py freeze --custody "$RUNNER_TEMP/wasm-release" --output "$RUNNER_TEMP/wasm-release/preparation-binding.json"
+          mkdir "$RUNNER_TEMP/wasm-release/evidence"
+          cp "$RUNNER_TEMP/wasm-contracts.log" "$RUNNER_TEMP/wasm-lifecycle.log" "$RUNNER_TEMP/wasm-sdk-consumer.log" "$RUNNER_TEMP/wasm-selected.log" "$RUNNER_TEMP/wasm-release/evidence/"
+          cp -a "$RUNNER_TEMP/wasm-selected" "$RUNNER_TEMP/wasm-selected-browser" "$RUNNER_TEMP/wasm-selected-baseline/official-core" "$RUNNER_TEMP/wasm-release/evidence/"
+      - name: Retain eligible originals
+        id: eligible
         uses: actions/upload-artifact@v7
         with:
-          name: wasm-release-custody-${{ github.sha }}-${{ env.VERSION }}
-          path: artifacts/wasm-release/
+          name: wasm-eligible-${{ github.run_id }}-${{ github.run_attempt }}-0.3.0
+          path: ${{ runner.temp }}/wasm-release/
           if-no-files-found: error
           retention-days: 90
+      - name: Retain ineligible failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-ineligible-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/wasm-*.log
+            ${{ runner.temp }}/wasm-selected/
+          if-no-files-found: ignore
+          retention-days: 14
 
-  readback:
-    needs: [custody]
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'readback'
+  admission:
+    needs: [preflight]
+    if: inputs.mode != 'prepare'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: read
       packages: read
+      id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
+        id: trust
         with:
-          name: wasm-release-custody-${{ github.sha }}-0.2.0
-          path: artifacts/wasm-release
-      - name: Verify both feeds and release assets without publishing
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      - name: Authenticate and admit exact prepared artifact
         env:
-          FEED_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          NUGET_EXCHANGE_VERIFIED: ${{ steps.trust.outputs.NUGET_API_KEY != '' && 'true' || 'false' }}
+          MODE: ${{ inputs.mode }}
         run: |
-          scripts/wasm-release/readback.sh org artifacts/wasm-release artifacts/readback/org
-          scripts/wasm-release/readback.sh public artifacts/wasm-release artifacts/readback/public
-          scripts/wasm-release/readback.sh assets artifacts/wasm-release artifacts/readback/assets
+          set -euo pipefail
+          python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
+          args=(); [[ "$MODE" == promote ]] || args=(--recovery)
+          mkdir "$RUNNER_TEMP/admission"
+          python3 scripts/wasm-release/promotion.py admit --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/admission/admission-binding.json" "${args[@]}"
+      - name: Retain successful native admission
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-admission-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/admission/admission-binding.json
+          if-no-files-found: error
+          retention-days: 90
+
+  begin:
+    needs: [admission]
+    if: inputs.mode == 'promote' || inputs.mode == 'recovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.401'
+      - name: Create bound draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FEED_TOKEN: ${{ github.token }}
+          TAG_CREDENTIAL_ROUTE: workflow-github-token
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
+          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          args=(); [[ "$MODE" == promote ]] || args=(--recovery)
+          python3 scripts/wasm-release/promotion.py begin --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" "${args[@]}"
+      - name: Retain actual transaction receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-promotion-begin-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/readback/
+          if-no-files-found: ignore
+          retention-days: 90
 
   org:
-    needs: [custody]
-    if: github.event_name == 'push' || inputs.mode == 'publish' || inputs.mode == 'recovery'
+    needs: [begin]
+    if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: wasm-release-custody-${{ github.sha }}-0.2.0
-          path: artifacts/wasm-release
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: '10.0.401'
-      - name: Push exact originals to org feed
-        run: dotnet nuget push 'artifacts/wasm-release/*.nupkg' --source https://nuget.pkg.github.com/FS-GG/index.json --api-key '${{ secrets.GITHUB_TOKEN }}' --no-symbols --skip-duplicate
-      - name: Read back and verify org packages
+      - name: Execute org from exact originals
         env:
-          FEED_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: scripts/wasm-release/readback.sh org artifacts/wasm-release artifacts/readback/org
+          GH_TOKEN: ${{ github.token }}
+          FEED_TOKEN: ${{ github.token }}
+          TAG_CREDENTIAL_ROUTE: workflow-github-token
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
+          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 scripts/wasm-release/promotion.py org --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
+      - name: Retain actual transaction receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-promotion-org-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/readback/
+          if-no-files-found: ignore
+          retention-days: 90
 
   public:
     needs: [org]
+    if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: read
+      packages: read
       id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: wasm-release-custody-${{ github.sha }}-0.2.0
-          path: artifacts/wasm-release
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: '10.0.401'
-      - name: NuGet login for release-wasm.yml
+      - uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
         id: nuget-login
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
           user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
-      - name: Push same originals to public nuget.org
-        run: dotnet nuget push 'artifacts/wasm-release/*.nupkg' --source https://api.nuget.org/v3/index.json --api-key '${{ steps.nuget-login.outputs.NUGET_API_KEY }}' --no-symbols --skip-duplicate
-      - name: Read back and verify public packages
-        run: scripts/wasm-release/readback.sh public artifacts/wasm-release artifacts/readback/public
+      - name: Execute public from exact originals
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FEED_TOKEN: ${{ github.token }}
+          TAG_CREDENTIAL_ROUTE: workflow-github-token
+          MODE: ${{ inputs.mode }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
+          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 scripts/wasm-release/promotion.py public --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
+      - name: Retain actual transaction receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-promotion-public-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/readback/
+          if-no-files-found: ignore
+          retention-days: 90
 
   assets:
     needs: [public]
+    if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: write
+      packages: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          name: wasm-release-custody-${{ github.sha }}-0.2.0
-          path: artifacts/wasm-release
-      - name: Upload SDK and manifest release assets
+          dotnet-version: '10.0.401'
+      - name: Execute assets from exact originals
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: scripts/wasm-release/stage-assets.sh artifacts/wasm-release
-      - name: Read back exact SDK and manifest
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: scripts/wasm-release/readback.sh assets artifacts/wasm-release artifacts/readback/assets
+          GH_TOKEN: ${{ github.token }}
+          FEED_TOKEN: ${{ github.token }}
+          TAG_CREDENTIAL_ROUTE: workflow-github-token
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
+          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 scripts/wasm-release/promotion.py assets --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
+      - name: Retain actual transaction receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-promotion-assets-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/readback/
+          if-no-files-found: ignore
+          retention-days: 90
 
   complete:
     needs: [org, public, assets]
+    if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
+      actions: read
       contents: write
+      packages: read
     steps:
-      - name: Publish verified GitHub Release
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.401'
+      - name: Execute complete from exact originals
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit wasm/v0.2.0 --repo "$GITHUB_REPOSITORY" --draft=false
-      - run: echo 'Both package feeds and immutable SDK release assets passed readback.'
+          GH_TOKEN: ${{ github.token }}
+          FEED_TOKEN: ${{ github.token }}
+          TAG_CREDENTIAL_ROUTE: workflow-github-token
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
+          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 scripts/wasm-release/promotion.py complete --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
+      - name: Retain actual transaction receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-promotion-complete-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/readback/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  readback:
+    needs: [admission]
+    if: inputs.mode == 'readback'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.401'
+      - name: Execute readback from exact originals
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FEED_TOKEN: ${{ github.token }}
+          TAG_CREDENTIAL_ROUTE: workflow-github-token
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,pathlib; (pathlib.Path(os.environ["RUNNER_TEMP"])/"reviewed.json").write_text(os.environ["REVIEWED_TUPLE"])'
+          python3 -c 'import importlib.util,json,pathlib; s=importlib.util.spec_from_file_location("p","scripts/wasm-release/promotion.py"); p=importlib.util.module_from_spec(s); s.loader.exec_module(p); p.download(p.Native(),p.load(pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"reviewed.json"),pathlib.Path(__import__("os").environ["RUNNER_TEMP"])/"custody")'
+          python3 scripts/wasm-release/promotion.py readback --reviewed "$RUNNER_TEMP/reviewed.json" --custody "$RUNNER_TEMP/custody" --output "$RUNNER_TEMP/readback"
+      - name: Retain actual transaction receipts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-promotion-readback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/readback/
+          if-no-files-found: ignore
+          retention-days: 90

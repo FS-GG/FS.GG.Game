@@ -24,6 +24,11 @@ def checked_inputs(environment, tracked_version):
         assert re.fullmatch(r"[0-9a-f]{40}", values[key]), "source must be an immutable commit"
     for key in ("MANIFEST_SHA256", "SDK_SHA256"):
         assert re.fullmatch(r"[0-9a-f]{64}", values[key]), "receipt must be an exact SHA-256"
+    if values["RELEASE_VERSION"] == "0.3.0":
+        for key, length in (("ACCEPTED_EXECUTOR",40),("PROMOTION_BINDING_SHA256",64)):
+            values[key] = environment[key]
+            assert re.fullmatch(r"[0-9a-f]{%d}" % length, values[key]), "invalid explicit executor/transaction binding"
+        assert values["QUALIFIER_SOURCE"] == values["ACCEPTED_EXECUTOR"]
     return values
 
 
@@ -39,6 +44,13 @@ def validate_release(release, values):
         assert item["browser_download_url"] == f"https://github.com/{REPO}/releases/download/{tag}/{name}", "asset identity mismatch"
         assert item.get("digest") == "sha256:" + expected, "native release asset digest mismatch"
         selected[name] = item["browser_download_url"]
+    if version == "0.3.0":
+        sha = values["PROMOTION_BINDING_SHA256"]
+        assert re.fullmatch(r"[0-9a-f]{64}", sha), "invalid promotion record hash"
+        row = assets["promotion-binding.json"]
+        assert row.get("digest") == "sha256:" + sha, "native transaction digest mismatch"
+        assert row["browser_download_url"] == f"https://github.com/{REPO}/releases/download/{tag}/promotion-binding.json"
+        selected["promotion-binding.json"] = row["browser_download_url"]
     return selected
 
 
@@ -86,7 +98,36 @@ def validate_consumer_audit(audit, source, version, changed, producer, qualifier
     return audit
 
 
+# An accepted executor commit is an explicit route input. The producer remains P;
+# only this finite publisher/qualification glue delta can differ from P at 0.3.
+PUBLISHER_SOURCE = "16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c"
+EXECUTOR_GLUE = {
+    ".github/workflows/release-wasm.yml", ".github/workflows/wasm-installed-org.yml",
+    "scripts/wasm-release/promotion.py", "scripts/wasm-release/readback.sh",
+    "scripts/wasm-release/stage-assets.sh", "scripts/wasm-release/bind-installed-release.py",
+    "scripts/wasm-release/qualify-supervisor-installed.sh", "scripts/verify-wasm-supervisor.sh",
+    "scripts/verify-wasm-supervisor-browser.sh", "tests/release/wasm/test-release-wasm.py",
+    "tests/release/wasm/test-release-wasm.sh", "tests/release/wasm/test-installed-org-workflow.py",
+    "tests/release/wasm/test-consumer-source-mapping.py", "tests/release/wasm/test-release-promotion.py",
+    "docs/roadmaps/wasm-shared-01.md",
+}
+
+def bind_executor(source, executor, version):
+    assert version == "0.3.0" and source == PUBLISHER_SOURCE, "wrong protected producer"
+    assert executor == os.environ["ACCEPTED_EXECUTOR"] == os.environ["GITHUB_SHA"], "executor not selected by reviewed dispatch"
+    changed = git("diff", "--name-only", source, executor).splitlines()
+    assert changed and len(changed) == len(set(changed)) and set(changed) <= EXECUTOR_GLUE, "executor changes preserved producer inputs"
+    rows = []
+    for path in sorted(changed):
+        body = subprocess.check_output(["git", "-C", str(ROOT), "show", executor + ":" + path])
+        rows.append(dict(path=path, **fingerprint(body)))
+    return {"consumerInputs": "protected-producer-preserved", "producer": source, "acceptedExecutor": executor, "executorDelta": rows}
+
+
 def bind_qualification_inputs(source, qualifier_source, version, release_binding=None):
+    if version == "0.3.0":
+        assert not os.environ.get("CANONICAL_QUALIFICATION_AUDIT"), "historical audit cannot authorize 0.3"
+        return bind_executor(source, qualifier_source, version)
     canonical = None
     if os.environ.get("CANONICAL_QUALIFICATION_AUDIT"):
         assert release_binding is not None, "model amendment requires genuine release receipts"
@@ -112,6 +153,7 @@ def bind_qualification_inputs(source, qualifier_source, version, release_binding
 def main():
     tracked = ET.parse(ROOT / "eng/wasm-shared/version.props").findtext(".//WasmSharedVersion")
     values = checked_inputs(os.environ, tracked)
+    assert not git("status", "--porcelain"), "installed qualifier must be a clean accepted executor"
     assert git("rev-parse", "HEAD") == values["QUALIFIER_SOURCE"] == os.environ["GITHUB_SHA"], "wrong qualifier checkout"
     source = values["PUBLISHED_SOURCE"]
     tag = "wasm/v" + values["RELEASE_VERSION"]
@@ -129,7 +171,7 @@ def main():
     for name, url in selected.items():
         destination = receipts / name
         subprocess.run(["curl", "--fail", "--location", "--proto", "=https", "--tlsv1.2", url, "--output", str(destination)], check=True)
-        expected = values["MANIFEST_SHA256"] if name == "release-manifest.json" else values["SDK_SHA256"]
+        expected = values["MANIFEST_SHA256"] if name == "release-manifest.json" else values["SDK_SHA256"] if name.endswith(".tar.gz") else values["PROMOTION_BINDING_SHA256"]
         assert hashlib.sha256(destination.read_bytes()).hexdigest() == expected, "downloaded release bytes mismatch"
     manifest = json.loads((receipts / "release-manifest.json").read_text())
     spec = importlib.util.spec_from_file_location("release_manifest", ROOT / "scripts/wasm-release/release_manifest.py")
@@ -141,6 +183,16 @@ def main():
     assert sdk["sha256"] == values["SDK_SHA256"]
     release_binding = {"manifestSha256": values["MANIFEST_SHA256"], "sdkSha256": values["SDK_SHA256"],
                        "packages": [{"name": row["file"], "sha256": row["sha256"]} for row in manifest["artifacts"] if row["file"].endswith(".nupkg")]}
+    if values["RELEASE_VERSION"] == "0.3.0":
+        spec = importlib.util.spec_from_file_location("promotion", ROOT / "scripts/wasm-release/promotion.py")
+        promotion = importlib.util.module_from_spec(spec); spec.loader.exec_module(promotion)
+        transaction = json.loads((receipts / "promotion-binding.json").read_text())
+        reviewed = promotion.validate_tuple(transaction["preparation"])
+        bound = reviewed["binding"]
+        assert transaction["schema"] == "fsgg.wasm.promotion/v1" and transaction["producer"] == source and transaction["tag"] == tag
+        assert bound["executor"] == values["ACCEPTED_EXECUTOR"] and bound["manifestSha256"] == values["MANIFEST_SHA256"]
+        assert bound["archives"][sdk["file"]] == values["SDK_SHA256"]
+        assert {row["file"]:row["sha256"] for row in manifest["artifacts"]} == bound["archives"]
     input_audit = bind_qualification_inputs(source, values["QUALIFIER_SOURCE"], values["RELEASE_VERSION"], release_binding)
     print("wasm-installed-input-audit: " + json.dumps(input_audit, sort_keys=True))
     print(f"wasm-installed-binding: qualifier={values['QUALIFIER_SOURCE']} published={source} tag={tag} native-assets=verified manifest={values['MANIFEST_SHA256']} sdk={values['SDK_SHA256']}")
