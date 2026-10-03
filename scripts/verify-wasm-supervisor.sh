@@ -12,6 +12,7 @@ version="${WASM_CANDIDATE_VERSION:?requires exact candidate version}"
 quint="${QUINT:-quint}"
 [[ "$($quint --version)" == 0.32.0 ]]
 "$quint" test eng/wasm-shared/compatible-qualification.qnt --main=compatibleQualificationTest --seed=20261003 > "$output/model-controls.log" 2>&1
+python3 tests/Wasm.Supervisor.Compatibility/check-receipt-mutation.py > "$output/receipt-mutation.log"
 for entry in initCompatible 'initCompatible.then(readyCompatible)'; do
   name=cold; [[ "$entry" == initCompatible ]] || name=ready
   "$quint" run eng/wasm-shared/lifecycle.qnt --main=compatibleLifecycle --init="$entry" --step=compatibleStep --invariant=compatibilitySafe --max-samples=1000 --max-steps=40 --seed=20261003 > "$output/model-$name.log" 2>&1
