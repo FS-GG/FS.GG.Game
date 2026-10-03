@@ -6,7 +6,7 @@
         "type": "Direct",
         "requested": "[0.0.0-p2-compat, 0.0.0-p2-compat]",
         "resolved": "0.0.0-p2-compat",
-        "contentHash": "LKDQdL/5t070JXbx2ysy/ctgTMRxQxgbqxrQfCRKWCsKEraJm51VVjm/kTUJKufrkJ2ny0Mk6rjKSU+w9baVxg==",
+        "contentHash": "vOp4kEDMufxsSvE8aUr33jhXXPhxWdlI6GU3ZzZpTQNNzCnziTPMg7uPuz51sQJOs0WkuLcOuVtWE0WUBUevoQ==",
         "dependencies": {
           "FS.GG.Wasm.Contracts": "[0.0.0-p2-compat]",
           "FSharp.Core": "10.1.302"
@@ -21,7 +21,7 @@
       "FS.GG.Wasm.Contracts": {
         "type": "Transitive",
         "resolved": "0.0.0-p2-compat",
-        "contentHash": "GcaaDYhmmG1HM6eRk+9mIphQ1XXsWcBV/eeP77lU+fBgro+ZTJVts76cBkxt6xJYA66P7+IEbR8atgdwSznqhA==",
+        "contentHash": "ptGtYUdoPIOye5pZn/KlOARhYadcfpwwe0F07AtLP+wFlH86ID/tklxXWESymAxXKrfskDWsi4W8XWZx3XqmMA==",
         "dependencies": {
           "FSharp.Core": "10.1.302"
         }

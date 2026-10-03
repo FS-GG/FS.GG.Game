@@ -374,7 +374,10 @@ module compatibleLifecycle {
     val h=c.host
     val population=(if(h.current.worker==0)List()else List(h.current)).concat(h.ordinary)
     val existingSnapshot=population.foldl(false,(found,p)=>found or p.submission==Snapshot)
-    if(r.submission==Snapshot and existingSnapshot){
+    if(h.disposed){...c,host:refuse(h,r,"refusedDisposed")}
+    else if(h.frozen){...c,host:refuse(h,r,"refusedFrozen")}
+    else if(h.activeWorker==0 or not(h.initializedWorkers.contains(h.activeWorker))){...c,host:refuse(h,r,"refused")}
+    else if(r.submission==Snapshot and existingSnapshot){
       val held={...r,deadline:0}
       {...c,held:held,host:{...h,nextRequest:h.nextRequest+1,deliveries:if(c.held.worker==0)h.deliveries else h.deliveries.append(c.held.id),effects:if(c.held.worker==0)List()else List(effect("settleCoalesced",c.held)),lastAction:"holdSnapshot"}}
     }else pumpCompatible({...c,admitted:c.admitted.append(r.id),host:{...h,nextRequest:h.nextRequest+1,ordinary:h.ordinary.append(r),effects:List(),lastAction:"queueMixed"}})
@@ -399,8 +402,11 @@ module compatibleLifecycle {
       val pending=h.ordinary.concat(if(c.held.worker==0)List()else List(c.held))
       {...c,held:emptyRequest,host:{...h,frozen:true,freezeToken:7,ordinary:List(),effects:effectsFor("settleInvalidated",pending),deliveries:h.deliveries.concat(idsFor(pending)),lastAction:"freeze"}}
     }else if(e.name=="frozenCommit"){
-      val promoted=handle({...h,frozen:false},input("commitCandidate",emptyRequest,h.candidateWorker,""))
-      {...c,host:{...promoted,frozen:true,freezeToken:h.freezeToken}}
+      if(not(canCommitFrozen(c,7,e.request.id,e.request.generation,e.worker)))c
+      else {
+        val promoted=handle({...h,frozen:false},input("commitCandidate",emptyRequest,h.candidateWorker,""))
+        {...c,host:{...promoted,frozen:true,freezeToken:h.freezeToken}}
+      }
     }else if(e.name=="resume")pumpCompatible({...c,host:{...h,frozen:false,freezeToken:0,lastAction:"resume"}})
     else if(e.name=="dispose")disposeCompatible(c)
     else {
@@ -471,7 +477,8 @@ module compatibleLifecycle {
     val requests=compatibleState.host.controls.select(r=>r.worker==worker and r.operation=="initialize")
     all {requests.length()>0,compatibleEvent(input("initialized",requests.head(),worker,""),compatibleState.host.clock,defaultLimits,0)}
   }
-  action compatibleSubmit(name: str,limits: Limits,bytes: int): bool = all {canAdmit(compatibleState,name,limits,bytes),compatibleEvent(input(name,emptyRequest,0,""),compatibleState.host.clock,limits,bytes)}
+  action compatibleSubmitAt(name: str,limits: Limits,bytes: int,observed: int): bool = all {canAdmit(compatibleState,name,limits,bytes),limits.enclosing==0 or limits.enclosing>observed,compatibleEvent(input(name,emptyRequest,0,""),observed,limits,bytes)}
+  action compatibleSubmit(name: str,limits: Limits,bytes: int): bool = compatibleSubmitAt(name,limits,bytes,compatibleState.host.clock)
   action compatibleComplete(observed: int): bool = all {compatibleState.host.current.worker!=0,compatibleEvent(input("complete",compatibleState.host.current,compatibleState.host.current.worker,""),observed,defaultLimits,0)}
   action compatiblePhase(phase: str,observed: int): bool = all {compatibleState.host.current.worker!=0,compatibleEvent(input("phase",compatibleState.host.current,compatibleState.host.current.worker,phase),observed,defaultLimits,0)}
   action compatiblePrepare = all {canAdmit(compatibleState,"prepareCandidate",defaultLimits,1),compatibleState.host.candidateWorker==0,live(compatibleState.host).size()<4,compatibleEvent(input("prepareCandidate",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,1)}
@@ -482,12 +489,18 @@ module compatibleLifecycle {
     c.host.candidateReady,c.host.candidateInitialized,
     c.host.candidateTransaction==transaction,c.host.activeGeneration==expectedActive,c.host.candidateGeneration==candidateGeneration,
   }
-  action compatibleFrozenCommit = all {canCommitFrozen(compatibleState,7,compatibleState.host.candidateTransaction,compatibleState.host.activeGeneration,compatibleState.host.candidateGeneration),compatibleEvent(input("frozenCommit",emptyRequest,compatibleState.host.candidateWorker,""),compatibleState.host.clock,defaultLimits,0)}
+  action compatibleFrozenCommitAt(observed: int): bool = all {canCommitFrozen(compatibleState,7,compatibleState.host.candidateTransaction,compatibleState.host.activeGeneration,compatibleState.host.candidateGeneration),compatibleEvent(input("frozenCommit",{...emptyRequest,id:compatibleState.host.candidateTransaction,generation:compatibleState.host.activeGeneration},compatibleState.host.candidateWorker,""),observed,defaultLimits,0)}
+  action compatibleFrozenCommit = compatibleFrozenCommitAt(compatibleState.host.clock)
   action compatibleResume = all {compatibleState.host.frozen,compatibleEvent(input("resume",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,0)}
   action compatibleDispose = compatibleEvent(input("dispose",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,0)
   action compatibleTimer(observed: int): bool = compatibleEvent(input("timer",emptyRequest,0,""),observed,defaultLimits,0)
   action readyCompatible = compatibleLoad.then(compatibleCompiled).then(compatibleInitialize(1,{deadline:10,output:44,enclosing:0})).then(compatibleInitialized(1))
-  action compatibleStep = any {compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
+  action compatibleProgressPhase = {
+    val r=compatibleState.host.current
+    val following=if(r.phase=="allocate-descriptor")"allocate-input" else if(r.phase=="allocate-input")r.operation else if(r.phase=="process")"free" else ""
+    all {r.worker!=0,following!="",compatiblePhase(following,compatibleState.host.clock+1)}
+  }
+  action compatibleStep = any {compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
   val selectedSingleSettlement = compatibleState.host.deliveries.foldl(Set(),(seen,id)=>seen.union(Set(id))).size()==compatibleState.host.deliveries.length()
   pure def admissionPosition(c: CompatibleState,id: int): int = c.admitted.foldl({next:1,found:0},(p,current)=>{next:p.next+1,found:if(current==id)p.next else p.found}).found
   val mixedFifoOrdered = compatibleState.host.ordinary.foldl({ok:true,last:0},(p,r)=>{
@@ -500,5 +513,29 @@ module compatibleLifecycle {
   val completeDisposal = not(compatibleState.host.disposed) or (live(compatibleState.host).size()==0 and pending(compatibleState.host).length()==0 and compatibleState.held.worker==0)
   val capturedLimitsBounded = compatibleState.limits.keys().forall(id=>{val selected=compatibleState.limits.get(id) selected.deadline>=1 and selected.deadline<=250 and selected.output>=1 and selected.output<=65536})
   val selectedCapacityBounded = compatibleState.host.ordinary.length()+(if(compatibleState.host.current.worker==0)0 else 1)<=256 and compatibleState.held.bytes<=262144
+  val sawSelectedLoad = hasEffect(compatibleState.host.effects,"createActive")
+  val sawSelectedCompile = compatibleState.host.lastAction=="compiled"
+  val sawSelectedInitialize = compatibleState.host.controls.foldl(false,(found,r)=>found or r.operation=="initialize")
+  val sawSelectedInitialized = compatibleState.host.initializedWorkers.size()>0
+  val sawMixedOrdinary = compatibleState.host.current.worker!=0 and compatibleState.host.current.submission==Ordinary
+  val sawMixedOrdered = compatibleState.host.ordinary.foldl(false,(found,r)=>found or r.submission==Ordered) or (compatibleState.host.current.worker!=0 and compatibleState.host.current.submission==Ordered)
+  val sawAdmittedSnapshot = compatibleState.host.ordinary.foldl(false,(found,r)=>found or r.submission==Snapshot) or (compatibleState.host.current.worker!=0 and compatibleState.host.current.submission==Snapshot)
+  val sawHeldSnapshot = compatibleState.held.worker!=0
+  val sawHeldPromotion = compatibleState.host.lastAction=="queueSnapshot"
+  val sawSelectedPhase = compatibleState.host.lastAction=="phase" and (compatibleState.host.current.phase=="allocate-input" or compatibleState.host.current.phase=="process" or compatibleState.host.current.phase=="free")
+  val sawNarrowDeadline = compatibleState.limits.keys().exists(id=>id!=0 and compatibleState.limits.get(id).deadline<250)
+  val sawNarrowOutput = compatibleState.limits.keys().exists(id=>id!=0 and compatibleState.limits.get(id).output<65536)
+  val sawEnclosingBudget = compatibleState.limits.keys().exists(id=>id!=0 and compatibleState.limits.get(id).enclosing>0)
+  val sawCandidatePrepared = compatibleState.host.candidateWorker!=0
+  val sawCandidateInitialized = compatibleState.host.candidateInitialized
+  val sawCandidateValidated = compatibleState.host.candidateReady
+  val sawSelectedFreeze = compatibleState.host.frozen
+  val sawAtomicFrozenCommit = compatibleState.host.frozen and compatibleState.host.freezeToken==7 and compatibleState.host.lastAction=="commitCandidate"
+  val sawSelectedHistorical = hasEffect(compatibleState.host.effects,"settleHistorical")
+  val sawSelectedResume = compatibleState.host.lastAction=="resume"
+  val sawSelectedDisposal = compatibleState.host.disposed
+  val sawRefusalAfterExpiry = hasEffect(compatibleState.host.effects,"refused") and hasEffect(compatibleState.host.effects,"settleTimedOut")
+  val sawInclusiveHeadExpiry = compatibleState.host.disposed and compatibleState.host.effects.foldl(false,(found,fx)=>found or (fx.kind=="settleTimedOut" and fx.outcome=="TimedOut" and not(fx.dispatched)))
+  val sawFrozenCommitExpiryRefused = compatibleState.host.input.name=="frozenCommit" and compatibleState.host.frozen and compatibleState.host.candidateReady and compatibleState.host.activeWorker==0 and hasEffect(compatibleState.host.effects,"settleTimedOut")
   val compatibilitySafe = and {compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
 }

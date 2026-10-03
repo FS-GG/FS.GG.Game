@@ -13,8 +13,10 @@ let selectedSettings () =
 let dispatch (trace:CompatibleTrace) (host:Host) (previous:ModelStep) (expected:ModelStep) =
     let detail=trace.Steps |> List.find(fun step->step.Model=expected)
     if expected.Input.Name="frozenCommit" then
-        host.CommitCandidateFrozen(expected.Input.Observed,previous.State.FreezeToken,previous.State.CandidateTransaction,previous.State.ActiveGeneration,previous.State.CandidateGeneration)
-        |> Result.defaultWith (failwithf "%A")
+        let result=host.CommitCandidateFrozen(expected.Input.Observed,previous.State.FreezeToken,previous.State.CandidateTransaction,previous.State.ActiveGeneration,previous.State.CandidateGeneration)
+        if expected.State.ActiveGeneration<>previous.State.CandidateGeneration then
+            if result<>Error [RequestOwnerUnavailable] then failwithf "expiry commit decision differs: %A" result
+        else result |> Result.defaultWith (failwithf "%A")
     else
         let original=eventFor previous expected
         let limited=
@@ -26,7 +28,11 @@ let dispatch (trace:CompatibleTrace) (host:Host) (previous:ModelStep) (expected:
             | ShutdownRequested identity -> Some(LimitedShutdown identity)
             | _ -> None
         match limited with
-        | Some request -> host.SubmitLimited(expected.Input.Observed,request,detail.Limits) |> Result.defaultWith (failwithf "%A")
+        | Some request ->
+            let result=host.SubmitLimited(expected.Input.Observed,request,detail.Limits)
+            if expected.Effects |> List.exists(fun effect->effect.Request=expected.Input.Request.Id && effect.Kind="refused") then
+                if result<>Error [RequestRefused GenerationRetired] then failwithf "expiry refusal decision differs: %A" result
+            else result |> Result.defaultWith (failwithf "%A")
         | None -> host.Dispatch original
 let replay (trace:CompatibleTrace) =
     let model:ModelTrace={Name=trace.Name;SourceSha256=trace.SourceSha256;Steps=trace.Steps |> List.map _.Model}
@@ -76,4 +82,6 @@ let causalMutationsAreDetected (trace:CompatibleTrace) =
       "individual-head-expiry",changed(fun step -> modelState(fun state -> if state.Disposed && (step.Model.Terminals |> List.exists(fun value->value.Outcome="TimedOut" && not value.Dispatched)) then {state with Disposed=false;ActiveWorker="worker-1";ActiveGeneration=1UL} else state) step)
       "retained-frozen-queues",changed(fun step -> modelState(fun state -> if state.Frozen then {state with Ordinary=[{state.Current with Id=999UL;Worker="worker-1"}]} else state) step)
       "temporary-resume-commit",changed(fun step -> modelState(fun state -> if step.Model.Input.Name="frozenCommit" then {state with LastAction="resume"} else state) step)
+      "discarded-refusal-expiry-effects",changed(fun step -> if step.Model.Input.Name="ordinary" && (step.Model.Effects |> List.exists(fun fx->fx.Kind="refused")) then {step with Model={step.Model with Effects=[];ConnectedEffects=[]}} else step)
+      "discarded-frozen-commit-expiry-effects",changed(fun step -> if step.Model.Input.Name="frozenCommit" && step.Model.State.ActiveGeneration=0UL then {step with Model={step.Model with Effects=[];ConnectedEffects=[]}} else step)
       "cleared-recovery-token",changed(fun step -> modelState(fun state -> if step.Model.Input.Name="frozenCommit" then {state with Frozen=false;FreezeToken=""} else state) step) ]

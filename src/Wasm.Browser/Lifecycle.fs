@@ -127,6 +127,9 @@ type private LifecycleState =
 
 type HostState = private HostState of LifecycleState
 
+/// A decision carries clock-driven maintenance even when the requested action is refused.
+type HostDecision = { State: HostState; Effects: HostEffect list; Result: Result<unit, RequestAdmissionIssue list> }
+
 [<RequireQualifiedAccess>]
 module Lifecycle =
     let private emptyRequest =
@@ -1465,13 +1468,15 @@ module Lifecycle =
         if limits.EnclosingDeadlineMilliseconds |> Option.exists (fun due -> due<=clock) then issues.Add EnclosingBudgetExpired
         if original.Disposed then issues.Add(RequestRefused HostDisposed)
         elif original.FrozenToken.IsSome then issues.Add(RequestRefused HostFrozen)
-        if issues.Count>0 then Error(List.ofSeq issues)
+        if issues.Count>0 then {State=HostState original;Effects=[];Result=Error(List.ofSeq issues)}
         else
             let next, effects = update {MonotonicMilliseconds=now;Input=input} (HostState {original with AdmissionLimits=Some limits})
             let (HostState nextState)=next
-            match effects |> List.tryPick(function Settle value when value.Identity=identity && value.Disposition=Refused -> value.Reason | _->None) with
-            | Some reason -> Error [RequestRefused reason]
-            | None -> Ok(HostState {nextState with AdmissionLimits=None},effects)
+            let result =
+                match effects |> List.tryPick(function Settle value when value.Identity=identity && value.Disposition=Refused -> value.Reason | _->None) with
+                | Some reason -> Error [RequestRefused reason]
+                | None -> Ok ()
+            {State=HostState {nextState with AdmissionLimits=None};Effects=effects;Result=result}
 
     /// Atomic matching-token promotion preserves the recovery fence throughout.
     let commitCandidateFrozen now freezeToken transaction expectedActive candidateGeneration (HostState original) =
@@ -1479,13 +1484,13 @@ module Lifecycle =
             compatible original && not original.Disposed && original.FrozenToken=Some freezeToken
             && (original.Active |> Option.map _.Generation |> Option.defaultValue 0UL)=expectedActive
             && (original.Candidate |> Option.exists(fun c -> c.Transaction=transaction && c.Worker.Generation=candidateGeneration && c.Initialized && c.Validated))
-        if not valid then Error [RequestOwnerUnavailable]
+        if not valid then {State=HostState original;Effects=[];Result=Error [RequestOwnerUnavailable]}
         else
             let clock=max original.Clock now
             let expired, expiryEffects=expireAt clock original
             // Expiry may remove the candidate or active; recheck the exact receipt.
             if (expired.Active |> Option.map _.Generation |> Option.defaultValue 0UL)<>expectedActive || not(expired.Candidate |> Option.exists(fun c -> c.Transaction=transaction && c.Worker.Generation=candidateGeneration && c.Initialized && c.Validated)) then
-                Error [RequestOwnerUnavailable]
+                {State=HostState expired;Effects=expiryEffects;Result=Error [RequestOwnerUnavailable]}
             else
                 let promoted, effects=commitCandidate transaction expectedActive candidateGeneration {expired with FrozenToken=None}
-                Ok(HostState {promoted with FrozenToken=Some freezeToken;Clock=clock},expiryEffects@effects)
+                {State=HostState {promoted with FrozenToken=Some freezeToken;Clock=clock};Effects=expiryEffects@effects;Result=Ok ()}

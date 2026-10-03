@@ -15,7 +15,7 @@ original_request=legacy.request
 legacy.request=lambda value:intern(original_request(value),'request','RequestProjection')
 original_state=legacy.state
 legacy.state=lambda value:intern(original_state(value),'hostState','HostProjection')
-schedules=[('fifo','fifoStep',11),('snapshot','snapshotStep',12),('held-enclosing','heldEnclosingStep',8),('freeze-active','freezeActive',19),('freeze-completed','freezeCompleted',19),('head-before','headBefore',14),('head-at','headAt',14),('head-after','headAfter',14),('composite','compositeStep',8),('bytes','bytesStep',21),('capacity','capacityStep',261)]
+schedules=[('fifo','fifoStep',11),('owner-expiry-refusal','ownerExpiryRefusalStep',7),('frozen-commit-expiry','frozenCommitExpiryStep',13),('snapshot','snapshotStep',12),('held-enclosing','heldEnclosingStep',8),('freeze-active','freezeActive',19),('freeze-completed','freezeCompleted',19),('head-before','headBefore',14),('head-at','headAt',14),('head-after','headAfter',14),('composite','compositeStep',8),('bytes','bytesStep',21),('capacity','capacityStep',261)]
 def limits(v):return '{ MaximumDeadlineMilliseconds=%d; MaximumOutputBytes=%d; EnclosingDeadlineMilliseconds=%s }'%(b(v['deadline']),b(v['output']),'None' if b(v['enclosing'])==0 else 'Some %dL'%b(v['enclosing']))
 def captured(c):return {b(key):value for key,value in c['limits']['#map']}
 def pending_body(c,r):return '{ Identity={WorkerInstance=%s;Request=%dUL;Generation=%dUL};Limits=%s;DeadlineMilliseconds=%dL }'%(t(legacy.worker(b(r['worker']))),b(r['id']),b(r['generation']),limits(captured(c)[b(r['id'])]),b(r['deadline']))

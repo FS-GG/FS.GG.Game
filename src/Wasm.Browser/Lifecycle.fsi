@@ -75,6 +75,9 @@ type CompatibilityProjection =
 
 type HostState
 
+/// Includes necessary clock-driven effects independently of admission success.
+type HostDecision = { State: HostState; Effects: HostEffect list; Result: Result<unit, RequestAdmissionIssue list> }
+
 [<RequireQualifiedAccess>]
 module Lifecycle =
     val create: HostSettings -> Result<HostState, RuntimeIssue list>
@@ -83,5 +86,5 @@ module Lifecycle =
     val projectCompatibility: HostState -> CompatibilityProjection
     val projectEffects: HostEffect list -> EffectProjection list
 
-    val submitLimited: int64 -> LimitedRequest -> RequestLimits -> HostState -> Result<HostState * HostEffect list, RequestAdmissionIssue list>
-    val commitCandidateFrozen: int64 -> string -> string -> uint64 -> uint64 -> HostState -> Result<HostState * HostEffect list, RequestAdmissionIssue list>
+    val submitLimited: int64 -> LimitedRequest -> RequestLimits -> HostState -> HostDecision
+    val commitCandidateFrozen: int64 -> string -> string -> uint64 -> uint64 -> HostState -> HostDecision

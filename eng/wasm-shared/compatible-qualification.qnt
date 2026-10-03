@@ -26,6 +26,17 @@ module compatibleQualification {
     else if(stage==8)compatibleComplete(10) else if(stage==9)compatibleComplete(11)
     else if(stage==10)compatibleComplete(12) else compatibleDispose,
   }
+  action ownerExpiryRefusalStep = all {stage'=stage+1,
+    if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",small,1)
+    else if(stage==5)compatibleSubmitAt("ordinary",roomy,1,6) else compatibleDispose,
+  }
+  action frozenCommitExpiryStep = all {stage'=stage+1,
+    if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",small,1)
+    else if(stage==5)compatiblePrepare else if(stage==6)compatibleCompiled
+    else if(stage==7)compatibleInitialize(2,defaultLimits) else if(stage==8)compatibleInitialized(2)
+    else if(stage==9)compatibleValidate else if(stage==10)compatibleFreeze
+    else if(stage==11)compatibleFrozenCommitAt(6) else compatibleDispose,
+  }
   action heldEnclosingStep = all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("snapshot",roomy,1)
     else if(stage==5)compatibleSubmit("snapshot",{deadline:10,output:44,enclosing:5},2)

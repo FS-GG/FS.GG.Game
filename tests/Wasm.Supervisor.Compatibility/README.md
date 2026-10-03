@@ -53,3 +53,20 @@ builds its guest, extracts the exact candidate Worker assets and runs all eight
 pinned Playwright controls from a fresh external public directory. Its looping
 initialization/process and enclosing-budget cases assert containment, without
 claiming exact wall-clock scheduling latency.
+
+The unpublished pure admission and frozen-commit functions return `HostDecision`.
+Its state and effects must be applied independently of its result. A valid
+request can advance the host clock, retire existing expired work and then
+return a refusal; the refused action cannot erase those expiry effects.
+`Host` applies this decision before returning its existing public result.
+Malformed limits, exhausted enclosing budgets and nonmatching frozen receipts
+remain pre-admission refusals with unchanged state and no effects. The retained
+owner-expiry/refusal and frozen-commit/expiry traces verify this distinction
+through both facades, including synchronous termination callbacks and raw
+settlement order. Dropping those expiry effects is a rejected causal mutation.
+
+Selected sampling now includes valid phase progression, enclosing budgets and
+clock-advanced admissions/commits. Twenty-four state/effect witnesses record
+actual reached counts. The gate requires each witness to occur in at least one
+of the cold or initialized 1,000-trace samples; it does not turn a zero count
+in one entry into a claim of coverage there.

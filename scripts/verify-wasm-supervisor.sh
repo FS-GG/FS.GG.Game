@@ -13,25 +13,30 @@ quint="${QUINT:-quint}"
 [[ "$($quint --version)" == 0.32.0 ]]
 "$quint" test eng/wasm-shared/compatible-qualification.qnt --main=compatibleQualificationTest --seed=20261003 > "$output/model-controls.log" 2>&1
 python3 tests/Wasm.Supervisor.Compatibility/check-receipt-mutation.py > "$output/receipt-mutation.log"
+witnesses=(sawSelectedLoad sawSelectedCompile sawSelectedInitialize sawSelectedInitialized sawMixedOrdinary sawMixedOrdered sawAdmittedSnapshot sawHeldSnapshot sawHeldPromotion sawSelectedPhase sawNarrowDeadline sawNarrowOutput sawEnclosingBudget sawCandidatePrepared sawCandidateInitialized sawCandidateValidated sawSelectedFreeze sawAtomicFrozenCommit sawSelectedHistorical sawSelectedResume sawSelectedDisposal sawRefusalAfterExpiry sawInclusiveHeadExpiry sawFrozenCommitExpiryRefused)
 for entry in initCompatible 'initCompatible.then(readyCompatible)'; do
   name=cold; [[ "$entry" == initCompatible ]] || name=ready
-  "$quint" run eng/wasm-shared/lifecycle.qnt --main=compatibleLifecycle --init="$entry" --step=compatibleStep --invariant=compatibilitySafe --max-samples=1000 --max-steps=40 --seed=20261003 > "$output/model-$name.log" 2>&1
+  "$quint" run eng/wasm-shared/lifecycle.qnt --main=compatibleLifecycle --init="$entry" --step=compatibleStep --invariant=compatibilitySafe --witnesses "${witnesses[@]}" --max-samples=1000 --max-steps=40 --seed=20261003 > "$output/model-$name.log" 2>&1
+done
+for witness in "${witnesses[@]}"; do
+  grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$output/model-cold.log" "$output/model-ready.log"
 done
 python3 tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py --check > "$output/default-traces.log"
 python3 tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py --check > "$output/selected-traces.log"
 export MSBuildSDKsPath=/usr/share/dotnet/sdk/10.0.401/Sdks MSBUILD_EXE_PATH=/usr/share/dotnet/sdk/10.0.401/MSBuild.dll MSBUILDDISABLENODEREUSE=1 DOTNET_PROCESSOR_COUNT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 NUGET_PACKAGES="$q/packages"
+compiler="${WASM_FSC_COMPILER_PATH:-/usr/share/dotnet/sdk/10.0.401/FSharp/fsc.dll}"
 fable="$q/tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/fable.dll"
-/usr/share/dotnet/dotnet exec "$MSBUILD_EXE_PATH" tests/Wasm.Supervisor.Compatibility/Compatibility.fsproj -t:Restore,Build -m:1 -nr:false -p:UseSharedCompilation=false -p:MSBuildEnableWorkloadResolver=false -p:RestoreConfigFile="$q/NuGet.Config" -p:RestorePackagesPath="$q/packages" > "$output/source-build.log" 2>&1
+/usr/share/dotnet/dotnet exec "$MSBUILD_EXE_PATH" tests/Wasm.Supervisor.Compatibility/Compatibility.fsproj -t:Restore,Build -m:1 -nr:false -p:UseSharedCompilation=false -p:DotnetFscCompilerPath="$compiler" -p:MSBuildEnableWorkloadResolver=false -p:RestoreConfigFile="$q/NuGet.Config" -p:RestorePackagesPath="$q/packages" > "$output/source-build.log" 2>&1
 /usr/share/dotnet/dotnet exec tests/Wasm.Supervisor.Compatibility/bin/Debug/net10.0/Compatibility.dll > "$output/source-dotnet.log" 2>&1
 /usr/share/dotnet/dotnet exec "$fable" tests/Wasm.Supervisor.Compatibility/Compatibility.fsproj --outDir "$output/source-fable" --noCache --noRestore > "$output/source-fable-build.log" 2>&1
 node "$output/source-fable"/Program.js > "$output/source-fable.log" 2>&1
 export NUGET_PACKAGES="$output/packages" WasmCandidateVersion="$version"
 project=tests/Wasm.Supervisor.Compatibility/Installed/InstalledCompatibility.fsproj
-/usr/share/dotnet/dotnet exec "$MSBUILD_EXE_PATH" "$project" -t:Restore,Build -m:1 -nr:false -p:UseSharedCompilation=false -p:MSBuildEnableWorkloadResolver=false -p:RestoreConfigFile="$custody/NuGet.Config" -p:RestorePackagesPath="$NUGET_PACKAGES" > "$output/installed-build.log" 2>&1
-/usr/share/dotnet/dotnet exec "$MSBUILD_EXE_PATH" "$project" -t:Restore,Build -m:1 -nr:false -p:UseSharedCompilation=false -p:MSBuildEnableWorkloadResolver=false -p:RestoreLockedMode=true -p:RestoreConfigFile="$custody/NuGet.Config" -p:RestorePackagesPath="$NUGET_PACKAGES" > "$output/installed-locked-build.log" 2>&1
+/usr/share/dotnet/dotnet exec "$MSBUILD_EXE_PATH" "$project" -t:Restore,Build -m:1 -nr:false -p:UseSharedCompilation=false -p:DotnetFscCompilerPath="$compiler" -p:MSBuildEnableWorkloadResolver=false -p:RestoreForceEvaluate=true -p:RestoreConfigFile="$custody/NuGet.Config" -p:RestorePackagesPath="$NUGET_PACKAGES" > "$output/installed-build.log" 2>&1
+/usr/share/dotnet/dotnet exec "$MSBUILD_EXE_PATH" "$project" -t:Restore,Build -m:1 -nr:false -p:UseSharedCompilation=false -p:DotnetFscCompilerPath="$compiler" -p:MSBuildEnableWorkloadResolver=false -p:RestoreLockedMode=true -p:RestoreConfigFile="$custody/NuGet.Config" -p:RestorePackagesPath="$NUGET_PACKAGES" > "$output/installed-locked-build.log" 2>&1
 /usr/share/dotnet/dotnet exec tests/Wasm.Supervisor.Compatibility/Installed/bin/Debug/net10.0/InstalledCompatibility.dll > "$output/installed-dotnet.log" 2>&1
 /usr/share/dotnet/dotnet exec "$fable" "$project" --outDir "$output/installed-fable/Installed" --noCache --noRestore > "$output/installed-fable-build.log" 2>&1
 node "$output/installed-fable/Program.js" > "$output/installed-fable.log" 2>&1
 node tests/Wasm.Supervisor.Compatibility/raw-numeric-controls.mjs "$output/installed-fable/Program.js" > "$output/installed-raw-numeric.log" 2>&1
 python3 tests/Wasm.Supervisor.Compatibility/native-api-compat.py --custody "$custody" --baseline-feed "$q/feed" --packages "$q/packages" --candidate-version "$version" --sdk /usr/share/dotnet/sdk/10.0.401 > "$output/native-api.log" 2>&1
-printf 'wasm-supervisor: default47+selected11 source=dotnet,fable installed=locked-dotnet,fable numeric=refused native-api=additive publication=none\n'
+printf 'wasm-supervisor: default47+selected13 source=dotnet,fable installed=locked-dotnet,fable numeric=refused native-api=additive publication=none\n'
