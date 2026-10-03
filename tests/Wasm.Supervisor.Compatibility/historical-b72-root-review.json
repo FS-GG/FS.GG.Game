@@ -1,0 +1,23 @@
+{
+  "schema": "fsgg.wasm.root-canonical-review/v1",
+  "status": "reviewed",
+  "sourceHead": "b72f6155c3e38d84f37dcfd1a10c01799feb690f",
+  "sourceTree": "a9dfa286d8dd656dd698bf09f609a1ef7852eb31",
+  "modelSha256": "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a",
+  "ownerProofSha256": "eb11b68a54578306f421eac2f0a719817be37740143fefc2279a74fb89b47c7f",
+  "reviewer": "programme integrator /root",
+  "review": [
+    "Read canonical selected transitions, admission/deadline/freeze guards and effects; read F# submitLimited/commitCandidateFrozen and Host.applyDecision.",
+    "Found and retained original discarded-expiry counterexample; reviewed repair separating State/Effects from Result, invalid/wrong-token unchanged, matching expiry retained.",
+    "Independently rehashed exact source/tree, qualifier inputs, all13 full/compressed ITFs,17 gate leaves, complete orchestration/browser logs and six actual Core DLLs.",
+    "All24 ready-entry reachability witnesses reached; cold zeros retained;1000x40 per entry is bounded sampling only.",
+    "Native ApiCompat old0.2.0 against ephemeral repaired candidate passes without suppressions; Host public signatures unchanged; pure Lifecycle shape additive/unpublished.",
+    "Existing47 default trace bytes preserved; genuine fresh locked installed .NET/Fable plus8 actual browser controls passed."
+  ],
+  "scope": "selected compatible supervisor canonical source/model review; publication/installed public and native product acceptance pending",
+  "provisionalRelease": "0.3.0",
+  "releaseReservation": "not granted; exact final source packs and authenticated occupancy/custody gates required",
+  "nativeAcceptance": false,
+  "versionClassification": "MINOR: actual published Browser .fsi additions are new receiver-visible capabilities; additive native ApiCompat does not imply PATCH",
+  "apiDeltaSha256": "2c46a9f25e20e393186c22c1514f1f1ea8e90262a1438239b4017fd69d0d4afd"
+}

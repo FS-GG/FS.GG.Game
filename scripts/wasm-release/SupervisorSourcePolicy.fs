@@ -16,31 +16,21 @@ type Observation = {
 }
 type Decision = { Accepted: bool; Kind: string; Reasons: string array; ExactHead: string; PublicationAuthorized: bool; NativeAccepted: bool }
 
-let reviewedHead = "b72f6155c3e38d84f37dcfd1a10c01799feb690f"
-let reviewedTree = "a9dfa286d8dd656dd698bf09f609a1ef7852eb31"
+let reviewedHead = "9638363fd64d1d5d99eb90acb2cdb5a0a19787e8"
+let reviewedTree = "a2f664f2c403b4c62ecc9e52955c32800a2ce6f0"
 let reviewedModel = "9eac9183e9b8bdbd555d1a922acdc098e25f92458866c5437c52fdedbe75717a"
-let reviewDigest = "57d1c6c3e1ab1bd2db939b9b129b5a3166a9e69c9cc3a301524b3851fb056075"
-let proofDigest = "eb11b68a54578306f421eac2f0a719817be37740143fefc2279a74fb89b47c7f"
+let reviewDigest = "e7b1af81ccde9da3c9d51bce6316d54c43c48798925e84b6ce3904e4983979df"
+let proofDigest = "bdf76d88362a3a9512b3deddbb074310c4eee2c0afe63cdaf7f73871892cbf92"
 let preparationPaths = Set [
-    "eng/wasm-shared/version.props"; "sdk/wasm/VERSION"
-    "sdk/wasm/rust/Cargo.lock"; "sdk/wasm/rust/fsgg-wasm-guest/Cargo.toml"
-    "examples/wasm/rust/bar-guest/Cargo.toml"; "examples/wasm/rust/bar-guest/Cargo.lock"
-    "examples/wasm/rust/sc2-guest/Cargo.toml"; "examples/wasm/rust/sc2-guest/Cargo.lock"
-    "src/Wasm.Contracts/compatibility-profile.v1.json"
-    "scripts/wasm-release/api-baseline-policy.json"; "scripts/wasm-release/api-baseline-policy-0.2.0.json"
-    "scripts/wasm-release/compare-published-baseline.py"; "scripts/wasm-release/release_manifest.py"
-    "scripts/wasm-release/SupervisorSourcePolicy.fs"; "scripts/wasm-release/decide-supervisor-source.fsx"
+    "scripts/wasm-release/SupervisorSourcePolicy.fs"
     "scripts/wasm-release/bind-supervisor-source.py"
-    "tests/release/wasm/test-supervisor-source-policy.fsx"; "tests/release/wasm/test-api-baseline-policy.py"; "tests/release/wasm/test-release-wasm.py"
+    "scripts/wasm-release/decide-supervisor-source.fsx"
+    "tests/release/wasm/test-supervisor-source-policy.fsx"
     "tests/Wasm.Supervisor.Compatibility/root-canonical-review.json"
     "tests/Wasm.Supervisor.Compatibility/reviewed-source-proof.json"
+    "tests/Wasm.Supervisor.Compatibility/historical-b72-root-review.json"
+    "tests/Wasm.Supervisor.Compatibility/historical-b72-source-proof.json"
     "docs/roadmaps/wasm-shared-01.md"
-    "scripts/wasm-release/qualify-supervisor-custody.sh"; "scripts/verify-wasm-contracts.sh"; "scripts/verify-wasm-lifecycle.sh"
-    "scripts/wasm-release/prepare.sh"; "scripts/verify-wasm-supervisor.sh"; "scripts/verify-wasm-package-consumer.sh"; "scripts/verify-wasm-workflow.sh"
-    ".github/workflows/wasm-shared.yml"
-    "tests/Wasm.Contracts.PortableConsumers/DotNet/DotNet.fsproj"
-    "tests/Wasm.Contracts.PortableConsumers/Fable/Fable.fsproj"
-    "tests/Wasm.PackageConsumer/Consumer.fsproj"
 ]
 
 let decide (review: Review) (observed: Observation) : Decision =

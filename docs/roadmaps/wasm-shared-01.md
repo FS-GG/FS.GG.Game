@@ -46,7 +46,7 @@ approved compatible supervisor packet from the unified programme roadmap.
   both Host facades, including matching frozen-commit expiry; retain causal controls.
 - [x] Root review actual canonical model/source, 24 reachability witnesses, native
   ApiCompat, official Core byte joins and 8 browser controls at b72f615.
-- [ ] Qualify coherent 0.3.0 packages freshly packed from the final committed head.
+- [x] Qualify coherent 0.3.0 packages freshly packed from exact 9638363; repack after review metadata commit.
 - [ ] Root admit source PR, protected merge and exact final release custody.
 - [ ] Authenticated release reservation, byte-identical dual publication and fresh
   both-feed installed qualification before downstream activation.
@@ -74,3 +74,13 @@ remain required. The implementation is bounded to this linear workflow; a new
 pipeline model would add no ordering coverage. Reuse is expected on each producer
 PR and release preparation; no measured runner savings are claimed. The existing
 canonical lifecycle remains the semantic model authority.
+
+
+Root renewed the narrow source/gate binding at exact 9638363 after independent
+hash review of the one changed qualifier input, external locked restore and real
+NU1403 refusal, complete historical/selected gates, six actual Core DLL joins and
+source cleanliness. The root receipt e7b1af81 and owner proof bdf76d88 retain their
+exact reviewed-source bindings. Original b72 review 57d1c6c3 and Pending owner
+proof eb11b68a remain byte-identical historical records. Renewed typed eligibility
+allows only binding metadata after the reviewed source; publication and native
+product acceptance remain false. Final source admission and publication are pending.
