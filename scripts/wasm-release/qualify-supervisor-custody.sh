@@ -96,6 +96,9 @@ import pathlib,sys,xml.etree.ElementTree as ET
 custody=pathlib.Path(sys.argv[1]);root=ET.Element('configuration');sources=ET.SubElement(root,'packageSources');ET.SubElement(sources,'clear');ET.SubElement(sources,'add',key='candidate',value=str(custody));ET.SubElement(sources,'add',key='official',value='https://api.nuget.org/v3/index.json');mapping=ET.SubElement(root,'packageSourceMapping');ET.SubElement(ET.SubElement(mapping,'packageSource',key='candidate'),'package',pattern='FS.GG.Wasm.*');ET.SubElement(ET.SubElement(mapping,'packageSource',key='official'),'package',pattern='*');ET.ElementTree(root).write(custody/'NuGet.Config',encoding='unicode')
 PYCONFIG
     export WASM_BASELINE_QUALIFICATION_ROOT="$q" WASM_CANDIDATE_CUSTODY="$custody" WASM_CANDIDATE_VERSION="$version" WASM_FSC_COMPILER_PATH="$q/compiler/fsc.dll"
+    # Direct MSBuild execution needs the same host used by the qualifier's commands.
+    # The selected private fsc.dll remains supplied through DotnetFscCompilerPath.
+    export DOTNET_HOST_PATH=/usr/share/dotnet/dotnet
     stage='source/model/installed supervisor qualification'
     "$repo/scripts/verify-wasm-supervisor.sh" "$output"
     stage='official Core byte joins'
