@@ -1,0 +1,34 @@
+{
+  "schema": "fsgg.coordination-board-v2-import/v1",
+  "target": {
+    "ownerKind": "organization",
+    "owner": "FS-GG",
+    "title": "FS.GG.Game — Product V2 qualification",
+    "id": "PVT_kwDOEYAWY84Bltsv",
+    "number": 4,
+    "creationState": "created-and-read-back"
+  },
+  "binding": {
+    "organizationId": "O_kgDOEYAWYw",
+    "visibility": "complete",
+    "authorization": "root-selected",
+    "recipeRevision": "2ab0c0ff9f37bdec9a11ba3604ebdc230711934f",
+    "artifactSha256": "cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615",
+    "repositories": [
+      "FS-GG/FS.GG.Game"
+    ]
+  },
+  "items": [
+    {
+      "issue": "FS-GG/FS.GG.Game#7",
+      "nodeId": "I_kwDOTPLzXc8AAAABH2FRaQ",
+      "observedUpdatedAt": "2026-10-04T22:23:27Z",
+      "observedState": "open",
+      "pilot": true,
+      "decision": "follow-up",
+      "adjudication": "verified-remaining",
+      "roadmap": "https://github.com/FS-GG/FS.GG.Game/issues/7",
+      "dependencies": []
+    }
+  ]
+}
