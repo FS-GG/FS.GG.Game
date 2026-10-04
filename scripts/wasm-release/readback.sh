@@ -49,12 +49,7 @@ case "$kind" in
     ;;
   assets)
     [[ -z "$selected" ]] || exit 2
-    for file in "fsgg-wasm-sdk-$version.tar.gz" release-manifest.json SHA256SUMS; do
-      release="$(timeout 30 gh api "repos/${GITHUB_REPOSITORY:?}/releases/tags/wasm%2Fv$version")"
-      asset_url="$(python3 -c 'import json,sys; rows=[r for r in json.loads(sys.argv[1])["assets"] if r["name"]==sys.argv[2]]; assert len(rows)==1; print(rows[0]["url"])' "$release" "$file")"
-      download "$asset_url" "$output/$file" -H 'Accept: application/octet-stream' -H "Authorization: Bearer ${GH_TOKEN:?}"
-      cmp "$custody/$file" "$output/$file"
-    done
+    python3 -B "$repo/scripts/wasm-release/promotion.py" asset-readback --reviewed "${RUNNER_TEMP:?}/reviewed.json" --custody "$custody" --output "$output"
     ;;
   *) echo "unknown readback kind: $kind" >&2; exit 2 ;;
 esac

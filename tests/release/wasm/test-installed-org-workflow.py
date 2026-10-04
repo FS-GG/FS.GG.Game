@@ -17,7 +17,7 @@ def validate(candidate):
     assert "on:\n  workflow_dispatch:\n    inputs:" in candidate and "  push:" not in candidate
     assert "packages: read" in candidate and candidate.count("    runs-on:") == 1
     assert all(value not in candidate for value in ("packages: write", "contents: write", "id-token:", "dotnet pack", "nuget push", "gh release", "git tag"))
-    for name in ("version", "published_source", "qualifier_source", "manifest_sha256", "sdk_sha256", "accepted_executor", "promotion_binding_sha256"):
+    for name in ("version", "published_source", "qualifier_source", "manifest_sha256", "sdk_sha256", "accepted_executor", "promotion_binding_sha256", "execution_binding"):
         assert f"      {name}:" in candidate and f"${{{{ inputs.{name} }}}}" in candidate
     assert "feed: [org, public]" in candidate and "max-parallel: 1" in candidate
     assert "https://nuget.pkg.github.com/FS-GG/index.json" in candidate and "https://api.nuget.org/v3/index.json" in candidate

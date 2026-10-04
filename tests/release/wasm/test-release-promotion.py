@@ -17,13 +17,13 @@ p=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)
 
 
 def validate_workflow(text):
-    assert '  push:' not in text and 'options: [prepare, promote, readback, recovery]' in text and 'default: prepare' in text
+    assert '  push:' not in text and 'options: [prepare, promote, readback, recovery, inspect]' in text and 'default: prepare' in text
     assert 'group: release-wasm-0.3.0' in text and 'cancel-in-progress: false' in text
     env = text.split("\nenv:\n",1)[1].split("\njobs:\n",1)[0]
     assert re.findall(r"(?m)^  DOTNET_PROCESSOR_COUNT: (.+)$",env)==['1'], "actual CPU bound must be one"
     assert not re.search(r"(?m)^  .*[/@].*:",env), "action identifier substituted for an environment key"
     jobs={m[1]:m[2] for m in re.finditer(r'(?ms)^  ([a-z]+):\n(.*?)(?=^  [a-z]+:\n|\Z)',text.split('jobs:\n',1)[1])}
-    assert set(jobs)=={'preflight','prepare','admission','begin','org','public','assets','complete','readback'}
+    assert set(jobs)=={'preflight','prepare','admission','begin','org','public','assets','complete','readback','inspect'}
     for job,dependency in [('prepare','preflight'),('admission','preflight'),('begin','admission'),('org','begin'),('public','org'),('assets','public'),('complete','org, public, assets'),('readback','admission')]:
         assert 'needs: ['+dependency+']' in jobs[job]
     assert "if: inputs.mode == 'prepare'" in jobs['prepare']
@@ -60,11 +60,19 @@ def validate_workflow(text):
     # Every caller of complete active/deleted occupancy needs the workflow-token
     # grant established by native diagnostic 37154778966; scope it to those jobs.
     write_jobs={'admission','begin','org','public'}
-    read_jobs={'assets','complete','readback'}
+    read_jobs={'assets','complete','readback','inspect'}
     for job,block in jobs.items():
         expected=['write'] if job in write_jobs else ['read'] if job in read_jobs else []
         grants=re.findall(r'(?m)^      packages: (\S+)$',block)
         assert grants==expected, 'wrong package permission for '+job
+    contents_writers={'admission','begin','org','public','assets','complete','readback','inspect'}
+    for job,block in jobs.items():
+        grant=re.findall(r'(?m)^      contents: (\S+)$',block)
+        assert grant==(['write'] if job in contents_writers else ['read'] if job=='prepare' else []), 'wrong draft visibility permission '+job
+    assert "if: inputs.mode == 'inspect'" in jobs['inspect'] and 'promotion.py inspect' in jobs['inspect']
+    assert all(x not in jobs['inspect'] for x in ('id-token:', 'NuGet/login', 'promotion.py admit', 'promotion.py begin', 'nuget push', 'stage-assets.sh'))
+    assert 'EXECUTION_BINDING: ${{ inputs.execution_binding }}' in env
+    assert 'fetch-depth: 0' in jobs['admission']
     assert text.count('packages: write')==len(write_jobs)
     assert text.split('\nenv:\n',1)[0].split('\npermissions:\n',1)[1]=='  contents: read\n', 'global permission widening'
     # Disable bytecode before SourceFileLoader runs: the module's own setting is
@@ -111,7 +119,7 @@ class Tests(unittest.TestCase):
     def test_actual_yaml_and_causal_mutants(self):
         text=(ROOT/'.github/workflows/release-wasm.yml').read_text();validate_workflow(text)
         for before,after in [
-            ('needs: [org]\n','needs: [begin]\n'),('options: [prepare, promote, readback, recovery]','options: [prepare, publish]'),
+            ('needs: [org]\n','needs: [begin]\n'),('options: [prepare, promote, readback, recovery, inspect]','options: [prepare, publish]'),
             ('DOTNET_PROCESSOR_COUNT: 1','DOTNET_PROCESSOR_COUNT: 2'),
             ('DOTNET_PROCESSOR_COUNT: 1','actions/setup-dotnet@bad_PROCESSOR_COUNT: 1'),
             ('Read-only pinned Rust model readiness','Skipped Rust readiness'),
@@ -131,7 +139,7 @@ class Tests(unittest.TestCase):
     def test_deleted_occupancy_permissions_are_exactly_job_scoped(self):
         text=(ROOT/'.github/workflows/release-wasm.yml').read_text()
         validate_workflow(text)
-        for job in ('preflight','prepare','admission','begin','org','public','assets','complete','readback'):
+        for job in ('preflight','prepare','admission','begin','org','public','assets','complete','readback','inspect'):
             pattern=r'(?ms)(^  '+job+r':\n.*?)(?=^  [a-z]+:\n|\Z)'
             block=re.search(pattern,text)[1]
             if job in ('admission','begin','org','public'):
@@ -236,7 +244,7 @@ class Tests(unittest.TestCase):
         native=p.Native();calls=[]
         def read(path,*args):
             calls.append(path)
-            return [{'name':'x','id':i} for i in range(100)] if path.endswith('&page=1') else [{'name':'last','id':100}]
+            return [{'name':'x','id':i} for i in range(1,101)] if path.endswith('&page=1') else [{'name':'last','id':101}]
         with patch.object(native,'checked',read):self.assertEqual(len(native.pages('orgs/FS-GG/versions')),101)
         self.assertEqual(len(calls),2)
         native.end=0
@@ -515,5 +523,165 @@ class Tests(unittest.TestCase):
                 self.assertEqual(events[count:],['readback-org','readback-public','readback-assets'])
                 self.assertEqual(events.count('push-contracts'),1);self.assertEqual(events.count('push-browser'),1)
                 self.assertEqual(events.count('public-contracts'),1);self.assertEqual(events.count('public-browser'),1)
+
+    def test_draft_resolver_actual_transport_pagination_and_unknowns(self):
+        release={'id':402763234,'tag_name':'wasm/v0.3.0','target_commitish':p.P,'draft':True,'prerelease':False,'assets':[]}
+        class Transport(p.Native):
+            def __init__(self,mutation=None):super().__init__();self.mutation=mutation;self.calls=[]
+            def api(self,path,method='GET',data=None):
+                self.calls.append(path)
+                if '/git/ref/' in path:return 200,{'object':{'type':'commit','sha':p.P}},{}
+                if '/releases/tags/' in path:return (200,dict(release,draft=False),{}) if self.mutation=='published' else (404,None,{})
+                if path.endswith('/releases/402763234'):
+                    row=dict(release,draft=False) if self.mutation=='published' else copy.deepcopy(release)
+                    if self.mutation=='disagreement':row['assets']=[{'id':1}]
+                    return 200,row,{}
+                page=int(path.rsplit('=',1)[1])
+                if self.mutation=='denied':return 403,None,{}
+                if self.mutation=='timeout':raise TimeoutError('bounded injected timeout')
+                if self.mutation=='oversized':return 200,[{'id':i,'tag_name':'other'} for i in range(1,102)],{}
+                if self.mutation=='repeat':return 200,[{'id':i,'tag_name':'other'} for i in range(1,101)],{}
+                if self.mutation=='cap':return 200,[{'id':page*100+i,'tag_name':'other'} for i in range(1,101)],{}
+                if self.mutation=='malformed':return 200,[{'id':1}],{}
+                if page==1:return 200,[{'id':i,'tag_name':'other'} for i in range(1,101)],{}
+                if self.mutation=='hidden':return 200,[],{}
+                if self.mutation=='duplicate':return 200,[release,dict(release,id=402763235)],{}
+                return 200,[dict(release,draft=False) if self.mutation=='published' else release],{}
+        with patch.dict(os.environ,{'EXECUTION_BINDING':json.dumps({'releaseId':402763234})}):
+            n=Transport();self.assertEqual(p.release_state(n),(200,release));self.assertTrue(any('page=2' in x for x in n.calls))
+            self.assertFalse(p.release_state(Transport('published'))[1]['draft'])
+            for mutation in ('disagreement','denied','timeout','oversized','repeat','cap','malformed','hidden','duplicate'):
+                with self.subTest(mutation=mutation),self.assertRaises((p.Refusal,TimeoutError)):p.release_state(Transport(mutation))
+
+    def test_closed_successor_git_join_and_real_download_entry(self):
+        import subprocess
+        with tempfile.TemporaryDirectory(prefix='wasm-two-source-control.') as raw:
+            fixture=pathlib.Path(raw)
+            def git(*args):return subprocess.check_output(['git','-C',str(fixture),*args],text=True,stderr=subprocess.PIPE).strip()
+            git('init','-q');git('config','user.name','Fixture');git('config','user.email','fixture@example.invalid')
+            source=fixture/'.github/workflows/release-wasm.yml';source.parent.mkdir(parents=True);source.write_text('original\n')
+            git('add','.');git('commit','-qm','producer');producer=git('rev-parse','HEAD')
+            source.write_text('preparation\n');git('add','.');git('commit','-qm','preparation executor');e0=git('rev-parse','HEAD');tree0=git('rev-parse','HEAD^{tree}')
+            source.write_text('successor\n');git('add','.');git('commit','-qm','successor executor');e1=git('rev-parse','HEAD');tree1=git('rev-parse','HEAD^{tree}')
+            r=reviewed();r['binding'].update(producer=producer,executor=e0,executorTree=tree0);r['artifactId']=11289067127;r['artifactSha256']='7b7f957e2506ef1a2d4a257eaa334c80ca116abaa0462c71315a1079aa38d723'
+            canonical=p.digest((json.dumps(r,sort_keys=True,indent=2)+'\n').encode())
+            with patch.object(p,'ROOT',fixture):
+                old=p.fingerprint(e0,'.github/workflows/release-wasm.yml');new=p.fingerprint(e1,'.github/workflows/release-wasm.yml')
+            value={'schema':'fsgg.wasm.successor-execution/v1','repository':p.REPO,'version':p.VERSION,'producer':producer,'preparationExecutor':e0,'preparationTree':tree0,'tupleSha256':p.ORIGINAL_TUPLE_SHA,'artifactId':r['artifactId'],'artifactSha256':r['artifactSha256'],'firstPromotionRun':37166812270,'firstPromotionAttempt':1,'releaseId':402763234,'journalAssetId':608859205,'journalSha256':'5b5382d6b246ace3f4841d9b3de17ef1b446ba4e41536caa60ae96be766dcf57','executor':e1,'executorTree':tree1,'workflow':'.github/workflows/release-wasm.yml','workflowSha256':p.digest(source.read_bytes()),'delta':[{'path':'.github/workflows/release-wasm.yml','oldBlob':old['blob'],'oldSha256':old['sha256'],'newBlob':new['blob'],'newSha256':new['sha256']}]}
+            env={'EXECUTION_BINDING':json.dumps(value),'GITHUB_SHA':e1,'ACCEPTED_EXECUTOR':e1,'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_RUN_ID':'300','MODE':'recovery'}
+            class Transport:
+                def __init__(self):self.main=e1
+                def checked(self,path):
+                    if '/git/ref/'in path:return {'object':{'sha':self.main}}
+                    if '/actions/runs/300/attempts/1' in path:return {'id':300,'run_attempt':1,'repository':{'full_name':p.REPO},'head_sha':e1,'head_branch':'main','path':value['workflow'],'event':'workflow_dispatch'}
+                    raise p.Refusal('custody API sentinel reached after execution join')
+            with patch.object(p,'ROOT',fixture),patch.object(p,'P',producer),patch.object(p,'ORIGINAL_EXECUTOR',e0),patch.object(p,'ORIGINAL_TREE',tree0),patch.object(p,'ORIGINAL_CANONICAL_SHA',canonical),patch.dict(os.environ,env):
+                n=Transport();self.assertEqual(p.execution_checkout(n,r),value)
+                with self.assertRaisesRegex(p.Refusal,'custody API sentinel'):p.download(n,r,fixture/'unused')
+                for key,bad in [('executorTree','0'*40),('workflowSha256','0'*64),('firstPromotionRun',37159983975),('firstPromotionAttempt',2),('artifactId',11287095456),('journalAssetId',1),('delta',[]),('extra','field')]:
+                    mutant=copy.deepcopy(value);mutant[key]=bad
+                    with self.subTest(key=key),patch.dict(os.environ,{'EXECUTION_BINDING':json.dumps(mutant)}),self.assertRaises(p.Refusal):p.execution_checkout(n,r)
+                for key,bad in [('MODE','promote'),('MODE','prepare'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_REF','refs/heads/other'),('GITHUB_SHA',e0)]:
+                    with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(p.Refusal):p.download(n,r,fixture/'unused')
+                n.main=e0
+                with self.assertRaisesRegex(p.Refusal,'protected executor moved'):p.execution_checkout(n,r)
+                n.main=e1;source.write_text('dirty\n')
+                with self.assertRaisesRegex(p.Refusal,'dirty or different'):p.execution_checkout(n,r)
+                source.write_text('successor\n')
+                changed=copy.deepcopy(r);changed['binding']['inventories'][p.FILES[0]]['substitution']='1'*64
+                with self.assertRaisesRegex(p.Refusal,'changed original tuple'):p.execution_checkout(n,changed)
+                with patch.dict(os.environ,{'MODE':'installed'}):self.assertRaises(p.Refusal,p.execution_checkout,n,r,True) # current run path is release, not installed
+
+    def test_current_admission_exact_run_binding_and_missing_occupancy(self):
+        import io,zipfile
+        r=reviewed();value={'executor':'1'*40};record={'schema':'fsgg.wasm.admission/v1','reviewed':r,'mode':'recovery','run':300,'attempt':1,'exchangeVerified':True,'occupancy':{k:False for k in p.OCCUPANCY_KEYS},'observedAt':'now','nugetAccountSha256':p.digest(b'offline'),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown','executionBinding':value,'executionBindingSha256':p.digest((json.dumps(value,sort_keys=True,indent=2)+'\n').encode())}
+        class Transport:
+            def __init__(self,record):self.record=record
+            def pages(self,path,key=None):
+                if path.endswith('/jobs'):return [{'name':'admission','conclusion':'success'}]
+                raw=io.BytesIO()
+                with zipfile.ZipFile(raw,'w')as z:z.writestr('admission-binding.json',json.dumps(self.record))
+                self.body=raw.getvalue();return [{'id':1,'name':'wasm-admission-300-1','expired':False,'workflow_run':{'id':300,'head_sha':'1'*40},'digest':'sha256:'+p.digest(self.body)}]
+            def request(self,*args,**kwargs):return 200,self.body,{}
+        env={'EXECUTION_BINDING':json.dumps(value),'MODE':'recovery','GITHUB_RUN_ID':'300','GITHUB_RUN_ATTEMPT':'1','NUGET_ACCOUNT':'offline'}
+        with patch.dict(os.environ,env):
+            p.verify_current_admission(Transport(record),r)
+            for mutation in ('missing','wrong-run','wrong-account','wrong-binding','no-exchange','deleted','wrong-mode'):
+                mutant=copy.deepcopy(record)
+                if mutation=='missing':mutant['occupancy'].pop(next(iter(p.OCCUPANCY_KEYS)))
+                elif mutation=='wrong-run':mutant['run']=200
+                elif mutation=='wrong-account':mutant['nugetAccountSha256']='0'*64
+                elif mutation=='wrong-binding':mutant['executionBindingSha256']='0'*64
+                elif mutation=='no-exchange':mutant['exchangeVerified']=False
+                elif mutation=='deleted':mutant['occupancy'][p.PACKAGES[0]+':deleted']=True
+                else:mutant['mode']='inspect'
+                with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_current_admission(Transport(mutant),r)
+            with patch.dict(os.environ,{'GITHUB_RUN_ATTEMPT':'2'}),self.assertRaises(p.Refusal):p.verify_current_admission(Transport(record),r)
+
+    def test_historical_admission_missing_occupancy_cannot_mean_absence(self):
+        import io,zipfile
+        r=reviewed();record={'schema':'fsgg.wasm.admission/v1','reviewed':r,'mode':'promote','run':200,'attempt':1,'exchangeVerified':True,'occupancy':{k:False for k in p.OCCUPANCY_KEYS},'observedAt':'now','nugetAccountSha256':p.digest(b'offline'),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown'}
+        class Transport:
+            def __init__(self,record):self.record=record
+            def checked(self,path):return {'id':200,'run_attempt':1,'repository':{'full_name':p.REPO},'head_sha':r['binding']['executor'],'path':r['binding']['workflow'],'event':'workflow_dispatch'}
+            def pages(self,path,key=None):
+                if path.endswith('/jobs'):return [{'name':'admission','conclusion':'success'}]
+                raw=io.BytesIO()
+                with zipfile.ZipFile(raw,'w')as z:z.writestr('admission-binding.json',json.dumps(self.record))
+                self.body=raw.getvalue();return [{'id':1,'name':'wasm-admission-200-1','expired':False,'workflow_run':{'id':200,'head_sha':r['binding']['executor']},'digest':'sha256:'+p.digest(self.body)}]
+            def request(self,*args,**kwargs):return 200,self.body,{}
+        with patch.dict(os.environ,{'NUGET_ACCOUNT':'offline','EXECUTION_BINDING':''}):
+            p.verify_admission(Transport(record),r,200,1)
+            for key in p.OCCUPANCY_KEYS:
+                mutant=copy.deepcopy(record);mutant['occupancy'].pop(key)
+                with self.assertRaises(p.Refusal):p.verify_admission(Transport(mutant),r,200,1)
+
+    def test_asset_shell_callers_use_actual_shared_resolver(self):
+        import subprocess
+        # The wrapper injects transport into the real CLI entry, preserving both
+        # shell callers and every release/asset decision. Original archive guards
+        # are covered separately; no product or provider process runs here.
+        with tempfile.TemporaryDirectory(prefix='wasm-asset-caller-control.')as raw:
+            root=pathlib.Path(raw);tools=root/'bin';tools.mkdir();custody=root/'custody';custody.mkdir()
+            for name in ('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS'):(custody/name).write_bytes(name.encode())
+            (root/'reviewed.json').write_text(json.dumps(reviewed()))
+            wrapper=tools/'python3';wrapper.write_text('#!'+sys.executable+'\n'+'''import importlib.util,sys,os,json,pathlib,hashlib
+args=sys.argv[1:];args=args[1:] if args[0]=='-B' else args
+if args[0]=='-c':
+ import subprocess
+ sys.exit(subprocess.call([sys.executable]+args))
+s=importlib.util.spec_from_file_location('promotion',args[0]);p=importlib.util.module_from_spec(s);s.loader.exec_module(p)
+root=pathlib.Path(os.environ['FIXTURE_ROOT']);c=root/'custody'
+rows=[dict(id=i+1,name=n,url=f'https://api.github.com/repos/{p.REPO}/releases/assets/{i+1}',size=len((c/n).read_bytes()),digest='sha256:'+p.digest((c/n).read_bytes()))for i,n in enumerate(('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS'))]
+release=dict(id=402763234,tag_name='wasm/v0.3.0',target_commitish=p.P,draft=True,prerelease=False,assets=rows)
+class N(p.Native):
+ def api(self,path,method='GET',data=None):
+  assert method=='GET'
+  if '/git/ref/'in path:return 200,dict(object=dict(type='commit',sha=p.P)),{}
+  if '/releases/tags/'in path:return 404,None,{}
+  if '/releases/402763234'in path:return 200,release,{}
+  return 200,[release],{}
+ def request(self,url,**kwargs):
+  assert kwargs.get('method','GET')=='GET'
+  row=next(x for x in rows if x['url']==url);body=(c/row['name']).read_bytes()
+  return 200,body+ (b'foreign' if os.environ.get('MUTANT') else b''),{}
+p.Native=N;p.verify_originals=lambda *a:None;p.verify_transaction=lambda *a:None
+sys.argv=[args[0]]+args[1:];p.main()
+''');wrapper.chmod(0o755)
+            env=dict(os.environ,PATH=str(tools)+':'+os.environ['PATH'],RUNNER_TEMP=str(root),FIXTURE_ROOT=str(root),EXECUTION_BINDING='')
+            for script,args in [('stage-assets.sh',[str(custody)]),('readback.sh',['assets',str(custody),str(root/'readback-assets')])]:
+                command=[str(ROOT/'scripts/wasm-release'/script),*args]
+                result=subprocess.run(command,env=env,capture_output=True,text=True,timeout=20);self.assertEqual(result.returncode,0,result.stderr)
+                result=subprocess.run(command,env=dict(env,MUTANT='served-substitution'),capture_output=True,text=True,timeout=20);self.assertNotEqual(result.returncode,0)
+
+    def test_inspect_excludes_all_mutating_jobs_and_cannot_admit(self):
+        text=(ROOT/'.github/workflows/release-wasm.yml').read_text();validate_workflow(text)
+        for job in ('prepare','admission','begin','org','public','assets','complete'):
+            block=re.search(r'(?ms)^  '+job+r':\n.*?(?=^  [a-z]+:\n|\Z)',text)[0]
+            self.assertNotIn("inputs.mode == 'inspect'",block)
+        for job in ('admission','org','public','readback','inspect'):
+            block=re.search(r'(?ms)^  '+job+r':\n.*?(?=^  [a-z]+:\n|\Z)',text)[0]
+            mutant=block.replace('      contents: write','      contents: read')
+            with self.assertRaises(AssertionError):validate_workflow(text.replace(block,mutant))
 
 if __name__=='__main__':unittest.main()

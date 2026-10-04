@@ -19,6 +19,10 @@ on:
         description: Root accepted protected publisher/qualification executor E
         required: true
         type: string
+      execution_binding:
+        description: Exact separate successor execution binding for original custody
+        required: false
+        type: string
       promotion_binding_sha256:
         description: Exact immutable published transaction binding SHA-256
         required: true
@@ -55,6 +59,9 @@ jobs:
       PUBLISHED_SOURCE: ${{ inputs.published_source }}
       QUALIFIER_SOURCE: ${{ inputs.qualifier_source }}
       MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+      NUGET_ACCOUNT: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      MODE: installed
+      EXECUTION_BINDING: ${{ inputs.execution_binding }}
       ACCEPTED_EXECUTOR: ${{ inputs.accepted_executor }}
       PROMOTION_BINDING_SHA256: ${{ inputs.promotion_binding_sha256 }}
       SDK_SHA256: ${{ inputs.sdk_sha256 }}
@@ -90,6 +97,7 @@ jobs:
       - name: Qualify fresh installed consumer
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           NuGetPackageSourceCredentials_wasm: ${{ matrix.feed == 'org' && format('Username=token;Password={0};ValidAuthenticationTypes=Basic', github.token) || '' }}
         run: |
           set -euo pipefail
