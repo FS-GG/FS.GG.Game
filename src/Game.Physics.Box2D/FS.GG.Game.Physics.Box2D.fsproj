@@ -13,8 +13,11 @@
     <Compile Include="Types.fs" />
     <Compile Include="Runtime.fsi" />
     <Compile Include="Runtime.fs" />
+    <Compile Include="AreaRuntime.fsi" />
+    <Compile Include="AreaRuntime.fs" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Game.Physics.Box2D.Tests" />
     <ProjectReference Include="../Game.Core/FS.GG.Game.Core.fsproj" />
     <PackageReference Include="Box2D.NET" />
   </ItemGroup>

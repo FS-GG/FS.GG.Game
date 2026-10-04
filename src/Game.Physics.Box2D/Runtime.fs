@@ -124,23 +124,30 @@ type Runtime(settings: Settings) =
             bodyDef.linearVelocity <- vec descriptor.LinearVelocity
             bodyDef.angularVelocity <- float32 descriptor.AngularVelocity
             let id = B2Bodies.b2CreateBody(world, &bodyDef)
-            let mutable shapeDef = B2Types.b2DefaultShapeDef()
-            shapeDef.density <- float32 descriptor.Density
-            shapeDef.material.friction <- float32 descriptor.Friction
-            shapeDef.material.restitution <- float32 descriptor.Restitution
-            shapeDef.isSensor <- descriptor.IsSensor
-            shapeDef.enableSensorEvents <- true
-            shapeDef.enableContactEvents <- true
-            let shape =
-                match descriptor.Shape with
-                | Circle radius ->
-                    let geometry = B2Circle(B2Vec2(0.f, 0.f), float32 radius)
-                    B2Shapes.b2CreateCircleShape(id, &shapeDef, &geometry)
-                | Box (width, height) ->
-                    let geometry = B2Geometries.b2MakeBox(float32 width, float32 height)
-                    B2Shapes.b2CreatePolygonShape(id, &shapeDef, &geometry)
-            bodies <- Map.add descriptor.Entity (id, shape, descriptor) bodies
-            shapes <- Map.add (key shape) descriptor.Entity shapes
+            try
+                let mutable shapeDef = B2Types.b2DefaultShapeDef()
+                shapeDef.density <- float32 descriptor.Density
+                shapeDef.material.friction <- float32 descriptor.Friction
+                shapeDef.material.restitution <- float32 descriptor.Restitution
+                shapeDef.isSensor <- descriptor.IsSensor
+                shapeDef.enableSensorEvents <- true
+                shapeDef.enableContactEvents <- true
+                let shape =
+                    match descriptor.Shape with
+                    | Circle radius ->
+                        let geometry = B2Circle(B2Vec2(0.f, 0.f), float32 radius)
+                        B2Shapes.b2CreateCircleShape(id, &shapeDef, &geometry)
+                    | Box (width, height) ->
+                        let geometry = B2Geometries.b2MakeBox(float32 width, float32 height)
+                        B2Shapes.b2CreatePolygonShape(id, &shapeDef, &geometry)
+                bodies <- Map.add descriptor.Entity (id, shape, descriptor) bodies
+                shapes <- Map.add (key shape) descriptor.Entity shapes
+            with _ ->
+                // Retain the source during staging; clean this known partial allocation before propagating.
+                B2Bodies.b2DestroyBody id
+                bodies <- Map.remove descriptor.Entity bodies
+                shapes <- Map.filter (fun _ entity -> entity <> descriptor.Entity) shapes
+                reraise ()
         | RemoveBody entity ->
             let (id, _, _) = bodies[entity]
             B2Bodies.b2DestroyBody id
@@ -188,6 +195,39 @@ type Runtime(settings: Settings) =
           for i in 0 .. contact.endCount - 1 do
               let e = contact.endEvents[i]
               yield ContactEnded(pair e.shapeIdA e.shapeIdB) ] |> List.sort
+
+    member internal _.ValidateBatch(commands: FS.GG.Game.Physics.Box2D.Command list) = ensureActive (); validate commands
+    member internal _.IsStopped = stopped
+    member internal _.Inspect() = if disposed then None else try Some (capture []) with _ -> None
+    member internal _.Stop() = stopped <- true
+    member internal _.Describe(entity) =
+        ensureActive ()
+        let (id, _, descriptor) = bodies[entity]
+        let pose = (capture []).Bodies[entity]
+        let current = { descriptor with Position = pose.Position; Rotation = pose.Rotation
+                                        LinearVelocity = pose.LinearVelocity; AngularVelocity = pose.AngularVelocity }
+        current, B2Bodies.b2Body_IsAwake id,
+            (joints |> Map.exists (fun _ (_, joint) -> joint.EntityA = entity || joint.EntityB = entity))
+    member internal _.Stage(descriptor, awake) =
+        ensureActive ()
+        validate [CreateBody descriptor]
+        try
+            apply (CreateBody descriptor)
+            let (id, _, _) = bodies[descriptor.Entity]
+            // Staging must not accumulate b2MakeRot's approximate sine error on every traversal.
+            let rotation = B2Rot(float32 (cos descriptor.Rotation), float32 (sin descriptor.Rotation))
+            B2Bodies.b2Body_SetTransform(id, vec descriptor.Position, rotation)
+            B2Bodies.b2Body_SetAwake(id, awake)
+        with _ -> stopped <- true; reraise ()
+    member internal _.RemoveWithoutStep(entity) =
+        ensureActive ()
+        validate [RemoveBody entity]
+        try apply (RemoveBody entity)
+        with _ -> stopped <- true; reraise ()
+    member internal _.SetAwake(entity, awake) =
+        ensureActive ()
+        let (id, _, _) = bodies[entity]
+        B2Bodies.b2Body_SetAwake(id, awake)
 
     member _.Settings = settings
     member _.Snapshot() = ensureActive (); capture []

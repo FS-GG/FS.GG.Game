@@ -1,3 +1,12 @@
+FS.GG.Game.Physics.Box2D.AreaCommand
+FS.GG.Game.Physics.Box2D.AreaPhysics
+FS.GG.Game.Physics.Box2D.AreaRuntime
+FS.GG.Game.Physics.Box2D.AreaSettings
+FS.GG.Game.Physics.Box2D.AreaSnapshot
+FS.GG.Game.Physics.Box2D.AreaStepResult
+FS.GG.Game.Physics.Box2D.AreaStepResult+Advanced
+FS.GG.Game.Physics.Box2D.AreaStepResult+Stopped
+FS.GG.Game.Physics.Box2D.AreaStepResult+Tags
 FS.GG.Game.Physics.Box2D.BodyDescriptor
 FS.GG.Game.Physics.Box2D.BodyKind
 FS.GG.Game.Physics.Box2D.BodyKind+Tags
@@ -18,6 +27,7 @@ FS.GG.Game.Physics.Box2D.PhysicsEvent+SensorEntered
 FS.GG.Game.Physics.Box2D.PhysicsEvent+SensorExited
 FS.GG.Game.Physics.Box2D.PhysicsEvent+Tags
 FS.GG.Game.Physics.Box2D.Pose
+FS.GG.Game.Physics.Box2D.RefusedTraversal
 FS.GG.Game.Physics.Box2D.Runtime
 FS.GG.Game.Physics.Box2D.Settings
 FS.GG.Game.Physics.Box2D.Shape
@@ -25,3 +35,7 @@ FS.GG.Game.Physics.Box2D.Shape+Box
 FS.GG.Game.Physics.Box2D.Shape+Circle
 FS.GG.Game.Physics.Box2D.Shape+Tags
 FS.GG.Game.Physics.Box2D.Snapshot
+FS.GG.Game.Physics.Box2D.TransferRefusal
+FS.GG.Game.Physics.Box2D.TransferRefusal+StagingRejected
+FS.GG.Game.Physics.Box2D.TransferRefusal+Tags
+FS.GG.Game.Physics.Box2D.Traversal

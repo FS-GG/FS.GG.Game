@@ -1,3 +1,23 @@
+FS.GG.Game.Physics.Box2D.AreaCommand.Area : FS.GG.Game.Core.AreaTopology+AreaId [get]
+FS.GG.Game.Physics.Box2D.AreaCommand.Command : FS.GG.Game.Physics.Box2D.Command [get]
+FS.GG.Game.Physics.Box2D.AreaCommand.new(FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Physics.Box2D.Command)
+FS.GG.Game.Physics.Box2D.AreaPhysics.interpolate(System.Double, FS.GG.Game.Physics.Box2D.AreaSnapshot, FS.GG.Game.Physics.Box2D.AreaSnapshot) : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.AreaTopology+AreaId, Microsoft.FSharp.Collections.FSharpMap<System.String, FS.GG.Game.Physics.Box2D.Pose>>
+FS.GG.Game.Physics.Box2D.AreaRuntime.InspectStopped() : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.AreaTopology+AreaId, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Physics.Box2D.Snapshot>>
+FS.GG.Game.Physics.Box2D.AreaRuntime.Snapshot() : FS.GG.Game.Physics.Box2D.AreaSnapshot
+FS.GG.Game.Physics.Box2D.AreaRuntime.Step(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.AreaCommand>) : FS.GG.Game.Physics.Box2D.AreaStepResult
+FS.GG.Game.Physics.Box2D.AreaRuntime.new(FS.GG.Game.Core.AreaTopology+Graph, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.AreaSettings>, System.Double)
+FS.GG.Game.Physics.Box2D.AreaSettings.Area : FS.GG.Game.Core.AreaTopology+AreaId [get]
+FS.GG.Game.Physics.Box2D.AreaSettings.Capacity : System.Int32 [get]
+FS.GG.Game.Physics.Box2D.AreaSettings.Physics : FS.GG.Game.Physics.Box2D.Settings [get]
+FS.GG.Game.Physics.Box2D.AreaSettings.new(FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Physics.Box2D.Settings, System.Int32)
+FS.GG.Game.Physics.Box2D.AreaSnapshot.Areas : Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Physics.Box2D.Snapshot> [get]
+FS.GG.Game.Physics.Box2D.AreaSnapshot.Ownership : Microsoft.FSharp.Collections.FSharpMap<System.String, FS.GG.Game.Core.AreaTopology+AreaId> [get]
+FS.GG.Game.Physics.Box2D.AreaSnapshot.Refused : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.RefusedTraversal> [get]
+FS.GG.Game.Physics.Box2D.AreaSnapshot.Tick : System.Int64 [get]
+FS.GG.Game.Physics.Box2D.AreaSnapshot.Traversals : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.Traversal> [get]
+FS.GG.Game.Physics.Box2D.AreaSnapshot.new(System.Int64, Microsoft.FSharp.Collections.FSharpMap<FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Physics.Box2D.Snapshot>, Microsoft.FSharp.Collections.FSharpMap<System.String, FS.GG.Game.Core.AreaTopology+AreaId>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.Traversal>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.RefusedTraversal>)
+FS.GG.Game.Physics.Box2D.AreaStepResult+Tags.Advanced : System.Int32
+FS.GG.Game.Physics.Box2D.AreaStepResult+Tags.Stopped : System.Int32
 FS.GG.Game.Physics.Box2D.BodyDescriptor.AngularVelocity : System.Double [get]
 FS.GG.Game.Physics.Box2D.BodyDescriptor.Density : System.Double [get]
 FS.GG.Game.Physics.Box2D.BodyDescriptor.Entity : System.String [get]
@@ -36,6 +56,10 @@ FS.GG.Game.Physics.Box2D.Pose.LinearVelocity : FS.GG.Game.Core.Point [get]
 FS.GG.Game.Physics.Box2D.Pose.Position : FS.GG.Game.Core.Point [get]
 FS.GG.Game.Physics.Box2D.Pose.Rotation : System.Double [get]
 FS.GG.Game.Physics.Box2D.Pose.new(FS.GG.Game.Core.Point, System.Double, FS.GG.Game.Core.Point, System.Double)
+FS.GG.Game.Physics.Box2D.RefusedTraversal.Entity : System.String [get]
+FS.GG.Game.Physics.Box2D.RefusedTraversal.Portal : FS.GG.Game.Core.AreaTopology+PortalId [get]
+FS.GG.Game.Physics.Box2D.RefusedTraversal.Reason : FS.GG.Game.Physics.Box2D.TransferRefusal [get]
+FS.GG.Game.Physics.Box2D.RefusedTraversal.new(System.String, FS.GG.Game.Core.AreaTopology+PortalId, FS.GG.Game.Physics.Box2D.TransferRefusal)
 FS.GG.Game.Physics.Box2D.Runtime.Settings : FS.GG.Game.Physics.Box2D.Settings [get]
 FS.GG.Game.Physics.Box2D.Runtime.Snapshot() : FS.GG.Game.Physics.Box2D.Snapshot
 FS.GG.Game.Physics.Box2D.Runtime.Step(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.Command>) : FS.GG.Game.Physics.Box2D.Snapshot
@@ -50,3 +74,16 @@ FS.GG.Game.Physics.Box2D.Snapshot.Bodies : Microsoft.FSharp.Collections.FSharpMa
 FS.GG.Game.Physics.Box2D.Snapshot.Events : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.PhysicsEvent> [get]
 FS.GG.Game.Physics.Box2D.Snapshot.Tick : System.Int64 [get]
 FS.GG.Game.Physics.Box2D.Snapshot.new(System.Int64, Microsoft.FSharp.Collections.FSharpMap<System.String, FS.GG.Game.Physics.Box2D.Pose>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Physics.Box2D.PhysicsEvent>)
+FS.GG.Game.Physics.Box2D.TransferRefusal+Tags.CapacityExceeded : System.Int32
+FS.GG.Game.Physics.Box2D.TransferRefusal+Tags.DestinationBlocked : System.Int32
+FS.GG.Game.Physics.Box2D.TransferRefusal+Tags.JointConnected : System.Int32
+FS.GG.Game.Physics.Box2D.TransferRefusal+Tags.MissingDestination : System.Int32
+FS.GG.Game.Physics.Box2D.TransferRefusal+Tags.StagingRejected : System.Int32
+FS.GG.Game.Physics.Box2D.Traversal.Destination : FS.GG.Game.Core.AreaTopology+AreaId [get]
+FS.GG.Game.Physics.Box2D.Traversal.DestinationPose : FS.GG.Game.Physics.Box2D.Pose [get]
+FS.GG.Game.Physics.Box2D.Traversal.Entity : System.String [get]
+FS.GG.Game.Physics.Box2D.Traversal.Portal : FS.GG.Game.Core.AreaTopology+PortalId [get]
+FS.GG.Game.Physics.Box2D.Traversal.Source : FS.GG.Game.Core.AreaTopology+AreaId [get]
+FS.GG.Game.Physics.Box2D.Traversal.SourcePose : FS.GG.Game.Physics.Box2D.Pose [get]
+FS.GG.Game.Physics.Box2D.Traversal.Tick : System.Int64 [get]
+FS.GG.Game.Physics.Box2D.Traversal.new(System.Int64, FS.GG.Game.Core.AreaTopology+PortalId, System.String, FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Physics.Box2D.Pose, FS.GG.Game.Physics.Box2D.Pose)

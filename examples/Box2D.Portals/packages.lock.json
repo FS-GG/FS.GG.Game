@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "FSharp.Core": {
+        "type": "Direct",
+        "requested": "[10.1.302, )",
+        "resolved": "10.1.302",
+        "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
+      },
+      "fs.gg.game.core": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.game.physics.box2d": {
+        "type": "Project",
+        "dependencies": {
+          "Box2D.NET": "[3.1.654, )",
+          "FS.GG.Game.Core": "[0.16.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "Box2D.NET": {
+        "type": "CentralTransitive",
+        "requested": "[3.1.654, )",
+        "resolved": "3.1.654",
+        "contentHash": "Sh43ZKml3BPnhGD9FzvHfBLcLR1LDUN1iMJnnX2dJJam15+DG2nLRezPlxjdXWfrskg0wEJpgdNVEkNnHx9wwA=="
+      }
+    }
+  }
+}
