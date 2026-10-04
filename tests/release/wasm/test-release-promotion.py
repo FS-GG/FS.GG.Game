@@ -532,6 +532,7 @@ class Tests(unittest.TestCase):
                 self.calls.append(path)
                 if '/git/ref/' in path:return 200,{'object':{'type':'commit','sha':p.P}},{}
                 if '/releases/tags/' in path:return (200,dict(release,draft=False),{}) if self.mutation=='published' else (404,None,{})
+                if '/releases/402763234/assets?' in path:return 200,[],{}
                 if path.endswith('/releases/402763234'):
                     row=dict(release,draft=False) if self.mutation=='published' else copy.deepcopy(release)
                     if self.mutation=='disagreement':row['assets']=[{'id':1}]
@@ -567,8 +568,8 @@ class Tests(unittest.TestCase):
             canonical=p.digest((json.dumps(r,sort_keys=True,indent=2)+'\n').encode())
             with patch.object(p,'ROOT',fixture):
                 old=p.fingerprint(e0,'.github/workflows/release-wasm.yml');new=p.fingerprint(e1,'.github/workflows/release-wasm.yml')
-            value={'schema':'fsgg.wasm.successor-execution/v1','repository':p.REPO,'version':p.VERSION,'producer':producer,'preparationExecutor':e0,'preparationTree':tree0,'tupleSha256':p.ORIGINAL_TUPLE_SHA,'artifactId':r['artifactId'],'artifactSha256':r['artifactSha256'],'firstPromotionRun':37166812270,'firstPromotionAttempt':1,'releaseId':402763234,'journalAssetId':608859205,'journalSha256':'5b5382d6b246ace3f4841d9b3de17ef1b446ba4e41536caa60ae96be766dcf57','executor':e1,'executorTree':tree1,'workflow':'.github/workflows/release-wasm.yml','workflowSha256':p.digest(source.read_bytes()),'delta':[{'path':'.github/workflows/release-wasm.yml','oldBlob':old['blob'],'oldSha256':old['sha256'],'newBlob':new['blob'],'newSha256':new['sha256']}]}
-            env={'EXECUTION_BINDING':json.dumps(value),'GITHUB_SHA':e1,'ACCEPTED_EXECUTOR':e1,'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_RUN_ID':'300','MODE':'recovery'}
+            value={'schema':'fsgg.wasm.successor-execution/v1','repository':p.REPO,'version':p.VERSION,'producer':producer,'preparationExecutor':e0,'preparationTree':tree0,'tupleSha256':p.ORIGINAL_TUPLE_SHA,'artifactId':r['artifactId'],'artifactSha256':r['artifactSha256'],'firstPromotionRun':37166812270,'firstPromotionAttempt':1,'releaseId':402763234,'journalAssetId':608859205,'journalSha256':'5b5382d6b246ace3f4841d9b3de17ef1b446ba4e41536caa60ae96be766dcf57','originalAdmissionArtifactId':11288824765,'originalAdmissionArtifactSha256':'8e2ea55a85345cf30eaaee5a26e075321608f91722ed251b995d47e889ef0952','executor':e1,'executorTree':tree1,'workflow':'.github/workflows/release-wasm.yml','workflowSha256':p.digest(source.read_bytes()),'delta':[{'path':'.github/workflows/release-wasm.yml','oldBlob':old['blob'],'oldSha256':old['sha256'],'newBlob':new['blob'],'newSha256':new['sha256']}]}
+            env={'EXECUTION_BINDING':json.dumps(value),'GITHUB_SHA':e1,'ACCEPTED_EXECUTOR':e1,'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_RUN_ID':'300','MODE':'recovery','FIRST_PROMOTION_RUN':'37166812270','FIRST_PROMOTION_ATTEMPT':'1'}
             class Transport:
                 def __init__(self):self.main=e1
                 def checked(self,path):
@@ -581,7 +582,7 @@ class Tests(unittest.TestCase):
                 for key,bad in [('executorTree','0'*40),('workflowSha256','0'*64),('firstPromotionRun',37159983975),('firstPromotionAttempt',2),('artifactId',11287095456),('journalAssetId',1),('delta',[]),('extra','field')]:
                     mutant=copy.deepcopy(value);mutant[key]=bad
                     with self.subTest(key=key),patch.dict(os.environ,{'EXECUTION_BINDING':json.dumps(mutant)}),self.assertRaises(p.Refusal):p.execution_checkout(n,r)
-                for key,bad in [('MODE','promote'),('MODE','prepare'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_REF','refs/heads/other'),('GITHUB_SHA',e0)]:
+                for key,bad in [('MODE','promote'),('MODE','prepare'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_REF','refs/heads/other'),('GITHUB_SHA',e0),('FIRST_PROMOTION_RUN','37159983975'),('FIRST_PROMOTION_ATTEMPT','2')]:
                     with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(p.Refusal):p.download(n,r,fixture/'unused')
                 n.main=e0
                 with self.assertRaisesRegex(p.Refusal,'protected executor moved'):p.execution_checkout(n,r)
@@ -665,11 +666,12 @@ release=dict(id=402763234,tag_name='wasm/v0.3.0',target_commitish=p.P,draft=True
 class N(p.Native):
  def api(self,path,method='GET',data=None):
   assert method=='GET'
-  if '/actions/runs/200/attempts/1/jobs' in path:return 200,{'jobs':[dict(id=1,name='admission',conclusion='success')]},{}
-  if '/actions/runs/200/artifacts' in path:return 200,{'artifacts':[dict(id=1,name='wasm-admission-200-1',expired=False,workflow_run=dict(id=200,head_sha=r['binding']['executor']),digest='sha256:'+p.digest(admission))]},{}
+  if '/actions/runs/200/attempts/1/jobs' in path:return 200,{'total_count':1,'jobs':[dict(id=1,name='admission',conclusion='success')]},{}
+  if '/actions/runs/200/artifacts' in path:return 200,{'total_count':1,'artifacts':[dict(id=1,name='wasm-admission-200-1',expired=False,workflow_run=dict(id=200,head_sha=r['binding']['executor']),digest='sha256:'+p.digest(admission))]},{}
   if '/actions/runs/200/attempts/1' in path:return 200,dict(id=200,run_attempt=1,repository=dict(full_name=p.REPO),head_sha=r['binding']['executor'],path=r['binding']['workflow'],event='workflow_dispatch'),{}
   if '/git/ref/'in path:return 200,dict(object=dict(type='commit',sha=p.P)),{}
   if '/releases/tags/'in path:return 404,None,{}
+  if '/releases/402763234/assets?'in path:return 200,rows,{}
   if '/releases/402763234'in path:return 200,release,{}
   return 200,[release],{}
  def request(self,url,**kwargs):

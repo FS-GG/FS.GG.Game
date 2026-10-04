@@ -138,17 +138,22 @@ class Native:
     def checked(self,path,method='GET',data=None):
         status, body, _ = self.api(path,method,data); need(status in (200,201), f'native API {method} {path}: status {status}, Unknown'); return body
     def pages(self,path,key=None):
-        rows=[]; page=1; seen=set()
+        rows=[]; page=1; seen=set(); total=None
         while True:
             need(page <= 100, 'pagination incomplete')
             value=self.checked(path + ('&' if '?' in path else '?') + f'per_page=100&page={page}')
+            if key:
+                need(type(value) is dict and type(value.get('total_count')) is int and value['total_count']>=0,'malformed pagination total')
+                if total is None: total=value['total_count']
+                need(value['total_count']==total,'moving pagination total')
             current=value[key] if key else value
             need(isinstance(current,list) and len(current)<=100, 'malformed paginated response')
             for row in current:
                 need(type(row) is dict and type(row.get('id')) is int and row['id']>0, 'malformed native page identity')
                 need(row['id'] not in seen, 'repeated/duplicate native page identity'); seen.add(row['id'])
             rows.extend(current)
-            if len(current)<100: return rows
+            if len(current)<100:
+                need(total is None or len(rows)==total,'incomplete enumeration'); return rows
             page+=1
 
 def occupancy(native, reviewed, recovering=False):
@@ -213,19 +218,20 @@ def execution_input():
 
 
 def git(*args):
-    return subprocess.check_output(['git','-C',str(ROOT),*args],text=True,stderr=subprocess.PIPE).strip()
+    need(time.monotonic()<STAGE_END,'stage deadline expired')
+    return subprocess.check_output(['git','-C',str(ROOT),*args],text=True,stderr=subprocess.PIPE,timeout=min(30,max(1,STAGE_END-time.monotonic()))).strip()
 
 
 def fingerprint(revision,path):
     blob=git('rev-parse',revision+':'+path)
-    body=subprocess.check_output(['git','-C',str(ROOT),'show',revision+':'+path])
+    body=subprocess.check_output(['git','-C',str(ROOT),'show',revision+':'+path],timeout=min(30,max(1,STAGE_END-time.monotonic())))
     return {'blob':blob,'sha256':digest(body)}
 
 
 def validate_execution(value,reviewed):
     fields={'schema','repository','version','producer','preparationExecutor','preparationTree','tupleSha256',
             'artifactId','artifactSha256','firstPromotionRun','firstPromotionAttempt','releaseId','journalAssetId',
-            'journalSha256','executor','executorTree','workflow','workflowSha256','delta'}
+            'journalSha256','originalAdmissionArtifactId','originalAdmissionArtifactSha256','executor','executorTree','workflow','workflowSha256','delta'}
     need(type(value) is dict and set(value)==fields, 'unreviewed successor fields')
     b=validate_tuple(reviewed)['binding']
     need(value['schema']=='fsgg.wasm.successor-execution/v1' and value['repository']==REPO and value['version']==VERSION and value['producer']==P,'foreign successor route')
@@ -233,6 +239,7 @@ def validate_execution(value,reviewed):
     need(value['tupleSha256']==ORIGINAL_TUPLE_SHA and digest((json.dumps(reviewed,sort_keys=True,indent=2)+'\n').encode())==ORIGINAL_CANONICAL_SHA,'changed original tuple')
     need(value['artifactId']==reviewed['artifactId']==11289067127 and value['artifactSha256']==reviewed['artifactSha256']=='7b7f957e2506ef1a2d4a257eaa334c80ca116abaa0462c71315a1079aa38d723','wrong original artifact')
     need((value['firstPromotionRun'],value['firstPromotionAttempt'],value['releaseId'],value['journalAssetId'],value['journalSha256'])==(37166812270,1,402763234,608859205,'5b5382d6b246ace3f4841d9b3de17ef1b446ba4e41536caa60ae96be766dcf57'),'wrong original durable identity')
+    need(value['originalAdmissionArtifactId']==11288824765 and value['originalAdmissionArtifactSha256']=='8e2ea55a85345cf30eaaee5a26e075321608f91722ed251b995d47e889ef0952','wrong original admission artifact')
     for name in ('executor','executorTree'): sha(value[name],40)
     need(value['executor']!=b['executor'] and value['workflow']==b['workflow'],'successor must be separate executor')
     sha(value['workflowSha256']); rows=value['delta']
@@ -256,13 +263,15 @@ def execution_checkout(native,reviewed,installed=False):
         return None
     validate_execution(value,reviewed)
     mode=os.environ.get('MODE')
+    if mode=='recovery': need(os.environ.get('FIRST_PROMOTION_RUN')==str(value['firstPromotionRun']) and os.environ.get('FIRST_PROMOTION_ATTEMPT')==str(value['firstPromotionAttempt']), 'wrong explicit original recovery attempt')
     need(mode in (('installed',) if installed else ('recovery','readback','inspect')), 'successor binding forbidden for selected mode')
     need(os.environ['GITHUB_REPOSITORY']==REPO and os.environ['GITHUB_REF']=='refs/heads/main' and os.environ['GITHUB_RUN_ATTEMPT']=='1','foreign/rerun successor execution')
     need(git('rev-parse','--is-shallow-repository')=='false', 'successor requires complete history')
     executor_checkout({'executor':value['executor'],'executorTree':value['executorTree']})
     need(native.checked(f'repos/{REPO}/git/ref/heads/main')['object']['sha']==value['executor'],'protected executor moved')
+    need(git('rev-parse',b['executor']+'^{tree}')==b['executorTree'], 'original executor tree differs')
     for old,new in ((P,b['executor']),(b['executor'],value['executor'])):
-        result=subprocess.run(['git','-C',str(ROOT),'merge-base','--is-ancestor',old,new],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        result=subprocess.run(['git','-C',str(ROOT),'merge-base','--is-ancestor',old,new],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=min(30,max(1,STAGE_END-time.monotonic())))
         need(result.returncode==0,'non-descendant successor')
     paths=git('diff','--name-only',b['executor'],value['executor']).splitlines()
     need(paths==[row['path'] for row in value['delta']], 'extra/missing actual successor delta')
@@ -346,6 +355,8 @@ def release_state(native):
     if release is not None:
         actual=native.checked(f'repos/{REPO}/releases/{release["id"]}')
         need(actual==release, 'release list/by-ID disagreement')
+        assets=native.pages(f'repos/{REPO}/releases/{release["id"]}/assets')
+        need(assets==release['assets'], 'release asset enumeration disagreement')
         need(ref_status==200 and release['tag_name']=='wasm/v'+VERSION and release['target_commitish']==P and not release['prerelease'] and type(release['draft']) is bool, 'foreign release')
         need((release_status==404 and release['draft']) or (release_status==200 and not release['draft'] and published==release), 'published/list contradiction')
     else: need(release_status==404, 'published release hidden in listing')
@@ -386,7 +397,9 @@ def verify_admission(native,reviewed,run_id,attempt):
     artifacts=native.pages(f'repos/{REPO}/actions/runs/{run_id}/artifacts','artifacts')
     matching=[a for a in artifacts if a['name']==f'wasm-admission-{run_id}-{attempt}']
     need(len(matching)==1 and not matching[0]['expired'],'original admission evidence absent/expired')
-    a=matching[0]; need(a['workflow_run']['id']==run_id and a['workflow_run']['head_sha']==reviewed['binding']['executor'],'foreign admission artifact')
+    a=matching[0]
+    if execution_input(): need(a['id']==execution_input()['originalAdmissionArtifactId'] and a['digest']=='sha256:'+execution_input()['originalAdmissionArtifactSha256'],'changed original admission artifact')
+    need(a['workflow_run']['id']==run_id and a['workflow_run']['head_sha']==reviewed['binding']['executor'],'foreign admission artifact')
     status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/artifacts/{a["id"]}/zip',github=True,binary=True)
     need(status==200 and a['digest']=='sha256:'+digest(body),'admission artifact digest mismatch')
     import io
@@ -471,6 +484,7 @@ def readback(kind,custody,output):
     command([str(ROOT/'scripts/wasm-release/readback.sh'),kind,str(custody),str(output)], env=dict(os.environ, WASM_READBACK_DEADLINE=str(int(time.time()+max(0,STAGE_END-time.monotonic())))))
 
 def perform(native,kind,reviewed,custody,output):
+    if execution_input(): need(os.environ.get('MODE')==('readback' if kind=='readback' else 'recovery'),'successor writer mode differs')
     verify_originals(custody,reviewed['binding'])
     if execution_input(): execution_checkout(native,reviewed); verify_current_admission(native,reviewed)
     _,release=release_state(native); need(release is not None,'no durable transaction before writer')
@@ -509,6 +523,7 @@ def perform(native,kind,reviewed,custody,output):
 
 
 def release_assets(native,reviewed,custody,output,write=False):
+    if write and execution_input(): need(os.environ.get('MODE')=='recovery','asset writer requires recovery mode')
     verify_originals(custody,reviewed['binding'])
     if execution_input(): execution_checkout(native,reviewed); verify_current_admission(native,reviewed)
     _,release=release_state(native); need(release is not None,'release assets Unknown')
