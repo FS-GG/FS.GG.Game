@@ -11,7 +11,10 @@ metres, seconds, kilograms, and counterclockwise radians with +Y up. Public doub
 validated and converted to the engine's single precision. Command batches with invalid,
 unknown or duplicate IDs refuse before any mutation. Removing a body removes its joints;
 removed shape events retain their entity IDs for that tick. An engine exception stops
-further stepping; dispose that runtime. All access belongs to one simulation owner.
+further stepping; dispose that runtime. Each runtime belongs to one simulation owner.
+Allocation and disposal are serialized across adapter instances because Box2D.NET uses a
+process-global world-slot table. Independent worlds may step concurrently; direct engine
+world lifetime calls outside this adapter must not race adapter allocation/disposal.
 
 `Runtime.Step` always uses its configured fixed interval and substeps. Drive it with
 Game.Core's `FixedStep.drain` if presentation frames vary, and use the remaining fraction

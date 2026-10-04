@@ -145,9 +145,14 @@ height `0.39992859959602356` m, and maximum joint length error
 `0.00008517808537522598` m over 240 ticks. Exact replay compares every copied pose
 and event at every tick in two fresh worlds within that observed profile.
 
-Both focused project builds passed with zero warnings and errors. The five focused
+Both focused project builds passed with zero warnings and errors. The six focused
 tests passed, including retained snapshots after disposal, full batch refusal before
-mutation, removed-shape event IDs, and shortest-arc interpolation. The adapter has
+mutation, removed-shape event IDs, and shortest-arc interpolation. A concurrent-lifetime regression also qualified
+128 independent world lifetimes across up to eight workers using the native default
+parallel test route. After a native Windows failure exposed concurrent slot allocation
+in the pinned engine's shared world table, adapter allocation/disposal now use one
+shared lifetime lock. Independent worlds may step concurrently; direct Box2D world
+lifetime calls outside the adapter must not race its operations. The adapter has
 registered type/member baselines (27 types, 52 members); whole-solution qualification
 and the native source delivery gates remain the integrator's obligation. No public
 package, installed consumer, portal transfer, browser or wider-platform acceptance

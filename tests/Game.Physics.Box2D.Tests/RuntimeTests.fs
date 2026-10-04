@@ -11,6 +11,16 @@ let tests = testList "Box2D runtime" [
         Expect.equal snapshots.Length 240 "Every fixed tick is captured"
         Expect.isLessThan error 0.03 "Engine enforces the distance joint"
 
+    testCase "concurrent independent world lifetimes keep distinct ownership" <| fun _ ->
+        let options = System.Threading.Tasks.ParallelOptions(MaxDegreeOfParallelism = 8)
+        System.Threading.Tasks.Parallel.For(0, 128, options, Action<int>(fun index ->
+            use runtime = new Runtime({ Physics.defaultSettings with Gravity = { X = 0.; Y = 0. } })
+            let x = float index
+            let snapshot = runtime.Step [ CreateBody (Physics.circle "body" 0.5 { X = x; Y = 10. }) ]
+            Expect.equal snapshot.Bodies["body"].Position.X x "World owns its uniquely placed body"
+            Expect.equal snapshot.Bodies.Count 1 "No foreign bodies enter the world"
+            runtime.Step [] |> ignore)) |> ignore
+
     testCase "retained observations survive steps and disposal" <| fun _ ->
         let runtime = new Runtime(Physics.defaultSettings)
         let first = runtime.Step [ CreateBody (Physics.circle "body" 0.5 { X = 0.; Y = 10. }) ]

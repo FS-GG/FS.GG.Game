@@ -1,7 +1,9 @@
 namespace FS.GG.Game.Physics.Box2D
 
 /// Owns one mutable engine world. Use and dispose on one simulation owner; concurrent access is
-/// unsupported. Validation failures leave the world usable. An engine failure stops further steps;
+/// unsupported on the same instance. World allocation/disposal are serialized across adapter instances
+/// because the pinned engine has a shared world-slot table; independent worlds may step concurrently.
+/// Direct engine lifetime calls outside this adapter must not race these operations. Validation failures leave the world usable. An engine failure stops further steps;
 /// disposal remains available. Dispose is idempotent. Snapshots remain usable after disposal.
 [<Sealed>]
 type Runtime =

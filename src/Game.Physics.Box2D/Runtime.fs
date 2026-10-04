@@ -31,6 +31,12 @@ module Validation =
         | Circle radius -> positive "Radius" radius
         | Box (width, height) -> positive "HalfWidth" width; positive "HalfHeight" height
 
+// The pinned engine uses a process-global world slot table. Allocation scans inUse then clears
+// and initializes the slot without synchronization; concurrent constructors can own the same slot.
+// Keep lifetime mutations serialized across adapter instances, while independent worlds may step.
+module WorldLifetime =
+    let gate = obj ()
+
 [<Sealed>]
 type Runtime(settings: Settings) =
     let vec (point: Point) = B2Vec2(float32 point.X, float32 point.Y)
@@ -43,7 +49,10 @@ type Runtime(settings: Settings) =
             invalidArg "Substeps" "Substeps must be in [1,64]."
         let mutable definition = B2Types.b2DefaultWorldDef()
         definition.gravity <- vec settings.Gravity
-        B2Worlds.b2CreateWorld(&definition)
+        lock WorldLifetime.gate (fun () ->
+            let id = B2Worlds.b2CreateWorld(&definition)
+            if id.index1 = 0us then invalidOp "Box2D world capacity is exhausted."
+            id)
     let mutable bodies: Map<string, B2BodyId * B2ShapeId * BodyDescriptor> = Map.empty
     let mutable joints: Map<string, B2JointId * DistanceJointDescriptor> = Map.empty
     let mutable shapes: Map<struct(int * uint16 * uint16), string> = Map.empty
@@ -199,7 +208,7 @@ type Runtime(settings: Settings) =
     interface IDisposable with
         member _.Dispose() =
             if not disposed then
-                B2Worlds.b2DestroyWorld world
+                lock WorldLifetime.gate (fun () -> B2Worlds.b2DestroyWorld world)
                 disposed <- true
                 bodies <- Map.empty
                 joints <- Map.empty
