@@ -6,6 +6,9 @@ transport into the same decisions; they do not establish live authorization.
 """
 from __future__ import annotations
 import argparse
+import base64
+import io
+import struct
 import datetime as dt
 import hashlib
 import importlib.util
@@ -20,6 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 sys.dont_write_bytecode = True
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REPO = 'FS-GG/FS.GG.Game'
@@ -121,7 +125,13 @@ class Native:
             headers['X-GitHub-Api-Version'] = '2022-11-28'
         if isinstance(data, bytes): headers['Content-Type'] = 'application/octet-stream'
         elif data is not None: data = json.dumps(data).encode(); headers['Content-Type'] = 'application/json'
-        if binary and github: headers['Accept'] = 'application/octet-stream'
+        if binary and github:
+            # Actions archive endpoints negotiate an API redirect, not an asset
+            # representation. The final redirected body remains opaque bytes.
+            parsed = urllib.parse.urlsplit(url)
+            actions_archive = (method == 'GET' and parsed.scheme == 'https' and parsed.netloc == 'api.github.com'
+                and re.fullmatch(r'/repos/' + re.escape(REPO) + r'/actions/(?:artifacts/[1-9][0-9]*/zip|runs/[1-9][0-9]*/(?:attempts/[1-9][0-9]*/)?logs)', parsed.path))
+            headers['Accept'] = 'application/vnd.github+json' if actions_archive else 'application/octet-stream'
         try:
             with urllib.request.build_opener(SafeRedirect()).open(urllib.request.Request(url, data=data, headers=headers, method=method), timeout=min(30,max(1,self.end-time.monotonic()))) as r:
                 chunks=[]; total=0
@@ -295,7 +305,8 @@ def verify_current_admission(native,reviewed):
     selected=[a for a in artifacts if a['name']==f'wasm-admission-{run_id}-1']; need(len(selected)==1 and not selected[0]['expired'],'current admission expired/missing')
     a=selected[0];need(a['workflow_run']['id']==run_id and a['workflow_run']['head_sha']==value['executor'],'foreign current admission artifact')
     status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/artifacts/{a["id"]}/zip',github=True,binary=True)
-    need(status==200 and a['digest']=='sha256:'+digest(body),'current admission digest Unknown')
+    need(status==200, f'current admission artifact download status {status}, Unknown')
+    need(a['digest']=='sha256:'+digest(body),'current admission digest Unknown')
     import io
     with zipfile.ZipFile(io.BytesIO(body)) as z:
         need(z.namelist()==['admission-binding.json'],'wrong current admission roster');record=json.loads(z.read('admission-binding.json'))
@@ -319,7 +330,8 @@ def download(native, reviewed, target):
     artifact=native.checked(f'repos/{REPO}/actions/artifacts/{reviewed["artifactId"]}')
     validate_run(reviewed,run,jobs,artifact)
     status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/artifacts/{reviewed["artifactId"]}/zip',github=True,binary=True)
-    need(status==200 and digest(body)==reviewed['artifactSha256'],'downloaded artifact digest mismatch')
+    need(status==200, f'preparation artifact download status {status}, Unknown')
+    need(digest(body)==reviewed['artifactSha256'],'downloaded artifact digest mismatch')
     target=pathlib.Path(target); need(not target.exists(),'custody output must be fresh'); target.mkdir(mode=0o700)
     import io
     with zipfile.ZipFile(io.BytesIO(body)) as z:
@@ -401,7 +413,8 @@ def verify_admission(native,reviewed,run_id,attempt):
     if execution_input(): need(a['id']==execution_input()['originalAdmissionArtifactId'] and a['digest']=='sha256:'+execution_input()['originalAdmissionArtifactSha256'],'changed original admission artifact')
     need(a['workflow_run']['id']==run_id and a['workflow_run']['head_sha']==reviewed['binding']['executor'],'foreign admission artifact')
     status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/artifacts/{a["id"]}/zip',github=True,binary=True)
-    need(status==200 and a['digest']=='sha256:'+digest(body),'admission artifact digest mismatch')
+    need(status==200, f'original admission artifact download status {status}, Unknown')
+    need(a['digest']=='sha256:'+digest(body),'admission artifact digest mismatch')
     import io
     with zipfile.ZipFile(io.BytesIO(body)) as z:
         need(z.namelist()==['admission-binding.json'],'foreign admission artifact members')
@@ -578,28 +591,140 @@ def inventories(custody):
                 result[name]={m.name:digest(t.extractfile(m).read()) if m.isfile() else digest(b'') for m in members}
     return result
 
+def package_content_hash(raw):
+    """SDK 10.0.401 NuGet 7.9.0 compressed unsigned-content SHA512.
+
+    Data-only projection of SignedPackageArchiveUtility.GetPackageContentHash
+    at dotnet/dotnet e34a38d2ae1fc26406a317517196e55c68ff83ab. Remove the
+    signature's physical span/CD record, relocate surviving local offsets,
+    adjust EOCD counts/size/offset, and hash original compressed bytes. This
+    does not verify a signature. Support a bounded classic single-disk ZIP;
+    ZIP64, encryption, duplicate/path/layout ambiguity fail closed.
+    """
+    need(isinstance(raw, bytes) and 22 <= len(raw) <= 536870912, 'unbounded/malformed package archive')
+    end = raw.rfind(b'PK\x05\x06', max(0, len(raw)-65557))
+    need(end >= 0 and end+22 <= len(raw), 'missing package EOCD')
+    disk, cdisk, count_disk, count, cd_size, cd_start, comment = struct.unpack_from('<HHHHIIH', raw, end+4)
+    need(disk == cdisk == 0 and count_disk == count and 0 < count < 4096
+         and count != 65535 and cd_size != 0xffffffff and cd_start != 0xffffffff,
+         'unsupported multidisk/ZIP64 package')
+    need(cd_start+cd_size == end and end+22+comment == len(raw), 'package central/EOCD layout differs')
+    def extra_fields(extra):
+        pos = 0
+        while pos < len(extra):
+            need(pos+4 <= len(extra), 'malformed package extra field')
+            kind, size = struct.unpack_from('<HH', extra, pos); pos += 4
+            need(kind != 1 and pos+size <= len(extra), 'ZIP64/malformed package extra field')
+            pos += size
+    records = []; pos = cd_start; names = set(); offsets = set(); expanded = 0
+    for _ in range(count):
+        need(pos+46 <= end and raw[pos:pos+4] == b'PK\x01\x02', 'malformed package central record')
+        version, flags, method, _, _, crc, compressed, size, nl, xl, cl, entry_disk, _, external, offset = struct.unpack_from('<HHHHHIIIHHHHHII', raw, pos+6)
+        length = 46+nl+xl+cl
+        need(pos+length <= end and compressed != 0xffffffff and size != 0xffffffff
+             and offset != 0xffffffff and entry_disk == 0 and version in (10,20) and (method != 8 or version == 20)
+             and flags & ~0x808 == 0 and method in (0,8), 'unsupported package entry/ZIP64/encryption')
+        encoded = raw[pos+46:pos+46+nl]
+        try: name = encoded.decode('utf-8' if flags & 0x800 else 'cp437')
+        except UnicodeError: raise Refusal('malformed package name encoding')
+        # NuGet IsPackageSignatureFileEntry requires the exact CP437/ASCII name
+        # with UTF8 flag clear; a visually identical UTF8 marker is ambiguous.
+        need(name != '.signature.p7s' or not flags & 0x800, 'unsupported package signature encoding')
+        path = pathlib.PurePosixPath(name)
+        need(name and not path.is_absolute() and not any(x in ('','.', '..') for x in name.rstrip('/').split('/'))
+             and '\\' not in name and '\x00' not in name and not re.match(r'^[A-Za-z]:', name), 'unsafe package member path')
+        need(name not in names and offset not in offsets and ((external>>16)&0o170000) != 0o120000, 'duplicate/symlink package member')
+        names.add(name); offsets.add(offset); expanded += size
+        need(expanded <= 536870912 and offset+30 <= cd_start and raw[offset:offset+4] == b'PK\x03\x04', 'unbounded/local package entry')
+        extra_fields(raw[pos+46+nl:pos+46+nl+xl])
+        local_version, local_flags, local_method, _, _, local_crc, local_compressed, local_size, local_nl, local_xl = struct.unpack_from('<HHHHHIIIHH', raw, offset+4)
+        data_start = offset+30+local_nl+local_xl
+        need(local_version == version and local_flags == flags and local_method == method
+             and data_start+compressed <= cd_start and raw[offset+30:offset+30+local_nl] == encoded,
+             'local/central package identity mismatch')
+        extra_fields(raw[offset+30+local_nl:data_start])
+        if flags & 8:
+            need(local_crc in (0,crc) and local_compressed in (0,compressed) and local_size in (0,size), 'wrong local data descriptor values')
+        else: need((local_crc,local_compressed,local_size) == (crc,compressed,size), 'local/central package sizes differ')
+        records.append({'pos':pos,'length':length,'offset':offset,'name':name,'dataEnd':data_start+compressed,
+                        'descriptor':bool(flags & 8),'crc':crc,'compressed':compressed,'size':size})
+        pos += length
+    need(pos == end, 'package central count/size differs')
+    order = sorted(records, key=lambda row:row['offset'])
+    need(order[0]['offset'] == 0, 'unsupported package preamble')
+    for index, row in enumerate(order):
+        finish = order[index+1]['offset'] if index+1 < len(order) else cd_start
+        trailing = raw[row['dataEnd']:finish]
+        if row['descriptor']:
+            if trailing.startswith(b'PK\x07\x08'): trailing = trailing[4:]
+            need(len(trailing) == 12 and struct.unpack('<III', trailing) == (row['crc'],row['compressed'],row['size']), 'malformed package data descriptor/span')
+        else: need(row['dataEnd'] == finish, 'overlap/gap package local span')
+        row['span'] = finish-row['offset']
+    signatures = [row for row in records if row['name'] == '.signature.p7s']
+    if not signatures: return base64.b64encode(hashlib.sha512(raw).digest()).decode()
+    need(len(signatures) == 1 and count > 1, 'invalid package signature roster')
+    signature = signatures[0]; selected = [row for row in order if row is not signature]
+    previous = 0; hasher = hashlib.sha512()
+    for row in selected:
+        row['change'] = previous-row['offset']; previous += row['span']
+        hasher.update(raw[row['offset']:row['offset']+row['span']])
+    for row in sorted(selected, key=lambda item:item['pos']):
+        start = row['pos']; hasher.update(raw[start:start+42])
+        hasher.update(struct.pack('<I', row['offset']+row['change']))
+        hasher.update(raw[start+46:start+row['length']])
+    hasher.update(raw[end:end+8]); hasher.update(struct.pack('<HHII',count_disk-1,count-1,cd_size-signature['length'],cd_start-signature['span']))
+    hasher.update(raw[end+20:])
+    return base64.b64encode(hasher.digest()).decode()
+
+
 def check_installed(record_path,cache,feed,lock):
     value=load(record_path); reviewed=validate_tuple(value['preparation']); b=reviewed['binding']
     if execution_input():
         execution_checkout(Native(),reviewed,installed=True)
         need(digest(pathlib.Path(record_path).read_bytes())==execution_input()['journalSha256'], 'installed original journal changed')
     else: need(b['executor']==os.environ['ACCEPTED_EXECUTOR'],'installed transaction wrong executor')
+    need(feed in ('https://api.nuget.org/v3/index.json','https://nuget.pkg.github.com/FS-GG/index.json'), 'foreign installed feed')
     dependencies=load(lock)['dependencies']['net10.0']
     for ident in PACKAGES:
         archive=pathlib.Path(cache)/ident.lower()/VERSION/(ident.lower()+'.'+VERSION+'.nupkg')
         need(archive.is_file(),'missing actual restored package archive')
         row=dependencies[ident]; need(row['resolved']==VERSION,'installed pair version mismatch')
         hashfile=archive.parent/(ident.lower()+'.'+VERSION+'.nupkg.sha512')
-        need(hashfile.read_text().strip()==row['contentHash'],'restored lock/package identity mismatch')
-        with zipfile.ZipFile(archive) as z:
-            names=z.namelist(); manifest_tool().safe_members(names,archive.name)
-            inventory=b['inventories'][ident+'.'+VERSION+'.nupkg']
-            if '.signature.p7s' in names:
-                need(feed=='https://api.nuget.org/v3/index.json','org original was unexpectedly signed')
-                repository_signature(archive); names.remove('.signature.p7s')
-            need(set(names)==set(inventory),'restored package roster mismatch')
-            need(all(digest(z.read(name))==inventory[name] for name in names),'restored payload drift')
-        if feed=='https://nuget.pkg.github.com/FS-GG/index.json': need(digest(archive.read_bytes())==b['archives'][ident+'.'+VERSION+'.nupkg'],'org literal archive differs')
+        need(archive.stat().st_size <= 536870912 and hashfile.is_file(), 'missing/unbounded installed archive hash')
+        with archive.open('rb') as stream: raw = stream.read(536870913)
+        need(len(raw) <= 536870912, 'unbounded installed archive')
+        whole_hash = base64.b64encode(hashlib.sha512(raw).digest()).decode()
+        with hashfile.open() as stream: sidecar = stream.read(129)
+        need(len(sidecar) <= 128 and sidecar.strip() == whole_hash, 'restored archive/sidecar hash mismatch')
+        metadata_path = archive.parent/'.nupkg.metadata'
+        need(metadata_path.is_file(), 'missing restored package metadata')
+        try:
+            with metadata_path.open() as stream: text = stream.read(8193)
+            need(len(text) <= 8192, 'unbounded restored package metadata')
+            def unique_fields(pairs):
+                need(len(pairs) == len({key for key,_ in pairs}), 'duplicate restored metadata field')
+                return dict(pairs)
+            metadata = json.loads(text, object_pairs_hook=unique_fields)
+        except (OSError, ValueError): raise Refusal('malformed restored package metadata')
+        need(type(metadata) is dict and set(metadata) == {'version','contentHash','source'}
+             and type(metadata['version']) is int and metadata['version'] == 2 and metadata['source'] == feed,
+             'restored package metadata/source mismatch')
+        content_hash = package_content_hash(raw)
+        need(metadata['contentHash'] == content_hash == row['contentHash'], 'restored lock/package content hash mismatch')
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                names=z.namelist(); manifest_tool().safe_members(names,archive.name)
+                inventory=b['inventories'][ident+'.'+VERSION+'.nupkg']
+                need(feed != 'https://api.nuget.org/v3/index.json' or '.signature.p7s' in names, 'public restored package lacks repository signature')
+                if '.signature.p7s' in names:
+                    need(feed=='https://api.nuget.org/v3/index.json','org original was unexpectedly signed')
+                    repository_signature(archive)
+                    with archive.open('rb') as stream: need(stream.read(536870913) == raw, 'restored archive changed during signature verification')
+                    names.remove('.signature.p7s')
+                need(set(names)==set(inventory),'restored package roster mismatch')
+                need(all(digest(z.read(name))==inventory[name] for name in names),'restored payload drift')
+        except (zipfile.BadZipFile, zlib.error, EOFError): raise Refusal('malformed restored package payload')
+        if feed=='https://nuget.pkg.github.com/FS-GG/index.json': need(digest(raw)==b['archives'][ident+'.'+VERSION+'.nupkg'],'org literal archive differs')
     print('wasm-installed-selected: actual feed cache, exact locked pair and every member verified')
 
 
