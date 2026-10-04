@@ -4,11 +4,11 @@
     "net10.0": {
       "FS.GG.Wasm.Browser": {
         "type": "Direct",
-        "requested": "[0.2.0, 0.2.0]",
-        "resolved": "0.2.0",
-        "contentHash": "fiULHMdsO/yrfjvqO4gJDgIuh96nZAWSY00dsfIvo9YCeCv2LXTqlmNT5z9ImwKIGAW3sj/u7tRBv89hwfRyhg==",
+        "requested": "[0.3.0, 0.3.0]",
+        "resolved": "0.3.0",
+        "contentHash": "CwiuMUDYgM1wD/CqFsHlGWz1AKEo5AiFrh1Hr6vdPTaO/TsOP5L/Ucqa7zN4IgaTPWFMHU8mYnyAqbrkTMqxXQ==",
         "dependencies": {
-          "FS.GG.Wasm.Contracts": "[0.2.0]",
+          "FS.GG.Wasm.Contracts": "[0.3.0]",
           "FSharp.Core": "10.1.302"
         }
       },
@@ -20,8 +20,8 @@
       },
       "FS.GG.Wasm.Contracts": {
         "type": "Transitive",
-        "resolved": "0.2.0",
-        "contentHash": "YzyfJPowlQnSUyjgIYQLtD9X5ADS8enZBc8GoqtY0XtOB+0gTufneaoW9rEPpMiaU2m3Uf4NGXYBVETT4jdwlw==",
+        "resolved": "0.3.0",
+        "contentHash": "JBJa0WRPKG1rHiww5TjI6GEsRKYXtSo5/6cPzfmVDN81HlVmqtykTcd4SSBWE/ob92m/DL8ZyYZG8+zrboquGA==",
         "dependencies": {
           "FSharp.Core": "10.1.302"
         }
