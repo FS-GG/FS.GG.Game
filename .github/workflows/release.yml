@@ -24,6 +24,10 @@ on:
         description: "Version to pack+publish (e.g. 0.1.0-preview.1). Required to actually push on a manual run; omit for a pack-only dry run."
         type: string
         required: false
+      admission_only:
+        description: "Check registry collisions and OIDC authentication without packing or publishing; package creation scope is not exposed by NuGet. Ignores version-tag checkout."
+        type: boolean
+        default: false
       source_run_id:
         description: "Failed tag release run whose retained package artifact must be resumed."
         type: string
@@ -44,7 +48,7 @@ jobs:
     name: Verify (locked restore + headless build + test)
     runs-on: ubuntu-latest
     # Restrict to the canonical repo: fork tags/dispatch never run this (no fork secret exposure).
-    if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v'))
+    if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')) && (github.event_name != 'workflow_dispatch' || inputs.admission_only != true)
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -60,6 +64,7 @@ jobs:
         run: |
           tests/release/test-game-0-17-release.sh --source-only
           tests/release/test-game-0-17-release-selftest.sh
+          python3 tests/release/test-release-admission.py
 
       # COLD, via the shared action (#135 / FS-GG/.github#429) — and this is the job where a warm
       # restore was worst. There is no `cache: true` here to blame: --locked-mode validates the
@@ -81,7 +86,7 @@ jobs:
   publish-packages:
     name: Publish FS.GG.Game.* (org feed + nuget.org, release-only)
     runs-on: ubuntu-latest
-    if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v'))
+    if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')) && (github.event_name != 'workflow_dispatch' || inputs.admission_only != true)
     needs: [verify]
     permissions:
       actions: read
@@ -332,3 +337,43 @@ jobs:
           path: artifacts/readback.json
           if-no-files-found: error
           retention-days: 90
+
+  admission:
+    name: Observe registry and OIDC admission (no publication)
+    if: github.repository == 'FS-GG/FS.GG.Game' && github.event_name == 'workflow_dispatch' && inputs.admission_only == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write # Match the publisher principal; this job makes only registry GET requests.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Guard isolated observation mode
+        shell: bash
+        env:
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          test -z "$SOURCE_RUN_ID"
+          python3 tests/release/test-release-admission.py
+      - name: Read both registries with the actual repository token
+        env:
+          FEED_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tests/release/observe-release-admission.py --registries artifacts/admission/registries.json
+      - name: Exchange workflow identity (no package push)
+        id: admission-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      - name: Verify predecessor package authority without publication
+        env:
+          NUGET_API_KEY: ${{ steps.admission-login.outputs.NUGET_API_KEY }}
+        run: python3 tests/release/observe-release-admission.py --authority artifacts/admission/authority.json
+      - name: Retain sanitized observations
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: game-release-admission-${{ github.sha }}-${{ github.run_id }}
+          path: artifacts/admission/*.json
+          if-no-files-found: warn
+          retention-days: 30
