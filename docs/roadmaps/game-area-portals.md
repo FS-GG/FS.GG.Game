@@ -1,9 +1,10 @@
 # GAME-PORTAL-01 — Area topology and rigid portal traversal
 
-Status: proposed extension, 2026-10-04. Game owns topology and traversal; the Box2D
-adapter owner implements local-world transfers; Rendering owns portal presentation.
-fdev integrates their joins. Parent: [GAME-BOX2D-01](game-box2d-physics.md#area-topology-and-portals).
-Implementation, package support and consumer adoption remain open.
+Status: P1/P2 source delivered and public installed support accepted in Game `0.17.0`,
+2026-10-05. Game owns topology and traversal; the Box2D adapter owns local-world
+transfers; Rendering owns portal presentation. fdev integrates their joins.
+Parent: [GAME-BOX2D-01](game-box2d-physics.md#area-topology-and-portals).
+P3 presentation/product adoption and P4 queries remain open.
 
 ## Local geometry, arbitrary connections
 
@@ -109,14 +110,16 @@ and misses, enclosing-disc clearance, rotated pose/momentum and inverse mapping,
 declared reverse validation, malformed topology/maps, finite input and overflow refusal,
 and deterministic competing crossings with blocked openings. Core and its complete test
 assembly compiled. An initial test import failed `FS0892` and was corrected to qualified
-module references before the passing run. Native merge readback, broader repository gates,
-actual P2 transfer, publication and installed/consumer qualification remain open.
+module references before the passing run. Subsequent native source gates and merge
+completed in [PR696](https://github.com/FS-GG/FS.GG.Game/pull/696), protected merge
+`82cb46d8025e43a09d6bbac0ef7bbd517318d7d4`. Actual P2 transfer and public installed
+support were qualified separately below.
 
 ## P2 local source qualification — 2026-10-04
 
-A local candidate joins the exact qualified P1 topology and Box2D runtime sources; it
-is not protected source acceptance. `AreaRuntime` owns active independent local worlds,
-validates routed commands before any step, steps every world once in stable area order,
+The local candidate joined the exact qualified P1 topology and Box2D runtime sources.
+These local observations preceded native source acceptance. `AreaRuntime` owns active
+independent local worlds, validates routed commands before any step, steps every world once in stable area order,
 and collects every crossing proposal before staging or removing bodies. It preserves
 Runtime's supported circle/box descriptors, material, density, kind, sensor flag and
 current awake state. Other filters, damping, gravity scale and sleep configuration
@@ -135,7 +138,7 @@ The actual `examples/Box2D.Portals` entry point ran a circle through the paired 
 portal into a second headless world: one body/entity and one traversal at tick 1, copied
 position `(9.9,5.15)`, velocity `(-1,4)` and angular velocity `2`. Both local worlds had
 one step; five recorded ticks repeated exactly in fresh worlds under Box2D.NET `3.1.654`
-and .NET `10.0.401`, 0.1-second ticks and four substeps. Pose and momentum checks use
+and .NET SDK `10.0.401`, 0.1-second ticks and four substeps. Pose and momentum checks use
 absolute `2e-5` tolerance, with angle compared modulo one turn. Source-only replay scope
 is the pinned local profile.
 
@@ -152,8 +155,36 @@ The failed compiler/name-resolution attempts and real angle-drift observations w
 retained privately. The engine's approximate rotation construction initially compounded
 error when recreating a body; staging now installs a direct sine/cosine transform before
 preserving awake state, and the real entry passed the original strict tolerance.
-Repository gates, generated adapter baselines and native merge readback remain pending.
-Publication, installed support, P3 product adoption and browser physics remain open.
+Repository gates and generated adapter baselines subsequently qualified, and
+[PR698](https://github.com/FS-GG/FS.GG.Game/pull/698) merged at
+`75ff1926f54b6cbaa050818ebeacd0a9aefd63cf`. The public installed proof below uses
+a separately observed runtime profile; P3 product adoption and browser physics remain open.
+
+## Window closure and public installed support
+
+- [x] P1 topology and crossing: source delivered by PR696.
+- [x] P2 headless whole-body transfer: source delivered by PR698.
+- [ ] P3 presentation and installed opt-in: public-installed prerequisite met; explicit product adoption and preserving retained adoption/removal remain open.
+- [ ] P4 portal-aware queries: separate follow-up, not selected.
+
+Game's [accepted `0.17.0` release and fresh public consumer](game-box2d-physics.md#accepted-public-release-and-installed-example)
+qualify this adapter from immutable source `8cd158db8cb0836968df3f695fad75366434886c`,
+[release run37237849417](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417).
+The four-package custody/readback evidence establishes both-feed payload equality,
+with NuGet repository signatures excluded from the payload comparison.
+
+The outside-checkout consumer restored only public packages into a fresh cache;
+its closure was Game adapter/Core `0.17.0`, Box2D.NET `3.1.654` and FSharp.Core `10.1.302`,
+without repository ProjectReferences or rendering dependencies. On .NET `10.0.12` /
+Ubuntu `24.04.5 LTS` / X64 it ran both the falling-body scene and five recorded portal ticks.
+Portal assertions confirmed one live `traveller`, one committed traversal, one step per
+local world/tick, transformed pose/momentum and exact fresh-world replay. The destination
+position was `(9.899999618530273, 5.150000095367432)` and velocity `(-1, 4)`.
+
+This establishes public producer support and P3's installed prerequisite. Presentation,
+explicit fresh product/Template opt-in and preserving retained adoption/removal require
+their own outcomes; P3 remains open. No browser physics, cross-platform determinism or
+hidden-solver restoration is inferred.
 
 ## Later physics and workspace boundaries
 

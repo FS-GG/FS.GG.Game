@@ -1,16 +1,16 @@
 # GAME-BOX2D-01 — Optional Box2D physics backend
 
-Status: runtime and replay source qualified locally, 2026-10-04. FS.GG.Game owns the
-adapter and qualification; fdev integrates the result. Source delivery, publication
-and adoption remain open. It is independent of full-V2
-acceptance and the current BAR/SC2 preparation lanes.
+Status: runtime/replay source delivered and public package-only qualification accepted,
+2026-10-05. FS.GG.Game owns the adapter and qualification; fdev integrates the result.
+Explicit product/Template adoption remains open. This track is independent of full-V2
+acceptance and the BAR/SC2 preparation lanes.
 
 Programme links: [Unified Roadmap §9.8](https://github.com/FS-GG/.github/blob/main/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and [V2 roadmap](https://github.com/FS-GG/.github/blob/main/docs/github-substrate-v2-roadmap.md#optional-box2d-game-physics--2026-10-04).
 
 ## Package and simulation boundary
 
-Add an opt-in package, provisionally **`FS.GG.Game.Physics.Box2D`**, alongside
+The opt-in package **`FS.GG.Game.Physics.Box2D`** is available alongside
 `FS.GG.Game.Core`. The adapter references Core and a pinned Box2D.NET package;
 Core retains its FSharp.Core/BCL runtime dependency boundary. The adapter has no
 rendering dependency, so headless servers and playtests can use it independently.
@@ -20,15 +20,15 @@ Game.Render or another presentation adapter consumes its snapshots.
 |---|---|
 | Existing `Geometry` + `Resolution` | Arcade movement, tile collisions, sliding and knockback |
 | Existing `Physics` | Lightweight rigid bodies, friction, bounce, sleeping and simple shapes |
-| Proposed Box2D adapter | Joints, connected mechanisms and more elaborate physical interactions |
+| Optional Box2D adapter | Joints, connected mechanisms and more elaborate physical interactions |
 
 The [current Core project](https://github.com/FS-GG/FS.GG.Game/blob/8de4c2747d40e9993cc9a08cd50e1e2d599f69fb/src/Game.Core/FS.GG.Game.Core.fsproj)
 and [Physics contract](https://github.com/FS-GG/FS.GG.Game/blob/8de4c2747d40e9993cc9a08cd50e1e2d599f69fb/src/Game.Core/Physics.fsi)
 establish the existing boundary and simulation options. Box2D.NET is a C# port of
 Box2D; its [project configuration](https://github.com/ikpil/Box2D.NET/blob/154bacd0fddc0e72e484d3061cdc76aa2d842994/src/Box2D.NET/Box2D.NET.csproj)
 includes `net10.0`, aligning with Game's .NET target. That upstream source observation
-does not select or qualify a published dependency version. The implementation owner
-must pin the actual package and supported runtime before the first executable proof.
+did not select or qualify a published dependency version. The actual dependency pin and
+observed runtime qualification are recorded below.
 
 ## Own mutation; publish immutable observations
 
@@ -38,7 +38,7 @@ retains distinct `Previous` and `Current` values. Box2D.NET's
 uses mutable worlds addressed by IDs. Returning the same mutable handle after stepping
 would make both buffers observe the updated world and invalidate interpolation.
 
-The proposed adapter therefore owns the mutable runtime and its lifetime. Game logic
+The adapter therefore owns the mutable runtime and its lifetime. Game logic
 submits commands; each fixed simulation tick applies them and steps the engine; the
 adapter then copies poses and events into immutable game-facing values. Mutable engine
 IDs and borrowed event buffers do not become the loop's public world state.
@@ -58,9 +58,9 @@ small example demonstrates which contracts are actually shared.
 
 ## First executable outcome and later joins
 
-The next outcome is **one headless example with falling bodies, one joint and one
-sensor**, using the optional adapter. Stop expanding preparation once this scene is
-ready to compile and run under its pinned profile.
+The first delivered outcome is **one headless example with falling bodies, one joint
+and one sensor**, using the optional adapter. The following windows retain their
+acceptance conditions; current closure is recorded below.
 
 | Window | Concrete outcome and success condition |
 |---|---|
@@ -90,11 +90,11 @@ the first executable example's prerequisites.
 
 ## Area topology and portals
 
-The [GAME-PORTAL-01 extension](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/game-area-portals.md) adds an immutable area graph and
+The [GAME-PORTAL-01 extension](game-area-portals.md) adds an immutable area graph and
 rigid portal mappings above local physics. Its first runtime example transfers one
 whole body between two independent Box2D worlds through a rotated opening, preserving
 entity identity and momentum while marking the interpolation discontinuity. Pure
-topology preparation is independent; actual transfers wait for `.1`'s local adapter.
+topology preparation is independent; P2 now uses the delivered local adapter.
 Portal-aware queries, viewing through openings, mirrored/scaled mappings and seamless
 cross-boundary collisions/joints have separate follow-ups. This extension does not
 delay the first falling-body/joint/sensor example or broaden its acceptance claim.
@@ -109,17 +109,17 @@ publication and installed qualification. Existing arcade and Core Physics consum
 keep their current route. Fresh creation must demonstrate explicit opt-in; retained
 adoption must preview and preserve user-owned files and record rollback/removal separately.
 
-## Source window qualification
+## Window closure
 
-- [ ] `.1` Runtime and headless example: locally qualified; native source delivery pending.
-- [ ] `.2` Retained snapshots, interpolation and pinned input replay: locally qualified; native source delivery pending.
-- [ ] `.3` Public package and fresh installed example: successor source and package-only candidate consumer locally qualified; native source/publication/public installed proof pending.
+- [x] `.1` Runtime and headless example: source delivered in [PR697](https://github.com/FS-GG/FS.GG.Game/pull/697), merged at `75df459ebe7dae755eacba3850a5074eba9ae3c2`.
+- [x] `.2` Retained snapshots, interpolation and pinned input replay: delivered with the same qualified source.
+- [x] `.3` Public package and fresh installed example: coherent `0.17.0` publication and public-only two-scene consumer accepted from [release run37237849417](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417).
 - [ ] `.4` Explicit consumer adoption: not selected.
 
 The optional project is `src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj`.
 Its package identity is `FS.GG.Game.Physics.Box2D` and it inherits Game's coherent
-version convention (selected successor 0.17.0); the producer release source prepares all four Game packages
-at that scalar. Source preparation does not establish publication.
+version convention. Core, Render, Harness and Physics.Box2D were published together at
+`0.17.0`; publication evidence is recorded separately from the source results below.
 
 The dependency is [published Box2D.NET 3.1.654](https://www.nuget.org/packages/Box2D.NET/3.1.654),
 whose package metadata records upstream revision
@@ -135,7 +135,8 @@ ordered command input, checks falling motion, the distance joint (maximum length
 below 0.03 m), sensor enter/exit and floor contact IDs, midpoint interpolation, and exact
 per-tick copied pose/event equality in two fresh worlds. The focused test suite also
 checks retained observations after disposal, pre-mutation batch refusal, removed-shape
-sensor event attribution and shortest-arc interpolation. These checks passed locally on 2026-10-04. Native source delivery is still pending.
+sensor event attribution and shortest-arc interpolation. These checks passed locally on 2026-10-04 and subsequently passed the native source
+delivery gates before PR697 merged.
 
 The actual headless entry point was compiled with the repository SDK profile
 (`global.json`: 10.0.401) and invoked with `dotnet exec --fx-version 10.0.12`. Its
@@ -153,10 +154,10 @@ parallel test route. After a native Windows failure exposed concurrent slot allo
 in the pinned engine's shared world table, adapter allocation/disposal now use one
 shared lifetime lock. Independent worlds may step concurrently; direct Box2D world
 lifetime calls outside the adapter must not race its operations. The adapter has
-registered type/member baselines (27 types, 52 members); whole-solution qualification
-and the native source delivery gates remain the integrator's obligation. No public
-package, installed consumer, portal transfer, browser or wider-platform acceptance
-is established by these local results.
+registered initial type/member baselines (27 types, 52 members). The native source
+gates completed before merge. These local results alone did not establish publication,
+installed support or portal transfer; the later joins and release evidence follow below.
+Browser and wider-platform acceptance remain outside this qualification.
 
 ## 0.17.0 release source and preflight
 
@@ -198,23 +199,61 @@ and ran the real 240-tick falling/joint/sensor scene with exact replay. It repor
 joint length error `0.00008517808537522598` m, with sensor enter/exit and floor contact.
 The original candidate bytes and consumer inputs were retained; no package was published.
 This candidate evidence binds the named source, independently of later documentation edits.
-Native source delivery, both-feed publication/readback and public-only installed qualification
-remain pending.
+At that local checkpoint, native source delivery, both-feed publication/readback and
+public-only installed qualification were pending. The accepted release below uses its own
+fresh preparation, rather than these historical candidate bytes.
 
 ## Portal transfer source join for the selected release
 
 The isolated successor joins the release source with the qualified P2 adapter/real headless
-portal scene (`10f63b469ec8b63635a8f4c5fe6e66f11010b3c9`). Source acceptance of that candidate
-remains separate from its native merge readback. The package-only consumer now copies that
+portal scene (`10f63b469ec8b63635a8f4c5fe6e66f11010b3c9`), delivered by
+[PR698](https://github.com/FS-GG/FS.GG.Game/pull/698) at protected merge
+`75ff1926f54b6cbaa050818ebeacd0a9aefd63cf`. The package-only consumer now copies that
 scene into its own `PortalScene.fs` and compiles it only against restored package APIs, alongside
 the existing falling-body scene. It requires one live traveller after the rotated transfer,
 transformed pose/momentum, one step per local world/tick, one traversal, no repeated transfer and
 exact fresh-world replay. The package metadata gate also requires the packed `AreaRuntime.fsi`.
 
 The earlier immutable `2eaca027` preparation and its four artifacts remain historical; they do
-not contain or qualify the expanded area-transfer API. The joined successor needs a fresh
+not contain or qualify the expanded area-transfer API. The joined successor completed a fresh
 version-consistent restore (including the new portal example lock), existing-three API/package
 validation, one fresh four-package preparation and independent candidate smoke for both scenes.
-Public installed support still requires genuine publication, both-feed readback and the public-only
-consumer; product/template opt-in remains separate. No old candidate is substituted for that
-fresh obligation.
+[PR699](https://github.com/FS-GG/FS.GG.Game/pull/699) delivered that release source at
+`080713373edafacc2945d089beb38fa75d6a6267`. Product/Template opt-in remains separate.
+No old candidate was substituted for the final release preparation.
+
+## Accepted public release and installed example
+
+The immutable `v0.17.0` tag names `8cd158db8cb0836968df3f695fad75366434886c`.
+[Release run37237849417](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417)
+completed successfully on 2026-10-04 UTC: full native verification, one coherent pack,
+candidate qualification, original custody retention, GitHub-first publication, OIDC
+nuget.org publication, both-feed payload comparison and fresh public-only qualification.
+All four packages are `0.17.0`, including the first
+[Physics.Box2D public package](https://www.nuget.org/packages/FS.GG.Game.Physics.Box2D/0.17.0).
+
+The downloaded [original custody artifact11315758497](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417/artifacts/11315758497)
+matched ZIP SHA256 `2691e04b592858e9bf913fe0b623dd8355f92fbce1dcf8f2b45cd0baba1f11ac`;
+the [readback artifact11316676562](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417/artifacts/11316676562)
+matched `97c52e492052a78ad92018f16e1e5b4f15f96d3c16b8e346688130f1ad347ce3`.
+The custody manifest and every package's version/source metadata agreed. Native GitHub
+archive hashes equalled original custody. Independently downloaded public packages matched
+the recorded public hashes and every non-signature ZIP member equalled custody. NuGet
+repository signing changes archive hashes; this establishes payload equality, without
+claiming full signed-archive byte equality or independent signature authentication.
+
+The fresh consumer copied independent source outside the checkout, restored from nuget.org
+into an empty cache, and built with zero warnings/errors. It had no ProjectReference,
+repository import or linked source. Its exact closure was adapter/Core `0.17.0`, Box2D.NET
+`3.1.654` and FSharp.Core `10.1.302`; Core retained only FSharp.Core and the adapter had no
+rendering dependency. Actual execution used .NET `10.0.12`, Ubuntu `24.04.5 LTS`, X64.
+
+The 240-tick scene passed retained-snapshot/interpolation and exact pose/event replay checks,
+observed sensor enter/exit and floor contact, and reported final falling height
+`0.39992859959602356` m with maximum joint error `0.00008517808537522598` m.
+The five-tick portal scene passed exact replay, one live `traveller`, one traversal and
+one step per local world/tick. Its rotated destination pose was
+`(9.899999618530273, 5.150000095367432)` with velocity `(-1, 4)`.
+This closes `.3` and supplies Portal P3's public-installed prerequisite. It does not
+record `.4` product/Template opt-in, preserving retained adoption/removal, browser support,
+solver rollback or cross-platform determinism.
