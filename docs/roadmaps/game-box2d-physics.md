@@ -113,7 +113,7 @@ adoption must preview and preserve user-owned files and record rollback/removal 
 
 - [ ] `.1` Runtime and headless example: locally qualified; native source delivery pending.
 - [ ] `.2` Retained snapshots, interpolation and pinned input replay: locally qualified; native source delivery pending.
-- [ ] `.3` Public package and fresh installed example: successor release source and independent consumer prepared; actual package/publication/installed proof pending.
+- [ ] `.3` Public package and fresh installed example: successor source and package-only candidate consumer locally qualified; native source/publication/public installed proof pending.
 - [ ] `.4` Explicit consumer adoption: not selected.
 
 The optional project is `src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj`.
@@ -187,4 +187,16 @@ substituted first/second/both push commands, a wrong scalar, foreign API baselin
 adapter custody, and missing/foreign/wrong-version artifacts before consumer launch. The
 measured local source-only mutation run took about 0.22 seconds with no restore or downloads.
 No billed runner savings or native publication acceptance are inferred from that measurement.
-Actual packing, candidate consumer execution and public installed qualification remain pending.
+Local candidate preflight passed on source `2eaca0271431a1239f9e1ba2640005687b3bd63d`:
+one coherent preparation produced exactly the four `0.17.0` packages, with existing-three
+API compatibility against `0.16.0` and first-release adapter validation. The source-bound
+metadata/API/dependency checks and independent Journey consumer passed. A fresh copied
+Box2D package-only consumer cold-restored the candidate packages into an empty cache,
+proved an exact four-package dependency closure (adapter, Core, Box2D.NET and FSharp.Core),
+and ran the real 240-tick falling/joint/sensor scene with exact replay. It reported
+.NET 10.0.12 / Arch Linux / X64, final falling height `0.39992859959602356` m and maximum
+joint length error `0.00008517808537522598` m, with sensor enter/exit and floor contact.
+The original candidate bytes and consumer inputs were retained; no package was published.
+This candidate evidence binds the named source, independently of later documentation edits.
+Native source delivery, both-feed publication/readback and public-only installed qualification
+remain pending.
