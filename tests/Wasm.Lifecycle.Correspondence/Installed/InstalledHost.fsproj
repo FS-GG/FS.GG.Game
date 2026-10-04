@@ -3,6 +3,6 @@
   <ItemGroup>
     <Compile Include="../CorrespondenceTypes.fs"/><Compile Include="../GeneratedTraces.fs"/><Compile Include="../Correspondence.fs"/><Compile Include="../InstalledHostControls.fs"/><Compile Include="../InstalledHostProgram.fs"/>
     <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]"/>
-    <PackageReference Update="FSharp.Core" Version="[10.1.302]"/>
+    <PackageReference Update="FSharp.Core" Version="[10.1.401]"/>
   </ItemGroup>
 </Project>

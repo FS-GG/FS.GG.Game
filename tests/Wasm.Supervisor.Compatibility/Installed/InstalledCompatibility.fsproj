@@ -8,7 +8,7 @@
     <Compile Include="../CompatibleTypes.fs" /><Compile Include="../GeneratedCompatibilityTraces.fs" />
     <Compile Include="../CompatibilityCorrespondence.fs" /><Compile Include="../Fixtures.fs" /><Compile Include="../BrowserBridge.fs" /><Compile Include="../Program.fs" />
     <PackageReference Include="FS.GG.Wasm.Browser" Version="[$(WasmCandidateVersion)]" />
-    <PackageReference Update="FSharp.Core" Version="[10.1.302]" />
+    <PackageReference Update="FSharp.Core" Version="[10.1.401]" />
   </ItemGroup>
   <Target Name="RequireCandidateVersion" BeforeTargets="Restore;Build"><Error Condition="'$(WasmCandidateVersion)' == ''" Text="Installed qualification requires the exact coherent WasmCandidateVersion." /></Target>
 </Project>
