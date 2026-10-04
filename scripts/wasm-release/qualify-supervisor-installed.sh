@@ -45,5 +45,9 @@ export WASM_INSTALLED_BROWSER_ARCHIVE="$output/packages/fs.gg.wasm.browser/0.3.0
 export WASM_WASI_SDK_ROOT="$q/wasi/wasi-sdk-34.0-x86_64-linux"
 (cd "$repo/tests/Wasm.Supervisor.Compatibility/browser" && npm ci --ignore-scripts && npx playwright install chromium)
 "$repo/scripts/verify-wasm-supervisor-browser.sh" --feed-only "$output" "${output}-browser"
+if [[ -n "${EXECUTION_BINDING:-}" ]]; then
+  cmp <(python3 -c 'import json,os;print(json.dumps(json.loads(os.environ["EXECUTION_BINDING"]),sort_keys=True,indent=2))') "$receipts/successor-execution-binding.json"
+  cp "$receipts/successor-execution-binding.json" "$output/"
+fi
 cp "$config" "$receipts/release-manifest.json" "$receipts/promotion-binding.json" "$output/"
 printf 'wasm-installed-supervisor: feed=%s default47+selected13 dotnet+fable both-facades browsers=8 locked-cache-worker=verified local-fallback=none\n' "$feed"

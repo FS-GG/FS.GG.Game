@@ -38,6 +38,7 @@ def validate_release(release, values):
     assert release["tag_name"] == tag and not release["draft"] and not release["prerelease"]
     assert release["published_at"], "release is unpublished"
     assets = {item["name"]: item for item in release["assets"]}
+    assert len(assets) == len(release["assets"]), "duplicate release assets"
     selected = {}
     for name, expected in (("release-manifest.json", values["MANIFEST_SHA256"]), (f"fsgg-wasm-sdk-{version}.tar.gz", values["SDK_SHA256"])):
         item = assets[name]
@@ -153,6 +154,21 @@ def bind_qualification_inputs(source, qualifier_source, version, release_binding
     return dict({"consumerInputs": "exact-reviewed-qualification-correction", "auditSha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(), "audit": audit}, canonicalAmendment=canonical) if canonical else {"consumerInputs": "exact-reviewed-qualification-correction", "auditSha256": hashlib.sha256(audit_path.read_bytes()).hexdigest(), "audit": audit}
 
 
+def bind_promotion_execution(promotion, transaction, values, release, receipts):
+    reviewed=promotion.validate_tuple(transaction['preparation'])
+    if promotion.execution_input():
+        promotion.execution_checkout(promotion.Native(),reviewed,installed=True)
+        assert hashlib.sha256((receipts / "promotion-binding.json").read_bytes()).hexdigest() == promotion.execution_input()['journalSha256']
+        assert release['id'] == promotion.execution_input()['releaseId']
+        rows=[a for a in release['assets'] if a['name']=='promotion-binding.json']
+        assert len(rows)==1 and rows[0]['id'] == promotion.execution_input()['journalAssetId']
+        promotion.verify_transaction(promotion.Native(),release,reviewed)
+        promotion.save(receipts / "successor-execution-binding.json",promotion.execution_input())
+    else:
+        assert reviewed['binding']['executor'] == values['ACCEPTED_EXECUTOR']
+    return reviewed
+
+
 def main():
     tracked = ET.parse(ROOT / "eng/wasm-shared/version.props").findtext(".//WasmSharedVersion")
     values = checked_inputs(os.environ, tracked)
@@ -166,14 +182,19 @@ def main():
     # consumer projection/assertion blobs may differ, bound by the immutable audit.
     # Model amendments are decided only after genuine immutable release receipts are acquired.
     request = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/tags/wasm%2Fv{values['RELEASE_VERSION']}", headers={"Accept": "application/vnd.github+json", "Authorization": "Bearer " + os.environ["GH_TOKEN"], "X-GitHub-Api-Version": "2022-11-28"})
-    with urllib.request.urlopen(request) as response:
-        release = json.load(response)
+    if values['RELEASE_VERSION']=='0.3.0':
+        spec=importlib.util.spec_from_file_location('promotion',ROOT/'scripts/wasm-release/promotion.py')
+        promotion=importlib.util.module_from_spec(spec);spec.loader.exec_module(promotion)
+        release=promotion.Native().checked(f"repos/{REPO}/releases/tags/wasm%2Fv{values['RELEASE_VERSION']}")
+    else:
+        with urllib.request.urlopen(request,timeout=30) as response:
+            release = json.load(response)
     selected = validate_release(release, values)
     receipts = pathlib.Path(os.environ["RUNNER_TEMP"]) / "wasm-installed-receipts"
     receipts.mkdir()
     for name, url in selected.items():
         destination = receipts / name
-        subprocess.run(["curl", "--fail", "--location", "--proto", "=https", "--tlsv1.2", url, "--output", str(destination)], check=True)
+        subprocess.run(["curl", "--max-time", "30", "--max-filesize", "536870912", "--fail", "--location", "--proto", "=https", "--tlsv1.2", url, "--output", str(destination)], check=True)
         expected = values["MANIFEST_SHA256"] if name == "release-manifest.json" else values["SDK_SHA256"] if name.endswith(".tar.gz") else values["PROMOTION_BINDING_SHA256"]
         assert hashlib.sha256(destination.read_bytes()).hexdigest() == expected, "downloaded release bytes mismatch"
     manifest = json.loads((receipts / "release-manifest.json").read_text())
@@ -193,7 +214,8 @@ def main():
         reviewed = promotion.validate_tuple(transaction["preparation"])
         bound = reviewed["binding"]
         assert transaction["schema"] == "fsgg.wasm.promotion/v1" and transaction["producer"] == source and transaction["tag"] == tag
-        assert bound["executor"] == values["ACCEPTED_EXECUTOR"] and bound["manifestSha256"] == values["MANIFEST_SHA256"]
+        bind_promotion_execution(promotion,transaction,values,release,receipts)
+        assert bound["manifestSha256"] == values["MANIFEST_SHA256"]
         assert bound["archives"][sdk["file"]] == values["SDK_SHA256"]
         assert {row["file"]:row["sha256"] for row in manifest["artifacts"]} == bound["archives"]
     input_audit = bind_qualification_inputs(source, values["QUALIFIER_SOURCE"], values["RELEASE_VERSION"], release_binding)
