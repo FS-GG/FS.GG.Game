@@ -50,6 +50,7 @@ let packages =
         "FS.GG.Game.Core", "Game.Core"
         "FS.GG.Game.Harness", "Game.Harness"
         "FS.GG.Game.Render", "Game.Render"
+        "FS.GG.Game.Physics.Box2D", "Game.Physics.Box2D"
     ]
 
 let binDir proj =

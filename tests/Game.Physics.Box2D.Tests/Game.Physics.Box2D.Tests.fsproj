@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><IsPackable>false</IsPackable><GenerateProgramFile>false</GenerateProgramFile></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../examples/Box2D.Headless/Scene.fs" Link="Scene.fs" />
+    <Compile Include="RuntimeTests.fs" /><Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj" />
+    <PackageReference Include="Expecto" /><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="YoloDev.Expecto.TestSdk" />
+  </ItemGroup>
+</Project>

@@ -163,4 +163,7 @@
   <ItemGroup Label="Generator-only — source for the generated _scaffold.fs (no project references this)">
     <PackageVersion Include="FS.GG.UI.Template" Version="0.31.0" />
   </ItemGroup>
+  <ItemGroup Label="Optional physics backend">
+    <PackageVersion Include="Box2D.NET" Version="3.1.654" />
+  </ItemGroup>
 </Project>
