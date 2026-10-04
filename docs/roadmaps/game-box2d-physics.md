@@ -200,3 +200,21 @@ The original candidate bytes and consumer inputs were retained; no package was p
 This candidate evidence binds the named source, independently of later documentation edits.
 Native source delivery, both-feed publication/readback and public-only installed qualification
 remain pending.
+
+## Portal transfer source join for the selected release
+
+The isolated successor joins the release source with the qualified P2 adapter/real headless
+portal scene (`10f63b469ec8b63635a8f4c5fe6e66f11010b3c9`). Source acceptance of that candidate
+remains separate from its native merge readback. The package-only consumer now copies that
+scene into its own `PortalScene.fs` and compiles it only against restored package APIs, alongside
+the existing falling-body scene. It requires one live traveller after the rotated transfer,
+transformed pose/momentum, one step per local world/tick, one traversal, no repeated transfer and
+exact fresh-world replay. The package metadata gate also requires the packed `AreaRuntime.fsi`.
+
+The earlier immutable `2eaca027` preparation and its four artifacts remain historical; they do
+not contain or qualify the expanded area-transfer API. The joined successor needs a fresh
+version-consistent restore (including the new portal example lock), existing-three API/package
+validation, one fresh four-package preparation and independent candidate smoke for both scenes.
+Public installed support still requires genuine publication, both-feed readback and the public-only
+consumer; product/template opt-in remains separate. No old candidate is substituted for that
+fresh obligation.

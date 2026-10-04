@@ -146,7 +146,7 @@ adapter, names = metadata('FS.GG.Game.Physics.Box2D')
 assert set(adapter) == {'FS.GG.Game.Core', 'FSharp.Core', 'Box2D.NET'}, 'adapter must have no rendering dependency'
 assert adapter['FS.GG.Game.Core'].strip('[]()').split(',')[0].strip() == '0.17.0', 'adapter/Core coherent dependency mismatch'
 assert adapter['Box2D.NET'].strip('[]()').split(',')[0].strip() == '3.1.654', 'adapter engine dependency differs from qualified pin'
-for entry in ('lib/net10.0/FS.GG.Game.Physics.Box2D.dll', 'api-surface/Types.fsi', 'api-surface/Runtime.fsi'):
+for entry in ('lib/net10.0/FS.GG.Game.Physics.Box2D.dll', 'api-surface/Types.fsi', 'api-surface/Runtime.fsi', 'api-surface/AreaRuntime.fsi'):
     assert entry in names, 'adapter missing package API entry: ' + entry
 print('coherent package metadata passed: adapter API, exact engine pin, Core boundary and no rendering dependency')
 PY_PACKAGE

@@ -9,7 +9,7 @@
     <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
-  <ItemGroup><Compile Include="Scene.fs" /><Compile Include="Program.fs" /></ItemGroup>
+  <ItemGroup><Compile Include="Scene.fs" /><Compile Include="PortalScene.fs" /><Compile Include="Program.fs" /></ItemGroup>
   <ItemGroup>
     <PackageReference Include="FS.GG.Game.Physics.Box2D" Version="[0.17.0]" />
     <PackageReference Include="FSharp.Core" Version="[10.1.302]" />

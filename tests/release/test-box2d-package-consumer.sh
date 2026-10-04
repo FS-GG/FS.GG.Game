@@ -19,7 +19,7 @@ if [[ -n "$output" ]]; then
 else
   output="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/box2d-package-consumer.XXXXXX")"
 fi
-cp "$root/tests/release/Box2D.PackageConsumer/"{Consumer.fsproj,Program.fs,Scene.fs,global.json,verify-package-boundary.py} "$output/"
+cp "$root/tests/release/Box2D.PackageConsumer/"{Consumer.fsproj,Program.fs,Scene.fs,PortalScene.fs,global.json,verify-package-boundary.py} "$output/"
 python3 - "$output/NuGet.Config" "$mode" "$packages" <<'PY'
 import sys, xml.etree.ElementTree as ET
 path, mode, packages = sys.argv[1:]

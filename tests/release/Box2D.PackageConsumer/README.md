@@ -12,6 +12,8 @@ no repository ProjectReference/import. The boundary check verifies the exact pac
 Core's FSharp.Core-only runtime dependencies and the adapter's lack of rendering dependencies.
 The real entry point then drives 240 ticks from recorded commands, observes falling motion,
 a distance joint, sensor enter/exit and floor contact, and compares exact per-tick copied
-poses/events in two fresh worlds. SDK10.0.401 and runtime10.0.12 scope this result; output
+poses/events in two fresh worlds. It also executes the copied real five-tick rotated portal
+scene against package APIs, requiring one live traveller after transfer, transformed pose/momentum,
+one step per local world per tick, one traversal, no repeated transfer and exact replay. SDK10.0.401 and runtime10.0.12 scope this result; output
 reports the actual OS/architecture/runtime. Candidate smoke cannot claim public installed
 support; neither smoke selects a product/template or establishes cross-platform determinism.

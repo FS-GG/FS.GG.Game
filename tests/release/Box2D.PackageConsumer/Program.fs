@@ -7,6 +7,8 @@ open System.Text.Json
 [<EntryPoint>]
 let main _ =
     let snapshots, jointError = Scene.qualify ()
+    let portals = Box2D.Portals.Scene.qualify ()
+    let traversal = portals.Head.Traversals.Head
     let events = snapshots |> List.collect _.Events |> List.map string |> List.toArray
     let final = snapshots |> List.last
     let result =
@@ -16,6 +18,13 @@ let main _ =
            runtimeVersion = Environment.Version.ToString()
            os = RuntimeInformation.OSDescription
            architecture = RuntimeInformation.ProcessArchitecture.ToString()
+           portalTicks = portals.Length
+           portalEntity = traversal.Entity
+           portalTraversals = portals |> List.sumBy (fun snapshot -> snapshot.Traversals.Length)
+           portalPositionX = traversal.DestinationPose.Position.X
+           portalPositionY = traversal.DestinationPose.Position.Y
+           portalVelocityX = traversal.DestinationPose.LinearVelocity.X
+           portalVelocityY = traversal.DestinationPose.LinearVelocity.Y
            ticks = final.Tick
            fallingY = final.Bodies["falling"].Position.Y
            maximumJointError = jointError
