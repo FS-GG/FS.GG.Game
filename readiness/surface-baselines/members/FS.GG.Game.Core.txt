@@ -20,6 +20,39 @@ FS.GG.Game.Core.Ai.threatField(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Core.
 FS.GG.Game.Core.Ai.tryFind<T>(FS.GG.Game.Core.AgentId, TeamView<T>) : FSharpValueOption<Sighting<T>>
 FS.GG.Game.Core.Ai.view<T>(System.Int32, System.Int32, FSharpList<Sighting<T>>) : TeamView<T>
 FS.GG.Game.Core.Ai.viewTick<T>(TeamView<T>) : System.Int32
+FS.GG.Game.Core.AreaTopology+Crossing.DestinationPoint : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.AreaTopology+Crossing.Fraction : System.Double [get]
+FS.GG.Game.Core.AreaTopology+Crossing.MappedMotion : FS.GG.Game.Core.AreaTopology+Motion [get]
+FS.GG.Game.Core.AreaTopology+Crossing.Portal : FS.GG.Game.Core.AreaTopology+Portal [get]
+FS.GG.Game.Core.AreaTopology+Crossing.SourcePoint : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.AreaTopology+Crossing.new(FS.GG.Game.Core.AreaTopology+Portal, System.Double, FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, FS.GG.Game.Core.AreaTopology+Motion)
+FS.GG.Game.Core.AreaTopology+Direction+Tags.NegativeToPositive : System.Int32
+FS.GG.Game.Core.AreaTopology+Direction+Tags.PositiveToNegative : System.Int32
+FS.GG.Game.Core.AreaTopology+Motion.AngularVelocity : System.Double [get]
+FS.GG.Game.Core.AreaTopology+Motion.Orientation : System.Double [get]
+FS.GG.Game.Core.AreaTopology+Motion.Position : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.AreaTopology+Motion.Velocity : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.AreaTopology+Motion.new(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point, System.Double, System.Double)
+FS.GG.Game.Core.AreaTopology+Opening.Finish : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.AreaTopology+Opening.Start : FS.GG.Game.Core.Point [get]
+FS.GG.Game.Core.AreaTopology+Opening.new(FS.GG.Game.Core.Point, FS.GG.Game.Core.Point)
+FS.GG.Game.Core.AreaTopology+Portal.Destination : FS.GG.Game.Core.AreaTopology+AreaId [get]
+FS.GG.Game.Core.AreaTopology+Portal.DestinationOpening : FS.GG.Game.Core.AreaTopology+Opening [get]
+FS.GG.Game.Core.AreaTopology+Portal.Direction : FS.GG.Game.Core.AreaTopology+Direction [get]
+FS.GG.Game.Core.AreaTopology+Portal.Id : FS.GG.Game.Core.AreaTopology+PortalId [get]
+FS.GG.Game.Core.AreaTopology+Portal.Mapping : FS.GG.Game.Core.AreaTopology+RigidMap [get]
+FS.GG.Game.Core.AreaTopology+Portal.Reverse : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.AreaTopology+PortalId> [get]
+FS.GG.Game.Core.AreaTopology+Portal.Source : FS.GG.Game.Core.AreaTopology+AreaId [get]
+FS.GG.Game.Core.AreaTopology+Portal.SourceOpening : FS.GG.Game.Core.AreaTopology+Opening [get]
+FS.GG.Game.Core.AreaTopology+Portal.new(FS.GG.Game.Core.AreaTopology+PortalId, FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Core.AreaTopology+Opening, FS.GG.Game.Core.AreaTopology+Opening, FS.GG.Game.Core.AreaTopology+Direction, FS.GG.Game.Core.AreaTopology+RigidMap, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.AreaTopology+PortalId>)
+FS.GG.Game.Core.AreaTopology.create(System.Collections.Generic.IEnumerable<FS.GG.Game.Core.AreaTopology+AreaId>, System.Collections.Generic.IEnumerable<FS.GG.Game.Core.AreaTopology+Portal>) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Core.AreaTopology+Graph, System.String>
+FS.GG.Game.Core.AreaTopology.inverse(FS.GG.Game.Core.AreaTopology+RigidMap) : FS.GG.Game.Core.AreaTopology+RigidMap
+FS.GG.Game.Core.AreaTopology.mapMotion(FS.GG.Game.Core.AreaTopology+RigidMap, FS.GG.Game.Core.AreaTopology+Motion) : FS.GG.Game.Core.AreaTopology+Motion
+FS.GG.Game.Core.AreaTopology.mapPoint(FS.GG.Game.Core.AreaTopology+RigidMap, FS.GG.Game.Core.Point) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.AreaTopology.mapVector(FS.GG.Game.Core.AreaTopology+RigidMap, FS.GG.Game.Core.Point) : FS.GG.Game.Core.Point
+FS.GG.Game.Core.AreaTopology.outgoing(FS.GG.Game.Core.AreaTopology+AreaId, FS.GG.Game.Core.AreaTopology+Graph) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Core.AreaTopology+Portal>
+FS.GG.Game.Core.AreaTopology.rigidMap(System.Double, FS.GG.Game.Core.Point) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Core.AreaTopology+RigidMap, System.String>
+FS.GG.Game.Core.AreaTopology.tryCrossing(FS.GG.Game.Core.AreaTopology+Graph, FS.GG.Game.Core.AreaTopology+AreaId, Microsoft.FSharp.Collections.FSharpSet<FS.GG.Game.Core.AreaTopology+PortalId>, System.Double, FS.GG.Game.Core.Point, FS.GG.Game.Core.AreaTopology+Motion) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Core.AreaTopology+Crossing>
 FS.GG.Game.Core.AuthoredState`1.ContentId : System.String [get]
 FS.GG.Game.Core.AuthoredState`1.Revision : System.UInt64 [get]
 FS.GG.Game.Core.AuthoredState`1.Value : content [get]
