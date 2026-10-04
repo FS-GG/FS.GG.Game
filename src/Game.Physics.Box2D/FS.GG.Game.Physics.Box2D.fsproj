@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <IsPackable>true</IsPackable>
+    <PackageId>FS.GG.Game.Physics.Box2D</PackageId>
+    <AssemblyName>FS.GG.Game.Physics.Box2D</AssemblyName>
+    <Title>FS.GG.Game.Physics.Box2D</Title>
+    <Description>Opt-in headless Box2D.NET physics runtime with fixed ticks, immutable observations and game entity IDs.</Description>
+    <PackageTags>fsharp;game;physics;box2d;headless</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Types.fsi" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Runtime.fsi" />
+    <Compile Include="Runtime.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Game.Core/FS.GG.Game.Core.fsproj" />
+    <PackageReference Include="Box2D.NET" />
+  </ItemGroup>
+</Project>
