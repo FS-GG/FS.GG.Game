@@ -2,6 +2,17 @@ FS.GG.Game.Core.AcceptedNetworkInput`1
 FS.GG.Game.Core.AcceptedState`1
 FS.GG.Game.Core.AgentId
 FS.GG.Game.Core.Ai
+FS.GG.Game.Core.AreaTopology
+FS.GG.Game.Core.AreaTopology+AreaId
+FS.GG.Game.Core.AreaTopology+Crossing
+FS.GG.Game.Core.AreaTopology+Direction
+FS.GG.Game.Core.AreaTopology+Direction+Tags
+FS.GG.Game.Core.AreaTopology+Graph
+FS.GG.Game.Core.AreaTopology+Motion
+FS.GG.Game.Core.AreaTopology+Opening
+FS.GG.Game.Core.AreaTopology+Portal
+FS.GG.Game.Core.AreaTopology+PortalId
+FS.GG.Game.Core.AreaTopology+RigidMap
 FS.GG.Game.Core.AuthoredState`1
 FS.GG.Game.Core.Autosave
 FS.GG.Game.Core.AutosaveConfig
