@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Offline decisions against real adapter/YAML. No credentials, actors or feeds."""
 import copy
+import base64
+import hashlib
+import io
+import struct
 import importlib.util
 import json
 import os
@@ -303,12 +307,15 @@ class Tests(unittest.TestCase):
                 with zipfile.ZipFile(archive,'w') as z:z.writestr('ordinary.dll',b'real-payload');z.writestr('module-worker.mjs',b'real-worker')
                 r['binding']['archives'][ident+'.0.3.0.nupkg']=p.digest(archive.read_bytes())
                 r['binding']['inventories'][ident+'.0.3.0.nupkg']={'ordinary.dll':p.digest(b'real-payload'),'module-worker.mjs':p.digest(b'real-worker')}
-                (folder/(ident.lower()+'.0.3.0.nupkg.sha512')).write_text('actual-restored-content-hash')
-                dependencies[ident]={'resolved':'0.3.0','contentHash':'actual-restored-content-hash'}
+                content=base64.b64encode(hashlib.sha512(archive.read_bytes()).digest()).decode()
+                (folder/(ident.lower()+'.0.3.0.nupkg.sha512')).write_text(content)
+                (folder/'.nupkg.metadata').write_text(json.dumps({'version':2,'contentHash':content,'source':'https://nuget.pkg.github.com/FS-GG/index.json'}))
+                dependencies[ident]={'resolved':'0.3.0','contentHash':content}
             record.write_text(json.dumps({'preparation':r}));lock.write_text(json.dumps({'dependencies':{'net10.0':dependencies}}))
             with patch.dict(os.environ,{'ACCEPTED_EXECUTOR':'a'*40}):
                 p.check_installed(record,cache,'https://nuget.pkg.github.com/FS-GG/index.json',lock)
-                folder=cache/p.PACKAGES[1].lower()/'0.3.0';archive=folder/(p.PACKAGES[1].lower()+'.0.3.0.nupkg');original=archive.read_bytes()
+                ident=p.PACKAGES[1];folder=cache/ident.lower()/'0.3.0';archive=folder/(ident.lower()+'.0.3.0.nupkg');original=archive.read_bytes()
+                sidecar=folder/(ident.lower()+'.0.3.0.nupkg.sha512');metadata=folder/'.nupkg.metadata';original_sidecar=sidecar.read_text();original_metadata=metadata.read_text()
                 for mutation in ('worker','ordinary','signature-disguised-worker','lock','version','missing-cache'):
                     saved=copy.deepcopy(dependencies)
                     if mutation in ('worker','ordinary','signature-disguised-worker'):
@@ -319,10 +326,153 @@ class Tests(unittest.TestCase):
                     elif mutation=='lock':dependencies[p.PACKAGES[1]]['contentHash']='wrong'
                     elif mutation=='version':dependencies[p.PACKAGES[1]]['resolved']='0.2.0'
                     else:archive.unlink()
+                    if mutation in ('worker','ordinary','signature-disguised-worker'):
+                        body=archive.read_bytes();content=p.package_content_hash(body)
+                        sidecar.write_text(base64.b64encode(hashlib.sha512(body).digest()).decode())
+                        metadata.write_text(json.dumps({'version':2,'contentHash':content,'source':'https://nuget.pkg.github.com/FS-GG/index.json'}));dependencies[ident]['contentHash']=content
                     lock.write_text(json.dumps({'dependencies':{'net10.0':dependencies}}))
-                    with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.check_installed(record,cache,'https://nuget.pkg.github.com/FS-GG/index.json',lock)
-                    archive.write_bytes(original);dependencies=saved
+                    with self.subTest(mutation=mutation),self.assertRaisesRegex(p.Refusal,'restored payload drift' if mutation in ('worker','ordinary') else ''):p.check_installed(record,cache,'https://nuget.pkg.github.com/FS-GG/index.json',lock)
+                    archive.write_bytes(original);sidecar.write_text(original_sidecar);metadata.write_text(original_metadata);dependencies=saved
                     lock.write_text(json.dumps({'dependencies':{'net10.0':dependencies}}))
+    def test_native_archive_media_roles_and_cross_host_auth(self):
+        class Reply:
+            status=200; headers={}
+            def __init__(self): self.body=io.BytesIO(b'PK opaque archive bytes')
+            def __enter__(self): return self
+            def __exit__(self,*args): pass
+            def read(self,size): return self.body.read(size)
+        observed=[]
+        class Opener:
+            def open(self,request,**kwargs): observed.append(request); return Reply()
+        routes=[('actions/artifacts/200/zip','GET','application/vnd.github+json'),
+                ('actions/runs/100/logs','GET','application/vnd.github+json'),
+                ('actions/runs/100/attempts/2/logs','GET','application/vnd.github+json'),
+                ('releases/assets/200','GET','application/octet-stream'),
+                ('actions/artifacts/200/zip','POST','application/octet-stream'),
+                ('actions/artifacts/0/zip','GET','application/octet-stream')]
+        with patch.dict(os.environ,{'GH_TOKEN':'inert-fixture'}),patch.object(p.urllib.request,'build_opener',return_value=Opener()):
+            for path,method,accept in routes:
+                with self.subTest(path=path,method=method):
+                    status,body,_=p.Native().request('https://api.github.com/repos/'+p.REPO+'/'+path,method=method,github=True,binary=True)
+                    self.assertEqual((status,body),(200,b'PK opaque archive bytes'));self.assertEqual(observed[-1].get_header('Accept'),accept)
+            p.Native().request('https://api.github.com/repos/other/repo/actions/artifacts/200/zip',github=True,binary=True)
+            self.assertEqual(observed[-1].get_header('Accept'),'application/octet-stream')
+        request=observed[0]
+        redirect=p.SafeRedirect().redirect_request(request,None,302,'',{},'https://objects.githubusercontent.com/archive.zip')
+        self.assertIsNone(redirect.get_header('Authorization'))
+        same=p.SafeRedirect().redirect_request(request,None,302,'',{},request.full_url)
+        self.assertEqual(same.get_header('Authorization'),'Bearer inert-fixture')
+
+    def test_download_http_unknown_is_distinct_from_digest_drift(self):
+        run,jobs,artifact=native_data()
+        class Transport:
+            def checked(self,path): return run if '/attempts/' in path else artifact
+            def pages(self,*args): return jobs
+            def request(self,*args,**kwargs): return self.response
+        for response,reason in [((415,None,{}),'preparation artifact download status 415, Unknown'),
+                                ((403,None,{}),'preparation artifact download status 403, Unknown'),
+                                ((200,b'wrong immutable bytes',{}),'downloaded artifact digest mismatch')]:
+            n=Transport();n.response=response
+            with tempfile.TemporaryDirectory() as raw,patch.object(p,'execution_checkout'),self.assertRaisesRegex(p.Refusal,'^'+re.escape(reason)+'$'):
+                p.download(n,reviewed(),pathlib.Path(raw)/'custody')
+
+    @staticmethod
+    def package_fixture(signature_at=None, names=('a.txt','b.txt'), extra=b'', descriptor=False, payloads=None):
+        class Stream(io.BytesIO):
+            def seek(self,*args): raise OSError('source fixture is nonseekable')
+        out=Stream() if descriptor else io.BytesIO();entries=list(names)
+        if signature_at is not None: entries.insert(signature_at,'.signature.p7s')
+        with p.zipfile.ZipFile(out,'w') as archive:
+            for name in entries:
+                info=p.zipfile.ZipInfo(name,(2020,1,1,0,0,0));info.compress_type=0 if name=='.signature.p7s' else 8;info.extra=extra
+                archive.writestr(info,b'not a real signature' if name=='.signature.p7s' else (payloads or {}).get(name,('payload:'+name).encode()))
+        return out.getvalue()
+
+    def test_compressed_unsigned_content_hash_signature_positions_and_descriptors(self):
+        for descriptor in (False,True):
+            original=self.package_fixture(descriptor=descriptor);expected=base64.b64encode(hashlib.sha512(original).digest()).decode()
+            self.assertEqual(p.package_content_hash(original),expected)
+            for position in (0,1,2):
+                raw=self.package_fixture(position,descriptor=descriptor)
+                self.assertNotEqual(base64.b64encode(hashlib.sha512(raw).digest()).decode(),expected)
+                self.assertEqual(p.package_content_hash(raw),expected)
+        # Central directory order and physical entry order are distinct roles.
+        def reverse_central(raw):
+            end=raw.rfind(b'PK\x05\x06');start=struct.unpack_from('<I',raw,end+16)[0];pos=start;rows=[]
+            while pos<end:
+                lengths=struct.unpack_from('<HHH',raw,pos+28);length=46+sum(lengths);rows.append(raw[pos:pos+length]);pos+=length
+            return raw[:start]+b''.join(reversed(rows))+raw[end:]
+        unsigned=reverse_central(self.package_fixture());signed=reverse_central(self.package_fixture(1))
+        self.assertEqual(p.package_content_hash(signed),base64.b64encode(hashlib.sha512(unsigned).digest()).decode())
+
+    def test_content_hash_refuses_ambiguous_zip_layout_and_paths(self):
+        raw=self.package_fixture(2);end=raw.rfind(b'PK\x05\x06');start=struct.unpack_from('<I',raw,end+16)[0]
+        def change(offset,fmt,value):
+            modified=bytearray(raw);struct.pack_into(fmt,modified,offset,value);return bytes(modified)
+        mutants=[raw[:20],raw[:-1],raw+b'unbound tail',change(end+4,'<H',1),change(end+10,'<H',65535),
+                 change(end+12,'<I',1),change(start+34,'<H',1),change(start+6,'<H',45),
+                 change(start+8,'<H',1),change(start+10,'<H',12),change(start+20,'<I',0xffffffff),
+                 change(4,'<H',45),change(18,'<I',1),self.package_fixture(2,names=('../a','b.txt')),
+                 self.package_fixture(2,names=('/a.txt','b.txt')),self.package_fixture(2,names=('a\\xx','b.txt')),
+                 self.package_fixture(2,extra=struct.pack('<HHQ',1,8,0))]
+        # Duplicate offsets, duplicate names and local/central name mismatch.
+        second=start+46+sum(struct.unpack_from('<HHH',raw,start+28));mutants.append(change(second+42,'<I',0))
+        duplicate=bytearray(raw);duplicate[second+46:second+51]=b'a.txt';mutants.append(bytes(duplicate))
+        mismatch=bytearray(raw);mismatch[30:35]=b'c.txt';mutants.append(bytes(mismatch))
+        symlink=bytearray(raw);struct.pack_into('<I',symlink,start+38,0o120777<<16);mutants.append(bytes(symlink))
+        with p.zipfile.ZipFile(io.BytesIO(raw))as archive:signature_offset=archive.getinfo('.signature.p7s').header_offset
+        sig_central=second+46+sum(struct.unpack_from('<HHH',raw,second+28))
+        utf8_signature=bytearray(raw);struct.pack_into('<H',utf8_signature,sig_central+8,0x800);struct.pack_into('<H',utf8_signature,signature_offset+6,0x800);mutants.append(bytes(utf8_signature))
+        for index,mutant in enumerate(mutants):
+            with self.subTest(index=index),self.assertRaises(p.Refusal):p.package_content_hash(mutant)
+
+    def test_installed_signed_hash_roles_are_independent_and_payload_locked(self):
+        feed='https://api.nuget.org/v3/index.json'
+        with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'ACCEPTED_EXECUTOR':'a'*40}):
+            root=pathlib.Path(raw);cache=root/'packages';record=root/'promotion-binding.json';lock=root/'packages.lock.json';r=reviewed();deps={};originals={}
+            for ident in p.PACKAGES:
+                folder=cache/ident.lower()/'0.3.0';folder.mkdir(parents=True);archive=folder/(ident.lower()+'.0.3.0.nupkg')
+                unsigned=self.package_fixture();signed=self.package_fixture(1);archive.write_bytes(signed);originals[ident]=signed
+                r['binding']['archives'][ident+'.0.3.0.nupkg']=p.digest(unsigned)
+                with p.zipfile.ZipFile(io.BytesIO(unsigned))as z:r['binding']['inventories'][ident+'.0.3.0.nupkg']={name:p.digest(z.read(name))for name in z.namelist()}
+                content=base64.b64encode(hashlib.sha512(unsigned).digest()).decode();self.assertNotEqual(base64.b64encode(hashlib.sha512(signed).digest()).decode(),content);deps[ident]={'resolved':'0.3.0','contentHash':content}
+                (folder/(ident.lower()+'.0.3.0.nupkg.sha512')).write_text(base64.b64encode(hashlib.sha512(signed).digest()).decode())
+                (folder/'.nupkg.metadata').write_text(json.dumps({'version':2,'contentHash':content,'source':feed}))
+            record.write_text(json.dumps({'preparation':r}));lock.write_text(json.dumps({'dependencies':{'net10.0':deps}}))
+            with patch.object(p,'repository_signature',return_value='source-controlled verification fixture')as verify:
+                p.check_installed(record,cache,feed,lock);self.assertEqual(verify.call_count,2)
+            ident=p.PACKAGES[0];folder=cache/ident.lower()/'0.3.0';archive=folder/(ident.lower()+'.0.3.0.nupkg');sidecar=folder/(ident.lower()+'.0.3.0.nupkg.sha512');metadata=folder/'.nupkg.metadata'
+            baseline_sidecar=sidecar.read_text();baseline_metadata=metadata.read_text();baseline_deps=copy.deepcopy(deps)
+            for mutation in ('sidecar','metadata-hash','metadata-source','metadata-version','metadata-malformed','metadata-missing','metadata-duplicate','lock','unsigned-public','ordinary','payload','corrupt-compression','cache-drift','signature-trust','foreign-feed'):
+                if mutation=='sidecar':sidecar.write_text(deps[ident]['contentHash'])
+                elif mutation.startswith('metadata-'):
+                    value=json.loads(baseline_metadata)
+                    if mutation=='metadata-hash':value['contentHash']='wrong'
+                    elif mutation=='metadata-source':value['source']='https://other.example/index.json'
+                    elif mutation=='metadata-version':value['version']=True
+                    elif mutation=='metadata-malformed':metadata.write_text('{')
+                    elif mutation=='metadata-missing':metadata.unlink()
+                    elif mutation=='metadata-duplicate':metadata.write_text(baseline_metadata[:-1]+',\"source\":'+json.dumps(feed)+'}')
+                    if mutation not in ('metadata-malformed','metadata-missing','metadata-duplicate'):metadata.write_text(json.dumps(value))
+                elif mutation=='lock':deps[ident]['contentHash']='wrong'
+                elif mutation in ('unsigned-public','ordinary','payload','corrupt-compression'):
+                    body=self.package_fixture(None if mutation=='unsigned-public'else 1,names=('a.txt','changed.txt')if mutation=='ordinary'else('a.txt','b.txt'),payloads={'a.txt':b'changed payload'}if mutation=='payload'else None)
+                    if mutation=='corrupt-compression':
+                        changed=bytearray(body);nl,xl=struct.unpack_from('<HH',body,26);changed[30+nl+xl]=255;body=bytes(changed)
+                    archive.write_bytes(body)
+                    # Keep every cache hash self-consistent to reach signature/member guards.
+                    content=p.package_content_hash(body);sidecar.write_text(base64.b64encode(hashlib.sha512(body).digest()).decode());metadata.write_text(json.dumps({'version':2,'contentHash':content,'source':feed}));deps[ident]['contentHash']=content
+                lock.write_text(json.dumps({'dependencies':{'net10.0':deps}}))
+                def verify_signature(path):
+                    if mutation=='signature-trust':raise p.Refusal('genuine trust refuses')
+                    if mutation=='cache-drift':path.write_bytes(b'cache changed during verification')
+                with self.subTest(mutation=mutation),patch.object(p,'repository_signature',side_effect=verify_signature),self.assertRaises(p.Refusal):
+                    p.check_installed(record,cache,'https://other.example/index.json'if mutation=='foreign-feed'else feed,lock)
+                archive.write_bytes(originals[ident]);sidecar.write_text(baseline_sidecar);metadata.write_text(baseline_metadata);deps=copy.deepcopy(baseline_deps)
+            lock.write_text(json.dumps({'dependencies':{'net10.0':deps}}))
+            with patch.object(p,'repository_signature',side_effect=AssertionError('org signature refuses before trust')), self.assertRaises(p.Refusal):
+                p.check_installed(record,cache,'https://nuget.pkg.github.com/FS-GG/index.json',lock)
+
     def test_admission_refuses_before_download_or_writer(self):
         env={'GITHUB_SHA':'a'*40,'ACCEPTED_EXECUTOR':'a'*40}
         class Transport:
