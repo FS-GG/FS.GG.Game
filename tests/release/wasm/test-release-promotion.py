@@ -247,6 +247,8 @@ class Tests(unittest.TestCase):
             return [{'name':'x','id':i} for i in range(1,101)] if path.endswith('&page=1') else [{'name':'last','id':101}]
         with patch.object(native,'checked',read):self.assertEqual(len(native.pages('orgs/FS-GG/versions')),101)
         self.assertEqual(len(calls),2)
+        for mutant in ({'total_count':2,'jobs':[{'id':1}]}, {'total_count':1,'jobs':[]}, {'total_count':'Unknown','jobs':[]}):
+            with patch.object(native,'checked',return_value=mutant),self.assertRaises(p.Refusal):native.pages('jobs','jobs')
         native.end=0
         with self.assertRaises(p.Refusal):native.request('https://example.invalid')
     def test_signature_trust_before_exception(self):
@@ -592,6 +594,15 @@ class Tests(unittest.TestCase):
                 changed=copy.deepcopy(r);changed['binding']['inventories'][p.FILES[0]]['substitution']='1'*64
                 with self.assertRaisesRegex(p.Refusal,'changed original tuple'):p.execution_checkout(n,changed)
                 with patch.dict(os.environ,{'MODE':'installed'}):self.assertRaises(p.Refusal,p.execution_checkout,n,r,True) # current run path is release, not installed
+                # Prove ancestry itself rather than merely the checkout fence:
+                # an exact clean selected orphan with matching current main fails.
+                git('checkout','--orphan','foreign-source','-q')
+                source.write_text('foreign successor\n');git('add','.');git('commit','-qm','non-descendant')
+                orphan=git('rev-parse','HEAD');orphan_tree=git('rev-parse','HEAD^{tree}')
+                broken=copy.deepcopy(value);broken['executor']=orphan;broken['executorTree']=orphan_tree;broken['workflowSha256']=p.digest(source.read_bytes())
+                with patch.dict(os.environ,{'EXECUTION_BINDING':json.dumps(broken),'GITHUB_SHA':orphan,'ACCEPTED_EXECUTOR':orphan}):
+                    n.main=orphan
+                    with self.assertRaisesRegex(p.Refusal,'non-descendant successor'):p.execution_checkout(n,r)
 
     def test_current_admission_exact_run_binding_and_missing_occupancy(self):
         import io,zipfile
@@ -618,6 +629,16 @@ class Tests(unittest.TestCase):
                 else:mutant['mode']='inspect'
                 with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_current_admission(Transport(mutant),r)
             with patch.dict(os.environ,{'GITHUB_RUN_ATTEMPT':'2'}),self.assertRaises(p.Refusal):p.verify_current_admission(Transport(record),r)
+            for mutation in ('expired','foreign-head','digest'):
+                class BadMetadata(Transport):
+                    def pages(self,path,key=None):
+                        rows=super().pages(path,key)
+                        if not path.endswith('/jobs'):
+                            if mutation=='expired':rows[0]['expired']=True
+                            elif mutation=='foreign-head':rows[0]['workflow_run']['head_sha']='0'*40
+                            else:rows[0]['digest']='sha256:'+'0'*64
+                        return rows
+                with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_current_admission(BadMetadata(record),r)
 
     def test_historical_admission_missing_occupancy_cannot_mean_absence(self):
         import io,zipfile
