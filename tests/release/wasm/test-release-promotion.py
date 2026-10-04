@@ -647,6 +647,7 @@ class Tests(unittest.TestCase):
             (custody/'release-manifest.json').write_text(json.dumps({'version':'0.3.0'}))
             (root/'reviewed.json').write_text(json.dumps(reviewed()))
             wrapper=tools/'python3';wrapper.write_text('#!'+sys.executable+'\n'+'''import importlib.util,sys,os,json,pathlib,hashlib,io,zipfile
+sys.dont_write_bytecode=True
 args=sys.argv[1:];args=args[1:] if args[0]=='-B' else args
 if args[0]=='-c':
  import subprocess
@@ -664,7 +665,7 @@ release=dict(id=402763234,tag_name='wasm/v0.3.0',target_commitish=p.P,draft=True
 class N(p.Native):
  def api(self,path,method='GET',data=None):
   assert method=='GET'
-  if '/actions/runs/200/attempts/1/jobs' in path:return 200,[dict(id=1,name='admission',conclusion='success')],{}
+  if '/actions/runs/200/attempts/1/jobs' in path:return 200,{'jobs':[dict(id=1,name='admission',conclusion='success')]},{}
   if '/actions/runs/200/artifacts' in path:return 200,{'artifacts':[dict(id=1,name='wasm-admission-200-1',expired=False,workflow_run=dict(id=200,head_sha=r['binding']['executor']),digest='sha256:'+p.digest(admission))]},{}
   if '/actions/runs/200/attempts/1' in path:return 200,dict(id=200,run_attempt=1,repository=dict(full_name=p.REPO),head_sha=r['binding']['executor'],path=r['binding']['workflow'],event='workflow_dispatch'),{}
   if '/git/ref/'in path:return 200,dict(object=dict(type='commit',sha=p.P)),{}
