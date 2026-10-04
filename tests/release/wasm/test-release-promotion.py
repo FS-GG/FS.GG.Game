@@ -116,6 +116,17 @@ class Occupancy:
         return (200 if self.mutant in ('contradiction','unlisted') else 404),b'',{}
 
 class Tests(unittest.TestCase):
+    def setUp(self):
+        # Unit fixtures declare their own transaction and mode. Native preflight
+        # inherits these inputs from the dispatched workflow; they must not turn
+        # an ordinary fixture into a successor inspection or recovery writer.
+        isolated = patch.dict(os.environ, {
+            'EXECUTION_BINDING': '', 'REVIEWED_TUPLE': '', 'MODE': '',
+            'FIRST_PROMOTION_RUN': '', 'FIRST_PROMOTION_ATTEMPT': '',
+        })
+        isolated.start()
+        self.addCleanup(isolated.stop)
+
     def test_actual_yaml_and_causal_mutants(self):
         text=(ROOT/'.github/workflows/release-wasm.yml').read_text();validate_workflow(text)
         for before,after in [
