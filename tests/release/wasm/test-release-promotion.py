@@ -572,7 +572,10 @@ class Tests(unittest.TestCase):
             class Transport:
                 def __init__(self):self.main=e1
                 def checked(self,path):
-                    if '/git/ref/'in path:return {'object':{'sha':self.main}}
+                    if '/actions/runs/200/attempts/1/jobs' in path:return 200,[dict(id=1,name='admission',conclusion='success')],{}
+  if '/actions/runs/200/artifacts' in path:return 200,{'artifacts':[dict(id=1,name='wasm-admission-200-1',expired=False,workflow_run=dict(id=200,head_sha=r['binding']['executor']),digest='sha256:'+p.digest(admission))]},{}
+  if '/actions/runs/200/attempts/1' in path:return 200,dict(id=200,run_attempt=1,repository=dict(full_name=p.REPO),head_sha=r['binding']['executor'],path=r['binding']['workflow'],event='workflow_dispatch'),{}
+  if '/git/ref/'in path:return {'object':{'sha':self.main}}
                     if '/actions/runs/300/attempts/1' in path:return {'id':300,'run_attempt':1,'repository':{'full_name':p.REPO},'head_sha':e1,'head_branch':'main','path':value['workflow'],'event':'workflow_dispatch'}
                     raise p.Refusal('custody API sentinel reached after execution join')
             with patch.object(p,'ROOT',fixture),patch.object(p,'P',producer),patch.object(p,'ORIGINAL_EXECUTOR',e0),patch.object(p,'ORIGINAL_TREE',tree0),patch.object(p,'ORIGINAL_CANONICAL_SHA',canonical),patch.dict(os.environ,env):
@@ -644,31 +647,42 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='wasm-asset-caller-control.')as raw:
             root=pathlib.Path(raw);tools=root/'bin';tools.mkdir();custody=root/'custody';custody.mkdir()
             for name in ('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS'):(custody/name).write_bytes(name.encode())
+            (custody/'release-manifest.json').write_text(json.dumps({'version':'0.3.0'}))
             (root/'reviewed.json').write_text(json.dumps(reviewed()))
-            wrapper=tools/'python3';wrapper.write_text('#!'+sys.executable+'\n'+'''import importlib.util,sys,os,json,pathlib,hashlib
+            wrapper=tools/'python3';wrapper.write_text('#!'+sys.executable+'\n'+'''import importlib.util,sys,os,json,pathlib,hashlib,io,zipfile
 args=sys.argv[1:];args=args[1:] if args[0]=='-B' else args
 if args[0]=='-c':
  import subprocess
  sys.exit(subprocess.call([sys.executable]+args))
 s=importlib.util.spec_from_file_location('promotion',args[0]);p=importlib.util.module_from_spec(s);s.loader.exec_module(p)
 root=pathlib.Path(os.environ['FIXTURE_ROOT']);c=root/'custody'
-rows=[dict(id=i+1,name=n,url=f'https://api.github.com/repos/{p.REPO}/releases/assets/{i+1}',size=len((c/n).read_bytes()),digest='sha256:'+p.digest((c/n).read_bytes()))for i,n in enumerate(('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS'))]
+r=json.loads((root/'reviewed.json').read_text());journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':200,'firstPromotionAttempt':1,'producer':p.P,'tag':'wasm/v0.3.0'}
+(c/'promotion-binding.json').write_text(json.dumps(journal))
+record={'schema':'fsgg.wasm.admission/v1','reviewed':r,'mode':'promote','run':200,'attempt':1,'exchangeVerified':True,'occupancy':{k:False for k in p.OCCUPANCY_KEYS},'observedAt':'now','nugetAccountSha256':p.digest(b'offline'),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown'}
+raw=io.BytesIO()
+with zipfile.ZipFile(raw,'w')as z:z.writestr('admission-binding.json',json.dumps(record))
+admission=raw.getvalue()
+rows=[dict(id=i+1,name=n,url=f'https://api.github.com/repos/{p.REPO}/releases/assets/{i+1}',size=len((c/n).read_bytes()),digest='sha256:'+p.digest((c/n).read_bytes()))for i,n in enumerate(('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS','promotion-binding.json'))]
 release=dict(id=402763234,tag_name='wasm/v0.3.0',target_commitish=p.P,draft=True,prerelease=False,assets=rows)
 class N(p.Native):
  def api(self,path,method='GET',data=None):
   assert method=='GET'
+  if '/actions/runs/200/attempts/1/jobs' in path:return 200,[dict(id=1,name='admission',conclusion='success')],{}
+  if '/actions/runs/200/artifacts' in path:return 200,{'artifacts':[dict(id=1,name='wasm-admission-200-1',expired=False,workflow_run=dict(id=200,head_sha=r['binding']['executor']),digest='sha256:'+p.digest(admission))]},{}
+  if '/actions/runs/200/attempts/1' in path:return 200,dict(id=200,run_attempt=1,repository=dict(full_name=p.REPO),head_sha=r['binding']['executor'],path=r['binding']['workflow'],event='workflow_dispatch'),{}
   if '/git/ref/'in path:return 200,dict(object=dict(type='commit',sha=p.P)),{}
   if '/releases/tags/'in path:return 404,None,{}
   if '/releases/402763234'in path:return 200,release,{}
   return 200,[release],{}
  def request(self,url,**kwargs):
   assert kwargs.get('method','GET')=='GET'
+  if '/actions/artifacts/1/zip' in url:return 200,admission,{}
   row=next(x for x in rows if x['url']==url);body=(c/row['name']).read_bytes()
   return 200,body+ (b'foreign' if os.environ.get('MUTANT') else b''),{}
-p.Native=N;p.verify_originals=lambda *a:None;p.verify_transaction=lambda *a:None
+p.Native=N;p.verify_originals=lambda *a:None
 sys.argv=[args[0]]+args[1:];p.main()
 ''');wrapper.chmod(0o755)
-            env=dict(os.environ,PATH=str(tools)+':'+os.environ['PATH'],RUNNER_TEMP=str(root),FIXTURE_ROOT=str(root),EXECUTION_BINDING='')
+            env=dict(os.environ,PATH=str(tools)+':'+os.environ['PATH'],RUNNER_TEMP=str(root),FIXTURE_ROOT=str(root),EXECUTION_BINDING='',NUGET_ACCOUNT='offline')
             for script,args in [('stage-assets.sh',[str(custody)]),('readback.sh',['assets',str(custody),str(root/'readback-assets')])]:
                 command=[str(ROOT/'scripts/wasm-release'/script),*args]
                 result=subprocess.run(command,env=env,capture_output=True,text=True,timeout=20);self.assertEqual(result.returncode,0,result.stderr)
