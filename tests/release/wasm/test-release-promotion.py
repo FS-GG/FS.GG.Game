@@ -719,4 +719,39 @@ sys.argv=[args[0]]+args[1:];p.main()
             mutant=block.replace('      contents: write','      contents: read')
             with self.assertRaises(AssertionError):validate_workflow(text.replace(block,mutant))
 
+    def test_org_public_binary_readback_cap_at_actual_curl(self):
+        import http.server,ssl,threading,subprocess,shutil
+        text=(ROOT/'scripts/wasm-release/readback.sh').read_text()
+        function=text[text.index('download() {'):text.index('\ncase "$kind"')]
+        self.assertIn('curl --max-filesize 536870912 ',function)
+        with tempfile.TemporaryDirectory(prefix='wasm-readback-cap-control.')as raw:
+            root=pathlib.Path(raw);cert=root/'cert.pem';key=root/'key.pem'
+            subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-days','1','-subj','/CN=localhost','-keyout',str(key),'-out',str(cert)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
+            class Handler(http.server.BaseHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(200);self.send_header('Content-Length','536870913');self.end_headers()
+                    try:self.wfile.write(b'x'*1024)
+                    except (BrokenPipeError,ConnectionResetError):pass
+                def log_message(self,*args):pass
+            server=http.server.HTTPServer(('127.0.0.1',0),Handler)
+            context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.load_cert_chain(cert,key);server.socket=context.wrap_socket(server.socket,server_side=True)
+            thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+            tools=root/'bin';tools.mkdir();curl=tools/'curl';actual=shutil.which('curl')
+            curl.write_text('#!/bin/sh\nexec '+actual+' --cacert "'+str(cert)+'" "$@"\n');curl.chmod(0o755)
+            try:
+                for bounded in (True,False):
+                    destination=root/('bounded' if bounded else 'known-bad-unbounded')
+                    selected=function if bounded else function.replace('--max-filesize 536870912 ','')
+                    code='set -euo pipefail\ndeadline=$((SECONDS+1))\n'+selected+'\ndownload "$1" "$2"\n'
+                    result=subprocess.run(['bash','-c',code,'control',f'https://localhost:{server.server_port}/oversized',str(destination)],env=dict(os.environ,PATH=str(tools)+':'+os.environ['PATH']),capture_output=True,text=True,timeout=5)
+                    self.assertNotEqual(result.returncode,0)
+                    if bounded:
+                        self.assertIn('Maximum file size exceeded',result.stderr)
+                        self.assertTrue(not destination.exists() or destination.stat().st_size==0)
+                    else:
+                        self.assertNotIn('Maximum file size exceeded',result.stderr)
+                        self.assertEqual(destination.stat().st_size,1024)
+            finally:server.shutdown();server.server_close();thread.join(timeout=2)
+
+
 if __name__=='__main__':unittest.main()

@@ -22,7 +22,7 @@ download() {
   while (( SECONDS < deadline )); do
     remaining=$((deadline - SECONDS))
     (( remaining <= 30 )) || remaining=30
-    if curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time "$remaining" "$@" "$url" --output "$destination"; then return; fi
+    if curl --max-filesize 536870912 --fail --location --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time "$remaining" "$@" "$url" --output "$destination"; then return; fi
     (( SECONDS + 10 < deadline )) || break
     sleep 10
   done
