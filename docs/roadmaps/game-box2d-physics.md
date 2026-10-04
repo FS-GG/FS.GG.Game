@@ -113,13 +113,13 @@ adoption must preview and preserve user-owned files and record rollback/removal 
 
 - [ ] `.1` Runtime and headless example: locally qualified; native source delivery pending.
 - [ ] `.2` Retained snapshots, interpolation and pinned input replay: locally qualified; native source delivery pending.
-- [ ] `.3` Public package and fresh installed example: publication/installed support pending.
+- [ ] `.3` Public package and fresh installed example: successor release source and independent consumer prepared; actual package/publication/installed proof pending.
 - [ ] `.4` Explicit consumer adoption: not selected.
 
 The optional project is `src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj`.
 Its package identity is `FS.GG.Game.Physics.Box2D` and it inherits Game's coherent
-version convention (currently 0.16.0); a future release must select a coherent version
-and add the package to release obligations before publication. No package has been published.
+version convention (selected successor 0.17.0); the producer release source prepares all four Game packages
+at that scalar. Source preparation does not establish publication.
 
 The dependency is [published Box2D.NET 3.1.654](https://www.nuget.org/packages/Box2D.NET/3.1.654),
 whose package metadata records upstream revision
@@ -157,3 +157,34 @@ registered type/member baselines (27 types, 52 members); whole-solution qualific
 and the native source delivery gates remain the integrator's obligation. No public
 package, installed consumer, portal transfer, browser or wider-platform acceptance
 is established by these local results.
+
+## 0.17.0 release source and preflight
+
+The selected source successor is stable `0.17.0`, with Core, Render, Harness and the new
+Physics.Box2D adapter forming one coherent release set. Existing packages use their published
+`0.16.0` API baseline. The first adapter package has no predecessor baseline; current-package
+validation and the exact package/API/dependency checks still apply. Both feed collision checks
+must be refreshed before the release owner selects publication.
+
+The existing `release.yml` route retains its verify dependency, exact-source version guard,
+one coherent preparation, original custody bytes, GitHub Packages before nuget.org/OIDC,
+byte comparison/readback, and authenticated retained-byte recovery. Successor fixtures check
+four exact package identities, metadata, adapter .fsi/API entries, Core's FSharp.Core-only
+runtime boundary and the adapter's absence of rendering dependencies. Candidate and public
+smokes copy independent source into a fresh directory outside the checkout and restore only
+PackageReferences; neither sibling projects nor repository imports/linked source qualify them.
+The smoke executes the same complete 240-tick falling/joint/sensor and exact replay scene.
+Candidate artifacts establish preflight only; the public-only fresh restore after genuine
+both-feed readback is required before `.3` can close.
+
+Pipeline-preflight selection is the existing-path static check plus focused mutation controls,
+placed before release restore/build/tests. The changes alter scalar/roster and first-release
+baseline selection while preserving the existing effect order and recovery route, so a custom
+state model is deferred: its maintenance would duplicate unchanged controls. Investment is
+bounded to the successor release fixture and isolated consumer; no new release framework or
+registry authority is introduced. Source controls accepted the good workflow and rejected
+substituted first/second/both push commands, a wrong scalar, foreign API baseline, missing
+adapter custody, and missing/foreign/wrong-version artifacts before consumer launch. The
+measured local source-only mutation run took about 0.22 seconds with no restore or downloads.
+No billed runner savings or native publication acceptance are inferred from that measurement.
+Actual packing, candidate consumer execution and public installed qualification remain pending.

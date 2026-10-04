@@ -61,12 +61,15 @@
 
   <PropertyGroup Label="Package">
     <!-- The release tag is authoritative: release.yml packs with -p:Version="$VER" from the tag,
-         which overrides this. Keep it equal to the newest released version anyway, so a local
-         `dotnet pack` and the feed cannot disagree. -->
-    <!-- 0.16.0 is a MINOR cut: the coherent set adds portable replay, planning/rules, and
-         authoritative network-admission surfaces while preserving the 0.15.0 API. Core, Render,
-         and Harness keep one scalar and publish together through release.yml. -->
-    <Version>0.16.0</Version>
+         which overrides this. This is the selected source release scalar;
+         native both-feed readback separately establishes its published status. -->
+    <!-- 0.17.0 adds optional Box2D physics and Core portal topology. Core, Render, Harness and
+         Physics.Box2D keep one scalar and publish together through release.yml. -->
+    <Version>0.17.0</Version>
+    <!-- Existing packages compare against their actual published predecessor. Physics.Box2D has
+         no predecessor on its first release: enable current-package validation, without asking
+         NuGet for a nonexistent baseline package. Add its baseline after first publication. -->
+    <PackageValidationBaselineVersion Condition="'$(MSBuildProjectName)' == 'FS.GG.Game.Core' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Render' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Harness'">0.16.0</PackageValidationBaselineVersion>
     <Authors>FS.GG Contributors</Authors>
     <Company>FS.GG Contributors</Company>
     <RepositoryType>git</RepositoryType>
