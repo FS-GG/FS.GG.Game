@@ -68,6 +68,8 @@
     <Compile Include="Primitives.fs" />
     <!-- Abstract input-command vocabulary (policy, epic Rendering#330). Device-free intents as pure
          data; reaches up to nothing, so it may sit anywhere — here, early, beside the other vocab. -->
+    <Compile Include="AreaTopology.fsi" />
+    <Compile Include="AreaTopology.fs" />
     <Compile Include="InputCommand.fsi" />
     <Compile Include="InputCommand.fs" />
     <Compile Include="SessionContract.fsi" />
