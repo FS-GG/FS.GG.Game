@@ -113,13 +113,13 @@ adoption must preview and preserve user-owned files and record rollback/removal 
 
 - [ ] `.1` Runtime and headless example: locally qualified; native source delivery pending.
 - [ ] `.2` Retained snapshots, interpolation and pinned input replay: locally qualified; native source delivery pending.
-- [ ] `.3` Public package and fresh installed example: publication/installed support pending.
+- [ ] `.3` Public package and fresh installed example: successor source and package-only candidate consumer locally qualified; native source/publication/public installed proof pending.
 - [ ] `.4` Explicit consumer adoption: not selected.
 
 The optional project is `src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj`.
 Its package identity is `FS.GG.Game.Physics.Box2D` and it inherits Game's coherent
-version convention (currently 0.16.0); a future release must select a coherent version
-and add the package to release obligations before publication. No package has been published.
+version convention (selected successor 0.17.0); the producer release source prepares all four Game packages
+at that scalar. Source preparation does not establish publication.
 
 The dependency is [published Box2D.NET 3.1.654](https://www.nuget.org/packages/Box2D.NET/3.1.654),
 whose package metadata records upstream revision
@@ -157,3 +157,64 @@ registered type/member baselines (27 types, 52 members); whole-solution qualific
 and the native source delivery gates remain the integrator's obligation. No public
 package, installed consumer, portal transfer, browser or wider-platform acceptance
 is established by these local results.
+
+## 0.17.0 release source and preflight
+
+The selected source successor is stable `0.17.0`, with Core, Render, Harness and the new
+Physics.Box2D adapter forming one coherent release set. Existing packages use their published
+`0.16.0` API baseline. The first adapter package has no predecessor baseline; current-package
+validation and the exact package/API/dependency checks still apply. Both feed collision checks
+must be refreshed before the release owner selects publication.
+
+The existing `release.yml` route retains its verify dependency, exact-source version guard,
+one coherent preparation, original custody bytes, GitHub Packages before nuget.org/OIDC,
+byte comparison/readback, and authenticated retained-byte recovery. Successor fixtures check
+four exact package identities, metadata, adapter .fsi/API entries, Core's FSharp.Core-only
+runtime boundary and the adapter's absence of rendering dependencies. Candidate and public
+smokes copy independent source into a fresh directory outside the checkout and restore only
+PackageReferences; neither sibling projects nor repository imports/linked source qualify them.
+The smoke executes the same complete 240-tick falling/joint/sensor and exact replay scene.
+Candidate artifacts establish preflight only; the public-only fresh restore after genuine
+both-feed readback is required before `.3` can close.
+
+Pipeline-preflight selection is the existing-path static check plus focused mutation controls,
+placed before release restore/build/tests. The changes alter scalar/roster and first-release
+baseline selection while preserving the existing effect order and recovery route, so a custom
+state model is deferred: its maintenance would duplicate unchanged controls. Investment is
+bounded to the successor release fixture and isolated consumer; no new release framework or
+registry authority is introduced. Source controls accepted the good workflow and rejected
+substituted first/second/both push commands, a wrong scalar, foreign API baseline, missing
+adapter custody, and missing/foreign/wrong-version artifacts before consumer launch. The
+measured local source-only mutation run took about 0.22 seconds with no restore or downloads.
+No billed runner savings or native publication acceptance are inferred from that measurement.
+Local candidate preflight passed on source `2eaca0271431a1239f9e1ba2640005687b3bd63d`:
+one coherent preparation produced exactly the four `0.17.0` packages, with existing-three
+API compatibility against `0.16.0` and first-release adapter validation. The source-bound
+metadata/API/dependency checks and independent Journey consumer passed. A fresh copied
+Box2D package-only consumer cold-restored the candidate packages into an empty cache,
+proved an exact four-package dependency closure (adapter, Core, Box2D.NET and FSharp.Core),
+and ran the real 240-tick falling/joint/sensor scene with exact replay. It reported
+.NET 10.0.12 / Arch Linux / X64, final falling height `0.39992859959602356` m and maximum
+joint length error `0.00008517808537522598` m, with sensor enter/exit and floor contact.
+The original candidate bytes and consumer inputs were retained; no package was published.
+This candidate evidence binds the named source, independently of later documentation edits.
+Native source delivery, both-feed publication/readback and public-only installed qualification
+remain pending.
+
+## Portal transfer source join for the selected release
+
+The isolated successor joins the release source with the qualified P2 adapter/real headless
+portal scene (`10f63b469ec8b63635a8f4c5fe6e66f11010b3c9`). Source acceptance of that candidate
+remains separate from its native merge readback. The package-only consumer now copies that
+scene into its own `PortalScene.fs` and compiles it only against restored package APIs, alongside
+the existing falling-body scene. It requires one live traveller after the rotated transfer,
+transformed pose/momentum, one step per local world/tick, one traversal, no repeated transfer and
+exact fresh-world replay. The package metadata gate also requires the packed `AreaRuntime.fsi`.
+
+The earlier immutable `2eaca027` preparation and its four artifacts remain historical; they do
+not contain or qualify the expanded area-transfer API. The joined successor needs a fresh
+version-consistent restore (including the new portal example lock), existing-three API/package
+validation, one fresh four-package preparation and independent candidate smoke for both scenes.
+Public installed support still requires genuine publication, both-feed readback and the public-only
+consumer; product/template opt-in remains separate. No old candidate is substituted for that
+fresh obligation.
