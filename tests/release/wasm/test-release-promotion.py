@@ -572,10 +572,7 @@ class Tests(unittest.TestCase):
             class Transport:
                 def __init__(self):self.main=e1
                 def checked(self,path):
-                    if '/actions/runs/200/attempts/1/jobs' in path:return 200,[dict(id=1,name='admission',conclusion='success')],{}
-  if '/actions/runs/200/artifacts' in path:return 200,{'artifacts':[dict(id=1,name='wasm-admission-200-1',expired=False,workflow_run=dict(id=200,head_sha=r['binding']['executor']),digest='sha256:'+p.digest(admission))]},{}
-  if '/actions/runs/200/attempts/1' in path:return 200,dict(id=200,run_attempt=1,repository=dict(full_name=p.REPO),head_sha=r['binding']['executor'],path=r['binding']['workflow'],event='workflow_dispatch'),{}
-  if '/git/ref/'in path:return {'object':{'sha':self.main}}
+                    if '/git/ref/'in path:return {'object':{'sha':self.main}}
                     if '/actions/runs/300/attempts/1' in path:return {'id':300,'run_attempt':1,'repository':{'full_name':p.REPO},'head_sha':e1,'head_branch':'main','path':value['workflow'],'event':'workflow_dispatch'}
                     raise p.Refusal('custody API sentinel reached after execution join')
             with patch.object(p,'ROOT',fixture),patch.object(p,'P',producer),patch.object(p,'ORIGINAL_EXECUTOR',e0),patch.object(p,'ORIGINAL_TREE',tree0),patch.object(p,'ORIGINAL_CANONICAL_SHA',canonical),patch.dict(os.environ,env):
