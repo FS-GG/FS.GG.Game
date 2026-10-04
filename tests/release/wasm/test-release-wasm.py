@@ -136,7 +136,18 @@ def source_checks() -> None:
     supervisor_backend_checks()
     subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-quint-evaluator-preparation.py")], check=True)
     browser_setup_checks()
-    subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-release-promotion.py")], check=True)
+    promotion_tests = ["python3", "-B", str(ROOT / "tests/release/wasm/test-release-promotion.py")]
+    subprocess.run(promotion_tests, check=True)
+    # Exercise the real suite under hostile inherited release inputs. Without
+    # fixture isolation these become production execution inputs and fail before
+    # the intended custody/writer assertions; explicit successor fixtures must
+    # still override the defaults and exercise their own guards.
+    for mode in ("inspect", "recovery"):
+        ambient = dict(os.environ, MODE=mode,
+                       EXECUTION_BINDING='{"ambient":"not a fixture binding"}',
+                       REVIEWED_TUPLE='{"ambient":"not a fixture tuple"}',
+                       FIRST_PROMOTION_RUN="37166812270", FIRST_PROMOTION_ATTEMPT="1")
+        subprocess.run(promotion_tests, env=ambient, check=True)
     require("NuGet/login@8d196754b4036150537f80ac539e15c2f1028841" in workflow, "public push lacks pinned OIDC login")
     require("secrets.NUGET_API_KEY" not in workflow, "long-lived public API key fallback is forbidden")
     require(core.count("github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')") == 2, "core release namespace guard missing")
