@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup><Compile Include="Scene.fs" /><Compile Include="Program.fs" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj" /></ItemGroup>
+</Project>

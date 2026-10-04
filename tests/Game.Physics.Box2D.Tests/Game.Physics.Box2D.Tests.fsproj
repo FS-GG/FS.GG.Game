@@ -2,6 +2,8 @@
   <PropertyGroup><OutputType>Exe</OutputType><IsPackable>false</IsPackable><GenerateProgramFile>false</GenerateProgramFile></PropertyGroup>
   <ItemGroup>
     <Compile Include="../../examples/Box2D.Headless/Scene.fs" Link="Scene.fs" />
+    <Compile Include="../../examples/Box2D.Portals/Scene.fs" Link="PortalScene.fs" />
+    <Compile Include="AreaRuntimeTests.fs" />
     <Compile Include="RuntimeTests.fs" /><Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

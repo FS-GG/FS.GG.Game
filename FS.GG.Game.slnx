@@ -16,5 +16,6 @@
   </Folder>
   <Folder Name="/examples/">
     <Project Path="examples/Box2D.Headless/Box2D.Headless.fsproj" />
+    <Project Path="examples/Box2D.Portals/Box2D.Portals.fsproj" />
   </Folder>
 </Solution>

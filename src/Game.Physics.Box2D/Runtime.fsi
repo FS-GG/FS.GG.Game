@@ -10,6 +10,14 @@ type Runtime =
     new: settings: Settings -> Runtime
     /// The pinned fixed solver profile.
     member Settings: Settings
+    member internal ValidateBatch: commands: Command list -> unit
+    member internal IsStopped: bool
+    member internal Inspect: unit -> Snapshot option
+    member internal Stop: unit -> unit
+    member internal Describe: entity: string -> BodyDescriptor * bool * bool
+    member internal Stage: descriptor: BodyDescriptor * awake: bool -> unit
+    member internal RemoveWithoutStep: entity: string -> unit
+    member internal SetAwake: entity: string * awake: bool -> unit
     /// Copy the current poses without stepping; events are empty.
     member Snapshot: unit -> Snapshot
     /// Validate the full command batch, apply in order, step once and copy all observations.

@@ -112,6 +112,49 @@ assembly compiled. An initial test import failed `FS0892` and was corrected to q
 module references before the passing run. Native merge readback, broader repository gates,
 actual P2 transfer, publication and installed/consumer qualification remain open.
 
+## P2 local source qualification — 2026-10-04
+
+A local candidate joins the exact qualified P1 topology and Box2D runtime sources; it
+is not protected source acceptance. `AreaRuntime` owns active independent local worlds,
+validates routed commands before any step, steps every world once in stable area order,
+and collects every crossing proposal before staging or removing bodies. It preserves
+Runtime's supported circle/box descriptors, material, density, kind, sensor flag and
+current awake state. Other filters, damping, gravity scale and sleep configuration
+remain Runtime's fixed defaults. Joint-connected bodies refuse before mutation.
+Destination placement uses conservative enclosing-disc overlap with non-sensor bodies.
+Self-area proposals refuse duplicate staging in this initial slice.
+
+Known missing-area, capacity, blocked-placement and staging-validation refusals preserve
+source ownership. Source removal follows real destination creation; transfer hooks do
+not step. An engine or commit uncertainty stops the whole owner, retains its worlds,
+and publishes no successful tick. `InspectStopped` offers best-effort actual copied
+observations with unreadable worlds explicit as `None`; the last fully published
+snapshot remains separate. Hidden solver state and contacts are not restored.
+
+The actual `examples/Box2D.Portals` entry point ran a circle through the paired 90-degree
+portal into a second headless world: one body/entity and one traversal at tick 1, copied
+position `(9.9,5.15)`, velocity `(-1,4)` and angular velocity `2`. Both local worlds had
+one step; five recorded ticks repeated exactly in fresh worlds under Box2D.NET `3.1.654`
+and .NET `10.0.401`, 0.1-second ticks and four substeps. Pose and momentum checks use
+absolute `2e-5` tolerance, with angle compared modulo one turn. Source-only replay scope
+is the pinned local profile.
+
+Eleven focused `Box2D AreaRuntime` tests passed: the real scene, asleep descriptor
+recreation without stepping, missing/capacity/blocked/joint refusal, actual single-precision
+staging-validation refusal, injected commit interruption with cleanup of a real staged
+body and explicit stopped observations, exit re-arming after recorded clearance,
+interpolation discontinuity and global identity prevalidation. Injected interruption
+qualifies that failure path; it does not claim an observed native engine allocator fault.
+Retained snapshots are immutable, and transferred entities snap while ordinary entities
+continue interpolation.
+
+The failed compiler/name-resolution attempts and real angle-drift observations were
+retained privately. The engine's approximate rotation construction initially compounded
+error when recreating a body; staging now installs a direct sine/cosine transform before
+preserving awake state, and the real entry passed the original strict tolerance.
+Repository gates, generated adapter baselines and native merge readback remain pending.
+Publication, installed support, P3 product adoption and browser physics remain open.
+
 ## Later physics and workspace boundaries
 
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
