@@ -12,11 +12,13 @@
   <ItemGroup>
     <Compile Include="AdapterTests.fs" />
     <Compile Include="DefaultKeymapTests.fs" />
+    <Compile Include="PortalPresentationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Game.Render\FS.GG.Game.Render.fsproj" />
+    <ProjectReference Include="..\..\examples\Box2D.Portals\Box2D.Portals.fsproj" />
     <PackageReference Include="Expecto" />
     <PackageReference Include="FsCheck" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

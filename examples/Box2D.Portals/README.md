@@ -22,3 +22,19 @@ Contacts in the destination start at its next ordinary step.
 This source example does not qualify public installed support, product adoption,
 browser physics, cross-world contacts/joints, hidden solver rollback or cross-platform
 replay. Execution evidence is recorded only after the actual bounded run.
+
+## Opt-in copied-pose presentation
+
+`dotnet run --project examples/Box2D.Portals -- --presentation` selects the separate
+bounded presentation route. It copies five ticks for two entities in two areas,
+samples each consecutive pair at alpha 0, 0.5 and 1, and projects the portal-aware
+poses through Game.Render into one points node per occupied area. Each point keeps
+its entity/pose binding; the route checks actual point contents and ownership before
+printing its structural counts. The traveller starts farther from the opening to
+retain a pre-transfer tick; the other body moves within its original area.
+
+Coordinates remain local metres with +Y-up. This is headless Scene data; it does not
+create a window, compose pixels or claim FPS, portal views or playability. Alpha never
+feeds physics. The default no-argument qualification is unchanged. Compilation and
+both entrypoint runs require separate qualification; adding the example/test project
+references also requires an admitted locked restore to update their dependency locks.

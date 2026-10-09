@@ -188,6 +188,37 @@ hidden-solver restoration is inferred.
 
 ## Later physics and workspace boundaries
 
+### P3 opt-in presentation source qualification — 2026-10-09
+
+The local example adds explicit `--presentation` selection while retaining its default
+physics qualification. `Presentation.view` reuses `AreaPhysics.interpolate` once per
+frame and `Game.Render.Adapter.drawPoints`, with deterministic area/entity bindings
+and actual points-node inspection. Its declared structural workload is two areas,
+two entities, at most five ticks and three alpha samples per consecutive pair;
+focused Render tests reference the actual example assembly, including midpoint,
+destination snap, ordering, refusal and missing/current-only/global-blend controls.
+
+The retained source was recovered onto current main. Public NuGet restore genuinely
+regenerated only the example and Render-test dependency locks, and locked restore
+then passed. The first compilation exposed strict-indentation errors in a nested
+test record update; the repaired test source builds under .NET SDK 10.0.401 with zero
+warnings or errors. Assembly discovery found all eight `Portal presentation` cases,
+and the focused assembly run passed all eight:
+
+```console
+dotnet tests/Game.Render.Tests/bin/Debug/net10.0/Game.Render.Tests.dll --filter-test-list "Portal presentation" --sequenced
+```
+
+This includes
+the negative controls and the self-contained five-tick managed Box2D simulation;
+it is ordinary source testing, not installed/native acceptance.
+
+P3 remains open. Public-only rendering-closure qualification, both executable
+entrypoint modes, runtime performance counters and fresh/retained adoption still
+need their own evidence. Historical producer `0.17.0` acceptance and the retained
+resume04 failure/resume05 unrun reservation are unchanged; this source attempt
+does not retry those operations or transfer their custody.
+
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
 recreation does not preserve hidden contacts, warm-start state or exact solver rollback.

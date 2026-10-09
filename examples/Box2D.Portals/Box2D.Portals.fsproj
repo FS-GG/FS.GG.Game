@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsPackable>false</IsPackable></PropertyGroup>
-  <ItemGroup><Compile Include="Scene.fs" /><Compile Include="Program.fs" /></ItemGroup>
-  <ItemGroup><ProjectReference Include="../../src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj" /></ItemGroup>
+  <ItemGroup><Compile Include="Scene.fs" /><Compile Include="Presentation.fs" /><Compile Include="Program.fs" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj" />
+    <ProjectReference Include="../../src/Game.Render/FS.GG.Game.Render.fsproj" />
+  </ItemGroup>
 </Project>

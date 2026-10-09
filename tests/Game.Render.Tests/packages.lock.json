@@ -118,9 +118,25 @@
         "resolved": "0.11.6",
         "contentHash": "f33RkDtZO8VlGXCtmQIviOtxgnUdym9xx/b1p9h91CRGOsJFxCFOFK1FDbVt1OCf1aWwYejUFa2MOQyFWTFjbA=="
       },
+      "box2d.portals": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Game.Physics.Box2D": "[0.17.0, )",
+          "FS.GG.Game.Render": "[0.17.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.game.core": {
         "type": "Project",
         "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.game.physics.box2d": {
+        "type": "Project",
+        "dependencies": {
+          "Box2D.NET": "[3.1.654, )",
+          "FS.GG.Game.Core": "[0.17.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
@@ -132,6 +148,12 @@
           "FS.GG.UI.Scene": "[0.31.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
+      },
+      "Box2D.NET": {
+        "type": "CentralTransitive",
+        "requested": "[3.1.654, )",
+        "resolved": "3.1.654",
+        "contentHash": "Sh43ZKml3BPnhGD9FzvHfBLcLR1LDUN1iMJnnX2dJJam15+DG2nLRezPlxjdXWfrskg0wEJpgdNVEkNnHx9wwA=="
       },
       "FS.GG.UI.KeyboardInput": {
         "type": "CentralTransitive",
