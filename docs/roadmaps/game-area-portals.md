@@ -218,13 +218,14 @@ The compiled `Box2D.Portals.dll` entrypoint also passed in both default and
 replay; presentation mode reported five ticks, twelve frames, twenty-four area nodes and
 twenty-four points. An invalid argument printed usage and exited with code 2.
 
-P3 remains open. Public-only rendering-closure qualification, runtime performance
-counters and fresh/retained adoption still need their own evidence. Historical
+At this source qualification, public-only rendering-closure qualification remained
+pending; the separate fresh receiver below supplies that bounded evidence. P3 remains
+open for runtime performance counters and fresh/retained product adoption. Historical
 producer `0.17.0` acceptance and the retained
 resume04 failure/resume05 unrun reservation are unchanged; this source attempt
 does not retry those operations or transfer their custody.
 
-### P3 public presentation consumer source preparation — 2026-10-09
+### P3 fresh public presentation package receiver — 2026-10-10
 
 The existing Box2D package-consumer runner has an explicit public `--presentation`
 route and a separate exact-PackageReference project. It copies the delivered portal
@@ -233,15 +234,29 @@ checks source/project inputs before restore and the expected seven-package rende
 closure before build, then requires unchanged locked restore and both entrypoint modes.
 The original four-package physics consumer remains a separate no-presentation route.
 
-This is source preparation. Public acquisition, restore, compile and managed receiver
-execution require a fresh independent admission and have not run for this receiver.
 Thirteen local source controls passed with synthetic assets and a stubbed `dotnet`:
 both valid routes reached restore, missing/linked source and foreign direct pins or
 ProjectReferences refused before restore, and missing Render, foreign packages,
-project dependency nodes and disabled assertions refused at the boundary. These
-controls do not authenticate public payloads or establish installed acceptance. P3 remains
-open for the actual public rendering closure, performance and fresh/retained product
-adoption. Original resume04/resume05 effects, caches and custody are not reused.
+project dependency nodes and disabled assertions refused at the boundary.
+
+A separately admitted fresh public receiver then passed at source
+`0a8665a9c8005f3edf2786ebd85bac311f1cd0d5`. Its new package and HTTP caches used
+only nuget.org. Actual restored assets and nuspecs passed the exact seven-package
+boundary: Game Core, Physics.Box2D and Render `0.17.0`, UI Scene and KeyboardInput
+`0.31.0`, Box2D.NET `3.1.654`, and FSharp.Core `10.1.302`. The genuinely generated
+lock remained byte-identical after locked restore. Release compilation reported no
+warnings or errors. The copied actual default and presentation entrypoints exited 0;
+an invalid argument printed usage and exited 2. Presentation reported five ticks,
+twelve frames, twenty-four area nodes and twenty-four points.
+
+The receiver finished in 6.224 seconds on CPU 1 with a 1.5 GiB managed heap cap;
+this duration is an operation observation, not a performance qualification. A separate
+post-terminal census found no remaining member of its owned process group/session;
+detached descendants and total RSS were not independently measured. This proves the
+bounded public package rendering closure and copied-source entrypoints, not generated
+product installation or retained adoption. P3 remains open for performance and
+fresh/retained product adoption. Original resume04/resume05 effects, caches and custody
+are unchanged and were not reused.
 
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
