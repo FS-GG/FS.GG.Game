@@ -258,6 +258,33 @@ product installation or retained adoption. P3 remains open for performance and
 fresh/retained product adoption. Original resume04/resume05 effects, caches and custody
 are unchanged and were not reused.
 
+### P3 current presentation performance smoke source — 2026-10-10
+
+An explicit `--presentation-performance` mode requires a declared exact source revision
+and emits raw stock counters plus its actual assembly and workload digests. It creates
+and validates the existing five-tick scene once, disposes its worlds, warms up five
+cycles, and then measures twenty samples of one hundred twelve-view cycles: 24,000
+actual interpolation and scene-projection views over immutable copied snapshots.
+Each returned frame is retained and checked outside timing against qualified bindings,
+identity/point coverage and structural bounds. Default and presentation modes remain.
+
+The mode reports elapsed timestamps, process CPU ticks and GC collection deltas,
+and allocations on the synchronous measurement thread, with per-view normalization
+and sample ranges/medians. Loop/storage/counter overhead is included; setup, validation
+and JSON serialization are excluded. Process CPU includes runtime threads and has
+coarse resolution. No subtraction, timing threshold or speedup verdict is invented.
+
+Direct optimized F# compilation against the already qualified public assemblies passed
+with warnings as errors. Six compiled refusal controls passed before world setup:
+missing, short, uppercase and nonhex declared source revisions, an invalid argument,
+and an extra performance argument all exited 2; the existing usage substring remains.
+The separately reviewed offline package receiver and measurement have not run.
+The original pre-edit performance baseline is unknown.
+The first admitted run will establish a current headless smoke baseline only, without
+physics stepping, raster/GPU timing or an installed-product/adoption claim. Performance
+release requirements and fresh/retained product adoption remain open; P3 is not done.
+Original resume04/resume05 effects and custody remain unchanged.
+
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
 recreation does not preserve hidden contacts, warm-start state or exact solver rollback.
