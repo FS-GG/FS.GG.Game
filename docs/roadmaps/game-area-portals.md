@@ -258,6 +258,63 @@ product installation or retained adoption. P3 remains open for performance and
 fresh/retained product adoption. Original resume04/resume05 effects, caches and custody
 are unchanged and were not reused.
 
+### P3 current presentation performance smoke source — 2026-10-10
+
+An explicit `--presentation-performance` mode requires a declared exact source revision
+and emits raw stock counters plus its actual assembly and workload digests. It creates
+and validates the existing five-tick scene once, disposes its worlds, warms up five
+cycles, and then measures twenty samples of one hundred twelve-view cycles: 24,000
+actual interpolation and scene-projection views over immutable copied snapshots.
+Each returned frame is retained and checked outside timing against qualified bindings,
+identity/point coverage and structural bounds. Default and presentation modes remain.
+
+The mode reports elapsed timestamps, process CPU ticks and GC collection deltas,
+and allocations on the synchronous measurement thread, with per-view normalization
+and sample ranges/medians. Loop/storage/counter overhead is included; setup, validation
+and JSON serialization are excluded. Process CPU includes runtime threads and has
+coarse resolution. No subtraction, timing threshold or speedup verdict is invented.
+
+Direct optimized F# compilation against the already qualified public assemblies passed
+with warnings as errors. Six compiled refusal controls passed before world setup:
+missing, short, uppercase and nonhex declared source revisions, an invalid argument,
+and an extra performance argument all exited 2; the existing usage substring remains.
+One separately admitted fresh offline receiver then passed at source
+`13a8cdeb821e43bcd94701902d5b6b2a3e6f42d4`. It used only the seven newly owned,
+previously public-qualified package payloads in an isolated local feed and empty new
+caches. Locked restore preserved the genuine lock, the actual package boundary passed,
+and Release compilation reported no warnings or errors. Default/presentation/invalid
+entrypoints exited 0/0/2; the explicit performance entrypoint exited 0.
+
+All twenty raw samples and 24,000 checked views were retained under .NET `10.0.12`,
+SDK `10.0.401`, CPU 1 and a 1.5 GiB managed heap cap. Elapsed time per view had a
+median of 886.82 ns and a range of 777.68–9,159.78 ns. Process CPU per view had a
+median of 885 ns and a range of 776.67–9,117.5 ns. Measurement-thread allocations
+per view had a median of 1,970.07 bytes and a range of 1,970.07–1,970.17 bytes.
+Process collection deltas summed to 2/1/0 for generations 0/1/2. Outliers were retained;
+there was no rerun. These are scoped current smoke observations, not a budget verdict,
+speedup claim or proof of steady-state behavior. Workload SHA256 is
+`66113918829ada39ae1a4fdfd32255e300e3986db4bbabc0b6e69807f34d4fd4`;
+the measured assembly SHA256 is
+`cd1fcc61c20cce56e37cbfcf0a382d27eb74642f39d8af79c61f69b76b2530d1`.
+
+The original pre-edit performance baseline remains unknown. The receiver completed
+in 3.32 seconds; that whole-operation duration is separate from the view samples.
+A separate post-terminal census found no owned process-group/session member;
+total RSS and detached descendants were not independently measured. Physics stepping,
+raster/GPU timing and installed-product/adoption are outside the measured scope.
+Performance release requirements and fresh/retained product adoption remain open;
+P3 is not done.
+Original resume04/resume05 effects and custody remain unchanged.
+
+Native PR709 checks on Ubuntu and Windows subsequently failed compilation at the
+nullable source-revision guard; the surface-baseline job stopped at the same build,
+before baseline refresh. The guard now uses `Option.ofObj` to refine the environment
+value before string operations. Direct compilation with null checking, latest language
+version and warnings as errors passes, as do the six compiled refusal controls.
+The measured computational body is byte-identical to source `13a8cdeb`; no measurement
+was repeated. The raw observations above remain bound to that original source and
+assembly, rather than certifying the successor assembly's exact timing.
+
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
 recreation does not preserve hidden contacts, warm-start state or exact solver rollback.
