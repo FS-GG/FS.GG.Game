@@ -10,10 +10,10 @@
     "repositoryId": 1290990429
   },
   "sourceImplementation": {
-    "repository": "FS-GG/FS.GG.Governance",
-    "commit": "afa7a965f1c908195bd57c9d9e52d18669edae7e",
-    "adaptation": "game-v1-code-owned-source-profile",
-    "observerSha256": "6e63f6f724fb267e77ef02f41b4c58a833e0dc5b08c003f07fd16c89e4f7fd55",
+    "repository": "FS-GG/FS.GG.Coordination",
+    "commit": "8eef1ab7f205132553632e03dc650e7ecdd03679",
+    "adaptation": "game-v1-code-owned-source-profile; main-storage extension with local profile preserved",
+    "observerSha256": "7f5500d810ab9169d967f8c19fbcb01d706ebf82fdeea6e4a6927b0b19eef29a",
     "qualificationSha256": "642451c72ff01e51c5339f4e42d5fc1ffe3df39a4f965610cc7621601a06b8b9"
   },
   "operationClass": "ordinary-post-merge-delivery-settlement",
@@ -199,26 +199,20 @@
   },
   "packagePin": {
     "status": "published-served-verified",
-    "version": "0.1.5",
-    "sha256": "3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
-    "hostedCandidateRunId": 36432670335,
-    "publishRunId": 36437778484,
-    "publishRunAttempt": 3,
-    "publishRunHeadSha": "8335501d94875fa0410087e6d55d3639fcdb7ec4",
-    "publishWorkflow": ".github/workflows/callable-cli-release-publish.yml",
-    "releaseUrl": "https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.1.5",
-    "releasePublishedAt": "2026-09-28T14:59:57Z",
-    "assetName": "FS.GG.Coordination.Cli.0.1.5.nupkg",
-    "assetSize": 6435119,
+    "version": "0.3.0",
+    "sha256": "a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c",
+    "sourceCommit": "8eef1ab7f205132553632e03dc650e7ecdd03679",
     "servedPackageVerified": true,
-    "requiredCapability": "game-v1 selected source",
     "requiredBeforeActivation": true,
-    "sourceCommit": "1268908d2d5a38d30a764c927f3e0591e53138aa",
-    "sourceTree": "52ef5c36cd3e3eeb94d6b92e3d64df86f81c3f01",
-    "githubPackagesArchiveSha256": "3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
-    "nugetOrgSignedArchiveSha256": "131079cc347eecd6ef0d05a6d481d7ba71e4db38d568744cf5ac6ecb64d7dd2a",
-    "payloadMatch": true,
-    "publicInstallVerified": true
+    "requiredCapability": "game-v1 selected source",
+    "publishRunId": 37983508705,
+    "publishRunHeadSha": "401a89e3e63c0eefda02124475e92d0c4b752cfd",
+    "releasePublishedAt": "2026-10-09T19:55:53Z",
+    "assetSize": 8694990,
+    "hostedCandidateRunId": 37977490696,
+    "releaseUrl": "https://github.com/FS-GG/FS.GG.Coordination/releases/tag/v0.3.0",
+    "assetName": "FS.GG.Coordination.Cli.0.3.0.nupkg",
+    "publishWorkflow": ".github/workflows/callable-cli-release-publish.yml"
   },
   "credentialInventory": [
     {
