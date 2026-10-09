@@ -224,6 +224,25 @@ producer `0.17.0` acceptance and the retained
 resume04 failure/resume05 unrun reservation are unchanged; this source attempt
 does not retry those operations or transfer their custody.
 
+### P3 public presentation consumer source preparation — 2026-10-09
+
+The existing Box2D package-consumer runner has an explicit public `--presentation`
+route and a separate exact-PackageReference project. It copies the delivered portal
+presentation and actual command-line modules into a fresh outside-checkout receiver,
+checks source/project inputs before restore and the expected seven-package rendering
+closure before build, then requires unchanged locked restore and both entrypoint modes.
+The original four-package physics consumer remains a separate no-presentation route.
+
+This is source preparation. Public acquisition, restore, compile and managed receiver
+execution require a fresh independent admission and have not run for this receiver.
+Thirteen local source controls passed with synthetic assets and a stubbed `dotnet`:
+both valid routes reached restore, missing/linked source and foreign direct pins or
+ProjectReferences refused before restore, and missing Render, foreign packages,
+project dependency nodes and disabled assertions refused at the boundary. These
+controls do not authenticate public payloads or establish installed acceptance. P3 remains
+open for the actual public rendering closure, performance and fresh/retained product
+adoption. Original resume04/resume05 effects, caches and custody are not reused.
+
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
 recreation does not preserve hidden contacts, warm-start state or exact solver rollback.
