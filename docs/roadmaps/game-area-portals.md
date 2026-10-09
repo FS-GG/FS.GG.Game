@@ -213,9 +213,14 @@ This includes
 the negative controls and the self-contained five-tick managed Box2D simulation;
 it is ordinary source testing, not installed/native acceptance.
 
-P3 remains open. Public-only rendering-closure qualification, both executable
-entrypoint modes, runtime performance counters and fresh/retained adoption still
-need their own evidence. Historical producer `0.17.0` acceptance and the retained
+The compiled `Box2D.Portals.dll` entrypoint also passed in both default and
+`--presentation` modes. Default mode reported one traversal and exact pinned-profile
+replay; presentation mode reported five ticks, twelve frames, twenty-four area nodes and
+twenty-four points. An invalid argument printed usage and exited with code 2.
+
+P3 remains open. Public-only rendering-closure qualification, runtime performance
+counters and fresh/retained adoption still need their own evidence. Historical
+producer `0.17.0` acceptance and the retained
 resume04 failure/resume05 unrun reservation are unchanged; this source attempt
 does not retry those operations or transfer their custody.
 
