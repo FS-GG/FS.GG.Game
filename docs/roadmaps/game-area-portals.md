@@ -306,6 +306,15 @@ Performance release requirements and fresh/retained product adoption remain open
 P3 is not done.
 Original resume04/resume05 effects and custody remain unchanged.
 
+Native PR709 checks on Ubuntu and Windows subsequently failed compilation at the
+nullable source-revision guard; the surface-baseline job stopped at the same build,
+before baseline refresh. The guard now uses `Option.ofObj` to refine the environment
+value before string operations. Direct compilation with null checking, latest language
+version and warnings as errors passes, as do the six compiled refusal controls.
+The measured computational body is byte-identical to source `13a8cdeb`; no measurement
+was repeated. The raw observations above remain bound to that original source and
+assembly, rather than certifying the successor assembly's exact timing.
+
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
 recreation does not preserve hidden contacts, warm-start state or exact solver rollback.

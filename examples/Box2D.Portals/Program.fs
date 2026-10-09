@@ -107,11 +107,12 @@ let main argv =
             snapshots.Length frames.Length (counts |> List.sumBy fst) (counts |> List.sumBy snd)
         0
     elif argv = [| "--presentation-performance" |] then
-        let revision = Environment.GetEnvironmentVariable "FSGG_PORTAL_SOURCE_REVISION"
-        if isNull revision || revision.Length <> 40 || revision |> Seq.exists (fun c -> not (c >= '0' && c <= '9' || c >= 'a' && c <= 'f')) then
+        match Environment.GetEnvironmentVariable "FSGG_PORTAL_SOURCE_REVISION" |> Option.ofObj with
+        | Some revision when revision.Length = 40 && revision |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f') ->
+            qualifyPerformance revision
+        | _ ->
             eprintfn "--presentation-performance requires FSGG_PORTAL_SOURCE_REVISION (exact lowercase 40-hex; declared externally, not inferred)."
             2
-        else qualifyPerformance revision
     elif argv.Length <> 0 then
         eprintfn "Usage: Box2D.Portals [--presentation]"
         eprintfn "Performance smoke: --presentation-performance (requires FSGG_PORTAL_SOURCE_REVISION)."
