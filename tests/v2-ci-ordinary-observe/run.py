@@ -117,11 +117,11 @@ class GameObservationSourceTests(unittest.TestCase):
         self.assertIn("FSGG_V2_SOURCE_PROFILE: game-v1", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn("python3 tools/v2-ci-ordinary-observe.py produce", workflow)
-        self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify", workflow)
+        self.assertIn("python3 tools/v2-ci-ordinary-observe.py verify-main", workflow)
         self.assertIn("environment: ordinary-v2", workflow)
-        self.assertIn("PACKAGE_VERSION: 0.1.5", workflow)
-        self.assertIn("PACKAGE_SHA256: 3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9", workflow)
-        self.assertIn("ordinary-settlement execute", workflow)
+        self.assertIn("PACKAGE_VERSION: 0.3.0", workflow)
+        self.assertIn("PACKAGE_SHA256: a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c", workflow)
+        self.assertIn("ordinary-settlement execute-main", workflow)
         self.assertEqual(3, workflow.count("${{ secrets.V2_ORDINARY_"))
         for forbidden in (
             "workflow_dispatch:", "repository_dispatch:", "pull_request:",
@@ -143,8 +143,8 @@ class GameObservationSourceTests(unittest.TestCase):
         self.assertEqual("main", observation["customBranchPolicy"])
         self.assertEqual(3, observation["secretCount"])
         self.assertEqual("published-served-verified", policy["packagePin"]["status"])
-        self.assertEqual("0.1.5", policy["packagePin"]["version"])
-        self.assertEqual("3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
+        self.assertEqual("0.3.0", policy["packagePin"]["version"])
+        self.assertEqual("a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c",
                          policy["packagePin"]["sha256"])
         self.assertTrue(policy["packagePin"]["servedPackageVerified"])
         self.assertEqual(3, len(policy["credentialInventory"]))

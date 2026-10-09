@@ -159,8 +159,8 @@ class GameQualificationTests(unittest.TestCase):
         self.assertEqual(3, len(self.policy["credentialInventory"]))
         self.assertEqual("published-served-verified",
                          self.policy["packagePin"]["status"])
-        self.assertEqual("0.1.5", self.policy["packagePin"]["version"])
-        self.assertEqual("3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
+        self.assertEqual("0.3.0", self.policy["packagePin"]["version"])
+        self.assertEqual("a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c",
                          self.policy["packagePin"]["sha256"])
         self.assertTrue(self.policy["packagePin"]["servedPackageVerified"])
         self.assertEqual([], self.policy["activationPrerequisites"])
