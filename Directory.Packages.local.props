@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup Label="Test-only">
-    <PackageVersion Include="Expecto" Version="11.1.0" />
+    <PackageVersion Include="Expecto" Version="11.1.1" />
     <PackageVersion Include="Fable.Package.SDK" Version="1.4.1" />
     <PackageVersion Include="FsCheck" Version="3.4.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
