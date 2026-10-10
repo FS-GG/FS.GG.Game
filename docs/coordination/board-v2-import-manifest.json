@@ -1,5 +1,6 @@
 {
   "schema": "fsgg.coordination-board-v2-import/v1",
+  "observedAt": "2026-10-10T11:51:40.854453+00:00",
   "target": {
     "ownerKind": "organization",
     "owner": "FS-GG",
@@ -12,23 +13,57 @@
     "organizationId": "O_kgDOEYAWYw",
     "visibility": "complete",
     "authorization": "root-selected",
-    "recipeRevision": "2ab0c0ff9f37bdec9a11ba3604ebdc230711934f",
-    "artifactSha256": "cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615",
     "repositories": [
       "FS-GG/FS.GG.Game"
-    ]
+    ],
+    "recipeRevision": "482fb0d46625992de0228e1d4799d3ac6963caa1",
+    "artifactSha256": "2841486123c0655f59fa3f0c6ef7ca116f81c7f62400cad8702a230da113f086"
   },
   "items": [
     {
       "issue": "FS-GG/FS.GG.Game#7",
       "nodeId": "I_kwDOTPLzXc8AAAABH2FRaQ",
-      "observedUpdatedAt": "2026-10-04T22:23:27Z",
+      "observedUpdatedAt": "2026-10-09T16:45:36Z",
       "observedState": "open",
-      "pilot": true,
       "decision": "follow-up",
       "adjudication": "verified-remaining",
+      "remainingOutcome": "Retain the repository dependency-dashboard follow-up: review the listed Fantomas8.0.8 update and nine dashboard-listed blocked dependency updates under their existing owners. This read does not establish current PR state, package compatibility, readiness or a product implementation outcome.",
       "roadmap": "https://github.com/FS-GG/FS.GG.Game/issues/7",
+      "status": "Backlog",
+      "track": "Follow-up",
+      "observation": "Unknown",
+      "observedRoadmapValue": "https://github.com/FS-GG/FS.GG.Game/issues/7",
+      "pilot": true,
       "dependencies": []
     }
-  ]
+  ],
+  "inventory": {
+    "prospectiveQualification": {
+      "projectCreationPerformed": false,
+      "membershipMutationPerformed": false,
+      "historicalConstructorAuthenticated": false,
+      "qualifier": {
+        "recipeRevision": "482fb0d46625992de0228e1d4799d3ac6963caa1",
+        "artifactSha256": "2841486123c0655f59fa3f0c6ef7ca116f81c7f62400cad8702a230da113f086"
+      },
+      "adapter": {
+        "recipeRevision": "64e95ebec1a8294e16edaafdb27e6aa96f32c6f7",
+        "artifactSha256": "c6fc21abdc7c9a8186eebab02b70ef6d3351a226f536b6d413a5dec432efde29"
+      },
+      "textualBlockerDisposition": {
+        "status": "preserved",
+        "evidenceBodySha256": "599468224078d9b8856e7ed91225acf412bc8cb694d1f33fe3966865acdede25",
+        "statement": "Preserve the owning dashboard PR Closed (Blocked) section and its nine listed updates as source statements. No PR endpoints were queried; empty native blocked_by does not settle those textual follow-ups. Keep human Backlog/Follow-up/Unknown planning values."
+      },
+      "metadataSha256": "fa1c9612827eee5851730598872e917231d89556318f840d7bc3624a7baff916",
+      "currentnessSha256": "9f43179c3906d2691d275c13c703f504f9d11d256d8aa34c13f9dfc0d186c960",
+      "adjudicationSha256": "68dc5224ffa57fe92f1dbed37c556711b5c184453bacd9873560355764d1efc6",
+      "priorPopulationSha256": "65826454dc1e217bf1fb51c7c6ac4c12bfb270257d31c87cc20a103180678c6c",
+      "priorImportProvenance": {
+        "recipeRevision": "2ab0c0ff9f37bdec9a11ba3604ebdc230711934f",
+        "artifactSha256": "cb318977a143085680b27ba4c86fffd6fb3f5a91dc6a7e07cf79ef7c67825615",
+        "historicalConstructorAuthenticated": false
+      }
+    }
+  }
 }
