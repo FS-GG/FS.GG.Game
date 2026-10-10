@@ -2,8 +2,8 @@
 
 Status: runtime/replay source delivered and public package-only qualification accepted,
 2026-10-05. FS.GG.Game owns the adapter and qualification; fdev integrates the result.
-Explicit product/Template adoption remains open. This track is independent of full-V2
-acceptance and the BAR/SC2 preparation lanes.
+Explicit managed Template adoption is qualified for the scope below. This track remains
+independent of full-V2 acceptance and the BAR/SC2 preparation lanes.
 
 Programme links: [Unified Roadmap §9.8](https://github.com/FS-GG/.github/blob/main/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index)
 and [V2 roadmap](https://github.com/FS-GG/.github/blob/main/docs/github-substrate-v2-roadmap.md#optional-box2d-game-physics--2026-10-04).
@@ -114,7 +114,7 @@ adoption must preview and preserve user-owned files and record rollback/removal 
 - [x] `.1` Runtime and headless example: source delivered in [PR697](https://github.com/FS-GG/FS.GG.Game/pull/697), merged at `75df459ebe7dae755eacba3850a5074eba9ae3c2`.
 - [x] `.2` Retained snapshots, interpolation and pinned input replay: delivered with the same qualified source.
 - [x] `.3` Public package and fresh installed example: coherent `0.17.0` publication and public-only two-scene consumer accepted from [release run37237849417](https://github.com/FS-GG/FS.GG.Game/actions/runs/37237849417).
-- [ ] `.4` Explicit consumer adoption: not selected.
+- [x] `.4` Explicit consumer adoption: public fresh opt-in and preserving retained adoption/removal qualified for the managed PortalExample scope below; browser and production-server integration are outside that scope.
 
 The optional project is `src/Game.Physics.Box2D/FS.GG.Game.Physics.Box2D.fsproj`.
 Its package identity is `FS.GG.Game.Physics.Box2D` and it inherits Game's coherent
@@ -254,6 +254,36 @@ observed sensor enter/exit and floor contact, and reported final falling height
 The five-tick portal scene passed exact replay, one live `traveller`, one traversal and
 one step per local world/tick. Its rotated destination pose was
 `(9.899999618530273, 5.150000095367432)` with velocity `(-1, 4)`.
-This closes `.3` and supplies Portal P3's public-installed prerequisite. It does not
-record `.4` product/Template opt-in, preserving retained adoption/removal, browser support,
-solver rollback or cross-platform determinism.
+This closes `.3` and supplies Portal P3's public-installed prerequisite. At that
+checkpoint it did not record `.4` product/Template adoption; the later managed scope
+is accepted below. Browser support, solver rollback and cross-platform determinism
+remain separate.
+
+## Accepted managed Template adoption — 2026-10-10
+
+[Templates Portal T4](https://github.com/FS-GG/FS.GG.Templates/blob/5279f0d98c9f4ff0339fee43af5a3e780e9ab8a7/docs/roadmaps/game-portal-template-adoption.md#actual-public-receiver-qualification--2026-10-10)
+qualifies `.4` for an explicitly selected managed .NET 10 `PortalExample` in the real
+`fs-gg-fable-game` workspace. Public Template `0.18.2`, producer `20c009bc`, copies
+canonical Game `49c7f5a` example bytes. Independent direct generation and the installed
+public SDD `2.1.0` provider both exercised the actual public template. Default generation
+excludes Portal; ordinary browser/server/default-solution behavior remains independent.
+
+Fresh public-only locked restore proved the declared seven-package rendering closure:
+Core, Physics.Box2D and Render `0.17.0`, UI Scene and KeyboardInput `0.31.0`, Box2D.NET
+`3.1.654`, and FSharp.Core `10.1.302`. Direct, retained and provider projects built in
+Release and passed actual 0/0/2 entrypoints, including canonical five-tick rotated
+transfer/replay and managed traversal-safe presentation. This rendering consumer does
+not change the adapter's independent four-package headless producer boundary.
+
+Adoption into a newly generated public pre-Portal `0.18.1` workspace, removal and both
+recoveries preserved all 118 original files, 152 rows, modes and three authored sentinels.
+A foreign Portal-folder sentinel survived; nine managed files were absent after recovery,
+with known new build outputs retained. Ordinary workspace tests then discovered/passed
+20/20, zero failures/skips, with original source/configuration/locks still preserved.
+Templates PR689 `5279f0d9` and required programme projection4369 `edb6fece` make that
+accepted evidence durable. No old retained receiver or interrupted native custody was used.
+
+This completes `.4` only for that headless managed-template contract. It does not close
+whole Portal P3 performance acceptance, qualify a later Portal-to-Portal version upgrade,
+activate the global Wizard, add browser physics or integrate the production server.
+Hidden-solver rollback and cross-platform determinism remain outside the original profile.
