@@ -1,0 +1,613 @@
+{
+  "schema": "fsgg.portal.p3-structural-release-record/1",
+  "feature": "GAME-PORTAL-01",
+  "item": "GAME-PORTAL-01.P3",
+  "originalAttempt": "portal-p3-qualification-prep-20261007",
+  "disposition": "accepted selected finite structural-cost Release verification; numeric magnitudes observational",
+  "acceptanceObservedAt": "2026-10-10T03:39:13.503647+00:00",
+  "source": {
+    "revision": "e514d018013f740b73fc54daa078f8f9f5f34014",
+    "tree": "f523e396cec8a1011da51f8bca12ccdca7729abc"
+  },
+  "prospectiveDeclaration": {
+    "schema": "fsgg.portal.structural-performance-intent/1",
+    "status": "PROSPECTIVE; selected property root-admitted, repository landing and execution not admitted",
+    "owner": "FS-GG/FS.GG.Game",
+    "feature": "GAME-PORTAL-01",
+    "item": "GAME-PORTAL-01.P3",
+    "route": "Presentation.view: copied-snapshot interpolation + Adapter.drawPoints",
+    "sourceRevision": "e514d018013f740b73fc54daa078f8f9f5f34014",
+    "sourceTree": "f523e396cec8a1011da51f8bca12ccdca7729abc",
+    "definitionVersion": 1,
+    "workloadDefinition": "GAME-PORTAL-01.P3;Presentation.view;areas=2;entities=2;setupTicks=5;pairs=4;alpha=0,0.5,1;viewsPerCycle=12;warmupCycles=5;samples=20;cyclesPerSample=100;maxAreaNodesPerView=2;pointsPerView=2;noSimulationDuringMeasurement;v1",
+    "definitionDigest": "66113918829ada39ae1a4fdfd32255e300e3986db4bbabc0b6e69807f34d4fd4",
+    "scale": {
+      "areas": 2,
+      "entities": 2,
+      "snapshots": 5,
+      "consecutivePairs": 4,
+      "alphas": [
+        0,
+        0.5,
+        1
+      ],
+      "viewsPerCycle": 12,
+      "warmupCycles": 5,
+      "samples": 20,
+      "cyclesPerSample": 100,
+      "measuredViews": 24000
+    },
+    "structuralLimits": {
+      "maxOccupiedAreaNodesPerView": 2,
+      "exactEntityBoundPointsPerView": 2,
+      "singleInterpolationPerView": "source-bound call path, not a dynamic internal counter",
+      "presentationPhysicsSteps": 0,
+      "snapshots": "immutable copied values; worlds disposed before warmup/measured views",
+      "ordering": "area/entity stable; traversal destination snap and ordinary interpolation"
+    },
+    "requiredCounters": [
+      "elapsedTicks",
+      "processCpuTicks",
+      "currentThreadAllocatedBytes",
+      "processGcCollections[0..2]",
+      "areaNodes",
+      "points"
+    ],
+    "numericPassCeilings": null,
+    "fpsTarget": null,
+    "historicalPreEditBaseline": "unknown",
+    "measurementCapability": "bounded headless managed.NET10; elapsed/processCPU/current synchronous-thread allocation/processGC; no raster/GPU/swapchain",
+    "liveCompositorRequired": false,
+    "counterMagnitudeDisposition": "observational only; no timing/speedup/allocation ceiling inferred",
+    "blockingConditions": [
+      "binding mismatch",
+      "missing/incomplete/nonfinite/invalid raw counters",
+      "semantic/structural failure",
+      "failed command/custody unknown",
+      "required independent verdict fails if such a capability becomes available"
+    ],
+    "scopeExclusions": [
+      "interactive-game/FPS acceptance",
+      "physics throughput",
+      "browser/server authority",
+      "Portal-to-Portal upgrade",
+      "global Wizard",
+      "original resume04/resume05 settlement"
+    ]
+  },
+  "prospectiveDeclarationByteSha256": "de90c3a96455505b0d99e7fbedadf927d19f113333432c2cec2ce6c0568892f2",
+  "declarationStatusInterpretation": "Original declaration preserved as authored before the operation; its preparation status is historical. Actual operation and subsequent root acceptance are separate below, not a retroactive smoke reclassification.",
+  "actualRawObservation": {
+    "architecture": "X64",
+    "assemblySha256": "4b85f5ee755376f300916b97c193302ddeada2b03b5039bb25bfff491c7cadd0",
+    "counterScope": "Elapsed stopwatch; process CPU and GC collections; current synchronous measurement-thread allocations. Process CPU has coarse resolution and may include runtime threads. No overhead subtraction.",
+    "currentThreadAllocatedBytesPerView": {
+      "maximum": 1975.3333333333333,
+      "median": 1970.0666666666666,
+      "minimum": 1970.0666666666666
+    },
+    "declaredSourceRevision": "e514d018013f740b73fc54daa078f8f9f5f34014",
+    "elapsedNanosecondsPerView": {
+      "maximum": 9338.938333333334,
+      "median": 866.3941666666667,
+      "minimum": 814.6741666666667
+    },
+    "historicalPreEditBaseline": "unknown",
+    "measuredViews": 24000,
+    "originalItem": "GAME-PORTAL-01.P3",
+    "os": "Arch Linux",
+    "processCpuNanosecondsPerView": {
+      "maximum": 9267.5,
+      "median": 862.0833333333333,
+      "minimum": 813.3333333333334
+    },
+    "processorCount": 1,
+    "runtime": "10.0.12",
+    "samples": [
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 1560.7183333333332,
+        "elapsedTicks": 1872862,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 1560.8333333333333,
+        "processCpuTicks": 18730,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 1,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 1627.0783333333334,
+        "elapsedTicks": 1952494,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 1590,
+        "processCpuTicks": 19080,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 2,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 1607.8666666666666,
+        "elapsedTicks": 1929440,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 1602.5,
+        "processCpuTicks": 19230,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 3,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 947.0766666666667,
+        "elapsedTicks": 1136492,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 945,
+        "processCpuTicks": 11340,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 4,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 971.665,
+        "elapsedTicks": 1165998,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 967.5,
+        "processCpuTicks": 11610,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 5,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 992.4625,
+        "elapsedTicks": 1190955,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 983.3333333333334,
+        "processCpuTicks": 11800,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 6,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 2347.9575,
+        "elapsedTicks": 2817549,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 2341.6666666666665,
+        "processCpuTicks": 28100,
+        "processGcCollections": [
+          1,
+          1,
+          0
+        ],
+        "sample": 7,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2370400,
+        "currentThreadAllocatedBytesPerView": 1975.3333333333333,
+        "elapsedNanosecondsPerView": 9338.938333333334,
+        "elapsedTicks": 11206726,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 9267.5,
+        "processCpuTicks": 111210,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 8,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 819.9508333333333,
+        "elapsedTicks": 983941,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 819.1666666666666,
+        "processCpuTicks": 9830,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 9,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 824.9108333333334,
+        "elapsedTicks": 989893,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 823.3333333333334,
+        "processCpuTicks": 9880,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 10,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 830.3375,
+        "elapsedTicks": 996405,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 828.3333333333334,
+        "processCpuTicks": 9940,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 11,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 823.325,
+        "elapsedTicks": 987990,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 820.8333333333334,
+        "processCpuTicks": 9850,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 12,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 856.93,
+        "elapsedTicks": 1028316,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 855,
+        "processCpuTicks": 10260,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 13,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 841.3341666666666,
+        "elapsedTicks": 1009601,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 840.8333333333334,
+        "processCpuTicks": 10090,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 14,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 849.1408333333334,
+        "elapsedTicks": 1018969,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 813.3333333333334,
+        "processCpuTicks": 9760,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 15,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 831.0141666666667,
+        "elapsedTicks": 997217,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 829.1666666666666,
+        "processCpuTicks": 9950,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 16,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 1739.0575,
+        "elapsedTicks": 2086869,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 1733.3333333333333,
+        "processCpuTicks": 20800,
+        "processGcCollections": [
+          1,
+          0,
+          0
+        ],
+        "sample": 17,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 814.6741666666667,
+        "elapsedTicks": 977609,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 813.3333333333334,
+        "processCpuTicks": 9760,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 18,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 870.3725,
+        "elapsedTicks": 1044447,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 869.1666666666666,
+        "processCpuTicks": 10430,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 19,
+        "views": 1200
+      },
+      {
+        "areaNodes": 2400,
+        "currentThreadAllocatedBytes": 2364080,
+        "currentThreadAllocatedBytesPerView": 1970.0666666666666,
+        "elapsedNanosecondsPerView": 862.4158333333334,
+        "elapsedTicks": 1034899,
+        "points": 2400,
+        "processCpuNanosecondsPerView": 825,
+        "processCpuTicks": 9900,
+        "processGcCollections": [
+          0,
+          0,
+          0
+        ],
+        "sample": 20,
+        "views": 1200
+      }
+    ],
+    "schema": "fsgg.portal.presentation-smoke/1",
+    "scope": "Actual Presentation.view interpolation+scene projection; loop, frame storage and counter overhead included. Setup, validation and JSON outside timing. No physics, raster, GPU or product-adoption timing.",
+    "stopwatchFrequency": 1000000000,
+    "stopwatchHighResolution": true,
+    "verdict": "current-smoke-observed-no-timing-threshold",
+    "warmupCycles": 5,
+    "workloadDefinition": "GAME-PORTAL-01.P3;Presentation.view;areas=2;entities=2;setupTicks=5;pairs=4;alpha=0,0.5,1;viewsPerCycle=12;warmupCycles=5;samples=20;cyclesPerSample=100;maxAreaNodesPerView=2;pointsPerView=2;noSimulationDuringMeasurement;v1",
+    "workloadSha256": "66113918829ada39ae1a4fdfd32255e300e3986db4bbabc0b6e69807f34d4fd4"
+  },
+  "actualRawStdoutByteSha256": "bc9688d9659dd2fa4d6ca01597c8c8338cd0bc1b75d63a2a0edb634457270aea",
+  "actualAssemblySha256": "4b85f5ee755376f300916b97c193302ddeada2b03b5039bb25bfff491c7cadd0",
+  "actualLockSha256": "7769c72f28bca3fc4b40e6ce710852c8d5e26098c5e6d5c35cefbe9f7c11f66b",
+  "graph": {
+    "FS.GG.Game.Core": "0.17.0",
+    "FS.GG.Game.Physics.Box2D": "0.17.0",
+    "FS.GG.Game.Render": "0.17.0",
+    "FS.GG.UI.Scene": "0.31.0",
+    "FS.GG.UI.KeyboardInput": "0.31.0",
+    "Box2D.NET": "3.1.654",
+    "FSharp.Core": "10.1.302"
+  },
+  "fullReleaseVerification": {
+    "route": "source/project preflight; offline locked seven-package restore/boundary; warnings-as-errors Release build; real default/presentation; six CLI refusals; one real performance run; typed binding/structural Verify",
+    "stageResults": [
+      {
+        "stage": "sdk-version",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "sdk-info",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "source-project-preflight",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "offline-locked-restore",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "seven-package-boundary",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "Release-build",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "default",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "presentation",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "missing-revision",
+        "actualExit": 2,
+        "expectedExit": 2
+      },
+      {
+        "stage": "short-revision",
+        "actualExit": 2,
+        "expectedExit": 2
+      },
+      {
+        "stage": "uppercase-revision",
+        "actualExit": 2,
+        "expectedExit": 2
+      },
+      {
+        "stage": "nonhex-revision",
+        "actualExit": 2,
+        "expectedExit": 2
+      },
+      {
+        "stage": "invalid-argument",
+        "actualExit": 2,
+        "expectedExit": 2
+      },
+      {
+        "stage": "extra-performance-argument",
+        "actualExit": 2,
+        "expectedExit": 2
+      },
+      {
+        "stage": "one-real-performance-observation",
+        "actualExit": 0,
+        "expectedExit": 0
+      },
+      {
+        "stage": "typed-binding-Verify",
+        "actualExit": 0,
+        "expectedExit": 0
+      }
+    ],
+    "sourceControlReuse": "Eight source-qualified Portal presentation tests remain byte-identical to their accepted producer. Program executes actual structural/interpolation/snap/identity/order predicates and real scene; invalid-alpha/nonconsecutive and malformed-projection/missing-point injected fixtures are separately reused source proof, not newly executed Release tests.",
+    "originalDescriptorSha256": "a939139ae69e126b33f5eba41e51c0a0461307f35dc4163da764e54d53085a43",
+    "originalResultsSha256": "e5485e7abe677aaa8ad45ac2d38018615f0be39e571b2a7b181ff295395efb67",
+    "validatorSha256": "f36ae74a1485b4dfd5fbb49e16b3e8d4eaf3ffd538040da272c38d3d823ca767",
+    "actualVerifierRecordSha256": "3c6b06f60d469827173535f5e08676f246bc27930d5510a93e092b4e97791a42",
+    "ownerResultSha256": "28b85872de07534f5968bfc160dc31ed41dd3311dfdaaab5e74e9115ebc65dce",
+    "rootAcceptanceSha256": "8fcc8eff13cc8fa684026dc70770c6ce92ea957152bd0ff9d18846f03b8d9fe9",
+    "rootIndependentChecks": [
+      "15 retained artifact hashes",
+      "16 exact descriptor stage vectors and expected exits",
+      "all stages firstFailure null, no signals, empty observed cleanup",
+      "all known original process births absent at independent root read",
+      "independent parser recomputation exactly agrees with actual20rows24kviews"
+    ],
+    "parserNegativeControlCount": 36,
+    "replayControlScriptSha256": "36345e9baf9ce7dd76b0156789e59ad24d1ea4990809d0e57a8396531ad68217"
+  },
+  "capability": {
+    "sdk": "10.0.401",
+    "runtime": "10.0.12",
+    "architecture": "X64",
+    "os": "Arch Linux",
+    "processorCount": 1,
+    "cpuAffinity": [
+      1
+    ],
+    "gcHeapCapBytes": 1610612736,
+    "sampledRssLimitBytes": 2147483648,
+    "sampledPeakRssBytes": 437309440,
+    "hardMemoryContainment": false,
+    "workWindowSeconds": 300,
+    "cleanupWindowSeconds": 30,
+    "scope": "Actual Presentation.view interpolation+scene projection; loop, frame storage and counter overhead included. Setup, validation and JSON outside timing. No physics, raster, GPU or product-adoption timing.",
+    "counterScope": "Elapsed stopwatch; process CPU and GC collections; current synchronous measurement-thread allocations. Process CPU has coarse resolution and may include runtime threads. No overhead subtraction.",
+    "liveCompositorRequired": false,
+    "independentGovernanceVerdict": null,
+    "independentGovernanceCapability": "Unavailable configured Portal/performance oracle; ordinary Debug/advisory CI is not a performance verdict"
+  },
+  "cleanup": {
+    "all16ObservedOwnedGroupsEmpty": true,
+    "independentCurrentLiveAndZombieCensusEmpty": true,
+    "rootIndependentKnownBirthCensusAbsent": true,
+    "signals": [],
+    "retries": 0,
+    "firstFailure": null,
+    "independentTerminalCensusSha256": "19ae13446a97fff572adb6160c83414214f4a50e88f0fce757456621e57f036f",
+    "unobservedTransientOrDetachedDescendants": "unknown"
+  },
+  "historicalPreEditBaseline": "unknown",
+  "original13a8SmokeDisposition": "prior iteration evidence only; not renamed Release evidence",
+  "numericPerformanceCeilings": null,
+  "scopeExclusions": [
+    "interactive-game/FPS acceptance",
+    "physics throughput",
+    "browser/server authority",
+    "Portal-to-Portal upgrade",
+    "global Wizard",
+    "original resume04/resume05 settlement"
+  ],
+  "originalInterruptedCustody": "resume04 failed/resume05 unrun remain held; not reused, retried or accepted"
+}

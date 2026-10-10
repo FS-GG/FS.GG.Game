@@ -4,8 +4,9 @@ Status: P1/P2 source delivered and public installed support accepted in Game `0.
 2026-10-05. Game owns topology and traversal; the Box2D adapter owns local-world
 transfers; Rendering owns portal presentation. fdev integrates their joins.
 Parent: [GAME-BOX2D-01](game-box2d-physics.md#area-topology-and-portals).
-P3 managed presentation and public Template adoption are qualified for the selected
-headless scope; P3 performance release acceptance and P4 queries remain open.
+P3 is complete for the selected finite headless managed presentation and public
+Template adoption scope, including its declared structural-cost Release verification.
+P4 queries and the separate browser/server/viewport follow-ups remain unselected.
 
 ## Local geometry, arbitrary connections
 
@@ -165,7 +166,7 @@ a separately observed runtime profile; P3 product adoption and browser physics r
 
 - [x] P1 topology and crossing: source delivered by PR696.
 - [x] P2 headless whole-body transfer: source delivered by PR698.
-- [ ] P3 presentation and installed opt-in: managed presentation and public fresh/retained Template adoption are qualified below; performance release acceptance remains open.
+- [x] P3 presentation and installed opt-in: traversal-safe managed presentation, fresh/retained public Template adoption and the selected finite structural-cost Release verification are qualified below. This closes only the declared headless managed scope.
 - [ ] P4 portal-aware queries: separate follow-up, not selected.
 
 Game's [accepted `0.17.0` release and fresh public consumer](game-box2d-physics.md#accepted-public-release-and-installed-example)
@@ -184,7 +185,7 @@ position was `(9.899999618530273, 5.150000095367432)` and velocity `(-1, 4)`.
 
 This establishes public producer support and P3's installed prerequisite. At that
 checkpoint, presentation and fresh/retained Template adoption required their own
-outcomes; their subsequent scoped acceptance is recorded below. P3 remains open.
+outcomes; their subsequent scoped acceptance is recorded below.
 No browser physics, cross-platform determinism or hidden-solver restoration is inferred.
 
 ## Later physics and workspace boundaries
@@ -305,7 +306,8 @@ total RSS and detached descendants were not independently measured. Physics step
 raster/GPU timing and installed-product/adoption are outside the measured scope.
 At that measurement checkpoint, performance release requirements and fresh/retained
 product adoption remained open. The later Template acceptance below closes only the
-declared adoption contribution; P3 is not done.
+declared adoption contribution; the separate final Release acceptance below resolves
+the remaining selected performance obligation.
 Original resume04/resume05 effects and custody remain unchanged.
 
 Native PR709 checks on Ubuntu and Windows subsequently failed compilation at the
@@ -353,12 +355,76 @@ recorded separately; whole-tree equality is not claimed. The first direct privat
 snapshot failure is retained separately from its admitted fresh successful successor.
 
 This closes Box2D `.4` for the declared managed-template scope and P3's fresh/retained
-adoption contribution. Whole P3 remains Done: No. Existing raw performance smoke is
-still bound to `13a8cdeb` and its measured assembly; T4 supplied no new timing evidence
-or accepted budget. A genuine Portal-to-Portal version upgrade awaits a separately
+adoption contribution. At that boundary P3 remained open for performance acceptance.
+The old raw smoke stays bound to `13a8cdeb` and its measured assembly; T4 supplied
+no timing evidence or accepted budget. The separate final Release acceptance follows. A genuine Portal-to-Portal version upgrade awaits a separately
 needed public successor. Global Wizard acceptance, browser physics/rendering, server
 authority and P4 remain separate. Original resume04/resume05 custody and effects were
 not reused, retried or accepted by these operations.
+
+### P3 finite structural-cost Release acceptance — 2026-10-10
+
+The producer/root prospectively selected the existing finite copied-snapshot route:
+two areas, two entities, five snapshots, four consecutive pairs and alpha 0/0.5/1.
+Each actual view must retain stable area/entity order, traversal destination snap and
+ordinary interpolation, produce at most two occupied-area points nodes and exactly
+two entity-bound points, and never step physics during presentation. Setup creates
+and validates the real scene once; its worlds are disposed before warmup/measurement.
+The selected property requires complete source-bound stock counters, not a latency,
+FPS, speedup or allocation ceiling. The [durable typed record](../reports/game-portal-p3-performance-20261010.json)
+preserves the original prospective declaration and actual twenty raw samples.
+
+The full Release verification for this narrow example is source/project preflight,
+offline locked seven-package restore and boundary, warnings-as-errors Release build,
+actual default/presentation entrypoints, all six CLI refusal controls, one real
+performance-mode execution and typed binding/structural verification. It ran once
+at protected `e514d018013f740b73fc54daa078f8f9f5f34014`, tree
+`f523e396cec8a1011da51f8bca12ccdca7729abc`. Ten stages exited 0 and six refusals
+exited the required 2; no failure, retry or signals occurred. The actual Release
+assembly SHA256 is `4b85f5ee755376f300916b97c193302ddeada2b03b5039bb25bfff491c7cadd0`.
+Lock `7769c72f` stayed unchanged; source/project/package, definition, declaration,
+assembly, runtime and original operation bindings were verified. This is the final
+Release example route, not the repository's Debug CI or an absent generic target.
+
+All twenty samples and 24,000 checked views passed after five warmup cycles. Each
+sample contains 1,200 actual views, 2,400 nodes and 2,400 points. Actual semantic checks
+run through the unchanged production scene/presentation modules. The eight original
+source tests remain byte-identical; their specialized malformed-input/frame controls
+are reused source qualification, not freshly executed Release test cases. Thirty-six
+private parser mutations independently exercised record refusal, including internally
+consistent foreign source/digest pairs and float-valued workload counts. Root review
+independently verified fifteen actual artifact hashes, sixteen exact command vectors,
+expected exits/cleanup, known process births and recomputed every raw row and total.
+
+The original stdout label remains `current-smoke-observed-no-timing-threshold`.
+The separate accepted typed verification proves the prospectively selected structural
+property and counter completeness. Elapsed ns/view median was 866.39, range
+814.67–9,338.94; process CPU median was 862.08, range 813.33–9,267.50. Measurement-thread
+allocation median was 1,970.07 bytes/view, range 1,970.07–1,975.33. All outliers and
+raw GC deltas are retained. These values remain observations without a pass ceiling
+or subtraction. The historical pre-edit baseline remains unknown; the previous
+`13a8cdeb`/`cd1fcc61` smoke remains iteration evidence and was not relabelled.
+
+The exact profile was SDK 10.0.401 / .NET 10.0.12 / Linux X64 / CPU 1, with a 1.5 GiB
+managed heap cap and practical sampled 2 GiB RSS control. Peak sampled aggregate RSS
+was 437,309,440 bytes. All sixteen owned groups were observed empty; independent
+terminal LIVE/zombie and root known-birth censuses were empty. Transient or detached
+descendants remain unknown; sampling is not hard memory containment. The configured
+independent Portal performance Governance capability is unavailable, so its verdict
+is null, not passed. Advisory/Debug CI does not fill that gap; root accepted this
+accurately scoped capability limit for the selected finite example property.
+
+**Required P3 outcomes complete:** traversal-safe presentation, public installed
+prerequisite, genuine fresh public opt-in, preserving retained adoption/removal and
+recoveries, ordinary workspace behavior after recovery, and the selected finite
+Release structural-cost verification. No required outcome remains for this declared
+headless managed scope. A through-portal viewport was optional in the original P3 row;
+browser physics/rendering, production-server authority, P4, global Wizard and a later
+Portal-to-Portal version upgrade are separate deferred boundaries. Their absence
+neither expands this acceptance nor becomes an invented P3 gate. No interactive-game
+performance promise, unavailable Governance pass or original resume04/resume05
+acceptance is inferred. A documentation-only successor preserves the exact qualified
+runtime bytes; it does not claim a new successor assembly measurement.
 
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
