@@ -4,7 +4,8 @@ Status: P1/P2 source delivered and public installed support accepted in Game `0.
 2026-10-05. Game owns topology and traversal; the Box2D adapter owns local-world
 transfers; Rendering owns portal presentation. fdev integrates their joins.
 Parent: [GAME-BOX2D-01](game-box2d-physics.md#area-topology-and-portals).
-P3 presentation/product adoption and P4 queries remain open.
+P3 managed presentation and public Template adoption are qualified for the selected
+headless scope; P3 performance release acceptance and P4 queries remain open.
 
 ## Local geometry, arbitrary connections
 
@@ -164,7 +165,7 @@ a separately observed runtime profile; P3 product adoption and browser physics r
 
 - [x] P1 topology and crossing: source delivered by PR696.
 - [x] P2 headless whole-body transfer: source delivered by PR698.
-- [ ] P3 presentation and installed opt-in: public-installed prerequisite met; explicit product adoption and preserving retained adoption/removal remain open.
+- [ ] P3 presentation and installed opt-in: managed presentation and public fresh/retained Template adoption are qualified below; performance release acceptance remains open.
 - [ ] P4 portal-aware queries: separate follow-up, not selected.
 
 Game's [accepted `0.17.0` release and fresh public consumer](game-box2d-physics.md#accepted-public-release-and-installed-example)
@@ -181,10 +182,10 @@ Portal assertions confirmed one live `traveller`, one committed traversal, one s
 local world/tick, transformed pose/momentum and exact fresh-world replay. The destination
 position was `(9.899999618530273, 5.150000095367432)` and velocity `(-1, 4)`.
 
-This establishes public producer support and P3's installed prerequisite. Presentation,
-explicit fresh product/Template opt-in and preserving retained adoption/removal require
-their own outcomes; P3 remains open. No browser physics, cross-platform determinism or
-hidden-solver restoration is inferred.
+This establishes public producer support and P3's installed prerequisite. At that
+checkpoint, presentation and fresh/retained Template adoption required their own
+outcomes; their subsequent scoped acceptance is recorded below. P3 remains open.
+No browser physics, cross-platform determinism or hidden-solver restoration is inferred.
 
 ## Later physics and workspace boundaries
 
@@ -219,7 +220,7 @@ replay; presentation mode reported five ticks, twelve frames, twenty-four area n
 twenty-four points. An invalid argument printed usage and exited with code 2.
 
 At this source qualification, public-only rendering-closure qualification remained
-pending; the separate fresh receiver below supplies that bounded evidence. P3 remains
+pending; the separate fresh receiver below supplies that bounded evidence. At that checkpoint, P3 remained
 open for runtime performance counters and fresh/retained product adoption. Historical
 producer `0.17.0` acceptance and the retained
 resume04 failure/resume05 unrun reservation are unchanged; this source attempt
@@ -254,8 +255,8 @@ this duration is an operation observation, not a performance qualification. A se
 post-terminal census found no remaining member of its owned process group/session;
 detached descendants and total RSS were not independently measured. This proves the
 bounded public package rendering closure and copied-source entrypoints, not generated
-product installation or retained adoption. P3 remains open for performance and
-fresh/retained product adoption. Original resume04/resume05 effects, caches and custody
+product installation or retained adoption. At that checkpoint, P3 remained open for
+performance and fresh/retained product adoption. Original resume04/resume05 effects, caches and custody
 are unchanged and were not reused.
 
 ### P3 current presentation performance smoke source — 2026-10-10
@@ -302,8 +303,9 @@ in 3.32 seconds; that whole-operation duration is separate from the view samples
 A separate post-terminal census found no owned process-group/session member;
 total RSS and detached descendants were not independently measured. Physics stepping,
 raster/GPU timing and installed-product/adoption are outside the measured scope.
-Performance release requirements and fresh/retained product adoption remain open;
-P3 is not done.
+At that measurement checkpoint, performance release requirements and fresh/retained
+product adoption remained open. The later Template acceptance below closes only the
+declared adoption contribution; P3 is not done.
 Original resume04/resume05 effects and custody remain unchanged.
 
 Native PR709 checks on Ubuntu and Windows subsequently failed compilation at the
@@ -314,6 +316,49 @@ version and warnings as errors passes, as do the six compiled refusal controls.
 The measured computational body is byte-identical to source `13a8cdeb`; no measurement
 was repeated. The raw observations above remain bound to that original source and
 assembly, rather than certifying the successor assembly's exact timing.
+
+### P3 managed public Template adoption — 2026-10-10
+
+[Templates' accepted Portal integration](https://github.com/FS-GG/FS.GG.Templates/blob/5279f0d98c9f4ff0339fee43af5a3e780e9ab8a7/docs/roadmaps/game-portal-template-adoption.md#actual-public-receiver-qualification--2026-10-10)
+completes the fresh and preserving retained adoption contribution. Templates PR689
+merged at `5279f0d98c9f4ff0339fee43af5a3e780e9ab8a7`; required programme projection4369
+merged at `edb6fece332863a28cb402996143ff900ef33133`. This accepts an explicitly
+selected managed .NET 10 `PortalExample` inside a genuine `fs-gg-fable-game` workspace.
+The browser player, production server and default solution do not reference it;
+omitted/default selection excludes it. It is headless managed scene projection,
+not browser rendering or server-integrated physics.
+
+The released public Workspace Template `0.18.2` names producer `20c009bc` and uses
+canonical Game example source `49c7f5a`. A fresh independently acquired signed public
+archive has SHA256 `496aad0e89496719bc543edc6ffbf829a82307862e630ba4e174e374ac11cc4e`;
+all 480 payload entries match the original release except its feed signature.
+Direct default/opt-in generations matched outside Portal before build outputs.
+The separate installed public SDD `2.1.0` receiver invoked the unchanged public provider
+descriptor and actual public template, without a local-archive source override.
+
+Direct, retained and provider projects independently passed canonical payload checks,
+fresh public-only locked restore, the exact seven-package boundary declared above,
+Release build and actual default/presentation/invalid entrypoints 0/0/2. These execute
+the canonical five-tick traversal/pose/momentum/replay checks and twelve-frame
+presentation correctness. The committed lock remained `7769c72f` in all three cases.
+
+Retained adoption used a newly generated genuine public pre-Portal `0.18.1` workspace,
+not the earlier candidate receiver. Inventory/apply, safe removal and both recoveries
+preserved all 118 original files, 152 inventory rows, modes and three authored sentinels.
+The foreign in-folder sentinel survived; both journals ended rolled back and nine
+managed files were absent. Known new Portal build outputs remained. Separate ordinary
+`Server.Tests` discovered and passed 20/20 tests, with zero failures or skips and the
+original source, configuration, locks and sentinels preserved. New test outputs were
+recorded separately; whole-tree equality is not claimed. The first direct private
+snapshot failure is retained separately from its admitted fresh successful successor.
+
+This closes Box2D `.4` for the declared managed-template scope and P3's fresh/retained
+adoption contribution. Whole P3 remains Done: No. Existing raw performance smoke is
+still bound to `13a8cdeb` and its measured assembly; T4 supplied no new timing evidence
+or accepted budget. A genuine Portal-to-Portal version upgrade awaits a separately
+needed public successor. Global Wizard acceptance, browser physics/rendering, server
+authority and P4 remain separate. Original resume04/resume05 custody and effects were
+not reused, retried or accepted by these operations.
 
 A crate straddling an opening and colliding on both sides, or a rope/joint spanning
 areas, requires a separately designed and measured solver/constraint strategy. Body
