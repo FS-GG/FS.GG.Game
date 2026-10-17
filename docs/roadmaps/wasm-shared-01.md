@@ -1,12 +1,49 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## Protected qualification and current checkout-reader correction
+
+PR713 delivered the reviewed terminal correction and coherent 0.4 source to
+protected main `5e2ebd8d1df0412d4725b31bcb8d380b3c85e48a`, tree
+`1b15f6d4d10982178021e496e08aae376472c9b4`. The complete PR qualifier
+[39009544440](https://github.com/FS-GG/FS.GG.Game/actions/runs/39009544440)
+and protected-main qualifier
+[39010989001](https://github.com/FS-GG/FS.GG.Game/actions/runs/39010989001),
+both attempt 1, passed. The latter's job `117333290828` passed all eleven
+maintained qualification gates, froze the eligible originals and uploaded artifact
+`12092849150`. Independent data review accepted its exact 39-member closure,
+original packages, SDK, manifest, hashes and bounded evidence. This includes actual
+source/installed CLR and Fable controls, current 0.3 API classification, fresh
+53-default/16-selected trace checks and real browser suites; generation was skipped.
+The earlier failures below remain failures. Publication, fresh both-feed installed
+acceptance and product adoption have not occurred.
+
+A subsequent read-only publication preflight found a current native-check reader
+defect before any publication operation. The required lock-range job
+`117328885864` records `actions/checkout@v7`, with the runner resolving that ref
+to the accepted full action SHA. The reader recognized only the full-SHA group
+label. All nineteen original required-job logs were inspected: sixteen use the
+full-SHA label, two reusable jobs use the resolved `v7` label and check out Game
+plus the shared repository, and one validates PR metadata without checkout.
+The correction must authenticate the native ref-to-pin resolution and select
+Game's actual checkout, preserving ambiguous, foreign and wrong-pin refusals.
+Installed and both-feed reader paths were included in the connected sweep.
+
+The successful original qualification/custody remains truthful historical evidence.
+Changed publisher source requires a new reviewed protected producer equal to its
+executor and fresh complete qualification/custody; the accepted old originals cannot
+be overlaid with the new reader. Seven generation inputs and all 71 independently
+accepted outputs remain unchanged, so this correction requires no new generation.
+Organization occupancy remains unknown where local reads return 403. Native
+publication admission must establish current protection, occupancy and credentials
+before writers; source delivery grants no publication authority.
+
 ## Coherent 0.4 candidate and current published-baseline classification
 
-The unpublished terminal API selects stable coherent 0.4.0 before final source CI.
+The terminal API selects stable coherent 0.4.0; it remains unpublished.
 Both .NET packages, Contracts source-profile metadata, SDK version, Rust helper and
 both Rust examples move together. Browser's exact same-version Contracts dependency
 continues to derive from `WasmSharedVersion`; no new package identity is introduced.
-This is source preparation, not a published version or a product consumer pin.
+This is qualified source, not a published version or a product consumer pin.
 
 Current release classification compares actual 0.3.0 from producer
 `16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, tree
@@ -16,8 +53,9 @@ The selected policy binds the actual public served archives: Browser SHA256
 `74a11425bfb64c152ffbeab5be2753434e08f55f806e85113cdc25cacbc86fa5`
 and Contracts SHA256
 `90839f0bef2688447a55568dcb370941efec6f4e043742b9b4b8969c247acfa1`.
-Read-only archive/nuspec inspection established these inputs; native API comparison
-of the new DLLs remains unexecuted. Actual classification is reported by the native
+Read-only archive/nuspec inspection established these inputs. The complete PR and
+protected-main qualifiers subsequently classified both current DLL comparisons as
+compatible; that observed result grants no old-version compatibility obligation. Actual classification is reported by the native
 comparison, with unavailable or unexpected results refused. Historical 0.2 and 0.3
 policy bytes remain explicit read-only evidence mappings, without granting current
 publisher authority or promising compatibility for old callers.

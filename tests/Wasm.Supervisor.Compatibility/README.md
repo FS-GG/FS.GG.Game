@@ -54,7 +54,7 @@ baseline qualification root, coherent candidate custody and candidate version,
 and a fresh output outside source. It limits local .NET work to one process
 with node reuse and shared compilation disabled. The second consumes the
 first gate's installed Fable output, requires pinned WASI SDK 34, independently
-builds its guest, extracts the exact candidate Worker assets and runs all eight
+builds its guest, extracts the exact candidate Worker assets and runs all ten
 pinned Playwright controls from a fresh external public directory. Its looping
 initialization/process and enclosing-budget cases assert containment, without
 claiming exact wall-clock scheduling latency.
