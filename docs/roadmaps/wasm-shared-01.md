@@ -38,6 +38,30 @@ Publication, fresh both-feed installed acceptance, registry inventory and consum
 adoption remain distinct later boundaries. Neither public 0.4 absence observed during
 planning nor source preparation establishes organization occupancy or authorization.
 
+## Third hosted attempt: complete generated trace preparation
+
+The separately selected [39004844417](https://github.com/FS-GG/FS.GG.Game/actions/runs/39004844417),
+attempt 1 at `bfdf70d66d0b64959b755dc23a920cc3848e29c7`, completed successfully.
+Both early model typechecks, all 53 default schedules and all 16 selected schedules
+passed within the original generation window (400.58 seconds). The original
+40,381-byte generation log has no omitted bytes. Node 26.12.0 and Quint 0.32.0
+were observed on Ubuntu 24 image `20261012.334.1`.
+
+Artifact `12090851663`, outer SHA256
+`63a4b8b1db41653930038ef35c7c16542e3d779995a8dcc46b1b87d63f08ae09`,
+contains the exact 71 generated files (53 JSON traces, 16 compressed selected traces
+and two F# projections), plus the manifest and generation log. Owner data-only
+checks matched every output size/hash and all seven exact source-input hashes.
+Independent artifact review precedes acceptance into source. No downloaded source
+is executed during review. The full source/model/package/browser qualification job
+was intentionally skipped in generation mode; preparation success does not qualify
+the joined 0.4 source or authorize publication.
+
+Collection reported no errors, direct generator-process return and owned scratch
+removal. Full descendant settlement remains unproven. Both prior failed operations
+retain their original outcomes; this independently selected job used a fresh hosted
+VM and does not establish teardown of either earlier job.
+
 ## Second hosted attempt: selected module scope and early model checks
 
 The new-source preparation [39003742514](https://github.com/FS-GG/FS.GG.Game/actions/runs/39003742514),
