@@ -52,8 +52,10 @@ Artifact `12090851663`, outer SHA256
 contains the exact 71 generated files (53 JSON traces, 16 compressed selected traces
 and two F# projections), plus the manifest and generation log. Owner data-only
 checks matched every output size/hash and all seven exact source-input hashes.
-Independent artifact review precedes acceptance into source. No downloaded source
-is executed during review. The full source/model/package/browser qualification job
+Independent data-only review accepted the exact 71 files before their source commit,
+including nine new terminal traces and equivalence of 60 historical traces. All seven
+model/generator input hashes remain identical to the dispatched source. No downloaded
+source was executed during review. The full source/model/package/browser qualification job
 was intentionally skipped in generation mode; preparation success does not qualify
 the joined 0.4 source or authorize publication.
 
