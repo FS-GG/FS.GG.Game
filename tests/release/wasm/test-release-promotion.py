@@ -724,11 +724,74 @@ class Tests(unittest.TestCase):
         with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':'9'*40}),self.assertRaises(p.Refusal):p.executor_checkout(b)
         spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
         binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
-        with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':head}):
-            binder.bind_executor(head,head,p.VERSION)
-            for source,executor,version in [('9'*40,head,p.VERSION),(head,'9'*40,p.VERSION),(head,head,'0.3.0')]:
-                with self.assertRaises(AssertionError):binder.bind_executor(source,executor,version)
+        env={'GITHUB_SHA':head,'GITHUB_WORKFLOW_SHA':head,'ACCEPTED_EXECUTOR':head,'QUALIFIER_SOURCE':head,
+             'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_RUN_ATTEMPT':'1',
+             'GITHUB_WORKFLOW_REF':p.REPO+'/.github/workflows/wasm-installed-org.yml@refs/heads/main','GITHUB_JOB':'installed','GITHUB_RUN_ID':'707','WASM_PACKAGE_FEED':'https://nuget.pkg.github.com/FS-GG/index.json'}
+        # Actual Git cleanliness/head checks remain live; the complete diff parser
+        # is exercised independently against real inert Git commits by collector controls.
+        with patch.dict(os.environ,env),patch.object(binder,'source_audit',return_value={'bound':True}) as audit:
+            audit_row=binder.bind_executor(binder.PUBLISHED,head,p.VERSION)
+            self.assertTrue(audit_row['bound']);self.assertEqual(audit_row['execution']['run'],707)
+            audit.assert_called_once_with(binder.PUBLISHED,head)
+            for key,bad in [('GITHUB_SHA','9'*40),('GITHUB_WORKFLOW_SHA','9'*40),('QUALIFIER_SOURCE','9'*40),('GITHUB_REF','refs/heads/other'),('GITHUB_EVENT_NAME','push'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_WORKFLOW_REF',p.REPO+'/.github/workflows/other.yml@refs/heads/main'),('GITHUB_JOB','other'),('GITHUB_RUN_ID','0'),('WASM_PACKAGE_FEED','https://other.invalid/index.json')]:
+                with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,head,p.VERSION)
+            for executor,version in [('9'*40,p.VERSION),(head,'0.3.0')]:
+                with self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,executor,version)
         with patch.dict(os.environ,{'EXECUTION_BINDING':'{"schema":"historical"}'}),self.assertRaises(p.Refusal):p.execution_input()
+
+    def test_installed_binder_authenticates_original_publication_and_current_qualifier(self):
+        spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
+        binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
+        producer=binder.PUBLISHED;tree=binder.PUBLISHED_TREE;qualifier='9'*40
+        with patch.object(p,'P',producer),patch.object(p,'TREE',tree):
+            r=reviewed();run,jobs,artifact=native_data()
+        journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':201,'firstPromotionAttempt':1,'producer':producer,'tag':'wasm/v0.4.0'}
+        values={'PUBLISHED_SOURCE':producer,'QUALIFIER_SOURCE':qualifier,'ACCEPTED_EXECUTOR':qualifier,'RELEASE_VERSION':'0.4.0'}
+        class Transport:
+            def __init__(self,mutation=None):
+                self.mutation=mutation;self.journal=copy.deepcopy(journal)
+                if mutation=='journal-producer':self.journal['producer']=qualifier
+                body=json.dumps(self.journal).encode();self.body=body
+                self.asset={'id':401,'name':'promotion-binding.json','url':f'https://api.github.com/repos/{p.REPO}/releases/assets/401','size':len(body),'digest':'sha256:'+p.digest(body)}
+                self.release={'id':300,'tag_name':'wasm/v0.4.0','target_commitish':qualifier if mutation=='release-source' else producer,'draft':False,'prerelease':False,'assets':[self.asset]}
+            def checked(self,path):
+                if path.endswith('/git/ref/heads/main'):return {'object':{'sha':'8'*40 if self.mutation=='main' else qualifier}}
+                if path.endswith('/releases/300'):return self.release
+                if path.endswith('/artifacts/200'):return artifact
+                if '/runs/100/' in path:
+                    result=copy.deepcopy(run)
+                    if self.mutation=='qualification-failed':result['conclusion']='failure'
+                    return result
+                if '/runs/201/' in path:return {'id':201,'head_sha':producer,'repository':{'full_name':p.REPO},'event':'workflow_dispatch','path':'.github/workflows/release-wasm.yml','run_attempt':1,'status':'completed','conclusion':'failure' if self.mutation=='publication-failed' else 'success'}
+                raise AssertionError('unexpected native read '+path)
+            def pages(self,path,key=None):
+                if '/runs/100/' in path:return jobs
+                if '/runs/201/' in path:return [{'name':name,'conclusion':'success'} for name in ('preflight','admission','begin','org','public','assets','complete')]
+                if path.endswith('/assets'):return [self.asset]
+                if path.endswith('/releases'):return [self.release]
+                raise AssertionError('unexpected native page '+path)
+            def api(self,path):return (200,{'object':{'type':'commit','sha':producer}}, {}) if '/git/ref/tags/' in path else (200,self.release,{})
+            def request(self,url,**kwargs):return 200,self.body,{}
+        for mutation in (None,'main','journal-producer','release-source','qualification-failed','publication-failed'):
+            native=Transport(mutation)
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as raw,patch.object(p,'Native',return_value=native),patch.object(p,'verify_admission') as original_admission:
+                if mutation:
+                    with self.assertRaises((AssertionError,p.Refusal)):binder.bind_promotion_execution(p,journal,values,native.release,pathlib.Path(raw))
+                else:
+                    self.assertEqual(binder.bind_promotion_execution(p,journal,values,native.release,pathlib.Path(raw)),r)
+                    original_admission.assert_called_once_with(native,r,201,1)
+                    self.assertTrue((pathlib.Path(raw)/'published-native.json').exists())
+
+    def test_explicit_read_only_publication_subject_does_not_relax_writer(self):
+        original=reviewed(); producer=p.P; tree=p.TREE
+        subject=p.PublicationSubject(producer,tree,p.VERSION)
+        with patch.object(p,'P','9'*40),patch.object(p,'TREE','8'*40):
+            self.assertEqual(p.validate_tuple(original,subject=subject),original)
+            with self.assertRaises(p.Refusal):p.validate_tuple(original)
+            for wrong in (p.PublicationSubject('7'*40,tree,p.VERSION),p.PublicationSubject(producer,'6'*40,p.VERSION),p.PublicationSubject(producer,tree,'0.3.0')):
+                with self.assertRaises(p.Refusal):p.validate_tuple(original,subject=wrong)
+            with self.assertRaises(AttributeError):subject.producer='9'*40
+        with patch.dict(os.environ,{'EXECUTION_BINDING':'historical'}),self.assertRaises(p.Refusal):p.execution_input()
 
     def test_native_cross_host_redirect_drops_token(self):
         import urllib.request

@@ -7,8 +7,41 @@ value="${2:-}"
 [[ "$mode" == --custody || "$mode" == --feed-only ]] || {
   echo "usage: verify-wasm-package-consumer.sh --custody <directory> | --feed-only" >&2; exit 2;
 }
+if [[ "$mode" == --feed-only && "${MODE:-}" == installed ]]; then
+  evidence="$(realpath -m "${WASM_CONSUMER_EVIDENCE:?requires fresh explicit retained evidence}")"
+  case "$evidence/" in "$repo/"*) echo 'consumer evidence must be outside source' >&2; exit 2;; esac
+  [[ ! -e "$evidence" && ! -L "$evidence" && -n "${WASM_CONSUMER_STATUS:-}" ]] || { echo 'consumer evidence/status must be fresh and explicit' >&2; exit 2; }
+fi
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-package-consumer.XXXXXX")"
-trap 'rm -rf "$work"' EXIT
+finish_consumer() {
+  local runtime=$? collection=0 cleanup=0 projection=0 current_http=
+  trap - EXIT
+  set +e
+  if [[ "$mode" == --feed-only && -n "${WASM_CONSUMER_EVIDENCE:-}" ]]; then
+    if [[ "${consumer_http_started:-0}" == 1 ]]; then
+      current_http="$(stat -c '%d:%i:%s:%y' -- /tmp/fsgg-wasm-package-consumer-http.log 2>/dev/null)"
+      if [[ -n "$current_http" && "$current_http" != "$consumer_http_before" ]]; then
+        cp -P -- /tmp/fsgg-wasm-package-consumer-http.log "$work/consumer-http.log"
+        collection=$?
+      else
+        collection=1
+      fi
+    fi
+    python3 "$repo/scripts/wasm-release/installed-evidence.py" consumer --work "$work" --output "$WASM_CONSUMER_EVIDENCE" --runtime "$runtime"
+    projection=$?
+    if (( collection == 0 )); then collection=$projection; fi
+  fi
+  rm -rf -- "$work"
+  cleanup=$?
+  if [[ -n "${WASM_CONSUMER_STATUS:-}" ]]; then
+    printf '{"runtime":%s,"collection":%s,"cleanup":%s,"descendants":"unproved"}\n' "$runtime" "$collection" "$cleanup" > "$WASM_CONSUMER_STATUS"
+    [[ $? == 0 ]] || collection=1
+  fi
+  if (( runtime != 0 )); then exit "$runtime"; fi
+  if (( collection != 0 )); then exit "$collection"; fi
+  exit "$cleanup"
+}
+trap finish_consumer EXIT
 mkdir -p "$work/sdk-artifacts" "$work/modules" "$work/lock-source" "$work/consumer/browser"
 manifest="$work/release-manifest.json"
 
@@ -112,11 +145,18 @@ mkdir -p "$output/modules"
 cp "$work/modules/"*.wasm "$output/modules/"
 printf '%s  %s\n' 1557e76b7a97b8e301c31c1e082c9060d8b66258a23308dcf9d2d17dbfd9de7d "$work/consumer/browser/fixtures/bar-conformance.wasm" | sha256sum --check --strict
 cp "$work/consumer/browser/fixtures/bar-conformance.wasm" "$output/modules/"
+consumer_http_before="$(stat -c '%d:%i:%s:%y' -- /tmp/fsgg-wasm-package-consumer-http.log 2>/dev/null || true)"
+consumer_http_started=1
 (
   cd "$work/consumer/browser"
   npm ci
   ./run.sh "$work/consumer/public"
 )
+if [[ "$mode" == --feed-only && "${MODE:-}" == installed ]]; then
+  # Authenticate this consumer's actual fresh cache too, preserving its own
+  # signed public bytes/signature log before the owner trap removes the work.
+  python3 "$repo/scripts/wasm-release/promotion.py" check-installed --manifest "$RUNNER_TEMP/wasm-installed-receipts/promotion-binding.json" --cache "$work/consumer-packages" --feed "$WASM_PACKAGE_FEED" --lock "$work/consumer/packages.lock.json" > "$work/installed-member-receipt.log"
+fi
 lock_sha="$(sha256sum "$work/consumer/packages.lock.json" | cut -d' ' -f1)"
 printf 'wasm-package-consumer: mode=%s version=%s lock-sha256=%s modules=rust2,c4 base=/sub/app publication=none\n' \
   "${mode#--}" "$version" "$lock_sha"

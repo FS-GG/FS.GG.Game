@@ -5,6 +5,7 @@ Native calls use bounded HTTPS and workflow-scoped tokens. Offline controls inje
 transport into the same decisions; they do not establish live authorization.
 """
 from __future__ import annotations
+from collections import namedtuple
 import argparse
 import base64
 import io
@@ -87,6 +88,28 @@ def manifest_tool():
     spec = importlib.util.spec_from_file_location('manifest', ROOT/'scripts/wasm-release/release_manifest.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); return module
 
+# Immutable context used only by explicitly selected read-only validators.
+PublicationSubject = namedtuple('PublicationSubject', 'producer tree version')
+
+
+def publication_identity(subject):
+    need(type(subject) is PublicationSubject, 'explicit publication subject required')
+    sha(subject.producer, 40); sha(subject.tree, 40)
+    need(subject.version == VERSION == '0.4.0', 'wrong published subject version')
+    return subject.producer, subject.tree
+
+
+def installed_subject():
+    # The binder independently validates this exact whole-tree installed policy
+    # before any restore; package checking repeats the local source identity audit.
+    spec = importlib.util.spec_from_file_location('installed_binding', ROOT/'scripts/wasm-release/bind-installed-release.py')
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    module.bind_qualification_inputs(os.environ['PUBLISHED_SOURCE'], os.environ['QUALIFIER_SOURCE'], VERSION)
+    subject = PublicationSubject(os.environ['PUBLISHED_SOURCE'], git('rev-parse', os.environ['PUBLISHED_SOURCE']+'^{tree}'), VERSION)
+    publication_identity(subject)
+    return subject
+
+
 def verify_originals(custody, expected):
     custody = pathlib.Path(custody)
     manifest = load(custody/'release-manifest.json')
@@ -103,13 +126,14 @@ def verify_originals(custody, expected):
     need(expected['inventories'] == inventories(custody), 'complete frozen member inventory drift')
     return manifest
 
-def validate_binding(binding):
+def validate_binding(binding, *, subject=None):
+    producer, tree = (P, TREE) if subject is None else publication_identity(subject)
     fields = {'schema','repository','workflow','mode','producer','producerTree','executor','executorTree',
               'runId','runAttempt','version','manifestSha256','archives','inventories','gates',
               'workflowSha','job','event','evidence'}
     need(set(binding) == fields, 'unreviewed preparation fields')
     need(binding['schema'] == SCHEMA and binding['repository'] == REPO and binding['workflow'] == '.github/workflows/wasm-shared.yml' and binding['mode'] == 'qualify', 'unrelated preparation route')
-    need(VERSION == '0.4.0' and binding['producer'] == binding['executor'] == binding['workflowSha'] == P and binding['producerTree'] == binding['executorTree'] == TREE and binding['version'] == VERSION, 'wrong selected producer/executor/tree/version')
+    need(VERSION == '0.4.0' and binding['producer'] == binding['executor'] == binding['workflowSha'] == producer and binding['producerTree'] == binding['executorTree'] == tree and binding['version'] == VERSION, 'wrong selected producer/executor/tree/version')
     need(binding['job'] == 'qualify' and binding['event'] in ('push','workflow_dispatch'), 'premerge/generation-only custody refuses')
     need(binding['runAttempt'] == 1, 'rerun custody refuses')
     need(set(binding['evidence']) == OUTER_FILES - {'preparation-binding.json'} - set(FILES), 'wrong closed evidence roster')
@@ -126,9 +150,9 @@ def validate_binding(binding):
     need(binding['gates'] == {name:'success' for name in GATES}, 'missing/failed required preparation gate')
     return binding
 
-def validate_tuple(reviewed):
+def validate_tuple(reviewed, *, subject=None):
     need(set(reviewed) == {'binding','bindingSha256','artifactId','artifactSha256'}, 'unreviewed promotion inputs')
-    validate_binding(reviewed['binding']); sha(reviewed['bindingSha256']); integer(reviewed['artifactId']); sha(reviewed['artifactSha256'])
+    validate_binding(reviewed['binding'], subject=subject); sha(reviewed['bindingSha256']); integer(reviewed['artifactId']); sha(reviewed['artifactSha256'])
     return reviewed
 
 def validate_run(reviewed, run, jobs, artifact):
@@ -413,11 +437,12 @@ def transaction(reviewed, first_run):
     integer(first_run)
     return {'schema':'fsgg.wasm.promotion/v1','preparation':reviewed,'firstPromotionRun':first_run,'firstPromotionAttempt':int(os.environ.get('FIRST_PROMOTION_ATTEMPT') or os.environ['GITHUB_RUN_ATTEMPT']),'producer':P,'tag':'wasm/v'+VERSION}
 
-def release_state(native):
+def release_state(native, *, subject=None):
+    producer = P if subject is None else publication_identity(subject)[0]
     ref_status,ref,_=native.api(f'repos/{REPO}/git/ref/tags/wasm%2Fv{VERSION}')
     release_status,published,_=native.api(f'repos/{REPO}/releases/tags/wasm%2Fv{VERSION}')
     need(ref_status in (200,404) and release_status in (200,404),'tag/release Unknown')
-    if ref_status==200: need(ref['object']['type']=='commit' and ref['object']['sha']==P,'foreign or nonliteral producer tag')
+    if ref_status==200: need(ref['object']['type']=='commit' and ref['object']['sha']==producer,'foreign or nonliteral producer tag')
     # Complete authenticated discovery is necessary even when by-tag returns404:
     # GitHub's by-tag API addresses published releases, not bound drafts.
     rows=native.pages(f'repos/{REPO}/releases')
@@ -431,7 +456,7 @@ def release_state(native):
         need(actual==release, 'release list/by-ID disagreement')
         assets=native.pages(f'repos/{REPO}/releases/{release["id"]}/assets')
         need(assets==release['assets'], 'release asset enumeration disagreement')
-        need(ref_status==200 and release['tag_name']=='wasm/v'+VERSION and release['target_commitish']==P and not release['prerelease'] and type(release['draft']) is bool, 'foreign release')
+        need(ref_status==200 and release['tag_name']=='wasm/v'+VERSION and release['target_commitish']==producer and not release['prerelease'] and type(release['draft']) is bool, 'foreign release')
         need((release_status==404 and release['draft']) or (release_status==200 and not release['draft'] and published==release), 'published/list contradiction')
     else: need(release_status==404, 'published release hidden in listing')
     return ref_status,release
@@ -444,13 +469,15 @@ def asset_bytes(native, row):
     need(status==200 and len(body)==row['size'] and row.get('digest')=='sha256:'+digest(body), 'asset bytes/digest Unknown')
     return body
 
-def verify_transaction(native, release, reviewed):
+def verify_transaction(native, release, reviewed, *, subject=None):
+    producer = P if subject is None else publication_identity(subject)[0]
+    validate_tuple(reviewed, subject=subject)
     assets=[x for x in release['assets'] if x['name']=='promotion-binding.json']
     need(len(assets)==1,'missing/duplicate durable transaction binding')
     row=assets[0]
     body=asset_bytes(native,row); value=json.loads(body)
     execution_input()
-    need(set(value)=={'schema','preparation','firstPromotionRun','firstPromotionAttempt','producer','tag'} and value['schema']=='fsgg.wasm.promotion/v1' and value['preparation']==reviewed and value['producer']==P and value['tag']=='wasm/v'+VERSION,'foreign durable release transaction')
+    need(set(value)=={'schema','preparation','firstPromotionRun','firstPromotionAttempt','producer','tag'} and value['schema']=='fsgg.wasm.promotion/v1' and value['preparation']==reviewed and value['producer']==producer and value['tag']=='wasm/v'+VERSION,'foreign durable release transaction')
     integer(value['firstPromotionRun']); integer(value['firstPromotionAttempt'])
     verify_admission(native,reviewed,value['firstPromotionRun'],value['firstPromotionAttempt'])
     run=native.checked(f'repos/{REPO}/actions/runs/{value["firstPromotionRun"]}/attempts/{value["firstPromotionAttempt"]}')
@@ -768,9 +795,11 @@ def package_content_hash(raw):
 
 
 def check_installed(record_path,cache,feed,lock):
-    value=load(record_path); reviewed=validate_tuple(value['preparation']); b=reviewed['binding']
+    value=load(record_path)
+    subject = installed_subject() if os.environ.get('MODE') == 'installed' else None
+    reviewed=validate_tuple(value['preparation'], subject=subject); b=reviewed['binding']
     execution_input()
-    need(b['executor']==os.environ['ACCEPTED_EXECUTOR'],'installed transaction wrong executor')
+    need(b['executor']==(subject.producer if subject else os.environ['ACCEPTED_EXECUTOR']),'installed transaction wrong publisher')
     need(feed in ('https://api.nuget.org/v3/index.json','https://nuget.pkg.github.com/FS-GG/index.json'), 'foreign installed feed')
     dependencies=load(lock)['dependencies']['net10.0']
     for ident in PACKAGES:
@@ -806,7 +835,7 @@ def check_installed(record_path,cache,feed,lock):
                 need(feed != 'https://api.nuget.org/v3/index.json' or '.signature.p7s' in names, 'public restored package lacks repository signature')
                 if '.signature.p7s' in names:
                     need(feed=='https://api.nuget.org/v3/index.json','org original was unexpectedly signed')
-                    repository_signature(archive)
+                    print(repository_signature(archive))
                     with archive.open('rb') as stream: need(stream.read(536870913) == raw, 'restored archive changed during signature verification')
                     names.remove('.signature.p7s')
                 need(set(names)==set(inventory),'restored package roster mismatch')
