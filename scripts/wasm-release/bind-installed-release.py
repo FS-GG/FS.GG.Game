@@ -30,6 +30,7 @@ INSTALLED_PATHS = frozenset({
     'docs/roadmaps/wasm-shared-01.md',
     'docs/atlas/catalog.json',
     'docs/atlas/records/264a2f7887a9b6473cbc24102e1bf9be70e57f6d7ba224138140efa094d541f4.json',
+    'docs/atlas/records/2056fa8b653c2240afdad2a16f572a07019109254847829610a9468bb2f95248.json',
 })
 
 
