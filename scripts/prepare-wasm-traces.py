@@ -223,26 +223,26 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
     failed_schedule = None
     failed_evidence_present = any((work / name).exists() or (work / name).is_symlink()
                                   for name in ('failure-schedule.json', 'counterexample.itf'))
-    def retain_failed_evidence():
+    def retain_failed_file(name, limit):
         nonlocal remaining_diagnostics, failed_schedule
-        for name, limit in (('failure-schedule.json', 8192), ('counterexample.itf', 4*MIB)):
-            source = work / name
-            if not source.exists() and not source.is_symlink():
-                continue
-            regular(work, name)
-            size = source.stat().st_size
-            if size > limit or size > remaining_diagnostics:
-                raise ValueError('failed schedule evidence exceeds retained budget: ' + name)
-            shutil.copyfile(source, output / 'artifact' / name)
-            diagnostics.append({'path': name, 'originalBytes': size, 'originalSha256': digest(source),
-                                'retainedBytes': size, 'omittedBytes': 0})
-            remaining_diagnostics -= size
-            if name == 'failure-schedule.json':
-                metadata = json.loads(source.read_text())
-                if not isinstance(metadata, dict) or not isinstance(metadata.get('schedule'), str) or not isinstance(metadata.get('argv'), list) or any(not isinstance(value, str) for value in metadata['argv']) or not isinstance(metadata.get('exitCode'), int) or metadata['exitCode'] == 0:
-                    raise ValueError('failed schedule metadata has invalid shape')
-                failed_schedule = metadata
-    attempt(retain_failed_evidence)
+        source = work / name
+        if not source.exists() and not source.is_symlink():
+            return
+        regular(work, name)
+        size = source.stat().st_size
+        if size > limit or size > remaining_diagnostics:
+            raise ValueError('failed schedule evidence exceeds retained budget: ' + name)
+        shutil.copyfile(source, output / 'artifact' / name)
+        diagnostics.append({'path': name, 'originalBytes': size, 'originalSha256': digest(source),
+                            'retainedBytes': size, 'omittedBytes': 0})
+        remaining_diagnostics -= size
+        if name == 'failure-schedule.json':
+            metadata = json.loads(source.read_text())
+            if not isinstance(metadata, dict) or not isinstance(metadata.get('schedule'), str) or not isinstance(metadata.get('argv'), list) or any(not isinstance(value, str) for value in metadata['argv']) or not isinstance(metadata.get('exitCode'), int) or metadata['exitCode'] == 0:
+                raise ValueError('failed schedule metadata has invalid shape')
+            failed_schedule = metadata
+    for name, limit in (('failure-schedule.json', 8192), ('counterexample.itf', 4*MIB)):
+        attempt(lambda: retain_failed_file(name, limit))
     if status == 0 and failed_evidence_present:
         errors.append('successful generation unexpectedly left failed-schedule evidence')
     def retain_log():
