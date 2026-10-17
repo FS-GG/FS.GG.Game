@@ -22,6 +22,15 @@ comparison, with unavailable or unexpected results refused. Historical 0.2 and 0
 policy bytes remain explicit read-only evidence mappings, without granting current
 publisher authority or promising compatibility for old callers.
 
+The first PR713 required lock-range check at source `05f33ef` found one stale
+Lifecycle.Tests Browser-to-Contracts Project dependency range, still recording
+0.3. The correction changes only that Project range to 0.4 and adds its actual
+version join and stale-range refusal to the cheap candidate preflight. No package
+`contentHash` was edited and no local restore was run. The maintained shared static
+lock-range guard checks all 16 project-reference ranges across 24 locks before the
+replacement push; full exact-head CI remains required. The original failed job
+`117318369385` in run `39005954355` retains its failure evidence.
+
 `prepare.sh` already seals the current published-baseline comparison against the same
 candidate archives in the custody manifest. Current supervisor acceptance therefore
 removes its duplicate 0.2 DLL comparison and unused 0.2 bootstrap feed acquisition.
