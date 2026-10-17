@@ -195,6 +195,7 @@ let terminalRetirementControls (selectedSettings:HostSettings) =
         host <- Some (value |> unwrap)
         let h=host.Value
         readyTerminalHost selectedSettings h (fun () -> results)
+        require armed.IsEmpty "ready fixture has no pending mechanical timer"
         mechanics <- [];results <- []
         h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|8uy|]),limits) |> unwrap
         // BAR retains its single-pending refusal; SC2 queues this follower.
@@ -304,14 +305,18 @@ let terminalReentrantAdmissionControls (selectedSettings:HostSettings) =
         host <- Some((if connected then Host.CreateConnected(selectedSettings,transport,settle) else Host.Create(selectedSettings,interpret)) |> unwrap)
         let h=host.Value
         readyTerminalHost selectedSettings h (fun () -> results)
+        require armed.IsEmpty "ready fixture has no pending mechanical timer"
         results <- [];terminated <- false
         if mode<>"timer-expiry" then
             h.SubmitLimited(0L,LimitedInvoke(previous,Ordinary,[|1uy|]),{limits with MaximumDeadlineMilliseconds=100}) |> unwrap
         if mode="busy-refusal" then
-            let currentBefore=h.Projection.Current
+            let stateBefore=h.Projection
+            let postsBefore=postedRequests
+            let armedBefore=armed
             let admission=h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|2uy|]),limits)
             require (admission=Error[RequestRefused Busy]) (sprintf "BAR pending terminal refusal differs: %A" admission)
-            require (h.Projection.Current=currentBefore) "BAR refusal preserves admitted ordinary request"
+            require (h.Projection.Current=stateBefore.Current && h.Projection.ActiveWorker=stateBefore.ActiveWorker && h.Projection.ActiveGeneration=stateBefore.ActiveGeneration) "BAR refusal preserves admitted ordinary request and worker"
+            require (postedRequests=postsBefore && armed=armedBefore && not terminated) "BAR refusal emits no extra Post/Arm or worker termination"
             let refused=results |> List.filter(fun result -> result.Identity=reset)
             require (refused.Length=1 && refused.Head.Disposition=Refused && refused.Head.Reason=Some Busy && refused.Head.Outcome.IsNone) "BAR refusal settles once without fabricated ABI"
             h.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
