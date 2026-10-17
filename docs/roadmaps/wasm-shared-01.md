@@ -1,11 +1,11 @@
 # WASM-SHARED-01 — producer qualification successor
 
-## Current 0.5 Worker packaging source preparation
+## Current 0.5 closed Worker and installed qualifier
 
 The current source successor selects coherent `0.5.0` for the pair and SDK.
-Published `0.4.0` and its finite P/Q installed qualification below remain unchanged.
-The generated Worker policy currently forms an ESM import graph that must evaluate
-before the native entry installs its command handler. Request admission already
+Published `0.4.0` and its historical P/Q installed qualification below remain unchanged.
+The previous generated Worker policy formed an ESM import graph that had to evaluate
+before the native entry installed its command handler. Request admission still
 sets the deadline before creating that Worker. A later ready event cannot move
 the start of the operation budget.
 
@@ -31,14 +31,13 @@ pre-create deadline, identity, capacity and termination policies are unchanged.
 A retired physical Worker's error also cannot borrow a newly created same-name
 Worker's command identity.
 
-Prepared installed controls exercise a fresh initial Worker, candidate abort and
+Candidate-package controls exercise a fresh initial Worker, candidate abort and
 new physical candidate, real cold expiry, and a genuine loaded message withheld
 until expiry then released as late evidence. The latter is an explicit delivery
 impairment control, not evidence of a naturally late callback. Existing normal
 configuration, ABI/refusal/profile and lifecycle controls remain. No priming,
 retry, clock enlargement, speculative HTTP cache change or consumer asset rewrite
-is selected. The existing 35-minute hosted producer profile remains the bound;
-new tool/build/browser fit is unqualified until its original complete run.
+is selected. The existing 35-minute hosted producer profile remains the bound.
 
 The first candidate qualifier
 [39069862111](https://github.com/FS-GG/FS.GG.Game/actions/runs/39069862111), attempt 1,
@@ -46,19 +45,44 @@ failed static preflight on the Lifecycle.Tests project dependency range before
 compiler or runtime qualification. The connected repair selects the current
 Contracts project version in that lock edge and tests the previous published
 version as a refusal. All other restored package hashes and historical package
-locks remain unchanged; a fresh exact-head full qualifier is still required.
+locks remain unchanged. The original repaired PR qualifier
+[39070020711](https://github.com/FS-GG/FS.GG.Game/actions/runs/39070020711), attempt 1,
+passed before PR719 delivered exact producer P
+`80540027623d9b1a8aa7715d0591de48455403b7`, tree
+`fa2cd0160f9a7c5bb0a1ad85fd8f1eff68b867d3`. Original protected qualification
+[39071360197](https://github.com/FS-GG/FS.GG.Game/actions/runs/39071360197), attempt 1,
+passed in 21m14s and retained the complete 39-file eligible custody. Its 35 real
+package-browser cases include the three new histories; default53 and selected16
+compiled source/candidate-installed CLR/Fable/numeric cohorts also passed.
+This measured fit is not a guarantee for future cold runs or consumer workloads.
 
-Source preparation does not publish `0.5.0` or qualify installed adoption. Its
-actual future publication P and read-only installed qualifier cannot be guessed;
-the existing finite installed binder still identifies authentic published `0.4.0`
-until a genuine successor publication supplies the next closed binding. Consumer
-adoption and native/product outcomes remain separately owned. This rationale
-comes from the producer's own source; private consumer evidence is not part of
-the public producer record.
+Original publication
+[39073209865](https://github.com/FS-GG/FS.GG.Game/actions/runs/39073209865), attempt 1,
+completed through admission, begin, org, public, assets and complete at that same P.
+Release [416092764](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.5.0)
+retains the literal P tag, original pair/SDK and manifest
+`4874c07d6c6b4f1cd920e2a1379de2e5778529f94d211b2c8d138ed8d719483c`.
+Its immutable transaction hash is
+`c567d141277004186ec6f4b24df63defb103c2fc1b811d1f4c3bcd83588cacb7`.
+The org originals match whole bytes; public repository signing changes the
+envelopes while every payload member and NuGet unsigned content hash correspond.
+Native signature verification and complete readbacks remain part of the original
+publication evidence, not a claim of local native verification.
 
-## Current 0.4 producer supplier acceptance
+The read-only installed qualifier now selects this exact `0.5.0` P/tree. Q must
+descend from P, bind its actual native transaction and original qualifying run,
+and change only the explicit binder/control/owning-document/Atlas closure.
+Runtime, package source, build inputs and workflow/profile bytes remain identical
+to P. Real current Q checkout, first attempt, complete source audit, separate
+org/public feeds, raw locks, exact served archives, Core/Worker/output custody and
+original status/cleanup observations remain mandatory. Q source preparation is
+not a dispatched or accepted served-feed installed run; consumer adoption and
+native/product outcomes remain separately owned. Private consumer evidence is
+not part of this public producer record.
 
-Published producer and original publisher P remains
+## Historical 0.4 producer supplier acceptance
+
+The original 0.4 published producer and publisher P remains
 `6732d2371d142d5ccc5d2d127f20e4f179800892`, tree
 `cc71e7cfe73449919376acf775940ff9e8bdab56`. Its original protected qualifier
 [39013804889](https://github.com/FS-GG/FS.GG.Game/actions/runs/39013804889),
