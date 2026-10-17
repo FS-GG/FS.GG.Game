@@ -6,7 +6,7 @@ open Wasm.Lifecycle.Correspondence.CorrespondenceTypes
 
 let private sha character = String.replicate 64 character
 
-let settings profile =
+let settings profile : HostSettings =
     let descriptor = Profiles.tryFind profile |> Option.get
 
     let configuration =
@@ -40,7 +40,7 @@ let private operationToken () =
     OperationToken.create "model-trace"
     |> Result.defaultWith (fun issue -> failwithf "%A" issue)
 
-let private successfulOutcome phase request =
+let private successfulOutcome (phase:InvocationPhase) (request:HostIdentity) : InvocationOutcome =
     {
         Identity = request
         Phase = phase
@@ -51,7 +51,7 @@ let private successfulOutcome phase request =
         EffectEligibility = ProductAdapterMustDecide
     }
 
-let private requestIdentity (request: RequestProjection) worker =
+let private requestIdentity (request: RequestProjection) worker : HostIdentity =
     identity worker request.Id request.Generation
 
 // The original typed input survives pre-event expiry; LastAction is an output.
@@ -86,6 +86,8 @@ let eventFor (previous: ModelStep) (target: ModelStep) =
         | "ordinary" | "ordered" | "snapshot" ->
             let submission = match original.Name with "ordered" -> OrderedEvent | "snapshot" -> ReplaceableSnapshot | _ -> Ordinary
             InvocationRequested(id, submission, Array.zeroCreate request.Bytes)
+        | "adapterRejected" -> AdapterOutputRejected(id, "adapter rejection")
+        | "terminal" -> InvocationAndRetirementRequested(id, Array.zeroCreate request.Bytes)
         | "shutdown" -> ShutdownRequested id
         | "candidateValidated" -> CandidateValidated(prior.CandidateTransaction, prior.CandidateGeneration)
         | "commitCandidate" -> CandidateCommitRequested(prior.CandidateTransaction, prior.ActiveGeneration, prior.CandidateGeneration)
@@ -130,7 +132,7 @@ let private replayWithMutations (mutate: ModelStep -> EffectProjection list -> E
         let terminals =
             effects |> List.choose (function
                 | Settle result ->
-                    let reason = match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:" + diagnostic | _ -> ""
+                    let reason = match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:" + diagnostic | Some (AdapterRejected diagnostic) -> "AdapterRejected:" + diagnostic | _ -> ""
                     if reason = "" then None else
                         let phase = result.Outcome |> Option.map (fun value -> match value.Phase with Compile -> "compile" | Instantiate -> "instantiate" | AllocateDescriptor -> "allocate-descriptor" | AllocateInput -> "allocate-input" | Initialize -> "initialize" | Process -> "process" | Free -> "free" | Shutdown -> "shutdown") |> Option.defaultValue ""
                         Some ({ Request = result.Identity.Request; Reason = reason; Outcome = result.Outcome |> Option.map (fun value -> match value.State with TimedOut -> "TimedOut" | Faulted _ -> "Faulted" | _ -> "unexpected") |> Option.defaultValue ""; Phase = phase; Dispatched = result.Outcome |> Option.exists (fun value -> value.Dispatch = Dispatched) } : TerminalExpectation)

@@ -121,33 +121,32 @@ def source_checks() -> None:
     workflow = (ROOT / ".github/workflows/release-wasm.yml").read_text()
     core = (ROOT / ".github/workflows/release.yml").read_text()
     props = (ROOT / "eng/wasm-shared/version.props").read_text()
-    require("<WasmSharedVersion>0.3.0</WasmSharedVersion>" in props, "stable version origin mismatch")
+    policy=json.loads((ROOT / "scripts/wasm-release/api-baseline-policy.json").read_text())
+    version=policy["candidateVersion"]
+    require(version == "0.4.0" and f"<WasmSharedVersion>{version}</WasmSharedVersion>" in props, "selected version origin mismatch")
     for path in (ROOT / "src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj", ROOT / "src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj"):
         require("$(WasmSharedVersion)" in path.read_text(), f"{path} bypasses shared version origin")
-    require((ROOT / "sdk/wasm/VERSION").read_text().strip() == "0.3.0", "SDK version mismatch")
-    require('"sourceVersion": "0.3.0"' in (ROOT / "src/Wasm.Contracts/compatibility-profile.v1.json").read_text(), "profile version mismatch")
+    require((ROOT / "sdk/wasm/VERSION").read_text().strip() == version, "SDK version mismatch")
+    require(f'"sourceVersion": "{version}"' in (ROOT / "src/Wasm.Contracts/compatibility-profile.v1.json").read_text(), "profile version mismatch")
     require('Version="[$(WasmSharedVersion)]"' in (ROOT / "src/Wasm.Browser/Fable/FS.GG.Wasm.Browser.fsproj").read_text(), "Fable dependency is not exact")
-    require('Version="[0.2.0]"' in (ROOT / "tests/Wasm.PackageConsumer/Consumer.fsproj").read_text(), "consumer dependency is not exact")
+    require('Version="[$(WasmCandidateVersion)]"' in (ROOT / "tests/Wasm.PackageConsumer/Consumer.fsproj").read_text() and 'Version="[0.2.0]"' not in (ROOT / "tests/Wasm.PackageConsumer/Consumer.fsproj").read_text(), "consumer dependency must require exact explicit candidate")
     cargo_files = list((ROOT / "sdk/wasm/rust").rglob("Cargo.toml")) + list((ROOT / "sdk/wasm/rust").rglob("Cargo.lock")) + list((ROOT / "examples/wasm/rust").rglob("Cargo.toml")) + list((ROOT / "examples/wasm/rust").rglob("Cargo.lock"))
     require(all("0.2.0-source" not in path.read_text() for path in cargo_files), "Cargo metadata retains a prerelease identity")
     cargo_manifests = [path for path in cargo_files if path.name == "Cargo.toml" and "[package]" in path.read_text()]
-    require(all('version = "0.3.0"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
+    require(all(f'version = "{version}"' in path.read_text() for path in cargo_manifests), "Cargo package version mismatch")
     validate_workflow(workflow)
     supervisor_backend_checks()
     subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-quint-evaluator-preparation.py")], check=True)
     browser_setup_checks()
+    subprocess.run(["python3", "-B", str(ROOT / "tests/release/wasm/test-installed-org-workflow.py")], check=True)
     promotion_tests = ["python3", "-B", str(ROOT / "tests/release/wasm/test-release-promotion.py")]
-    subprocess.run(promotion_tests, check=True)
-    # Exercise the real suite under hostile inherited release inputs. Without
-    # fixture isolation these become production execution inputs and fail before
-    # the intended custody/writer assertions; explicit successor fixtures must
-    # still override the defaults and exercise their own guards.
-    for mode in ("inspect", "recovery"):
-        ambient = dict(os.environ, MODE=mode,
-                       EXECUTION_BINDING='{"ambient":"not a fixture binding"}',
-                       REVIEWED_TUPLE='{"ambient":"not a fixture tuple"}',
-                       FIRST_PROMOTION_RUN="37166812270", FIRST_PROMOTION_ATTEMPT="1")
-        subprocess.run(promotion_tests, env=ambient, check=True)
+    # One suite run also proves inherited historical dispatch inputs cannot
+    # contaminate inert fixture decisions; current routing rejects overlays.
+    ambient = dict(os.environ, MODE="recovery",
+                   EXECUTION_BINDING='{"ambient":"not a fixture binding"}',
+                   REVIEWED_TUPLE='{"ambient":"not a fixture tuple"}',
+                   FIRST_PROMOTION_RUN="37166812270", FIRST_PROMOTION_ATTEMPT="1")
+    subprocess.run(promotion_tests, env=ambient, check=True)
     require("NuGet/login@8d196754b4036150537f80ac539e15c2f1028841" in workflow, "public push lacks pinned OIDC login")
     require("secrets.NUGET_API_KEY" not in workflow, "long-lived public API key fallback is forbidden")
     require(core.count("github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')") == 2, "core release namespace guard missing")

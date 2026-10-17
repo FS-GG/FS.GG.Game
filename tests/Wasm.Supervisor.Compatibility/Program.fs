@@ -7,15 +7,15 @@ let check value message = if not value then failwith message
 let ok = function Ok value -> value | Error issues -> failwithf "%A" issues
 let id worker request generation : HostIdentity = {WorkerInstance=worker;Request=request;Generation=generation}
 let token (identity:HostIdentity) = OperationToken.create $"request-{identity.Generation}-{identity.Request}" |> ok
-let success phase identity = {Identity=identity;Phase=phase;State=Succeeded;Dispatch=Dispatched;CleanupFault=None;CopiedOutput=Array.empty;EffectEligibility=ProductAdapterMustDecide}
-let configuration path =
+let success (phase:InvocationPhase) (identity:HostIdentity) : InvocationOutcome = {Identity=identity;Phase=phase;State=Succeeded;Dispatch=Dispatched;CleanupFault=None;CopiedOutput=Array.empty;EffectEligibility=ProductAdapterMustDecide}
+let configuration path : ValidatedConfiguration =
     let d=Profiles.tryFind path |> Option.get
     Validation.validateConfiguration {Path=path;ArtifactSha256=String.replicate 64 "a";ConfigurationSha256=String.replicate 64 "b";Limits=d.Limits;Deadline=d.Deadline;Scheduling=d.Scheduling;Replacement=d.Replacement} |> ok
-let limits deadline output = {MaximumDeadlineMilliseconds=deadline;MaximumOutputBytes=output;EnclosingDeadlineMilliseconds=None}
+let limits deadline output : RequestLimits = {MaximumDeadlineMilliseconds=deadline;MaximumOutputBytes=output;EnclosingDeadlineMilliseconds=None}
 let make selected =
-    let mutable effects=[]
+    let mutable effects:HostEffect list=[]
     let cfg=configuration Sc2ImportedStrict
-    let settings=HostSettings.createCompatible cfg (Some Controller) selected |> ok
+    let settings:HostSettings=HostSettings.createCompatible cfg (Some Controller) selected |> ok
     let h=Host.Create(settings,fun emitted -> effects<-effects@emitted) |> ok
     let clear () = effects<-[]
     h,(fun ()->effects),clear,cfg
@@ -202,15 +202,22 @@ let workerLimits () = async {
 }
 [<EntryPoint>]
 let main _ =
+    // Current default BAR/SC2 and selected supervisor settings share the same
+    // real source/installed facade checks; no historical package is executed.
+    for selected in [CompatibilityCorrespondence.selectedSettings(); Wasm.Lifecycle.Correspondence.Correspondence.settings Sc2ImportedStrict; Wasm.Lifecycle.Correspondence.Correspondence.settings BarProtected] do
+        Wasm.Lifecycle.Correspondence.InstalledHostControls.terminalReentrantAdmissionControls selected
+        Wasm.Lifecycle.Correspondence.InstalledHostControls.terminalRetirementControls selected
     runSynchronous()
     let defaultFailures=Wasm.Lifecycle.Correspondence.GeneratedTraces.traces |> List.collect(fun trace ->
         Wasm.Lifecycle.Correspondence.InstalledHostControls.replayFacade false trace @ Wasm.Lifecycle.Correspondence.InstalledHostControls.replayFacade true trace)
     if not defaultFailures.IsEmpty then failwithf "default facade regression: %s" (String.concat "\n" defaultFailures)
-    printfn "default canonical correspondence: 47 original traces, both public facades PASS"
+    printfn "default canonical correspondence: %d traces, both public facades PASS" Wasm.Lifecycle.Correspondence.GeneratedTraces.traces.Length
+    let ordinaryCapture=GeneratedCompatibilityTraces.traces |> List.find(fun trace -> trace.Name="fifo")
+    check (CompatibilityCorrespondence.ordinaryPostArmCaptureIsDetected ordinaryCapture) "ordinary Post+Arm command capture/omission control"
     let correspondenceFailures=GeneratedCompatibilityTraces.traces |> List.collect CompatibilityCorrespondence.replay
     if not correspondenceFailures.IsEmpty then failwithf "%s" (String.concat "\n" correspondenceFailures)
     let detected=GeneratedCompatibilityTraces.traces |> List.filter(fun trace->trace.Name<>"capacity") |> List.collect CompatibilityCorrespondence.causalMutationsAreDetected
-    for name in ["loaded-deadline-retained";"output-narrowing-ignored";"next-budget-overwritten";"ordinary-priority";"ordinary-bytes-omitted";"held-deadline-started-early";"snapshot-promoted-before-pump";"individual-head-expiry";"retained-frozen-queues";"temporary-resume-commit";"cleared-recovery-token";"discarded-refusal-expiry-effects";"discarded-frozen-commit-expiry-effects"] do
+    for name in ["lost-terminal-flag";"dispatch-before-retire";"active-only-retirement";"held-snapshot-resurrection";"terminal-result-dropped";"loaded-deadline-retained";"output-narrowing-ignored";"next-budget-overwritten";"ordinary-priority";"ordinary-bytes-omitted";"held-deadline-started-early";"snapshot-promoted-before-pump";"individual-head-expiry";"retained-frozen-queues";"temporary-resume-commit";"cleared-recovery-token";"discarded-refusal-expiry-effects";"discarded-frozen-commit-expiry-effects"] do
         check (detected |> List.exists(fun (control,refused)->control=name && refused)) ("causal model mutation accepted: "+name)
     printfn "selected canonical correspondence: all full pure/connected states, ordered mechanical effects, callbacks, raw terminals and captured command limits PASS"
     #if FABLE_COMPILER

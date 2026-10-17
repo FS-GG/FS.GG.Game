@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cold official tools and immutable baseline, then actual selected qualification.
+# Cold official tools, then actual selected qualification and sealed current API classification.
 set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export DOTNET_PROCESSOR_COUNT=1 MSBUILDDISABLENODEREUSE=1 UseSharedCompilation=false
@@ -12,9 +12,9 @@ bootstrap() {
     umask 077
     mkdir -p -- "$(dirname "$q")"
     mkdir -m 700 -- "$q"
-    mkdir -- "$q/feed" "$q/packages" "$q/official-core"
+    mkdir -- "$q/packages" "$q/official-core"
     local staging
-    for staging in "$q" "$q/feed" "$q/packages" "$q/official-core"; do
+    for staging in "$q" "$q/packages" "$q/official-core"; do
       [[ ! -L "$staging" && "$(stat -c '%a:%u' -- "$staging")" == "700:$(id -u)" ]] || {
         echo 'supervisor bootstrap staging must be private and owned by the current user' >&2
         exit 2
@@ -28,9 +28,6 @@ def download(url,path,digest):
  with urllib.request.urlopen(url) as response:body=response.read()
  assert sha(body)==digest,'official archive byte mismatch: '+path.name
  path.write_bytes(body);return body
-for name,digest in [('contracts','b5bb9d0217dc31de9649b7c952db514bab5c99d32b30e6480da1f313d446fba4'),('browser','40d11feebb07b01c0846b1b9716db10badc5dfbce1a450eb5319ab89b8f041e6')]:
- ident='fs.gg.wasm.'+name;path=q/'feed'/f'{ident}.0.2.0.nupkg'
- download(f'https://api.nuget.org/v3-flatcontainer/{ident}/0.2.0/{path.name}',path,digest)
 sdk=pathlib.Path(subprocess.check_output(['dotnet','--list-sdks'],text=True).split('10.0.401 [',1)[1].split(']',1)[0])/'10.0.401'
 shutil.copytree(sdk/'FSharp',q/'compiler')
 for version,archiveDigest,entries in [
@@ -46,7 +43,7 @@ for version,archiveDigest,entries in [
    rows.append(dict(version=version,archiveSha256=archiveDigest,archiveEntry=entry,dllSha256=digest,path=str(out)))
    if version=='10.1.401' and tfm=='netstandard2.0':(q/'compiler/FSharp.Core.dll').write_bytes(body)
 (q/'official-core/receipt.json').write_text(json.dumps(rows,indent=2)+'\n')
-root=ET.Element('configuration');sources=ET.SubElement(root,'packageSources');ET.SubElement(sources,'clear');ET.SubElement(sources,'add',key='baseline',value=str(q/'feed'));ET.SubElement(sources,'add',key='official',value='https://api.nuget.org/v3/index.json');mapping=ET.SubElement(root,'packageSourceMapping');ET.SubElement(ET.SubElement(mapping,'packageSource',key='baseline'),'package',pattern='FS.GG.Wasm.*');ET.SubElement(ET.SubElement(mapping,'packageSource',key='official'),'package',pattern='*');ET.ElementTree(root).write(q/'NuGet.Config',encoding='unicode')
+root=ET.Element('configuration');sources=ET.SubElement(root,'packageSources');ET.SubElement(sources,'clear');ET.SubElement(sources,'add',key='official',value='https://api.nuget.org/v3/index.json');mapping=ET.SubElement(root,'packageSourceMapping');ET.SubElement(ET.SubElement(mapping,'packageSource',key='official'),'package',pattern='*');ET.ElementTree(root).write(q/'NuGet.Config',encoding='unicode')
 (q/'environment').write_text('WASM_SUPERVISOR_BASELINE_ROOT='+str(q)+'\nDotnetFscCompilerPath='+str(q/'compiler/fsc.dll')+'\nWASM_FSC_COMPILER_PATH='+str(q/'compiler/fsc.dll')+'\nDOTNET_PROCESSOR_COUNT=1\nMSBUILDDISABLENODEREUSE=1\nUseSharedCompilation=false\n')
 PY
   NUGET_PACKAGES="$q/packages" dotnet tool install fable --version 5.18.0 --tool-path "$q/tools" --configfile "$q/NuGet.Config" > "$q/tool-install.log" 2>&1
@@ -54,7 +51,7 @@ PY
   cmp "$q/compiler/FSharp.Core.dll" "$q/official-core/FSharp.Core.10.1.401.netstandard2.0.dll"
   "$repo/sdk/wasm/toolchains/acquire-wasi-sdk.sh" "$q/wasi" > "$q/wasi-acquire.log"
   printf 'WASM_WASI_SDK_ROOT=%s\n' "$q/wasi/wasi-sdk-34.0-x86_64-linux" >> "$q/environment"
-  printf 'supervisor-bootstrap: official baseline0.2.0 Fable5.18.0 Core401-TFM20+21 Core302-TFM20+21 Core203-TFM21 pinned; commonSDK=unchanged\n'
+  printf 'supervisor-bootstrap: official-only Fable5.18.0 Core401-TFM20+21 Core302-TFM20+21 Core203-TFM21 pinned; commonSDK=unchanged\n'
 }
 report_custody_exit() {
   local status=$1 leaf
@@ -66,10 +63,10 @@ report_custody_exit() {
           default-traces.log selected-traces.log source-build.log source-dotnet.log \
           source-fable-build.log source-fable.log installed-build.log installed-locked-build.log \
           installed-dotnet.log installed-fable-build.log installed-fable.log \
-          installed-raw-numeric.log native-api.log installed-lock-refusal.log; do
+          installed-raw-numeric.log installed-lock-refusal.log; do
         if [[ -f "$output/$leaf" && ! -L "$output/$leaf" ]]; then
-          printf 'supervisor diagnostic: %s (last 60 lines, at most 16384 bytes)\n' "$leaf" >&2
-          { tail -c 16384 -- "$output/$leaf" | tail -n 60; } >&2 || printf 'supervisor diagnostic unavailable: %s\n' "$leaf" >&2
+          printf 'supervisor diagnostic: %s (first compiler errors plus last 60 lines, at most 16384 bytes)\n' "$leaf" >&2
+          { { grep -m 12 -E 'error (FS|NU|MSB)[0-9]+' "$output/$leaf" | head -c 4096; } || true; tail -c 12288 -- "$output/$leaf" | tail -n 60; } >&2 || printf 'supervisor diagnostic unavailable: %s\n' "$leaf" >&2
         fi
       done
     fi
@@ -78,12 +75,21 @@ report_custody_exit() {
 }
 case "${1:-}" in
   --bootstrap) bootstrap "$(realpath -m "${2:?requires new private baseline root}")";;
-  --custody)
+  --compile-source)
+    output="$(realpath -m "${2:?requires new private output}")"
+    q="${WASM_SUPERVISOR_BASELINE_ROOT:?requires completed official bootstrap}"
+    stage='early current source compile';diagnostic_fresh=true
+    trap 'report_custody_exit "$?"' EXIT
+    export WASM_BASELINE_QUALIFICATION_ROOT="$q" WASM_FSC_COMPILER_PATH="$q/compiler/fsc.dll" DOTNET_HOST_PATH=/usr/share/dotnet/dotnet
+    "$repo/scripts/verify-wasm-supervisor.sh" --compile-source "$output"
+    ;;
+  --compile-installed|--custody)
+    phase="$1"
     custody="$(realpath -e "${2:?requires exact coherent custody}")"
     output="$(realpath -m "${3:?requires new private output}")"
     stage='baseline preparation'
     diagnostic_fresh=false
-    [[ -e "$output" ]] || diagnostic_fresh=true
+    if [[ "$phase" == --custody || ! -e "$output" ]]; then diagnostic_fresh=true;fi
     trap 'report_custody_exit "$?"' EXIT
     q="${WASM_SUPERVISOR_BASELINE_ROOT:-${output}-baseline}"
     [[ -d "$q" ]] || bootstrap "$q"
@@ -99,8 +105,13 @@ PYCONFIG
     # Direct MSBuild execution needs the same host used by the qualifier's commands.
     # The selected private fsc.dll remains supplied through DotnetFscCompilerPath.
     export DOTNET_HOST_PATH=/usr/share/dotnet/dotnet
+    if [[ "$phase" == --compile-installed ]]; then
+      stage='early current installed compile'
+      "$repo/scripts/verify-wasm-supervisor.sh" --compile-installed "$output"
+      exit 0
+    fi
     stage='source/model/installed supervisor qualification'
-    "$repo/scripts/verify-wasm-supervisor.sh" "$output"
+    "$repo/scripts/verify-wasm-supervisor.sh" --compiled "$output"
     stage='official Core byte joins'
     python3 - "$repo" "$q" <<'PYJOIN'
 import hashlib,json,pathlib,sys
@@ -124,5 +135,5 @@ PYJOIN
     stage='source cleanliness'
     [[ -z "$(git -C "$repo" status --porcelain)" ]] || { echo 'supervisor browser qualification dirtied source' >&2; exit 2; }
     ;;
-  *) echo 'usage: qualify-supervisor-custody.sh --bootstrap NEW_ROOT | --custody CUSTODY NEW_OUTPUT' >&2; exit 2;;
+  *) echo 'usage: qualify-supervisor-custody.sh --bootstrap NEW_ROOT | --compile-source NEW_OUTPUT | --compile-installed CUSTODY NEW_OUTPUT | --custody CUSTODY COMPILED_OUTPUT' >&2; exit 2;;
 esac

@@ -21,38 +21,15 @@ p=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)
 
 
 def validate_workflow(text):
-    assert '  push:' not in text and 'options: [prepare, promote, readback, recovery, inspect]' in text and 'default: prepare' in text
-    assert 'group: release-wasm-0.3.0' in text and 'cancel-in-progress: false' in text
+    assert '  push:' not in text and 'options: [readback, promote, recovery, inspect]' in text and 'default: readback' in text
+    assert 'group: release-wasm-current' in text and 'cancel-in-progress: false' in text
     env = text.split("\nenv:\n",1)[1].split("\njobs:\n",1)[0]
     assert re.findall(r"(?m)^  DOTNET_PROCESSOR_COUNT: (.+)$",env)==['1'], "actual CPU bound must be one"
     assert not re.search(r"(?m)^  .*[/@].*:",env), "action identifier substituted for an environment key"
     jobs={m[1]:m[2] for m in re.finditer(r'(?ms)^  ([a-z]+):\n(.*?)(?=^  [a-z]+:\n|\Z)',text.split('jobs:\n',1)[1])}
-    assert set(jobs)=={'preflight','prepare','admission','begin','org','public','assets','complete','readback','inspect'}
-    for job,dependency in [('prepare','preflight'),('admission','preflight'),('begin','admission'),('org','begin'),('public','org'),('assets','public'),('complete','org, public, assets'),('readback','admission')]:
+    assert set(jobs)=={'preflight','admission','begin','org','public','assets','complete','readback','inspect'}
+    for job,dependency in [('admission','preflight'),('begin','admission'),('org','begin'),('public','org'),('assets','public'),('complete','org, public, assets'),('readback','admission')]:
         assert 'needs: ['+dependency+']' in jobs[job]
-    assert "if: inputs.mode == 'prepare'" in jobs['prepare']
-    assert '      - name: Read-only pinned Rust model readiness\n' in jobs['prepare']
-    assert '      - name: Prepare protected originals once\n' in jobs['prepare']
-    assert jobs['prepare'].index('Read-only pinned Rust model readiness') < jobs['prepare'].index('Prepare protected originals once')
-    readiness = jobs['prepare'].split('      - name: Read-only pinned Rust model readiness\n', 1)[1].split('      - name: Prepare protected originals once\n', 1)[0]
-    assert 'timeout-minutes: 10' in readiness and 'GH_TOKEN: ${{ github.token }}' in readiness
-    assert 'python3 ../executor/scripts/wasm-release/prepare-quint-evaluator.py --producer "$PWD" --quint-home "$QUINT_HOME" --evidence "$RUNNER_TEMP/wasm-prepack-rust"' in readiness
-    assert 'QUINT_HOME: ${{ runner.temp }}/wasm-quint' in readiness
-    assert '''printf 'QUINT_HOME=%s\\n' "$QUINT_HOME" >> "$GITHUB_ENV"''' in readiness
-    assert 'continue-on-error' not in readiness and '|| true' not in readiness
-    assert jobs['prepare'].index('Read-only pinned Rust model readiness') < jobs['prepare'].index('Prepare protected originals once')
-    assert '"$RUNNER_TEMP/wasm-prepack-rust" "$RUNNER_TEMP/wasm-selected"' in jobs['prepare']
-    assert '${{ runner.temp }}/wasm-prepack-rust/' in jobs['prepare']
-    assert text.count('scripts/wasm-release/prepare.sh')==1 and 'scripts/wasm-release/prepare.sh "$RUNNER_TEMP/wasm-release"' in jobs['prepare']
-    assert "ref: "+p.P in jobs['prepare'] and p.TREE in jobs['prepare']
-    assert 'EXECUTOR_TREE=' in jobs['prepare'] and 'python3 scripts/wasm-release/promotion.py freeze' in jobs['prepare']
-    for gate in p.GATES: assert '- name: '+gate in jobs['prepare']
-    assert 'scripts/verify-wasm-contracts.sh' in jobs['prepare'] and 'scripts/verify-wasm-lifecycle.sh' in jobs['prepare']
-    assert 'scripts/verify-wasm-package-consumer.sh --custody' in jobs['prepare'] and 'scripts/wasm-release/qualify-supervisor-custody.sh --custody' in jobs['prepare']
-    assert jobs['prepare'].index('Qualify full selected custody') < jobs['prepare'].index('Freeze eligible binding') < jobs['prepare'].index('Retain eligible originals')
-    assert 'if: failure()' in jobs['prepare'] and 'wasm-ineligible-' in jobs['prepare']
-    assert jobs['prepare'].count('GH_TOKEN:') == 1, 'only the authenticated read-only readiness step may receive token'
-    assert all(x not in jobs['prepare'] for x in ['contents: write','packages: write','id-token: write','NUGET_API_KEY:'])
     assert 'id-token: write' in jobs['admission'] and 'NuGet/login@8d196754b4036150537f80ac539e15c2f1028841' in jobs['admission']
     assert 'NUGET_EXCHANGE_VERIFIED:' in jobs['admission'] and 'promotion.py admit' in jobs['admission']
     for job in ['begin','org','public','assets','complete']:
@@ -72,10 +49,11 @@ def validate_workflow(text):
     contents_writers={'admission','begin','org','public','assets','complete','readback','inspect'}
     for job,block in jobs.items():
         grant=re.findall(r'(?m)^      contents: (\S+)$',block)
-        assert grant==(['write'] if job in contents_writers else ['read'] if job=='prepare' else []), 'wrong draft visibility permission '+job
+        assert grant==(['write'] if job in contents_writers else []), 'wrong draft visibility permission '+job
     assert "if: inputs.mode == 'inspect'" in jobs['inspect'] and 'promotion.py inspect' in jobs['inspect']
     assert all(x not in jobs['inspect'] for x in ('id-token:', 'NuGet/login', 'promotion.py admit', 'promotion.py begin', 'nuget push', 'stage-assets.sh'))
-    assert 'EXECUTION_BINDING: ${{ inputs.execution_binding }}' in env
+    assert 'EXECUTION_BINDING:' not in env and 'execution_binding:' not in text
+    assert 'prepare.sh' not in text and 'Read-only pinned Rust model readiness' not in text
     assert 'fetch-depth: 0' in jobs['admission']
     assert text.count('packages: write')==len(write_jobs)
     assert text.split('\nenv:\n',1)[0].split('\npermissions:\n',1)[1]=='  contents: read\n', 'global permission widening'
@@ -91,23 +69,23 @@ def validate_workflow(text):
 
 
 def binding():
-    return {'schema':p.SCHEMA,'repository':p.REPO,'workflow':'.github/workflows/release-wasm.yml','mode':'prepare','producer':p.P,'producerTree':p.TREE,'executor':'a'*40,'executorTree':'b'*40,'runId':100,'runAttempt':2,'version':'0.3.0','manifestSha256':'c'*64,'archives':{name:'d'*64 for name in p.FILES},'inventories':{name:{'value':'e'*64} for name in p.FILES},'gates':{name:'success' for name in p.GATES}}
+    return {'schema':p.SCHEMA,'repository':p.REPO,'workflow':'.github/workflows/wasm-shared.yml','workflowSha':p.P,'job':'qualify','event':'push','mode':'qualify','producer':p.P,'producerTree':p.TREE,'executor':p.P,'executorTree':p.TREE,'runId':100,'runAttempt':1,'version':p.VERSION,'manifestSha256':'c'*64,'archives':{name:'d'*64 for name in p.FILES},'inventories':{name:{'value':'e'*64} for name in p.FILES},'gates':{name:'success' for name in p.GATES},'evidence':{name:'e'*64 for name in p.OUTER_FILES-set(p.FILES)-{'preparation-binding.json'}}}
 
 def reviewed(): return {'binding':binding(),'bindingSha256':'f'*64,'artifactId':200,'artifactSha256':'0'*64}
 
 def native_data():
     b=binding()
-    run={'id':100,'run_attempt':2,'head_sha':'a'*40,'path':b['workflow'],'event':'workflow_dispatch','status':'completed','conclusion':'success','repository':{'full_name':p.REPO}}
-    jobs=[{'name':'prepare','conclusion':'success','steps':[{'name':x,'conclusion':'success'} for x in [*p.GATES,'Retain eligible originals']]}]
-    artifact={'id':200,'expired':False,'digest':'sha256:'+'0'*64,'name':'wasm-eligible-100-2-0.3.0','workflow_run':{'id':100,'head_sha':'a'*40}}
+    run={'id':100,'run_attempt':1,'head_sha':p.P,'head_branch':'main','path':b['workflow'],'event':'push','status':'completed','conclusion':'success','repository':{'full_name':p.REPO}}
+    jobs=[{'name':p.QUALIFY_JOB,'run_id':100,'run_attempt':1,'head_sha':p.P,'conclusion':'success','steps':[{'name':x,'conclusion':'success'} for x in [*p.GATES,'Retain eligible originals']]}]
+    artifact={'id':200,'expired':False,'digest':'sha256:'+'0'*64,'name':'wasm-eligible-100-1-'+p.VERSION,'workflow_run':{'id':100,'head_sha':p.P}}
     return run,jobs,artifact
 
 class Occupancy:
     def __init__(self,mutant=None): self.mutant=mutant; self.writes=[]
     def pages(self,path,key=None):
         if self.mutant=='denied': raise p.Refusal('403 Unknown')
-        if self.mutant=='deleted' and 'state=deleted' in path: return [{'name':'0.3.0','id':1}]
-        if self.mutant=='active' and 'state=active' in path: return [{'name':'0.3.0','id':1}]
+        if self.mutant=='deleted' and 'state=deleted' in path: return [{'name':'0.4.0','id':1}]
+        if self.mutant=='active' and 'state=active' in path: return [{'name':'0.4.0','id':1}]
         if self.mutant=='malformed-org': return [{'id':1}]
         return [{'name':'0.2.0','id':1}]
     def request(self,url,**kwargs):
@@ -116,7 +94,7 @@ class Occupancy:
         if url.endswith('/index.json'):
             if self.mutant=='missing-index': return 404,None,{}
             if self.mutant=='malformed-index': return 200,{'versions':[{}]},{}
-            return 200,{'versions':['0.1.1','0.2.0']+(['0.3.0'] if self.mutant=='unlisted' else [])},{}
+            return 200,{'versions':['0.1.1','0.2.0']+(['0.4.0'] if self.mutant=='unlisted' else [])},{}
         return (200 if self.mutant in ('contradiction','unlisted') else 404),b'',{}
 
 class Tests(unittest.TestCase):
@@ -134,27 +112,19 @@ class Tests(unittest.TestCase):
     def test_actual_yaml_and_causal_mutants(self):
         text=(ROOT/'.github/workflows/release-wasm.yml').read_text();validate_workflow(text)
         for before,after in [
-            ('needs: [org]\n','needs: [begin]\n'),('options: [prepare, promote, readback, recovery, inspect]','options: [prepare, publish]'),
+            ('needs: [org]\n','needs: [begin]\n'),('options: [readback, promote, recovery, inspect]','options: [prepare, publish]'),
             ('DOTNET_PROCESSOR_COUNT: 1','DOTNET_PROCESSOR_COUNT: 2'),
             ('DOTNET_PROCESSOR_COUNT: 1','actions/setup-dotnet@bad_PROCESSOR_COUNT: 1'),
-            ('Read-only pinned Rust model readiness','Skipped Rust readiness'),
-            ('timeout-minutes: 10','timeout-minutes: 11'),
-            ('QUINT_HOME: ${{ runner.temp }}/wasm-quint','QUINT_HOME: $HOME/.quint'),
-            ('default: prepare','default: promote'),('contents: read\n    defaults:','contents: write\n    defaults:'),
-            ('Qualify full selected custody','Skipped selected custody'),('TAG_CREDENTIAL_ROUTE: workflow-github-token','TAG_CREDENTIAL_ROUTE: PAT'),
+            ('default: readback','default: promote'),('TAG_CREDENTIAL_ROUTE: workflow-github-token','TAG_CREDENTIAL_ROUTE: PAT'),
             ('p.download(p.Native()','p.foreign(p.Native()'),('NUGET_EXCHANGE_VERIFIED:','EXCHANGE_ASSUMED:'),
-            ('group: release-wasm-0.3.0','group: release-wasm-0.2.0'),('GH_TOKEN: ${{ github.token }}','GH_TOKEN: ${{ secrets.APP_TOKEN }}')]:
+            ('group: release-wasm-current','group: release-wasm-0.3.0'),('GH_TOKEN: ${{ github.token }}','GH_TOKEN: ${{ secrets.APP_TOKEN }}')]:
             self.assertIn(before,text)
             with self.subTest(before=before),self.assertRaises((AssertionError,KeyError,ValueError)): validate_workflow(text.replace(before,after))
-        block=text.split('      - name: Read-only pinned Rust model readiness\n',1)[1].split('      - name: Prepare protected originals once\n',1)[0]
-        full='      - name: Read-only pinned Rust model readiness\n'+block
-        moved=text.replace(full,'',1).replace('      - name: Qualify contracts and lifecycle\n',full+'      - name: Qualify contracts and lifecycle\n',1)
-        with self.assertRaises(AssertionError):validate_workflow(moved)
         with self.assertRaises(AssertionError):validate_workflow(text.replace('on:\n','on:\n  push:\n    tags: [wasm/v*]\n',1))
     def test_deleted_occupancy_permissions_are_exactly_job_scoped(self):
         text=(ROOT/'.github/workflows/release-wasm.yml').read_text()
         validate_workflow(text)
-        for job in ('preflight','prepare','admission','begin','org','public','assets','complete','readback','inspect'):
+        for job in ('preflight','admission','begin','org','public','assets','complete','readback','inspect'):
             pattern=r'(?ms)(^  '+job+r':\n.*?)(?=^  [a-z]+:\n|\Z)'
             block=re.search(pattern,text)[1]
             if job in ('admission','begin','org','public'):
@@ -197,6 +167,7 @@ class Tests(unittest.TestCase):
                 fixture=pathlib.Path(raw)/('safe' if no_bytecode else 'original')
                 source=fixture/'scripts/wasm-release/promotion.py';source.parent.mkdir(parents=True)
                 source.write_bytes((ROOT/'scripts/wasm-release/promotion.py').read_bytes())
+                props=fixture/'eng/wasm-shared/version.props';props.parent.mkdir(parents=True);props.write_bytes((ROOT/'eng/wasm-shared/version.props').read_bytes())
                 def git(*args):
                     return subprocess.check_output(['git','-C',str(fixture),*args],text=True,stderr=subprocess.PIPE).strip()
                 git('init','-q');git('add','.')
@@ -229,9 +200,115 @@ class Tests(unittest.TestCase):
                                       'dirty or different executor tree',result.stderr)
                 self.assertFalse((fixture/'scripts/wasm-release/__pycache__').exists())
 
+    def test_bounded_freeze_actual_caller_and_bad_inputs(self):
+        p.custody_plan()
+        with tempfile.TemporaryDirectory(prefix='wasm-freeze-inert.') as raw:
+            root=pathlib.Path(raw);custody=root/'originals';custody.mkdir();runner=root/'runner';runner.mkdir()
+            for name in (*p.FILES,*p.CUSTODY_METADATA,*p.BASELINE_LOGS):(custody/name).write_bytes(b'inert original/evidence')
+            manifest={'artifacts':[{'file':name,'sha256':p.digest((custody/name).read_bytes())} for name in p.FILES]}
+            (custody/'release-manifest.json').write_text(json.dumps(manifest))
+            for name,path in p.EVIDENCE.items():
+                source=runner/path;source.parent.mkdir(parents=True,exist_ok=True);source.write_bytes(b'inert evidence')
+            env={'RUNNER_TEMP':str(runner),'GITHUB_OUTPUT':str(root/'outputs'),'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_SHA':p.P,'GITHUB_WORKFLOW_SHA':p.P,'GITHUB_EVENT_NAME':'push','GITHUB_RUN_ID':'100','GITHUB_RUN_ATTEMPT':'1'}
+            inventory={name:{'inert-member':p.digest(b'inert')} for name in p.FILES}
+            with patch.dict(os.environ,env),patch.object(p,'git',return_value=''),patch.object(p,'inventories',return_value=inventory),patch.object(p,'verify_originals'):
+                output=root/'eligible';p.freeze(custody,output)
+                self.assertEqual({f.relative_to(output).as_posix() for f in output.rglob('*') if f.is_file()},p.OUTER_FILES)
+                bound=p.load(output/'preparation-binding.json');p.validate_binding(bound)
+                self.assertTrue(all(p.digest((output/name).read_bytes())==value for name,value in bound['evidence'].items()))
+                for key,value in [('GITHUB_EVENT_NAME','pull_request'),('GITHUB_REF','refs/pull/1/merge'),('GITHUB_SHA','9'*40),('GITHUB_WORKFLOW_SHA','9'*40),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_EVENT_NAME','workflow_dispatch')]:
+                    target=root/('bad-'+key+'-'+value.replace('/','_'))
+                    with self.subTest(key=key),patch.dict(os.environ,{key:value}),self.assertRaises(p.Refusal):p.freeze(custody,target)
+                    self.assertFalse(target.exists())
+                with patch.object(p,'MAX_ARCHIVE',1),self.assertRaises(p.Refusal):p.freeze(custody,root/'oversize-original')
+                with patch.object(p,'MAX_METADATA',1),self.assertRaises(p.Refusal):p.freeze(custody,root/'oversize-metadata')
+                with patch.object(p,'MAX_DIAGNOSTICS',1),self.assertRaises(p.Refusal):p.freeze(custody,root/'oversize-diagnostics')
+                source=runner/next(iter(p.EVIDENCE.values()));original=source.read_bytes();source.unlink()
+                with self.assertRaises(p.Refusal):p.freeze(custody,root/'missing')
+                outside=root/'foreign';outside.write_bytes(original);source.symlink_to(outside)
+                with self.assertRaises(p.Refusal):p.freeze(custody,root/'symlink')
+
+    @staticmethod
+    def checkout_log(commit,repo=None):
+        repo=repo or p.REPO
+        return ('2026-10-17T05:00:00.000Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n'
+                '2026-10-17T05:00:00.001Z Syncing repository: '+repo+'\n'
+                '2026-10-17T05:00:00.002Z [command]/usr/bin/git log -1 --format=%H\n'
+                '2026-10-17T05:00:00.003Z '+commit+'\n'
+                '2026-10-17T05:00:00.004Z ##[group]Run actual required check\n').encode()
+
+    def test_checkout_logs_require_action_repository_and_actual_commit(self):
+        body=self.checkout_log('7'*40)
+        self.assertEqual(p.checkout_commit(body),'7'*40)
+        windows=body.replace(b'/usr/bin/git log',b'"C:\\Program Files\\Git\\cmd\\git.exe" log')
+        self.assertEqual(p.checkout_commit(windows),'7'*40)
+        for bad in [body.replace(b'actions/checkout@',b'echo checkout@'),body.replace(p.REPO.encode(),b'foreign/repo'),body.replace(b'--format=%H',b'--format=summary'),body.replace(b'7'*40,b'not-a-commit'),body+body,b'Run script\n[command]/usr/bin/git log -1 --format=%H\n'+b'7'*40]:
+            with self.subTest(body=bad[:50]),self.assertRaises(p.Refusal):p.checkout_commit(bad)
+        expected={'workflowId':316870217,'path':'.github/workflows/kit-materialize.yml','event':'pull_request'}
+        metadata=('2026-10-17T05:00:00.000Z   PR_HEAD: '+'8'*40+'\n2026-10-17T05:00:00.001Z   SELF_REPO: '+p.REPO+'\n').encode()
+        p.metadata_head(metadata,'8'*40,expected)
+        for bad in [b'',metadata.replace(b'8'*40,b'9'*40),metadata+metadata,metadata.replace(p.REPO.encode(),b'foreign/repo')]:
+            with self.assertRaises(p.Refusal):p.metadata_head(bad,'8'*40,expected)
+        with self.assertRaises(p.Refusal):p.metadata_head(metadata,'8'*40,dict(expected,workflowId=1))
+
+    def test_native_required_checks_pr_checkout_tree_producer_join(self):
+        selected=p.required_checks();self.assertEqual(len(selected),19)
+        policy=p.load(ROOT/'policy/v2-ci-ordinary-settlement.json')['qualification']
+        head='8'*40;checked='7'*40
+        branch={'protected':True,'protection':{'required_status_checks':{'checks':[{'context':name,'app_id':app} for name,app in selected],'contexts':[name for name,_ in selected]}}}
+        pull={'id':1,'number':1,'node_id':'PR1','merged_at':'2026-10-17T05:00:00Z','merge_commit_sha':p.P,'state':'closed','head':{'sha':head,'repo':{'full_name':p.REPO}},'base':{'ref':'main','repo':{'full_name':p.REPO}}}
+        rows=[];runs={};jobs={};logs={}
+        for i,(name,app) in enumerate(selected):
+            run_id=1000+i;job_id=2000+i;expected=policy['checkProducers'][name]
+            rows.append({'id':job_id,'name':name,'app':{'id':app},'head_sha':head,'status':'completed','conclusion':'success','check_suite':{'id':3000+i},'details_url':f'https://github.com/{p.REPO}/actions/runs/{run_id}/job/{job_id}'})
+            runs[run_id]={'id':run_id,'repository':{'full_name':p.REPO},'workflow_id':expected['workflowId'],'path':expected['path'],'event':expected['event'],'head_sha':head,'check_suite_id':3000+i,'run_attempt':1}
+            jobs[job_id]={'id':job_id,'run_id':run_id,'head_sha':head,'name':name,'status':'completed','conclusion':'success','check_run_url':f'https://api.github.com/repos/{p.REPO}/check-runs/{job_id}','run_attempt':1}
+            logs[job_id]=('  PR_HEAD: '+head+'\n  SELF_REPO: '+p.REPO+'\n').encode() if name=='materialize / receiver-validate' else self.checkout_log(checked)
+        class Transport:
+            def checked(self,path):
+                if path.endswith('/branches/main'):return self.branch
+                if '/pulls/' in path:return self.pull
+                if '/git/commits/' in path:
+                    commit=path.rsplit('/',1)[1];return {'sha':commit,'tree':{'sha':self.trees.get(commit,p.TREE)}}
+                if '/actions/jobs/' in path:return self.jobs[int(path.rsplit('/',1)[1])]
+                return self.runs[int(path.rsplit('/',1)[1])]
+            def pages(self,path,key=None):return [self.pull] if path.endswith('/pulls') else self.rows
+            def request(self,url,**kwargs):
+                return self.status,self.logs[int(url.split('/jobs/',1)[1].split('/')[0])],{}
+        def transport():
+            n=Transport();n.branch=copy.deepcopy(branch);n.pull=copy.deepcopy(pull);n.rows=copy.deepcopy(rows);n.runs=copy.deepcopy(runs);n.jobs=copy.deepcopy(jobs);n.logs=dict(logs);n.trees={};n.status=200;return n
+        p.verify_protection(transport(),binding())
+        for mutation in ('not-protected','missing-required','wrong-required-app','unmerged','wrong-merge','foreign-pr','head-tree','checkout-tree','missing-check','wrong-check-app','failed','skipped','wrong-head','incomplete','duplicate','workflow','event','run-head','job-attempt','check-job','job-name','logs-expired','checkout-echo','metadata-missing','metadata-head'):
+            n=transport()
+            if mutation=='not-protected':n.branch['protected']=False
+            elif mutation=='missing-required':n.branch['protection']['required_status_checks']['checks'].pop()
+            elif mutation=='wrong-required-app':n.branch['protection']['required_status_checks']['checks'][0]['app_id']=1
+            elif mutation=='unmerged':n.pull['merged_at']=None
+            elif mutation=='wrong-merge':n.pull['merge_commit_sha']='9'*40
+            elif mutation=='foreign-pr':n.pull['head']['repo']['full_name']='foreign/repo'
+            elif mutation=='head-tree':n.trees[head]='9'*40
+            elif mutation=='checkout-tree':n.trees[checked]='9'*40
+            elif mutation=='missing-check':n.rows.pop()
+            elif mutation=='wrong-check-app':n.rows[0]['app']['id']=1
+            elif mutation in ('failed','skipped'):n.rows[0]['conclusion']=mutation
+            elif mutation=='wrong-head':n.rows[0]['head_sha']='9'*40
+            elif mutation=='incomplete':n.rows[0]['status']='in_progress'
+            elif mutation=='duplicate':n.rows.append(n.rows[0])
+            elif mutation=='workflow':n.runs[1000]['workflow_id']=1
+            elif mutation=='event':n.runs[1000]['event']='push'
+            elif mutation=='run-head':n.runs[1000]['head_sha']='9'*40
+            elif mutation=='job-attempt':n.jobs[2000]['run_attempt']=2
+            elif mutation=='check-job':n.rows[0]['id']=999
+            elif mutation=='job-name':n.jobs[2000]['name']='other'
+            elif mutation=='logs-expired':n.status=410
+            elif mutation=='checkout-echo':n.logs[2000]=b'echo '+checked.encode()
+            elif mutation=='metadata-missing':n.logs[2018]=b'no explicit subject'
+            else:n.logs[2018]=n.logs[2018].replace(head.encode(),b'9'*40)
+            with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_protection(n,binding())
+
     def test_closed_binding(self):
         p.validate_tuple(reviewed())
-        for key,value in [('producer','9'*40),('executor','main'),('producerTree','9'*40),('version','0.2.0'),('mode','publish'),('runAttempt',0),('repository','foreign/repo')]:
+        for key,value in [('producer','9'*40),('executor','main'),('producerTree','9'*40),('version','0.2.0'),('mode','publish'),('runAttempt',0),('repository','foreign/repo'),('version','0.3.0'),('event','pull_request'),('workflowSha','9'*40),('job','generate-traces'),('workflow','.github/workflows/release-wasm.yml'),('executor','9'*40)]:
             x=reviewed();x['binding'][key]=value
             with self.subTest(key=key),self.assertRaises(p.Refusal):p.validate_tuple(x)
         for mutation in ('gate','roster','inventory','extra','duplicate-surrogate'):
@@ -244,7 +321,7 @@ class Tests(unittest.TestCase):
             with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.validate_tuple(x)
     def test_real_native_run_attempt_and_gate_join(self):
         run,jobs,artifact=native_data();p.validate_run(reviewed(),run,jobs,artifact)
-        for target,key,value in [('run','run_attempt',1),('run','conclusion','failure'),('run','head_sha','9'*40),('run','event','push'),('artifact','expired',True),('artifact','digest','sha256:'+'9'*64),('artifact','name','wasm-ineligible-100-2')]:
+        for target,key,value in [('run','run_attempt',2),('run','conclusion','failure'),('run','head_sha','9'*40),('run','event','pull_request'),('run','head_branch','feature'),('artifact','expired',True),('artifact','digest','sha256:'+'9'*64),('artifact','name','wasm-ineligible-100-2')]:
             r,j,a=copy.deepcopy((run,jobs,artifact)); (r if target=='run' else a)[key]=value
             with self.subTest(target=target,key=key),self.assertRaises(p.Refusal):p.validate_run(reviewed(),r,j,a)
         broken=copy.deepcopy(jobs);broken[0]['steps'][3]['conclusion']='skipped'
@@ -289,12 +366,15 @@ class Tests(unittest.TestCase):
         selected=(ROOT/'scripts/wasm-release/qualify-supervisor-installed.sh').read_text()
         self.assertNotIn('dotnet pack',selected);self.assertNotIn('--custody',selected)
         self.assertIn('check-installed --manifest',selected)
-        self.assertIn('$output/packages/fs.gg.wasm.browser/0.3.0/',selected)
+        self.assertIn('$output/packages/fs.gg.wasm.browser/$version/',selected)
         self.assertIn('verify-wasm-supervisor.sh" --feed-only',selected)
         self.assertIn('verify-wasm-supervisor-browser.sh" --feed-only',selected)
         self.assertIn('official-core-joins.json',selected)
         runner=(ROOT/'scripts/verify-wasm-supervisor.sh').read_text()
-        self.assertEqual(runner.count('if [[ "$mode" == custody ]]; then'),3)
+        self.assertIn('if [[ "$mode" == custody ]]; then compile_source;fi',runner)
+        self.assertIn('if [[ "$mode" == compile-installed ]]; then compile_installed;exit 0;fi',runner)
+        self.assertIn('if [[ "$mode" != feed-only ]]; then',runner)
+        self.assertLess(runner.index('validate_build "$source_log"'),runner.index('"$quint" test'))
         self.assertIn('RestoreLockedMode=true',runner);self.assertIn('NU1403',runner)
     def test_installed_cache_member_lock_worker_substitution(self):
         import zipfile
@@ -302,20 +382,20 @@ class Tests(unittest.TestCase):
             root=pathlib.Path(raw);cache=root/'packages';record=root/'promotion-binding.json';lock=root/'packages.lock.json'
             r=reviewed();dependencies={}
             for ident in p.PACKAGES:
-                folder=cache/ident.lower()/'0.3.0';folder.mkdir(parents=True)
-                archive=folder/(ident.lower()+'.0.3.0.nupkg')
+                folder=cache/ident.lower()/'0.4.0';folder.mkdir(parents=True)
+                archive=folder/(ident.lower()+'.0.4.0.nupkg')
                 with zipfile.ZipFile(archive,'w') as z:z.writestr('ordinary.dll',b'real-payload');z.writestr('module-worker.mjs',b'real-worker')
-                r['binding']['archives'][ident+'.0.3.0.nupkg']=p.digest(archive.read_bytes())
-                r['binding']['inventories'][ident+'.0.3.0.nupkg']={'ordinary.dll':p.digest(b'real-payload'),'module-worker.mjs':p.digest(b'real-worker')}
+                r['binding']['archives'][ident+'.0.4.0.nupkg']=p.digest(archive.read_bytes())
+                r['binding']['inventories'][ident+'.0.4.0.nupkg']={'ordinary.dll':p.digest(b'real-payload'),'module-worker.mjs':p.digest(b'real-worker')}
                 content=base64.b64encode(hashlib.sha512(archive.read_bytes()).digest()).decode()
-                (folder/(ident.lower()+'.0.3.0.nupkg.sha512')).write_text(content)
+                (folder/(ident.lower()+'.0.4.0.nupkg.sha512')).write_text(content)
                 (folder/'.nupkg.metadata').write_text(json.dumps({'version':2,'contentHash':content,'source':'https://nuget.pkg.github.com/FS-GG/index.json'}))
-                dependencies[ident]={'resolved':'0.3.0','contentHash':content}
+                dependencies[ident]={'resolved':'0.4.0','contentHash':content}
             record.write_text(json.dumps({'preparation':r}));lock.write_text(json.dumps({'dependencies':{'net10.0':dependencies}}))
-            with patch.dict(os.environ,{'ACCEPTED_EXECUTOR':'a'*40}):
+            with patch.dict(os.environ,{'ACCEPTED_EXECUTOR':p.P}):
                 p.check_installed(record,cache,'https://nuget.pkg.github.com/FS-GG/index.json',lock)
-                ident=p.PACKAGES[1];folder=cache/ident.lower()/'0.3.0';archive=folder/(ident.lower()+'.0.3.0.nupkg');original=archive.read_bytes()
-                sidecar=folder/(ident.lower()+'.0.3.0.nupkg.sha512');metadata=folder/'.nupkg.metadata';original_sidecar=sidecar.read_text();original_metadata=metadata.read_text()
+                ident=p.PACKAGES[1];folder=cache/ident.lower()/'0.4.0';archive=folder/(ident.lower()+'.0.4.0.nupkg');original=archive.read_bytes()
+                sidecar=folder/(ident.lower()+'.0.4.0.nupkg.sha512');metadata=folder/'.nupkg.metadata';original_sidecar=sidecar.read_text();original_metadata=metadata.read_text()
                 for mutation in ('worker','ordinary','signature-disguised-worker','lock','version','missing-cache'):
                     saved=copy.deepcopy(dependencies)
                     if mutation in ('worker','ordinary','signature-disguised-worker'):
@@ -373,7 +453,7 @@ class Tests(unittest.TestCase):
                                 ((403,None,{}),'preparation artifact download status 403, Unknown'),
                                 ((200,b'wrong immutable bytes',{}),'downloaded artifact digest mismatch')]:
             n=Transport();n.response=response
-            with tempfile.TemporaryDirectory() as raw,patch.object(p,'execution_checkout'),self.assertRaisesRegex(p.Refusal,'^'+re.escape(reason)+'$'):
+            with tempfile.TemporaryDirectory() as raw,patch.object(p,'execution_checkout'),patch.object(p,'verify_protection'),self.assertRaisesRegex(p.Refusal,'^'+re.escape(reason)+'$'):
                 p.download(n,reviewed(),pathlib.Path(raw)/'custody')
 
     @staticmethod
@@ -428,20 +508,20 @@ class Tests(unittest.TestCase):
 
     def test_installed_signed_hash_roles_are_independent_and_payload_locked(self):
         feed='https://api.nuget.org/v3/index.json'
-        with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'ACCEPTED_EXECUTOR':'a'*40}):
+        with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'ACCEPTED_EXECUTOR':p.P}):
             root=pathlib.Path(raw);cache=root/'packages';record=root/'promotion-binding.json';lock=root/'packages.lock.json';r=reviewed();deps={};originals={}
             for ident in p.PACKAGES:
-                folder=cache/ident.lower()/'0.3.0';folder.mkdir(parents=True);archive=folder/(ident.lower()+'.0.3.0.nupkg')
+                folder=cache/ident.lower()/'0.4.0';folder.mkdir(parents=True);archive=folder/(ident.lower()+'.0.4.0.nupkg')
                 unsigned=self.package_fixture();signed=self.package_fixture(1);archive.write_bytes(signed);originals[ident]=signed
-                r['binding']['archives'][ident+'.0.3.0.nupkg']=p.digest(unsigned)
-                with p.zipfile.ZipFile(io.BytesIO(unsigned))as z:r['binding']['inventories'][ident+'.0.3.0.nupkg']={name:p.digest(z.read(name))for name in z.namelist()}
-                content=base64.b64encode(hashlib.sha512(unsigned).digest()).decode();self.assertNotEqual(base64.b64encode(hashlib.sha512(signed).digest()).decode(),content);deps[ident]={'resolved':'0.3.0','contentHash':content}
-                (folder/(ident.lower()+'.0.3.0.nupkg.sha512')).write_text(base64.b64encode(hashlib.sha512(signed).digest()).decode())
+                r['binding']['archives'][ident+'.0.4.0.nupkg']=p.digest(unsigned)
+                with p.zipfile.ZipFile(io.BytesIO(unsigned))as z:r['binding']['inventories'][ident+'.0.4.0.nupkg']={name:p.digest(z.read(name))for name in z.namelist()}
+                content=base64.b64encode(hashlib.sha512(unsigned).digest()).decode();self.assertNotEqual(base64.b64encode(hashlib.sha512(signed).digest()).decode(),content);deps[ident]={'resolved':'0.4.0','contentHash':content}
+                (folder/(ident.lower()+'.0.4.0.nupkg.sha512')).write_text(base64.b64encode(hashlib.sha512(signed).digest()).decode())
                 (folder/'.nupkg.metadata').write_text(json.dumps({'version':2,'contentHash':content,'source':feed}))
             record.write_text(json.dumps({'preparation':r}));lock.write_text(json.dumps({'dependencies':{'net10.0':deps}}))
             with patch.object(p,'repository_signature',return_value='source-controlled verification fixture')as verify:
                 p.check_installed(record,cache,feed,lock);self.assertEqual(verify.call_count,2)
-            ident=p.PACKAGES[0];folder=cache/ident.lower()/'0.3.0';archive=folder/(ident.lower()+'.0.3.0.nupkg');sidecar=folder/(ident.lower()+'.0.3.0.nupkg.sha512');metadata=folder/'.nupkg.metadata'
+            ident=p.PACKAGES[0];folder=cache/ident.lower()/'0.4.0';archive=folder/(ident.lower()+'.0.4.0.nupkg');sidecar=folder/(ident.lower()+'.0.4.0.nupkg.sha512');metadata=folder/'.nupkg.metadata'
             baseline_sidecar=sidecar.read_text();baseline_metadata=metadata.read_text();baseline_deps=copy.deepcopy(deps)
             for mutation in ('sidecar','metadata-hash','metadata-source','metadata-version','metadata-malformed','metadata-missing','metadata-duplicate','lock','unsigned-public','ordinary','payload','corrupt-compression','cache-drift','signature-trust','foreign-feed'):
                 if mutation=='sidecar':sidecar.write_text(deps[ident]['contentHash'])
@@ -474,21 +554,25 @@ class Tests(unittest.TestCase):
                 p.check_installed(record,cache,'https://nuget.pkg.github.com/FS-GG/index.json',lock)
 
     def test_admission_refuses_before_download_or_writer(self):
-        env={'GITHUB_SHA':'a'*40,'ACCEPTED_EXECUTOR':'a'*40}
+        env={'GITHUB_SHA':p.P,'ACCEPTED_EXECUTOR':p.P}
         class Transport:
             def checked(self,path,*args):return {'object':{'sha':'9'*40}}
             def pages(self,*args):raise AssertionError('must refuse before artifact access')
             def request(self,*args,**kwargs):raise AssertionError('must refuse before download')
-        with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,env),patch.object(p,'executor_checkout'):
+        with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,dict(env,GITHUB_REPOSITORY=p.REPO,GITHUB_REF='refs/heads/main',GITHUB_RUN_ATTEMPT='1')),patch.object(p,'executor_checkout'):
             with self.assertRaises(p.Refusal):p.download(Transport(),reviewed(),pathlib.Path(raw)/'custody')
         with patch.dict(os.environ,{'TAG_CREDENTIAL_ROUTE':'app-token'}),patch.object(p,'verify_originals',side_effect=AssertionError('must refuse before custody/writer')):
             with self.assertRaises(p.Refusal):p.begin(Transport(),reviewed(),'.',False)
     def test_artifact_digest_safe_members_and_binding_refusal(self):
         import io,zipfile
-        for mutation in ('none','artifact-digest','traversal','missing-binding','changed-binding'):
+        for mutation in ('none','artifact-digest','traversal','missing-binding','changed-binding','changed-evidence','extra-cache','member-size','evidence-total'):
             r=reviewed();body=io.BytesIO();binding_body=(json.dumps(r['binding'])+'\n').encode()
             r['bindingSha256']=p.digest(binding_body)
             with zipfile.ZipFile(body,'w') as z:
+                for name in p.OUTER_FILES-{'preparation-binding.json'}:z.writestr(name,b'changed' if mutation=='changed-evidence' and name=='evidence/contracts.log' else b'evidence')
+                if mutation=='extra-cache':z.writestr('packages/foreign.nupkg',b'ineligible cache')
+                r['binding']['evidence']={name:p.digest(b'evidence') for name in r['binding']['evidence']}
+                binding_body=(json.dumps(r['binding'])+'\n').encode();r['bindingSha256']=p.digest(binding_body)
                 if mutation!='missing-binding':z.writestr('preparation-binding.json',b'{}' if mutation=='changed-binding' else binding_body)
                 if mutation=='traversal':z.writestr('../escape',b'bad')
             payload=body.getvalue();r['artifactSha256']=p.digest(payload)
@@ -500,7 +584,7 @@ class Tests(unittest.TestCase):
                     return artifact if '/artifacts/' in path else run
                 def pages(self,*args):return jobs
                 def request(self,*args,**kwargs):return 200,payload,{}
-            with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'GITHUB_SHA':'a'*40,'ACCEPTED_EXECUTOR':'a'*40}),patch.object(p,'verify_originals') as verify,patch.object(p,'executor_checkout'):
+            with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'GITHUB_SHA':p.P,'ACCEPTED_EXECUTOR':p.P}),patch.object(p,'verify_originals') as verify,patch.object(p,'executor_checkout'),patch.object(p,'verify_protection'),patch.object(p,'execution_checkout'),patch.object(p,'MAX_METADATA',1 if mutation=='member-size' else p.MAX_METADATA),patch.object(p,'MAX_DIAGNOSTICS',1 if mutation=='evidence-total' else p.MAX_DIAGNOSTICS):
                 if mutation=='none':
                     p.download(Transport(),r,pathlib.Path(raw)/'custody');verify.assert_called_once()
                 else:
@@ -525,7 +609,7 @@ class Tests(unittest.TestCase):
     def test_foreign_occupied_second_member_blocks_first_writer(self):
         class Transport(Occupancy):
             def pages(self,path,key=None):
-                return [{'name':'0.3.0','id':1}] if 'browser' in path and 'state=active' in path else []
+                return [{'name':'0.4.0','id':1}] if 'browser' in path and 'state=active' in path else []
         calls=[]
         def reject(args,**kwargs):
             calls.append(args[0])
@@ -543,11 +627,11 @@ class Tests(unittest.TestCase):
                     class Transport(Occupancy):
                         def pages(self,path,key=None):
                             if outcome=='unknown':raise p.Refusal('403 occupancy Unknown')
-                            return [{'name':'0.3.0','id':1}] if feed=='org' and 'browser' in path and 'state=active' in path else []
+                            return [{'name':'0.4.0','id':1}] if feed=='org' and 'browser' in path and 'state=active' in path else []
                         def request(self,url,**kwargs):
                             if feed!='public' or url.endswith('/v3/index.json'):return super().request(url,**kwargs)
                             exists='browser' in url
-                            return (200,{'versions':['0.2.0']+(['0.3.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
+                            return (200,{'versions':['0.2.0']+(['0.4.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
                         def checked(self,path,method='GET',data=None):
                             if method=='POST':events.append(('writer','draft'))
                             return {'id':1,'draft':True,'assets':[]}
@@ -570,7 +654,7 @@ class Tests(unittest.TestCase):
             class Transport(Occupancy):
                 def pages(self,path,key=None):
                     if outcome=='unknown':raise p.Refusal('403 occupancy Unknown')
-                    return [{'name':'0.3.0','id':1}] if 'browser' in path and 'state=active' in path else []
+                    return [{'name':'0.4.0','id':1}] if 'browser' in path and 'state=active' in path else []
             def cmd(args,**kwargs):
                 self.assertTrue(str(args[0]).endswith('readback.sh'))
                 events.append(('readback',args[1],args[-1]))
@@ -596,36 +680,13 @@ class Tests(unittest.TestCase):
             wrong=dict(b);wrong['executorTree']='9'*40
             with self.assertRaises(p.Refusal):p.executor_checkout(wrong)
         with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':'9'*40}),self.assertRaises(p.Refusal):p.executor_checkout(b)
-        # Source-only preflight must also work on the native depth-one merge
-        # checkout. Exercise the real immutable Git/blob predicates in a complete
-        # local fixture; production installed qualification still requires P's
-        # actual history and preserves its immutable producer constant.
         spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
         binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
-        self.assertEqual(binder.PUBLISHER_SOURCE,p.P)
-        with tempfile.TemporaryDirectory(prefix='wasm-executor-history-control.') as raw:
-            fixture=pathlib.Path(raw)/'source';fixture.mkdir()
-            def git(*args):return subprocess.check_output(['git','-C',str(fixture),*args],text=True,stderr=subprocess.PIPE).strip()
-            git('init','-q');git('config','user.name','Fixture');git('config','user.email','fixture@example.invalid')
-            path='scripts/wasm-release/readback.sh';file=fixture/path;file.parent.mkdir(parents=True);file.write_text('original glue\n')
-            git('add','.');git('commit','-qm','producer fixture');producer=git('rev-parse','HEAD')
-            file.write_text('qualified glue\n');git('add','.');git('commit','-qm','executor glue fixture');executor=git('rev-parse','HEAD')
-            env={'GITHUB_SHA':executor,'ACCEPTED_EXECUTOR':executor}
-            with patch.object(binder,'ROOT',fixture),patch.object(binder,'PUBLISHER_SOURCE',producer),patch.dict(os.environ,env):
-                audit=binder.bind_executor(producer,executor,'0.3.0')
-                self.assertEqual([r['path'] for r in audit['executorDelta']],[path])
-                self.assertEqual(audit['executorDelta'][0]['sha256'],p.digest(file.read_bytes()))
-                shallow=pathlib.Path(raw)/'shallow'
-                subprocess.run(['git','clone','--quiet','--depth','1',fixture.as_uri(),str(shallow)],check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-                self.assertEqual(subprocess.check_output(['git','-C',str(shallow),'rev-list','--count','HEAD'],text=True).strip(),'1')
-                # Missing P must still refuse the actual installed binder. It is
-                # not replaced by a shallow HEAD/tree-equivalence waiver.
-                with patch.object(binder,'ROOT',shallow),patch.object(binder,'git',side_effect=lambda *args:subprocess.check_output(['git','-C',str(shallow),*args],text=True,stderr=subprocess.PIPE).strip()),self.assertRaises(subprocess.CalledProcessError):
-                    binder.bind_executor(producer,executor,'0.3.0')
-                semantic=fixture/'src/Wasm.Contracts/Contracts.fs';semantic.parent.mkdir(parents=True);semantic.write_text('unreviewed semantic change\n')
-                git('add','.');git('commit','-qm','unadmitted source fixture');changed=git('rev-parse','HEAD')
-                with patch.dict(os.environ,{'GITHUB_SHA':changed,'ACCEPTED_EXECUTOR':changed}),self.assertRaises(AssertionError):binder.bind_executor(producer,changed,'0.3.0')
-        self.assertEqual(binder.PUBLISHER_SOURCE,p.P)
+        with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':head}):
+            binder.bind_executor(head,head,p.VERSION)
+            for source,executor,version in [('9'*40,head,p.VERSION),(head,'9'*40,p.VERSION),(head,head,'0.3.0')]:
+                with self.assertRaises(AssertionError):binder.bind_executor(source,executor,version)
+        with patch.dict(os.environ,{'EXECUTION_BINDING':'{"schema":"historical"}'}),self.assertRaises(p.Refusal):p.execution_input()
 
     def test_native_cross_host_redirect_drops_token(self):
         import urllib.request
@@ -647,12 +708,12 @@ class Tests(unittest.TestCase):
                     return release
                 def pages(self,path,key=None):
                     ident=p.PACKAGES[0] if 'contracts' in path else p.PACKAGES[1]
-                    return [{'name':'0.3.0','id':1}] if 'state=active' in path and state.get(('org',ident)) else []
+                    return [{'name':'0.4.0','id':1}] if 'state=active' in path and state.get(('org',ident)) else []
                 def request(self,url,**kw):
                     if url.endswith('/v3/index.json'):return super().request(url,**kw)
                     ident=p.PACKAGES[0] if 'contracts' in url else p.PACKAGES[1]
                     exists=state.get(('public',ident))
-                    return (200,{'versions':['0.2.0']+(['0.3.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
+                    return (200,{'versions':['0.2.0']+(['0.4.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
             def rb(kind,custody,output):
                 if kind in ('org','public'):
                     if not all(state.get((kind,x)) for x in p.PACKAGES):raise p.Refusal('pair absent')
@@ -688,7 +749,7 @@ class Tests(unittest.TestCase):
                 self.assertEqual(events.count('public-contracts'),1);self.assertEqual(events.count('public-browser'),1)
 
     def test_draft_resolver_actual_transport_pagination_and_unknowns(self):
-        release={'id':402763234,'tag_name':'wasm/v0.3.0','target_commitish':p.P,'draft':True,'prerelease':False,'assets':[]}
+        release={'id':402763234,'tag_name':'wasm/v0.4.0','target_commitish':p.P,'draft':True,'prerelease':False,'assets':[]}
         class Transport(p.Native):
             def __init__(self,mutation=None):super().__init__();self.mutation=mutation;self.calls=[]
             def api(self,path,method='GET',data=None):
@@ -711,102 +772,18 @@ class Tests(unittest.TestCase):
                 if self.mutation=='hidden':return 200,[],{}
                 if self.mutation=='duplicate':return 200,[release,dict(release,id=402763235)],{}
                 return 200,[dict(release,draft=False) if self.mutation=='published' else release],{}
-        with patch.dict(os.environ,{'EXECUTION_BINDING':json.dumps({'releaseId':402763234})}):
+        with patch.dict(os.environ,{'EXECUTION_BINDING':''}):
             n=Transport();self.assertEqual(p.release_state(n),(200,release));self.assertTrue(any('page=2' in x for x in n.calls))
             self.assertFalse(p.release_state(Transport('published'))[1]['draft'])
-            for mutation in ('disagreement','denied','timeout','oversized','repeat','cap','malformed','hidden','duplicate'):
+            for mutation in ('disagreement','denied','timeout','oversized','repeat','cap','malformed','duplicate'):
                 with self.subTest(mutation=mutation),self.assertRaises((p.Refusal,TimeoutError)):p.release_state(Transport(mutation))
-
-    def test_closed_successor_git_join_and_real_download_entry(self):
-        import subprocess
-        with tempfile.TemporaryDirectory(prefix='wasm-two-source-control.') as raw:
-            fixture=pathlib.Path(raw)
-            def git(*args):return subprocess.check_output(['git','-C',str(fixture),*args],text=True,stderr=subprocess.PIPE).strip()
-            git('init','-q');git('config','user.name','Fixture');git('config','user.email','fixture@example.invalid')
-            source=fixture/'.github/workflows/release-wasm.yml';source.parent.mkdir(parents=True);source.write_text('original\n')
-            git('add','.');git('commit','-qm','producer');producer=git('rev-parse','HEAD')
-            source.write_text('preparation\n');git('add','.');git('commit','-qm','preparation executor');e0=git('rev-parse','HEAD');tree0=git('rev-parse','HEAD^{tree}')
-            source.write_text('successor\n');git('add','.');git('commit','-qm','successor executor');e1=git('rev-parse','HEAD');tree1=git('rev-parse','HEAD^{tree}')
-            r=reviewed();r['binding'].update(producer=producer,executor=e0,executorTree=tree0);r['artifactId']=11289067127;r['artifactSha256']='7b7f957e2506ef1a2d4a257eaa334c80ca116abaa0462c71315a1079aa38d723'
-            canonical=p.digest((json.dumps(r,sort_keys=True,indent=2)+'\n').encode())
-            with patch.object(p,'ROOT',fixture):
-                old=p.fingerprint(e0,'.github/workflows/release-wasm.yml');new=p.fingerprint(e1,'.github/workflows/release-wasm.yml')
-            value={'schema':'fsgg.wasm.successor-execution/v1','repository':p.REPO,'version':p.VERSION,'producer':producer,'preparationExecutor':e0,'preparationTree':tree0,'tupleSha256':p.ORIGINAL_TUPLE_SHA,'artifactId':r['artifactId'],'artifactSha256':r['artifactSha256'],'firstPromotionRun':37166812270,'firstPromotionAttempt':1,'releaseId':402763234,'journalAssetId':608859205,'journalSha256':'5b5382d6b246ace3f4841d9b3de17ef1b446ba4e41536caa60ae96be766dcf57','originalAdmissionArtifactId':11288824765,'originalAdmissionArtifactSha256':'8e2ea55a85345cf30eaaee5a26e075321608f91722ed251b995d47e889ef0952','executor':e1,'executorTree':tree1,'workflow':'.github/workflows/release-wasm.yml','workflowSha256':p.digest(source.read_bytes()),'delta':[{'path':'.github/workflows/release-wasm.yml','oldBlob':old['blob'],'oldSha256':old['sha256'],'newBlob':new['blob'],'newSha256':new['sha256']}]}
-            env={'EXECUTION_BINDING':json.dumps(value),'GITHUB_SHA':e1,'ACCEPTED_EXECUTOR':e1,'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_RUN_ID':'300','MODE':'recovery','FIRST_PROMOTION_RUN':'37166812270','FIRST_PROMOTION_ATTEMPT':'1'}
-            class Transport:
-                def __init__(self):self.main=e1
-                def checked(self,path):
-                    if '/git/ref/'in path:return {'object':{'sha':self.main}}
-                    if '/actions/runs/300/attempts/1' in path:return {'id':300,'run_attempt':1,'repository':{'full_name':p.REPO},'head_sha':e1,'head_branch':'main','path':value['workflow'],'event':'workflow_dispatch'}
-                    raise p.Refusal('custody API sentinel reached after execution join')
-            with patch.object(p,'ROOT',fixture),patch.object(p,'P',producer),patch.object(p,'ORIGINAL_EXECUTOR',e0),patch.object(p,'ORIGINAL_TREE',tree0),patch.object(p,'ORIGINAL_CANONICAL_SHA',canonical),patch.dict(os.environ,env):
-                n=Transport();self.assertEqual(p.execution_checkout(n,r),value)
-                with self.assertRaisesRegex(p.Refusal,'custody API sentinel'):p.download(n,r,fixture/'unused')
-                for key,bad in [('executorTree','0'*40),('workflowSha256','0'*64),('firstPromotionRun',37159983975),('firstPromotionAttempt',2),('artifactId',11287095456),('journalAssetId',1),('delta',[]),('extra','field')]:
-                    mutant=copy.deepcopy(value);mutant[key]=bad
-                    with self.subTest(key=key),patch.dict(os.environ,{'EXECUTION_BINDING':json.dumps(mutant)}),self.assertRaises(p.Refusal):p.execution_checkout(n,r)
-                for key,bad in [('MODE','promote'),('MODE','prepare'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_REF','refs/heads/other'),('GITHUB_SHA',e0),('FIRST_PROMOTION_RUN','37159983975'),('FIRST_PROMOTION_ATTEMPT','2')]:
-                    with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(p.Refusal):p.download(n,r,fixture/'unused')
-                n.main=e0
-                with self.assertRaisesRegex(p.Refusal,'protected executor moved'):p.execution_checkout(n,r)
-                n.main=e1;source.write_text('dirty\n')
-                with self.assertRaisesRegex(p.Refusal,'dirty or different'):p.execution_checkout(n,r)
-                source.write_text('successor\n')
-                changed=copy.deepcopy(r);changed['binding']['inventories'][p.FILES[0]]['substitution']='1'*64
-                with self.assertRaisesRegex(p.Refusal,'changed original tuple'):p.execution_checkout(n,changed)
-                with patch.dict(os.environ,{'MODE':'installed'}):self.assertRaises(p.Refusal,p.execution_checkout,n,r,True) # current run path is release, not installed
-                # Prove ancestry itself rather than merely the checkout fence:
-                # an exact clean selected orphan with matching current main fails.
-                git('checkout','--orphan','foreign-source','-q')
-                source.write_text('foreign successor\n');git('add','.');git('commit','-qm','non-descendant')
-                orphan=git('rev-parse','HEAD');orphan_tree=git('rev-parse','HEAD^{tree}')
-                broken=copy.deepcopy(value);broken['executor']=orphan;broken['executorTree']=orphan_tree;broken['workflowSha256']=p.digest(source.read_bytes())
-                with patch.dict(os.environ,{'EXECUTION_BINDING':json.dumps(broken),'GITHUB_SHA':orphan,'ACCEPTED_EXECUTOR':orphan}):
-                    n.main=orphan
-                    with self.assertRaisesRegex(p.Refusal,'non-descendant successor'):p.execution_checkout(n,r)
-
-    def test_current_admission_exact_run_binding_and_missing_occupancy(self):
-        import io,zipfile
-        r=reviewed();value={'executor':'1'*40};record={'schema':'fsgg.wasm.admission/v1','reviewed':r,'mode':'recovery','run':300,'attempt':1,'exchangeVerified':True,'occupancy':{k:False for k in p.OCCUPANCY_KEYS},'observedAt':'now','nugetAccountSha256':p.digest(b'offline'),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown','executionBinding':value,'executionBindingSha256':p.digest((json.dumps(value,sort_keys=True,indent=2)+'\n').encode())}
-        class Transport:
-            def __init__(self,record):self.record=record
-            def pages(self,path,key=None):
-                if path.endswith('/jobs'):return [{'name':'admission','conclusion':'success'}]
-                raw=io.BytesIO()
-                with zipfile.ZipFile(raw,'w')as z:z.writestr('admission-binding.json',json.dumps(self.record))
-                self.body=raw.getvalue();return [{'id':1,'name':'wasm-admission-300-1','expired':False,'workflow_run':{'id':300,'head_sha':'1'*40},'digest':'sha256:'+p.digest(self.body)}]
-            def request(self,*args,**kwargs):return 200,self.body,{}
-        env={'EXECUTION_BINDING':json.dumps(value),'MODE':'recovery','GITHUB_RUN_ID':'300','GITHUB_RUN_ATTEMPT':'1','NUGET_ACCOUNT':'offline'}
-        with patch.dict(os.environ,env):
-            p.verify_current_admission(Transport(record),r)
-            for mutation in ('missing','wrong-run','wrong-account','wrong-binding','no-exchange','deleted','wrong-mode'):
-                mutant=copy.deepcopy(record)
-                if mutation=='missing':mutant['occupancy'].pop(next(iter(p.OCCUPANCY_KEYS)))
-                elif mutation=='wrong-run':mutant['run']=200
-                elif mutation=='wrong-account':mutant['nugetAccountSha256']='0'*64
-                elif mutation=='wrong-binding':mutant['executionBindingSha256']='0'*64
-                elif mutation=='no-exchange':mutant['exchangeVerified']=False
-                elif mutation=='deleted':mutant['occupancy'][p.PACKAGES[0]+':deleted']=True
-                else:mutant['mode']='inspect'
-                with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_current_admission(Transport(mutant),r)
-            with patch.dict(os.environ,{'GITHUB_RUN_ATTEMPT':'2'}),self.assertRaises(p.Refusal):p.verify_current_admission(Transport(record),r)
-            for mutation in ('expired','foreign-head','digest'):
-                class BadMetadata(Transport):
-                    def pages(self,path,key=None):
-                        rows=super().pages(path,key)
-                        if not path.endswith('/jobs'):
-                            if mutation=='expired':rows[0]['expired']=True
-                            elif mutation=='foreign-head':rows[0]['workflow_run']['head_sha']='0'*40
-                            else:rows[0]['digest']='sha256:'+'0'*64
-                        return rows
-                with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_current_admission(BadMetadata(record),r)
 
     def test_historical_admission_missing_occupancy_cannot_mean_absence(self):
         import io,zipfile
         r=reviewed();record={'schema':'fsgg.wasm.admission/v1','reviewed':r,'mode':'promote','run':200,'attempt':1,'exchangeVerified':True,'occupancy':{k:False for k in p.OCCUPANCY_KEYS},'observedAt':'now','nugetAccountSha256':p.digest(b'offline'),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown'}
         class Transport:
             def __init__(self,record):self.record=record
-            def checked(self,path):return {'id':200,'run_attempt':1,'repository':{'full_name':p.REPO},'head_sha':r['binding']['executor'],'path':r['binding']['workflow'],'event':'workflow_dispatch'}
+            def checked(self,path):return {'id':200,'run_attempt':1,'repository':{'full_name':p.REPO},'head_sha':r['binding']['executor'],'path':'.github/workflows/release-wasm.yml','event':'workflow_dispatch'}
             def pages(self,path,key=None):
                 if path.endswith('/jobs'):return [{'name':'admission','conclusion':'success'}]
                 raw=io.BytesIO()
@@ -826,8 +803,8 @@ class Tests(unittest.TestCase):
         # are covered separately; no product or provider process runs here.
         with tempfile.TemporaryDirectory(prefix='wasm-asset-caller-control.')as raw:
             root=pathlib.Path(raw);tools=root/'bin';tools.mkdir();custody=root/'custody';custody.mkdir()
-            for name in ('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS'):(custody/name).write_bytes(name.encode())
-            (custody/'release-manifest.json').write_text(json.dumps({'version':'0.3.0'}))
+            for name in ('fsgg-wasm-sdk-0.4.0.tar.gz','release-manifest.json','SHA256SUMS'):(custody/name).write_bytes(name.encode())
+            (custody/'release-manifest.json').write_text(json.dumps({'version':'0.4.0'}))
             (root/'reviewed.json').write_text(json.dumps(reviewed()))
             wrapper=tools/'python3';wrapper.write_text('#!'+sys.executable+'\n'+'''import importlib.util,sys,os,json,pathlib,hashlib,io,zipfile
 sys.dont_write_bytecode=True
@@ -837,20 +814,20 @@ if args[0]=='-c':
  sys.exit(subprocess.call([sys.executable]+args))
 s=importlib.util.spec_from_file_location('promotion',args[0]);p=importlib.util.module_from_spec(s);s.loader.exec_module(p)
 root=pathlib.Path(os.environ['FIXTURE_ROOT']);c=root/'custody'
-r=json.loads((root/'reviewed.json').read_text());journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':200,'firstPromotionAttempt':1,'producer':p.P,'tag':'wasm/v0.3.0'}
+r=json.loads((root/'reviewed.json').read_text());journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':200,'firstPromotionAttempt':1,'producer':p.P,'tag':'wasm/v0.4.0'}
 (c/'promotion-binding.json').write_text(json.dumps(journal))
 record={'schema':'fsgg.wasm.admission/v1','reviewed':r,'mode':'promote','run':200,'attempt':1,'exchangeVerified':True,'occupancy':{k:False for k in p.OCCUPANCY_KEYS},'observedAt':'now','nugetAccountSha256':p.digest(b'offline'),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown'}
 raw=io.BytesIO()
 with zipfile.ZipFile(raw,'w')as z:z.writestr('admission-binding.json',json.dumps(record))
 admission=raw.getvalue()
-rows=[dict(id=i+1,name=n,url=f'https://api.github.com/repos/{p.REPO}/releases/assets/{i+1}',size=len((c/n).read_bytes()),digest='sha256:'+p.digest((c/n).read_bytes()))for i,n in enumerate(('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS','promotion-binding.json'))]
-release=dict(id=402763234,tag_name='wasm/v0.3.0',target_commitish=p.P,draft=True,prerelease=False,assets=rows)
+rows=[dict(id=i+1,name=n,url=f'https://api.github.com/repos/{p.REPO}/releases/assets/{i+1}',size=len((c/n).read_bytes()),digest='sha256:'+p.digest((c/n).read_bytes()))for i,n in enumerate(('fsgg-wasm-sdk-0.4.0.tar.gz','release-manifest.json','SHA256SUMS','promotion-binding.json'))]
+release=dict(id=402763234,tag_name='wasm/v0.4.0',target_commitish=p.P,draft=True,prerelease=False,assets=rows)
 class N(p.Native):
  def api(self,path,method='GET',data=None):
   assert method=='GET'
   if '/actions/runs/200/attempts/1/jobs' in path:return 200,{'total_count':1,'jobs':[dict(id=1,name='admission',conclusion='success')]},{}
   if '/actions/runs/200/artifacts' in path:return 200,{'total_count':1,'artifacts':[dict(id=1,name='wasm-admission-200-1',expired=False,workflow_run=dict(id=200,head_sha=r['binding']['executor']),digest='sha256:'+p.digest(admission))]},{}
-  if '/actions/runs/200/attempts/1' in path:return 200,dict(id=200,run_attempt=1,repository=dict(full_name=p.REPO),head_sha=r['binding']['executor'],path=r['binding']['workflow'],event='workflow_dispatch'),{}
+  if '/actions/runs/200/attempts/1' in path:return 200,dict(id=200,run_attempt=1,repository=dict(full_name=p.REPO),head_sha=r['binding']['executor'],path='.github/workflows/release-wasm.yml',event='workflow_dispatch'),{}
   if '/git/ref/'in path:return 200,dict(object=dict(type='commit',sha=p.P)),{}
   if '/releases/tags/'in path:return 404,None,{}
   if '/releases/402763234/assets?'in path:return 200,rows,{}
@@ -872,7 +849,7 @@ sys.argv=[args[0]]+args[1:];p.main()
 
     def test_inspect_excludes_all_mutating_jobs_and_cannot_admit(self):
         text=(ROOT/'.github/workflows/release-wasm.yml').read_text();validate_workflow(text)
-        for job in ('prepare','admission','begin','org','public','assets','complete'):
+        for job in ('admission','begin','org','public','assets','complete'):
             block=re.search(r'(?ms)^  '+job+r':\n.*?(?=^  [a-z]+:\n|\Z)',text)[0]
             self.assertNotIn("inputs.mode == 'inspect'",block)
         for job in ('admission','org','public','readback','inspect'):

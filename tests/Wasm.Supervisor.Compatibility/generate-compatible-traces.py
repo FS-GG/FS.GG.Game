@@ -15,7 +15,7 @@ original_request=legacy.request
 legacy.request=lambda value:intern(original_request(value),'request','RequestProjection')
 original_state=legacy.state
 legacy.state=lambda value:intern(original_state(value),'hostState','HostProjection')
-schedules=[('fifo','fifoStep',11),('owner-expiry-refusal','ownerExpiryRefusalStep',7),('frozen-commit-expiry','frozenCommitExpiryStep',13),('snapshot','snapshotStep',12),('held-enclosing','heldEnclosingStep',8),('freeze-active','freezeActive',19),('freeze-completed','freezeCompleted',19),('head-before','headBefore',14),('head-at','headAt',14),('head-after','headAfter',14),('composite','compositeStep',8),('bytes','bytesStep',21),('capacity','capacityStep',261)]
+schedules=[('terminal-held','terminalHeldStep',16),('terminal-followers','terminalFollowersStep',11),('terminal-expiry','terminalExpiryStep',10),('fifo','fifoStep',11),('owner-expiry-refusal','ownerExpiryRefusalStep',7),('frozen-commit-expiry','frozenCommitExpiryStep',13),('snapshot','snapshotStep',12),('held-enclosing','heldEnclosingStep',8),('freeze-active','freezeActive',19),('freeze-completed','freezeCompleted',19),('head-before','headBefore',14),('head-at','headAt',14),('head-after','headAfter',14),('composite','compositeStep',8),('bytes','bytesStep',21),('capacity','capacityStep',261)]
 def limits(v):return '{ MaximumDeadlineMilliseconds=%d; MaximumOutputBytes=%d; EnclosingDeadlineMilliseconds=%s }'%(b(v['deadline']),b(v['output']),'None' if b(v['enclosing'])==0 else 'Some %dL'%b(v['enclosing']))
 def captured(c):return {b(key):value for key,value in c['limits']['#map']}
 def pending_body(c,r):return '{ Identity={WorkerInstance=%s;Request=%dUL;Generation=%dUL};Limits=%s;DeadlineMilliseconds=%dL }'%(t(legacy.worker(b(r['worker']))),b(r['id']),b(r['generation']),limits(captured(c)[b(r['id'])]),b(r['deadline']))
@@ -36,7 +36,7 @@ def main():
  values=[]
  for name,action,count in schedules:
   path=destination/(name+'_0.itf.json')
-  subprocess.run(['quint','run','--backend=typescript','--main=compatibleQualification','--init=initQualification','--step='+action,'--invariant=compatibilitySafe','--max-samples=1','--max-steps='+str(count),'--seed=20261003','--out-itf='+str(path),str(ROOT/'eng/wasm-shared/compatible-qualification.qnt')],check=True,stdout=subprocess.DEVNULL)
+  legacy.run_quint_schedule(['quint','run','--verbosity=1','--backend=typescript','--main=compatibleQualification','--init=initQualification','--step='+action,'--invariant=compatibilitySafe','--max-samples=1','--max-steps='+str(count),'--seed=20261003','--out-itf='+str(path),str(ROOT/'eng/wasm-shared/compatible-qualification.qnt')],name,path)
   d=json.loads(path.read_text());d['vars']=sorted(d['vars']);d['#meta'].pop('description',None);d['#meta'].pop('timestamp',None);d['#meta']['source']='eng/wasm-shared/compatible-qualification.qnt';d['#meta']['canonicalSource']='eng/wasm-shared/lifecycle.qnt';path.write_text(json.dumps(d,sort_keys=True,separators=(',',':'))+'\n')
   # Stream gzip emits the portable OS header on Python 3.12 as well as 3.14.
   # gzip.compress(mtime=0) delegates its header to zlib on older runtimes.

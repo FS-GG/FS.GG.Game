@@ -24,17 +24,50 @@ import urllib.parse
 import urllib.request
 import zipfile
 import zlib
+import shutil
+import stat
+import xml.etree.ElementTree as ET
 sys.dont_write_bytecode = True
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REPO = 'FS-GG/FS.GG.Game'
-P = '16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c'
-TREE = 'f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a'
-VERSION = '0.3.0'
+# This adapter is selected only for the coherent current 0.4 release. Historical
+# consumed transactions remain in immutable history; no executor overlay is admitted.
+P = subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True,timeout=10).strip()
+TREE = subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD^{tree}'],text=True,timeout=10).strip()
+VERSION = ET.parse(ROOT/'eng/wasm-shared/version.props').findtext('.//WasmSharedVersion')
 PACKAGES = ('FS.GG.Wasm.Contracts', 'FS.GG.Wasm.Browser')
-FILES = tuple(x + '.0.3.0.nupkg' for x in PACKAGES) + ('fsgg-wasm-sdk-0.3.0.tar.gz',)
-GATES = ('Read-only pinned Rust model readiness', 'Prepare protected originals once', 'Qualify contracts and lifecycle',
-         'Qualify historical packages and SDK', 'Qualify full selected custody', 'Freeze eligible binding')
-SCHEMA = 'fsgg.wasm.preparation/v1'
+FILES = tuple(x + '.' + VERSION + '.nupkg' for x in PACKAGES) + ('fsgg-wasm-sdk-' + VERSION + '.tar.gz',)
+QUALIFY_JOB = 'Shared WASM source, model, package, and browser qualification'
+GATES = ('Static workflow preflight', 'Compile current supervisor source',
+         'Prepare coherent candidate custody', 'Compile current installed supervisor', 'Rebuild pinned WebAssembly fixtures',
+         'Verify compatibility contracts', 'Verify lifecycle, packages, and Fable consumers',
+         'Run browser Worker conformance', 'Verify SDK archive and fresh package consumer',
+         'Qualify compatible supervisor source and installed custody', 'Freeze eligible binding')
+SCHEMA = 'fsgg.wasm.preparation/v2'
+MAX_TOTAL = 512 * 1024 * 1024
+MAX_ARCHIVE = 256 * 1024 * 1024
+MAX_DIAGNOSTICS = 32 * 1024 * 1024
+MAX_METADATA = 1024 * 1024
+# Closed outer artifact roster. Values identify exact files produced by the
+# maintained full qualifier, never a recursive package/cache/workspace copy.
+EVIDENCE = {
+    **{'lifecycle/' + name: 'wasm-lifecycle-evidence/' + name for name in
+       ('qualification-status.json','quint-sampled-init.txt','quint-sampled-initReady.txt',
+        'quint-sampled-init.itf.json','quint-sampled-initReady.itf.json')},
+    **{'supervisor/' + name: 'wasm-supervisor-evidence/' + name for name in
+       ('model-controls.log','receipt-mutation.log','model-cold.log','model-ready.log',
+        'default-traces.log','selected-traces.log','source-build.log','source-dotnet.log',
+        'source-fable-build.log','source-fable.log','installed-build.log','installed-locked-build.log',
+        'installed-dotnet.log','installed-fable-build.log','installed-fable.log',
+        'installed-raw-numeric.log','installed-lock-refusal.log','installed.packages.lock.json')},
+    'official-core/receipt.json': 'wasm-supervisor-baseline/official-core/receipt.json',
+    'official-core/executed-runtime-joins.json': 'wasm-supervisor-baseline/official-core/executed-runtime-joins.json',
+    **{name: 'wasm-custody-logs/' + name for name in
+       ('contracts.log','lifecycle.log','browser.log','package-consumer.log','supervisor.log')},
+}
+CUSTODY_METADATA = ('release-manifest.json','SHA256SUMS','api-baseline-comparison.json')
+BASELINE_LOGS = tuple(ident + '.published-baseline.log' for ident in PACKAGES)
+OUTER_FILES = set(FILES) | set(CUSTODY_METADATA) | set(BASELINE_LOGS) | {'preparation-binding.json'} | {'evidence/' + name for name in EVIDENCE}
 STAGE_END = time.monotonic() + 600
 
 class Refusal(ValueError): pass
@@ -72,10 +105,15 @@ def verify_originals(custody, expected):
 
 def validate_binding(binding):
     fields = {'schema','repository','workflow','mode','producer','producerTree','executor','executorTree',
-              'runId','runAttempt','version','manifestSha256','archives','inventories','gates'}
+              'runId','runAttempt','version','manifestSha256','archives','inventories','gates',
+              'workflowSha','job','event','evidence'}
     need(set(binding) == fields, 'unreviewed preparation fields')
-    need(binding['schema'] == SCHEMA and binding['repository'] == REPO and binding['workflow'] == '.github/workflows/release-wasm.yml' and binding['mode'] == 'prepare', 'unrelated preparation route')
-    need(binding['producer'] == P and binding['producerTree'] == TREE and binding['version'] == VERSION, 'wrong P/tree/version')
+    need(binding['schema'] == SCHEMA and binding['repository'] == REPO and binding['workflow'] == '.github/workflows/wasm-shared.yml' and binding['mode'] == 'qualify', 'unrelated preparation route')
+    need(VERSION == '0.4.0' and binding['producer'] == binding['executor'] == binding['workflowSha'] == P and binding['producerTree'] == binding['executorTree'] == TREE and binding['version'] == VERSION, 'wrong selected producer/executor/tree/version')
+    need(binding['job'] == 'qualify' and binding['event'] in ('push','workflow_dispatch'), 'premerge/generation-only custody refuses')
+    need(binding['runAttempt'] == 1, 'rerun custody refuses')
+    need(set(binding['evidence']) == OUTER_FILES - {'preparation-binding.json'} - set(FILES), 'wrong closed evidence roster')
+    for value in binding['evidence'].values(): sha(value)
     sha(binding['executor'],40); sha(binding['executorTree'],40); integer(binding['runId']); integer(binding['runAttempt'])
     sha(binding['manifestSha256']); need(set(binding['archives']) == set(FILES), 'wrong preparation roster')
     for value in binding['archives'].values(): sha(value)
@@ -95,11 +133,11 @@ def validate_tuple(reviewed):
 
 def validate_run(reviewed, run, jobs, artifact):
     b = reviewed['binding']
-    need(run['head_sha'] == b['executor'] and run['path'] == b['workflow'] and run['event'] == 'workflow_dispatch', 'unrelated native preparation run')
+    need(run['head_sha'] == b['executor'] and run['path'] == b['workflow'] and run['event'] == b['event'] and run['head_branch'] == 'main', 'unrelated native preparation run')
     need(run['id'] == b['runId'] and run['run_attempt'] == b['runAttempt'] and run['status'] == 'completed' and run['conclusion'] == 'success', 'preparation failed/wrong attempt/incomplete')
     need(run['repository']['full_name'] == REPO, 'foreign run repository')
-    prepared = [job for job in jobs if job['name'] == 'prepare']
-    need(len(prepared) == 1 and prepared[0]['conclusion'] == 'success', 'missing actual successful prepare job')
+    prepared = [job for job in jobs if job['name'] == QUALIFY_JOB]
+    need(len(prepared) == 1 and prepared[0]['conclusion'] == 'success' and prepared[0]['head_sha'] == b['producer'] and prepared[0]['run_id'] == b['runId'] and prepared[0]['run_attempt'] == b['runAttempt'], 'missing actual successful full qualify job')
     steps = {row['name']: row['conclusion'] for row in prepared[0]['steps']}
     need(len(steps)==len(prepared[0]['steps']), 'duplicate native gate names')
     need(all(steps.get(name) == 'success' for name in GATES) and steps.get('Retain eligible originals') == 'success', 'actual preparation gates absent/failed')
@@ -117,7 +155,7 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
 
 class Native:
     def __init__(self): self.end = STAGE_END
-    def request(self, url, method='GET', data=None, github=False, binary=False):
+    def request(self, url, method='GET', data=None, github=False, binary=False, max_bytes=None):
         need(time.monotonic() < self.end, 'stage deadline expired')
         headers = {'Accept':'application/vnd.github+json' if github else 'application/json', 'Cache-Control':'no-cache'}
         if github:
@@ -130,7 +168,7 @@ class Native:
             # representation. The final redirected body remains opaque bytes.
             parsed = urllib.parse.urlsplit(url)
             actions_archive = (method == 'GET' and parsed.scheme == 'https' and parsed.netloc == 'api.github.com'
-                and re.fullmatch(r'/repos/' + re.escape(REPO) + r'/actions/(?:artifacts/[1-9][0-9]*/zip|runs/[1-9][0-9]*/(?:attempts/[1-9][0-9]*/)?logs)', parsed.path))
+                and re.fullmatch(r'/repos/' + re.escape(REPO) + r'/actions/(?:artifacts/[1-9][0-9]*/zip|jobs/[1-9][0-9]*/logs|runs/[1-9][0-9]*/(?:attempts/[1-9][0-9]*/)?logs)', parsed.path))
             headers['Accept'] = 'application/vnd.github+json' if actions_archive else 'application/octet-stream'
         try:
             with urllib.request.build_opener(SafeRedirect()).open(urllib.request.Request(url, data=data, headers=headers, method=method), timeout=min(30,max(1,self.end-time.monotonic()))) as r:
@@ -139,7 +177,7 @@ class Native:
                     need(time.monotonic() < self.end, 'native response stage deadline expired')
                     chunk=r.read(1048576)
                     if not chunk: break
-                    total+=len(chunk); need(total <= (536870912 if binary else 8388608),'native response exceeds bounded size')
+                    total+=len(chunk); need(total <= (max_bytes if max_bytes is not None else 536870912 if binary else 8388608),'native response exceeds bounded size')
                     chunks.append(chunk)
                 body=b''.join(chunks); receipt(url,method,r.status,dict(r.headers)); return r.status, body if binary else json.loads(body or b'null'), dict(r.headers)
         except urllib.error.HTTPError as e:
@@ -198,21 +236,6 @@ def occupancy(native, reviewed, recovering=False):
 
 
 OCCUPANCY_KEYS = {ident+':'+state for ident in PACKAGES for state in ('active','deleted','public')}
-SUCCESSOR_PATHS = {
-    '.github/workflows/release-wasm.yml', '.github/workflows/wasm-installed-org.yml',
-    'scripts/wasm-release/promotion.py', 'scripts/wasm-release/stage-assets.sh',
-    'scripts/wasm-release/readback.sh', 'scripts/wasm-release/bind-installed-release.py',
-    'scripts/wasm-release/qualify-supervisor-installed.sh',
-    'tests/release/wasm/test-release-promotion.py', 'tests/release/wasm/test-release-wasm.py',
-    'tests/release/wasm/test-release-wasm.sh', 'tests/release/wasm/test-installed-org-workflow.py',
-    'tests/release/wasm/test-consumer-source-mapping.py', 'docs/roadmaps/wasm-shared-01.md',
-}
-ORIGINAL_EXECUTOR = '8b92b7c4a8061157c03155662c97d33c0bc01551'
-ORIGINAL_TREE = '9813a780f8c77170002e005dbde9acc3f40e1765'
-ORIGINAL_TUPLE_SHA = '6ba4084f7835e81cec93fe58b23ee9fa70cec67e0b01e2e4195b16e7f2b5d937'
-ORIGINAL_CANONICAL_SHA = '97ca289e68b9faf8d79c9ef7fcdaad86ec324e70f421837709fedb2eaf6c3bff'
-
-
 def receipt(url,method,status,headers):
     # Credential-free request identity/status only; redirects/query credentials
     # and complete headers are never retained.
@@ -224,7 +247,8 @@ def receipt(url,method,status,headers):
 
 
 def execution_input():
-    return json.loads(os.environ['EXECUTION_BINDING']) if os.environ.get('EXECUTION_BINDING') else None
+    need(not os.environ.get('EXECUTION_BINDING'), 'historical executor overlay is sealed')
+    return None
 
 
 def git(*args):
@@ -238,83 +262,12 @@ def fingerprint(revision,path):
     return {'blob':blob,'sha256':digest(body)}
 
 
-def validate_execution(value,reviewed):
-    fields={'schema','repository','version','producer','preparationExecutor','preparationTree','tupleSha256',
-            'artifactId','artifactSha256','firstPromotionRun','firstPromotionAttempt','releaseId','journalAssetId',
-            'journalSha256','originalAdmissionArtifactId','originalAdmissionArtifactSha256','executor','executorTree','workflow','workflowSha256','delta'}
-    need(type(value) is dict and set(value)==fields, 'unreviewed successor fields')
-    b=validate_tuple(reviewed)['binding']
-    need(value['schema']=='fsgg.wasm.successor-execution/v1' and value['repository']==REPO and value['version']==VERSION and value['producer']==P,'foreign successor route')
-    need(value['preparationExecutor']==b['executor']==ORIGINAL_EXECUTOR and value['preparationTree']==b['executorTree']==ORIGINAL_TREE, 'wrong original executor')
-    need(value['tupleSha256']==ORIGINAL_TUPLE_SHA and digest((json.dumps(reviewed,sort_keys=True,indent=2)+'\n').encode())==ORIGINAL_CANONICAL_SHA,'changed original tuple')
-    need(value['artifactId']==reviewed['artifactId']==11289067127 and value['artifactSha256']==reviewed['artifactSha256']=='7b7f957e2506ef1a2d4a257eaa334c80ca116abaa0462c71315a1079aa38d723','wrong original artifact')
-    need((value['firstPromotionRun'],value['firstPromotionAttempt'],value['releaseId'],value['journalAssetId'],value['journalSha256'])==(37166812270,1,402763234,608859205,'5b5382d6b246ace3f4841d9b3de17ef1b446ba4e41536caa60ae96be766dcf57'),'wrong original durable identity')
-    need(value['originalAdmissionArtifactId']==11288824765 and value['originalAdmissionArtifactSha256']=='8e2ea55a85345cf30eaaee5a26e075321608f91722ed251b995d47e889ef0952','wrong original admission artifact')
-    for name in ('executor','executorTree'): sha(value[name],40)
-    need(value['executor']!=b['executor'] and value['workflow']==b['workflow'],'successor must be separate executor')
-    sha(value['workflowSha256']); rows=value['delta']
-    need(type(rows) is list and rows, 'missing finite successor delta')
-    paths=[]
-    for row in rows:
-        need(type(row) is dict and set(row)=={'path','oldBlob','oldSha256','newBlob','newSha256'},'malformed reviewed delta')
-        paths.append(row['path']); need(row['path'] in SUCCESSOR_PATHS,'unreviewed successor path')
-        for name in ('oldBlob','newBlob'): sha(row[name],40)
-        for name in ('oldSha256','newSha256'): sha(row[name])
-        need(row['oldBlob']!=row['newBlob'],'unchanged delta row')
-    need(len(paths)==len(set(paths)) and paths==sorted(paths),'duplicate/unordered successor delta')
-    return value
-
-
 def execution_checkout(native,reviewed,installed=False):
-    value=execution_input(); b=reviewed['binding']
-    if value is None:
-        executor_checkout(b)
-        need(native.checked(f'repos/{REPO}/git/ref/heads/main')['object']['sha']==b['executor'],'protected executor moved')
-        return None
-    validate_execution(value,reviewed)
-    mode=os.environ.get('MODE')
-    if mode=='recovery': need(os.environ.get('FIRST_PROMOTION_RUN')==str(value['firstPromotionRun']) and os.environ.get('FIRST_PROMOTION_ATTEMPT')==str(value['firstPromotionAttempt']), 'wrong explicit original recovery attempt')
-    need(mode in (('installed',) if installed else ('recovery','readback','inspect')), 'successor binding forbidden for selected mode')
-    need(os.environ['GITHUB_REPOSITORY']==REPO and os.environ['GITHUB_REF']=='refs/heads/main' and os.environ['GITHUB_RUN_ATTEMPT']=='1','foreign/rerun successor execution')
-    need(git('rev-parse','--is-shallow-repository')=='false', 'successor requires complete history')
-    executor_checkout({'executor':value['executor'],'executorTree':value['executorTree']})
-    need(native.checked(f'repos/{REPO}/git/ref/heads/main')['object']['sha']==value['executor'],'protected executor moved')
-    need(git('rev-parse',b['executor']+'^{tree}')==b['executorTree'], 'original executor tree differs')
-    for old,new in ((P,b['executor']),(b['executor'],value['executor'])):
-        result=subprocess.run(['git','-C',str(ROOT),'merge-base','--is-ancestor',old,new],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=min(30,max(1,STAGE_END-time.monotonic())))
-        need(result.returncode==0,'non-descendant successor')
-    paths=git('diff','--name-only',b['executor'],value['executor']).splitlines()
-    need(paths==[row['path'] for row in value['delta']], 'extra/missing actual successor delta')
-    for row in value['delta']:
-        for revision,prefix in ((b['executor'],'old'),(value['executor'],'new')):
-            actual=fingerprint(revision,row['path'])
-            need(actual=={'blob':row[prefix+'Blob'],'sha256':row[prefix+'Sha256']},'successor delta bytes changed')
-    need(digest((ROOT/value['workflow']).read_bytes())==value['workflowSha256'],'successor workflow changed')
-    run=native.checked(f'repos/{REPO}/actions/runs/{int(os.environ["GITHUB_RUN_ID"])}/attempts/1')
-    path='.github/workflows/wasm-installed-org.yml' if installed else value['workflow']
-    need(run['id']==int(os.environ['GITHUB_RUN_ID']) and run['run_attempt']==1 and run['repository']['full_name']==REPO and run['head_sha']==value['executor'] and run['head_branch']=='main' and run['event']=='workflow_dispatch' and run['path']==path,'unrelated current successor run')
-    return value
-
-
-def verify_current_admission(native,reviewed):
-    value=execution_input(); need(value is not None and os.environ.get('MODE') in ('recovery','readback'),'no current writer authority')
-    run_id=int(os.environ['GITHUB_RUN_ID']); attempt=int(os.environ['GITHUB_RUN_ATTEMPT']); need(attempt==1,'rerun writer refuses')
-    jobs=native.pages(f'repos/{REPO}/actions/runs/{run_id}/attempts/1/jobs','jobs')
-    admitted=[j for j in jobs if j['name']=='admission']; need(len(admitted)==1 and admitted[0]['conclusion']=='success','current admission absent/failed')
-    artifacts=native.pages(f'repos/{REPO}/actions/runs/{run_id}/artifacts','artifacts')
-    selected=[a for a in artifacts if a['name']==f'wasm-admission-{run_id}-1']; need(len(selected)==1 and not selected[0]['expired'],'current admission expired/missing')
-    a=selected[0];need(a['workflow_run']['id']==run_id and a['workflow_run']['head_sha']==value['executor'],'foreign current admission artifact')
-    status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/artifacts/{a["id"]}/zip',github=True,binary=True)
-    need(status==200, f'current admission artifact download status {status}, Unknown')
-    need(a['digest']=='sha256:'+digest(body),'current admission digest Unknown')
-    import io
-    with zipfile.ZipFile(io.BytesIO(body)) as z:
-        need(z.namelist()==['admission-binding.json'],'wrong current admission roster');record=json.loads(z.read('admission-binding.json'))
-    fields={'schema','reviewed','mode','run','attempt','exchangeVerified','occupancy','observedAt','nugetAccountSha256','publicModeratorRemovalHistory','atomicReservation','executionBinding','executionBindingSha256'}
-    need(set(record)==fields and record['schema']=='fsgg.wasm.admission/v1' and record['reviewed']==reviewed and record['mode']==os.environ['MODE'] and record['run']==run_id and record['attempt']==1 and record['exchangeVerified'] is True,'current native authority differs')
-    need(record['executionBinding']==value and record['executionBindingSha256']==digest((json.dumps(value,sort_keys=True,indent=2)+'\n').encode()),'current successor binding differs')
-    need(set(record['occupancy'])==OCCUPANCY_KEYS and all(type(v) is bool for v in record['occupancy'].values()) and all(not record['occupancy'][i+':deleted'] for i in PACKAGES),'current occupancy incomplete/deleted')
-    need(record['nugetAccountSha256']==digest(os.environ['NUGET_ACCOUNT'].encode()) and record['publicModeratorRemovalHistory']==record['atomicReservation']=='Unknown','current account/history differs')
+    need(execution_input() is None, 'historical executor overlays cannot authorize current release')
+    b=validate_tuple(reviewed)['binding']
+    need(os.environ['GITHUB_REPOSITORY']==REPO and os.environ['GITHUB_REF']=='refs/heads/main' and os.environ['GITHUB_RUN_ATTEMPT']=='1', 'foreign/rerun current execution')
+    executor_checkout(b)
+    need(native.checked(f'repos/{REPO}/git/ref/heads/main')['object']['sha']==b['executor'], 'protected producer moved')
 
 
 def executor_checkout(binding):
@@ -323,31 +276,127 @@ def executor_checkout(binding):
     need(git('rev-parse','HEAD^{tree}')==binding['executorTree'] and not git('status','--porcelain'),'dirty or different executor tree')
 
 
+# Share the maintained Game required-check contract with the ordinary native
+# delivery observer; live protection must still agree before publication.
+def required_checks():
+    policy=load(ROOT/'policy/v2-ci-ordinary-settlement.json')['qualification']
+    return tuple((name,policy['requiredCheckAppId']) for name in policy['requiredGateChecks'])
+
+
+def job_log_lines(log):
+    need(len(log)<=16*1024*1024, 'checkout job log exceeds bound')
+    text=log.decode('utf-8-sig',errors='strict')
+    text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text)
+    return [re.sub(r'^\d{4}-\d\d-\d\dT\S+Z ', '', line) for line in text.splitlines()]
+
+
+def metadata_head(log,head,expected):
+    # This exact existing producer validates PR metadata and does not check out
+    # source. Its explicit runner environment binds the subject, not tested code.
+    need(expected=={'workflowId':316870217,'path':'.github/workflows/kit-materialize.yml','event':'pull_request'}, 'metadata-only producer contract changed')
+    lines=job_log_lines(log)
+    heads=[line.removeprefix('  PR_HEAD: ') for line in lines if line.startswith('  PR_HEAD: ')]
+    need(heads==[head], 'metadata-only native PR_HEAD missing/mismatched/ambiguous')
+    need('  SELF_REPO: '+REPO in lines, 'metadata-only repository differs')
+
+
+def checkout_commit(log):
+    """Read the pinned checkout action's own git-log result, never a script echo."""
+    lines=job_log_lines(log)
+    starts=[i for i,line in enumerate(lines) if line=='##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1']
+    commits=[]
+    for start in starts:
+        end=next((i for i in range(start+1,len(lines)) if lines[i].startswith('##[group]Run ')),len(lines))
+        block=lines[start:end]
+        if 'Syncing repository: '+REPO not in block: continue
+        need(block.count('Syncing repository: '+REPO)==1, 'ambiguous checkout repository')
+        positions=[i for i,line in enumerate(block) if re.fullmatch(r'\[command\].*(?:/|\\)git(?:\.exe)?"? log -1 --format=%H',line)]
+        need(len(positions)==1 and positions[0]+1<len(block), 'checkout commit missing/ambiguous')
+        commit=block[positions[0]+1];sha(commit,40);commits.append(commit)
+    need(len(commits)==1, 'actual selected repository checkout missing/ambiguous')
+    return commits[0]
+
+
+def verify_protection(native,binding):
+    branch=native.checked(f'repos/{REPO}/branches/main')
+    need(branch['protected'] is True, 'main protection unavailable')
+    protection=branch['protection']['required_status_checks'];required=required_checks()
+    checks=protection['checks']
+    need(type(checks) is list and len(checks)==19 and {(row['context'],row['app_id']) for row in checks}==set(required), 'selected required protection checks changed/Unknown')
+    need(set(protection['contexts'])=={name for name,_ in required}, 'required context projection drift')
+    # Reuse the existing Game native check-producer policy, but admit only an
+    # exact checkout tree. The ordinary observer's broader three-way semantic
+    # merge path does not authorize this selected publication window.
+    policy=load(ROOT/'policy/v2-ci-ordinary-settlement.json')['qualification']
+    pulls=native.pages(f'repos/{REPO}/commits/{binding["producer"]}/pulls')
+    need(len(pulls)==1, 'current producer needs unique native merged PR')
+    pull=native.checked(f'repos/{REPO}/pulls/{pulls[0]["number"]}')
+    need(all(pull[key]==pulls[0][key] for key in ('number','node_id','merged_at','merge_commit_sha')), 'native merged PR association drift')
+    need(pull['state']=='closed' and pull['merged_at'] and pull['merge_commit_sha']==binding['producer'] and pull['base']['ref']=='main' and pull['base']['repo']['full_name']==REPO and pull['head']['repo']['full_name']==REPO, 'foreign/unmerged producer association')
+    head=pull['head']['sha'];sha(head,40)
+    trees={}
+    def exact_tree(commit):
+        if commit not in trees:
+            value=native.checked(f'repos/{REPO}/git/commits/{commit}')
+            need(value['sha']==commit and value['tree']['sha']==binding['producerTree'], 'tested checkout tree differs from protected custody producer')
+            trees[commit]=value['tree']['sha']
+        return trees[commit]
+    exact_tree(binding['producer']);exact_tree(head)
+    rows=native.pages(f'repos/{REPO}/commits/{head}/check-runs?filter=latest','check_runs')
+    runs={};log_bytes=0
+    for name,app in required:
+        matches=[row for row in rows if row['name']==name]
+        need(len(matches)==1, 'required check absent/ambiguous: '+name)
+        check=matches[0]
+        need(check['app']['id']==app and check['head_sha']==head and check['status']=='completed' and check['conclusion']=='success', 'required native check failed/foreign: '+name)
+        match=re.fullmatch(r'https://github\.com/'+re.escape(REPO)+r'/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)',check['details_url'])
+        need(match is not None, 'required check lacks native Actions job: '+name)
+        run_id,job_id=map(int,match.groups());need(job_id==check['id'],'check/job identity differs')
+        if run_id not in runs:runs[run_id]=native.checked(f'repos/{REPO}/actions/runs/{run_id}')
+        run=runs[run_id];job=native.checked(f'repos/{REPO}/actions/jobs/{job_id}');expected=policy['checkProducers'][name]
+        need(run['id']==run_id and run['repository']['full_name']==REPO and run['workflow_id']==expected['workflowId'] and run['path']==expected['path'] and run['event']==expected['event'] and run['head_sha']==head and run['check_suite_id']==check['check_suite']['id'], 'required check producer differs: '+name)
+        need(job['id']==job_id and job['run_id']==run_id and job['head_sha']==head and job['name']==name and job['status']==check['status'] and job['conclusion']==check['conclusion'] and job['check_run_url']==f'https://api.github.com/repos/{REPO}/check-runs/{job_id}' and type(job['run_attempt']) is int and type(run['run_attempt']) is int and 1<=job['run_attempt']==run['run_attempt'], 'required native job/attempt differs: '+name)
+        status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/jobs/{job_id}/logs',github=True,binary=True,max_bytes=min(16*1024*1024,64*1024*1024-log_bytes))
+        need(status==200, 'required checkout logs unavailable: '+name)
+        log_bytes+=len(body);need(log_bytes<=64*1024*1024, 'required checkout logs exceed total bound')
+        if name=='materialize / receiver-validate':metadata_head(body,head,expected)
+        else:exact_tree(checkout_commit(body))
+
+
 def download(native, reviewed, target):
     validate_tuple(reviewed); b=reviewed['binding']; execution_checkout(native,reviewed)
     run=native.checked(f'repos/{REPO}/actions/runs/{b["runId"]}/attempts/{b["runAttempt"]}')
     jobs=native.pages(f'repos/{REPO}/actions/runs/{b["runId"]}/attempts/{b["runAttempt"]}/jobs', 'jobs')
     artifact=native.checked(f'repos/{REPO}/actions/artifacts/{reviewed["artifactId"]}')
     validate_run(reviewed,run,jobs,artifact)
+    verify_protection(native,b)
     status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/artifacts/{reviewed["artifactId"]}/zip',github=True,binary=True)
     need(status==200, f'preparation artifact download status {status}, Unknown')
     need(digest(body)==reviewed['artifactSha256'],'downloaded artifact digest mismatch')
     target=pathlib.Path(target); need(not target.exists(),'custody output must be fresh'); target.mkdir(mode=0o700)
     import io
     with zipfile.ZipFile(io.BytesIO(body)) as z:
-        names=z.namelist(); need(len(names)==len(set(names)),'duplicate artifact members')
+        names=z.namelist()
+        need(len(names)==len(set(names)) and set(names)==OUTER_FILES, 'wrong closed custody archive roster')
+        need(len(body)<=MAX_TOTAL and sum(info.file_size for info in z.infolist())<=MAX_TOTAL, 'custody archive total budget exceeded')
         for info in z.infolist():
-            path=target/info.filename
-            need(not pathlib.PurePosixPath(info.filename).is_absolute() and '..' not in pathlib.PurePosixPath(info.filename).parts and (info.external_attr>>16)&0o170000 != 0o120000,'unsafe custody member')
-            if info.is_dir(): path.mkdir(parents=True,exist_ok=True)
-            else: path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(z.read(info))
+            name=info.filename
+            need(not info.is_dir() and not pathlib.PurePosixPath(name).is_absolute() and '..' not in pathlib.PurePosixPath(name).parts and (info.external_attr>>16)&0o170000 in (0,stat.S_IFREG), 'unsafe custody member')
+            limit=MAX_ARCHIVE if name in FILES else MAX_METADATA if name=='preparation-binding.json' or name in CUSTODY_METADATA or name.endswith('.json') else MAX_DIAGNOSTICS
+            need(info.file_size<=limit, 'custody member budget exceeded')
+        diagnostics=sum(info.file_size for info in z.infolist() if info.filename not in FILES and info.filename!='preparation-binding.json')
+        metadata=sum(info.file_size for info in z.infolist() if info.filename=='preparation-binding.json' or info.filename in CUSTODY_METADATA or info.filename.endswith('.json'))
+        need(diagnostics<=MAX_DIAGNOSTICS and metadata<=MAX_METADATA, 'custody evidence budget exceeded')
+        for info in z.infolist():
+            path=target/info.filename; path.parent.mkdir(parents=True,exist_ok=True); path.write_bytes(z.read(info))
     need(digest((target/'preparation-binding.json').read_bytes())==reviewed['bindingSha256'],'preparation binding digest drift')
     need(load(target/'preparation-binding.json')==b,'actual preparation tuple drift')
+    need(all(digest((target/name).read_bytes())==value for name,value in b['evidence'].items()), 'custody evidence digest drift')
     verify_originals(target,b)
 
 def transaction(reviewed, first_run):
     integer(first_run)
-    return {'schema':'fsgg.wasm.promotion/v1','preparation':reviewed,'firstPromotionRun':first_run,'firstPromotionAttempt':int(os.environ.get('FIRST_PROMOTION_ATTEMPT') or os.environ['GITHUB_RUN_ATTEMPT']),'producer':P,'tag':'wasm/v0.3.0'}
+    return {'schema':'fsgg.wasm.promotion/v1','preparation':reviewed,'firstPromotionRun':first_run,'firstPromotionAttempt':int(os.environ.get('FIRST_PROMOTION_ATTEMPT') or os.environ['GITHUB_RUN_ATTEMPT']),'producer':P,'tag':'wasm/v'+VERSION}
 
 def release_state(native):
     ref_status,ref,_=native.api(f'repos/{REPO}/git/ref/tags/wasm%2Fv{VERSION}')
@@ -361,9 +410,7 @@ def release_state(native):
     matches=[x for x in rows if x['tag_name']=='wasm/v'+VERSION]
     need(len(matches)<=1, 'duplicate selected release')
     release=matches[0] if matches else None
-    execution=execution_input()
-    if execution:
-        need(release is not None and release['id']==execution['releaseId'], 'expected bound draft hidden/missing')
+    execution_input()
     if release is not None:
         actual=native.checked(f'repos/{REPO}/releases/{release["id"]}')
         need(actual==release, 'release list/by-ID disagreement')
@@ -387,12 +434,10 @@ def verify_transaction(native, release, reviewed):
     need(len(assets)==1,'missing/duplicate durable transaction binding')
     row=assets[0]
     body=asset_bytes(native,row); value=json.loads(body)
-    execution=execution_input()
-    if execution: need(row['id']==execution['journalAssetId'] and digest(body)==execution['journalSha256'], 'changed original journal identity')
-    need(set(value)=={'schema','preparation','firstPromotionRun','firstPromotionAttempt','producer','tag'} and value['schema']=='fsgg.wasm.promotion/v1' and value['preparation']==reviewed and value['producer']==P and value['tag']=='wasm/v0.3.0','foreign durable release transaction')
+    execution_input()
+    need(set(value)=={'schema','preparation','firstPromotionRun','firstPromotionAttempt','producer','tag'} and value['schema']=='fsgg.wasm.promotion/v1' and value['preparation']==reviewed and value['producer']==P and value['tag']=='wasm/v'+VERSION,'foreign durable release transaction')
     integer(value['firstPromotionRun']); integer(value['firstPromotionAttempt'])
     verify_admission(native,reviewed,value['firstPromotionRun'],value['firstPromotionAttempt'])
-    if execution: need((value['firstPromotionRun'],value['firstPromotionAttempt'])==(execution['firstPromotionRun'],execution['firstPromotionAttempt']), 'changed original transaction attempt')
     run=native.checked(f'repos/{REPO}/actions/runs/{value["firstPromotionRun"]}/attempts/{value["firstPromotionAttempt"]}')
     need(run['head_sha']==reviewed['binding']['executor'] and run['event']=='workflow_dispatch' and run['path']=='.github/workflows/release-wasm.yml','foreign first promotion run')
     return value
@@ -402,15 +447,12 @@ def verify_admission(native,reviewed,run_id,attempt):
     need(run['head_sha']==reviewed['binding']['executor'] and run['event']=='workflow_dispatch' and run['path']=='.github/workflows/release-wasm.yml','foreign original admission run')
     jobs=native.pages(f'repos/{REPO}/actions/runs/{run_id}/attempts/{attempt}/jobs','jobs')
     need(run['id']==run_id and run['run_attempt']==attempt and run['repository']['full_name']==REPO,'wrong original native attempt')
-    if execution_input():
-        begun=[j for j in jobs if j['name']=='begin']; need(len(begun)==1 and begun[0]['conclusion']=='success','original bound begin failed/missing')
     admitted=[j for j in jobs if j['name']=='admission']
     need(len(admitted)==1 and admitted[0]['conclusion']=='success','original admission was not successful')
     artifacts=native.pages(f'repos/{REPO}/actions/runs/{run_id}/artifacts','artifacts')
     matching=[a for a in artifacts if a['name']==f'wasm-admission-{run_id}-{attempt}']
     need(len(matching)==1 and not matching[0]['expired'],'original admission evidence absent/expired')
     a=matching[0]
-    if execution_input(): need(a['id']==execution_input()['originalAdmissionArtifactId'] and a['digest']=='sha256:'+execution_input()['originalAdmissionArtifactSha256'],'changed original admission artifact')
     need(a['workflow_run']['id']==run_id and a['workflow_run']['head_sha']==reviewed['binding']['executor'],'foreign admission artifact')
     status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/artifacts/{a["id"]}/zip',github=True,binary=True)
     need(status==200, f'original admission artifact download status {status}, Unknown')
@@ -456,14 +498,11 @@ def readback_occupied(observed,custody,output,feeds=('org','public')):
 def begin(native,reviewed,custody,recovery):
     need(os.environ.get('TAG_CREDENTIAL_ROUTE')=='workflow-github-token','PAT/App/manual tag path refuses')
     verify_originals(custody,reviewed['binding'])
-    if execution_input(): execution_checkout(native,reviewed); verify_current_admission(native,reviewed)
+    execution_input()
     ref,release=release_state(native)
     observed=occupancy(native,reviewed,recovery or release is not None)
     if recovery or release is not None:
         readback_occupied(observed,custody,pathlib.Path(os.environ['RUNNER_TEMP'])/'begin-occupied-readback')
-    if execution_input():
-        need(recovery and release is not None, 'successor requires existing bound transaction')
-        verify_transaction(native,release,reviewed); return
     if release:
         rows=[a for a in release['assets'] if a['name']=='promotion-binding.json']
         if not rows:
@@ -471,7 +510,7 @@ def begin(native,reviewed,custody,recovery):
             first,attempt=interrupted_begin(native,reviewed,release)
             value=transaction(reviewed,first); value['firstPromotionAttempt']=attempt
             path=pathlib.Path(custody)/'promotion-binding.json'; save(path,value)
-            command(['gh','release','upload','wasm/v0.3.0',str(path),'--repo',REPO])
+            command(['gh','release','upload','wasm/v'+VERSION,str(path),'--repo',REPO])
             verify_transaction(native,native.checked(f'repos/{REPO}/releases/{release["id"]}'),reviewed)
         else:
             verify_transaction(native,release,reviewed)
@@ -480,10 +519,10 @@ def begin(native,reviewed,custody,recovery):
     need(ref==404 or recovery,'preexisting tag requires causally bound recovery')
     first=int(os.environ.get('FIRST_PROMOTION_RUN') or os.environ['GITHUB_RUN_ID'])
     if ref==200: first,_=interrupted_begin(native,reviewed)
-    if ref==404: native.checked(f'repos/{REPO}/git/refs','POST',{'ref':'refs/tags/wasm/v0.3.0','sha':P})
-    release=native.checked(f'repos/{REPO}/releases','POST',{'tag_name':'wasm/v0.3.0','target_commitish':P,'name':'Shared WASM 0.3.0','draft':True,'prerelease':False,'body':'Same-custody promotion incomplete until exact readback and installed acceptance.'})
+    if ref==404: native.checked(f'repos/{REPO}/git/refs','POST',{'ref':'refs/tags/wasm/v'+VERSION,'sha':P})
+    release=native.checked(f'repos/{REPO}/releases','POST',{'tag_name':'wasm/v'+VERSION,'target_commitish':P,'name':'Shared WASM '+VERSION,'draft':True,'prerelease':False,'body':'Same-custody promotion incomplete until exact readback and installed acceptance.'})
     path=pathlib.Path(custody)/'promotion-binding.json'; save(path,transaction(reviewed,first))
-    command(['gh','release','upload','wasm/v0.3.0',str(path),'--repo',REPO])
+    command(['gh','release','upload','wasm/v'+VERSION,str(path),'--repo',REPO])
     verify_transaction(native,native.checked(f'repos/{REPO}/releases/{release["id"]}'),reviewed)
 
 def repository_signature(archive):
@@ -497,9 +536,8 @@ def readback(kind,custody,output):
     command([str(ROOT/'scripts/wasm-release/readback.sh'),kind,str(custody),str(output)], env=dict(os.environ, WASM_READBACK_DEADLINE=str(int(time.time()+max(0,STAGE_END-time.monotonic())))))
 
 def perform(native,kind,reviewed,custody,output):
-    if execution_input(): need(os.environ.get('MODE')==('readback' if kind=='readback' else 'recovery'),'successor writer mode differs')
     verify_originals(custody,reviewed['binding'])
-    if execution_input(): execution_checkout(native,reviewed); verify_current_admission(native,reviewed)
+    execution_input()
     _,release=release_state(native); need(release is not None,'no durable transaction before writer')
     verify_transaction(native,release,reviewed)
     if kind=='readback':
@@ -516,7 +554,7 @@ def perform(native,kind,reviewed,custody,output):
         readback_occupied(occupied,custody,output,(kind,))
         for ident in PACKAGES:
             key=ident+(':active' if kind=='org' else ':public')
-            original=pathlib.Path(custody)/(ident+'.0.3.0.nupkg')
+            original=pathlib.Path(custody)/(ident+'.'+VERSION+'.nupkg')
             verify_originals(custody,reviewed['binding'])
             if not occupied[key]:
                 token=os.environ['FEED_TOKEN'] if kind=='org' else os.environ['NUGET_API_KEY']
@@ -536,14 +574,13 @@ def perform(native,kind,reviewed,custody,output):
 
 
 def release_assets(native,reviewed,custody,output,write=False):
-    if write and execution_input(): need(os.environ.get('MODE')=='recovery','asset writer requires recovery mode')
     verify_originals(custody,reviewed['binding'])
-    if execution_input(): execution_checkout(native,reviewed); verify_current_admission(native,reviewed)
+    execution_input()
     _,release=release_state(native); need(release is not None,'release assets Unknown')
     verify_transaction(native,release,reviewed)
     rows=release['assets']; need(len({r['name'] for r in rows})==len(rows),'duplicate release assets')
     output=pathlib.Path(output);output.mkdir(parents=True,exist_ok=True)
-    for name in ('fsgg-wasm-sdk-0.3.0.tar.gz','release-manifest.json','SHA256SUMS'):
+    for name in ('fsgg-wasm-sdk-'+VERSION+'.tar.gz','release-manifest.json','SHA256SUMS'):
         matches=[a for a in rows if a['name']==name]; original=(pathlib.Path(custody)/name).read_bytes()
         if matches:
             served=asset_bytes(native,matches[0]); need(served==original,'existing release asset differs');(output/name).write_bytes(served)
@@ -555,14 +592,52 @@ def release_assets(native,reviewed,custody,output,write=False):
             served=asset_bytes(native,row);need(served==original,'uploaded asset differs');(output/name).write_bytes(served)
 
 
+def custody_plan():
+    need(len(OUTER_FILES)<=64 and len(OUTER_FILES)==len(FILES)+len(CUSTODY_METADATA)+len(BASELINE_LOGS)+len(EVIDENCE)+1, 'custody roster collision/file budget')
+    print(f'wasm-custody-plan: files={len(OUTER_FILES)} total<=512MiB originals<=256MiB each diagnostics<=32MiB metadata<=1MiB; actual sizes required at freeze')
+
+
 def freeze(custody,output):
-    manifest=load(pathlib.Path(custody)/'release-manifest.json')
-    b={'schema':SCHEMA,'repository':REPO,'workflow':'.github/workflows/release-wasm.yml','mode':'prepare','producer':P,'producerTree':TREE,
-       'executor':os.environ['ACCEPTED_EXECUTOR'],'executorTree':os.environ['EXECUTOR_TREE'],'runId':int(os.environ['GITHUB_RUN_ID']),
-       'runAttempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'version':VERSION,'manifestSha256':digest((pathlib.Path(custody)/'release-manifest.json').read_bytes()),
-       'archives':{row['file']:row['sha256'] for row in manifest['artifacts']},'inventories':inventories(custody),'gates':{name:'success' for name in GATES}}
-    validate_binding(b); verify_originals(custody,b); save(output,b)
-    with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('binding_sha256='+digest(pathlib.Path(output).read_bytes())+'\n')
+    custody_plan()
+    need(VERSION=='0.4.0', 'only selected current release can freeze')
+    need(os.environ['GITHUB_REPOSITORY']==REPO and os.environ['GITHUB_REF']=='refs/heads/main' and os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA']==P, 'premerge/source/workflow substitution')
+    event=os.environ['GITHUB_EVENT_NAME']
+    need(event=='push' or (event=='workflow_dispatch' and os.environ.get('WASM_QUALIFY_EXPECTED_HEAD')==P), 'qualification dispatch needs selected protected head')
+    need(os.environ['GITHUB_RUN_ATTEMPT']=='1', 'rerun custody refuses')
+    need(not git('status','--porcelain'), 'dirty qualification source')
+    custody=pathlib.Path(custody); output=pathlib.Path(output)
+    need(not output.exists() and not output.is_symlink() and not output.resolve().is_relative_to(ROOT.resolve()), 'eligible output must be fresh and outside source')
+    selected={name:custody/name for name in (*FILES,*CUSTODY_METADATA,*BASELINE_LOGS)}
+    selected.update({'evidence/'+name:pathlib.Path(os.environ['RUNNER_TEMP'])/relative for name,relative in EVIDENCE.items()})
+    # Validate the complete input roster before copying anything. Symlinks in any
+    # ancestor cannot import a foreign cache/workspace under a selected leaf.
+    for name,path in selected.items():
+        need(path.is_file() and not any(parent.is_symlink() for parent in (path,*path.parents)), 'missing/unsafe mandatory evidence: '+name)
+    sizes={name:path.stat().st_size for name,path in selected.items()}
+    need(all(sizes[name]<=MAX_ARCHIVE for name in FILES), 'original archive budget exceeded')
+    need(sum(size for name,size in sizes.items() if name not in FILES)<=MAX_DIAGNOSTICS, 'diagnostics budget exceeded')
+    need(sum(size for name,size in sizes.items() if name in CUSTODY_METADATA or name.endswith('.json'))<=MAX_METADATA, 'metadata budget exceeded')
+    manifest=load(custody/'release-manifest.json')
+    evidence={name:digest(path.read_bytes()) for name,path in selected.items() if name not in FILES}
+    b={'schema':SCHEMA,'repository':REPO,'workflow':'.github/workflows/wasm-shared.yml','workflowSha':P,'job':'qualify','event':event,
+       'mode':'qualify','producer':P,'producerTree':TREE,'executor':P,'executorTree':TREE,'runId':int(os.environ['GITHUB_RUN_ID']),
+       'runAttempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'version':VERSION,'manifestSha256':digest((custody/'release-manifest.json').read_bytes()),
+       'archives':{row['file']:row['sha256'] for row in manifest['artifacts']},'inventories':inventories(custody),
+       'gates':{name:'success' for name in GATES},'evidence':evidence}
+    validate_binding(b); verify_originals(custody,b)
+    binding_bytes=(json.dumps(b,sort_keys=True,indent=2)+'\n').encode()
+    sizes={name:path.stat().st_size for name,path in selected.items()}
+    need(all(sizes[name]<=MAX_ARCHIVE for name in FILES), 'original archive budget exceeded')
+    need(sum(sizes[name] for name in evidence)<=MAX_DIAGNOSTICS, 'diagnostics budget exceeded')
+    metadata=sum(size for name,size in sizes.items() if name in CUSTODY_METADATA or name.endswith('.json'))+len(binding_bytes)
+    need(metadata<=MAX_METADATA and sum(sizes.values())+len(binding_bytes)<=MAX_TOTAL, 'metadata/total custody budget exceeded')
+    output.mkdir(mode=0o700)
+    for name,path in selected.items():
+        destination=output/name; destination.parent.mkdir(parents=True,exist_ok=True); shutil.copyfile(path,destination)
+        need(digest(destination.read_bytes())==(b['archives'][name] if name in FILES else evidence[name]), 'custody changed during retention')
+    (output/'preparation-binding.json').write_bytes(binding_bytes)
+    print(f'wasm-custody-size: files={len(OUTER_FILES)} totalBytes={sum(sizes.values())+len(binding_bytes)} diagnosticBytes={sum(sizes[name] for name in evidence)} metadataBytes={metadata}')
+    with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('binding_sha256='+digest(binding_bytes)+'\nversion='+VERSION+'\n')
 
 def validate_feed_config(path,feed):
     import xml.etree.ElementTree as ET
@@ -679,10 +754,8 @@ def package_content_hash(raw):
 
 def check_installed(record_path,cache,feed,lock):
     value=load(record_path); reviewed=validate_tuple(value['preparation']); b=reviewed['binding']
-    if execution_input():
-        execution_checkout(Native(),reviewed,installed=True)
-        need(digest(pathlib.Path(record_path).read_bytes())==execution_input()['journalSha256'], 'installed original journal changed')
-    else: need(b['executor']==os.environ['ACCEPTED_EXECUTOR'],'installed transaction wrong executor')
+    execution_input()
+    need(b['executor']==os.environ['ACCEPTED_EXECUTOR'],'installed transaction wrong executor')
     need(feed in ('https://api.nuget.org/v3/index.json','https://nuget.pkg.github.com/FS-GG/index.json'), 'foreign installed feed')
     dependencies=load(lock)['dependencies']['net10.0']
     for ident in PACKAGES:
@@ -729,8 +802,9 @@ def check_installed(record_path,cache,feed,lock):
 
 
 def main():
-    parser=argparse.ArgumentParser(); parser.add_argument('action',choices=['freeze','admit','begin','org','public','assets','complete','readback','check-installed','check-feed','verify-signature','inspect','asset-stage','asset-readback'])
+    parser=argparse.ArgumentParser(); parser.add_argument('action',choices=['freeze','admit','begin','org','public','assets','complete','readback','check-installed','check-feed','verify-signature','inspect','asset-stage','asset-readback','check-custody-plan'])
     parser.add_argument('--custody'); parser.add_argument('--output'); parser.add_argument('--reviewed'); parser.add_argument('--recovery',action='store_true'); parser.add_argument('--manifest'); parser.add_argument('--cache'); parser.add_argument('--feed'); parser.add_argument('--lock'); parser.add_argument('--archive'); args=parser.parse_args()
+    if args.action=='check-custody-plan': custody_plan(); return
     if args.action=='freeze': freeze(args.custody,args.output); return
     if args.action=='check-feed': validate_feed_config(args.output,args.feed); return
     if args.action=='check-installed': check_installed(args.manifest,args.cache,args.feed,args.lock); return
@@ -739,7 +813,7 @@ def main():
     if args.action in ('asset-stage','asset-readback'):
         release_assets(native,reviewed,args.custody,args.output,write=args.action=='asset-stage'); return
     if args.action=='inspect':
-        need(os.environ.get('MODE')=='inspect' and execution_input() is not None,'closed inspection requires successor binding')
+        need(os.environ.get('MODE')=='inspect' and execution_input() is None,'inspection requires current route')
         download(native,reviewed,args.custody)
         _,release=release_state(native); need(release is not None,'inspection draft Unknown')
         value=verify_transaction(native,release,reviewed)
@@ -759,7 +833,6 @@ def main():
         else:
             need(ref==404 and release is None,'fresh tag/release occupied'); observed=occupancy(native,reviewed)
         record={'schema':'fsgg.wasm.admission/v1','reviewed':reviewed,'mode':os.environ.get('MODE') or ('recovery' if args.recovery else 'promote'),'run':int(os.environ['GITHUB_RUN_ID']),'attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'exchangeVerified':True,'occupancy':observed,'observedAt':dt.datetime.now(dt.timezone.utc).isoformat(),'nugetAccountSha256':digest(os.environ['NUGET_ACCOUNT'].encode()),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown'}
-        if execution_input(): record.update(executionBinding=execution_input(),executionBindingSha256=digest((json.dumps(execution_input(),sort_keys=True,indent=2)+'\n').encode()))
         save(args.output,record)
     elif args.action=='begin': begin(native,reviewed,args.custody,args.recovery)
     else: perform(native,args.action,reviewed,args.custody,args.output)

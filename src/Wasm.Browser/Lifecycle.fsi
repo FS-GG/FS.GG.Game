@@ -86,5 +86,9 @@ module Lifecycle =
     val projectCompatibility: HostState -> CompatibilityProjection
     val projectEffects: HostEffect list -> EffectProjection list
 
+    /// Reentrant effect eligibility is producer policy; disposed sessions cannot arm or post.
+    val internal terminalDispatchIdentity: HostState -> HostIdentity option
+    val internal effectEligible: HostIdentity option -> HostEffect -> HostState -> bool
+
     val submitLimited: int64 -> LimitedRequest -> RequestLimits -> HostState -> HostDecision
     val commitCandidateFrozen: int64 -> string -> string -> uint64 -> uint64 -> HostState -> HostDecision

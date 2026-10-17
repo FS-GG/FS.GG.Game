@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Bounded pinned-Quint trace acquisition; expected bytes come only from canonical execution."""
-import os,subprocess,tempfile,pathlib,sys
+import os,subprocess,tempfile,pathlib,sys,importlib.util
+sys.dont_write_bytecode=True
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 HERE=pathlib.Path(__file__).resolve().parent
+spec=importlib.util.spec_from_file_location('projection',HERE/'generate-traces.py');projection=importlib.util.module_from_spec(spec);spec.loader.exec_module(projection)
 quint=os.environ.get('QUINT','quint')
 assert subprocess.check_output([quint,'--version'],text=True).strip()=='0.32.0'
 check='--check' in sys.argv
 out=pathlib.Path(tempfile.mkdtemp(prefix='wasm-event-traces-')) if check else HERE/'Traces'
 schedules=[('bar','lifecycle','initBar','barCorrespondenceStep',10,'lifecycle.qnt'),('sc2','lifecycle','initSc2','sc2CorrespondenceStep',18,'lifecycle.qnt'),('timeout','lifecycle','initSc2','timeoutCorrespondenceStep',8,'lifecycle.qnt'),('phase','lifecycle','initBar','phaseCorrespondenceStep',16,'lifecycle.qnt'),('cleanup','lifecycle','initSc2','cleanupCorrespondenceStep',15,'lifecycle.qnt')]
+for case in ['Before','At','After','Rejected','Cleanup','AdapterRejected']:
+ schedules.append(('boundary-terminal-'+case.lower(),'eventBoundaryQualification','initBoundary','terminal'+case,10,'event-boundary-qualification.qnt'))
 for timing in ['early','late']:schedules.append(('expiry-'+timing,'expiryQualification','initSc2',timing+'Step',8,'expiry-qualification.qnt'))
 for action in ['dispose','completion','timer','phase','freeze','resume','compile','initialize']:
  for boundary in ['Before','At','After']:
@@ -24,7 +28,7 @@ for boundary in ['Before','At','After']:
 schedules.append(('pending-load-commit','pendingLoadCommitQualification','initRegression','regressionStep',14,'event-boundary-qualification.qnt'))
 schedules.append(('pending-initialize-commit','pendingInitializeCommitQualification','initRegression','regressionStep',10,'event-boundary-qualification.qnt'))
 for name,module,initial,step,count,model in schedules:
- subprocess.run([quint,'run','--backend=typescript','--main='+module,'--init='+initial,'--step='+step,'--invariant=lifecycleSafe','--max-steps='+str(count),'--max-samples=1','--seed=20261002','--out-itf='+str(out/(name+'_{seq}.itf.json')),str(ROOT/'eng/wasm-shared'/model)],check=True,stdout=subprocess.DEVNULL)
+ projection.run_quint_schedule([quint,'run','--verbosity=1','--backend=typescript','--main='+module,'--init='+initial,'--step='+step,'--invariant=lifecycleSafe','--max-steps='+str(count),'--max-samples=1','--seed=20261002','--out-itf='+str(out/(name+'_{seq}.itf.json')),str(ROOT/'eng/wasm-shared'/model)],name,out/(name+'_0.itf.json'))
 target=out/'GeneratedTraces.fs' if check else HERE/'GeneratedTraces.fs'
 subprocess.run([sys.executable,str(HERE/'generate-traces.py'),'--traces',str(out),'--output',str(target)],check=True)
 if check:

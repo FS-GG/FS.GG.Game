@@ -1,9 +1,346 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## Coherent 0.4 candidate and current published-baseline classification
+
+The unpublished terminal API selects stable coherent 0.4.0 before final source CI.
+Both .NET packages, Contracts source-profile metadata, SDK version, Rust helper and
+both Rust examples move together. Browser's exact same-version Contracts dependency
+continues to derive from `WasmSharedVersion`; no new package identity is introduced.
+This is source preparation, not a published version or a product consumer pin.
+
+Current release classification compares actual 0.3.0 from producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, tree
+`f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a`, with manifest SHA256
+`a10046daf5417304732605745608b084f14481212931cb69939d51f90233ed07`.
+The selected policy binds the actual public served archives: Browser SHA256
+`74a11425bfb64c152ffbeab5be2753434e08f55f806e85113cdc25cacbc86fa5`
+and Contracts SHA256
+`90839f0bef2688447a55568dcb370941efec6f4e043742b9b4b8969c247acfa1`.
+Read-only archive/nuspec inspection established these inputs; native API comparison
+of the new DLLs remains unexecuted. Actual classification is reported by the native
+comparison, with unavailable or unexpected results refused. Historical 0.2 and 0.3
+policy bytes remain explicit read-only evidence mappings, without granting current
+publisher authority or promising compatibility for old callers.
+
+The first PR713 required lock-range check at source `05f33ef` found one stale
+Lifecycle.Tests Browser-to-Contracts Project dependency range, still recording
+0.3. The correction changes only that Project range to 0.4 and adds its actual
+version join and stale-range refusal to the cheap candidate preflight. No package
+`contentHash` was edited and no local restore was run. The maintained shared static
+lock-range guard checks all 16 project-reference ranges across 24 locks before the
+replacement push; full exact-head CI remains required. The original failed job
+`117318369385` in run `39005954355` retains its failure evidence.
+
+`prepare.sh` already seals the current published-baseline comparison against the same
+candidate archives in the custody manifest. Current supervisor acceptance therefore
+removes its duplicate 0.2 DLL comparison and unused 0.2 bootstrap feed acquisition.
+Official Core/compiler/Fable/WASI preparation, canonical model and correspondence,
+BAR/SC2 ABI controls, both Host facades, locked installed consumers, numeric/content
+refusals and installed Worker/browser coverage remain required. PackageConsumer now
+requires an explicit exact selected version and refuses absence, matching the maintained
+custody and feed-only callers; its old 0.2 fallback is removed.
+
+The existing 0.3 publication and installed evidence retain their original identities.
+The separately owned current publisher/installed correction must join this metadata
+and independently reviewed genuine generated files before final coherent source CI.
+Publication, fresh both-feed installed acceptance, registry inventory and consumer
+adoption remain distinct later boundaries. Neither public 0.4 absence observed during
+planning nor source preparation establishes organization occupancy or authorization.
+
+## Current source and installed compile boundary
+
+PR713 full qualification [39006292599](https://github.com/FS-GG/FS.GG.Game/actions/runs/39006292599),
+attempt 1, job `117319354159`, failed at source `5e1c48b` in the supervisor
+source build. Earlier contract, lifecycle, browser Worker, coherent package/current
+0.3 classification and fresh package-consumer steps passed. Selected model controls,
+sampling and both trace checks also passed before the build failed. The compiler
+reported HostIdentity/WireHostIdentity inference errors in shared controls. Only the
+last 60 source-build log lines survived the original failure trap; the complete raw
+source-build log is unavailable. Installed supervisor suites and eligible custody
+freeze/upload were unreached. This run remains failed.
+
+The next full qualifier [39008574356](https://github.com/FS-GG/FS.GG.Game/actions/runs/39008574356),
+attempt 1 at `efe2840`, failed in the early source phase before Quint, packing,
+model or browser work. Its bounded first-error diagnostics exposed an unparenthesized
+conditional record field followed by another field, plus EffectProjection/Mechanical
+inference in the new omission control. The follow-up parenthesizes the field expression
+and explicitly types both effect-search lambdas. The same head also failed required
+shell lint (`39008574510`, job `117326008491`) on SC2174: combining mkdir mode
+with parent creation. The correction creates parents separately, then creates the
+fresh private evidence directory with its explicit mode. This is actual early failure detection,
+not successful source compilation or full qualification; both failed operations remain.
+
+Follow-up [39008813238](https://github.com/FS-GG/FS.GG.Game/actions/runs/39008813238),
+attempt 1 at `784645c`, passed the actual source build with zero warnings/errors,
+then failed the first CLR terminal-control assertion. The control expected only
+HostDisposed, while existing typed admission accumulates RequestOwnerUnavailable
+for the absent retired owner followed by HostDisposed. The correction asserts
+that complete refusal, unchanged retired state and no emitted mechanical/settlement
+effects; it changes no runtime behavior. Actual Fable/pack/model/browser/installed
+acceptance remained unreached. The failed attempt and its exact assertion remain.
+
+The following attempt [39009007033](https://github.com/FS-GG/FS.GG.Game/actions/runs/39009007033),
+attempt 1 at `abb3f3b`, again built source then failed CLR setup with
+RequestOwnerUnavailable in the expanded BAR reentry caller. The full cohort sweep
+found a hardcoded SC2 ABI in that helper and SC2 queue assumptions in three scenarios.
+Both shared terminal helpers now use one typed ready fixture deriving ABI from the
+selected descriptor and immediately asserting active worker/generation, compiled and
+initialized state, idle queues/controls, and exactly two successful setup settlements.
+SC2 retains all five reentry scenarios on both facades. BAR retains queue-free timer
+expiry and ordinary-ancestor cases and explicitly checks Busy while an ordinary
+request is pending: the refused terminal settles once without an outcome, preserves
+the admitted request, never posts/arms or retires the live session, and stays settled
+after ordinary completion. A fresh subsequent BAR terminal then actually dispatches
+once, retains its real result and retires the session. All success/rejection/adapter/synchronous terminal-result
+controls remain across current selected SC2, default SC2 and BAR settings. Failure
+messages include profile/facade/case. The cohort sweep covered exact ordered refusals,
+queue population, clocks/timers, callback retirement state, subsequent assertions and
+shared CLR/Fable includes; actual execution of the repaired cohort remains owed.
+No runtime policy, model, generator or accepted trace changes are needed.
+
+The connected correction annotates shared identity, outcome, settings and boundary
+records across all source/installed include contexts. It also accumulates command
+capture across singleton effect callbacks and adds an ordinary Post/Arm omission
+control. `Compatibility.fsproj` checks current producer lifecycle behavior, shared
+BAR/SC2 and selected controls, generated correspondence and both facades; its name
+does not impose old-version compatibility. The separate installed host fixture now
+requires an explicit exact current version instead of an obsolete 0.2 fallback.
+Historical baseline source and audit evidence retain their original identities.
+
+Pipeline preflight selects a linear dependency/order correction with inert controls,
+without a new pipeline model. Official bootstrap enables the existing source build
+and CLR/Fable in-memory controls before Quint/Rust/browser setup. One coherent pack
+then enables installed lock-generation restore, one fresh-cache locked build and
+existing installed CLR/Fable/raw-numeric/NU1403 controls before model/browser work.
+The final supervisor stage validates same-job source/tree/version/status and actual
+assembly hashes before reusing these outputs. Both final model/browser suites remain
+required; builds and in-memory suites are not duplicated. Known-stale phase evidence
+is refused by the actual helper in inert preflight controls. Failure reporting now
+retains bounded first compiler errors plus the existing tail, preserving first status.
+The 35-minute job limit is unchanged. Earlier detection is the intended benefit;
+actual cold fit, runtime success and cost savings await the next hosted qualification.
+
+## Third hosted attempt: complete generated trace preparation
+
+The separately selected [39004844417](https://github.com/FS-GG/FS.GG.Game/actions/runs/39004844417),
+attempt 1 at `bfdf70d66d0b64959b755dc23a920cc3848e29c7`, completed successfully.
+Both early model typechecks, all 53 default schedules and all 16 selected schedules
+passed within the original generation window (400.58 seconds). The original
+40,381-byte generation log has no omitted bytes. Node 26.12.0 and Quint 0.32.0
+were observed on Ubuntu 24 image `20261012.334.1`.
+
+Artifact `12090851663`, outer SHA256
+`63a4b8b1db41653930038ef35c7c16542e3d779995a8dcc46b1b87d63f08ae09`,
+contains the exact 71 generated files (53 JSON traces, 16 compressed selected traces
+and two F# projections), plus the manifest and generation log. Owner data-only
+checks matched every output size/hash and all seven exact source-input hashes.
+Independent data-only review accepted the exact 71 files before their source commit,
+including nine new terminal traces and equivalence of 60 historical traces. All seven
+model/generator input hashes remain identical to the dispatched source. No downloaded
+source was executed during review. The full source/model/package/browser qualification job
+was intentionally skipped in generation mode; preparation success does not qualify
+the joined 0.4 source or authorize publication.
+
+Collection reported no errors, direct generator-process return and owned scratch
+removal. Full descendant settlement remains unproven. Both prior failed operations
+retain their original outcomes; this independently selected job used a fresh hosted
+VM and does not establish teardown of either earlier job.
+
+## Second hosted attempt: selected module scope and early model checks
+
+The new-source preparation [39003742514](https://github.com/FS-GG/FS.GG.Game/actions/runs/39003742514),
+attempt 1 at `75854a55d7a8ee42d52f8b0cd4f664286154506f`, failed separately from
+the original attempt. All 53 default schedules and their F# projection completed
+successfully. The first selected schedule, `terminal-held`, stopped during parsing:
+`QNT404` could not resolve `currentResultsHaveAuthority` in the selected test module.
+No selected simulation ran. Wildcard import of `compatibleLifecycle` does not
+re-export a helper that module imports from `lifecycle`.
+
+Artifact `12090088469`, outer SHA256
+`7f6d080abcc9ec8991c30d00cfd2187a336e452f984951e8242543b6db4dca41`,
+retains exact failed-schedule metadata and the complete 6,730,681-byte generation
+log with zero omitted bytes. No fresh ITF exists for this parse failure; the gap is
+explicit. Collection reported no errors, direct process return and owned scratch
+removal, with full descendant settlement unproven. No partial fixtures or coherent
+qualification are accepted, and neither failed operation grants another dispatch.
+
+The correction exports `selectedCurrentResultsHaveAuthority` as a module-owned
+observation and uses it in selected tests and `compatibilitySafe`. Its predicate,
+production runtime, seeds, sample counts, step bounds and ITF semantics are unchanged.
+Before any schedule simulation, the existing bounded preparation shell typechecks
+the default event-boundary entry (including the canonical lifecycle model) and the
+selected compatibility entry. Both commands share the original 20-minute window;
+ordered stage/status records identify a typecheck refusal before either generator.
+These new commands and the corrected selected module remain unexecuted.
+
+Both generators add `--verbosity=1`, recorded in the actual command log and manifest.
+Quint's pinned [verbosity definitions](https://github.com/informalsystems/quint/blob/v0.32.0/quint/src/verbosity.ts)
+and [simulator path](https://github.com/informalsystems/quint/blob/v0.32.0/quint/src/cliCommands.ts)
+retain result and violated-invariant reporting while suppressing full state dumps;
+the [ITF hook](https://github.com/informalsystems/quint/blob/v0.32.0/quint/src/cliReporting.ts)
+remains independent. The observed default success log was already 6.7 MiB; overflow
+from later selected state dumps is a prospective risk, not an observed failure.
+Fresh failed ITF remains bounded diagnostic evidence, with explicit missing/partial
+gaps and the existing shared diagnostic budget. No new streaming runner or deadline
+is introduced. Static/inert checks and independent source review precede any further
+separately admitted generation or final coherent CI.
+
+## First hosted terminal trace attempt and model authority correction
+
+The separately admitted trace preparation [39002952646](https://github.com/FS-GG/FS.GG.Game/actions/runs/39002952646),
+attempt 1 at `f57a83f5dad5a733b5acef4ed6f41628adfc9da2`, failed. Exact checkout,
+dispatch guards, cold static preflight and Node/Quint setup passed. The default
+generator passed its preceding five schedules, then Quint reported `Invariant
+violated` for `terminalBefore` (`lifecycleSafe`, seed 20261002, ten steps).
+The remaining default schedules and all sixteen selected schedules were unreached.
+Artifact `12089723109`, outer SHA256
+`31e2743fdbaef0decb4a7db9bea33c50dfa0ee0546082110bda2fc0fcc7f476a`,
+retains the manifest and complete 1178-byte failure log. It accepts no fixture
+outputs or qualification. The original process returned; collection reported no
+errors and removed owned scratch. Full descendant settlement is not established.
+No counterexample ITF or failing conjunct was retained, so the exact invariant
+conjunct diagnosis is a source-supported inference rather than executed evidence.
+
+The old current-result invariant compared a terminal result's preserved generation
+with final `activeGeneration`, which retirement intentionally clears to zero.
+The model-only correction captures active worker/generation after expiry and before
+the actual event handler in observational input metadata. Current results must match
+that authority, the handled request and a valid result event. This preserves stale
+worker/generation/request/event rejection without exempting disposed states. Both
+default and selected event boundaries capture the same provenance; production
+reducer, Host, result classification and Worker ABI are unchanged. Existing selected
+model tests gain prepared terminal, expiry, historical and forged-authority controls;
+those tests and the changed model were initially unexecuted. The second attempt above records later default-schedule execution; prepared mutation tests remain unexecuted.
+
+Both maintained generators reuse one original-call wrapper in the existing projection
+helper. Each scheduled output is removed immediately before its original Quint call,
+so historical bytes cannot masquerade as a fresh failed counterexample. Original
+Quint stdout joins the bounded generation log. On failure, exact schedule/argv/status
+and any fresh ITF are retained under the existing diagnostic window: at most 4 MiB
+of counterexample bytes plus bounded metadata, sharing the total 8-MiB retained
+budget with the log. Missing, partial, truncated or unavailable evidence is explicit;
+collection runs before scratch removal and never accepts failed output as fixtures.
+No extra Quint invocation or generated-fixture hand edit is introduced. Original
+failure remains historical; a repaired source, independent review and separately
+admitted new operation are needed before another generation attempt.
+
+## Bounded hosted trace preparation for the terminal correction
+
+Source preparation adds explicit `generate-traces` manual mode to the existing
+`wasm-shared` workflow. Default dispatch, PR and push retain the complete 35-minute
+qualification route. The preparation job has its own non-canceling concurrency key
+and a distinct name; it requires the reviewed expected head to match both the workflow
+and clean checkout before setup or generator execution. The existing owning plan
+and protected shared foundation supply the canonical .5-P2 → S1 lineage; ordinary
+PR admission uses its stable campaign/chain without creating a duplicate issue.
+
+`scripts/prepare-wasm-traces.sh` runs the existing generators sequentially under one
+20-minute process-group timeout with 30-second termination grace, inside a 30-minute
+hosted job. One original five-minute setup cutoff is recorded before checkout;
+late or invalid setup refuses before generation, with no renewed setup window. It requires Node 26, Quint 0.32.0 selected identically through QUINT/PATH,
+V8 old-space 2 GiB, core dumps disabled and a 64-MiB hard per-file limit. These are
+not aggregate RSS/storage bounds or proof of perfect descendant settlement. A timeout
+or unknown cleanup is incomplete and grants no retry. The job uses Contents-read,
+with no CLR/Rust/browser/package/publication stages.
+
+The inert helper derives the exact 53 default/16 compatible schedule census from
+allowlisted AST declarations without importing generators. Successful preparation
+requires both generators to return zero, exactly 71 regular outputs without symbolic or hard links,
+unchanged source/model/generator inputs and no other tracked/untracked/ignored
+changes. Generated payload is capped at 64 MiB, retained diagnostics at 8 MiB,
+manifest at 64 KiB and the inner archive at 80 MiB. The bounded manifest retains
+source/tree/workflow/run/attempt, observed tool files/versions, schedules/seeds,
+output hashes, stage times and independent original failure/collection/cleanup facts.
+Npm version provisioning does not attest the complete dependency closure.
+
+Preflight uses the existing static workflow validator plus focused inert controls
+for dispatch/head/dirty-tree/missing-tool refusal, extra/linked outputs, unrelated
+changes, failed generation, uncertain cleanup and archive failure. No new formal
+pipeline model is justified for this linear route. Expected reuse is each relevant
+WASM workflow amendment; the source-check investment is bounded to this small route.
+Cold setup/generation fit, avoided runner minutes and monetary savings are unknown.
+The first full existing static preflight encountered its expected dirty-worktree
+refusal in release-source controls. The committed preparation source `7065525`
+then exposed an inherited historical audit test that compared evolving current
+consumer bytes with immutable 0.2 qualifier hashes. Both failures retain their
+original outcomes. The connected repair uses maintained exact historical byte
+fixtures, checked by the unchanged production blob/SHA256 audit predicates and
+mutation refusals. Clean shallow CI needs no history fetch or historical Git objects;
+the accepted audit and binder are unchanged. Independent review then found that
+successful inert collection controls still resolved installed tools before hosted
+setup. Source `045756b` replaces those tool identities with inert files/doubles;
+the missing-tool refusal remains explicit. This preserves a cold-runner preflight
+that needs only its existing Python/Git source-check dependencies. The corrected
+clean static preflight passed; no generator or runtime execution is implied.
+
+Preparation artifacts are inputs for independent review and a subsequent generated
+fixture commit. They are not coherent qualification or package acceptance. Root must
+admit one exact hosted operation after source review and fresh native queue/ref facts.
+After accepted generated files are committed, run all 19 required protection checks
+and the unchanged full WASM qualification on the exact final source. Authentic model,
+.NET/Fable/browser qualification, publication and installed consumer readback remain
+separate; historical accepted 0.3 H3/H4 evidence retains its original scope.
+
+
 Protected qualifier base7397d4b408b8e7b44393fee9f837278723934867;
 genuine published producer4afacb501b9371b4cc81494b7bf91b46c880a663,
 Contracts/Browser/SDK0.2.0. Genuine prior publication and both-feed installed
 qualification37047631080 remain historical CLOSED for their tested scope.
+
+## S1-discovered terminal Process correction — existing .5-P2 → .5-S1
+
+The original 0.3.0 H3 publication and H4/.5-P2 installed qualification remain
+accepted for their tested scope (shared foundation evidence, `.github` PR4485,
+run37191263989). S1's complete-supervisor-API inventory adds one corrective
+assertion: a reset executes its supplied ordinary Process payload and retires the
+complete session before the next dispatch or public completion. This is remaining
+work under WASM-SHARED-01/.5-P2 feeding S1, without reopening those original receipts.
+
+`LimitedInvokeAndRetire(identity,input)` uses the existing `SubmitLimited` request
+limits and unchanged `ProcessGuest(Ordinary,input)` Worker ABI. An immutable flag
+on the admitted request selects session retirement on its matching terminal result,
+including rejected ABI status, trap, timeout, worker loss, cleanup failure and
+exact-current adapter output rejection. Adapter rejection retains its original
+reason without fabricating an ABI outcome.
+The reducer clears active/candidate/retiring/controls/queues/held state before effects;
+workers, timers and followers retire before publishing the preserved actual result.
+Terminal dispatch arms its watchdog before posting so a synchronous transport
+completion can cancel it without an outer batch arming a stale timer afterward.
+Host interprets effects individually and mechanically rechecks pure Lifecycle
+eligibility before each one. Disposed sessions cannot post or arm, including an
+ordinary ancestor resuming after nested terminal completion. For a batch selecting
+a terminal current request, the guard additionally checks its exact current
+identity/correlation and timer phase. Earlier synchronous expiry, previous-result
+callbacks or replacement therefore suppress stale terminal effects. Ordinary live
+reducer behavior/effect order and Freeze retention of an already selected current
+request retain their existing behavior.
+Queued cancellation, invalid-limit refusal, ordinary admission ceilings and captured
+composite deadlines retain their existing behavior. BAR normal invocation/shutdown
+and SC2 normal ordinary/ordered/snapshot/replacement paths retain their selected behavior.
+Product F# still owns closing/reset state and queue-overflow result mapping.
+
+- [ ] Independently review the exact producer correction, canonical model and
+  prepared focused reducer/facade/installed-browser qualification sources.
+- [ ] Under separately admitted resources, typecheck/run the canonical model and
+  existing boundary/expiry/compatible witnesses, regenerate authentic traces, and
+  execute source .NET/Fable correspondence plus both facades and causal mutations.
+- [ ] Execute real installed Worker qualification for terminal success/rejection,
+  traps/cleanup/timeouts, repeated terminal followers, held snapshots and candidate
+  retirement; preserve exact ABI evidence and retirement-before-result ordering.
+- [ ] Deliver reviewed source with relevant checks and required coherent CI through
+  the existing canonical owner route, which programme ownership must reconcile.
+- [ ] Select and qualify an unused coherent successor version, then separately
+  authorize publication and verify fresh both-feed installed readback before an S1
+  consumer pin. Published 0.3.0 does not expose this new capability.
+
+Current boundary: source preparation only. Model execution, trace regeneration,
+CLR/Fable/browser/Worker execution, SDK restore/build/pack, remote source delivery,
+publication and installed acceptance have not run for this correction. Committed
+pre-existing generated traces remain historical until the maintained generators run;
+new required mutation checks intentionally depend on those regenerated fixtures.
+The owning shared foundation S1/final .5-P2 contract remains the integration authority.
+No runtime shim, JavaScript queue, transport freeze hook or new guest ABI is selected.
+
 
 ## Event boundary model correction
 

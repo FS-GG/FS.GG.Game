@@ -459,3 +459,226 @@ let lifecycle =
                     1
                     "one terminal load result"
         ]
+
+let private terminalLimits =
+    { MaximumDeadlineMilliseconds = 100
+      MaximumOutputBytes = 64
+      EnclosingDeadlineMilliseconds = None }
+
+let private loadedSelected policy =
+    let baseline = settings Sc2ImportedStrict
+    let selected =
+        HostSettings.createCompatible (HostSettings.configuration baseline) (Some Controller) policy
+        |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+    let load = identity "worker-1" 100UL 1UL
+    let initialize = identity "worker-1" 101UL 1UL
+    Lifecycle.create selected
+    |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+    |> next 0L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
+    |> next 0L (WorkerObserved("worker-1", AbiVersionObserved(load, tokenFor load, 0x10000u)))
+    |> next 0L (InitializeRequested(initialize, [| 1uy |]))
+    |> next 0L (WorkerObserved("worker-1", InvocationObserved(success Initialize initialize, tokenFor initialize)))
+
+let private limited at requested limits state =
+    let decision = Lifecycle.submitLimited at requested limits state
+    Expect.equal decision.Result (Ok ()) "typed request admitted"
+    decision.State
+
+let private terminalResults effects = effects |> List.choose (function Settle result -> Some result | _ -> None)
+
+let private expectRetired state effects terminal expectedWorkers =
+    let projection = Lifecycle.project state
+    Expect.isTrue projection.Disposed "whole session disposed before effects are interpreted"
+    Expect.equal projection.ActiveWorker "" "active cleared"
+    Expect.equal projection.CandidateWorker "" "candidate cleared"
+    Expect.isEmpty projection.RetiringWorkers "retiring workers cleared"
+    Expect.isEmpty projection.Controls "controls cleared"
+    Expect.isEmpty projection.Ordinary "ordinary queue cleared"
+    Expect.isEmpty projection.Ordered "ordered queue cleared"
+    Expect.equal projection.Current.Id 0UL "no current request"
+    Expect.equal projection.Snapshot.Id 0UL "held snapshot cleared"
+    Expect.isFalse (effects |> List.exists (function PostToWorker _ | ArmTimer _ -> true | _ -> false)) "retirement cannot dispatch or arm work"
+    let terminated = effects |> List.choose (function TerminateWorker worker -> Some worker | _ -> None)
+    Expect.equal (Set.ofList terminated) (Set.ofList expectedWorkers) "all session workers retire"
+    Expect.equal terminated.Length (Set.count (Set.ofList terminated)) "workers terminate once"
+    let results = terminalResults effects
+    Expect.equal results.[results.Length - 1].Identity terminal "followers destroyed before actual terminal result"
+    Expect.equal results.Length (results |> List.map _.Identity |> Set.ofList |> Set.count) "each request settles once"
+
+[<Tests>]
+let terminalProcess =
+    testList "terminal Process session retirement" [
+        for policy in [ DefaultCompatibility; Sc2SupervisorV1 ] do
+            for resultState in [ Succeeded; GuestRejected -17; Faulted "process trap"; TimedOut ] do
+                testCase (sprintf "%A preserves actual %A and cancels followers" policy resultState) <| fun _ ->
+                    let a = identity "worker-1" 1UL 1UL
+                    let reset = identity "worker-1" 2UL 1UL
+                    let follower = identity "worker-1" 3UL 1UL
+                    let candidate = identity "worker-2" 4UL 2UL
+                    let state = loadedSelected policy
+                    let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+                    let state = limited 0L (LimitedInvoke(a, Ordinary, [| 1uy |])) terminalLimits state
+                    let state = limited 0L (LimitedInvokeAndRetire(reset, [| 9uy; 8uy |])) terminalLimits state
+                    let state = limited 0L (LimitedShutdown follower) terminalLimits state
+                    let state, dispatch = update 1L (WorkerObserved("worker-1", InvocationObserved(success Process a, tokenFor a))) state
+                    Expect.isTrue (dispatch |> List.exists (function PostToWorker(_, command) -> command.Identity = reset && command.Operation = ProcessGuest(Ordinary, [| 9uy; 8uy |]) | _ -> false)) "terminal request uses unchanged Process payload once"
+                    let actual = { success Process reset with State = resultState; CopiedOutput = [| 7uy |] }
+                    let state, effects = update 2L (WorkerObserved("worker-1", InvocationObserved(actual, tokenFor reset))) state
+                    expectRetired state effects reset [ "worker-1"; "worker-2" ]
+                    Expect.equal (terminalResults effects |> List.last).Outcome (Some actual) "raw result/output retained exactly"
+                    let destroyed = terminalResults effects |> List.find (fun result -> result.Identity = follower)
+                    Expect.equal destroyed.Outcome None "undispatched follower has no invented ABI outcome"
+                    let _, duplicate = update 3L (WorkerObserved("worker-1", InvocationObserved(actual, tokenFor reset))) state
+                    Expect.isEmpty duplicate "duplicate terminal callback has no effect"
+
+        testCase "held snapshot promoted behind reset cannot resurrect" <| fun _ ->
+            let snapshot = identity "worker-1" 1UL 1UL
+            let reset = identity "worker-1" 2UL 1UL
+            let held = identity "worker-1" 3UL 1UL
+            let state = loadedSelected Sc2SupervisorV1
+            let state = limited 0L (LimitedInvoke(snapshot, ReplaceableSnapshot, [| 1uy |])) terminalLimits state
+            let state = limited 0L (LimitedInvokeAndRetire(reset, [| 2uy |])) terminalLimits state
+            let state = limited 0L (LimitedInvoke(held, ReplaceableSnapshot, [| 3uy |])) terminalLimits state
+            Expect.isSome (Lifecycle.projectCompatibility state).HeldSnapshot "snapshot is initially held"
+            let state, _ = update 1L (WorkerObserved("worker-1", InvocationObserved(success Process snapshot, tokenFor snapshot))) state
+            Expect.equal (Lifecycle.project state).Ordinary.Head.Id held.Request "existing pump promotes held behind reset"
+            let state, effects = update 2L (WorkerObserved("worker-1", InvocationObserved(success Process reset, tokenFor reset))) state
+            expectRetired state effects reset [ "worker-1" ]
+            let _, resumed = update 3L (ResumeRequested "unused") state
+            Expect.isEmpty resumed "resume cannot revive retired held work"
+
+        for observed, expired in [ 4L, false; 5L, true; 6L, true ] do
+            testCase (sprintf "queued terminal head boundary %d" observed) <| fun _ ->
+                let a = identity "worker-1" 1UL 1UL
+                let reset = identity "worker-1" 2UL 1UL
+                let state = loadedSelected Sc2SupervisorV1
+                let state = limited 0L (LimitedInvoke(a, Ordinary, [| 1uy |])) terminalLimits state
+                let state = limited 0L (LimitedInvokeAndRetire(reset, [| 2uy |])) { terminalLimits with MaximumDeadlineMilliseconds = 5 } state
+                let state, effects = update observed (WorkerObserved("worker-1", InvocationObserved(success Process a, tokenFor a))) state
+                Expect.equal (Lifecycle.project state).Disposed expired "inclusive queue-head deadline preserved"
+                if expired then
+                    Expect.isFalse (effects |> List.exists (function PostToWorker _ -> true | _ -> false)) "expired reset never dispatches"
+                    let result = terminalResults effects |> List.find (fun result -> result.Identity = reset)
+                    Expect.isTrue (result.Outcome |> Option.exists (fun outcome -> outcome.State = TimedOut && outcome.Dispatch = NotDispatched)) "queued expiry keeps undispatched first cause"
+                else Expect.equal (Lifecycle.project state).Current.Id reset.Request "before due reset dispatches"
+
+        for failure in [ "timeout"; "worker-failed"; "worker-terminated"; "cleanup" ] do
+            testCase ("executing terminal " + failure + " retires candidate and held state") <| fun _ ->
+                let reset = identity "worker-1" 1UL 1UL
+                let follower = identity "worker-1" 2UL 1UL
+                let candidate = identity "worker-2" 4UL 2UL
+                let state = loadedSelected Sc2SupervisorV1
+                let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+                let state = limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) { terminalLimits with MaximumDeadlineMilliseconds = 5 } state
+                let state = limited 0L (LimitedInvoke(follower, ReplaceableSnapshot, [| 2uy |])) terminalLimits state
+                let state = next 1L (WorkerObserved("worker-1", PhaseObserved(reset, tokenFor reset, AllocateInput))) state
+                let state = next 2L (WorkerObserved("worker-1", PhaseObserved(reset, tokenFor reset, Process))) state
+                Expect.equal (Lifecycle.project state).Current.DeadlineMilliseconds 5L "phase reports cannot renew selected terminal budget"
+                let actual = { success Process reset with State = GuestRejected 93; CleanupFault = Some { Phase = Free; Diagnostic = "free trap" } }
+                let at, event =
+                    match failure with
+                    | "timeout" -> 6L, TimerObserved { Identity = reset; Correlation = tokenFor reset; Phase = Process }
+                    | "worker-failed" -> 3L, WorkerObserved("worker-1", WorkerFailed(reset, Some(tokenFor reset), "transport failed"))
+                    | "worker-terminated" -> 3L, WorkerObserved("worker-1", WorkerTerminated "worker-1")
+                    | _ -> 3L, WorkerObserved("worker-1", InvocationTerminated(actual, tokenFor reset))
+                let state, effects = update at event state
+                expectRetired state effects reset [ "worker-1"; "worker-2" ]
+                let outcome = (terminalResults effects |> List.last).Outcome.Value
+                Expect.equal outcome.Identity reset "failure retains exact terminal identity"
+                Expect.equal outcome.Dispatch Dispatched "process-phase failure retains dispatch evidence"
+                if failure = "cleanup" then Expect.equal outcome actual "cleanup fault and rejected return preserved"
+                elif failure = "timeout" then Expect.equal outcome.State TimedOut "timeout retained"
+                else Expect.isTrue (match outcome.State with Faulted _ -> true | _ -> false) "worker loss retains fault"
+
+        testCase "invalid limits, freeze cancellation and wrong correlation cannot retire" <| fun _ ->
+            let reset = identity "worker-1" 1UL 1UL
+            let state = loadedSelected Sc2SupervisorV1
+            let invalid = Lifecycle.submitLimited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) { terminalLimits with MaximumDeadlineMilliseconds = 0 } state
+            Expect.isError invalid.Result "invalid terminal request refused before admission"
+            Expect.equal (Lifecycle.project invalid.State) (Lifecycle.project state) "pure refusal leaves session unchanged"
+            Expect.isEmpty invalid.Effects "no refusal invocation"
+            let state = limited 0L (LimitedInvoke(identity "worker-1" 2UL 1UL, Ordinary, [| 2uy |])) terminalLimits state
+            let state = limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits state
+            let state = next 1L (FreezeRequested "fence") state
+            let state, effects = update 2L (WorkerObserved("worker-1", InvocationObserved(success Process reset, tokenFor reset))) state
+            Expect.isFalse (Lifecycle.project state).Disposed "canceled queued reset never gains retirement authority"
+            Expect.isEmpty effects "late canceled reset ignored"
+            let state = loadedSelected Sc2SupervisorV1 |> limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits
+            let wrong = OperationToken.create "wrong" |> Result.defaultWith (fun issue -> failtestf "%A" issue)
+            let state, effects = update 1L (WorkerObserved("worker-1", InvocationObserved(success Process reset, wrong))) state
+            Expect.isFalse (Lifecycle.project state).Disposed "wrong correlation cannot retire current request"
+            Expect.isEmpty effects "forged callback ignored"
+
+        testCase "terminal result from retired generation clears active candidate and retiring roles" <| fun _ ->
+            let reset = identity "worker-1" 1UL 1UL
+            let candidate = identity "worker-2" 2UL 2UL
+            let initialize = identity "worker-2" 3UL 2UL
+            let future = identity "worker-3" 4UL 3UL
+            let state = loadedSelected Sc2SupervisorV1 |> limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits
+            let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+            let state = next 0L (WorkerObserved("worker-2", AbiVersionObserved(candidate, tokenFor candidate, 0x10000u))) state
+            let state = next 0L (InitializeRequested(initialize, [| 1uy |])) state
+            let state = next 0L (WorkerObserved("worker-2", InvocationObserved(success Initialize initialize, tokenFor initialize))) state
+            let state = next 0L (CandidateValidated("tx", 2UL)) state
+            let state = next 0L (CandidateCommitRequested("tx", 1UL, 2UL)) state
+            let state = next 0L (LoadRequested(future, PrepareCandidate("future", Some 2UL), [| 0uy |])) state
+            Expect.equal (Lifecycle.project state).RetiringWorkers [ "worker-1" ] "terminal request still belongs to retiring generation"
+            let actual = { success Process reset with CopiedOutput = [| 8uy |] }
+            let state, effects = update 1L (WorkerObserved("worker-1", InvocationObserved(actual, tokenFor reset))) state
+            expectRetired state effects reset [ "worker-1"; "worker-2"; "worker-3" ]
+            let result = terminalResults effects |> List.last
+            Expect.equal result.Outcome (Some actual) "historical actual result retained"
+            Expect.equal result.Disposition HistoricalOnly "retired generation gains no current authority"
+
+        testCase "terminal ordinary capacity refusal leaves existing session work intact" <| fun _ ->
+            let state = loadedSelected Sc2SupervisorV1
+            let state = limited 0L (LimitedInvoke(identity "worker-1" 1UL 1UL, Ordinary, [| 1uy |])) terminalLimits state
+            let state = [ 2UL .. 5UL ] |> List.fold (fun current request -> limited 0L (LimitedInvoke(identity "worker-1" request 1UL, OrderedEvent, [| 1uy |])) terminalLimits current) state
+            let decision = Lifecycle.submitLimited 0L (LimitedInvokeAndRetire(identity "worker-1" 6UL 1UL, [| 2uy |])) terminalLimits state
+            Expect.equal decision.Result (Error [ RequestRefused QueueFull ]) "terminal uses existing ordinary queue cap"
+            Expect.isFalse (Lifecycle.project decision.State).Disposed "producer does not invent product overflow policy"
+            Expect.equal (Lifecycle.project decision.State).Current.Id 1UL "earlier work retained"
+            Expect.equal (Lifecycle.project decision.State).Ordinary.Length 4 "no overflow request admitted"
+
+        for shutdownFollower in [ false; true ] do
+            testCase (sprintf "ordinary Shutdown ABI remains terminal before follower shutdown=%b" shutdownFollower) <| fun _ ->
+                let first = identity "worker-1" 1UL 1UL
+                let follower = identity "worker-1" 2UL 1UL
+                let state = loadedSelected Sc2SupervisorV1
+                let decision = Lifecycle.submitLimited 0L (LimitedShutdown first) terminalLimits state
+                Expect.isTrue (decision.Effects |> List.exists (function PostToWorker(_,command) -> command.Operation = ShutdownGuest | _ -> false)) "Shutdown still selects actual shutdown ABI"
+                let following = if shutdownFollower then LimitedShutdown follower else LimitedInvokeAndRetire(follower, [| 1uy |])
+                let state = limited 0L following terminalLimits decision.State
+                let state, effects = update 1L (WorkerObserved("worker-1", InvocationObserved(success Shutdown first, tokenFor first))) state
+                Expect.isFalse (effects |> List.exists (function PostToWorker _ -> true | _ -> false)) "neither reset nor shutdown follower dispatches"
+                Expect.equal ((terminalResults effects |> List.filter (fun result -> result.Identity = follower)).Length) 1 "undispatched terminal follower settles once"
+                Expect.equal (Lifecycle.project state).ActiveWorker "" "ordinary Shutdown retains active-worker retirement"
+
+        testCase "candidate initializing control is retired before terminal result" <| fun _ ->
+            let reset = identity "worker-1" 1UL 1UL
+            let candidate = identity "worker-2" 2UL 2UL
+            let initialize = identity "worker-2" 3UL 2UL
+            let state = loadedSelected Sc2SupervisorV1 |> limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits
+            let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+            let state = next 0L (WorkerObserved("worker-2", AbiVersionObserved(candidate, tokenFor candidate, 0x10000u))) state
+            let state = next 0L (InitializeRequested(initialize, [| 1uy |])) state
+            let state, effects = update 1L (WorkerObserved("worker-1", InvocationObserved(success Process reset, tokenFor reset))) state
+            expectRetired state effects reset [ "worker-1"; "worker-2" ]
+            Expect.equal ((terminalResults effects |> List.filter (fun result -> result.Identity = initialize)).Length) 1 "initializing control settles once before reset"
+            let state, late = update 2L (WorkerObserved("worker-2", InvocationObserved(success Initialize initialize, tokenFor initialize))) state
+            Expect.isTrue (Lifecycle.project state).Disposed "late initialization cannot resurrect candidate"
+            Expect.isEmpty late "late initialization settles nothing twice"
+
+        testCase "adapter rejection retires terminal session before rejected result" <| fun _ ->
+            let reset = identity "worker-1" 1UL 1UL
+            let follower = identity "worker-1" 2UL 1UL
+            let candidate = identity "worker-2" 3UL 2UL
+            let state = loadedSelected Sc2SupervisorV1 |> limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits
+            let state = limited 0L (LimitedInvokeAndRetire(follower, [| 2uy |])) terminalLimits state
+            let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+            let state, effects = update 1L (AdapterOutputRejected(reset, "adapter rejection")) state
+            expectRetired state effects reset [ "worker-1"; "worker-2" ]
+            let result = terminalResults effects |> List.last
+            Expect.equal result.Reason (Some(AdapterRejected "adapter rejection")) "adapter first cause retained"
+            Expect.equal result.Outcome None "adapter refusal invents no actual ABI outcome"
+    ]

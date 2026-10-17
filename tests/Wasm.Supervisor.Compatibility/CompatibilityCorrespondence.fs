@@ -6,7 +6,7 @@ open Wasm.Lifecycle.Correspondence.Correspondence
 open Wasm.Lifecycle.Correspondence.InstalledHostControls
 open Wasm.Supervisor.Compatibility.CompatibleTypes
 
-let selectedSettings () =
+let selectedSettings () : HostSettings =
     let baseline=settings Sc2ImportedStrict
     HostSettings.createCompatible (HostSettings.configuration baseline) (HostSettings.role baseline) Sc2SupervisorV1
     |> Result.defaultWith (failwithf "%A")
@@ -25,6 +25,7 @@ let dispatch (trace:CompatibleTrace) (host:Host) (previous:ModelStep) (expected:
             | LoadRequested(identity,PrepareCandidate(transaction,active),bytes) -> Some(LimitedCandidate(identity,transaction,active,HostSettings.configuration(selectedSettings()),bytes))
             | InitializeRequested(identity,bytes) -> Some(LimitedInitialize(identity,bytes))
             | InvocationRequested(identity,submission,bytes) -> Some(LimitedInvoke(identity,submission,bytes))
+            | InvocationAndRetirementRequested(identity,bytes) -> Some(LimitedInvokeAndRetire(identity,bytes))
             | ShutdownRequested identity -> Some(LimitedShutdown identity)
             | _ -> None
         match limited with
@@ -49,11 +50,11 @@ let replay (trace:CompatibleTrace) =
     // Same pure facade emits captured configurations, projectionFailures independently of projected effects.
     let mutable commands=[]
     let host=Host.Create(selectedSettings(),fun effects ->
-        commands<-effects |> List.choose(function
+        commands<-commands @ (effects |> List.choose(function
             | PostToWorker(_,command) ->
                 let limits=(Validation.configuration command.Configuration).Limits
                 Some(command.Identity.Request,limits.MaximumDeadlineMilliseconds,limits.MaximumOutputBytes)
-            | _->None)) |> Result.defaultWith (failwithf "%A")
+            | _->None))) |> Result.defaultWith (failwithf "%A")
     let mutable commandFailures=[]
     for previous,target in List.pairwise trace.Steps do
         commands<-[]
@@ -62,13 +63,35 @@ let replay (trace:CompatibleTrace) =
         if commands<>expected then commandFailures <- $"{trace.Name} captured command limits differ: expected=%A{expected} actual=%A{commands}"::commandFailures
     failures@commandFailures
 
+// An ordinary Process emits Post then Arm. The real Host supplies singleton
+// callbacks; omitting its nonempty command must fail the same full validator.
+let ordinaryPostArmCaptureIsDetected (trace:CompatibleTrace) =
+    let ordinary (step:CompatibleStep) =
+        let effects:EffectProjection list=step.Model.Effects
+        match List.tryFindIndex(fun (effect:EffectProjection) -> effect.Kind="post" && effect.Operation="process") effects,
+              List.tryFindIndex(fun (effect:EffectProjection) -> effect.Kind="armTimer") effects with
+        | Some post,Some arm -> post<arm && not step.Commands.IsEmpty
+        | _ -> false
+    let present=trace.Steps |> List.exists ordinary
+    let omitted={trace with Steps=trace.Steps |> List.map(fun step -> if ordinary step then {step with Commands=[]} else step)}
+    present && List.isEmpty(replay trace) && not(List.isEmpty(replay omitted))
+
 // Alter only expected causal facts; all controls use the same real facade validators.
 let causalMutationsAreDetected (trace:CompatibleTrace) =
     let changed change =
         let candidate={trace with Steps=trace.Steps |> List.map change}
         try not(List.isEmpty(replay candidate)) with _ -> true
     let modelState change step = {step with Model={step.Model with State=change step.Model.State;Connected=change step.Model.Connected}}
-    [ "loaded-deadline-retained",changed(fun step -> {step with Commands=step.Commands |> List.map(fun (id,limit)->id,{limit with MaximumDeadlineMilliseconds=250})})
+    let terminalStep step = step.Model.State.LastAction="retireSession"
+    let terminalEffects change step =
+        if terminalStep step then {step with Model={step.Model with Effects=change step.Model.Effects;ConnectedEffects=change step.Model.ConnectedEffects}}
+        else step
+    [ "lost-terminal-flag",changed(fun step -> if terminalStep step then modelState(fun state -> {state with Disposed=false}) step else step)
+      "dispatch-before-retire",changed(terminalEffects(fun effects -> {Operation="process";Phase="";Correlation="";Bytes=1;Due=0L;Kind="post";Request=999UL;Generation=1UL;Worker="worker-1"}::effects))
+      "active-only-retirement",changed(terminalEffects(List.filter(fun fx -> fx.Kind<>"terminate" || fx.Worker<>"worker-2")))
+      "held-snapshot-resurrection",changed(fun step -> if terminalStep step then modelState(fun state -> {state with Snapshot={state.Snapshot with Id=999UL;Worker="worker-1";Generation=1UL}}) step else step)
+      "terminal-result-dropped",changed(terminalEffects(fun effects -> effects |> List.filter(fun fx -> fx.Request<>4UL || not(fx.Kind.StartsWith("settle")))))
+      "loaded-deadline-retained",changed(fun step -> {step with Commands=step.Commands |> List.map(fun (id,limit)->id,{limit with MaximumDeadlineMilliseconds=250})})
       "output-narrowing-ignored",changed(fun step -> {step with Commands=step.Commands |> List.map(fun (id,limit)->id,{limit with MaximumOutputBytes=65536})})
       "next-budget-overwritten",changed(fun step -> {step with Commands=step.Commands |> List.map(fun (id,limit)->id,{limit with MaximumOutputBytes=44})})
       "ordinary-priority",changed(fun step ->

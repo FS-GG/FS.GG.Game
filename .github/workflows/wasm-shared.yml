@@ -27,6 +27,8 @@ on:
       - "scripts/verify-wasm-contracts.sh"
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
+      - "scripts/prepare-wasm-traces.sh"
+      - "scripts/prepare-wasm-traces.py"
       - "scripts/verify-wasm-package-consumer.sh"
       - "scripts/verify-wasm-supervisor.sh"
       - "scripts/verify-wasm-supervisor-browser.sh"
@@ -59,6 +61,8 @@ on:
       - "scripts/verify-wasm-contracts.sh"
       - "scripts/verify-wasm-lifecycle.sh"
       - "scripts/verify-wasm-workflow.sh"
+      - "scripts/prepare-wasm-traces.sh"
+      - "scripts/prepare-wasm-traces.py"
       - "scripts/verify-wasm-package-consumer.sh"
       - "scripts/verify-wasm-supervisor.sh"
       - "scripts/verify-wasm-supervisor-browser.sh"
@@ -66,16 +70,29 @@ on:
       - "tests/release/wasm/**"
       - "eng/wasm-shared/version.props"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Full qualification or explicit trace artifact preparation
+        type: choice
+        options: [qualify, generate-traces]
+        default: qualify
+        required: true
+      expected-head:
+        description: Exact reviewed protected head for dispatch custody or trace generation
+        type: string
+        default: ""
+        required: false
 
 concurrency:
-  group: wasm-shared-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: wasm-shared-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.mode == 'generate-traces' && 'generate-traces' || 'qualify' }}
+  cancel-in-progress: ${{ inputs.mode != 'generate-traces' }}
 
 permissions:
   contents: read
 
 jobs:
   qualify:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'qualify' }}
     name: Shared WASM source, model, package, and browser qualification
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -84,12 +101,16 @@ jobs:
       RUST_VERSION: 1.90.0
       PLAYWRIGHT_VERSION: 1.63.0
       NODE_OPTIONS: --max-old-space-size=2048
+      WASM_QUALIFY_EXPECTED_HEAD: ${{ inputs.expected-head }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Static workflow preflight
-        run: scripts/verify-wasm-workflow.sh
+        run: |
+          set -euo pipefail
+          scripts/verify-wasm-workflow.sh
+          python3 scripts/wasm-release/promotion.py check-custody-plan
 
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -118,6 +139,18 @@ jobs:
           fable_version="$(dotnet tool run fable -- --version | sed -E $'s/\\x1B\\[[0-9;]*[mK]//g' | head -n 1)"
           test "$fable_version" = "5.18.0"
 
+      - name: Prepare compatible supervisor qualification state
+        run: |
+          scripts/wasm-release/qualify-supervisor-custody.sh --bootstrap "$RUNNER_TEMP/wasm-supervisor-baseline"
+          cat "$RUNNER_TEMP/wasm-supervisor-baseline/environment" >> "$GITHUB_ENV"
+
+      - name: Compile current supervisor source
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          scripts/wasm-release/qualify-supervisor-custody.sh --compile-source "$RUNNER_TEMP/wasm-supervisor-source"
+          echo "WASM_SUPERVISOR_SOURCE_BUILD_LOG=$RUNNER_TEMP/wasm-supervisor-source/source-build.log" >> "$GITHUB_ENV"
+
       - name: Install pinned Quint
         run: |
           npm install --global "@informalsystems/quint@${QUINT_VERSION}"
@@ -132,6 +165,17 @@ jobs:
           rustc --version | grep -F "rustc ${RUST_VERSION} "
           rustup target list --installed | grep -Fx wasm32-unknown-unknown
 
+      - name: Prepare coherent candidate custody
+        run: |
+          set -euo pipefail
+          scripts/wasm-release/prepare.sh artifacts/wasm-release
+
+      - name: Compile current installed supervisor
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          scripts/wasm-release/qualify-supervisor-custody.sh --compile-installed artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence"
+
       - name: Install pinned Playwright Chromium
         working-directory: tests/Wasm.Browser.Conformance
         run: |
@@ -139,36 +183,53 @@ jobs:
           test "$(node -p "require('@playwright/test/package.json').version")" = "$PLAYWRIGHT_VERSION"
           npx playwright install --with-deps chromium
 
-      - name: Prepare compatible supervisor qualification state
-        run: |
-          scripts/wasm-release/qualify-supervisor-custody.sh --bootstrap "$RUNNER_TEMP/wasm-supervisor-baseline"
-          cat "$RUNNER_TEMP/wasm-supervisor-baseline/environment" >> "$GITHUB_ENV"
-
       - name: Rebuild pinned WebAssembly fixtures
         run: |
           tests/Wasm.Compatibility/modules/build-fixtures.sh
           git diff --exit-code -- tests/Wasm.Compatibility/modules
 
       - name: Verify compatibility contracts
-        run: scripts/verify-wasm-contracts.sh
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wasm-custody-logs"
+          scripts/verify-wasm-contracts.sh 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/contracts.log"
 
       - name: Verify lifecycle, packages, and Fable consumers
         env:
           QUINT: quint
           WASM_LIFECYCLE_EVIDENCE_DIR: ${{ runner.temp }}/wasm-lifecycle-evidence
-        run: scripts/verify-wasm-lifecycle.sh
+        run: |
+          set -euo pipefail
+          scripts/verify-wasm-lifecycle.sh 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/lifecycle.log"
 
       - name: Run browser Worker conformance
-        run: tests/Wasm.Browser.Conformance/run.sh
+        run: |
+          set -euo pipefail
+          tests/Wasm.Browser.Conformance/run.sh 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/browser.log"
 
       - name: Verify SDK archive and fresh package consumer
         run: |
-          scripts/wasm-release/prepare.sh artifacts/wasm-release
-          scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release
+          set -euo pipefail
+          scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/package-consumer.log"
 
       - name: Qualify compatible supervisor source and installed custody
         run: |
-          scripts/wasm-release/qualify-supervisor-custody.sh --custody artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence"
+          set -euo pipefail
+          scripts/wasm-release/qualify-supervisor-custody.sh --custody artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence" 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/supervisor.log"
+
+      - name: Freeze eligible binding
+        id: binding
+        if: ${{ success() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'qualify' && inputs.expected-head == github.sha)) }}
+        run: python3 scripts/wasm-release/promotion.py freeze --custody artifacts/wasm-release --output "$RUNNER_TEMP/wasm-eligible"
+
+      - name: Retain eligible originals
+        if: ${{ success() && steps.binding.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: wasm-eligible-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.binding.outputs.version }}
+          path: ${{ runner.temp }}/wasm-eligible/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Retain bounded public lifecycle model evidence
         if: always()
@@ -183,3 +244,66 @@ jobs:
             ${{ runner.temp }}/wasm-lifecycle-evidence/quint-sampled-initReady.txt
             ${{ runner.temp }}/wasm-lifecycle-evidence/quint-sampled-init.itf.json
             ${{ runner.temp }}/wasm-lifecycle-evidence/quint-sampled-initReady.itf.json
+
+  generate-traces:
+    name: Prepare canonical WASM trace artifact (not qualification)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'generate-traces' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=2048
+      QUINT_VERSION: 0.32.0
+      WASM_TRACE_MODE: ${{ inputs.mode }}
+      WASM_TRACE_EXPECTED_HEAD: ${{ inputs.expected-head }}
+    steps:
+      - name: Record original setup cutoff
+        shell: bash
+        run: printf 'WASM_TRACE_SETUP_DEADLINE=%s\n' "$(( $(date +%s) + 300 ))" >> "$GITHUB_ENV"
+
+      - name: Checkout exact dispatched source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Guard dispatch and source before setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$WASM_TRACE_MODE" = generate-traces
+          [[ "$WASM_TRACE_EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$WASM_TRACE_EXPECTED_HEAD"
+          test "$GITHUB_WORKFLOW_SHA" = "$WASM_TRACE_EXPECTED_HEAD"
+          test "$(git rev-parse HEAD)" = "$WASM_TRACE_EXPECTED_HEAD"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          printf 'WASM_TRACE_OUTPUT_ROOT=%s/wasm-trace-preparation-%s-%s\n' "$RUNNER_TEMP" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+
+      - name: Static workflow preflight
+        run: scripts/verify-wasm-workflow.sh
+
+      - name: Set up Node for trace preparation
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "26"
+
+      - name: Install exact trace tool
+        timeout-minutes: 5
+        run: npm install --global "@informalsystems/quint@${QUINT_VERSION}"
+
+      - name: Prepare bounded canonical traces
+        run: scripts/prepare-wasm-traces.sh
+
+      - name: Retain trace preparation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: wasm-trace-preparation-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/trace-preparation.zip
+            ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failure.json
+            ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failed-generation.log
+            ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failed-failure-schedule.json
+            ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failed-counterexample.itf

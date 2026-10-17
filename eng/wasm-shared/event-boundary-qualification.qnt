@@ -30,6 +30,20 @@ module eventBoundaryQualification {
       eventAtTime(input(kind,r,r.worker,if(kind=="phase")"instantiate" else ""),r.deadline+offset)
     }else dispose,
   }
+  action terminalStep(kind: str,offset: int): bool = all {
+    stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
+    else if(stage==4)submitTerminal else if(stage==5)submitOrdinary
+    else if(stage==6)prepareCandidate
+    else if(stage==7)eventAtTime(input(kind,state.current,state.current.worker,""),state.current.deadline+offset)
+    else dispose,
+  }
+  action terminalBefore = terminalStep("complete",-1)
+  action terminalAt = terminalStep("complete",0)
+  action terminalAfter = terminalStep("complete",1)
+  action terminalRejected = terminalStep("rejectedTermination",-1)
+  action terminalCleanup = terminalStep("cleanupFault",-1)
+  action terminalAdapterRejected = terminalStep("adapterRejected",-1)
   action disposeBefore = boundaryStep("dispose",-1)
   action disposeAt = boundaryStep("dispose",0)
   action disposeAfter = boundaryStep("dispose",1)
@@ -111,6 +125,38 @@ module pendingLoadCommitQualification {
 // Bound controls invoke the same canonical transition and mechanical closure.
 module callbackClosureTest {
   import lifecycle.* from "./lifecycle"
+  run terminalRetirementKeepsResultAuthorityTest = initSc2.then(readyActive).then(submitTerminal).expect({
+    val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.clock+1)
+    and {completed.disposed,completed.activeGeneration==0,hasEffect(completed.effects,"settleCurrent"),currentResultsHaveAuthority(completed)}
+  })
+  run forgedTerminalResultAuthorityIsRejectedTest = initSc2.then(readyActive).then(submitTerminal).expect({
+    val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.clock+1)
+    val result=completed.effects.select(e=>e.kind=="settleCurrent").head()
+    and {
+      not(currentResultsHaveAuthority({...completed,effects:List({...result,worker:result.worker+1})})),
+      not(currentResultsHaveAuthority({...completed,effects:List({...result,generation:result.generation+1})})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,request:{...completed.input.request,id:result.request+1}}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,name:"timer"}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,worker:completed.input.worker+1}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityWorker:completed.input.authorityWorker+1}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityGeneration:completed.input.authorityGeneration+1}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityWorker:0,authorityGeneration:0}})),
+    }
+  })
+  run terminalHistoricalResultCannotClaimNewAuthorityTest = initSc2.then(readyActive).then(submitTerminal)
+    .then(readyCandidate).then(candidateValidated).then(commitCandidate).expect({
+      val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.clock+1)
+      val historical=completed.effects.select(e=>e.kind=="settleHistorical").head()
+      and {completed.disposed,currentResultsHaveAuthority(completed),
+        not(currentResultsHaveAuthority({...completed,effects:List({...historical,kind:"settleCurrent"})}))}
+    })
+  run terminalExpiryCannotRetainCurrentAuthorityTest = initSc2.then(readyActive).then(submitTerminal).expect({
+    val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.current.deadline+1)
+    val forged=effect("settleCurrent",state.current)
+    and {completed.disposed,completed.input.authorityWorker==0,completed.input.authorityGeneration==0,
+      not(hasEffect(completed.effects,"settleCurrent")),currentResultsHaveAuthority(completed),
+      not(currentResultsHaveAuthority({...completed,effects:List(forged)}))}
+  })
   run invalidationClearsWorkerTest = initSc2.then(loadInitial).expect({
     val cleared=eventAt(state,input("workerTerminated",emptyRequest,1,""),state.clock)
     and {pending(cleared).length()==0,live(cleared).size()==0,cleared.compiledWorkers.size()==0,cleared.initializedWorkers.size()==0}

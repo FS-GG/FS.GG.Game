@@ -1,4 +1,4 @@
-// Test-only facade seams over exactly installed public0.2.0, no producer runtime link.
+// Current facade controls shared by source and exact selected-package qualification.
 module Wasm.Lifecycle.Correspondence.InstalledHostControls
 open System
 open FS.GG.Wasm.Contracts
@@ -16,7 +16,7 @@ let private phaseName = function
 let private rawPhase = function
     | Compile -> "compile" | Instantiate -> "instantiate" | AllocateDescriptor -> "allocate-descriptor"
     | AllocateInput -> "allocate-input" | Initialize -> "initialize" | Process -> "process" | Free -> "free" | Shutdown -> "shutdown"
-let private blank state kind worker =
+let private blank (state:HostProjection) kind worker : Mechanical =
     { Kind=kind;Worker=worker;Request=0UL;Generation=0UL;Correlation="";Operation="";Bytes=0;Timer="";Delay=0;Disposition="";State=state }
 let private mechanicalExpectation (observed:int64) (state:HostProjection) (effect:EffectProjection) =
     let empty=blank state "" effect.Worker
@@ -78,7 +78,7 @@ let replayFacadeWith (selectedSettings:HostSettings) dispatch (connected:bool) (
             match results |> List.tryFind(fun result -> result.Identity.Request=terminal.Request) with
             | None -> failures <- $"{trace.Name} terminal callback missing" :: failures
             | Some result ->
-                let reason=match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:"+diagnostic | _ -> ""
+                let reason=match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:"+diagnostic | Some (AdapterRejected diagnostic) -> "AdapterRejected:"+diagnostic | _ -> ""
                 let outcome=result.Outcome |> Option.map(fun value -> match value.State with TimedOut -> "TimedOut" | Faulted _ -> "Faulted" | _ -> "unexpected") |> Option.defaultValue ""
                 let phase=result.Outcome |> Option.map(fun value -> rawPhase value.Phase) |> Option.defaultValue ""
                 let dispatched=result.Outcome |> Option.exists(fun value -> value.Dispatch=Dispatched)
@@ -100,3 +100,256 @@ let nestedCallbackMutationsAreDetected (trace:ModelTrace) =
           match step.ConnectedEffects with
           | first::second::third::rest -> {step with ConnectedEffects=first::third::second::rest}
           | _ -> step) ]
+
+// One ready fixture for every current profile and both source/package includes.
+let private terminalIdentity (request:uint64) : HostIdentity =
+    { WorkerInstance="terminal-worker";Request=request;Generation=1UL }
+let private terminalCorrelation (identity:HostIdentity) : OperationToken =
+    OperationToken.create $"request-{identity.Generation}-{identity.Request}" |> Result.defaultWith (failwithf "%A")
+let private terminalOutcome (phase:InvocationPhase) (identity:HostIdentity) : InvocationOutcome =
+    { Identity=identity;Phase=phase;State=Succeeded;Dispatch=Dispatched;CleanupFault=None;CopiedOutput=Array.empty;EffectEligibility=ProductAdapterMustDecide }
+let private readyTerminalHost (settings:HostSettings) (host:Host) (results:unit -> BrowserResult list) =
+    let descriptor=Validation.descriptor (HostSettings.configuration settings)
+    let load=terminalIdentity 1UL
+    let initialize=terminalIdentity 2UL
+    host.Load(0L,load,[|0uy|])
+    host.Observe(0L,load.WorkerInstance,AbiVersionObserved(load,terminalCorrelation load,descriptor.Abi.Version))
+    host.Initialize(0L,initialize,[|1uy|])
+    host.Observe(0L,initialize.WorkerInstance,InvocationObserved(terminalOutcome Initialize initialize,terminalCorrelation initialize))
+    let state=host.Projection
+    let observed=results()
+    let expected=[load;initialize]
+    if state.ActiveWorker<>load.WorkerInstance || state.ActiveGeneration<>load.Generation
+       || not(List.contains load.WorkerInstance state.CompiledWorkers)
+       || not(List.contains load.WorkerInstance state.InitializedWorkers)
+       || not state.Controls.IsEmpty || state.Current.Id<>0UL
+       || not state.Ordinary.IsEmpty || not state.Ordered.IsEmpty || state.Snapshot.Id<>0UL
+       || state.Disposed || state.Frozen || observed.Length<>2
+       || (expected |> List.exists(fun identity ->
+            let matching=observed |> List.filter(fun result -> result.Identity=identity)
+            matching.Length<>1 || matching.Head.Disposition<>Current || matching.Head.Reason.IsSome
+            || not(matching.Head.Outcome |> Option.exists(fun outcome -> outcome.State=Succeeded)))) then
+        failwithf "terminal ready fixture profile=%A state=%A results=%A" descriptor.Path state observed
+
+// Runs against both public facades (and the installed package build). Transport
+// is inert: this checks real reducer/effect/callback ordering without guest code.
+let terminalRetirementControls (selectedSettings:HostSettings) =
+    let unwrap = function Ok value -> value | Error issues -> failwithf "%A" issues
+    let identity=terminalIdentity
+    let correlation=terminalCorrelation
+    let outcome=terminalOutcome
+    let limits : RequestLimits = { MaximumDeadlineMilliseconds=100; MaximumOutputBytes=64; EnclosingDeadlineMilliseconds=None }
+    let descriptor=Validation.descriptor (HostSettings.configuration selectedSettings)
+    for connected, rejected, completeFromPost, adapterRejected in [ for connected in [false;true] do for rejected in [false;true] do for sync in [false;true] do for adapter in [false;true] do yield connected,rejected,sync,adapter ] do
+        let require condition message = if not condition then failwithf "terminal retirement profile=%A connected=%b rejected=%b sync=%b adapter=%b: %s" descriptor.Path connected rejected completeFromPost adapterRejected message
+        let mutable host:Host option=None
+        let mutable mechanics=[]
+        let mutable results:BrowserResult list=[]
+        let mutable reentered=false
+        let mutable completed=false
+        let mutable armed:Set<string>=Set.empty
+        let reset=identity 3UL
+        let follower=identity 4UL
+        let fresh=identity 5UL
+        let actual={ outcome Process reset with State=(if rejected then GuestRejected 27 else Succeeded); CopiedOutput=[|4uy;5uy|] }
+        let completeTerminal () =
+            if adapterRejected then host.Value.RejectAdapterOutput(1L,reset,"adapter rejection")
+            else host.Value.Observe(1L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
+        let observedPost request =
+            if completeFromPost && request=reset.Request then completeTerminal ()
+        let record value = mechanics <- mechanics @ [value]
+        let settle (result:BrowserResult) =
+            results <- results @ [result]
+            if result.Identity=reset then
+                require host.Value.Projection.Disposed "disposed state must precede callback"
+                require armed.IsEmpty "all timers canceled before callback, including synchronous Post completion"
+                require (mechanics |> List.contains "terminate") "worker retired before result"
+                completed <- true
+                let stateBefore=host.Value.Projection
+                let mechanicsBefore=mechanics
+                let resultCountBefore=results.Length
+                let admission=host.Value.SubmitLimited(2L,LimitedInvoke(fresh,Ordinary,[|9uy|]),limits)
+                require (admission=Error[RequestOwnerUnavailable;RequestRefused HostDisposed]) (sprintf "callback reentry refusal differs: %A" admission)
+                require (host.Value.Projection=stateBefore) "refused callback reentry preserves retired state"
+                require (mechanics=mechanicsBefore && results.Length=resultCountBefore) "refused callback reentry emits no effects"
+                reentered <- true
+        let transport:HostTransport =
+            { Now=(fun () -> 2L)
+              CreateWorker=(fun _ _ -> ())
+              PostCommand=(fun _ command -> record ("post:"+command.Kind); observedPost (UInt64.Parse command.Identity.Request))
+              TerminateWorker=(fun _ -> record "terminate")
+              ArmTimer=(fun key _ _ -> armed <- armed.Add key; record "arm")
+              CancelTimer=(fun key -> armed <- armed.Remove key; record "cancel") }
+        let interpret effects =
+            for effect in effects do
+                match effect with
+                | Settle result -> settle result
+                | TerminateWorker _ -> record "terminate"
+                | PostToWorker(_,command) ->
+                    record (match command.Operation with ProcessGuest _ -> "post:process" | _ -> "post:other")
+                    observedPost command.Identity.Request
+                | ArmTimer(timer,_) -> armed <- armed.Add (string timer); record "arm"
+                | CancelTimer timer -> armed <- armed.Remove (string timer); record "cancel"
+                | _ -> ()
+        let value = if connected then Host.CreateConnected(selectedSettings,transport,settle) else Host.Create(selectedSettings,interpret)
+        host <- Some (value |> unwrap)
+        let h=host.Value
+        readyTerminalHost selectedSettings h (fun () -> results)
+        require armed.IsEmpty "ready fixture has no pending mechanical timer"
+        mechanics <- [];results <- []
+        h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|8uy|]),limits) |> unwrap
+        // BAR retains its single-pending refusal; SC2 queues this follower.
+        let sc2=descriptor.Path=Sc2ImportedStrict
+        if sc2 && not completeFromPost then h.SubmitLimited(0L,LimitedInvokeAndRetire(follower,[|7uy|]),limits) |> unwrap
+        if not completeFromPost then completeTerminal ()
+        require completed "terminal completion delivered"
+        require reentered "synchronous callback attempted reentry"
+        require armed.IsEmpty "outer admission cannot arm a timer after nested retirement"
+        let terminalResult=results |> List.find(fun result -> result.Identity=reset)
+        if adapterRejected then
+            require (terminalResult.Outcome.IsNone && terminalResult.Reason=Some(AdapterRejected "adapter rejection")) "adapter first cause preserved without fabricated ABI"
+        else require (terminalResult.Outcome=Some actual) "raw ABI evidence preserved"
+        require ((mechanics |> List.filter(fun item -> item="post:process")).Length=1) "no precomputed following post survives"
+        require ((mechanics |> List.filter(fun item -> item="arm")).Length=1) "no timer armed after retirement"
+        if sc2 && not completeFromPost then
+            let followerIndex=results |> List.findIndex(fun result -> result.Identity=follower)
+            let resetIndex=results |> List.findIndex(fun result -> result.Identity=reset)
+            require (followerIndex<resetIndex) "queued terminal follower settles before reset"
+        let before=results.Length
+        h.Observe(2L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
+        h.Dispose(2L)
+        require (results.Length=before) "duplicates and repeated disposal settle nothing twice"
+
+// Exercise callbacks occurring BEFORE a selected terminal batch reaches Post.
+// No guest execution: both actual public facades use their maintained reducer.
+let terminalReentrantAdmissionControls (selectedSettings:HostSettings) =
+    let unwrap = function Ok value -> value | Error issues -> failwithf "%A" issues
+    let identity=terminalIdentity
+    let correlation=terminalCorrelation
+    let outcome=terminalOutcome
+    let limits : RequestLimits = { MaximumDeadlineMilliseconds=5;MaximumOutputBytes=64;EnclosingDeadlineMilliseconds=None }
+    let descriptor=Validation.descriptor (HostSettings.configuration selectedSettings)
+    // Explicit current-profile applicability: queue-dependent histories require
+    // SC2. BAR preserves its single-pending policy and proves its Busy path.
+    let modes =
+        match descriptor.Path,HostSettings.compatibility selectedSettings with
+        | BarProtected,DefaultCompatibility -> ["timer-expiry";"busy-refusal";"ordinary-ancestor"]
+        | Sc2ImportedStrict,DefaultCompatibility
+        | Sc2ImportedStrict,Sc2SupervisorV1 -> ["timer-expiry";"previous-dispose";"previous-replace";"previous-phase";"ordinary-ancestor"]
+        | _ -> failwith "terminal controls require a selected current profile"
+    for connected, mode in [ for connected in [false;true] do for mode in modes do yield connected,mode ] do
+        let require condition message = if not condition then failwithf "terminal reentry profile=%A connected=%b mode=%s: %s" descriptor.Path connected mode message
+        let mutable host:Host option=None
+        let mutable now=0L
+        let mutable fired=false
+        let mutable terminalPosts=0
+        let mutable postedRequests:uint64 list=[]
+        let mutable terminalArms=0
+        let mutable armed:Set<string>=Set.empty
+        let mutable terminated=false
+        let mutable results:BrowserResult list=[]
+        let reset=identity 4UL
+        let previous=identity 3UL
+        let terminalKey (timer:TimerIdentity) = $"{timer.Identity.WorkerInstance}:{timer.Identity.Generation}:{timer.Identity.Request}:{OperationToken.value timer.Correlation}:{timer.Phase}"
+        let terminalTimer : TimerIdentity = { Identity=reset;Correlation=correlation reset;Phase=AllocateDescriptor }
+        let settle (result:BrowserResult) =
+            results <- results @ [result]
+            if result.Identity=previous && not fired then
+                fired <- true
+                match mode with
+                | "previous-dispose" -> host.Value.Dispose(1L)
+                | "previous-replace" -> host.Value.Load(1L,{WorkerInstance="replacement";Request=9UL;Generation=2UL},[|0uy|])
+                | "previous-phase" -> host.Value.Observe(1L,reset.WorkerInstance,PhaseObserved(reset,correlation reset,AllocateInput))
+                | "ordinary-ancestor" -> host.Value.SubmitLimited(1L,LimitedInvokeAndRetire(reset,[|2uy|]),limits) |> unwrap
+                | _ -> ()
+            if result.Identity=reset && mode="timer-expiry" then
+                require terminated "timeout retires worker before callback"
+                require armed.IsEmpty "timeout cancels all owned timers before callback"
+        let observedPost request =
+            if mode="ordinary-ancestor" then
+                if request=previous.Request && not fired then
+                    host.Value.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
+                elif request=reset.Request then
+                    host.Value.Observe(2L,reset.WorkerInstance,InvocationObserved(outcome Process reset,correlation reset))
+        let arm key callback =
+            armed <- armed.Add key
+            if key.Contains(":4:") then
+                terminalArms <- terminalArms+1
+                if mode="timer-expiry" && not fired then
+                    fired <- true
+                    now <- 6L
+                    callback ()
+        let transport:HostTransport =
+            { Now=(fun () -> now)
+              CreateWorker=(fun _ _ -> ())
+              PostCommand=(fun _ command ->
+                  let request=UInt64.Parse command.Identity.Request
+                  postedRequests <- postedRequests @ [request]
+                  if request=reset.Request then terminalPosts <- terminalPosts+1
+                  observedPost request)
+              TerminateWorker=(fun _ -> terminated <- true)
+              ArmTimer=(fun key _ callback -> arm key callback)
+              CancelTimer=(fun key -> armed <- armed.Remove key) }
+        let interpret effects =
+            for effect in effects do
+                match effect with
+                | Settle result -> settle result
+                | TerminateWorker _ -> terminated <- true
+                | ArmTimer(timer,_) -> arm (terminalKey timer) (fun () -> host.Value.ObserveTimer(now,timer))
+                | CancelTimer timer -> armed <- armed.Remove (terminalKey timer)
+                | PostToWorker(_,command) ->
+                    postedRequests <- postedRequests @ [command.Identity.Request]
+                    if command.Identity=reset then terminalPosts <- terminalPosts+1
+                    observedPost command.Identity.Request
+                | _ -> ()
+        host <- Some((if connected then Host.CreateConnected(selectedSettings,transport,settle) else Host.Create(selectedSettings,interpret)) |> unwrap)
+        let h=host.Value
+        readyTerminalHost selectedSettings h (fun () -> results)
+        require armed.IsEmpty "ready fixture has no pending mechanical timer"
+        results <- [];terminated <- false
+        if mode<>"timer-expiry" then
+            h.SubmitLimited(0L,LimitedInvoke(previous,Ordinary,[|1uy|]),{limits with MaximumDeadlineMilliseconds=100}) |> unwrap
+        if mode="busy-refusal" then
+            let stateBefore=h.Projection
+            let postsBefore=postedRequests
+            let armedBefore=armed
+            let admission=h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|2uy|]),limits)
+            require (admission=Error[RequestRefused Busy]) (sprintf "BAR pending terminal refusal differs: %A" admission)
+            require (h.Projection.Current=stateBefore.Current && h.Projection.ActiveWorker=stateBefore.ActiveWorker && h.Projection.ActiveGeneration=stateBefore.ActiveGeneration) "BAR refusal preserves admitted ordinary request and worker"
+            require (postedRequests=postsBefore && armed=armedBefore && not terminated) "BAR refusal emits no extra Post/Arm or worker termination"
+            let refused=results |> List.filter(fun result -> result.Identity=reset)
+            require (refused.Length=1 && refused.Head.Disposition=Refused && refused.Head.Reason=Some Busy && refused.Head.Outcome.IsNone) "BAR refusal settles once without fabricated ABI"
+            h.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
+        elif mode<>"ordinary-ancestor" then
+            h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|2uy|]),limits) |> unwrap
+            if mode<>"timer-expiry" then h.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
+        require fired "intended synchronous callback occurred"
+        if mode="busy-refusal" then
+            require (terminalPosts=0 && terminalArms=0) "BAR refused terminal never dispatches or arms, including after ordinary completion"
+            require (not h.Projection.Disposed) "pre-dispatch BAR refusal does not retire the live session"
+            require ((results |> List.filter(fun result -> result.Identity=reset)).Length=1) "BAR refused terminal remains settled exactly once"
+            let subsequent=identity 5UL
+            let actual={outcome Process subsequent with CopiedOutput=[|3uy|]}
+            h.SubmitLimited(2L,LimitedInvokeAndRetire(subsequent,[|2uy|]),limits) |> unwrap
+            h.Observe(3L,subsequent.WorkerInstance,InvocationObserved(actual,correlation subsequent))
+            let completed=results |> List.filter(fun result -> result.Identity=subsequent)
+            require (h.Projection.Disposed && armed.IsEmpty) "BAR subsequent admitted terminal retires the session and timers"
+            require ((postedRequests |> List.filter((=) subsequent.Request)).Length=1 && completed.Length=1 && completed.Head.Outcome=Some actual && completed.Head.Disposition=Current) "BAR subsequent terminal dispatches once and preserves actual outcome"
+            require ((results |> List.filter(fun result -> result.Identity=reset)).Length=1) "BAR refused terminal is not resettled by later retirement"
+        elif mode="ordinary-ancestor" then
+            require (terminalPosts=1 && terminalArms=1) "nested terminal dispatch occurs once"
+            require h.Projection.Disposed "nested terminal retires whole session"
+            require armed.IsEmpty "ordinary ancestor cannot arm its old timer after nested terminal retirement"
+            require ((results |> List.filter(fun result -> result.Identity=reset)).Length=1) "nested terminal settles exactly once"
+        elif mode="previous-phase" then
+            require (terminalPosts=1 && terminalArms=1) "current terminal posts once with only its new phase timer"
+            require (armed=Set.singleton(terminalKey {terminalTimer with Phase=AllocateInput})) "old precomputed phase timer cannot be armed"
+        else
+            require (terminalPosts=0) "retired/replaced terminal must never reach PostCommand"
+            require (terminalArms=(if mode="timer-expiry" then 1 else 0)) "earlier callback cannot arm stale terminal timer"
+            let terminalResults=results |> List.filter(fun result -> result.Identity=reset)
+            require (terminalResults.Length=1) "terminal settles exactly once through nested callback"
+            if mode="timer-expiry" then
+                require (terminalResults.Head.Outcome |> Option.exists(fun value -> value.State=TimedOut && value.Dispatch=NotDispatched)) "pre-post timeout keeps undispatched original evidence"
+            else require terminalResults.Head.Outcome.IsNone "canceled terminal invents no ABI outcome"
+        h.Dispose(now)
