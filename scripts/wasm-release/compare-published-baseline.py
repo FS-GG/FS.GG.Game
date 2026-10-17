@@ -89,7 +89,8 @@ def compare(custody, output):
             rows.append({"id": identity, "baselineArchiveSha256": sha(baseline), "candidateArchiveSha256": sha(candidate), "baselineApiSurface": surfaces(baseline), "candidateApiSurface": surfaces(candidate), "nativeLogSha256": hashlib.sha256(run.stdout.encode()).hexdigest(), **result})
     receipt = {"schema": "fsgg.wasm.published-api-comparison/v1", "tool": "SDK10.0.401.ApiCompat", "baselineVersion": POLICY["baselineVersion"], "baselineSource": POLICY["baselineSource"], "baselineTree": POLICY["baselineTree"], "baselineManifestSha256": POLICY["baselineManifestSha256"], "candidateVersion": POLICY["candidateVersion"], "packages": rows}
     output.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
-    print(f"wasm-published-api-comparison: baseline={POLICY['baselineVersion']} Contracts=compatible Browser=compatible candidate={POLICY['candidateVersion']} suppressions=none")
+    statuses = " ".join(row["id"] + "=" + row["status"] for row in rows)
+    print(f"wasm-published-api-comparison: baseline={POLICY['baselineVersion']} {statuses} candidate={POLICY['candidateVersion']} suppressions=none")
 
 
 if __name__ == "__main__":
