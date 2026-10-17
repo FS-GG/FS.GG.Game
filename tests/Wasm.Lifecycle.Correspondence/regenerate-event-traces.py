@@ -8,7 +8,7 @@ assert subprocess.check_output([quint,'--version'],text=True).strip()=='0.32.0'
 check='--check' in sys.argv
 out=pathlib.Path(tempfile.mkdtemp(prefix='wasm-event-traces-')) if check else HERE/'Traces'
 schedules=[('bar','lifecycle','initBar','barCorrespondenceStep',10,'lifecycle.qnt'),('sc2','lifecycle','initSc2','sc2CorrespondenceStep',18,'lifecycle.qnt'),('timeout','lifecycle','initSc2','timeoutCorrespondenceStep',8,'lifecycle.qnt'),('phase','lifecycle','initBar','phaseCorrespondenceStep',16,'lifecycle.qnt'),('cleanup','lifecycle','initSc2','cleanupCorrespondenceStep',15,'lifecycle.qnt')]
-for case in ['Before','At','After','Rejected','Cleanup']:
+for case in ['Before','At','After','Rejected','Cleanup','AdapterRejected']:
  schedules.append(('boundary-terminal-'+case.lower(),'eventBoundaryQualification','initBoundary','terminal'+case,10,'event-boundary-qualification.qnt'))
 for timing in ['early','late']:schedules.append(('expiry-'+timing,'expiryQualification','initSc2',timing+'Step',8,'expiry-qualification.qnt'))
 for action in ['dispose','completion','timer','phase','freeze','resume','compile','initialize']:

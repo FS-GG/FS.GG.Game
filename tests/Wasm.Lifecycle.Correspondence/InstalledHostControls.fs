@@ -78,7 +78,7 @@ let replayFacadeWith (selectedSettings:HostSettings) dispatch (connected:bool) (
             match results |> List.tryFind(fun result -> result.Identity.Request=terminal.Request) with
             | None -> failures <- $"{trace.Name} terminal callback missing" :: failures
             | Some result ->
-                let reason=match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:"+diagnostic | _ -> ""
+                let reason=match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:"+diagnostic | Some (AdapterRejected diagnostic) -> "AdapterRejected:"+diagnostic | _ -> ""
                 let outcome=result.Outcome |> Option.map(fun value -> match value.State with TimedOut -> "TimedOut" | Faulted _ -> "Faulted" | _ -> "unexpected") |> Option.defaultValue ""
                 let phase=result.Outcome |> Option.map(fun value -> rawPhase value.Phase) |> Option.defaultValue ""
                 let dispatched=result.Outcome |> Option.exists(fun value -> value.Dispatch=Dispatched)
@@ -110,7 +110,7 @@ let terminalRetirementControls selectedSettings =
     let correlation (id:HostIdentity) = OperationToken.create $"request-{id.Generation}-{id.Request}" |> unwrap
     let outcome phase id = { Identity=id; Phase=phase; State=Succeeded; Dispatch=Dispatched; CleanupFault=None; CopiedOutput=Array.empty; EffectEligibility=ProductAdapterMustDecide }
     let limits = { MaximumDeadlineMilliseconds=100; MaximumOutputBytes=64; EnclosingDeadlineMilliseconds=None }
-    for connected, rejected, completeFromPost in [ for connected in [false;true] do for rejected in [false;true] do for sync in [false;true] do yield connected,rejected,sync ] do
+    for connected, rejected, completeFromPost, adapterRejected in [ for connected in [false;true] do for rejected in [false;true] do for sync in [false;true] do for adapter in [false;true] do yield connected,rejected,sync,adapter ] do
         let mutable host:Host option=None
         let mutable mechanics=[]
         let mutable results:BrowserResult list=[]
@@ -121,9 +121,11 @@ let terminalRetirementControls selectedSettings =
         let follower=identity 4UL
         let fresh=identity 5UL
         let actual={ outcome Process reset with State=if rejected then GuestRejected 27 else Succeeded; CopiedOutput=[|4uy;5uy|] }
+        let completeTerminal () =
+            if adapterRejected then host.Value.RejectAdapterOutput(1L,reset,"adapter rejection")
+            else host.Value.Observe(1L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
         let observedPost request =
-            if completeFromPost && request=reset.Request then
-                host.Value.Observe(1L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
+            if completeFromPost && request=reset.Request then completeTerminal ()
         let record value = mechanics <- mechanics @ [value]
         let settle result =
             results <- results @ [result]
@@ -168,11 +170,14 @@ let terminalRetirementControls selectedSettings =
         // BAR retains its single-pending refusal; SC2 queues this follower.
         let sc2=(Validation.descriptor (HostSettings.configuration selectedSettings)).Path=Sc2ImportedStrict
         if sc2 && not completeFromPost then h.SubmitLimited(0L,LimitedInvokeAndRetire(follower,[|7uy|]),limits) |> unwrap
-        if not completeFromPost then h.Observe(1L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
+        if not completeFromPost then completeTerminal ()
         require completed "terminal completion delivered"
         require reentered "synchronous callback attempted reentry"
         require armed.IsEmpty "outer admission cannot arm a timer after nested retirement"
-        require ((results |> List.find(fun result -> result.Identity=reset)).Outcome=Some actual) "raw ABI evidence preserved"
+        let terminalResult=results |> List.find(fun result -> result.Identity=reset)
+        if adapterRejected then
+            require (terminalResult.Outcome.IsNone && terminalResult.Reason=Some(AdapterRejected "adapter rejection")) "adapter first cause preserved without fabricated ABI"
+        else require (terminalResult.Outcome=Some actual) "raw ABI evidence preserved"
         require ((mechanics |> List.filter(fun item -> item="post:process")).Length=1) "no precomputed following post survives"
         require ((mechanics |> List.filter(fun item -> item="arm")).Length=1) "no timer armed after retirement"
         if sc2 && not completeFromPost then

@@ -668,4 +668,17 @@ let terminalProcess =
             let state, late = update 2L (WorkerObserved("worker-2", InvocationObserved(success Initialize initialize, tokenFor initialize))) state
             Expect.isTrue (Lifecycle.project state).Disposed "late initialization cannot resurrect candidate"
             Expect.isEmpty late "late initialization settles nothing twice"
+
+        testCase "adapter rejection retires terminal session before rejected result" <| fun _ ->
+            let reset = identity "worker-1" 1UL 1UL
+            let follower = identity "worker-1" 2UL 1UL
+            let candidate = identity "worker-2" 3UL 2UL
+            let state = loadedSelected Sc2SupervisorV1 |> limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits
+            let state = limited 0L (LimitedInvokeAndRetire(follower, [| 2uy |])) terminalLimits state
+            let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+            let state, effects = update 1L (AdapterOutputRejected(reset, "adapter rejection")) state
+            expectRetired state effects reset [ "worker-1"; "worker-2" ]
+            let result = terminalResults effects |> List.last
+            Expect.equal result.Reason (Some(AdapterRejected "adapter rejection")) "adapter first cause retained"
+            Expect.equal result.Outcome None "adapter refusal invents no actual ABI outcome"
     ]

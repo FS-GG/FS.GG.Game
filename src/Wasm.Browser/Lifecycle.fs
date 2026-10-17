@@ -1426,22 +1426,26 @@ module Lifecycle =
             | AdapterOutputRejected(identity, diagnostic) ->
                 match state.Active with
                 | Some active when active.Generation = identity.Generation ->
-                    let afterRejected, rejectionEffects =
-                        match state.Current with
-                        | Some current when current.Identity = identity ->
-                            settle
-                                { state with
-                                    Current = None
-                                    LastAction = "adapterRejected"
-                                }
-                                current
-                                None
-                                Discarded
-                                (Some(AdapterRejected diagnostic))
-                        | _ -> state, []
+                    match state.Current with
+                    | Some current when current.Identity = identity && current.RetireSession ->
+                        retireSession state current None Discarded (Some(AdapterRejected diagnostic)) "adapterRejected"
+                    | _ ->
+                        let afterRejected, rejectionEffects =
+                            match state.Current with
+                            | Some current when current.Identity = identity ->
+                                settle
+                                    { state with
+                                        Current = None
+                                        LastAction = "adapterRejected"
+                                    }
+                                    current
+                                    None
+                                    Discarded
+                                    (Some(AdapterRejected diagnostic))
+                            | _ -> state, []
 
-                    let disposed, disposeEffects = dispose afterRejected
-                    disposed, rejectionEffects @ disposeEffects
+                        let disposed, disposeEffects = dispose afterRejected
+                        disposed, rejectionEffects @ disposeEffects
                 | _ -> state, []
             | FreezeRequested freezeToken ->
                 if state.Disposed || state.FrozenToken.IsSome then

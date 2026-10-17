@@ -172,6 +172,10 @@ module lifecycle {
           {...after,effects:prefix.concat(after.effects)}
         }else dispatchNext(base,prefix)
       }
+    } else if(e.name=="adapterRejected"){
+      if(s.current.worker!=0 and s.current.retire and s.current.id==r.id and s.current.worker==r.worker and s.activeGeneration==r.generation)
+        retireState(s,s.current,{...effect("settleDiscarded",s.current),reason:"AdapterRejected:adapter rejection"},"adapterRejected")
+      else s
     } else if(e.name=="phase"){
       if(not(requestPresent(s,r)))s else {
         val updated={...r,phase:e.phase,deadline:if(s.profile==Bar)s.clock+250 else r.deadline}
@@ -431,7 +435,7 @@ module compatibleLifecycle {
       }
     }else if(e.name=="resume")pumpCompatible({...c,host:{...h,frozen:false,freezeToken:0,lastAction:"resume"}})
     else if(e.name=="dispose")disposeCompatible(c)
-    else if(h.current.retire and Set("cleanupFault","rejectedTermination","workerTerminated","terminateRetiring").contains(e.name)){
+    else if(h.current.retire and Set("cleanupFault","rejectedTermination","adapterRejected","workerTerminated","terminateRetiring").contains(e.name)){
       val following=handle(projectedHost(c),e)
       {...c,host:{...following,snapshot:emptyRequest},held:following.snapshot}
     }else {

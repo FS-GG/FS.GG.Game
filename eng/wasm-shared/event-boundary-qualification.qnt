@@ -43,6 +43,7 @@ module eventBoundaryQualification {
   action terminalAfter = terminalStep("complete",1)
   action terminalRejected = terminalStep("rejectedTermination",-1)
   action terminalCleanup = terminalStep("cleanupFault",-1)
+  action terminalAdapterRejected = terminalStep("adapterRejected",-1)
   action disposeBefore = boundaryStep("dispose",-1)
   action disposeAt = boundaryStep("dispose",0)
   action disposeAfter = boundaryStep("dispose",1)

@@ -17,7 +17,9 @@ work under WASM-SHARED-01/.5-P2 feeding S1, without reopening those original rec
 `LimitedInvokeAndRetire(identity,input)` uses the existing `SubmitLimited` request
 limits and unchanged `ProcessGuest(Ordinary,input)` Worker ABI. An immutable flag
 on the admitted request selects session retirement on its matching terminal result,
-including rejected ABI status, trap, timeout, worker loss and cleanup failure.
+including rejected ABI status, trap, timeout, worker loss, cleanup failure and
+exact-current adapter output rejection. Adapter rejection retains its original
+reason without fabricating an ABI outcome.
 The reducer clears active/candidate/retiring/controls/queues/held state before effects;
 workers, timers and followers retire before publishing the preserved actual result.
 Terminal dispatch arms its watchdog before posting so a synchronous transport
