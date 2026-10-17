@@ -253,6 +253,7 @@ module lifecycle {
   action submitSnapshot = event(input("snapshot",emptyRequest,0,""))
   action shutdown = event(input("shutdown",emptyRequest,0,""))
   action submitTerminal = event(input("terminal",emptyRequest,0,""))
+  action rejectTerminalAdapter = all {state.current.worker!=0,state.current.retire,state.current.generation==state.activeGeneration,event(input("adapterRejected",state.current,state.current.worker,""))}
   action complete = all {state.current.worker!=0,event(input("complete",state.current,state.current.worker,""))}
   action rejectedTermination = all {state.current.worker!=0,event(input("rejectedTermination",state.current,state.current.worker,""))}
   action cleanupFault = all {state.current.worker!=0,event(input("cleanupFault",state.current,state.current.worker,""))}
@@ -268,7 +269,7 @@ module lifecycle {
   action resume = all {state.frozen,event(input("resume",emptyRequest,0,""))}
   action dispose = event(input("dispose",emptyRequest,0,""))
   action stutter = event(input("timer",emptyRequest,0,""))
-  action step = any {loadInitial,prepareCandidate,compiled,initialize,initialized,submitOrdinary,submitOrdered,submitSnapshot,shutdown,complete,rejectedTermination,cleanupFault,phaseObserved,expireDeadlines,advanceAndExpireDeadlines,candidateValidated,commitCandidate,abortCandidate,candidateFailed,terminateRetiring,freeze,resume,dispose,stutter}
+  action step = any {submitTerminal,rejectTerminalAdapter,loadInitial,prepareCandidate,compiled,initialize,initialized,submitOrdinary,submitOrdered,submitSnapshot,shutdown,complete,rejectedTermination,cleanupFault,phaseObserved,expireDeadlines,advanceAndExpireDeadlines,candidateValidated,commitCandidate,abortCandidate,candidateFailed,terminateRetiring,freeze,resume,dispose,stutter}
   action readyActive = loadInitial.then(compiled).then(initialize).then(initialized)
   // Reachable initialized entry complements cold-start sampling; readiness is
   // established by the same explicit load/compile/initialize actions.
@@ -529,7 +530,8 @@ module compatibleLifecycle {
     val following=if(r.phase=="allocate-descriptor")"allocate-input" else if(r.phase=="allocate-input")r.operation else if(r.phase=="process")"free" else ""
     all {r.worker!=0,following!="",compatiblePhase(following,compatibleState.host.clock+1)}
   }
-  action compatibleStep = any {compatibleSubmit("terminal",defaultLimits,1),compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
+  action compatibleRejectTerminalAdapter = all {compatibleState.host.current.worker!=0,compatibleState.host.current.retire,compatibleState.host.current.generation==compatibleState.host.activeGeneration,compatibleEvent(input("adapterRejected",compatibleState.host.current,compatibleState.host.current.worker,""),compatibleState.host.clock,defaultLimits,0)}
+  action compatibleStep = any {compatibleRejectTerminalAdapter,compatibleSubmit("terminal",defaultLimits,1),compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
   val selectedSingleSettlement = compatibleState.host.deliveries.foldl(Set(),(seen,id)=>seen.union(Set(id))).size()==compatibleState.host.deliveries.length()
   pure def admissionPosition(c: CompatibleState,id: int): int = c.admitted.foldl({next:1,found:0},(p,current)=>{next:p.next+1,found:if(current==id)p.next else p.found}).found
   val mixedFifoOrdered = compatibleState.host.ordinary.foldl({ok:true,last:0},(p,r)=>{
