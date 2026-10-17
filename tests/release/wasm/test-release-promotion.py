@@ -737,6 +737,49 @@ class Tests(unittest.TestCase):
                 with self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,executor,version)
         with patch.dict(os.environ,{'EXECUTION_BINDING':'{"schema":"historical"}'}),self.assertRaises(p.Refusal):p.execution_input()
 
+    def test_installed_binder_authenticates_original_publication_and_current_qualifier(self):
+        spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
+        binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
+        producer=binder.PUBLISHED;tree=binder.PUBLISHED_TREE;qualifier='9'*40
+        with patch.object(p,'P',producer),patch.object(p,'TREE',tree):
+            r=reviewed();run,jobs,artifact=native_data()
+        journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':201,'firstPromotionAttempt':1,'producer':producer,'tag':'wasm/v0.4.0'}
+        values={'PUBLISHED_SOURCE':producer,'QUALIFIER_SOURCE':qualifier,'ACCEPTED_EXECUTOR':qualifier,'RELEASE_VERSION':'0.4.0'}
+        class Transport:
+            def __init__(self,mutation=None):
+                self.mutation=mutation;self.journal=copy.deepcopy(journal)
+                if mutation=='journal-producer':self.journal['producer']=qualifier
+                body=json.dumps(self.journal).encode();self.body=body
+                self.asset={'id':401,'name':'promotion-binding.json','url':f'https://api.github.com/repos/{p.REPO}/releases/assets/401','size':len(body),'digest':'sha256:'+p.digest(body)}
+                self.release={'id':300,'tag_name':'wasm/v0.4.0','target_commitish':qualifier if mutation=='release-source' else producer,'draft':False,'prerelease':False,'assets':[self.asset]}
+            def checked(self,path):
+                if path.endswith('/git/ref/heads/main'):return {'object':{'sha':'8'*40 if self.mutation=='main' else qualifier}}
+                if path.endswith('/releases/300'):return self.release
+                if path.endswith('/artifacts/200'):return artifact
+                if '/runs/100/' in path:
+                    result=copy.deepcopy(run)
+                    if self.mutation=='qualification-failed':result['conclusion']='failure'
+                    return result
+                if '/runs/201/' in path:return {'id':201,'head_sha':producer,'repository':{'full_name':p.REPO},'event':'workflow_dispatch','path':'.github/workflows/release-wasm.yml','run_attempt':1,'status':'completed','conclusion':'failure' if self.mutation=='publication-failed' else 'success'}
+                raise AssertionError('unexpected native read '+path)
+            def pages(self,path,key=None):
+                if '/runs/100/' in path:return jobs
+                if '/runs/201/' in path:return [{'name':name,'conclusion':'success'} for name in ('preflight','admission','begin','org','public','assets','complete')]
+                if path.endswith('/assets'):return [self.asset]
+                if path.endswith('/releases'):return [self.release]
+                raise AssertionError('unexpected native page '+path)
+            def api(self,path):return (200,{'object':{'type':'commit','sha':producer}}, {}) if '/git/ref/tags/' in path else (200,self.release,{})
+            def request(self,url,**kwargs):return 200,self.body,{}
+        for mutation in (None,'main','journal-producer','release-source','qualification-failed','publication-failed'):
+            native=Transport(mutation)
+            with self.subTest(mutation=mutation),tempfile.TemporaryDirectory() as raw,patch.object(p,'Native',return_value=native),patch.object(p,'verify_admission') as original_admission:
+                if mutation:
+                    with self.assertRaises((AssertionError,p.Refusal)):binder.bind_promotion_execution(p,journal,values,native.release,pathlib.Path(raw))
+                else:
+                    self.assertEqual(binder.bind_promotion_execution(p,journal,values,native.release,pathlib.Path(raw)),r)
+                    original_admission.assert_called_once_with(native,r,201,1)
+                    self.assertTrue((pathlib.Path(raw)/'published-native.json').exists())
+
     def test_explicit_read_only_publication_subject_does_not_relax_writer(self):
         original=reviewed(); producer=p.P; tree=p.TREE
         subject=p.PublicationSubject(producer,tree,p.VERSION)

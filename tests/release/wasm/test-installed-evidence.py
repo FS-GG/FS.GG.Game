@@ -33,15 +33,17 @@ class Evidence(unittest.TestCase):
             for ident in e.PACKAGES:
                 for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata'):
                     put(work/'consumer-packages'/ident/'0.4.0'/leaf)
+            for name in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','lib/netstandard2.0/FSharp.Core.dll','lib/netstandard2.1/FSharp.Core.dll'):
+                put(work/'consumer-packages/fsharp.core/10.1.302'/name)
             put(work/'consumer/browser/test-results/.last-run.json',b'{"status":"passed"}')
-            put(work/'consumer/public/sub/app/FSharp.Core.dll')
-            put(work/'consumer/public/sub/app/fable/Program.js')
+            for name in ('FSharp.Core.dll','Consumer.dll','fable/Program.js','_content/FS.GG.Wasm.Browser/module-worker.mjs','_content/FS.GG.Wasm.Browser/worker-client.mjs','_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js'):
+                put(work/'consumer/public/sub/app'/name)
             put(work/'http-cache/cache:https.json/list.dat',b'discard HTTP cache')
             p=e.Projection();e.consumer(p,work)
             self.assertEqual(p.finish(root/'output',0),0)
             with tarfile.open(root/'output/installed-evidence.tar.gz') as archive:
                 names=archive.getnames()
-                self.assertEqual(sum(x.endswith('/.nupkg.metadata') for x in names),2)
+                self.assertEqual(sum(x.endswith('/.nupkg.metadata') for x in names),3)
                 self.assertTrue(all('http-cache' not in x for x in names))
                 self.assertTrue(json.load(archive.extractfile('evidence-manifest.json'))['eligible'])
             joined=e.Projection();e.merge(joined,root/'output')
@@ -72,6 +74,7 @@ class Evidence(unittest.TestCase):
             self.assertTrue(any('installed.packages.lock' in x['member'] for x in p.errors))
             self.assertTrue(any('core/' in x['member'] for x in p.errors))
             self.assertTrue(any(x['member']=='selected/browser' for x in p.errors))
+            self.assertTrue(any(x['member'].endswith('/policy/WorkerEntry.js') for x in p.errors))
             self.assertEqual(p.finish(pathlib.Path(raw)/'out',0),1)
 
     def test_combined_budget_is_enforced_on_merge(self):
@@ -109,6 +112,20 @@ class Evidence(unittest.TestCase):
                 status=json.loads((pathlib.Path(raw)/'status.json').read_text())
                 self.assertEqual(status['exitCode'],expected)
                 self.assertEqual(status['commandExit'],command_exit);self.assertEqual(status['logExit'],log_exit)
+
+    def test_bad_consumer_retention_configuration_refuses_before_work(self):
+        import shlex
+        source=(ROOT/'scripts/verify-wasm-package-consumer.sh').read_text()
+        prelude=source.split('mode="${1:-}"',1)[1].split('work="$(mktemp',1)[0]
+        prelude='mode="${1:-}"'+prelude
+        with tempfile.TemporaryDirectory() as raw:
+            env=dict(os.environ,MODE='installed',WASM_CONSUMER_EVIDENCE=raw+'/fresh',WASM_CONSUMER_STATUS=raw+'/status')
+            script='set -euo pipefail\nrepo='+shlex.quote(str(ROOT))+'\n'+prelude+'\necho ADMITTED\n'
+            result=subprocess.run(['bash','-c',script,'inert','--feed-only'],env=env,capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            for bad in ({'WASM_CONSUMER_EVIDENCE':str(ROOT/'forbidden-evidence')},{'WASM_CONSUMER_EVIDENCE':raw},{'WASM_CONSUMER_EVIDENCE':''},{'WASM_CONSUMER_STATUS':''}):
+                result=subprocess.run(['bash','-c',script,'inert','--feed-only'],env=dict(env,**bad),capture_output=True,text=True)
+                self.assertNotEqual(result.returncode,0);self.assertNotIn('ADMITTED',result.stdout)
 
     def test_complete_diff_binds_exact_blobs_and_refuses_semantic_change(self):
         with tempfile.TemporaryDirectory() as raw:

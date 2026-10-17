@@ -27,6 +27,17 @@ def safe_name(name):
     return name
 
 
+def consumer_member(name):
+    safe_name(name)
+    fixed={'consumer/release-manifest.json','consumer/NuGet.Config','consumer/consumer/packages.lock.json',
+           'consumer/fsgg-wasm-sdk-0.4.0.tar.gz','consumer/installed-member-receipt.log','consumer/browser-result.json'}
+    if name in fixed:return True
+    for ident in PACKAGES:
+        if name in {'consumer/packages/'+ident+'/'+leaf for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata')}:return True
+    if name in {'consumer/core/'+leaf for leaf in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','reference-netstandard2.0.dll','reference-netstandard2.1.dll')}:return True
+    return name.startswith('consumer/public/sub/app/') and pathlib.PurePosixPath(name).suffix in SUFFIXES and not set(pathlib.PurePosixPath(name).parts)&{'node_modules','http-cache','lock-http-cache','.git'}
+
+
 def regular(path):
     for parent in (path, *path.parents):
         if parent.is_symlink(): raise ValueError('linked evidence path')
@@ -75,7 +86,8 @@ class Projection:
                     count+=1
                     if count>LIMITS['members']: raise ValueError('compiled output census cap')
                     file=pathlib.Path(directory,name)
-                    if file.suffix not in SUFFIXES and name!='http.log': raise ValueError('unreviewed compiled output member: '+name)
+                    if file.suffix not in SUFFIXES and name!='http.log':
+                        self.errors.append({'member':prefix+'/'+file.relative_to(path).as_posix(),'status':'refused','reason':'unreviewed compiled output suffix'}); continue
                     self.add(file,prefix+'/'+file.relative_to(path).as_posix())
         except (OSError,ValueError) as error:
             self.errors.append({'member':prefix,'status':'refused','reason':str(error)})
@@ -84,6 +96,16 @@ class Projection:
             base=pathlib.Path(cache)/ident/'0.4.0'
             for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata'):
                 self.add(base/leaf,prefix+'/'+ident+'/'+leaf)
+    def core(self, cache, prefix):
+        base=pathlib.Path(cache)/'fsharp.core/10.1.302'
+        for name in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata'):
+            self.add(base/name,prefix+'/'+name)
+        for tfm in ('netstandard2.0','netstandard2.1'):
+            self.add(base/'lib'/tfm/'FSharp.Core.dll',prefix+'/reference-'+tfm+'.dll')
+    def require(self, names):
+        for name in names:
+            if name not in self.files:
+                self.errors.append({'member':name,'status':'absent','reason':'mandatory actual Core/Worker/runtime output absent'})
     def finish(self, output, runtime):
         output=pathlib.Path(output)
         if output.exists(): raise ValueError('evidence output must be fresh')
@@ -114,8 +136,14 @@ def consumer(projection, work):
     projection.add(work/'sdk-artifacts/fsgg-wasm-sdk-0.4.0.tar.gz','consumer/fsgg-wasm-sdk-0.4.0.tar.gz')
     projection.add(work/'installed-member-receipt.log','consumer/installed-member-receipt.log')
     projection.packages(work/'consumer-packages','consumer/packages')
+    projection.core(work/'consumer-packages','consumer/core')
     projection.tree(work/'consumer/public','consumer/public')
     projection.add(work/'consumer/browser/test-results/.last-run.json','consumer/browser-result.json')
+    projection.require(['consumer/public/sub/app/'+name for name in (
+        'FSharp.Core.dll','Consumer.dll','fable/Program.js',
+        '_content/FS.GG.Wasm.Browser/module-worker.mjs',
+        '_content/FS.GG.Wasm.Browser/worker-client.mjs',
+        '_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js')])
     # Consumer.fsproj intentionally places the actual DLL/Core/runtime outputs
     # in consumer/public/sub/app, already included above.
 
@@ -129,14 +157,23 @@ def selected(projection, work):
             original=pathlib.Path(os.environ.get('RUNNER_TEMP',''))/'wasm-installed-receipts'/name
         projection.add(original,'selected/'+name)
     projection.packages(work/'packages','selected/packages')
-    for tfm in ('netstandard2.0','netstandard2.1'):
-        projection.add(work/'packages/fsharp.core/10.1.302/lib'/tfm/'FSharp.Core.dll','selected/core/reference-'+tfm+'.dll')
-    baseline=pathlib.Path(str(work)+'-baseline')/'official-core'
-    for name in ('receipt.json','fsharp.core.10.1.302.nupkg','FSharp.Core.10.1.302.netstandard2.0.dll','FSharp.Core.10.1.302.netstandard2.1.dll'):
-        projection.add(baseline/name,'official-core/'+name)
+    projection.core(work/'packages','selected/core')
+    baseline=pathlib.Path(str(work)+'-baseline')
+    for name in ('receipt.json','fsharp.core.10.1.302.nupkg','fsharp.core.10.1.401.nupkg','fsharp.core.10.1.203.nupkg',
+                 'FSharp.Core.10.1.302.netstandard2.0.dll','FSharp.Core.10.1.302.netstandard2.1.dll',
+                 'FSharp.Core.10.1.401.netstandard2.0.dll','FSharp.Core.10.1.401.netstandard2.1.dll','FSharp.Core.10.1.203.netstandard2.1.dll'):
+        projection.add(baseline/'official-core'/name,'official-core/'+name)
+    projection.add(baseline/'compiler/FSharp.Core.dll','official-core/actual-compiler-Core.dll')
+    projection.add(baseline/'tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/FSharp.Core.dll','official-core/actual-fable-runtime-Core.dll')
     projection.tree(work/'installed-fable','selected/installed-fable')
     projection.tree(pathlib.Path(str(work)+'-browser'),'selected/browser')
     projection.add(ROOT/'tests/Wasm.Supervisor.Compatibility/browser/test-results/.last-run.json','selected/browser-result.json')
+    projection.require(['selected/browser/'+name for name in (
+        'fable/Program.js','fable/BrowserBridge.js','limits-guest.wasm','http.log',
+        '_content/FS.GG.Wasm.Browser/module-worker.mjs',
+        '_content/FS.GG.Wasm.Browser/worker-client.mjs',
+        '_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js')])
+    projection.require(['selected/installed-fable/Program.js','selected/installed-fable/BrowserBridge.js'])
     runtime=ROOT/'tests/Wasm.Supervisor.Compatibility/Installed/bin/Debug/net10.0'
     for name in ('InstalledCompatibility.dll','InstalledCompatibility.deps.json','InstalledCompatibility.runtimeconfig.json','FSharp.Core.dll'):
         projection.add(runtime/name,'selected/runtime/'+name)
@@ -149,16 +186,17 @@ def merge(projection, source):
         if regular(meta).st_size>MIB: raise ValueError('consumer manifest cap')
         manifest=json.loads(meta.read_text())
         if not isinstance(manifest,dict) or manifest.get('schema')!='fsgg.wasm.installed-evidence/v1': raise ValueError('consumer evidence schema')
-        regular(source/'installed-evidence.tar.gz')
+        if regular(source/'installed-evidence.tar.gz').st_size>LIMITS['total']: raise ValueError('consumer archive cap')
         with tarfile.open(source/'installed-evidence.tar.gz','r:gz') as archive:
             rows={row['path']:row for row in manifest['members']}
+            if len(rows)!=len(manifest['members']) or len(rows)+1>LIMITS['members']: raise ValueError('consumer manifest duplicate/census cap')
             seen=set()
             for member in archive:
                 safe_name(member.name)
                 if not member.isfile() or member.name in seen: raise ValueError('unsafe/duplicate consumer archive')
                 seen.add(member.name)
                 if member.name=='evidence-manifest.json': continue
-                if not member.name.startswith('consumer/'): raise ValueError('foreign consumer evidence member')
+                if not consumer_member(member.name): raise ValueError('foreign consumer evidence member')
                 expected=rows[member.name]
                 if member.size!=expected['bytes'] or member.size>LIMITS['file']: raise ValueError('consumer evidence size drift')
                 body=archive.extractfile(member).read(member.size+1)
@@ -173,12 +211,14 @@ def merge(projection, source):
         projection.errors.extend(manifest['errors'])
         if manifest.get('runtimeStatus')!=0 or manifest.get('collectorStatus')!='passed' or manifest.get('eligible') is not True:
             projection.errors.append({'member':'consumer','status':'failed','reason':'consumer runtime/collection not eligible'})
-    except (OSError,ValueError,KeyError,tarfile.TarError) as error:
+    except (OSError,ValueError,KeyError,TypeError,EOFError,tarfile.TarError) as error:
         projection.errors.append({'member':'consumer','status':'absent/refused','reason':str(error)})
 
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('action',choices=('consumer','assemble'));parser.add_argument('--work',required=True);parser.add_argument('--output',required=True);parser.add_argument('--runtime',required=True,type=int);parser.add_argument('--consumer');parser.add_argument('--receipts');parser.add_argument('--logs');args=parser.parse_args()
+    if args.action=='assemble' and not all((args.consumer,args.receipts,args.logs)):
+        parser.error('assemble requires explicit consumer, receipts and logs inputs')
     p=Projection()
     if args.action=='consumer': consumer(p,args.work)
     else:
@@ -199,6 +239,7 @@ def main():
             args.runtime=actual
         except (KeyError,ValueError,TypeError) as error:
             p.errors.append({'member':'execution/runtime-status.json','status':'absent/refused','reason':str(error)})
+            args.runtime=None
     raise SystemExit(p.finish(args.output,args.runtime))
 
 if __name__=='__main__':main()

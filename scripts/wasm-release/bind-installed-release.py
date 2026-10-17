@@ -21,12 +21,10 @@ INSTALLED_PATHS = frozenset({
     '.github/workflows/wasm-installed-org.yml',
     'scripts/wasm-release/bind-installed-release.py',
     'scripts/wasm-release/promotion.py',
-    'scripts/wasm-release/qualify-supervisor-installed.sh',
     'scripts/wasm-release/installed-evidence.py',
     'scripts/verify-wasm-package-consumer.sh',
     'tests/release/wasm/test-installed-org-workflow.py',
     'tests/release/wasm/test-release-promotion.py',
-    'tests/release/wasm/test-consumer-source-mapping.py',
     'tests/release/wasm/test-installed-evidence.py',
     'scripts/verify-wasm-workflow.sh',
     'docs/roadmaps/wasm-shared-01.md',
@@ -74,7 +72,7 @@ def validate_release(release, values):
 
 
 def git(*args):
-    return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True).strip()
+    return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True, timeout=30).strip()
 
 
 def source_audit(source, qualifier):
