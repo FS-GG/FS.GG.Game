@@ -63,6 +63,15 @@ for key, value in (("PUBLISHED_SOURCE", "main"), ("QUALIFIER_SOURCE", "wasm/v0.4
         pass
     else:
         raise SystemExit(f"unbound dispatch {key} accepted")
+for missing in ('ACCEPTED_EXECUTOR','PROMOTION_BINDING_SHA256'):
+    broken=dict(values);broken.pop(missing)
+    try:binding.checked_inputs(broken,'0.4.0')
+    except (AssertionError,KeyError):pass
+    else:raise SystemExit('missing current transaction/executor accepted')
+for key, value in [('PUBLISHED_SOURCE','b'*40),('EXECUTION_BINDING','{}'),('CANONICAL_QUALIFICATION_AUDIT','historical')]:
+    try:binding.checked_inputs(dict(values,**{key:value}),'0.4.0')
+    except (AssertionError,KeyError):pass
+    else:raise SystemExit('current source/overlay substitution accepted')
 release = {"tag_name": "wasm/v0.4.0", "draft": False, "prerelease": False, "published_at": "2026-10-02T00:00:00Z", "assets": []}
 for name, digest in (("release-manifest.json", "c" * 64), ("fsgg-wasm-sdk-0.4.0.tar.gz", "d" * 64), ("promotion-binding.json", "e" * 64)):
     release["assets"].append({"name": name, "digest": "sha256:" + digest, "browser_download_url": f"https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v0.4.0/{name}"})

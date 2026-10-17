@@ -11,6 +11,8 @@ feed="${WASM_PACKAGE_FEED:?}"
 [[ "$feed" == https://api.nuget.org/v3/index.json || "$feed" == https://nuget.pkg.github.com/FS-GG/index.json ]] || { echo 'feed-only requires a literal native HTTPS feed' >&2; exit 2; }
 receipts="${RUNNER_TEMP:?}/wasm-installed-receipts"
 [[ -f "$receipts/release-manifest.json" && -f "$receipts/promotion-binding.json" ]] || { echo 'requires genuine binder-downloaded immutable public receipts' >&2; exit 2; }
+version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
+[[ "$version" == 0.4.0 && "${RELEASE_VERSION:?}" == "$version" ]] || { echo 'requires selected current installed version' >&2; exit 2; }
 q="${output}-baseline"
 "$repo/scripts/wasm-release/qualify-supervisor-custody.sh" --bootstrap "$q"
 config="${output}-NuGet.Config"
@@ -23,8 +25,6 @@ else:
 ET.SubElement(deps,'package',pattern='FSharp.Core');ET.ElementTree(root).write(sys.argv[1],encoding='unicode')
 PY
 python3 "$repo/scripts/wasm-release/promotion.py" check-feed --output "$config" --feed "$feed"
-version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
-[[ "$version" == 0.4.0 && "${RELEASE_VERSION:?}" == "$version" ]] || { echo 'requires selected current installed version' >&2; exit 2; }
 export WASM_BASELINE_QUALIFICATION_ROOT="$q" WASM_INSTALLED_CONFIG="$config" WASM_CANDIDATE_VERSION="$version"
 export WASM_FSC_COMPILER_PATH="$q/compiler/fsc.dll" DOTNET_HOST_PATH=/usr/share/dotnet/dotnet
 export NUGET_HTTP_CACHE_PATH="${output}-http-cache"
