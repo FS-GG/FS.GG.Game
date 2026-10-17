@@ -51,7 +51,7 @@ def inspect(data,record):
         with zipfile.ZipFile(package,"w") as archive:
             for name,value in data.items():archive.writestr(name,value)
             archive.writestr(PREFIX+"worker-build.json",json.dumps(record))
-        return manifest.inspect_package(package,"FS.GG.Wasm.Browser","0.5.0",SOURCE)
+        return manifest.inspect_package(package,"FS.GG.Wasm.Browser","0.5.0",SOURCE,"2"*40)
 
 class WorkerCustody(unittest.TestCase):
     def test_actual_reader_joins_all_selected_byte_roles(self):
@@ -67,10 +67,11 @@ class WorkerCustody(unittest.TestCase):
                     with self.assertRaises(SystemExit):inspect(data,record)
 
     def test_incomplete_or_false_build_metadata_refuses(self):
-        for change in ["source","tool","external","split","minify","nondeterministic","duplicate","escape","negative","boolean","missingpolicy"]:
+        for change in ["source","tree","tool","external","split","minify","nondeterministic","duplicate","escape","negative","boolean","missingpolicy"]:
             with self.subTest(change=change):
                 data,record=fixture()
                 if change=="source":record["sourceCommit"]="3"*40
+                if change=="tree":record["sourceTree"]="3"*40
                 if change=="tool":record["tool"]["version"]="unselected"
                 if change=="external":record["composition"]["externalImports"]=1
                 if change=="split":record["composition"]["outputFiles"]=2

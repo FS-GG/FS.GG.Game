@@ -15,7 +15,10 @@ esbuild, Acorn and ESLint scope tools preserve names, avoid minification and cod
 splitting, check every output body for runtime imports and unresolved dynamic
 execution/network primitives, and compare two builds of the same captured inputs.
 Lexical binding matters: the admission scanner's local `require` function remains
-unchanged and is not a Node loader. Package custody joins generated input hashes,
+unchanged and is not a Node loader. The output guard also follows Fable's const
+global aliases, confines them to selected static mechanical/encoding members and
+refuses global-object escape or dynamic property access. It is not a general
+JavaScript sandbox. Package custody joins generated input hashes,
 mechanical source, actual tool/lock identity and final bundle bytes. Raw generated
 policy remains source provenance; the runtime always selects the closed entry.
 

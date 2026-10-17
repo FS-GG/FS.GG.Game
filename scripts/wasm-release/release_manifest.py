@@ -82,7 +82,7 @@ def nuspec(package: Path) -> tuple[dict[str, str], dict[str, str], list[str]]:
     return values, dependencies, names
 
 
-def verify_worker_build(archive: zipfile.ZipFile, source: str) -> dict[str, object]:
+def verify_worker_build(archive: zipfile.ZipFile, source: str, tree: str) -> dict[str, object]:
     prefix = "contentFiles/any/any/_content/FS.GG.Wasm.Browser/"
     def read(name, limit=8*1024*1024):
         info = archive.getinfo(name)
@@ -91,7 +91,7 @@ def verify_worker_build(archive: zipfile.ZipFile, source: str) -> dict[str, obje
         return archive.read(name)
     try:
         record = json.loads(read(prefix+"worker-build.json", 256*1024))
-        if record["schema"] != "fsgg.wasm.worker-build/1" or record["sourceCommit"] != source or not re.fullmatch(r"[0-9a-f]{40}", record["sourceTree"]):
+        if record["schema"] != "fsgg.wasm.worker-build/1" or record["sourceCommit"] != source or not re.fullmatch(r"[0-9a-f]{40}", tree) or record["sourceTree"] != tree:
             fail("Worker build source binding differs")
         expected = {"format":"esm","platform":"browser","target":"es2022","minify":False,"treeShaking":False,
                     "keepNames":True,"deterministicBuildsCompared":2,"outputFiles":1,"externalImports":0}
@@ -134,7 +134,7 @@ def verify_worker_build(archive: zipfile.ZipFile, source: str) -> dict[str, obje
     return {"bundleSha256":record["output"]["sha256"],"generatedInputs":len(rows),"externalImports":0}
 
 
-def inspect_package(path: Path, expected_id: str, version: str, source: str) -> dict[str, object]:
+def inspect_package(path: Path, expected_id: str, version: str, source: str, tree: str) -> dict[str, object]:
     values, dependencies, names = nuspec(path)
     if values != {"id": expected_id, "version": version, "repositoryCommit": source}:
         fail(f"{path.name} identity/source mismatch: {values}")
@@ -178,7 +178,7 @@ def inspect_package(path: Path, expected_id: str, version: str, source: str) -> 
             # Historical immutable releases retain their original package
             # layout; current producer preparation requires the closed entry.
             if version not in ("0.1.1", "0.2.0", "0.3.0", "0.4.0"):
-                verify_worker_build(archive, source)
+                verify_worker_build(archive, source, tree)
         if f"<WasmSharedVersion>{version}</WasmSharedVersion>" not in props or 'Version="[$(WasmSharedVersion)]"' not in project:
             fail("packaged Fable dependency does not resolve through the stable version origin")
     return {
@@ -244,7 +244,7 @@ def verify_manifest(path: Path, custody: Path, source: str | None = None) -> dic
         if not artifact.is_file() or digest(artifact) != row.get("sha256"):
             fail(f"missing or mismatched custody artifact: {artifact.name}")
     expected_rows = [
-        inspect_package(custody / files[identity], identity, version, str(data["source"]))
+        inspect_package(custody / files[identity], identity, version, str(data["source"]), str(data["tree"]))
         for identity in ROSTER
     ] + [inspect_sdk(custody / files["sdk"], version)]
     if artifacts != expected_rows:
@@ -323,7 +323,7 @@ def prepare(args: argparse.Namespace) -> None:
         fail("release version must be stable SemVer")
     custody = Path(args.custody)
     files = expected_files(version)
-    packages = [inspect_package(custody / files[identity], identity, version, args.source) for identity in ROSTER]
+    packages = [inspect_package(custody / files[identity], identity, version, args.source, args.tree) for identity in ROSTER]
     sdk = inspect_sdk(custody / files["sdk"], version)
     data = {
         "schema": SCHEMA,
