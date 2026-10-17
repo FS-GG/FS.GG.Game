@@ -10,7 +10,9 @@
   <ItemGroup>
     <Compile Include="Program.fs" />
     <PackageReference Update="FSharp.Core" Version="[10.1.302]" />
-    <PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" Condition="'$(WasmCandidateVersion)' == ''" />
-    <PackageReference Include="FS.GG.Wasm.Browser" Version="[$(WasmCandidateVersion)]" Condition="'$(WasmCandidateVersion)' != ''" />
+    <PackageReference Include="FS.GG.Wasm.Browser" Version="[$(WasmCandidateVersion)]" />
   </ItemGroup>
+  <Target Name="RequireCandidateVersion" BeforeTargets="Restore;Build">
+    <Error Condition="'$(WasmCandidateVersion)' == ''" Text="Package qualification requires the exact coherent WasmCandidateVersion." />
+  </Target>
 </Project>

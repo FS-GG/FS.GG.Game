@@ -9,7 +9,7 @@ output="$(realpath -m "${1:?usage: verify-wasm-supervisor.sh [--feed-only] <new-
 case "$output/" in "$repo/"*) echo 'qualification requires a private output outside source' >&2; exit 2;; esac
 [[ ! -e "$output" ]] || { echo 'qualification output must be fresh' >&2; exit 2; }
 mkdir -p "$output"
-q="${WASM_BASELINE_QUALIFICATION_ROOT:?requires baseline feed/cache/tool root}"
+q="${WASM_BASELINE_QUALIFICATION_ROOT:?requires official cache/tool root}"
 if [[ "$mode" == feed-only ]]; then
   [[ -z "${WASM_CANDIDATE_CUSTODY:-}" && -z "${WASM_RELEASE_CUSTODY:-}" && -z "${WASM_SOURCE3_FEED:-}" ]] || { echo "feed-only refuses local custody/source injection" >&2; exit 2; }
   config="${WASM_INSTALLED_CONFIG:?requires explicit feed-only configuration}"
@@ -53,9 +53,8 @@ installed_lock="$output/installed.packages.lock.json"
 /usr/share/dotnet/dotnet exec "$fable" "$project" --outDir "$output/installed-fable/Installed" --noCache --noRestore > "$output/installed-fable-build.log" 2>&1
 node "$output/installed-fable/Program.js" > "$output/installed-fable.log" 2>&1
 node tests/Wasm.Supervisor.Compatibility/raw-numeric-controls.mjs "$output/installed-fable/Program.js" > "$output/installed-raw-numeric.log" 2>&1
-if [[ "$mode" == custody ]]; then
-python3 tests/Wasm.Supervisor.Compatibility/native-api-compat.py --custody "$custody" --baseline-feed "$q/feed" --packages "$q/packages" --candidate-version "$version" --sdk /usr/share/dotnet/sdk/10.0.401 > "$output/native-api.log" 2>&1
-fi
+# prepare.sh seals the actual current published-baseline classification in custody.
+
 python3 - "$installed_lock" "$output/installed.bad-hash.lock.json" <<'PYLOCK'
 import json,pathlib,sys
 source,target=map(pathlib.Path,sys.argv[1:]);lock=json.loads(source.read_text())
