@@ -58,8 +58,31 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
 
 // One declared history: fresh initial Worker, candidate abort, then a fresh
 // same-name candidate. No priming, retry, synthetic clock or renewed budget.
-window.runObservedFreshWorkers = async () => {
-  const trace=[],artifact=await bytes("control-ordinary.wasm"),current=await session(artifact,"sc2c",65536,250,false,row=>trace.push(row));
+// Own public control module plus 65,536 genuine nop instructions in its first
+// function. No private guest, clock, synthetic result or priming Worker is used.
+function instructionDense(artifact) {
+  const leb=value=>{const out=[];do{const part=value&127;value>>>=7;out.push(part|(value?128:0));}while(value);return out;};
+  const read=cursor=>{let value=0,shift=0,part;do{part=artifact[cursor.offset++];value|=(part&127)<<shift;shift+=7;}while(part&128);return value;};
+  const cursor={offset:8};
+  while(cursor.offset<artifact.length){
+    const start=cursor.offset,kind=artifact[cursor.offset++],length=read(cursor),payload=cursor.offset,end=payload+length;
+    if(kind===10){
+      if(read(cursor)<1)throw new Error("owned dense fixture requires a function");
+      const sizeStart=cursor.offset,size=read(cursor),body=cursor.offset,groups=read(cursor);
+      for(let i=0;i<groups;i++){read(cursor);cursor.offset++;}
+      const insert=cursor.offset,padding=new Uint8Array(65536).fill(1),bodyLength=leb(size+padding.length);
+      const header=[kind,...leb(length+padding.length+bodyLength.length-(body-sizeStart))];
+      const result=new Uint8Array(artifact.length+padding.length+bodyLength.length-(body-sizeStart)+header.length-(payload-start));
+      let offset=0;for(const part of [artifact.subarray(0,start),header,artifact.subarray(payload,sizeStart),bodyLength,artifact.subarray(body,insert),padding,artifact.subarray(insert)]){result.set(part,offset);offset+=part.length;}
+      if(offset!==result.length)throw new Error("dense fixture length mismatch");
+      return result;
+    }
+    cursor.offset=end;
+  }
+  throw new Error("owned dense fixture has no code section");
+}
+window.runObservedFreshWorkers = async (dense=false) => {
+  const trace=[],original=await bytes("control-ordinary.wasm"),artifact=dense?instructionDense(original):original,current=await session(artifact,"sc2c",65536,250,false,row=>trace.push(row));
   let result={fixtureFailure:null};
   try{
     result.loaded=await current.loadBounded();
@@ -76,7 +99,7 @@ window.runObservedFreshWorkers = async () => {
     }
   }catch(error){result.fixtureFailure=String(error).slice(0,256);}
   finally{current.dispose();}
-  return {...result,trace,status:current.transport.DiagnosticStatus(),retired:current.terminations,final:current.projection()};
+  return {...result,artifactBytes:artifact.length,trace,status:current.transport.DiagnosticStatus(),retired:current.terminations,final:current.projection()};
 };
 
 window.runObservedColdExpiry = async () => {

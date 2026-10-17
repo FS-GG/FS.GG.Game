@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <WasmSharedVersion>0.5.0</WasmSharedVersion>
+    <WasmSharedVersion>0.6.0</WasmSharedVersion>
     <WasmSharedTag>wasm/v$(WasmSharedVersion)</WasmSharedTag>
   </PropertyGroup>
 </Project>

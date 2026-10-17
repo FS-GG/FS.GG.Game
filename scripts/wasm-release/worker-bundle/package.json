@@ -2,7 +2,7 @@
   "name": "fsgg-wasm-worker-build",
   "private": true,
   "type": "module",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "devDependencies": {
     "acorn": "8.19.0",
     "esbuild": "0.28.2",
