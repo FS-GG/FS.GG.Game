@@ -212,6 +212,10 @@ jobs:
       WASM_TRACE_MODE: ${{ inputs.mode }}
       WASM_TRACE_EXPECTED_HEAD: ${{ inputs.expected-head }}
     steps:
+      - name: Record original setup cutoff
+        shell: bash
+        run: printf 'WASM_TRACE_SETUP_DEADLINE=%s\n' "$(( $(date +%s) + 300 ))" >> "$GITHUB_ENV"
+
       - name: Checkout exact dispatched source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

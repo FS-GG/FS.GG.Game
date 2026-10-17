@@ -12,7 +12,8 @@ PR admission uses its stable campaign/chain without creating a duplicate issue.
 
 `scripts/prepare-wasm-traces.sh` runs the existing generators sequentially under one
 20-minute process-group timeout with 30-second termination grace, inside a 30-minute
-hosted job. It requires Node 26, Quint 0.32.0 selected identically through QUINT/PATH,
+hosted job. One original five-minute setup cutoff is recorded before checkout;
+late or invalid setup refuses before generation, with no renewed setup window. It requires Node 26, Quint 0.32.0 selected identically through QUINT/PATH,
 V8 old-space 2 GiB, core dumps disabled and a 64-MiB hard per-file limit. These are
 not aggregate RSS/storage bounds or proof of perfect descendant settlement. A timeout
 or unknown cleanup is incomplete and grants no retry. The job uses Contents-read,
@@ -20,7 +21,7 @@ with no CLR/Rust/browser/package/publication stages.
 
 The inert helper derives the exact 53 default/16 compatible schedule census from
 allowlisted AST declarations without importing generators. Successful preparation
-requires both generators to return zero, exactly 71 regular unlinked outputs,
+requires both generators to return zero, exactly 71 regular outputs without symbolic or hard links,
 unchanged source/model/generator inputs and no other tracked/untracked/ignored
 changes. Generated payload is capped at 64 MiB, retained diagnostics at 8 MiB,
 manifest at 64 KiB and the inner archive at 80 MiB. The bounded manifest retains

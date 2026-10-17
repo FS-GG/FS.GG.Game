@@ -25,7 +25,7 @@ MODEL_INPUTS = ['eng/wasm-shared/lifecycle.qnt', 'eng/wasm-shared/event-boundary
                 'eng/wasm-shared/expiry-qualification.qnt', 'eng/wasm-shared/compatible-qualification.qnt',
                 DEFAULT + '/generate-traces.py', *GENERATORS]
 MIB = 1024 * 1024
-BOUNDS = {'generationSeconds': 1200, 'terminationGraceSeconds': 30, 'nodeOldSpaceMiB': 2048,
+BOUNDS = {'setupSeconds': 300, 'generationSeconds': 1200, 'terminationGraceSeconds': 30, 'nodeOldSpaceMiB': 2048,
           'perFileBytes': 64*MIB, 'payloadBytes': 64*MIB, 'diagnosticBytes': 8*MIB,
           'manifestBytes': 64*1024, 'archiveBytes': 80*MIB}
 
@@ -117,6 +117,8 @@ def regular(root, relative):
             break
         if parent.is_symlink():
             raise ValueError('linked output/input refused: ' + relative)
+    if path.lstat().st_nlink != 1:
+        raise ValueError('hardlinked output/input refused: ' + relative)
     if not stat.S_ISREG(path.lstat().st_mode):
         raise ValueError('nonregular output/input refused: ' + relative)
     return path
@@ -168,7 +170,7 @@ def prepare(root, output, env):
               'ignoredFiles': ignored_inventory(root),
               'toolSha256': {name: digest(Path(path)) for name, path in tools.items()},
               'toolProvenance': 'actual installed file/version observations; npm dependency closure not independently attested',
-              'bounds': BOUNDS, 'startedMonotonic': time.monotonic(),
+              'bounds': BOUNDS, 'setupDeadlineUnix': env.get('WASM_TRACE_SETUP_DEADLINE', ''), 'startedMonotonic': time.monotonic(),
               'workflow': {name: env.get(name, '') for name in ('GITHUB_REPOSITORY', 'GITHUB_REF', 'GITHUB_SHA',
                   'GITHUB_WORKFLOW_REF', 'GITHUB_WORKFLOW_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT',
                   'ImageOS', 'ImageVersion', 'RUNNER_OS', 'RUNNER_ARCH')}}

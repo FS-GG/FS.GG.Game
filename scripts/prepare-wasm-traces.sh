@@ -2,6 +2,10 @@
 # Explicit hosted artifact preparation. This never qualifies or publishes packages.
 set -euo pipefail
 umask 077
+setup_window_open() {
+  local deadline=$1 now=$2
+  [[ "$deadline" =~ ^[0-9]{1,10}$ ]] && (( deadline > now && deadline - now <= 300 ))
+}
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output="${WASM_TRACE_OUTPUT_ROOT:?requires fresh external WASM_TRACE_OUTPUT_ROOT}"
 [[ $# == 0 || ( $# == 1 && "$1" == --preflight ) ]] || { echo "unsupported trace preparation argument" >&2; exit 2; }
@@ -33,6 +37,15 @@ PYVERSIONS
 )"
 if (( status != 0 )); then
   printf '%s\n' "tool version, NODE_OPTIONS or timeout/prlimit prerequisite refused (exit $status)" > "$output/work/generation.log"
+fi
+
+# The original setup window begins before checkout; no stage renews it.
+# Even successful late setup must refuse before the original generation deadline starts.
+if (( status == 0 )); then
+  setup_deadline="${WASM_TRACE_SETUP_DEADLINE:-}"
+  setup_now="$(date +%s)"
+  setup_window_open "$setup_deadline" "$setup_now" || status=2
+  if (( status != 0 )); then printf '%s\n' 'original five-minute setup cutoff refused generation' > "$output/work/generation.log"; fi
 fi
 
 if (( status == 0 )); then
