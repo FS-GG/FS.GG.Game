@@ -85,6 +85,23 @@ def validate(candidate: str) -> None:
         'Prepare bounded canonical traces', 'Retain trace preparation evidence')]
     if min(generation_order) < 0 or generation_order != sorted(generation_order):
         raise ValueError("generation guard/setup/execution ordering differs")
+    freeze_guard="if: ${{ success() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'qualify' && inputs.expected-head == github.sha)) }}"
+    for token in ('python3 scripts/wasm-release/promotion.py check-custody-plan',
+                  'WASM_QUALIFY_EXPECTED_HEAD: ${{ inputs.expected-head }}', freeze_guard,
+                  'id: binding', 'promotion.py freeze --custody artifacts/wasm-release --output "$RUNNER_TEMP/wasm-eligible"',
+                  "if: ${{ success() && steps.binding.outcome == 'success' }}",
+                  'name: wasm-eligible-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.binding.outputs.version }}',
+                  'path: ${{ runner.temp }}/wasm-eligible/', 'if-no-files-found: error', 'retention-days: 90'):
+        if token not in qualify:
+            raise ValueError('eligible custody guard missing: '+token)
+    if qualify.index('promotion.py check-custody-plan') > qualify.index('Set up .NET'):
+        raise ValueError('custody plan preflight must precede costly setup')
+    custody_order=[qualify.index(name) for name in ('Qualify compatible supervisor source and installed custody','Freeze eligible binding','Retain eligible originals')]
+    if custody_order != sorted(custody_order):
+        raise ValueError('eligible custody must follow all complete qualification gates')
+    upload=qualify.split('      - name: Retain eligible originals',1)[1].split('      - name:',1)[0]
+    if 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' not in upload:
+        raise ValueError('eligible custody upload must use the pinned artifact action')
     if any(value not in qualify for value in required[1:]):
         raise ValueError("complete normal qualification lost a required gate")
     positions = [qualify.find(value) for value in ordered]
@@ -110,6 +127,13 @@ for broken in (
     text.replace('  generate-traces:\n', '  generate-traces:\n    permissions:\n      id-token: write\n'),
     text.replace("      WASM_TRACE_MODE:", "      BAD_JOB_ENV: ${{ runner.temp }}\n      WASM_TRACE_MODE:"),
     text.replace('run: scripts/prepare-wasm-traces.sh', 'run: dotnet test'),
+    text.replace('python3 scripts/wasm-release/promotion.py check-custody-plan', 'true'),
+    text.replace("inputs.expected-head == github.sha", "true", 1),
+    text.replace("github.ref == 'refs/heads/main'", "true", 1),
+    text.replace("success() && steps.binding.outcome == 'success'", "always()", 1),
+    text.replace('retention-days: 90', 'retention-days: 7'),
+    text.replace('path: ${{ runner.temp }}/wasm-eligible/', 'path: artifacts/'),
+    text.replace('      - name: Freeze eligible binding', '      - name: Missing custody freeze'),
     text.replace(ordered[7], "BROKEN-A").replace(ordered[8], ordered[7]).replace("BROKEN-A", ordered[8]),
 ):
     try:
