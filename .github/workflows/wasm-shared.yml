@@ -261,3 +261,5 @@ jobs:
             ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/trace-preparation.zip
             ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failure.json
             ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failed-generation.log
+            ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failed-failure-schedule.json
+            ${{ runner.temp }}/wasm-trace-preparation-${{ github.run_id }}-${{ github.run_attempt }}/artifact/failed-counterexample.itf

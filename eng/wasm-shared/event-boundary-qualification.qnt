@@ -125,6 +125,37 @@ module pendingLoadCommitQualification {
 // Bound controls invoke the same canonical transition and mechanical closure.
 module callbackClosureTest {
   import lifecycle.* from "./lifecycle"
+  run terminalRetirementKeepsResultAuthorityTest = initSc2.then(readyActive).then(submitTerminal).expect({
+    val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.clock+1)
+    and {completed.disposed,completed.activeGeneration==0,hasEffect(completed.effects,"settleCurrent"),currentResultsHaveAuthority(completed)}
+  })
+  run forgedTerminalResultAuthorityIsRejectedTest = initSc2.then(readyActive).then(submitTerminal).expect({
+    val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.clock+1)
+    val result=completed.effects.select(e=>e.kind=="settleCurrent").head()
+    and {
+      not(currentResultsHaveAuthority({...completed,effects:List({...result,worker:result.worker+1})})),
+      not(currentResultsHaveAuthority({...completed,effects:List({...result,generation:result.generation+1})})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,request:{...completed.input.request,id:result.request+1}}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,name:"timer"}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityWorker:completed.input.authorityWorker+1}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityGeneration:completed.input.authorityGeneration+1}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityWorker:0,authorityGeneration:0}})),
+    }
+  })
+  run terminalHistoricalResultCannotClaimNewAuthorityTest = initSc2.then(readyActive).then(submitTerminal)
+    .then(readyCandidate).then(candidateValidated).then(commitCandidate).expect({
+      val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.clock+1)
+      val historical=completed.effects.select(e=>e.kind=="settleHistorical").head()
+      and {completed.disposed,currentResultsHaveAuthority(completed),
+        not(currentResultsHaveAuthority({...completed,effects:List({...historical,kind:"settleCurrent"})}))}
+    })
+  run terminalExpiryCannotRetainCurrentAuthorityTest = initSc2.then(readyActive).then(submitTerminal).expect({
+    val completed=eventAt(state,input("complete",state.current,state.current.worker,""),state.current.deadline+1)
+    val forged=effect("settleCurrent",state.current)
+    and {completed.disposed,completed.input.authorityWorker==0,completed.input.authorityGeneration==0,
+      not(hasEffect(completed.effects,"settleCurrent")),currentResultsHaveAuthority(completed),
+      not(currentResultsHaveAuthority({...completed,effects:List(forged)}))}
+  })
   run invalidationClearsWorkerTest = initSc2.then(loadInitial).expect({
     val cleared=eventAt(state,input("workerTerminated",emptyRequest,1,""),state.clock)
     and {pending(cleared).length()==0,live(cleared).size()==0,cleared.compiledWorkers.size()==0,cleared.initializedWorkers.size()==0}

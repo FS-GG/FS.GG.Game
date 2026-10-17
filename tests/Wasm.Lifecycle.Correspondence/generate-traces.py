@@ -6,7 +6,59 @@ from __future__ import annotations
 import hashlib
 import json
 import argparse
+import os
+import subprocess
+import sys
 from pathlib import Path
+
+
+def run_quint_schedule(command, schedule, trace_path):
+    """Run the original call once; retain fresh failed evidence, never old fixtures."""
+    trace_path.unlink(missing_ok=True)
+    print('canonical Quint schedule: ' + schedule, flush=True)
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as failure:
+        location = os.environ.get('WASM_TRACE_DIAGNOSTIC_DIR')
+        if location:
+            try:
+                directory = Path(location)
+                record = {'schedule': schedule, 'argv': command, 'exitCode': failure.returncode,
+                          'counterexample': None, 'gap': 'Quint emitted no fresh ITF file'}
+                if trace_path.exists():
+                    if trace_path.is_symlink() or not trace_path.is_file() or trace_path.stat().st_nlink != 1:
+                        raise ValueError('failed counterexample is linked or nonregular')
+                    value = hashlib.sha256()
+                    size = 0
+                    with trace_path.open('rb') as source, (directory / 'counterexample.itf').open('xb') as target:
+                        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                            value.update(chunk)
+                            keep = max(0, min(len(chunk), 4 * 1024 * 1024 - size))
+                            target.write(chunk[:keep])
+                            size += len(chunk)
+                    record['counterexample'] = {'originalBytes': size, 'originalSha256': value.hexdigest(),
+                        'retainedBytes': min(size, 4 * 1024 * 1024), 'truncated': size > 4 * 1024 * 1024}
+                    usable = False
+                    if size <= 4 * 1024 * 1024:
+                        try:
+                            document = json.loads((directory / 'counterexample.itf').read_bytes())
+                            usable = (isinstance(document, dict) and isinstance(document.get('#meta'), dict)
+                                      and isinstance(document.get('vars'), list)
+                                      and isinstance(document.get('states'), list) and len(document['states']) > 0)
+                        except (ValueError, UnicodeError):
+                            pass
+                    record['counterexample']['usableItf'] = usable
+                    record['gap'] = (None if usable else 'Fresh output is partial/non-ITF or exceeds retained budget; diagnostic bytes only')
+                data = (json.dumps(record, sort_keys=True) + '\n').encode()
+                if len(data) > 8192:
+                    raise ValueError('failed schedule metadata exceeds 8 KiB')
+                (directory / 'failure-schedule.json').write_bytes(data)
+            except (OSError, ValueError) as diagnostic_error:
+                try:
+                    print('failed schedule evidence collection failed: ' + str(diagnostic_error), file=sys.stderr)
+                except OSError:
+                    pass
+        raise
 
 
 ROOT = Path(__file__).resolve().parent

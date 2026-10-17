@@ -217,7 +217,29 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
         return sorted(changed | untracked)
     changed = attempt(closure) if status == 0 else None
     diagnostics = []
-    log = output / 'work' / 'generation.log'
+    work = output / 'work'
+    log = work / 'generation.log'
+    remaining_diagnostics = BOUNDS['diagnosticBytes']
+    failed_schedule = None
+    def retain_failed_evidence():
+        nonlocal remaining_diagnostics, failed_schedule
+        for name, limit in (('failure-schedule.json', 8192), ('counterexample.itf', 4*MIB)):
+            source = work / name
+            if not source.exists():
+                continue
+            regular(work, name)
+            size = source.stat().st_size
+            if size > limit or size > remaining_diagnostics:
+                raise ValueError('failed schedule evidence exceeds retained budget: ' + name)
+            shutil.copyfile(source, output / 'artifact' / name)
+            diagnostics.append({'path': name, 'originalBytes': size, 'originalSha256': digest(source),
+                                'retainedBytes': size, 'omittedBytes': 0})
+            remaining_diagnostics -= size
+            if name == 'failure-schedule.json':
+                failed_schedule = json.loads(source.read_text())
+    attempt(retain_failed_evidence)
+    if status == 0 and (failed_schedule is not None or (work / 'counterexample.itf').exists()):
+        errors.append('successful generation unexpectedly left failed-schedule evidence')
     def retain_log():
         if not log.exists():
             return
@@ -225,7 +247,7 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
         original_digest = digest(log)
         retained = output / 'artifact' / 'generation.log'
         with log.open('rb') as source, retained.open('xb') as target:
-            target.write(source.read(BOUNDS['diagnosticBytes']))
+            target.write(source.read(remaining_diagnostics))
         diagnostics.append({'path': 'generation.log', 'originalBytes': original_size,
                             'originalSha256': original_digest, 'retainedBytes': retained.stat().st_size,
                             'omittedBytes': max(0, original_size - retained.stat().st_size)})
@@ -254,6 +276,8 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
                 'collectionErrors': errors, 'cleanup': cleanup, 'scratchCleanup': scratch_cleanup, 'stages': stages,
                 'descendantSettlement': 'not-established; timeout process group and hosted VM teardown only',
                 'toolVersions': versions, 'changedPaths': changed, 'diagnostics': diagnostics,
+                'failedSchedule': failed_schedule,
+                'diagnosticEvidenceGap': ('generator failed without retained schedule metadata; original log only' if generation_started and status != 0 and failed_schedule is None else None),
                 'fixturePreparationComplete': accepted, 'qualification': False, 'publication': False,
                 'outputs': files if accepted else []}
     artifact = output / 'artifact'
@@ -265,8 +289,8 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
         target = artifact / 'trace-preparation.pending.zip'
         with zipfile.ZipFile(target, 'x', compression=zipfile.ZIP_DEFLATED) as bundle:
             bundle.write(artifact / 'manifest.json', 'manifest.json')
-            if (artifact / 'generation.log').exists():
-                bundle.write(artifact / 'generation.log', 'generation.log')
+            for diagnostic in diagnostics:
+                bundle.write(artifact / diagnostic['path'], diagnostic['path'])
             if accepted:
                 for item in files:
                     bundle.write(root / item['path'], item['path'])
@@ -278,10 +302,12 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
     if errors:
         (artifact / 'trace-preparation.zip').unlink(missing_ok=True)
         (artifact / 'trace-preparation.pending.zip').unlink(missing_ok=True)
-        if (artifact / 'generation.log').exists():
-            (artifact / 'generation.log').rename(artifact / 'failed-generation.log')
-            for diagnostic in diagnostics:
-                diagnostic['path'] = 'failed-generation.log'
+        for diagnostic in diagnostics:
+            original = artifact / diagnostic['path']
+            if original.exists():
+                retained_name = 'failed-' + diagnostic['path']
+                original.rename(artifact / retained_name)
+                diagnostic['path'] = retained_name
         manifest['fixturePreparationComplete'] = False
         manifest['outputs'] = []
         manifest['firstFailure'] = first_failure or errors[0]
@@ -297,6 +323,7 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
                     'prerequisiteExitCode': status if not generation_started else 0,
                     'sourceTree': record['sourceTree'], 'workflow': record['workflow'],
                     'toolVersions': versions, 'inputs': record['inputs'], 'diagnostics': diagnostics,
+                    'failedSchedule': failed_schedule, 'diagnosticEvidenceGap': manifest['diagnosticEvidenceGap'],
                     'firstFailure': manifest['firstFailure'], 'collectionErrors': errors[:16],
                     'cleanup': cleanup, 'scratchCleanup': scratch_cleanup, 'qualification': False},
                     sort_keys=True) + '\n').encode()

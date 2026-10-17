@@ -6,7 +6,10 @@ module lifecycle {
   type Request = { id: int, worker: int, generation: int, deadline: int,
     submission: Submission, bytes: int, operation: str, phase: str, correlation: int, retire: bool }
   type Effect = { kind: str, request: int, generation: int, worker: int, operation: str, phase: str, correlation: int, bytes: int, due: int, reason: str, outcome: str, terminalPhase: str, dispatched: bool }
-  type Input = { name: str, request: Request, worker: int, phase: str, observed: int }
+  // Observational authority is captured after expiry, before this event's handler.
+  // It is not an input grant or a runtime/Worker ABI field.
+  type Input = { name: str, request: Request, worker: int, phase: str, observed: int,
+    authorityWorker: int, authorityGeneration: int }
   type State = {
     profile: Profile, clock: int, nextRequest: int, nextGeneration: int,
     activeWorker: int, activeGeneration: int, candidateWorker: int,
@@ -27,7 +30,7 @@ module lifecycle {
     candidateWorker:0,candidateGeneration:0,candidateTransaction:0,candidateInitialized:false,
     candidateReady:false,retiringWorkers:Set(),compiledWorkers:Set(),initializedWorkers:Set(),
     controls:List(),current:emptyRequest,ordinary:List(),ordered:List(),snapshot:emptyRequest,
-    frozen:false,freezeToken:0,disposed:false,deliveries:List(),effects:List(),lastAction:"init",input:{name:"init",request:emptyRequest,worker:0,phase:"",observed:0},
+    frozen:false,freezeToken:0,disposed:false,deliveries:List(),effects:List(),lastAction:"init",input:{name:"init",request:emptyRequest,worker:0,phase:"",observed:0,authorityWorker:0,authorityGeneration:0},
   }
   pure def effect(kind: str,r: Request): Effect = {
     kind:kind,request:r.id,generation:r.generation,worker:r.worker,
@@ -134,7 +137,7 @@ module lifecycle {
   }
   // Original input is retained even if expiry removes its request or worker.
   // Handler runs at the already-clamped event clock; it never advances time.
-  pure def input(name: str,r: Request,worker: int,phase: str): Input = {name:name,request:r,worker:worker,phase:phase,observed:0}
+  pure def input(name: str,r: Request,worker: int,phase: str): Input = {name:name,request:r,worker:worker,phase:phase,observed:0,authorityWorker:0,authorityGeneration:0}
   pure def requestPresent(s: State,r: Request): bool = pending(s).foldl(false,(found,p)=>found or (p.id==r.id and p.worker==r.worker and p.generation==r.generation))
   pure def handle(s: State,e: Input): State = {
     val r=e.request
@@ -206,8 +209,9 @@ module lifecycle {
       else if(e.name=="initialize")requestFor(captured,e.worker,if(e.worker==s.activeWorker)s.activeGeneration else s.candidateGeneration,"initialize","allocate-descriptor",Ordinary)
       else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown" or e.name=="terminal")requestFor(captured,s.activeWorker,s.activeGeneration,if(e.name=="shutdown")"shutdown" else "process",if(e.name=="shutdown")"shutdown" else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
       else e.request
-    val original={...e,request:if(e.name=="terminal"){...r,retire:true}else r,observed:observed}
     val expired=expireAtState(s,time)
+    val original={...e,request:if(e.name=="terminal"){...r,retire:true}else r,observed:observed,
+      authorityWorker:expired.activeWorker,authorityGeneration:expired.activeGeneration}
     val result=handle({...expired,effects:List()},original)
     {...result,effects:expired.effects.concat(result.effects),input:original,lastAction:if(e.name=="timer" and expired.effects.length()>0)expired.lastAction else result.lastAction}
   }
@@ -300,7 +304,17 @@ module lifecycle {
   pure def orderedIdsAreIncreasing(rs: List[Request]): bool = rs.foldl({ok:true,last:0},(p,r)=>{ok:p.ok and r.id>p.last,last:r.id}).ok
   pure def hasEffect(es: List[Effect],kind: str): bool = es.foldl(false,(found,e)=>found or e.kind==kind)
   val singleTerminalDelivery = state.deliveries.foldl(Set(),(seen,id)=>seen.union(Set(id))).size()==state.deliveries.length()
-  val staleCannotBeCurrent = state.effects.foldl(true,(valid,e)=>valid and (e.kind!="settleCurrent" or e.generation==state.activeGeneration))
+  // Current classification belongs to the handled event's authority before its
+  // effects retire the session. Final activeGeneration is intentionally zero then.
+  // Request/event binding and both authority components still reject stale results.
+  pure def currentResultsHaveAuthority(s: State): bool = s.effects.foldl(true,(valid,e)=>valid and
+    (e.kind!="settleCurrent" or and {
+      Set("compiled","initialized","complete").contains(s.input.name),
+      s.input.authorityWorker!=0,s.input.authorityGeneration!=0,
+      e.request==s.input.request.id,e.worker==s.input.request.worker,e.generation==s.input.request.generation,
+      e.worker==s.input.authorityWorker,e.generation==s.input.authorityGeneration,
+    }))
+  val staleCannotBeCurrent = currentResultsHaveAuthority(state)
   val candidateHasNoAuthority = state.candidateWorker==0 or state.candidateGeneration!=state.activeGeneration
   val workerCapacityIncludesRetiring = live(state).size()<=4
   val queuesBounded = state.ordinary.length()<=4 and state.ordered.length()+(if(state.current.submission==Ordered)1 else 0)<=256 and realtimeBytes(state)<=4194304
@@ -455,8 +469,9 @@ module compatibleLifecycle {
       else e.request
     val admission=Set("loadInitial","prepareCandidate","initialize","ordinary","ordered","snapshot","shutdown","terminal").contains(e.name)
     val selected=if(admission){...r,deadline:dueFor(time,limits),bytes:bytes,retire:e.name=="terminal"}else r
-    val original={...e,request:selected,observed:observed}
     val expired=expireCompatible(projectedHost(c),time)
+    val original={...e,request:selected,observed:observed,
+      authorityWorker:expired.activeWorker,authorityGeneration:expired.activeGeneration}
     val following=handleCompatible({...c,held:expired.snapshot,host:{...expired,snapshot:emptyRequest,effects:List()},limits:if(admission)c.limits.put(selected.id,limits)else c.limits,selected:limits},original)
     {...following,host:{...following.host,input:original,effects:expired.effects.concat(following.host.effects),lastAction:if(e.name=="timer" and expired.effects.length()>0)expired.lastAction else following.host.lastAction}}
   }
@@ -571,5 +586,5 @@ module compatibleLifecycle {
   val sawTerminalAdmission = compatibleState.host.current.retire or compatibleState.host.ordinary.select(r=>r.retire).length()>0
   val sawTerminalRetirement = compatibleState.host.disposed and compatibleState.host.lastAction=="retireSession"
   val selectedDisposedHasNoDispatch = not(compatibleState.host.disposed) or compatibleState.host.effects.select(fx=>fx.kind=="post" or fx.kind=="armTimer").length()==0
-  val compatibilitySafe = and {selectedDisposedHasNoDispatch,compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
+  val compatibilitySafe = and {currentResultsHaveAuthority(compatibleState.host),selectedDisposedHasNoDispatch,compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
 }

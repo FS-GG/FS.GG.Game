@@ -53,6 +53,7 @@ if (( status == 0 )); then
   export QUINT
   QUINT="$(command -v quint)"
   export TMPDIR="$output/work"
+  export WASM_TRACE_DIAGNOSTIC_DIR="$output/work"
   # One original 20-minute process-group deadline for BOTH sequential generators.
   # V8 old-space and RLIMIT_FSIZE are not aggregate RSS or filesystem quotas.
   set +e

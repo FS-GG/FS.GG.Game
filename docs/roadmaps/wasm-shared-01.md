@@ -1,5 +1,44 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## First hosted terminal trace attempt and model authority correction
+
+The separately admitted trace preparation [39002952646](https://github.com/FS-GG/FS.GG.Game/actions/runs/39002952646),
+attempt 1 at `f57a83f5dad5a733b5acef4ed6f41628adfc9da2`, failed. Exact checkout,
+dispatch guards, cold static preflight and Node/Quint setup passed. The default
+generator passed its preceding five schedules, then Quint reported `Invariant
+violated` for `terminalBefore` (`lifecycleSafe`, seed 20261002, ten steps).
+The remaining default schedules and all sixteen selected schedules were unreached.
+Artifact `12089723109`, outer SHA256
+`31e2743fdbaef0decb4a7db9bea33c50dfa0ee0546082110bda2fc0fcc7f476a`,
+retains the manifest and complete 1178-byte failure log. It accepts no fixture
+outputs or qualification. The original process returned; collection reported no
+errors and removed owned scratch. Full descendant settlement is not established.
+No counterexample ITF or failing conjunct was retained, so the exact invariant
+conjunct diagnosis is a source-supported inference rather than executed evidence.
+
+The old current-result invariant compared a terminal result's preserved generation
+with final `activeGeneration`, which retirement intentionally clears to zero.
+The model-only correction captures active worker/generation after expiry and before
+the actual event handler in observational input metadata. Current results must match
+that authority, the handled request and a valid result event. This preserves stale
+worker/generation/request/event rejection without exempting disposed states. Both
+default and selected event boundaries capture the same provenance; production
+reducer, Host, result classification and Worker ABI are unchanged. Existing selected
+model tests gain prepared terminal, expiry, historical and forged-authority controls;
+these tests and the changed model have not been run.
+
+Both maintained generators reuse one original-call wrapper in the existing projection
+helper. Each scheduled output is removed immediately before its original Quint call,
+so historical bytes cannot masquerade as a fresh failed counterexample. Original
+Quint stdout joins the bounded generation log. On failure, exact schedule/argv/status
+and any fresh ITF are retained under the existing diagnostic window: at most 4 MiB
+of counterexample bytes plus bounded metadata, sharing the total 8-MiB retained
+budget with the log. Missing, partial, truncated or unavailable evidence is explicit;
+collection runs before scratch removal and never accepts failed output as fixtures.
+No extra Quint invocation or generated-fixture hand edit is introduced. Original
+failure remains historical; a repaired source, independent review and separately
+admitted new operation are needed before another generation attempt.
+
 ## Bounded hosted trace preparation for the terminal correction
 
 Source preparation adds explicit `generate-traces` manual mode to the existing

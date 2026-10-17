@@ -157,6 +157,38 @@ for deadline,now,expected in [('1300','1000',0),('1001','1000',0),('1000','1000'
  result=subprocess.run(['bash','--noprofile','--norc','-c','setup_window_open() {\n'+cutoff+'\n}\nsetup_window_open "$1" "$2"','inert-cutoff',deadline,now])
  assert result.returncode==expected,(deadline,now)
 assert wrapper.index('setup_window_open "$setup_deadline" "$setup_now"')<wrapper.index('generation_started=true')
+# Only the existing projection helper is imported; both executable generators
+# remain unimported. subprocess.run is doubled, so these are diagnostic data controls.
+projection_spec=importlib.util.spec_from_file_location('trace_projection',repo/'tests/Wasm.Lifecycle.Correspondence/generate-traces.py')
+projection=importlib.util.module_from_spec(projection_spec);projection_spec.loader.exec_module(projection)
+with tempfile.TemporaryDirectory(prefix='wasm-failed-schedule-inert-') as raw:
+ directory=pathlib.Path(raw)
+ for case in ('fresh','absent','partial','prefix','capture-failure','logging-failure','linked-fresh'):
+  trace=directory/'trace.itf.json';trace.write_bytes(b'historical fixture sentinel')
+  diagnostic=directory/case;diagnostic.mkdir()
+  if case in ('capture-failure','logging-failure'):diagnostic.rmdir()
+  def failed_call(command,check):
+   assert check and not trace.exists(),'old fixture was not removed before the original call'
+   if case=='linked-fresh':trace.symlink_to(directory/'historical-target')
+   elif case=='partial':trace.write_bytes(b'{')
+   elif case=='prefix':trace.write_bytes(b'x'*(4*1024*1024+1))
+   elif case!='absent':trace.write_text(json.dumps({'#meta':{},'vars':[],'states':[{}],'inert':True}))
+   raise subprocess.CalledProcessError(7,command)
+  with patch.dict(projection.os.environ,{'WASM_TRACE_DIAGNOSTIC_DIR':str(diagnostic)}),patch.object(projection.subprocess,'run',failed_call):
+   try:
+    if case=='logging-failure':
+     with patch('builtins.print',side_effect=[None,OSError('inert log failure')]):projection.run_quint_schedule(['inert-quint'],'inert-schedule',trace)
+    else:
+     with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(io.StringIO()):projection.run_quint_schedule(['inert-quint'],'inert-schedule',trace)
+   except subprocess.CalledProcessError as error:assert error.returncode==7
+   else:raise AssertionError('original failure was replaced')
+  if case not in ('capture-failure','logging-failure','linked-fresh'):
+   record=json.loads((diagnostic/'failure-schedule.json').read_text());assert record['schedule']=='inert-schedule' and record['exitCode']==7
+   if case=='absent':assert record['counterexample'] is None and record['gap']
+   else:
+    assert (diagnostic/'counterexample.itf').stat().st_size<=4*1024*1024
+    assert record['counterexample']['usableItf']==(case=='fresh')
+    assert bool(record['gap'])==(case!='fresh')
 head='a'*40
 env={'GITHUB_EVENT_NAME':'workflow_dispatch','WASM_TRACE_MODE':'generate-traces','WASM_TRACE_EXPECTED_HEAD':head,
      'GITHUB_SHA':head,'GITHUB_WORKFLOW_SHA':head,'GITHUB_REF':'refs/heads/source-candidate'}
@@ -189,7 +221,7 @@ with patch.object(m,'git',fake_git):
    except ValueError:pass
    else:raise AssertionError('missing tool admitted')
   assert not output.exists(),'missing prerequisite created execution output'
-  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure','hardlinked-trace'):
+  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure','hardlinked-trace','failed-evidence','unexpected-failure-evidence'):
    output=pathlib.Path(raw)/case
    with patch.object(m.shutil,'which',lambda name:str(inert_tool)):
     m.prepare(root,output,env)
@@ -197,7 +229,11 @@ with patch.object(m,'git',fake_git):
     target=root/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'inert output control\n')
    (output/'work/generation.log').write_text('inert diagnostic\n')
    (output/'work/stages.jsonl').write_text('\n'.join(json.dumps({'generator':name,'exitCode':0}) for name in ('default','compatible'))+'\n')
-   status=7 if case in ('failed-generator','primary-and-collection-failure') else (2 if case=='tool-prerequisite' else 0)
+   status=7 if case in ('failed-generator','primary-and-collection-failure','failed-evidence') else (2 if case=='tool-prerequisite' else 0)
+   if case in ('failed-evidence','unexpected-failure-evidence'):
+    (output/'work/failure-schedule.json').write_text(json.dumps({'schedule':'inert-failed','exitCode':7,'gap':'inert control only'}))
+    (output/'work/counterexample.itf').write_bytes(b'x'*(4*1024*1024))
+    (output/'work/generation.log').write_bytes(b'x'*(5*1024*1024))
    cleanup='unknown-timeout-or-signal' if case=='unknown-cleanup' else ('not-started' if case=='tool-prerequisite' else 'generator-process-returned')
    if case=='extra-trace':(root/m.DEFAULT/'Traces/unexpected.itf.json').write_bytes(b'extra')
    if case in ('linked-trace','hardlinked-trace'):(root/paths[0]).unlink();(root/paths[0]).symlink_to(root/paths[1])
@@ -218,6 +254,10 @@ with patch.object(m,'git',fake_git):
    assert manifest['fixturePreparationComplete']==(case=='good'),case
    assert manifest['qualification'] is False and manifest['publication'] is False
    if case in ('failed-generator','primary-and-collection-failure'):assert result==7 and manifest['outputs']==[] and manifest['firstFailure']=='generator process exited 7'
+   if case=='failed-evidence':
+    assert sum(item['retainedBytes'] for item in manifest['diagnostics'])<=8*1024*1024
+    assert manifest['failedSchedule']['schedule']=='inert-failed' and manifest['outputs']==[]
+    with m.zipfile.ZipFile(output/'artifact/trace-preparation.zip') as archive:assert set(archive.namelist())=={'manifest.json','generation.log','failure-schedule.json','counterexample.itf'}
    if case=='tool-prerequisite':assert manifest['generationStarted'] is False and manifest['generationExitCode'] is None and manifest['firstFailure']=='tool prerequisite exited 2'
    if case in ('collection-failure','primary-and-collection-failure'):assert not (output/'artifact/trace-preparation.zip').exists()
    if case=='cleanup-failure':assert manifest['scratchCleanup']=='failed'
