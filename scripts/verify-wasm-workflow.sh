@@ -173,6 +173,7 @@ with patch.object(m,'git',fake_git):
   for name in m.MODEL_INPUTS:
    target=root/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(repo/name,target)
   for directory in (m.DEFAULT+'/Traces',m.SELECTED+'/Traces'):(root/directory).mkdir(parents=True)
+  inert_tool=pathlib.Path(raw)/'inert-tool';inert_tool.write_bytes(b'inert tool identity; never executed\n')
   output=pathlib.Path(raw)/'missing-tools'
   with patch.object(m.shutil,'which',lambda name:None):
    try:m.prepare(root,output,env)
@@ -181,7 +182,8 @@ with patch.object(m,'git',fake_git):
   assert not output.exists(),'missing prerequisite created execution output'
   for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure'):
    output=pathlib.Path(raw)/case
-   m.prepare(root,output,env)
+   with patch.object(m.shutil,'which',lambda name:str(inert_tool)):
+    m.prepare(root,output,env)
    for name in paths:
     target=root/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'inert output control\n')
    (output/'work/generation.log').write_text('inert diagnostic\n')
