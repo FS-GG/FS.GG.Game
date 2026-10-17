@@ -23,6 +23,8 @@ INSTALLED_PATHS = frozenset({
     'tests/release/wasm/test-release-promotion.py',
     'docs/roadmaps/wasm-shared-01.md',
     'docs/atlas/catalog.json',
+    'docs/atlas/records/71bc29a175940d22dd1d85148ee49f47aed714395fbd51d07b8751147815a55f.json',
+    'docs/atlas/records/ab69ebe00eac40c68aec6131ef0559967b399266aae89f9673d3c30ce12f36b0.json',
 })
 
 
