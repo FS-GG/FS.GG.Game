@@ -24,11 +24,14 @@ The reducer clears active/candidate/retiring/controls/queues/held state before e
 workers, timers and followers retire before publishing the preserved actual result.
 Terminal dispatch arms its watchdog before posting so a synchronous transport
 completion can cancel it without an outer batch arming a stale timer afterward.
-For a batch selecting a terminal current request, Host mechanically rechecks pure
-Lifecycle eligibility before that request's timer arm/post. Earlier synchronous
-callbacks, including timer expiry or a previous result disposing the session,
-therefore suppress stale terminal effects. Normal batches and Freeze retention of
-an already selected current request retain their existing behavior.
+Host interprets effects individually and mechanically rechecks pure Lifecycle
+eligibility before each one. Disposed sessions cannot post or arm, including an
+ordinary ancestor resuming after nested terminal completion. For a batch selecting
+a terminal current request, the guard additionally checks its exact current
+identity/correlation and timer phase. Earlier synchronous expiry, previous-result
+callbacks or replacement therefore suppress stale terminal effects. Ordinary live
+reducer behavior/effect order and Freeze retention of an already selected current
+request retain their existing behavior.
 Queued cancellation, invalid-limit refusal, ordinary admission ceilings and captured
 composite deadlines retain their existing behavior. BAR normal invocation/shutdown
 and SC2 normal ordinary/ordered/snapshot/replacement paths retain their selected behavior.

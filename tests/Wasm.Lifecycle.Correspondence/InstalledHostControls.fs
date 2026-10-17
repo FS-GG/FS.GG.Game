@@ -198,7 +198,7 @@ let terminalReentrantAdmissionControls selectedSettings =
     let correlation (id:HostIdentity) = OperationToken.create $"request-{id.Generation}-{id.Request}" |> unwrap
     let outcome phase id = { Identity=id;Phase=phase;State=Succeeded;Dispatch=Dispatched;CleanupFault=None;CopiedOutput=Array.empty;EffectEligibility=ProductAdapterMustDecide }
     let limits = { MaximumDeadlineMilliseconds=5;MaximumOutputBytes=64;EnclosingDeadlineMilliseconds=None }
-    for connected, mode in [ for connected in [false;true] do for mode in ["timer-expiry";"previous-dispose";"previous-replace";"previous-phase"] do yield connected,mode ] do
+    for connected, mode in [ for connected in [false;true] do for mode in ["timer-expiry";"previous-dispose";"previous-replace";"previous-phase";"ordinary-ancestor"] do yield connected,mode ] do
         let mutable host:Host option=None
         let mutable now=0L
         let mutable fired=false
@@ -219,10 +219,17 @@ let terminalReentrantAdmissionControls selectedSettings =
                 | "previous-dispose" -> host.Value.Dispose(1L)
                 | "previous-replace" -> host.Value.Load(1L,{WorkerInstance="replacement";Request=9UL;Generation=2UL},[|0uy|])
                 | "previous-phase" -> host.Value.Observe(1L,reset.WorkerInstance,PhaseObserved(reset,correlation reset,AllocateInput))
+                | "ordinary-ancestor" -> host.Value.SubmitLimited(1L,LimitedInvokeAndRetire(reset,[|2uy|]),limits) |> unwrap
                 | _ -> ()
             if result.Identity=reset && mode="timer-expiry" then
                 require terminated "timeout retires worker before callback"
                 require armed.IsEmpty "timeout cancels all owned timers before callback"
+        let observedPost request =
+            if mode="ordinary-ancestor" then
+                if request=previous.Request && not fired then
+                    host.Value.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
+                elif request=reset.Request then
+                    host.Value.Observe(2L,reset.WorkerInstance,InvocationObserved(outcome Process reset,correlation reset))
         let arm key callback =
             armed <- armed.Add key
             if key.Contains(":4:") then
@@ -234,7 +241,10 @@ let terminalReentrantAdmissionControls selectedSettings =
         let transport:HostTransport =
             { Now=(fun () -> now)
               CreateWorker=(fun _ _ -> ())
-              PostCommand=(fun _ command -> if command.Identity.Request="4" then terminalPosts <- terminalPosts+1)
+              PostCommand=(fun _ command ->
+                  let request=UInt64.Parse command.Identity.Request
+                  if request=reset.Request then terminalPosts <- terminalPosts+1
+                  observedPost request)
               TerminateWorker=(fun _ -> terminated <- true)
               ArmTimer=(fun key _ callback -> arm key callback)
               CancelTimer=(fun key -> armed <- armed.Remove key) }
@@ -245,7 +255,9 @@ let terminalReentrantAdmissionControls selectedSettings =
                 | TerminateWorker _ -> terminated <- true
                 | ArmTimer(timer,_) -> arm (terminalKey timer) (fun () -> host.Value.ObserveTimer(now,timer))
                 | CancelTimer timer -> armed <- armed.Remove (terminalKey timer)
-                | PostToWorker(_,command) when command.Identity=reset -> terminalPosts <- terminalPosts+1
+                | PostToWorker(_,command) ->
+                    if command.Identity=reset then terminalPosts <- terminalPosts+1
+                    observedPost command.Identity.Request
                 | _ -> ()
         host <- Some((if connected then Host.CreateConnected(selectedSettings,transport,settle) else Host.Create(selectedSettings,interpret)) |> unwrap)
         let h=host.Value
@@ -258,10 +270,16 @@ let terminalReentrantAdmissionControls selectedSettings =
         results <- [];terminated <- false
         if mode<>"timer-expiry" then
             h.SubmitLimited(0L,LimitedInvoke(previous,Ordinary,[|1uy|]),{limits with MaximumDeadlineMilliseconds=100}) |> unwrap
-        h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|2uy|]),limits) |> unwrap
-        if mode<>"timer-expiry" then h.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
+        if mode<>"ordinary-ancestor" then
+            h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|2uy|]),limits) |> unwrap
+            if mode<>"timer-expiry" then h.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
         require fired "intended synchronous callback occurred"
-        if mode="previous-phase" then
+        if mode="ordinary-ancestor" then
+            require (terminalPosts=1 && terminalArms=1) "nested terminal dispatch occurs once"
+            require h.Projection.Disposed "nested terminal retires whole session"
+            require armed.IsEmpty "ordinary ancestor cannot arm its old timer after nested terminal retirement"
+            require ((results |> List.filter(fun result -> result.Identity=reset)).Length=1) "nested terminal settles exactly once"
+        elif mode="previous-phase" then
             require (terminalPosts=1 && terminalArms=1) "current terminal posts once with only its new phase timer"
             require (armed=Set.singleton(terminalKey {terminalTimer with Phase=AllocateInput})) "old precomputed phase timer cannot be armed"
         else

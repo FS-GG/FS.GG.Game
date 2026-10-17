@@ -8,12 +8,10 @@ type EffectInterpreter = HostEffect list -> unit
 type Host private (initialState: HostState, interpret: EffectInterpreter) =
     let mutable state = initialState
     let interpretEffects effects =
-        match Lifecycle.terminalDispatchIdentity state with
-        | None -> interpret effects
-        | Some identity ->
-            for effect in effects do
-                if Lifecycle.terminalEffectEligible identity effect state then
-                    interpret [ effect ]
+        let terminalIdentity = Lifecycle.terminalDispatchIdentity state
+        for effect in effects do
+            if Lifecycle.effectEligible terminalIdentity effect state then
+                interpret [ effect ]
 
     let applyDecision (decision:HostDecision) =
         state <- decision.State

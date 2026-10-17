@@ -1490,19 +1490,22 @@ module Lifecycle =
     let internal terminalDispatchIdentity (HostState state) =
         state.Current |> Option.filter _.RetireSession |> Option.map _.Identity
 
-    let internal terminalEffectEligible identity effect (HostState state) =
-        let current =
-            state.Current
-            |> Option.filter (fun pending ->
-                not state.Disposed && pending.RetireSession && pending.Identity = identity)
+    let internal effectEligible terminalIdentity effect (HostState state) =
         match effect with
-        | ArmTimer(timer, _) when timer.Identity = identity ->
-            current |> Option.exists (fun pending ->
-                timer.Correlation = token pending.Identity && timer.Phase = pending.Phase)
-        | PostToWorker(worker, command) when command.Identity = identity ->
-            current |> Option.exists (fun pending ->
-                worker = pending.Identity.WorkerInstance && command.Correlation = token pending.Identity)
-        | _ -> true
+        | PostToWorker _
+        | ArmTimer _ when state.Disposed -> false
+        | _ ->
+            let current identity =
+                state.Current
+                |> Option.filter (fun pending -> pending.RetireSession && pending.Identity = identity)
+            match terminalIdentity, effect with
+            | Some identity, ArmTimer(timer, _) when timer.Identity = identity ->
+                current identity |> Option.exists (fun pending ->
+                    timer.Correlation = token pending.Identity && timer.Phase = pending.Phase)
+            | Some identity, PostToWorker(worker, command) when command.Identity = identity ->
+                current identity |> Option.exists (fun pending ->
+                    worker = pending.Identity.WorkerInstance && command.Correlation = token pending.Identity)
+            | _ -> true
 
     /// Typed admission captures a fresh request budget without mutating any loaded ceiling.
     let submitLimited now requested (limits: RequestLimits) (HostState original) =
