@@ -23,7 +23,9 @@ else:
 ET.SubElement(deps,'package',pattern='FSharp.Core');ET.ElementTree(root).write(sys.argv[1],encoding='unicode')
 PY
 python3 "$repo/scripts/wasm-release/promotion.py" check-feed --output "$config" --feed "$feed"
-export WASM_BASELINE_QUALIFICATION_ROOT="$q" WASM_INSTALLED_CONFIG="$config" WASM_CANDIDATE_VERSION=0.3.0
+version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
+[[ "$version" == 0.4.0 && "${RELEASE_VERSION:?}" == "$version" ]] || { echo 'requires selected current installed version' >&2; exit 2; }
+export WASM_BASELINE_QUALIFICATION_ROOT="$q" WASM_INSTALLED_CONFIG="$config" WASM_CANDIDATE_VERSION="$version"
 export WASM_FSC_COMPILER_PATH="$q/compiler/fsc.dll" DOTNET_HOST_PATH=/usr/share/dotnet/dotnet
 export NUGET_HTTP_CACHE_PATH="${output}-http-cache"
 "$repo/scripts/verify-wasm-supervisor.sh" --feed-only "$output"
@@ -41,13 +43,9 @@ for actual,official in [
 PYJOIN
 # The browser adapter accepts ONLY this actually restored cache path. It does not
 # extract any preparation/custody archive to substitute an installed worker.
-export WASM_INSTALLED_BROWSER_ARCHIVE="$output/packages/fs.gg.wasm.browser/0.3.0/fs.gg.wasm.browser.0.3.0.nupkg"
+export WASM_INSTALLED_BROWSER_ARCHIVE="$output/packages/fs.gg.wasm.browser/$version/fs.gg.wasm.browser.$version.nupkg"
 export WASM_WASI_SDK_ROOT="$q/wasi/wasi-sdk-34.0-x86_64-linux"
 (cd "$repo/tests/Wasm.Supervisor.Compatibility/browser" && npm ci --ignore-scripts && npx playwright install chromium)
 "$repo/scripts/verify-wasm-supervisor-browser.sh" --feed-only "$output" "${output}-browser"
-if [[ -n "${EXECUTION_BINDING:-}" ]]; then
-  cmp <(python3 -c 'import json,os;print(json.dumps(json.loads(os.environ["EXECUTION_BINDING"]),sort_keys=True,indent=2))') "$receipts/successor-execution-binding.json"
-  cp "$receipts/successor-execution-binding.json" "$output/"
-fi
 cp "$config" "$receipts/release-manifest.json" "$receipts/promotion-binding.json" "$output/"
-printf 'wasm-installed-supervisor: feed=%s default47+selected13 dotnet+fable both-facades browsers=8 locked-cache-worker=verified local-fallback=none\n' "$feed"
+printf 'wasm-installed-supervisor: feed=%s current-default+selected dotnet+fable both-facades browsers=current locked-cache-worker=verified local-fallback=none\n' "$feed"

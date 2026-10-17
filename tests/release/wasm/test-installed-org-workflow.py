@@ -21,7 +21,7 @@ def validate(candidate):
     assert re.findall(r'(?m)^      (actions|contents|packages): (\S+)$',grant)==[('actions','read'),('contents','read'),('packages','read')], "installed evidence endpoints require scoped Actions read"
     assert "packages: read" in candidate and candidate.count("    runs-on:") == 1
     assert all(value not in candidate for value in ("packages: write", "contents: write", "id-token:", "dotnet pack", "nuget push", "gh release", "git tag"))
-    for name in ("version", "published_source", "qualifier_source", "manifest_sha256", "sdk_sha256", "accepted_executor", "promotion_binding_sha256", "execution_binding"):
+    for name in ("version", "published_source", "qualifier_source", "manifest_sha256", "sdk_sha256", "accepted_executor", "promotion_binding_sha256"):
         assert f"      {name}:" in candidate and f"${{{{ inputs.{name} }}}}" in candidate
     assert "feed: [org, public]" in candidate and "max-parallel: 1" in candidate
     assert "https://nuget.pkg.github.com/FS-GG/index.json" in candidate and "https://api.nuget.org/v3/index.json" in candidate
@@ -54,19 +54,19 @@ for broken in (
     else:
         raise SystemExit("known-bad installed qualification route accepted")
 
-values = {"RELEASE_VERSION": "0.2.0", "PUBLISHED_SOURCE": "a" * 40, "QUALIFIER_SOURCE": "b" * 40, "MANIFEST_SHA256": "c" * 64, "SDK_SHA256": "d" * 64}
-assert binding.checked_inputs(values, "0.2.0") == values
-for key, value in (("PUBLISHED_SOURCE", "main"), ("QUALIFIER_SOURCE", "wasm/v0.2.0"), ("SDK_SHA256", "unknown"), ("RELEASE_VERSION", "0.1.1"), ("MANIFEST_SHA256", "$(false)")):
+values = {"RELEASE_VERSION": "0.4.0", "PUBLISHED_SOURCE": "a" * 40, "QUALIFIER_SOURCE": "a" * 40, "ACCEPTED_EXECUTOR": "a" * 40, "PROMOTION_BINDING_SHA256": "e" * 64, "MANIFEST_SHA256": "c" * 64, "SDK_SHA256": "d" * 64}
+assert binding.checked_inputs(values, "0.4.0") == values
+for key, value in (("PUBLISHED_SOURCE", "main"), ("QUALIFIER_SOURCE", "wasm/v0.4.0"), ("SDK_SHA256", "unknown"), ("RELEASE_VERSION", "0.1.1"), ("MANIFEST_SHA256", "$(false)")):
     try:
-        binding.checked_inputs(dict(values, **{key: value}), "0.2.0")
+        binding.checked_inputs(dict(values, **{key: value}), "0.4.0")
     except AssertionError:
         pass
     else:
         raise SystemExit(f"unbound dispatch {key} accepted")
-release = {"tag_name": "wasm/v0.2.0", "draft": False, "prerelease": False, "published_at": "2026-10-02T00:00:00Z", "assets": []}
-for name, digest in (("release-manifest.json", "c" * 64), ("fsgg-wasm-sdk-0.2.0.tar.gz", "d" * 64)):
-    release["assets"].append({"name": name, "digest": "sha256:" + digest, "browser_download_url": f"https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v0.2.0/{name}"})
-assert len(binding.validate_release(release, values)) == 2
+release = {"tag_name": "wasm/v0.4.0", "draft": False, "prerelease": False, "published_at": "2026-10-02T00:00:00Z", "assets": []}
+for name, digest in (("release-manifest.json", "c" * 64), ("fsgg-wasm-sdk-0.4.0.tar.gz", "d" * 64), ("promotion-binding.json", "e" * 64)):
+    release["assets"].append({"name": name, "digest": "sha256:" + digest, "browser_download_url": f"https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v0.4.0/{name}"})
+assert len(binding.validate_release(release, values)) == 3
 for mutant in ("digest", "url", "draft", "version", "missing"):
     broken = copy.deepcopy(release)
     if mutant == "digest": broken["assets"][0]["digest"] = "sha256:" + "0" * 64
@@ -81,38 +81,7 @@ for mutant in ("digest", "url", "draft", "version", "missing"):
     else:
         raise SystemExit(f"native release {mutant} mismatch accepted")
 
-# Exercise the historical 0.2 audit with its exact reviewed qualifier bytes.
-# These maintained fixtures were copied from immutable 4163448cfc69d428e136853212765690265b92c6
-# and are checked by the unchanged production blob/SHA256 predicates below.
-# Current consumer source can evolve; clean shallow CI requires no history fetch.
-import hashlib
 import json
-source = "4afacb501b9371b4cc81494b7bf91b46c880a663"
-audit = json.loads((root / "scripts/wasm-release/installed-qualification-audit.json").read_text())
-producer = {row["path"]: {"blob": row["producerBlob"], "sha256": row["producerSha256"]} for row in audit["files"]}
-qualifier_bytes = {path: (root / "tests/release/wasm/fixtures" / ("historical-0.2-consumer-" + pathlib.Path(path).name)).read_bytes()
-                   for path in binding.AUDITED_CONSUMER_PATHS}
-qualifier = {path: binding.fingerprint(data) for path, data in qualifier_bytes.items()}
-changed = sorted(binding.AUDITED_CONSUMER_PATHS)
-binding.validate_consumer_audit(audit, source, "0.2.0", changed, producer, qualifier)
-for mutation in ("extra-consumer", "changed-spec", "changed-projection", "wrong-producer", "extra-audit-path", "duplicate-row", "wrong-blob"):
-    broken = copy.deepcopy(audit)
-    names = list(changed)
-    bytes_ = dict(qualifier)
-    producer_source = source
-    if mutation == "extra-consumer": names.append("tests/Wasm.PackageConsumer/browser/package-consumer.mjs")
-    elif mutation == "changed-spec": bytes_["tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs"] = binding.fingerprint(qualifier_bytes["tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs"] + b"\n// unreviewed relaxation")
-    elif mutation == "changed-projection": bytes_["tests/Wasm.PackageConsumer/Program.fs"] = binding.fingerprint(qualifier_bytes["tests/Wasm.PackageConsumer/Program.fs"] + b"\n// unreviewed policy")
-    elif mutation == "wrong-producer": producer_source = "a" * 40
-    elif mutation == "extra-audit-path": broken["files"][0]["path"] = "tests/Wasm.PackageConsumer/browser/package-consumer.mjs"
-    elif mutation == "duplicate-row": broken["files"].append(broken["files"][0])
-    else: broken["files"][0]["producerBlob"] = "0" * 40
-    try:
-        binding.validate_consumer_audit(broken, producer_source, "0.2.0", names, producer, bytes_)
-    except (AssertionError, KeyError):
-        pass
-    else:
-        raise SystemExit(f"unreviewed qualification correction {mutation} accepted")
 # Both traces come from schedules over the unchanged canonical model and preserve full ordered effects.
 trace_root = root / "tests/Wasm.Lifecycle.Correspondence/Traces"
 for timing, order, kinds in (
@@ -125,6 +94,6 @@ for timing, order, kinds in (
     assert [effect["kind"] for effect in state["effects"]] == kinds
     assert state["activeWorker"] == {"#bigint": "0"} and not state["ordinary"]
     assert len(set(order)) == 5
-print("wasm-installed-input-audit: exact-two-reviewed-blobs=pass extra-or-unreviewed-consumer=refused expiry-early-late=canonical")
+print("wasm-installed-input-audit: current-producer=executor promotion=mandatory expiry-early-late=canonical")
 
 print("wasm-installed-preflight: manual=pass read-only=pass serial-two-feeds=pass qualifier=immutable native-receipts=bound negative-controls=pass")

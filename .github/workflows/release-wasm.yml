@@ -4,21 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Read-only prepare by default; promotion requires reviewed original custody
+        description: Promote exact protected-head qualification custody; readback is effect-free
         type: choice
-        options: [prepare, promote, readback, recovery, inspect]
-        default: prepare
+        options: [readback, promote, recovery, inspect]
+        default: readback
       executor:
         description: Exact root-accepted protected executor E
         required: true
         type: string
       reviewed_tuple:
-        description: Root-reviewed preparation/run-attempt/artifact/digest tuple; empty only for prepare
-        required: false
-        type: string
-      execution_binding:
-        description: Separately reviewed closed successor execution binding; empty for prepare/promote
-        required: false
+        description: Root-reviewed protected qualification run/attempt/artifact/digest tuple
+        required: true
         type: string
       first_promotion_run:
         description: Original promotion run for interrupted tag-before-draft recovery
@@ -31,7 +27,7 @@ on:
         type: string
 
 concurrency:
-  group: release-wasm-0.3.0
+  group: release-wasm-current
   cancel-in-progress: false
 
 permissions:
@@ -39,7 +35,6 @@ permissions:
 
 env:
   ACCEPTED_EXECUTOR: ${{ inputs.executor }}
-  EXECUTION_BINDING: ${{ inputs.execution_binding }}
   REVIEWED_TUPLE: ${{ inputs.reviewed_tuple }}
   FIRST_PROMOTION_RUN: ${{ inputs.first_promotion_run }}
   FIRST_PROMOTION_ATTEMPT: ${{ inputs.first_promotion_attempt }}
@@ -64,102 +59,9 @@ jobs:
           [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_SHA" == "$ACCEPTED_EXECUTOR" ]]
           [[ "$(git rev-parse HEAD)" == "$ACCEPTED_EXECUTOR" && -z "$(git status --porcelain)" ]]
           [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" == "$ACCEPTED_EXECUTOR" ]]
-          if [[ "$MODE" == prepare ]]; then [[ -z "$REVIEWED_TUPLE" && -z "$EXECUTION_BINDING" ]]; else [[ -n "$REVIEWED_TUPLE" ]]; fi
-          if [[ "$MODE" == promote ]]; then [[ -z "$EXECUTION_BINDING" ]]; fi
-          if [[ "$MODE" == inspect ]]; then [[ -n "$EXECUTION_BINDING" ]]; fi
+          [[ -n "$REVIEWED_TUPLE" && "$GITHUB_RUN_ATTEMPT" == 1 ]]
+          [[ "$GITHUB_WORKFLOW_SHA" == "$ACCEPTED_EXECUTOR" ]]
           bash tests/release/wasm/test-release-wasm.sh --source-only
-
-  prepare:
-    needs: [preflight]
-    if: inputs.mode == 'prepare'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: producer
-    outputs:
-      artifact_id: ${{ steps.eligible.outputs.artifact-id }}
-      artifact_sha256: ${{ steps.eligible.outputs.artifact-digest }}
-      binding_sha256: ${{ steps.binding.outputs.binding_sha256 }}
-    steps:
-      - name: Checkout protected executor
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          path: executor
-      - name: Checkout protected producer
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c
-          path: producer
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          dotnet-version: '10.0.401'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: '26'
-      - name: Install exact preparation tools
-        run: |
-          set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == 16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c ]]
-          [[ "$(git rev-parse 'HEAD^{tree}')" == f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a ]]
-          dotnet tool restore
-          npm install --global '@informalsystems/quint@0.32.0'
-          rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-unknown
-          rustup default 1.90.0
-          scripts/wasm-release/install-browser-tools.sh
-      - name: Read-only pinned Rust model readiness
-        timeout-minutes: 10
-        env:
-          GH_TOKEN: ${{ github.token }}
-          QUINT_HOME: ${{ runner.temp }}/wasm-quint
-        run: |
-          set -euo pipefail
-          python3 ../executor/scripts/wasm-release/prepare-quint-evaluator.py --producer "$PWD" --quint-home "$QUINT_HOME" --evidence "$RUNNER_TEMP/wasm-prepack-rust"
-          printf 'QUINT_HOME=%s\n' "$QUINT_HOME" >> "$GITHUB_ENV"
-      - name: Prepare protected originals once
-        run: scripts/wasm-release/prepare.sh "$RUNNER_TEMP/wasm-release"
-      - name: Qualify contracts and lifecycle
-        run: |
-          set -euo pipefail
-          scripts/verify-wasm-contracts.sh > "$RUNNER_TEMP/wasm-contracts.log" 2>&1
-          scripts/verify-wasm-lifecycle.sh > "$RUNNER_TEMP/wasm-lifecycle.log" 2>&1
-      - name: Qualify historical packages and SDK
-        run: scripts/verify-wasm-package-consumer.sh --custody "$RUNNER_TEMP/wasm-release" > "$RUNNER_TEMP/wasm-sdk-consumer.log" 2>&1
-      - name: Qualify full selected custody
-        run: scripts/wasm-release/qualify-supervisor-custody.sh --custody "$RUNNER_TEMP/wasm-release" "$RUNNER_TEMP/wasm-selected" > "$RUNNER_TEMP/wasm-selected.log" 2>&1
-      - name: Freeze eligible binding
-        id: binding
-        working-directory: executor
-        run: |
-          set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$ACCEPTED_EXECUTOR" ]]
-          EXECUTOR_TREE="$(git rev-parse 'HEAD^{tree}')"
-          export EXECUTOR_TREE
-          python3 scripts/wasm-release/promotion.py freeze --custody "$RUNNER_TEMP/wasm-release" --output "$RUNNER_TEMP/wasm-release/preparation-binding.json"
-          mkdir "$RUNNER_TEMP/wasm-release/evidence"
-          cp "$RUNNER_TEMP/wasm-contracts.log" "$RUNNER_TEMP/wasm-lifecycle.log" "$RUNNER_TEMP/wasm-sdk-consumer.log" "$RUNNER_TEMP/wasm-selected.log" "$RUNNER_TEMP/wasm-release/evidence/"
-          cp -a "$RUNNER_TEMP/wasm-prepack-rust" "$RUNNER_TEMP/wasm-selected" "$RUNNER_TEMP/wasm-selected-browser" "$RUNNER_TEMP/wasm-selected-baseline/official-core" "$RUNNER_TEMP/wasm-release/evidence/"
-      - name: Retain eligible originals
-        id: eligible
-        uses: actions/upload-artifact@v7
-        with:
-          name: wasm-eligible-${{ github.run_id }}-${{ github.run_attempt }}-0.3.0
-          path: ${{ runner.temp }}/wasm-release/
-          if-no-files-found: error
-          retention-days: 90
-      - name: Retain ineligible failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: wasm-ineligible-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/wasm-*.log
-            ${{ runner.temp }}/wasm-selected/
-            ${{ runner.temp }}/wasm-prepack-rust/
-          if-no-files-found: ignore
-          retention-days: 14
 
   admission:
     needs: [preflight]

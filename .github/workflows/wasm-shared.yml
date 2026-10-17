@@ -78,7 +78,7 @@ on:
         default: qualify
         required: true
       expected-head:
-        description: Exact reviewed 40-hex workflow/source head for generate-traces
+        description: Exact reviewed protected head for dispatch custody or trace generation
         type: string
         default: ""
         required: false
@@ -101,12 +101,16 @@ jobs:
       RUST_VERSION: 1.90.0
       PLAYWRIGHT_VERSION: 1.63.0
       NODE_OPTIONS: --max-old-space-size=2048
+      WASM_QUALIFY_EXPECTED_HEAD: ${{ inputs.expected-head }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Static workflow preflight
-        run: scripts/verify-wasm-workflow.sh
+        run: |
+          set -euo pipefail
+          scripts/verify-wasm-workflow.sh
+          python3 scripts/wasm-release/promotion.py check-custody-plan
 
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
@@ -167,25 +171,48 @@ jobs:
           git diff --exit-code -- tests/Wasm.Compatibility/modules
 
       - name: Verify compatibility contracts
-        run: scripts/verify-wasm-contracts.sh
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wasm-custody-logs"
+          scripts/verify-wasm-contracts.sh 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/contracts.log"
 
       - name: Verify lifecycle, packages, and Fable consumers
         env:
           QUINT: quint
           WASM_LIFECYCLE_EVIDENCE_DIR: ${{ runner.temp }}/wasm-lifecycle-evidence
-        run: scripts/verify-wasm-lifecycle.sh
+        run: |
+          set -euo pipefail
+          scripts/verify-wasm-lifecycle.sh 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/lifecycle.log"
 
       - name: Run browser Worker conformance
-        run: tests/Wasm.Browser.Conformance/run.sh
+        run: |
+          set -euo pipefail
+          tests/Wasm.Browser.Conformance/run.sh 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/browser.log"
 
       - name: Verify SDK archive and fresh package consumer
         run: |
+          set -euo pipefail
           scripts/wasm-release/prepare.sh artifacts/wasm-release
-          scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release
+          scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/package-consumer.log"
 
       - name: Qualify compatible supervisor source and installed custody
         run: |
-          scripts/wasm-release/qualify-supervisor-custody.sh --custody artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence"
+          set -euo pipefail
+          scripts/wasm-release/qualify-supervisor-custody.sh --custody artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence" 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/supervisor.log"
+
+      - name: Freeze eligible binding
+        id: binding
+        if: ${{ success() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'qualify' && inputs.expected-head == github.sha)) }}
+        run: python3 scripts/wasm-release/promotion.py freeze --custody artifacts/wasm-release --output "$RUNNER_TEMP/wasm-eligible"
+
+      - name: Retain eligible originals
+        if: ${{ success() && steps.binding.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: wasm-eligible-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.binding.outputs.version }}
+          path: ${{ runner.temp }}/wasm-eligible/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Retain bounded public lifecycle model evidence
         if: always()

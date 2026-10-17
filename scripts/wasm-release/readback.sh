@@ -40,9 +40,7 @@ case "$kind" in
         python3 "$repo/scripts/wasm-release/release_manifest.py" compare-package --original "$original" --served "$output/$file" >> "$output/report.jsonl"
       else
         download "https://api.nuget.org/v3-flatcontainer/$lower/$version/$lower.$version.nupkg" "$output/$file"
-        if [[ "$version" == 0.3.0 ]]; then
-          python3 "$repo/scripts/wasm-release/promotion.py" verify-signature --archive "$output/$file" > "$output/$id.signature.log"
-        fi
+        python3 "$repo/scripts/wasm-release/promotion.py" verify-signature --archive "$output/$file" > "$output/$id.signature.log"
         python3 "$repo/scripts/wasm-release/release_manifest.py" compare-package --original "$original" --served "$output/$file" --allow-nuget-signature >> "$output/report.jsonl"
       fi
     done
