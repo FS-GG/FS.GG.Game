@@ -38,6 +38,9 @@ module lifecycle {
     reason:if(kind=="settleTimedOut")"DeadlineExpired" else "",outcome:"",terminalPhase:"",dispatched:false,
   }
   pure def termination(worker: int): Effect = {kind:"terminate",request:0,generation:0,worker:worker,operation:"",phase:"",correlation:0,bytes:0,due:0,reason:"",outcome:"",terminalPhase:"",dispatched:false}
+  pure def dispatchEffects(r: Request): List[Effect] =
+    if(r.retire)List(effect("armTimer",r),effect("post",r))
+    else List(effect("post",r),effect("armTimer",r))
   pure def requestFor(s: State,worker: int,generation: int,operation: str,phase: str,submission: Submission): Request = {
     id:s.nextRequest,worker:worker,generation:generation,deadline:s.clock+250,
     submission:submission,bytes:if(operation=="shutdown")0 else 1,operation:operation,phase:phase,
@@ -59,9 +62,9 @@ module lifecycle {
   pure def dispatchNext(s: State,prefix: List[Effect]): State =
     if(s.current.worker!=0){...s,effects:prefix}
     else if(s.disposed or s.frozen or s.activeWorker==0) {...s,current:emptyRequest,effects:prefix}
-    else if(s.ordinary.length()>0) {...s,current:s.ordinary.head(),ordinary:s.ordinary.tail(),effects:prefix.concat(List(effect("post",s.ordinary.head()),effect("armTimer",s.ordinary.head())))}
-    else if(s.ordered.length()>0) {...s,current:s.ordered.head(),ordered:s.ordered.tail(),effects:prefix.concat(List(effect("post",s.ordered.head()),effect("armTimer",s.ordered.head())))}
-    else if(s.snapshot.worker!=0) {...s,current:s.snapshot,snapshot:emptyRequest,effects:prefix.concat(List(effect("post",s.snapshot),effect("armTimer",s.snapshot)))}
+    else if(s.ordinary.length()>0) {...s,current:s.ordinary.head(),ordinary:s.ordinary.tail(),effects:prefix.concat(dispatchEffects(s.ordinary.head()))}
+    else if(s.ordered.length()>0) {...s,current:s.ordered.head(),ordered:s.ordered.tail(),effects:prefix.concat(dispatchEffects(s.ordered.head()))}
+    else if(s.snapshot.worker!=0) {...s,current:s.snapshot,snapshot:emptyRequest,effects:prefix.concat(dispatchEffects(s.snapshot))}
     else {...s,current:emptyRequest,effects:prefix}
   pure def realtimeBytes(s: State): int = s.ordered.foldl(0,(n,r)=>n+r.bytes)+s.snapshot.bytes+(if(s.current.submission==Ordinary)0 else s.current.bytes)
   pure def submit(s: State,r: Request): State = {
@@ -69,7 +72,7 @@ module lifecycle {
     if(s.disposed)refuse(s,r,"refusedDisposed")
     else if(s.frozen)refuse(s,r,"refusedFrozen")
     else if(s.activeWorker==0 or not(s.initializedWorkers.contains(s.activeWorker)))refuse(s,r,"refused")
-    else if(s.current.worker==0){...s,clock:s.clock,nextRequest:s.nextRequest+1,current:r,effects:List(effect("post",r),effect("armTimer",r)),lastAction:"begin"}
+    else if(s.current.worker==0){...s,clock:s.clock,nextRequest:s.nextRequest+1,current:r,effects:dispatchEffects(r),lastAction:"begin"}
     else if(s.profile==Bar)refuse(s,r,"refusedBusy")
     else if(submission==Ordinary and s.ordinary.length()>=4)refuse(s,r,"refusedQueueFull")
     else if(submission==Ordinary){...s,clock:s.clock,nextRequest:s.nextRequest+1,ordinary:s.ordinary.append(r),effects:List(),lastAction:"queueOrdinary"}
@@ -370,7 +373,7 @@ module compatibleLifecycle {
         val cleared={...c,host:{...h,ordinary:h.ordinary.tail()}}
         if(h.clock>=r.deadline){
           expireHeadCompatible(cleared,r)
-        }else {...cleared,host:{...cleared.host,current:r,effects:List(effect("post",r),effect("armTimer",r))}}
+        }else {...cleared,host:{...cleared.host,current:r,effects:dispatchEffects(r)}}
       }
     val hasSnapshot=(pumped.host.current.worker!=0 and pumped.host.current.submission==Snapshot) or pumped.host.ordinary.foldl(false,(found,r)=>found or r.submission==Snapshot)
     if(pumped.held.worker==0 or pumped.host.disposed or pumped.host.frozen or hasSnapshot)pumped
@@ -382,7 +385,7 @@ module compatibleLifecycle {
         if(pumped.host.clock>=r.deadline){
           val expired=expireHeadCompatible(cleared,r)
           {...expired,host:{...expired.host,effects:pumped.host.effects.concat(expired.host.effects)}}
-        }else {...cleared,host:{...cleared.host,current:r,effects:pumped.host.effects.concat(List(effect("post",r),effect("armTimer",r)))}}
+        }else {...cleared,host:{...cleared.host,current:r,effects:pumped.host.effects.concat(dispatchEffects(r))}}
       }else {...cleared,host:{...cleared.host,ordinary:cleared.host.ordinary.append(r),lastAction:"queueSnapshot"}}
     }
   }

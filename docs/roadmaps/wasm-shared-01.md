@@ -20,6 +20,8 @@ on the admitted request selects session retirement on its matching terminal resu
 including rejected ABI status, trap, timeout, worker loss and cleanup failure.
 The reducer clears active/candidate/retiring/controls/queues/held state before effects;
 workers, timers and followers retire before publishing the preserved actual result.
+Terminal dispatch arms its watchdog before posting so a synchronous transport
+completion can cancel it without an outer batch arming a stale timer afterward.
 Queued cancellation, invalid-limit refusal, ordinary admission ceilings and captured
 composite deadlines retain their existing behavior. BAR normal invocation/shutdown
 and SC2 normal ordinary/ordered/snapshot/replacement paths retain their selected behavior.

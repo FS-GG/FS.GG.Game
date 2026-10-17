@@ -461,11 +461,13 @@ module Lifecycle =
                     Phase = request.Phase
                 }
 
+            let post = PostToWorker(worker.Instance, command)
+            let arm = ArmTimer(timer, request.DeadlineMilliseconds)
+            // A synchronous transport completion may retire this session inside
+            // PostToWorker. Arm first so the nested retirement cancels that timer;
+            // the outer batch then has no stale timer to create after completion.
             { state with Current = Some request },
-            [
-                PostToWorker(worker.Instance, command)
-                ArmTimer(timer, request.DeadlineMilliseconds)
-            ]
+            (if request.RetireSession then [ arm; post ] else [ post; arm ])
 
     let private refuse state request reason action =
         let settled, effects =
