@@ -1,37 +1,55 @@
 # WASM-SHARED-01 — producer qualification successor
 
-## Current 0.4 publication and installed follow-up
+## Current 0.4 producer supplier acceptance
 
-PR714 delivered the current reader to protected producer/publisher
+Published producer and original publisher P remains
 `6732d2371d142d5ccc5d2d127f20e4f179800892`, tree
-`cc71e7cfe73449919376acf775940ff9e8bdab56`. Complete protected qualification
+`cc71e7cfe73449919376acf775940ff9e8bdab56`. Its original protected qualifier
 [39013804889](https://github.com/FS-GG/FS.GG.Game/actions/runs/39013804889),
-attempt 1, passed all eleven maintained gates and retained the independently
-accepted 39-file original custody. Original publication
+attempt 1, passed all eleven maintained gates and retained the accepted 39-file
+custody. Original publication
 [39015233527](https://github.com/FS-GG/FS.GG.Game/actions/runs/39015233527),
-attempt 1, completed and was independently accepted: immutable tag, published
-release, original org pair, genuinely signed public pair, SDK, manifest, checksums
-and durable transaction retain that producer identity.
+attempt 1, published the exact original pair, SDK, manifest and checksums. The tag
+and release retain P; later qualifier source does not replace the publisher.
 
-Fresh installed operation
-[39016307973](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973),
-attempt 1, remains failed. Org's actual consumer qualification passed, then evidence
-upload failed on NuGet HTTP-cache filenames and produced zero artifacts. Public
-was cancelled before execution. PR715 delivered the reviewed P/Q binding and
-bounded evidence collector at qualifier
-`5104205393d45fcc1ce5eacbb40f9a237403634d`, with complete same-tree PR qualification.
-Its fresh both-feed installed operation
-[39020851715](https://github.com/FS-GG/FS.GG.Game/actions/runs/39020851715), attempt 1,
-also remains failed: each feed passed the general consumer's 32 browser tests and
-Rust2/C4 checks, then its first evidence projection refused Fable dependency
-source/support files. Both selected-supervisor phases were unreached. Independent
-review verified both bounded diagnostic archives; final collectors failed as
-ineligible while both uploads succeeded. No both-feed acceptance follows.
-The current correction classifies those dependency roles against original package
-members across the general and selected Fable contexts. Complete new coherent
-qualification and a separately selected installed operation remain required.
-Publication remains accepted at P; consumer adoption remains open. Earlier source
-and operation frontiers below retain their historical scopes.
+PR716 delivered reviewed qualifier Q
+`20c94478f774cd58d8e9c1aaef1b573449570309`, tree
+`382119d7cc95d25eac7558ab4f1645d8dd69844e`. Complete PR qualification
+[39021707772](https://github.com/FS-GG/FS.GG.Game/actions/runs/39021707772),
+attempt 1, passed all maintained gates, with native tested checkout/tree equal to
+the reviewed and delivered tree. Protected-main qualifier
+[39023124943](https://github.com/FS-GG/FS.GG.Game/actions/runs/39023124943), attempt 1,
+also passed all maintained gates at exact Q. Trace generation was skipped in both
+qualifiers; the seven accepted generation inputs and 71 authentic outputs remain
+unchanged. The protected job ran 21m28s within its 35-minute limit, without a claim
+about process RSS or general cold-run fit.
+
+Fresh both-feed installed operation
+[39023332496](https://github.com/FS-GG/FS.GG.Game/actions/runs/39023332496), attempt 1,
+passed org and public qualification, collection and upload. Independent original
+data review accepted both complete raw package/lock/metadata/signature/Core/Worker
+and runtime closures. Each feed executed 53 default and 16 selected CLR/Fable
+correspondence cases, both facades and terminal/profile controls, 32 package and
+10 selected browser cases, and SDK Rust2/C4 checks. Each retained 571 regular
+inner members: 65,279,527 bytes org and 65,347,827 bytes public. Actual archive,
+metadata, log, member and local acquisition bounds fit; these measurements do not
+establish process RSS or global descendant settlement.
+
+The earlier installed originals remain failed:
+[39016307973](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973) lost org
+upload evidence and never ran public;
+[39020851715](https://github.com/FS-GG/FS.GG.Game/actions/runs/39020851715) passed both
+general consumers but refused Fable support-file projection before selected
+qualification. Its valid ineligible diagnostics remain distinct from the accepted
+fresh original. Historical sections below preserve their original scopes.
+
+These results complete the producer terminal/reset correction feeding
+WASM-SHARED-01/.5-P2 and S1. Product adapter
+adoption, native journeys and later shared WASM stages remain separately owned;
+this producer result does not close overall WASM-SHARED-01 or its .7 outcome.
+Installed acceptance names immutable P/Q and original run identities. A later
+owning-documentation capture does not admit a new qualifier or replay that run.
+No package, tag, release or registry mutation follows from this reconciliation.
 
 ## Protected qualification and checkout-reader correction (completed source delivery)
 
@@ -396,28 +414,30 @@ composite deadlines retain their existing behavior. BAR normal invocation/shutdo
 and SC2 normal ordinary/ordered/snapshot/replacement paths retain their selected behavior.
 Product F# still owns closing/reset state and queue-overflow result mapping.
 
-- [ ] Independently review the exact producer correction, canonical model and
+- [x] Independently review the exact producer correction, canonical model and
   prepared focused reducer/facade/installed-browser qualification sources.
-- [ ] Under separately admitted resources, typecheck/run the canonical model and
+- [x] Under separately admitted resources, typecheck/run the canonical model and
   existing boundary/expiry/compatible witnesses, regenerate authentic traces, and
   execute source .NET/Fable correspondence plus both facades and causal mutations.
-- [ ] Execute real installed Worker qualification for terminal success/rejection,
+- [x] Execute real installed Worker qualification for terminal success/rejection,
   traps/cleanup/timeouts, repeated terminal followers, held snapshots and candidate
   retirement; preserve exact ABI evidence and retirement-before-result ordering.
-- [ ] Deliver reviewed source with relevant checks and required coherent CI through
+- [x] Deliver reviewed source with relevant checks and required coherent CI through
   the existing canonical owner route, which programme ownership must reconcile.
-- [ ] Select and qualify an unused coherent successor version, then separately
+- [x] Select and qualify an unused coherent successor version, then separately
   authorize publication and verify fresh both-feed installed readback before an S1
   consumer pin. Published 0.3.0 does not expose this new capability.
 
-Current boundary: source preparation only. Model execution, trace regeneration,
-CLR/Fable/browser/Worker execution, SDK restore/build/pack, remote source delivery,
-publication and installed acceptance have not run for this correction. Committed
-pre-existing generated traces remain historical until the maintained generators run;
-new required mutation checks intentionally depend on those regenerated fixtures.
-The owning shared foundation S1/final .5-P2 contract remains the integration authority.
-No runtime shim, JavaScript queue, transport freeze hook or new guest ABI is selected.
-
+Current producer boundary: authentic trace preparation, source/model/CLR/Fable,
+real Worker/browser qualification, protected source delivery, coherent 0.4.0
+publication and fresh both-feed installed data acceptance have run with the exact
+identities above. The exact protected-main coherent obligation also passed.
+The original source-only preparation boundary and subsequent
+failed operations retain their historical evidence; they do not become passing
+runs. The owning shared foundation S1/final .5-P2 contract remains the integration
+authority. Product integration and native acceptance are outside this producer
+closure. No runtime shim, JavaScript queue, transport freeze hook or new guest ABI
+was introduced.
 
 ## Event boundary model correction
 
@@ -733,10 +753,11 @@ metadata or 1024 regular members (including its own manifest). Actual archive,
 Core, Worker and compiled-output inventories/hashes must be read back; the caps
 are refusal limits, not measured cold-run guarantees or process RSS limits.
 Inert controls exercise the actual source audit, collector and shell first-cause
-paths. Complete coherent CI and a separately selected new both-feed installed run
-remain required; neither local source controls nor the original org-only runtime
-success authorize consumer adoption. Publication bytes and both failed/successful
-original identities remain unchanged.
+paths. The original source boundary required complete coherent CI and a separately
+selected fresh both-feed installed run. Current acceptance above records those
+actual results; local source controls and the earlier org-only runtime never
+substitute for them. Publication bytes and every failed/successful original
+identity remain unchanged.
 
 
 ### Fable dependency projection after original installed refusal
@@ -760,5 +781,38 @@ Fable bookkeeping remain bounded data, not runtime or provenance substitutes.
 Foreign modules/members, unexpected executable files, paths, links, changed copied
 sources or library runtime refuse; missing Core, lock and Worker proof still
 refuses. Producer caps and feed isolation do not change. Inert controls cover all
-caller contexts and actual merge provenance, while repaired native execution and
-complete projection fit remain unproved until a separately selected original run.
+caller contexts and actual merge provenance. The later selected original
+39023332496 supplies actual repaired native execution and complete bounded
+projection fit on both feeds; it does not retrospectively complete either failed
+original or establish product adoption.
+
+
+### Accepted installed identity and reusable evidence lessons
+
+Accepted publication remains producer/publisher P at 6732d237; accepted installed
+qualification remains the exact Q20c9447 original above. The complete reviewed
+P-to-Q audit has 13 explicit path/blob/content-hash rows. Its current-only read-only
+subject does not modify the original publisher executor, writer constraints or
+transaction. This later owning capture records that historical accepted subject;
+it grants no later qualifier, historical overlay, replay or additional operation.
+
+The org and public archives preserve different physical identities. Public
+repository signing adds `.signature.p7s`; its full archive SHA-256 and `.nupkg.sha512`
+sidecar address the signed envelope. Raw lock and hidden metadata content hashes
+address NuGet's unsigned package content. Exact payload comparison and genuine
+native repository-signature verification establish their correspondence. Treating
+those two SHA-512 roles as interchangeable would invent a mismatch.
+
+Actual proof includes the original archives, sidecars and hidden metadata, raw
+locks/configs, official reference/compiler/Fable/runtime Core, compiled runtime,
+restored Worker bytes and browser logs. The portable closed projection retained
+425 Fable dependency files per feed across five populated compiler/Worker contexts;
+package source/library copies join exact original members, while generated code
+and transformed projects join their original inputs. Ancillary source/support is
+bounded evidence data. Source predicates alone never establish the runtime result.
+
+Runtime, log-copy, collection, direct cleanup and native upload retain separate
+statuses. Both accepted consumers recorded zero for all direct statuses; global
+descendant settlement remains unproved. Prior failures and original publication
+absence-response, atomicity and moderation evidence gaps remain unchanged. No local
+CLR, Fable, model, browser or package-restore workload was used for this closure.
