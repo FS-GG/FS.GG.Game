@@ -76,6 +76,25 @@ assert manifest.api_policy("0.5.0")["baselineVersion"] == "0.4.0"
 assert manifest.api_policy("0.4.0")["baselineVersion"] == "0.3.0"
 assert manifest.api_policy("0.3.0")["baselineVersion"] == "0.2.0"
 assert manifest.api_policy("0.2.0")["baselineVersion"] == "0.1.1"
+# Exercise both exact current and immutable predecessor policy readers through
+# the actual receipt validator, including changed valid-looking source/hash data.
+for selected in (current_policy, manifest.api_policy("0.5.0")):
+    selected_rows = [{"id": identity, "baselineArchiveSha256": expected["servedArchiveSha256"],
+                      "candidateArchiveSha256": "e" * 64, "baselineApiSurface": {"api-surface/test.fsi": "f" * 64},
+                      "candidateApiSurface": {"api-surface/test.fsi": "f" * 64}, "nativeLogSha256": "a" * 64,
+                      "status": "compatible", "diagnostics": []} for identity, expected in selected["packages"].items()]
+    current_receipt = {"schema": "fsgg.wasm.published-api-comparison/v1", "tool": "SDK10.0.401.ApiCompat",
+                       "packages": selected_rows, **{key: selected[key] for key in
+                       ("baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion")}}
+    current_artifacts = [{"file": f"{identity}.{selected['candidateVersion']}.nupkg", "sha256": "e" * 64} for identity in selected["packages"]]
+    manifest.verify_api_comparison(current_receipt, current_artifacts)
+    for field in ("baselineSource", "baselineTree", "baselineManifestSha256", "served-bytes"):
+        broken = copy.deepcopy(current_receipt)
+        if field == "served-bytes": broken["packages"][0]["baselineArchiveSha256"] = "0" * 64
+        else: broken[field] = "0" * len(broken[field])
+        try: manifest.verify_api_comparison(broken, current_artifacts)
+        except SystemExit: pass
+        else: raise SystemExit("changed current/predecessor baseline identity admitted: " + field)
 try: manifest.api_policy("0.2.1")
 except SystemExit: pass
 else: raise SystemExit("unselected patch version accepted")
