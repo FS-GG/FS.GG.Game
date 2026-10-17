@@ -17,10 +17,20 @@ Fresh installed operation
 [39016307973](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973),
 attempt 1, remains failed. Org's actual consumer qualification passed, then evidence
 upload failed on NuGet HTTP-cache filenames and produced zero artifacts. Public
-was cancelled before execution. The current follow-up separates reviewed qualifier
-Q from this immutable published P, repairs bounded evidence retention, and requires
-complete new coherent qualification plus a separately selected both-feed installed
-operation. Both-feed acceptance and consumer adoption remain open. Earlier source
+was cancelled before execution. PR715 delivered the reviewed P/Q binding and
+bounded evidence collector at qualifier
+`5104205393d45fcc1ce5eacbb40f9a237403634d`, with complete same-tree PR qualification.
+Its fresh both-feed installed operation
+[39020851715](https://github.com/FS-GG/FS.GG.Game/actions/runs/39020851715), attempt 1,
+also remains failed: each feed passed the general consumer's 32 browser tests and
+Rust2/C4 checks, then its first evidence projection refused Fable dependency
+source/support files. Both selected-supervisor phases were unreached. Independent
+review verified both bounded diagnostic archives; final collectors failed as
+ineligible while both uploads succeeded. No both-feed acceptance follows.
+The current correction classifies those dependency roles against original package
+members across the general and selected Fable contexts. Complete new coherent
+qualification and a separately selected installed operation remain required.
+Publication remains accepted at P; consumer adoption remains open. Earlier source
 and operation frontiers below retain their historical scopes.
 
 ## Protected qualification and checkout-reader correction (completed source delivery)
@@ -727,3 +737,28 @@ paths. Complete coherent CI and a separately selected new both-feed installed ru
 remain required; neither local source controls nor the original org-only runtime
 success authorize consumer adoption. Publication bytes and both failed/successful
 original identities remain unchanged.
+
+
+### Fable dependency projection after original installed refusal
+
+Original installed operation 39020851715/attempt1 preserved the precise first
+cause: general consumer runtime 0, collection 1, cleanup 0, command 1 and log-copy
+0 on each feed. Its 21 refused Fable source/support paths prevented both selected
+supervisor suites from starting. Both always-run final collectors returned
+ineligible diagnostics; their two portable uploads succeeded and were independently
+reviewed. This corrects evidence retention, not installed acceptance or descendant
+cleanup proof. The earlier zero-artifact operation remains a separate failure.
+
+Projection now distinguishes finite Fable dependency modules and their roles in
+the actual compiler output, selected output/copy and restored Worker policy
+contexts. Copied FS.GG sources and primitive inputs must match the retained
+original package member; generated JavaScript and transformed Fable projects must
+have the corresponding source/project member in that same original archive.
+Fable-library runtime JavaScript must match the original Browser package's static
+library member. Known pinned-library documentation/declarations/metadata and
+Fable bookkeeping remain bounded data, not runtime or provenance substitutes.
+Foreign modules/members, unexpected executable files, paths, links, changed copied
+sources or library runtime refuse; missing Core, lock and Worker proof still
+refuses. Producer caps and feed isolation do not change. Inert controls cover all
+caller contexts and actual merge provenance, while repaired native execution and
+complete projection fit remain unproved until a separately selected original run.
