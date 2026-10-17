@@ -75,10 +75,24 @@ and change only the explicit binder/control/owning-document/Atlas closure.
 Runtime, package source, build inputs and workflow/profile bytes remain identical
 to P. Real current Q checkout, first attempt, complete source audit, separate
 org/public feeds, raw locks, exact served archives, Core/Worker/output custody and
-original status/cleanup observations remain mandatory. Q source preparation is
-not a dispatched or accepted served-feed installed run; consumer adoption and
-native/product outcomes remain separately owned. Private consumer evidence is
-not part of this public producer record.
+original status/cleanup observations remain mandatory.
+
+PR720 delivered exact installed qualifier Q
+`c938e9158542e3a0572b62dd09c01ad01cbb344f`, tree
+`c8bc3d17d1e79f297be3b68b55e83b403bc0cf8e`, after its original source qualifier
+39074212790/attempt1 passed. The independently reviewed seven-path P-to-Q audit
+preserves the runtime, build and workflow/profile. Original served-feed installed
+[39076218708](https://github.com/FS-GG/FS.GG.Game/actions/runs/39076218708), attempt 1,
+completed successfully at that actual Q: both sequential org/public jobs qualified
+fresh consumers and passed collection, upload and direct cleanup. Each original
+artifact retains 575 manifest members, including all 428 dependency-role paths;
+actual served pair, unsigned/signature identities, closed Worker/build provenance,
+official Core, locks, compiled CLR/Fable/numeric and browser outputs correspond.
+Independent original-data review passed. Global descendant settlement remains
+unproved. This accepts the demonstrated both-feed installed producer scope, not
+SC2/product/native/image adoption or the cause of earlier cold-start failures.
+Consumer and native/product outcomes remain separately owned; private consumer
+evidence is not part of this public producer record.
 
 ## Historical 0.4 producer supplier acceptance
 
