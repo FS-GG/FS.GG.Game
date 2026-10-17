@@ -59,6 +59,14 @@ last 60 source-build log lines survived the original failure trap; the complete 
 source-build log is unavailable. Installed supervisor suites and eligible custody
 freeze/upload were unreached. This run remains failed.
 
+The next full qualifier [39008574356](https://github.com/FS-GG/FS.GG.Game/actions/runs/39008574356),
+attempt 1 at `efe2840`, failed in the early source phase before Quint, packing,
+model or browser work. Its bounded first-error diagnostics exposed an unparenthesized
+conditional record field followed by another field, plus EffectProjection/Mechanical
+inference in the new omission control. The follow-up parenthesizes the field expression
+and explicitly types both effect-search lambdas. This is actual early failure detection,
+not successful source compilation or full qualification; both failed operations remain.
+
 The connected correction annotates shared identity, outcome, settings and boundary
 records across all source/installed include contexts. It also accumulates command
 capture across singleton effect callbacks and adds an ordinary Post/Arm omission

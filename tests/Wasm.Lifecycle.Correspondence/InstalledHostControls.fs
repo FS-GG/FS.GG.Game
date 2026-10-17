@@ -120,7 +120,7 @@ let terminalRetirementControls (selectedSettings:HostSettings) =
         let reset=identity 3UL
         let follower=identity 4UL
         let fresh=identity 5UL
-        let actual={ outcome Process reset with State=if rejected then GuestRejected 27 else Succeeded; CopiedOutput=[|4uy;5uy|] }
+        let actual={ outcome Process reset with State=(if rejected then GuestRejected 27 else Succeeded); CopiedOutput=[|4uy;5uy|] }
         let completeTerminal () =
             if adapterRejected then host.Value.RejectAdapterOutput(1L,reset,"adapter rejection")
             else host.Value.Observe(1L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))

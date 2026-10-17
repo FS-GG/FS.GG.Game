@@ -67,9 +67,9 @@ let replay (trace:CompatibleTrace) =
 // callbacks; omitting its nonempty command must fail the same full validator.
 let ordinaryPostArmCaptureIsDetected (trace:CompatibleTrace) =
     let ordinary (step:CompatibleStep) =
-        let effects=step.Model.Effects
-        match List.tryFindIndex(fun effect -> effect.Kind="post" && effect.Operation="process") effects,
-              List.tryFindIndex(fun effect -> effect.Kind="armTimer") effects with
+        let effects:EffectProjection list=step.Model.Effects
+        match List.tryFindIndex(fun (effect:EffectProjection) -> effect.Kind="post" && effect.Operation="process") effects,
+              List.tryFindIndex(fun (effect:EffectProjection) -> effect.Kind="armTimer") effects with
         | Some post,Some arm -> post<arm && not step.Commands.IsEmpty
         | _ -> false
     let present=trace.Steps |> List.exists ordinary
