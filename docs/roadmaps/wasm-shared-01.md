@@ -655,3 +655,46 @@ The distinct inspection [37176783775](https://github.com/FS-GG/FS.GG.Game/action
 The source repair scopes JSON media negotiation to exact GET Actions artifact ZIP and run-log API routes, keeps redirected archive bytes opaque and release-asset binary negotiation unchanged, and distinguishes HTTP Unknown from actual digest drift. The independent installed repair checks the whole restored archive SHA-512 against its cache sidecar, and computes NuGet's compressed unsigned-content SHA-512 against both `.nupkg.metadata` and the lock, with an exact metadata source. The algorithm follows [SDK 10.0.401's pinned NuGet source](https://github.com/dotnet/dotnet/blob/e34a38d2ae1fc26406a317517196e55c68ff83ab/src/nuget-client/src/NuGet.Core/NuGet.Packaging/Signing/Archive/SignedPackageArchiveUtility.cs): remove the signature span and central record, relocate surviving offsets, adjust EOCD fields, and hash the original compressed bytes. Unsupported ZIP64/multidisk/encrypted or ambiguous layouts refuse. Genuine public repository-signature verification, the original org archive, every payload/Worker member, locked versions and fresh exact-feed caches remain required. Existing accepted 0.2 receivers retain their scoped evidence; no signed-public 0.3 installed success is claimed.
 
 This changes only existing adapter, test and owning-plan paths within the closed successor allowlist. Source controls cover media roles, distinct HTTP/hash refusals, unsigned and signed hash roles, signature position and data descriptors, malformed archive layouts, and cache/source/member substitutions. Authentic retained UTEL signed archives independently match the pinned primary NuGet content-hash projections; those are offline algorithm counterexamples, not WASM installation or signature-trust evidence. Publication, installed acceptance and activation remain open. A new protected executor and separately admitted distinct inspection are required after source closure; no failed inspection is retried or relabeled, and the original preparation tuple/journal/packages stay unchanged.
+
+
+### Installed qualifier and publication subject (current 0.4 correction)
+
+Publication of 0.4.0 is accepted at immutable producer/publisher
+`6732d2371d142d5ccc5d2d127f20e4f179800892`: original promotion
+39015233527/attempt1 published the same original coherent pair, SDK and manifest.
+The first installed operation, 39016307973/attempt1, remains failed: org's actual
+consumer qualification passed, but recursive evidence upload rejected a colon in
+NuGet HTTP-cache paths and retained zero artifacts; public was cancelled before
+execution. This is partial runtime evidence, not both-feed installed acceptance.
+
+The selected repair separates immutable published P=publisher E from the current
+read-only qualifier/executor Q. One clean protected Q checkout records the entire
+P→Q path/blob/content-hash closure and refuses changes outside the finite reviewed
+installed binding, evidence projection, controls and owning documentation set.
+Package/runtime/Worker sources, model, traces, semantic consumer assertions,
+projects, locks, tool profiles and version inputs remain identical to P. Original
+qualification, admission, publication transaction and tag still authenticate P;
+current workflow/checkout/main/manual-event/first-attempt checks authenticate Q.
+Publisher writer commands retain their same-current-source constraints. Historical
+overlays, identity mutation, source DLL substitution and repacking originals are
+not admitted.
+
+The general consumer projects its actual archives, hidden NuGet metadata, raw
+lock/config, SDK and compiled browser/runtime outputs before temporary cleanup,
+including on failure. A separate always-run collector retains selected logs,
+locked packages, actual official/reference/runtime Core and restored Worker
+outputs plus the original publication and P/Q receipts in a portable closed tar
+archive. HTTP/tool caches and node_modules are excluded. The consumer's original
+exit wins over collector/cleanup errors; command, log-copy, collection and native
+upload outcomes remain distinct. Both independently guarded feeds run serially
+with fail-fast disabled, preserving the existing 45-minute per-job limit.
+
+Projection refuses over 512 MiB total, 256 MiB per file, 32 MiB logs, 1 MiB total
+metadata or 1024 regular members (including its own manifest). Actual archive,
+Core, Worker and compiled-output inventories/hashes must be read back; the caps
+are refusal limits, not measured cold-run guarantees or process RSS limits.
+Inert controls exercise the actual source audit, collector and shell first-cause
+paths. Complete coherent CI and a separately selected new both-feed installed run
+remain required; neither local source controls nor the original org-only runtime
+success authorize consumer adoption. Publication bytes and both failed/successful
+original identities remain unchanged.

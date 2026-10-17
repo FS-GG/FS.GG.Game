@@ -23,7 +23,7 @@ def validate(candidate):
     assert all(value not in candidate for value in ("packages: write", "contents: write", "id-token:", "dotnet pack", "nuget push", "gh release", "git tag"))
     for name in ("version", "published_source", "qualifier_source", "manifest_sha256", "sdk_sha256", "accepted_executor", "promotion_binding_sha256"):
         assert f"      {name}:" in candidate and f"${{{{ inputs.{name} }}}}" in candidate
-    assert "feed: [org, public]" in candidate and "max-parallel: 1" in candidate
+    assert "feed: [org, public]" in candidate and "max-parallel: 1" in candidate and "fail-fast: false" in candidate
     assert "https://nuget.pkg.github.com/FS-GG/index.json" in candidate and "https://api.nuget.org/v3/index.json" in candidate
     assert "run: python3 scripts/wasm-release/bind-installed-release.py" in candidate
     assert "scripts/verify-wasm-package-consumer.sh --feed-only" in candidate
@@ -32,6 +32,11 @@ def validate(candidate):
     steps = ["Static installed qualification preflight", "Bind qualification source and immutable published receipts", "Install exact consumer tools", "Qualify fresh installed consumer"]
     positions = [candidate.index(value) for value in steps]
     assert positions == sorted(positions)
+    assert 'cp -a "$RUNNER_TEMP/selected-' not in candidate
+    assert 'installed-evidence.py assemble' in candidate and 'if-no-files-found: error' in candidate
+    assert 'WASM_CONSUMER_EVIDENCE=' in candidate and 'WASM_CONSUMER_STATUS=' in candidate
+    assert candidate.count('if: always()') == 2
+    assert 'path: ${{ runner.temp }}/installed-${{ matrix.feed }}-evidence/' in candidate
     assert "fetch-depth: 0" in candidate and "ref:" not in candidate
 
 
@@ -44,6 +49,9 @@ for broken in (
     text.replace("--feed-only", "--custody artifacts/wasm-release"),
     text.replace("scripts/wasm-release/qualify-supervisor-installed.sh --feed-only", "true"),
     text.replace("max-parallel: 1", "max-parallel: 2"),
+    text.replace("fail-fast: false", "fail-fast: true"),
+    text.replace("installed-evidence.py assemble", "true"),
+    text.replace("if-no-files-found: error", "if-no-files-found: ignore"),
     text.replace("python3 scripts/wasm-release/bind-installed-release.py", "true"),
     text.replace("          fetch-depth: 0", "          fetch-depth: 0\n          ref: wasm/v0.1.1"),
 ):
@@ -54,7 +62,7 @@ for broken in (
     else:
         raise SystemExit("known-bad installed qualification route accepted")
 
-values = {"RELEASE_VERSION": "0.4.0", "PUBLISHED_SOURCE": "a" * 40, "QUALIFIER_SOURCE": "a" * 40, "ACCEPTED_EXECUTOR": "a" * 40, "PROMOTION_BINDING_SHA256": "e" * 64, "MANIFEST_SHA256": "c" * 64, "SDK_SHA256": "d" * 64}
+values = {"RELEASE_VERSION": "0.4.0", "PUBLISHED_SOURCE": binding.PUBLISHED, "QUALIFIER_SOURCE": "a" * 40, "ACCEPTED_EXECUTOR": "a" * 40, "PROMOTION_BINDING_SHA256": "e" * 64, "MANIFEST_SHA256": "c" * 64, "SDK_SHA256": "d" * 64}
 assert binding.checked_inputs(values, "0.4.0") == values
 for key, value in (("PUBLISHED_SOURCE", "main"), ("QUALIFIER_SOURCE", "wasm/v0.4.0"), ("SDK_SHA256", "unknown"), ("RELEASE_VERSION", "0.1.1"), ("MANIFEST_SHA256", "$(false)")):
     try:
@@ -68,7 +76,7 @@ for missing in ('ACCEPTED_EXECUTOR','PROMOTION_BINDING_SHA256'):
     try:binding.checked_inputs(broken,'0.4.0')
     except (AssertionError,KeyError):pass
     else:raise SystemExit('missing current transaction/executor accepted')
-for key, value in [('PUBLISHED_SOURCE','b'*40),('EXECUTION_BINDING','{}'),('CANONICAL_QUALIFICATION_AUDIT','historical')]:
+for key, value in [('PUBLISHED_SOURCE','b'*40),('QUALIFIER_SOURCE','b'*40),('EXECUTION_BINDING','{}'),('CANONICAL_QUALIFICATION_AUDIT','historical')]:
     try:binding.checked_inputs(dict(values,**{key:value}),'0.4.0')
     except (AssertionError,KeyError):pass
     else:raise SystemExit('current source/overlay substitution accepted')
@@ -103,6 +111,6 @@ for timing, order, kinds in (
     assert [effect["kind"] for effect in state["effects"]] == kinds
     assert state["activeWorker"] == {"#bigint": "0"} and not state["ordinary"]
     assert len(set(order)) == 5
-print("wasm-installed-input-audit: current-producer=executor promotion=mandatory expiry-early-late=canonical")
+print("wasm-installed-input-audit: immutable-publisher=current-qualifier-separated promotion=mandatory expiry-early-late=canonical")
 
 print("wasm-installed-preflight: manual=pass read-only=pass serial-two-feeds=pass qualifier=immutable native-receipts=bound negative-controls=pass")

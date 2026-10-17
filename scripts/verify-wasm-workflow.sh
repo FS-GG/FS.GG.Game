@@ -421,6 +421,7 @@ print('wasm-supervisor-phase-preflight: actual helper identity/status/assembly g
 PYPHASE
 "$repo/tests/release/wasm/test-release-wasm.sh" --source-only
 python3 "$repo/tests/release/wasm/test-installed-org-workflow.py"
+python3 "$repo/tests/release/wasm/test-installed-evidence.py"
 python3 "$repo/tests/release/wasm/test-api-baseline-policy.py"
 for control in \
   'rust-bar.wasm' 'rust-sc2.wasm' 'c-bar.wasm' 'c-sc2.wasm' \

@@ -724,11 +724,29 @@ class Tests(unittest.TestCase):
         with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':'9'*40}),self.assertRaises(p.Refusal):p.executor_checkout(b)
         spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
         binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
-        with patch.dict(os.environ,{'GITHUB_SHA':head,'ACCEPTED_EXECUTOR':head}):
-            binder.bind_executor(head,head,p.VERSION)
-            for source,executor,version in [('9'*40,head,p.VERSION),(head,'9'*40,p.VERSION),(head,head,'0.3.0')]:
-                with self.assertRaises(AssertionError):binder.bind_executor(source,executor,version)
+        env={'GITHUB_SHA':head,'GITHUB_WORKFLOW_SHA':head,'ACCEPTED_EXECUTOR':head,'QUALIFIER_SOURCE':head,
+             'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_RUN_ATTEMPT':'1'}
+        # Actual Git cleanliness/head checks remain live; the complete diff parser
+        # is exercised independently against real inert Git commits by collector controls.
+        with patch.dict(os.environ,env),patch.object(binder,'source_audit',return_value={'bound':True}) as audit:
+            self.assertEqual(binder.bind_executor(binder.PUBLISHED,head,p.VERSION),{'bound':True})
+            audit.assert_called_once_with(binder.PUBLISHED,head)
+            for key,bad in [('GITHUB_SHA','9'*40),('GITHUB_WORKFLOW_SHA','9'*40),('QUALIFIER_SOURCE','9'*40),('GITHUB_REF','refs/heads/other'),('GITHUB_EVENT_NAME','push'),('GITHUB_RUN_ATTEMPT','2')]:
+                with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,head,p.VERSION)
+            for executor,version in [('9'*40,p.VERSION),(head,'0.3.0')]:
+                with self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,executor,version)
         with patch.dict(os.environ,{'EXECUTION_BINDING':'{"schema":"historical"}'}),self.assertRaises(p.Refusal):p.execution_input()
+
+    def test_explicit_read_only_publication_subject_does_not_relax_writer(self):
+        original=reviewed(); producer=p.P; tree=p.TREE
+        subject=p.PublicationSubject(producer,tree,p.VERSION)
+        with patch.object(p,'P','9'*40),patch.object(p,'TREE','8'*40):
+            self.assertEqual(p.validate_tuple(original,subject=subject),original)
+            with self.assertRaises(p.Refusal):p.validate_tuple(original)
+            for wrong in (p.PublicationSubject('7'*40,tree,p.VERSION),p.PublicationSubject(producer,'6'*40,p.VERSION),p.PublicationSubject(producer,tree,'0.3.0')):
+                with self.assertRaises(p.Refusal):p.validate_tuple(original,subject=wrong)
+            with self.assertRaises(AttributeError):subject.producer='9'*40
+        with patch.dict(os.environ,{'EXECUTION_BINDING':'historical'}),self.assertRaises(p.Refusal):p.execution_input()
 
     def test_native_cross_host_redirect_drops_token(self):
         import urllib.request

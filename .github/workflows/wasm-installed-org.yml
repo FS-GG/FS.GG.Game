@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       accepted_executor:
-        description: Root accepted protected publisher/qualification executor E
+        description: Root accepted current installed qualifier executor Q
         required: true
         type: string
       promotion_binding_sha256:
@@ -42,6 +42,7 @@ permissions:
 jobs:
   installed:
     strategy:
+      fail-fast: false
       max-parallel: 1
       matrix:
         feed: [org, public]
@@ -72,6 +73,7 @@ jobs:
         run: |
           python3 tests/release/wasm/test-consumer-source-mapping.py
           python3 tests/release/wasm/test-installed-org-workflow.py
+          python3 tests/release/wasm/test-installed-evidence.py
       - name: Bind qualification source and immutable published receipts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,6 +93,7 @@ jobs:
           rustup default 1.90.0
           scripts/wasm-release/install-browser-tools.sh
       - name: Qualify fresh installed consumer
+        id: consumer
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,14 +102,57 @@ jobs:
           set -euo pipefail
           export NUGET_HTTP_CACHE_PATH="$RUNNER_TEMP/wasm-installed-${{ matrix.feed }}-http-cache"
           mkdir -p artifacts/wasm-installed-${{ matrix.feed }}
-          scripts/verify-wasm-package-consumer.sh --feed-only 2>&1 | tee artifacts/wasm-installed-${{ matrix.feed }}/consumer.log
-          scripts/wasm-release/qualify-supervisor-installed.sh --feed-only "$RUNNER_TEMP/selected-${{ matrix.feed }}" 2>&1 | tee artifacts/wasm-installed-${{ matrix.feed }}/selected.log
-          cp -a "$RUNNER_TEMP/selected-${{ matrix.feed }}" "$RUNNER_TEMP/selected-${{ matrix.feed }}-browser" "$RUNNER_TEMP/wasm-installed-receipts" artifacts/wasm-installed-${{ matrix.feed }}/
+          export WASM_CONSUMER_EVIDENCE="$RUNNER_TEMP/consumer-${{ matrix.feed }}-evidence"
+          export WASM_CONSUMER_STATUS="$GITHUB_WORKSPACE/artifacts/wasm-installed-${{ matrix.feed }}/consumer-status.json"
+          phase=initial
+          command_exit=null
+          tee_exit=null
+          record_runtime() {
+            local original=$? recorded=0
+            trap - EXIT
+            set +e
+            printf '{"phase":"%s","exitCode":%s,"commandExit":%s,"logExit":%s}\n' "$phase" "$original" "$command_exit" "$tee_exit" > artifacts/wasm-installed-${{ matrix.feed }}/runtime-status.json
+            recorded=$?
+            if (( original != 0 )); then exit "$original"; fi
+            exit "$recorded"
+          }
+          trap record_runtime EXIT
+          run_logged() {
+            phase=$1
+            local log=$2
+            shift 2
+            set +e
+            "$@" 2>&1 | tee "$log"
+            local results=("${PIPESTATUS[@]}")
+            set -e
+            command_exit=${results[0]}
+            tee_exit=${results[1]}
+            if (( command_exit != 0 )); then return "$command_exit"; fi
+            return "$tee_exit"
+          }
+          run_logged consumer artifacts/wasm-installed-${{ matrix.feed }}/consumer.log scripts/verify-wasm-package-consumer.sh --feed-only
+          run_logged selected artifacts/wasm-installed-${{ matrix.feed }}/selected.log scripts/wasm-release/qualify-supervisor-installed.sh --feed-only "$RUNNER_TEMP/selected-${{ matrix.feed }}"
+          phase=complete
+      - name: Collect bounded installed evidence
+        if: always()
+        env:
+          RUNTIME_OUTCOME: ${{ steps.consumer.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          logs="artifacts/wasm-installed-${{ matrix.feed }}"
+          mkdir -p "$logs"
+          runtime=1
+          [[ "$RUNTIME_OUTCOME" != success ]] || runtime=0
+          if [[ ! -e "$logs/runtime-status.json" ]]; then
+            printf '{"phase":"unreached","exitCode":null,"nativeOutcome":"%s"}\n' "$RUNTIME_OUTCOME" > "$logs/runtime-status.json"
+          fi
+          python3 scripts/wasm-release/installed-evidence.py assemble --work "$RUNNER_TEMP/selected-${{ matrix.feed }}" --consumer "$RUNNER_TEMP/consumer-${{ matrix.feed }}-evidence" --receipts "$RUNNER_TEMP/wasm-installed-receipts" --logs "$logs" --runtime "$runtime" --output "$RUNNER_TEMP/installed-${{ matrix.feed }}-evidence"
       - name: Retain installed qualification output
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: wasm-installed-${{ matrix.feed }}-${{ github.sha }}-${{ inputs.version }}
-          path: artifacts/wasm-installed-${{ matrix.feed }}/
-          if-no-files-found: ignore
+          path: ${{ runner.temp }}/installed-${{ matrix.feed }}-evidence/
+          if-no-files-found: error
           retention-days: 30

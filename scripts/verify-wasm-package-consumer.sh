@@ -7,8 +7,31 @@ value="${2:-}"
 [[ "$mode" == --custody || "$mode" == --feed-only ]] || {
   echo "usage: verify-wasm-package-consumer.sh --custody <directory> | --feed-only" >&2; exit 2;
 }
+if [[ "$mode" == --feed-only && "${MODE:-}" == installed ]]; then
+  evidence="$(realpath -m "${WASM_CONSUMER_EVIDENCE:?requires fresh explicit retained evidence}")"
+  case "$evidence/" in "$repo/"*) echo 'consumer evidence must be outside source' >&2; exit 2;; esac
+  [[ ! -e "$evidence" && ! -L "$evidence" && -n "${WASM_CONSUMER_STATUS:-}" ]] || { echo 'consumer evidence/status must be fresh and explicit' >&2; exit 2; }
+fi
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-package-consumer.XXXXXX")"
-trap 'rm -rf "$work"' EXIT
+finish_consumer() {
+  local runtime=$? collection=0 cleanup=0
+  trap - EXIT
+  set +e
+  if [[ "$mode" == --feed-only && -n "${WASM_CONSUMER_EVIDENCE:-}" ]]; then
+    python3 "$repo/scripts/wasm-release/installed-evidence.py" consumer --work "$work" --output "$WASM_CONSUMER_EVIDENCE" --runtime "$runtime"
+    collection=$?
+  fi
+  rm -rf -- "$work"
+  cleanup=$?
+  if [[ -n "${WASM_CONSUMER_STATUS:-}" ]]; then
+    printf '{"runtime":%s,"collection":%s,"cleanup":%s,"descendants":"unproved"}\n' "$runtime" "$collection" "$cleanup" > "$WASM_CONSUMER_STATUS"
+    [[ $? == 0 ]] || collection=1
+  fi
+  if (( runtime != 0 )); then exit "$runtime"; fi
+  if (( collection != 0 )); then exit "$collection"; fi
+  exit "$cleanup"
+}
+trap finish_consumer EXIT
 mkdir -p "$work/sdk-artifacts" "$work/modules" "$work/lock-source" "$work/consumer/browser"
 manifest="$work/release-manifest.json"
 
@@ -117,6 +140,11 @@ cp "$work/consumer/browser/fixtures/bar-conformance.wasm" "$output/modules/"
   npm ci
   ./run.sh "$work/consumer/public"
 )
+if [[ "$mode" == --feed-only && "${MODE:-}" == installed ]]; then
+  # Authenticate this consumer's actual fresh cache too, preserving its own
+  # signed public bytes/signature log before the owner trap removes the work.
+  python3 "$repo/scripts/wasm-release/promotion.py" check-installed --manifest "$RUNNER_TEMP/wasm-installed-receipts/promotion-binding.json" --cache "$work/consumer-packages" --feed "$WASM_PACKAGE_FEED" --lock "$work/consumer/packages.lock.json" > "$work/installed-member-receipt.log"
+fi
 lock_sha="$(sha256sum "$work/consumer/packages.lock.json" | cut -d' ' -f1)"
 printf 'wasm-package-consumer: mode=%s version=%s lock-sha256=%s modules=rust2,c4 base=/sub/app publication=none\n' \
   "${mode#--}" "$version" "$lock_sha"
