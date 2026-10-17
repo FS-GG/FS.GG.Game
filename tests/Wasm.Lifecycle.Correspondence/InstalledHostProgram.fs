@@ -3,6 +3,7 @@ open Wasm.Lifecycle.Correspondence.GeneratedTraces
 open Wasm.Lifecycle.Correspondence.InstalledHostControls
 [<EntryPoint>]
 let main _ =
+    terminalReentrantAdmissionControls (Wasm.Lifecycle.Correspondence.Correspondence.settings FS.GG.Wasm.Contracts.Sc2ImportedStrict)
     terminalRetirementControls (Wasm.Lifecycle.Correspondence.Correspondence.settings FS.GG.Wasm.Contracts.Sc2ImportedStrict)
     terminalRetirementControls (Wasm.Lifecycle.Correspondence.Correspondence.settings FS.GG.Wasm.Contracts.BarProtected)
     let failures = traces |> List.collect(fun trace -> replayFacade false trace @ replayFacade true trace)

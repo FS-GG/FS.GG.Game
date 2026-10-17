@@ -5,7 +5,10 @@ open FS.GG.Wasm.Contracts
 type EffectInterpreter = HostEffect list -> unit
 
 /// Stateful browser facade over the pure Lifecycle reducer. The supplied interpreter
-/// performs effects mechanically; all policy decisions remain in Lifecycle.update.
+/// performs effects mechanically; policy decisions remain in Lifecycle. Terminal
+/// dispatch batches are interpreted one effect at a time, rechecking the reducer's
+/// exact current identity/correlation before each terminal timer arm or Worker post.
+/// Synchronous callbacks can therefore retire work before a stale outer effect runs.
 [<Sealed>]
 type Host =
     static member CreateConnected:

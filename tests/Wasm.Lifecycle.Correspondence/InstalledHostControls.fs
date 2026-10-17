@@ -188,3 +188,88 @@ let terminalRetirementControls selectedSettings =
         h.Observe(2L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
         h.Dispose(2L)
         require (results.Length=before) "duplicates and repeated disposal settle nothing twice"
+
+// Exercise callbacks occurring BEFORE a selected terminal batch reaches Post.
+// No guest execution: both actual public facades use their maintained reducer.
+let terminalReentrantAdmissionControls selectedSettings =
+    let require condition message = if not condition then failwith ("terminal pre-post reentry: " + message)
+    let unwrap = function Ok value -> value | Error issues -> failwithf "%A" issues
+    let identity request = { WorkerInstance="terminal-worker";Request=request;Generation=1UL }
+    let correlation (id:HostIdentity) = OperationToken.create $"request-{id.Generation}-{id.Request}" |> unwrap
+    let outcome phase id = { Identity=id;Phase=phase;State=Succeeded;Dispatch=Dispatched;CleanupFault=None;CopiedOutput=Array.empty;EffectEligibility=ProductAdapterMustDecide }
+    let limits = { MaximumDeadlineMilliseconds=5;MaximumOutputBytes=64;EnclosingDeadlineMilliseconds=None }
+    for connected, mode in [ for connected in [false;true] do for mode in ["timer-expiry";"previous-dispose";"previous-replace";"previous-phase"] do yield connected,mode ] do
+        let mutable host:Host option=None
+        let mutable now=0L
+        let mutable fired=false
+        let mutable terminalPosts=0
+        let mutable terminalArms=0
+        let mutable armed:Set<string>=Set.empty
+        let mutable terminated=false
+        let mutable results:BrowserResult list=[]
+        let reset=identity 4UL
+        let previous=identity 3UL
+        let terminalKey (timer:TimerIdentity) = $"{timer.Identity.WorkerInstance}:{timer.Identity.Generation}:{timer.Identity.Request}:{OperationToken.value timer.Correlation}:{timer.Phase}"
+        let terminalTimer = { Identity=reset;Correlation=correlation reset;Phase=AllocateDescriptor }
+        let settle result =
+            results <- results @ [result]
+            if result.Identity=previous && not fired then
+                fired <- true
+                match mode with
+                | "previous-dispose" -> host.Value.Dispose(1L)
+                | "previous-replace" -> host.Value.Load(1L,{WorkerInstance="replacement";Request=9UL;Generation=2UL},[|0uy|])
+                | "previous-phase" -> host.Value.Observe(1L,reset.WorkerInstance,PhaseObserved(reset,correlation reset,AllocateInput))
+                | _ -> ()
+            if result.Identity=reset && mode="timer-expiry" then
+                require terminated "timeout retires worker before callback"
+                require armed.IsEmpty "timeout cancels all owned timers before callback"
+        let arm key callback =
+            armed <- armed.Add key
+            if key.Contains(":4:") then
+                terminalArms <- terminalArms+1
+                if mode="timer-expiry" && not fired then
+                    fired <- true
+                    now <- 6L
+                    callback ()
+        let transport:HostTransport =
+            { Now=(fun () -> now)
+              CreateWorker=(fun _ _ -> ())
+              PostCommand=(fun _ command -> if command.Identity.Request="4" then terminalPosts <- terminalPosts+1)
+              TerminateWorker=(fun _ -> terminated <- true)
+              ArmTimer=(fun key _ callback -> arm key callback)
+              CancelTimer=(fun key -> armed <- armed.Remove key) }
+        let interpret effects =
+            for effect in effects do
+                match effect with
+                | Settle result -> settle result
+                | TerminateWorker _ -> terminated <- true
+                | ArmTimer(timer,_) -> arm (terminalKey timer) (fun () -> host.Value.ObserveTimer(now,timer))
+                | CancelTimer timer -> armed <- armed.Remove (terminalKey timer)
+                | PostToWorker(_,command) when command.Identity=reset -> terminalPosts <- terminalPosts+1
+                | _ -> ()
+        host <- Some((if connected then Host.CreateConnected(selectedSettings,transport,settle) else Host.Create(selectedSettings,interpret)) |> unwrap)
+        let h=host.Value
+        let load=identity 1UL
+        let initialize=identity 2UL
+        h.Load(0L,load,[|0uy|])
+        h.Observe(0L,load.WorkerInstance,AbiVersionObserved(load,correlation load,0x10000u))
+        h.Initialize(0L,initialize,[|1uy|])
+        h.Observe(0L,initialize.WorkerInstance,InvocationObserved(outcome Initialize initialize,correlation initialize))
+        results <- [];terminated <- false
+        if mode<>"timer-expiry" then
+            h.SubmitLimited(0L,LimitedInvoke(previous,Ordinary,[|1uy|]),{limits with MaximumDeadlineMilliseconds=100}) |> unwrap
+        h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|2uy|]),limits) |> unwrap
+        if mode<>"timer-expiry" then h.Observe(1L,previous.WorkerInstance,InvocationObserved(outcome Process previous,correlation previous))
+        require fired "intended synchronous callback occurred"
+        if mode="previous-phase" then
+            require (terminalPosts=1 && terminalArms=1) "current terminal posts once with only its new phase timer"
+            require (armed=Set.singleton(terminalKey {terminalTimer with Phase=AllocateInput})) "old precomputed phase timer cannot be armed"
+        else
+            require (terminalPosts=0) "retired/replaced terminal must never reach PostCommand"
+            require (terminalArms=(if mode="timer-expiry" then 1 else 0)) "earlier callback cannot arm stale terminal timer"
+            let terminalResults=results |> List.filter(fun result -> result.Identity=reset)
+            require (terminalResults.Length=1) "terminal settles exactly once through nested callback"
+            if mode="timer-expiry" then
+                require (terminalResults.Head.Outcome |> Option.exists(fun value -> value.State=TimedOut && value.Dispatch=NotDispatched)) "pre-post timeout keeps undispatched original evidence"
+            else require terminalResults.Head.Outcome.IsNone "canceled terminal invents no ABI outcome"
+        h.Dispose(now)

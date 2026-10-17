@@ -202,6 +202,7 @@ let workerLimits () = async {
 }
 [<EntryPoint>]
 let main _ =
+    Wasm.Lifecycle.Correspondence.InstalledHostControls.terminalReentrantAdmissionControls (CompatibilityCorrespondence.selectedSettings())
     Wasm.Lifecycle.Correspondence.InstalledHostControls.terminalRetirementControls (CompatibilityCorrespondence.selectedSettings())
     runSynchronous()
     let defaultFailures=Wasm.Lifecycle.Correspondence.GeneratedTraces.traces |> List.collect(fun trace ->

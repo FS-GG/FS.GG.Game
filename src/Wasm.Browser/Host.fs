@@ -7,9 +7,17 @@ type EffectInterpreter = HostEffect list -> unit
 [<Sealed>]
 type Host private (initialState: HostState, interpret: EffectInterpreter) =
     let mutable state = initialState
+    let interpretEffects effects =
+        match Lifecycle.terminalDispatchIdentity state with
+        | None -> interpret effects
+        | Some identity ->
+            for effect in effects do
+                if Lifecycle.terminalEffectEligible identity effect state then
+                    interpret [ effect ]
+
     let applyDecision (decision:HostDecision) =
         state <- decision.State
-        interpret decision.Effects
+        interpretEffects decision.Effects
         decision.Result
 
     static member Create(settings, interpret) =
@@ -21,7 +29,7 @@ type Host private (initialState: HostState, interpret: EffectInterpreter) =
     member _.Dispatch(event) =
         let next, effects = Lifecycle.update event state
         state <- next
-        interpret effects
+        interpretEffects effects
 
     member _.SubmitLimited(monotonicMilliseconds, request, limits) =
         Lifecycle.submitLimited monotonicMilliseconds request limits state

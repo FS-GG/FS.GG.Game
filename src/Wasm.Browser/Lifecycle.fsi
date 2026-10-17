@@ -86,5 +86,9 @@ module Lifecycle =
     val projectCompatibility: HostState -> CompatibilityProjection
     val projectEffects: HostEffect list -> EffectProjection list
 
+    /// Reentrant terminal effect eligibility is producer policy; Host interprets it mechanically.
+    val internal terminalDispatchIdentity: HostState -> HostIdentity option
+    val internal terminalEffectEligible: HostIdentity -> HostEffect -> HostState -> bool
+
     val submitLimited: int64 -> LimitedRequest -> RequestLimits -> HostState -> HostDecision
     val commitCandidateFrozen: int64 -> string -> string -> uint64 -> uint64 -> HostState -> HostDecision

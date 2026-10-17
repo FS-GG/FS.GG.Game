@@ -1484,6 +1484,26 @@ module Lifecycle =
           MixedQueue=state.Ordinary |> List.map projectRequest
           HeldSnapshot=if compatible state then state.Snapshot |> Option.map projectRequest else None }
 
+    // Terminal batches may call back synchronously while interpreting an earlier
+    // effect. Keep the eligibility decision in the reducer's immutable state;
+    // Host only rechecks it immediately before the terminal arm/post effect.
+    let internal terminalDispatchIdentity (HostState state) =
+        state.Current |> Option.filter _.RetireSession |> Option.map _.Identity
+
+    let internal terminalEffectEligible identity effect (HostState state) =
+        let current =
+            state.Current
+            |> Option.filter (fun pending ->
+                not state.Disposed && pending.RetireSession && pending.Identity = identity)
+        match effect with
+        | ArmTimer(timer, _) when timer.Identity = identity ->
+            current |> Option.exists (fun pending ->
+                timer.Correlation = token pending.Identity && timer.Phase = pending.Phase)
+        | PostToWorker(worker, command) when command.Identity = identity ->
+            current |> Option.exists (fun pending ->
+                worker = pending.Identity.WorkerInstance && command.Correlation = token pending.Identity)
+        | _ -> true
+
     /// Typed admission captures a fresh request budget without mutating any loaded ceiling.
     let submitLimited now requested (limits: RequestLimits) (HostState original) =
         let identity, configuration, input =
