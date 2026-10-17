@@ -354,9 +354,12 @@ python3 - "$repo" <<'PYVERSION'
 import json,pathlib,sys,xml.etree.ElementTree as ET
 repo=pathlib.Path(sys.argv[1]);version=ET.parse(repo/'eng/wasm-shared/version.props').findtext('./PropertyGroup/WasmSharedVersion')
 policy=json.loads((repo/'scripts/wasm-release/api-baseline-policy.json').read_text())
-def validate(version,sdk,consumer,contracts,lifecycle):
+def validate(version,sdk,consumer,contracts,lifecycle,lock):
     if version != policy['candidateVersion'] or sdk != version:
         raise ValueError('coherent candidate version mismatch')
+    edge=lock['dependencies']['net10.0']['fs.gg.wasm.browser']['dependencies']['FS.GG.Wasm.Contracts']
+    if edge != '['+version+', )':
+        raise ValueError('Lifecycle.Tests project dependency lock range differs from selected Contracts version')
     document=ET.fromstring(consumer)
     references=[row for row in document.iter('PackageReference') if row.get('Include')=='FS.GG.Wasm.Browser']
     targets=[row for row in document.iter('Target') if row.get('Name')=='RequireCandidateVersion']
@@ -367,12 +370,14 @@ def validate(version,sdk,consumer,contracts,lifecycle):
     if 'FS.GG.Wasm.Contracts.$version.nupkg' not in contracts or 'FS.GG.Wasm.Browser.$version.nupkg' not in lifecycle:
         raise ValueError('qualification package path bypasses coherent metadata')
 sdk=(repo/'sdk/wasm/VERSION').read_text().strip();consumer=(repo/'tests/Wasm.PackageConsumer/Consumer.fsproj').read_text();contracts=(repo/'scripts/verify-wasm-contracts.sh').read_text();lifecycle=(repo/'scripts/verify-wasm-lifecycle.sh').read_text()
-validate(version,sdk,consumer,contracts,lifecycle)
-for broken in [(version,'0.2.0',consumer,contracts,lifecycle),(version,sdk,consumer,contracts.replace('$version.nupkg','0.2.0.nupkg'),lifecycle),(version,sdk,consumer.replace('Version="[$(WasmCandidateVersion)]"','Version="[0.2.0]"'),contracts,lifecycle),(version,sdk,consumer.replace('Name="RequireCandidateVersion"','Name="MissingGuard"'),contracts,lifecycle)]:
+lock=json.loads((repo/'tests/Wasm.Lifecycle.Tests/packages.lock.json').read_text())
+validate(version,sdk,consumer,contracts,lifecycle,lock)
+stale=json.loads(json.dumps(lock));stale['dependencies']['net10.0']['fs.gg.wasm.browser']['dependencies']['FS.GG.Wasm.Contracts']='[0.3.0, )'
+for broken in [(version,'0.2.0',consumer,contracts,lifecycle,lock),(version,sdk,consumer,contracts.replace('$version.nupkg','0.2.0.nupkg'),lifecycle,lock),(version,sdk,consumer.replace('Version="[$(WasmCandidateVersion)]"','Version="[0.2.0]"'),contracts,lifecycle,lock),(version,sdk,consumer.replace('Name="RequireCandidateVersion"','Name="MissingGuard"'),contracts,lifecycle,lock),(version,sdk,consumer,contracts,lifecycle,stale)]:
     try:validate(*broken)
     except ValueError:pass
     else:raise SystemExit('known-bad candidate version binding accepted')
-print('wasm-candidate-preflight: coherent metadata=pass explicit selected consumer=required wrong paths/version/fallback/missing guard=refused')
+print('wasm-candidate-preflight: coherent metadata=pass explicit selected consumer=required wrong paths/version/fallback/missing guard/stale project lock=refused')
 PYVERSION
 "$repo/tests/release/wasm/test-release-wasm.sh" --source-only
 python3 "$repo/tests/release/wasm/test-installed-org-workflow.py"
