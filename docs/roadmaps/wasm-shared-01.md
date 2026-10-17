@@ -41,7 +41,12 @@ consumer bytes with immutable 0.2 qualifier hashes. Both failures retain their
 original outcomes. The connected repair uses maintained exact historical byte
 fixtures, checked by the unchanged production blob/SHA256 audit predicates and
 mutation refusals. Clean shallow CI needs no history fetch or historical Git objects;
-the accepted audit and binder are unchanged. Rerun requires a committed clean candidate.
+the accepted audit and binder are unchanged. Independent review then found that
+successful inert collection controls still resolved installed tools before hosted
+setup. Source `045756b` replaces those tool identities with inert files/doubles;
+the missing-tool refusal remains explicit. This preserves a cold-runner preflight
+that needs only its existing Python/Git source-check dependencies. The corrected
+clean static preflight passed; no generator or runtime execution is implied.
 
 Preparation artifacts are inputs for independent review and a subsequent generated
 fixture commit. They are not coherent qualification or package acceptance. Root must
