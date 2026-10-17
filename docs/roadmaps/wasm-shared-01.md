@@ -28,6 +28,10 @@ correspondence, admission results, cleanup and whole-job fit remain unqualified
 until the exact candidate runs. Original failures and future scheduling remain
 separate from the source optimization.
 
+The mandatory ApiCompat rail compares against actual published 0.5 P805400, its
+manifest and signed served archive hashes. The exact original 0.5 candidate policy
+remains a versioned historical evidence reader, not an execution fallback.
+
 Accepted 0.5 publication/installed identities below remain immutable. The finite
 installed binder still selects that exact publication and refuses the unpublished
 0.6 successor; a later publication-specific qualifier requires genuine receipts.
