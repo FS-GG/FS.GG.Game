@@ -1,4 +1,4 @@
-// Test-only facade seams over exactly installed public0.2.0, no producer runtime link.
+// Current facade controls shared by source and exact selected-package qualification.
 module Wasm.Lifecycle.Correspondence.InstalledHostControls
 open System
 open FS.GG.Wasm.Contracts
@@ -16,7 +16,7 @@ let private phaseName = function
 let private rawPhase = function
     | Compile -> "compile" | Instantiate -> "instantiate" | AllocateDescriptor -> "allocate-descriptor"
     | AllocateInput -> "allocate-input" | Initialize -> "initialize" | Process -> "process" | Free -> "free" | Shutdown -> "shutdown"
-let private blank state kind worker =
+let private blank (state:HostProjection) kind worker : Mechanical =
     { Kind=kind;Worker=worker;Request=0UL;Generation=0UL;Correlation="";Operation="";Bytes=0;Timer="";Delay=0;Disposition="";State=state }
 let private mechanicalExpectation (observed:int64) (state:HostProjection) (effect:EffectProjection) =
     let empty=blank state "" effect.Worker
@@ -103,13 +103,13 @@ let nestedCallbackMutationsAreDetected (trace:ModelTrace) =
 
 // Runs against both public facades (and the installed package build). Transport
 // is inert: this checks real reducer/effect/callback ordering without guest code.
-let terminalRetirementControls selectedSettings =
+let terminalRetirementControls (selectedSettings:HostSettings) =
     let require condition message = if not condition then failwith ("terminal retirement: " + message)
     let unwrap = function Ok value -> value | Error issues -> failwithf "%A" issues
-    let identity request = { WorkerInstance = "terminal-worker"; Request = request; Generation = 1UL }
+    let identity (request:uint64) : HostIdentity = { WorkerInstance = "terminal-worker"; Request = request; Generation = 1UL }
     let correlation (id:HostIdentity) = OperationToken.create $"request-{id.Generation}-{id.Request}" |> unwrap
-    let outcome phase id = { Identity=id; Phase=phase; State=Succeeded; Dispatch=Dispatched; CleanupFault=None; CopiedOutput=Array.empty; EffectEligibility=ProductAdapterMustDecide }
-    let limits = { MaximumDeadlineMilliseconds=100; MaximumOutputBytes=64; EnclosingDeadlineMilliseconds=None }
+    let outcome (phase:InvocationPhase) (id:HostIdentity) : InvocationOutcome = { Identity=id; Phase=phase; State=Succeeded; Dispatch=Dispatched; CleanupFault=None; CopiedOutput=Array.empty; EffectEligibility=ProductAdapterMustDecide }
+    let limits : RequestLimits = { MaximumDeadlineMilliseconds=100; MaximumOutputBytes=64; EnclosingDeadlineMilliseconds=None }
     for connected, rejected, completeFromPost, adapterRejected in [ for connected in [false;true] do for rejected in [false;true] do for sync in [false;true] do for adapter in [false;true] do yield connected,rejected,sync,adapter ] do
         let mutable host:Host option=None
         let mutable mechanics=[]
@@ -127,7 +127,7 @@ let terminalRetirementControls selectedSettings =
         let observedPost request =
             if completeFromPost && request=reset.Request then completeTerminal ()
         let record value = mechanics <- mechanics @ [value]
-        let settle result =
+        let settle (result:BrowserResult) =
             results <- results @ [result]
             if result.Identity=reset then
                 require host.Value.Projection.Disposed "disposed state must precede callback"
@@ -191,13 +191,13 @@ let terminalRetirementControls selectedSettings =
 
 // Exercise callbacks occurring BEFORE a selected terminal batch reaches Post.
 // No guest execution: both actual public facades use their maintained reducer.
-let terminalReentrantAdmissionControls selectedSettings =
+let terminalReentrantAdmissionControls (selectedSettings:HostSettings) =
     let require condition message = if not condition then failwith ("terminal pre-post reentry: " + message)
     let unwrap = function Ok value -> value | Error issues -> failwithf "%A" issues
-    let identity request = { WorkerInstance="terminal-worker";Request=request;Generation=1UL }
+    let identity (request:uint64) : HostIdentity = { WorkerInstance="terminal-worker";Request=request;Generation=1UL }
     let correlation (id:HostIdentity) = OperationToken.create $"request-{id.Generation}-{id.Request}" |> unwrap
-    let outcome phase id = { Identity=id;Phase=phase;State=Succeeded;Dispatch=Dispatched;CleanupFault=None;CopiedOutput=Array.empty;EffectEligibility=ProductAdapterMustDecide }
-    let limits = { MaximumDeadlineMilliseconds=5;MaximumOutputBytes=64;EnclosingDeadlineMilliseconds=None }
+    let outcome (phase:InvocationPhase) (id:HostIdentity) : InvocationOutcome = { Identity=id;Phase=phase;State=Succeeded;Dispatch=Dispatched;CleanupFault=None;CopiedOutput=Array.empty;EffectEligibility=ProductAdapterMustDecide }
+    let limits : RequestLimits = { MaximumDeadlineMilliseconds=5;MaximumOutputBytes=64;EnclosingDeadlineMilliseconds=None }
     for connected, mode in [ for connected in [false;true] do for mode in ["timer-expiry";"previous-dispose";"previous-replace";"previous-phase";"ordinary-ancestor"] do yield connected,mode ] do
         let mutable host:Host option=None
         let mutable now=0L
@@ -210,8 +210,8 @@ let terminalReentrantAdmissionControls selectedSettings =
         let reset=identity 4UL
         let previous=identity 3UL
         let terminalKey (timer:TimerIdentity) = $"{timer.Identity.WorkerInstance}:{timer.Identity.Generation}:{timer.Identity.Request}:{OperationToken.value timer.Correlation}:{timer.Phase}"
-        let terminalTimer = { Identity=reset;Correlation=correlation reset;Phase=AllocateDescriptor }
-        let settle result =
+        let terminalTimer : TimerIdentity = { Identity=reset;Correlation=correlation reset;Phase=AllocateDescriptor }
+        let settle (result:BrowserResult) =
             results <- results @ [result]
             if result.Identity=previous && not fired then
                 fired <- true

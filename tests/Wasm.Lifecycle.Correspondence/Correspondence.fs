@@ -6,7 +6,7 @@ open Wasm.Lifecycle.Correspondence.CorrespondenceTypes
 
 let private sha character = String.replicate 64 character
 
-let settings profile =
+let settings profile : HostSettings =
     let descriptor = Profiles.tryFind profile |> Option.get
 
     let configuration =
@@ -40,7 +40,7 @@ let private operationToken () =
     OperationToken.create "model-trace"
     |> Result.defaultWith (fun issue -> failwithf "%A" issue)
 
-let private successfulOutcome phase request =
+let private successfulOutcome (phase:InvocationPhase) (request:HostIdentity) : InvocationOutcome =
     {
         Identity = request
         Phase = phase
@@ -51,7 +51,7 @@ let private successfulOutcome phase request =
         EffectEligibility = ProductAdapterMustDecide
     }
 
-let private requestIdentity (request: RequestProjection) worker =
+let private requestIdentity (request: RequestProjection) worker : HostIdentity =
     identity worker request.Id request.Generation
 
 // The original typed input survives pre-event expiry; LastAction is an output.

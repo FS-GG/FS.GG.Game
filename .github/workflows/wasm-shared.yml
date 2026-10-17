@@ -139,6 +139,18 @@ jobs:
           fable_version="$(dotnet tool run fable -- --version | sed -E $'s/\\x1B\\[[0-9;]*[mK]//g' | head -n 1)"
           test "$fable_version" = "5.18.0"
 
+      - name: Prepare compatible supervisor qualification state
+        run: |
+          scripts/wasm-release/qualify-supervisor-custody.sh --bootstrap "$RUNNER_TEMP/wasm-supervisor-baseline"
+          cat "$RUNNER_TEMP/wasm-supervisor-baseline/environment" >> "$GITHUB_ENV"
+
+      - name: Compile current supervisor source
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          scripts/wasm-release/qualify-supervisor-custody.sh --compile-source "$RUNNER_TEMP/wasm-supervisor-source"
+          echo "WASM_SUPERVISOR_SOURCE_BUILD_LOG=$RUNNER_TEMP/wasm-supervisor-source/source-build.log" >> "$GITHUB_ENV"
+
       - name: Install pinned Quint
         run: |
           npm install --global "@informalsystems/quint@${QUINT_VERSION}"
@@ -153,17 +165,23 @@ jobs:
           rustc --version | grep -F "rustc ${RUST_VERSION} "
           rustup target list --installed | grep -Fx wasm32-unknown-unknown
 
+      - name: Prepare coherent candidate custody
+        run: |
+          set -euo pipefail
+          scripts/wasm-release/prepare.sh artifacts/wasm-release
+
+      - name: Compile current installed supervisor
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          scripts/wasm-release/qualify-supervisor-custody.sh --compile-installed artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence"
+
       - name: Install pinned Playwright Chromium
         working-directory: tests/Wasm.Browser.Conformance
         run: |
           npm ci
           test "$(node -p "require('@playwright/test/package.json').version")" = "$PLAYWRIGHT_VERSION"
           npx playwright install --with-deps chromium
-
-      - name: Prepare compatible supervisor qualification state
-        run: |
-          scripts/wasm-release/qualify-supervisor-custody.sh --bootstrap "$RUNNER_TEMP/wasm-supervisor-baseline"
-          cat "$RUNNER_TEMP/wasm-supervisor-baseline/environment" >> "$GITHUB_ENV"
 
       - name: Rebuild pinned WebAssembly fixtures
         run: |
@@ -192,7 +210,6 @@ jobs:
       - name: Verify SDK archive and fresh package consumer
         run: |
           set -euo pipefail
-          scripts/wasm-release/prepare.sh artifacts/wasm-release
           scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/package-consumer.log"
 
       - name: Qualify compatible supervisor source and installed custody

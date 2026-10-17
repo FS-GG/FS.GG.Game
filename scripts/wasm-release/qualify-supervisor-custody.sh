@@ -65,8 +65,8 @@ report_custody_exit() {
           installed-dotnet.log installed-fable-build.log installed-fable.log \
           installed-raw-numeric.log installed-lock-refusal.log; do
         if [[ -f "$output/$leaf" && ! -L "$output/$leaf" ]]; then
-          printf 'supervisor diagnostic: %s (last 60 lines, at most 16384 bytes)\n' "$leaf" >&2
-          { tail -c 16384 -- "$output/$leaf" | tail -n 60; } >&2 || printf 'supervisor diagnostic unavailable: %s\n' "$leaf" >&2
+          printf 'supervisor diagnostic: %s (first compiler errors plus last 60 lines, at most 16384 bytes)\n' "$leaf" >&2
+          { { grep -m 12 -E 'error (FS|NU|MSB)[0-9]+' "$output/$leaf" | head -c 4096; } || true; tail -c 12288 -- "$output/$leaf" | tail -n 60; } >&2 || printf 'supervisor diagnostic unavailable: %s\n' "$leaf" >&2
         fi
       done
     fi
@@ -75,12 +75,21 @@ report_custody_exit() {
 }
 case "${1:-}" in
   --bootstrap) bootstrap "$(realpath -m "${2:?requires new private baseline root}")";;
-  --custody)
+  --compile-source)
+    output="$(realpath -m "${2:?requires new private output}")"
+    q="${WASM_SUPERVISOR_BASELINE_ROOT:?requires completed official bootstrap}"
+    stage='early current source compile';diagnostic_fresh=true
+    trap 'report_custody_exit "$?"' EXIT
+    export WASM_BASELINE_QUALIFICATION_ROOT="$q" WASM_FSC_COMPILER_PATH="$q/compiler/fsc.dll" DOTNET_HOST_PATH=/usr/share/dotnet/dotnet
+    "$repo/scripts/verify-wasm-supervisor.sh" --compile-source "$output"
+    ;;
+  --compile-installed|--custody)
+    phase="$1"
     custody="$(realpath -e "${2:?requires exact coherent custody}")"
     output="$(realpath -m "${3:?requires new private output}")"
     stage='baseline preparation'
     diagnostic_fresh=false
-    [[ -e "$output" ]] || diagnostic_fresh=true
+    if [[ "$phase" == --custody || ! -e "$output" ]]; then diagnostic_fresh=true;fi
     trap 'report_custody_exit "$?"' EXIT
     q="${WASM_SUPERVISOR_BASELINE_ROOT:-${output}-baseline}"
     [[ -d "$q" ]] || bootstrap "$q"
@@ -96,8 +105,13 @@ PYCONFIG
     # Direct MSBuild execution needs the same host used by the qualifier's commands.
     # The selected private fsc.dll remains supplied through DotnetFscCompilerPath.
     export DOTNET_HOST_PATH=/usr/share/dotnet/dotnet
+    if [[ "$phase" == --compile-installed ]]; then
+      stage='early current installed compile'
+      "$repo/scripts/verify-wasm-supervisor.sh" --compile-installed "$output"
+      exit 0
+    fi
     stage='source/model/installed supervisor qualification'
-    "$repo/scripts/verify-wasm-supervisor.sh" "$output"
+    "$repo/scripts/verify-wasm-supervisor.sh" --compiled "$output"
     stage='official Core byte joins'
     python3 - "$repo" "$q" <<'PYJOIN'
 import hashlib,json,pathlib,sys
@@ -121,5 +135,5 @@ PYJOIN
     stage='source cleanliness'
     [[ -z "$(git -C "$repo" status --porcelain)" ]] || { echo 'supervisor browser qualification dirtied source' >&2; exit 2; }
     ;;
-  *) echo 'usage: qualify-supervisor-custody.sh --bootstrap NEW_ROOT | --custody CUSTODY NEW_OUTPUT' >&2; exit 2;;
+  *) echo 'usage: qualify-supervisor-custody.sh --bootstrap NEW_ROOT | --compile-source NEW_OUTPUT | --compile-installed CUSTODY NEW_OUTPUT | --custody CUSTODY COMPILED_OUTPUT' >&2; exit 2;;
 esac

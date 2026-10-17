@@ -33,10 +33,13 @@ ordered = [
     "Set up .NET",
     "Set up Node",
     "Prepare cold package and tool state",
+    "Prepare compatible supervisor qualification state",
+    "Compile current supervisor source",
     "Install pinned Quint",
     "Install pinned Rust",
+    "Prepare coherent candidate custody",
+    "Compile current installed supervisor",
     "Install pinned Playwright Chromium",
-    "Prepare compatible supervisor qualification state",
     "Rebuild pinned WebAssembly fixtures",
     "Verify compatibility contracts",
     "Verify lifecycle, packages, and Fable consumers",
@@ -85,6 +88,13 @@ def validate(candidate: str) -> None:
         'Prepare bounded canonical traces', 'Retain trace preparation evidence')]
     if min(generation_order) < 0 or generation_order != sorted(generation_order):
         raise ValueError("generation guard/setup/execution ordering differs")
+    for token in ('--compile-source "$RUNNER_TEMP/wasm-supervisor-source"',
+                  '--compile-installed artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence"',
+                  'WASM_SUPERVISOR_SOURCE_BUILD_LOG=$RUNNER_TEMP/wasm-supervisor-source/source-build.log'):
+        if token not in qualify:
+            raise ValueError('early compile prerequisite missing: '+token)
+    if qualify.count('scripts/wasm-release/prepare.sh artifacts/wasm-release') != 1:
+        raise ValueError('original custody must be packed exactly once')
     freeze_guard="if: ${{ success() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'qualify' && inputs.expected-head == github.sha)) }}"
     for token in ('python3 scripts/wasm-release/promotion.py check-custody-plan',
                   'WASM_QUALIFY_EXPECTED_HEAD: ${{ inputs.expected-head }}', freeze_guard,
@@ -134,7 +144,9 @@ for broken in (
     text.replace('retention-days: 90', 'retention-days: 7'),
     text.replace('path: ${{ runner.temp }}/wasm-eligible/', 'path: artifacts/'),
     text.replace('      - name: Freeze eligible binding', '      - name: Missing custody freeze'),
-    text.replace(ordered[7], "BROKEN-A").replace(ordered[8], ordered[7]).replace("BROKEN-A", ordered[8]),
+    text.replace('Compile current supervisor source', 'BROKEN-SOURCE').replace('Install pinned Quint', 'Compile current supervisor source').replace('BROKEN-SOURCE', 'Install pinned Quint'),
+    text.replace('Compile current installed supervisor', 'BROKEN-INSTALLED').replace('Install pinned Playwright Chromium', 'Compile current installed supervisor').replace('BROKEN-INSTALLED', 'Install pinned Playwright Chromium'),
+    text.replace('scripts/wasm-release/prepare.sh artifacts/wasm-release', 'true'),
 ):
     try:
         validate(broken)
@@ -379,6 +391,34 @@ for broken in [(version,'0.2.0',consumer,contracts,lifecycle,lock),(version,sdk,
     else:raise SystemExit('known-bad candidate version binding accepted')
 print('wasm-candidate-preflight: coherent metadata=pass explicit selected consumer=required wrong paths/version/fallback/missing guard/stale project lock=refused')
 PYVERSION
+python3 - "$repo" <<'PYPHASE'
+import hashlib,pathlib,subprocess,sys,tempfile
+repo=pathlib.Path(sys.argv[1]);text=(repo/'scripts/verify-wasm-supervisor.sh').read_text()
+helpers=text.split('build_header() {',1)[1].split('compile_source() {',1)[0]
+helpers='build_header() {'+helpers
+assert text.index('validate_build "$source_log"') < text.index('# All compilation prerequisites') < text.index('"$quint" test')
+assert text.index('export WasmCandidateVersion="$version"') < text.index('compile_installed() {')
+assert text.count('"$project" -t:Restore,Build')==1
+assert '"$project" -t:Restore -m:1' in text
+assert text.count('-p:WasmCandidateVersion="$version"')==3
+with tempfile.TemporaryDirectory() as root:
+    root=pathlib.Path(root);assembly=root/'current.dll';log=root/'build.log'
+    assembly.write_bytes(b'owned inert assembly fixture')
+    header='wasm-supervisor-build phase=source source=fixture-head tree=fixture-tree version=0.4.0'
+    good=header+'\nwasm-supervisor-assembly sha256='+hashlib.sha256(assembly.read_bytes()).hexdigest()+'\n'+header+' status=success\n'
+    def run(body,phase='source',binary=None):
+        log.write_text(body)
+        return subprocess.run(['bash','-c','set -euo pipefail\nsource_head=fixture-head;source_tree=fixture-tree;version=0.4.0\n'+helpers+'\nvalidate_build "$1" "$2" "$3"\nprintf admitted', 'phase-control',str(log),phase,str(binary or assembly)],capture_output=True,text=True)
+    result=run(good);assert result.returncode==0 and result.stdout=='admitted',result.stderr
+    for bad in ['',good.replace('fixture-head','stale-head'),good.replace('status=success','status=partial'),good.replace('version=0.4.0','version=0.3.0'),good.replace('sha256=','sha256=00')]:
+        result=run(bad);assert result.returncode!=0 and 'admitted' not in result.stdout
+    result=run(good,'installed');assert result.returncode!=0 and 'admitted' not in result.stdout
+    link=root/'linked.dll';link.symlink_to(assembly)
+    result=run(good,binary=link);assert result.returncode!=0 and 'admitted' not in result.stdout
+    assembly.write_bytes(b'different inert assembly')
+    result=run(good);assert result.returncode!=0 and 'admitted' not in result.stdout
+print('wasm-supervisor-phase-preflight: actual helper identity/status/assembly guards=pass stale/partial/linked/wrong phase=refused before admission')
+PYPHASE
 "$repo/tests/release/wasm/test-release-wasm.sh" --source-only
 python3 "$repo/tests/release/wasm/test-installed-org-workflow.py"
 python3 "$repo/tests/release/wasm/test-api-baseline-policy.py"

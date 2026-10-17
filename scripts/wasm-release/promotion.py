@@ -38,7 +38,8 @@ VERSION = ET.parse(ROOT/'eng/wasm-shared/version.props').findtext('.//WasmShared
 PACKAGES = ('FS.GG.Wasm.Contracts', 'FS.GG.Wasm.Browser')
 FILES = tuple(x + '.' + VERSION + '.nupkg' for x in PACKAGES) + ('fsgg-wasm-sdk-' + VERSION + '.tar.gz',)
 QUALIFY_JOB = 'Shared WASM source, model, package, and browser qualification'
-GATES = ('Static workflow preflight', 'Rebuild pinned WebAssembly fixtures',
+GATES = ('Static workflow preflight', 'Compile current supervisor source',
+         'Prepare coherent candidate custody', 'Compile current installed supervisor', 'Rebuild pinned WebAssembly fixtures',
          'Verify compatibility contracts', 'Verify lifecycle, packages, and Fable consumers',
          'Run browser Worker conformance', 'Verify SDK archive and fresh package consumer',
          'Qualify compatible supervisor source and installed custody', 'Freeze eligible binding')

@@ -8,7 +8,7 @@ published 0.2.0. It is gap evidence, not successor acceptance.
 `Compatibility.fsproj` uses production source. `Installed/InstalledCompatibility.fsproj`
 uses an exact package selected by `WasmCandidateVersion`; restore it into a
 fresh package cache with explicit candidate source mapping, then rebuild in
-locked mode. Both replay the original 47 default canonical traces and all
+locked mode. Both replay the 53 default canonical traces and all 16
 selected traces through `Host.Create` and `Host.CreateConnected`, compare full
 states and ordered effects, and check connected callbacks and raw terminals.
 The additional wire fixture exercises the actual F# receiver with controlled
@@ -23,12 +23,17 @@ not when its earlier identity was created. Negative guards and causal
 mutations cover limit capture, mixed capacity, snapshot promotion, inclusive
 head expiry, frozen queue invalidation and token-bound commit.
 
-`native-api-compat.py` runs SDK 10.0.401's native package validation against
-the hash-pinned immutable 0.2.0 Browser and Contracts archives. It accepts
-explicit custody, candidate version, baseline feed, official package-cache
-and SDK paths. No suppression file is generated. An ephemeral package must
-retain at least assembly version 0.2.0.0 for this API comparison; that does
-not reserve a release version.
+`Baseline/` and `native-api-compat.py` retain immutable historical 0.2.0 gap
+and API evidence. They are not current acceptance gates. Current qualification
+classifies the coherent candidate against the actual published 0.3.0 baseline
+once in `prepare.sh`; it imposes no old-version compatibility requirement.
+
+Current source and exact-package projects exercise present lifecycle contracts,
+including both default BAR/SC2 settings and the selected supervisor policy. The
+shared controls annotate host identities, outcomes and settings explicitly so
+source includes and installed public namespaces resolve the same types. The
+singleton effect interpreter's command capture accumulates each callback; its
+ordinary Post/Arm mutation control refuses a missing command.
 
 `browser/` calls the installed producer through its real module Worker assets
 in Chromium. Its guest is independently compiled from `limits-guest.c` with
@@ -70,3 +75,13 @@ clock-advanced admissions/commits. Twenty-four state/effect witnesses record
 actual reached counts. The gate requires each witness to occur in at least one
 of the cold or initialized 1,000-trace samples; it does not turn a zero count
 in one entry into a claim of coverage there.
+
+In hosted qualification, official tool bootstrap precedes the existing source
+restore/build and CLR/Fable in-memory controls. After one coherent pack, the
+installed lock-generation restore and fresh-cache locked build run with their
+existing CLR/Fable and lock-refusal controls. Model sampling and real browser
+work follow these phases. The final custody stage checks the same-job source,
+tree, version, assembly hashes and successful phase logs before reusing their
+outputs; it does not repeat the builds or in-memory suites. All stages share
+the unchanged 35-minute job limit. This ordering moves diagnosis earlier;
+measured time or cost savings are not established.

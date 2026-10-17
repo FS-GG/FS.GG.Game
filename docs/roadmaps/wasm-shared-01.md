@@ -47,6 +47,40 @@ Publication, fresh both-feed installed acceptance, registry inventory and consum
 adoption remain distinct later boundaries. Neither public 0.4 absence observed during
 planning nor source preparation establishes organization occupancy or authorization.
 
+## Current source and installed compile boundary
+
+PR713 full qualification [39006292599](https://github.com/FS-GG/FS.GG.Game/actions/runs/39006292599),
+attempt 1, job `117319354159`, failed at source `5e1c48b` in the supervisor
+source build. Earlier contract, lifecycle, browser Worker, coherent package/current
+0.3 classification and fresh package-consumer steps passed. Selected model controls,
+sampling and both trace checks also passed before the build failed. The compiler
+reported HostIdentity/WireHostIdentity inference errors in shared controls. Only the
+last 60 source-build log lines survived the original failure trap; the complete raw
+source-build log is unavailable. Installed supervisor suites and eligible custody
+freeze/upload were unreached. This run remains failed.
+
+The connected correction annotates shared identity, outcome, settings and boundary
+records across all source/installed include contexts. It also accumulates command
+capture across singleton effect callbacks and adds an ordinary Post/Arm omission
+control. `Compatibility.fsproj` checks current producer lifecycle behavior, shared
+BAR/SC2 and selected controls, generated correspondence and both facades; its name
+does not impose old-version compatibility. The separate installed host fixture now
+requires an explicit exact current version instead of an obsolete 0.2 fallback.
+Historical baseline source and audit evidence retain their original identities.
+
+Pipeline preflight selects a linear dependency/order correction with inert controls,
+without a new pipeline model. Official bootstrap enables the existing source build
+and CLR/Fable in-memory controls before Quint/Rust/browser setup. One coherent pack
+then enables installed lock-generation restore, one fresh-cache locked build and
+existing installed CLR/Fable/raw-numeric/NU1403 controls before model/browser work.
+The final supervisor stage validates same-job source/tree/version/status and actual
+assembly hashes before reusing these outputs. Both final model/browser suites remain
+required; builds and in-memory suites are not duplicated. Known-stale phase evidence
+is refused by the actual helper in inert preflight controls. Failure reporting now
+retains bounded first compiler errors plus the existing tail, preserving first status.
+The 35-minute job limit is unchanged. Earlier detection is the intended benefit;
+actual cold fit, runtime success and cost savings await the next hosted qualification.
+
 ## Third hosted attempt: complete generated trace preparation
 
 The separately selected [39004844417](https://github.com/FS-GG/FS.GG.Game/actions/runs/39004844417),

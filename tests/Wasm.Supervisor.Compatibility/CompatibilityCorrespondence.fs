@@ -6,7 +6,7 @@ open Wasm.Lifecycle.Correspondence.Correspondence
 open Wasm.Lifecycle.Correspondence.InstalledHostControls
 open Wasm.Supervisor.Compatibility.CompatibleTypes
 
-let selectedSettings () =
+let selectedSettings () : HostSettings =
     let baseline=settings Sc2ImportedStrict
     HostSettings.createCompatible (HostSettings.configuration baseline) (HostSettings.role baseline) Sc2SupervisorV1
     |> Result.defaultWith (failwithf "%A")
@@ -50,11 +50,11 @@ let replay (trace:CompatibleTrace) =
     // Same pure facade emits captured configurations, projectionFailures independently of projected effects.
     let mutable commands=[]
     let host=Host.Create(selectedSettings(),fun effects ->
-        commands<-effects |> List.choose(function
+        commands<-commands @ (effects |> List.choose(function
             | PostToWorker(_,command) ->
                 let limits=(Validation.configuration command.Configuration).Limits
                 Some(command.Identity.Request,limits.MaximumDeadlineMilliseconds,limits.MaximumOutputBytes)
-            | _->None)) |> Result.defaultWith (failwithf "%A")
+            | _->None))) |> Result.defaultWith (failwithf "%A")
     let mutable commandFailures=[]
     for previous,target in List.pairwise trace.Steps do
         commands<-[]
@@ -62,6 +62,19 @@ let replay (trace:CompatibleTrace) =
         let expected=target.Commands |> List.map(fun (request,selected)->request,selected.MaximumDeadlineMilliseconds,selected.MaximumOutputBytes)
         if commands<>expected then commandFailures <- $"{trace.Name} captured command limits differ: expected=%A{expected} actual=%A{commands}"::commandFailures
     failures@commandFailures
+
+// An ordinary Process emits Post then Arm. The real Host supplies singleton
+// callbacks; omitting its nonempty command must fail the same full validator.
+let ordinaryPostArmCaptureIsDetected (trace:CompatibleTrace) =
+    let ordinary (step:CompatibleStep) =
+        let effects=step.Model.Effects
+        match List.tryFindIndex(fun effect -> effect.Kind="post" && effect.Operation="process") effects,
+              List.tryFindIndex(fun effect -> effect.Kind="armTimer") effects with
+        | Some post,Some arm -> post<arm && not step.Commands.IsEmpty
+        | _ -> false
+    let present=trace.Steps |> List.exists ordinary
+    let omitted={trace with Steps=trace.Steps |> List.map(fun step -> if ordinary step then {step with Commands=[]} else step)}
+    present && List.isEmpty(replay trace) && not(List.isEmpty(replay omitted))
 
 // Alter only expected causal facts; all controls use the same real facade validators.
 let causalMutationsAreDetected (trace:CompatibleTrace) =

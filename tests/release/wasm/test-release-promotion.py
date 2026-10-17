@@ -371,7 +371,10 @@ class Tests(unittest.TestCase):
         self.assertIn('verify-wasm-supervisor-browser.sh" --feed-only',selected)
         self.assertIn('official-core-joins.json',selected)
         runner=(ROOT/'scripts/verify-wasm-supervisor.sh').read_text()
-        self.assertEqual(runner.count('if [[ "$mode" == custody ]]; then'),2)
+        self.assertIn('if [[ "$mode" == custody ]]; then compile_source;fi',runner)
+        self.assertIn('if [[ "$mode" == compile-installed ]]; then compile_installed;exit 0;fi',runner)
+        self.assertIn('if [[ "$mode" != feed-only ]]; then',runner)
+        self.assertLess(runner.index('validate_build "$source_log"'),runner.index('"$quint" test'))
         self.assertIn('RestoreLockedMode=true',runner);self.assertIn('NU1403',runner)
     def test_installed_cache_member_lock_worker_substitution(self):
         import zipfile
