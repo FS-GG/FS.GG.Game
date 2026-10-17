@@ -134,8 +134,13 @@ let terminalRetirementControls (selectedSettings:HostSettings) =
                 require armed.IsEmpty "all timers canceled before callback, including synchronous Post completion"
                 require (mechanics |> List.contains "terminate") "worker retired before result"
                 completed <- true
+                let stateBefore=host.Value.Projection
+                let mechanicsBefore=mechanics
+                let resultCountBefore=results.Length
                 let admission=host.Value.SubmitLimited(2L,LimitedInvoke(fresh,Ordinary,[|9uy|]),limits)
-                require (admission=Error[RequestRefused HostDisposed]) "callback reentry refused"
+                require (admission=Error[RequestOwnerUnavailable;RequestRefused HostDisposed]) (sprintf "callback reentry refusal differs: %A" admission)
+                require (host.Value.Projection=stateBefore) "refused callback reentry preserves retired state"
+                require (mechanics=mechanicsBefore && results.Length=resultCountBefore) "refused callback reentry emits no effects"
                 reentered <- true
         let transport:HostTransport =
             { Now=(fun () -> 2L)

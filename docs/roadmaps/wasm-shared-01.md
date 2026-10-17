@@ -70,6 +70,15 @@ with parent creation. The correction creates parents separately, then creates th
 fresh private evidence directory with its explicit mode. This is actual early failure detection,
 not successful source compilation or full qualification; both failed operations remain.
 
+Follow-up [39008813238](https://github.com/FS-GG/FS.GG.Game/actions/runs/39008813238),
+attempt 1 at `784645c`, passed the actual source build with zero warnings/errors,
+then failed the first CLR terminal-control assertion. The control expected only
+HostDisposed, while existing typed admission accumulates RequestOwnerUnavailable
+for the absent retired owner followed by HostDisposed. The correction asserts
+that complete refusal, unchanged retired state and no emitted mechanical/settlement
+effects; it changes no runtime behavior. Actual Fable/pack/model/browser/installed
+acceptance remained unreached. The failed attempt and its exact assertion remain.
+
 The connected correction annotates shared identity, outcome, settings and boundary
 records across all source/installed include contexts. It also accumulates command
 capture across singleton effect callbacks and adds an ordinary Post/Arm omission
