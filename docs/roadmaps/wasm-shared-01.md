@@ -40,6 +40,14 @@ retry, clock enlargement, speculative HTTP cache change or consumer asset rewrit
 is selected. The existing 35-minute hosted producer profile remains the bound;
 new tool/build/browser fit is unqualified until its original complete run.
 
+The first candidate qualifier
+[39069862111](https://github.com/FS-GG/FS.GG.Game/actions/runs/39069862111), attempt 1,
+failed static preflight on the Lifecycle.Tests project dependency range before
+compiler or runtime qualification. The connected repair selects the current
+Contracts project version in that lock edge and tests the previous published
+version as a refusal. All other restored package hashes and historical package
+locks remain unchanged; a fresh exact-head full qualifier is still required.
+
 Source preparation does not publish `0.5.0` or qualify installed adoption. Its
 actual future publication P and read-only installed qualifier cannot be guessed;
 the existing finite installed binder still identifies authentic published `0.4.0`
