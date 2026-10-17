@@ -13,24 +13,18 @@ import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REPO = "FS-GG/FS.GG.Game"
-PUBLISHED = "6732d2371d142d5ccc5d2d127f20e4f179800892"
-PUBLISHED_TREE = "cc71e7cfe73449919376acf775940ff9e8bdab56"
+PUBLISHED = "80540027623d9b1a8aa7715d0591de48455403b7"
+PUBLISHED_TREE = "fa2cd0160f9a7c5bb0a1ad85fd8f1eff68b867d3"
 # Closed repair closure. Root selection binds the exact Q; this is not authority
 # for arbitrary descendants or semantic changes inside a broad scripts prefix.
 INSTALLED_PATHS = frozenset({
-    '.github/workflows/wasm-installed-org.yml',
     'scripts/wasm-release/bind-installed-release.py',
-    'scripts/wasm-release/promotion.py',
-    'scripts/wasm-release/installed-evidence.py',
-    'scripts/verify-wasm-package-consumer.sh',
     'tests/release/wasm/test-installed-org-workflow.py',
     'tests/release/wasm/test-release-promotion.py',
-    'tests/release/wasm/test-installed-evidence.py',
-    'scripts/verify-wasm-workflow.sh',
     'docs/roadmaps/wasm-shared-01.md',
     'docs/atlas/catalog.json',
-    'docs/atlas/records/264a2f7887a9b6473cbc24102e1bf9be70e57f6d7ba224138140efa094d541f4.json',
-    'docs/atlas/records/2056fa8b653c2240afdad2a16f572a07019109254847829610a9468bb2f95248.json',
+    'docs/atlas/records/71bc29a175940d22dd1d85148ee49f47aed714395fbd51d07b8751147815a55f.json',
+    'docs/atlas/records/ab69ebe00eac40c68aec6131ef0559967b399266aae89f9673d3c30ce12f36b0.json',
 })
 
 
@@ -45,7 +39,7 @@ def checked_inputs(environment, tracked_version):
     for key, length in (("ACCEPTED_EXECUTOR",40),("PROMOTION_BINDING_SHA256",64)):
         values[key] = environment[key]
         assert re.fullmatch(r"[0-9a-f]{%d}" % length, values[key]), "invalid explicit executor/transaction binding"
-    assert values["RELEASE_VERSION"] == "0.4.0", "historical release is not the selected current route"
+    assert values["RELEASE_VERSION"] == "0.5.0", "historical release is not the selected current route"
     assert values["PUBLISHED_SOURCE"] == PUBLISHED and values["QUALIFIER_SOURCE"] == values["ACCEPTED_EXECUTOR"], "immutable publication and selected current qualifier required"
     assert not environment.get("EXECUTION_BINDING") and not environment.get("CANONICAL_QUALIFICATION_AUDIT"), "historical overlays cannot authorize current qualification"
     return values
@@ -53,7 +47,7 @@ def checked_inputs(environment, tracked_version):
 
 def validate_release(release, values):
     version = values["RELEASE_VERSION"]
-    assert version == "0.4.0", "only selected current release can qualify"
+    assert version == "0.5.0", "only selected current release can qualify"
     tag = f"wasm/v{version}"
     assert release["tag_name"] == tag and not release["draft"] and not release["prerelease"]
     assert release["published_at"], "release is unpublished"
@@ -100,7 +94,7 @@ def source_audit(source, qualifier):
 
 
 def bind_executor(source, executor, version):
-    assert version == '0.4.0' and executor == os.environ['ACCEPTED_EXECUTOR'] == os.environ['QUALIFIER_SOURCE'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA'] == git('rev-parse','HEAD'), 'wrong actual installed qualifier/executor'
+    assert version == '0.5.0' and executor == os.environ['ACCEPTED_EXECUTOR'] == os.environ['QUALIFIER_SOURCE'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA'] == git('rev-parse','HEAD'), 'wrong actual installed qualifier/executor'
     assert os.environ['GITHUB_REPOSITORY'] == REPO and os.environ['GITHUB_REF'] == 'refs/heads/main' and os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch' and os.environ['GITHUB_RUN_ATTEMPT'] == '1', 'foreign/rerun installed execution'
     assert os.environ['GITHUB_WORKFLOW_REF'] == REPO+'/.github/workflows/wasm-installed-org.yml@refs/heads/main', 'foreign installed workflow'
     assert os.environ['GITHUB_JOB'] == 'installed' and re.fullmatch('[1-9][0-9]*',os.environ['GITHUB_RUN_ID']), 'wrong installed native run/job'
