@@ -300,21 +300,36 @@ def metadata_head(log,head,expected):
     need('  SELF_REPO: '+REPO in lines, 'metadata-only repository differs')
 
 
+CHECKOUT_SHA = '3d3c42e5aac5ba805825da76410c181273ba90b1'
+
+
 def checkout_commit(log):
-    """Read the pinned checkout action's own git-log result, never a script echo."""
+    """Join runner download resolution to the Game checkout's own git-log result."""
     lines=job_log_lines(log)
-    starts=[i for i,line in enumerate(lines) if line=='##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1']
-    commits=[]
-    for start in starts:
+    # Only runner setup can resolve a mutable action ref. A later script echo
+    # cannot supply the missing resolution for an executed checkout step.
+    setup_end=next((i for i,line in enumerate(lines) if line.startswith('##[group]Run ')),len(lines))
+    resolutions={}
+    for line in lines[:setup_end]:
+        match=re.fullmatch(r"Download action repository 'actions/checkout@([^']+)' \(SHA:([0-9a-f]{40})\)",line)
+        if match:resolutions.setdefault(match[1],[]).append(match[2])
+    starts=[(i,line.removeprefix('##[group]Run actions/checkout@')) for i,line in enumerate(lines) if line.startswith('##[group]Run actions/checkout@')]
+    selected=[]
+    for start,ref in starts:
         end=next((i for i in range(start+1,len(lines)) if lines[i].startswith('##[group]Run ')),len(lines))
         block=lines[start:end]
-        if 'Syncing repository: '+REPO not in block: continue
-        need(block.count('Syncing repository: '+REPO)==1, 'ambiguous checkout repository')
+        repositories=[line.removeprefix('Syncing repository: ') for line in block if line.startswith('Syncing repository: ')]
+        if REPO not in repositories:continue
+        need(repositories==[REPO], 'ambiguous checkout repository')
+        header_end=next((i for i,line in enumerate(block) if line=='##[endgroup]'),len(block))
+        declared=[line.removeprefix('  repository: ') for line in block[:header_end] if line.startswith('  repository: ')]
+        need(declared==[REPO], 'checkout declared/synced repository mismatch')
+        need(ref in (CHECKOUT_SHA,'v7') and resolutions.get(ref)==[CHECKOUT_SHA], 'checkout ref lacks exact accepted native download resolution')
         positions=[i for i,line in enumerate(block) if re.fullmatch(r'\[command\].*(?:/|\\)git(?:\.exe)?"? log -1 --format=%H',line)]
         need(len(positions)==1 and positions[0]+1<len(block), 'checkout commit missing/ambiguous')
-        commit=block[positions[0]+1];sha(commit,40);commits.append(commit)
-    need(len(commits)==1, 'actual selected repository checkout missing/ambiguous')
-    return commits[0]
+        commit=block[positions[0]+1];sha(commit,40);selected.append(commit)
+    need(len(selected)==1, 'actual selected repository checkout missing/ambiguous')
+    return selected[0]
 
 
 def verify_protection(native,binding):

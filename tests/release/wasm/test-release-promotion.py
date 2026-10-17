@@ -231,7 +231,11 @@ class Tests(unittest.TestCase):
     @staticmethod
     def checkout_log(commit,repo=None):
         repo=repo or p.REPO
-        return ('2026-10-17T05:00:00.000Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n'
+        return ("2026-10-17T04:59:59.000Z Download action repository 'actions/checkout@"+p.CHECKOUT_SHA+"' (SHA:"+p.CHECKOUT_SHA+")\n"
+                '2026-10-17T05:00:00.000Z ##[group]Run actions/checkout@'+p.CHECKOUT_SHA+'\n'
+                '2026-10-17T05:00:00.000Z with:\n'
+                '2026-10-17T05:00:00.000Z   repository: '+repo+'\n'
+                '2026-10-17T05:00:00.000Z ##[endgroup]\n'
                 '2026-10-17T05:00:00.001Z Syncing repository: '+repo+'\n'
                 '2026-10-17T05:00:00.002Z [command]/usr/bin/git log -1 --format=%H\n'
                 '2026-10-17T05:00:00.003Z '+commit+'\n'
@@ -251,6 +255,36 @@ class Tests(unittest.TestCase):
             with self.assertRaises(p.Refusal):p.metadata_head(bad,'8'*40,expected)
         with self.assertRaises(p.Refusal):p.metadata_head(metadata,'8'*40,dict(expected,workflowId=1))
 
+    def test_mutable_checkout_ref_joins_native_resolution_and_game_only_block(self):
+        pin=p.CHECKOUT_SHA.encode()
+        body=self.checkout_log('7'*40).replace(b'actions/checkout@'+pin,b'actions/checkout@v7')
+        self.assertEqual(p.checkout_commit(body),'7'*40)
+        # The same downloaded action runs twice in a reusable job; the shared
+        # repository checkout must never replace the Game source identity.
+        foreign=self.checkout_log('8'*40,'FS-GG/.github').replace(b'actions/checkout@'+pin,b'actions/checkout@v7')
+        foreign_step=foreign.split(b'\n',1)[1]
+        self.assertEqual(p.checkout_commit(body+foreign_step),'7'*40)
+        self.assertEqual(p.checkout_commit(body.split(b'\n',1)[0]+b'\n'+foreign_step+body.split(b'\n',1)[1]),'7'*40)
+        resolution,step=body.split(b'\n',1)
+        mutants={
+            'missing-resolution':step,
+            'wrong-resolved-pin':body.replace(b'(SHA:'+pin+b')',b'(SHA:'+b'9'*40+b')'),
+            'duplicate-resolution':resolution+b'\n'+body,
+            'conflicting-resolution':resolution.replace(pin,b'9'*40)+b'\n'+body,
+            'wrong-download-ref':body.replace(b"repository 'actions/checkout@v7'",b"repository 'actions/checkout@v6'"),
+            'wrong-executed-ref':body.replace(b'Run actions/checkout@v7',b'Run actions/checkout@v6'),
+            'unselected-ref-even-if-same-pin':body.replace(b'actions/checkout@v7',b'actions/checkout@main'),
+            'late-script-resolution':step+resolution+b'\n',
+            'foreign-repository-only':foreign,
+            'declared-foreign-synced-game':body.replace(b'  repository: '+p.REPO.encode(),b'  repository: FS-GG/.github'),
+            'declared-game-synced-foreign':body.replace(b'Syncing repository: '+p.REPO.encode(),b'Syncing repository: FS-GG/.github'),
+            'missing-declared-repository':body.replace(b'  repository: '+p.REPO.encode(),b'  path: caller'),
+            'ambiguous-game-checkout':body+step,
+            'duplicate-synced-repository':body.replace(b'Syncing repository: '+p.REPO.encode(),b'Syncing repository: '+p.REPO.encode()+b'\nSyncing repository: '+p.REPO.encode()),
+        }
+        for mutation,mutant in mutants.items():
+            with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.checkout_commit(mutant)
+
     def test_native_required_checks_pr_checkout_tree_producer_join(self):
         selected=p.required_checks();self.assertEqual(len(selected),19)
         policy=p.load(ROOT/'policy/v2-ci-ordinary-settlement.json')['qualification']
@@ -264,6 +298,11 @@ class Tests(unittest.TestCase):
             runs[run_id]={'id':run_id,'repository':{'full_name':p.REPO},'workflow_id':expected['workflowId'],'path':expected['path'],'event':expected['event'],'head_sha':head,'check_suite_id':3000+i,'run_attempt':1}
             jobs[job_id]={'id':job_id,'run_id':run_id,'head_sha':head,'name':name,'status':'completed','conclusion':'success','check_run_url':f'https://api.github.com/repos/{p.REPO}/check-runs/{job_id}','run_attempt':1}
             logs[job_id]=('  PR_HEAD: '+head+'\n  SELF_REPO: '+p.REPO+'\n').encode() if name=='materialize / receiver-validate' else self.checkout_log(checked)
+            if name in ('Lock-range coherence (project refs track declared versions) / lock-ranges','kit / coordination-kit'):
+                pin=p.CHECKOUT_SHA.encode()
+                logs[job_id]=logs[job_id].replace(b'actions/checkout@'+pin,b'actions/checkout@v7')
+                shared=self.checkout_log('6'*40,'FS-GG/.github').replace(b'actions/checkout@'+pin,b'actions/checkout@v7')
+                logs[job_id]+=shared.split(b'\n',1)[1]
         class Transport:
             def checked(self,path):
                 if path.endswith('/branches/main'):return self.branch
@@ -278,7 +317,7 @@ class Tests(unittest.TestCase):
         def transport():
             n=Transport();n.branch=copy.deepcopy(branch);n.pull=copy.deepcopy(pull);n.rows=copy.deepcopy(rows);n.runs=copy.deepcopy(runs);n.jobs=copy.deepcopy(jobs);n.logs=dict(logs);n.trees={};n.status=200;return n
         p.verify_protection(transport(),binding())
-        for mutation in ('not-protected','missing-required','wrong-required-app','unmerged','wrong-merge','foreign-pr','head-tree','checkout-tree','missing-check','wrong-check-app','failed','skipped','wrong-head','incomplete','duplicate','workflow','event','run-head','job-attempt','check-job','job-name','logs-expired','checkout-echo','metadata-missing','metadata-head'):
+        for mutation in ('not-protected','missing-required','wrong-required-app','unmerged','wrong-merge','foreign-pr','head-tree','checkout-tree','missing-check','wrong-check-app','failed','skipped','wrong-head','incomplete','duplicate','workflow','event','run-head','job-attempt','check-job','job-name','logs-expired','checkout-echo','metadata-missing','metadata-head','checkout-ref-resolution'):
             n=transport()
             if mutation=='not-protected':n.branch['protected']=False
             elif mutation=='missing-required':n.branch['protection']['required_status_checks']['checks'].pop()
@@ -303,7 +342,10 @@ class Tests(unittest.TestCase):
             elif mutation=='logs-expired':n.status=410
             elif mutation=='checkout-echo':n.logs[2000]=b'echo '+checked.encode()
             elif mutation=='metadata-missing':n.logs[2018]=b'no explicit subject'
-            else:n.logs[2018]=n.logs[2018].replace(head.encode(),b'9'*40)
+            elif mutation=='metadata-head':n.logs[2018]=n.logs[2018].replace(head.encode(),b'9'*40)
+            else:
+                selected_job=next(job for job,log in n.logs.items() if b'Run actions/checkout@v7' in log)
+                n.logs[selected_job]=n.logs[selected_job].replace(b'(SHA:'+p.CHECKOUT_SHA.encode()+b')',b'(SHA:'+b'9'*40+b')')
             with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_protection(n,binding())
 
     def test_closed_binding(self):
