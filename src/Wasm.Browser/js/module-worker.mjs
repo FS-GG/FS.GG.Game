@@ -1,6 +1,41 @@
 // WebAssembly and memory mechanics only. All admission, ownership, limits,
 // invocation order and cleanup decisions execute in the packaged F# policy.
 import { WorkerEntry_createWireRuntime } from "./policy/WorkerEntry.js";
+// Diagnostic messages are advisory, scalar-only and independent of lifecycle
+// observations. Worker-local offsets never claim a join to the page clock.
+const diagnosticsEnabled=self.location.hash==="#fsgg-worker-diagnostics-v1";
+const diagnosticStart=performance.now();
+const diagnosticStages=new Set(["handler-ready","load-received","admission-begin","admission-end",
+  "sha256-begin","sha256-end","instantiate-begin","instantiate-end","load-completed","terminal","error"]);
+let diagnosticEvents=0,diagnosticBytes=0,diagnosticStopped=false;
+const diagnosticStatus=status=>{
+  if(!diagnosticsEnabled||diagnosticStopped)return;
+  diagnosticStopped=true;
+  try{self.postMessage({kind:"fsgg-worker-diagnostic/1",stage:"status",status,
+    elapsedMilliseconds:performance.now()-diagnosticStart,events:diagnosticEvents,bytes:diagnosticBytes});}catch{}
+};
+const diagnostic=(stage,wire)=>{
+  if(!diagnosticsEnabled||diagnosticStopped)return;
+  try{
+    if(!diagnosticStages.has(stage))throw new Error("unknown diagnostic stage");
+    let identity=null,correlation=null;
+    if(wire){
+      const value=wire.Identity;
+      if(!value||typeof value.WorkerInstance!=="string"||value.WorkerInstance.length<1||value.WorkerInstance.length>128
+        ||typeof value.Request!=="string"||typeof value.Generation!=="string"
+        ||!/^\d{1,20}$/.test(value.Request)||!/^\d{1,20}$/.test(value.Generation)
+        ||typeof wire.Correlation!=="string"||wire.Correlation.length<1||wire.Correlation.length>128)
+        throw new Error("unreadable diagnostic identity");
+      identity={WorkerInstance:value.WorkerInstance,Request:value.Request,Generation:value.Generation};
+      correlation=wire.Correlation;
+    }
+    const row={kind:"fsgg-worker-diagnostic/1",stage,status:"observed",identity,correlation,
+      elapsedMilliseconds:performance.now()-diagnosticStart};
+    const bytes=new TextEncoder().encode(JSON.stringify(row)).length;
+    if(diagnosticEvents>=63||bytes>768||diagnosticBytes+bytes+512>12288){diagnosticStatus("truncated");return;}
+    diagnosticEvents++;diagnosticBytes+=bytes;self.postMessage(row);
+  }catch{diagnosticStatus("read-failed");}
+};
 let instance = null;
 let memoryExport = "memory";
 const memory = () => instance.exports[memoryExport];
@@ -45,5 +80,15 @@ const receive = WorkerEntry_createWireRuntime({
     }, error => fail(String(error)));
   },
   Perform: perform
-}, observation => self.postMessage(observation));
-self.onmessage = ({ data }) => receive(data);
+}, observation => {
+  if(observation.Kind==="diagnostic"){diagnostic(observation.Phase,observation);return;}
+  if(observation.Kind==="loaded")diagnostic("load-completed",observation);
+  else if(observation.Kind==="failed")diagnostic("error",observation);
+  else if(["outcome","outcome-terminated"].includes(observation.Kind))diagnostic("terminal",observation);
+  self.postMessage(observation);
+});
+self.onmessage = ({ data }) => {
+  if(data?.Kind==="load")diagnostic("load-received",data);
+  receive(data);
+};
+diagnostic("handler-ready");

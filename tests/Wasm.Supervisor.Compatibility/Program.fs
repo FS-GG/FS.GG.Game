@@ -176,6 +176,13 @@ let workerLimits () = async {
     send (id "worker" 1UL 1UL) ceiling (InspectAndCompile(ceiling,sc2Module))
     let! loaded=terminal 1000
     check (loaded.Kind="loaded") (sprintf "actual Worker wire loaded ceiling %A" loaded)
+    let diagnostics=observations |> List.filter(fun value -> value.Kind="diagnostic")
+    check ((diagnostics |> List.map(fun value -> value.Phase)) =
+        ["admission-begin";"admission-end";"sha256-begin";"sha256-end";"instantiate-begin";"instantiate-end"])
+        "load diagnostics observe actual policy/mechanical boundaries in order"
+    for value in diagnostics do
+        check (value.Output.Length=0 && not value.Dispatched && value.Diagnostic="") "diagnostics contain no guest bytes/diagnostic text or ABI claim"
+        check (WorkerEntry.observationFromWire value |> Result.isError) "diagnostics cannot become lifecycle observations"
     send (id "worker" 2UL 1UL) (narrow 10 44) (InitializeGuest [|1uy|])
     let! initialized=terminal 1000
     check (initialized.State="succeeded" && initialized.Output.Length=44) "44-byte narrowed init succeeds without reload"

@@ -50,10 +50,10 @@ def fable_dependency(name):
         return ('library-runtime', 'fs.gg.wasm.browser',
                 'contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/fable_modules/'+relative)
     modules = {
-        'FS.GG.Wasm.Browser.0.4.0': ('fs.gg.wasm.browser',
+        'FS.GG.Wasm.Browser.0.5.0': ('fs.gg.wasm.browser',
             ('Admission', 'Host', 'Invocation', 'Lifecycle', 'RuntimeProtocol', 'WorkerEntry'),
             'FS.GG.Wasm.Browser'),
-        'FS.GG.Wasm.Contracts.0.4.0': ('fs.gg.wasm.contracts', ('Contracts',), 'FS.GG.Wasm.Contracts')}
+        'FS.GG.Wasm.Contracts.0.5.0': ('fs.gg.wasm.contracts', ('Contracts',), 'FS.GG.Wasm.Contracts')}
     if module not in modules: raise ValueError('unreviewed Fable dependency module')
     package, stems, project = modules[module]
     if leaf in {stem+suffix for stem in stems for suffix in ('.fs', '.fsi')}:
@@ -62,7 +62,7 @@ def fable_dependency(name):
         return ('compiled-package-source', package, 'fable/'+leaf[:-3])
     if leaf == project+'.fableproj':
         return ('derived-project', package, 'fable/'+project+'.fsproj')
-    if package == 'fs.gg.wasm.browser' and leaf in ('eng/wasm-shared/version.props', 'js/wasm-primitives.js'):
+    if package == 'fs.gg.wasm.browser' and leaf in ('eng/wasm-shared/version.props', 'js/wasm-primitives.js', 'js/module-worker.entry.mjs'):
         return ('package-source', package, 'fable/'+leaf)
     raise ValueError('unreviewed Fable package dependency member')
 
@@ -70,10 +70,10 @@ def fable_dependency(name):
 def consumer_member(name):
     safe_name(name)
     fixed={'consumer/release-manifest.json','consumer/NuGet.Config','consumer/consumer/packages.lock.json',
-           'consumer/fsgg-wasm-sdk-0.4.0.tar.gz','consumer/installed-member-receipt.log','consumer/browser-result.json','consumer/http.log','consumer/public/sub/app/Consumer'}
+           'consumer/fsgg-wasm-sdk-0.5.0.tar.gz','consumer/installed-member-receipt.log','consumer/browser-result.json','consumer/http.log','consumer/public/sub/app/Consumer'}
     if name in fixed:return True
     for ident in PACKAGES:
-        if name in {'consumer/packages/'+ident+'/'+leaf for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata')}:return True
+        if name in {'consumer/packages/'+ident+'/'+leaf for leaf in (ident+'.0.5.0.nupkg',ident+'.0.5.0.nupkg.sha512','.nupkg.metadata')}:return True
     if name in {'consumer/core/'+leaf for leaf in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','reference-netstandard2.0.dll','reference-netstandard2.1.dll')}:return True
     if '/fable_modules/' in name:
         context = name.split('/fable_modules/', 1)[0]
@@ -130,7 +130,7 @@ class Projection:
                         raise ValueError('pinned Fable library metadata drift')
                 return
             context = 'consumer' if name.startswith('consumer/') else 'selected'
-            original = self.files[context+'/packages/'+package+'/'+package+'.0.4.0.nupkg']
+            original = self.files[context+'/packages/'+package+'/'+package+'.0.5.0.nupkg']
             with zipfile.ZipFile(io.BytesIO(original)) as archive:
                 rows = [row for row in archive.infolist() if row.filename == member]
                 if len(rows) != 1 or rows[0].is_dir() or rows[0].file_size > LIMITS['file']:
@@ -174,8 +174,8 @@ class Projection:
             self.errors.append({'member':prefix,'status':'refused','reason':str(error)})
     def packages(self, cache, prefix):
         for ident in PACKAGES:
-            base=pathlib.Path(cache)/ident/'0.4.0'
-            for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata'):
+            base=pathlib.Path(cache)/ident/'0.5.0'
+            for leaf in (ident+'.0.5.0.nupkg',ident+'.0.5.0.nupkg.sha512','.nupkg.metadata'):
                 self.add(base/leaf,prefix+'/'+ident+'/'+leaf)
     def core(self, cache, prefix):
         base=pathlib.Path(cache)/'fsharp.core/10.1.302'
@@ -228,7 +228,7 @@ def consumer(projection, work):
     work=pathlib.Path(work)
     for name in ('release-manifest.json','NuGet.Config','consumer/packages.lock.json'):
         projection.add(work/name,'consumer/'+name)
-    projection.add(work/'sdk-artifacts/fsgg-wasm-sdk-0.4.0.tar.gz','consumer/fsgg-wasm-sdk-0.4.0.tar.gz')
+    projection.add(work/'sdk-artifacts/fsgg-wasm-sdk-0.5.0.tar.gz','consumer/fsgg-wasm-sdk-0.5.0.tar.gz')
     projection.add(work/'installed-member-receipt.log','consumer/installed-member-receipt.log')
     projection.add(work/'consumer-http.log','consumer/http.log')
     projection.packages(work/'consumer-packages','consumer/packages')
@@ -239,6 +239,7 @@ def consumer(projection, work):
         'FSharp.Core.dll','Consumer.dll','fable/Program.js',
         '_content/FS.GG.Wasm.Browser/module-worker.mjs',
         '_content/FS.GG.Wasm.Browser/worker-client.mjs',
+        '_content/FS.GG.Wasm.Browser/worker-build.json',
         '_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js')])
     # Consumer.fsproj intentionally places the actual DLL/Core/runtime outputs
     # in consumer/public/sub/app, already included above.
@@ -268,6 +269,7 @@ def selected(projection, work):
         'fable/Program.js','fable/BrowserBridge.js','limits-guest.wasm','http.log',
         '_content/FS.GG.Wasm.Browser/module-worker.mjs',
         '_content/FS.GG.Wasm.Browser/worker-client.mjs',
+        '_content/FS.GG.Wasm.Browser/worker-build.json',
         '_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js')])
     projection.require(['selected/installed-fable/Program.js','selected/installed-fable/BrowserBridge.js'])
     runtime=ROOT/'tests/Wasm.Supervisor.Compatibility/Installed/bin/Debug/net10.0'
@@ -322,11 +324,11 @@ def main():
     if args.action=='consumer': consumer(p,args.work)
     else:
         merge(p,args.consumer); selected(p,args.work)
-        for name in ('release-manifest.json','promotion-binding.json','installed-input-audit.json','published-native.json','fsgg-wasm-sdk-0.4.0.tar.gz'):
+        for name in ('release-manifest.json','promotion-binding.json','installed-input-audit.json','published-native.json','fsgg-wasm-sdk-0.5.0.tar.gz'):
             p.add(pathlib.Path(args.receipts)/name,'receipts/'+name)
         for name in ('consumer.log','selected.log','runtime-status.json','consumer-status.json'):
             p.add(pathlib.Path(args.logs)/name,'execution/'+name)
-        for consumer_name,receipt_name in [('consumer/release-manifest.json','receipts/release-manifest.json'),('consumer/fsgg-wasm-sdk-0.4.0.tar.gz','receipts/fsgg-wasm-sdk-0.4.0.tar.gz')]:
+        for consumer_name,receipt_name in [('consumer/release-manifest.json','receipts/release-manifest.json'),('consumer/fsgg-wasm-sdk-0.5.0.tar.gz','receipts/fsgg-wasm-sdk-0.5.0.tar.gz')]:
             if consumer_name not in p.files or receipt_name not in p.files or p.files[consumer_name]!=p.files[receipt_name]:
                 p.errors.append({'member':consumer_name,'status':'absent/refused','reason':'consumer original differs from authenticated publication receipt'})
         try:

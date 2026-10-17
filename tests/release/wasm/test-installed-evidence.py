@@ -30,16 +30,16 @@ class Evidence(unittest.TestCase):
             root=pathlib.Path(raw);work=root/'work'
             for name in ('release-manifest.json','NuGet.Config','consumer/packages.lock.json'):
                 put(work/name,b'{}')
-            put(work/'sdk-artifacts/fsgg-wasm-sdk-0.4.0.tar.gz')
+            put(work/'sdk-artifacts/fsgg-wasm-sdk-0.5.0.tar.gz')
             put(work/'installed-member-receipt.log')
             put(work/'consumer-http.log')
             for ident in e.PACKAGES:
-                for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata'):
-                    put(work/'consumer-packages'/ident/'0.4.0'/leaf)
+                for leaf in (ident+'.0.5.0.nupkg',ident+'.0.5.0.nupkg.sha512','.nupkg.metadata'):
+                    put(work/'consumer-packages'/ident/'0.5.0'/leaf)
             for name in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','lib/netstandard2.0/FSharp.Core.dll','lib/netstandard2.1/FSharp.Core.dll'):
                 put(work/'consumer-packages/fsharp.core/10.1.302'/name)
             put(work/'consumer/browser/test-results/.last-run.json',b'{"status":"passed"}')
-            for name in ('FSharp.Core.dll','Consumer.dll','Consumer','fable/Program.js','_content/FS.GG.Wasm.Browser/module-worker.mjs','_content/FS.GG.Wasm.Browser/worker-client.mjs','_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js'):
+            for name in ('FSharp.Core.dll','Consumer.dll','Consumer','fable/Program.js','_content/FS.GG.Wasm.Browser/module-worker.mjs','_content/FS.GG.Wasm.Browser/worker-client.mjs','_content/FS.GG.Wasm.Browser/worker-build.json','_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js'):
                 put(work/'consumer/public/sub/app'/name)
             put(work/'http-cache/cache:https.json/list.dat',b'discard HTTP cache')
             p=e.Projection();e.consumer(p,work)
@@ -80,7 +80,7 @@ class Evidence(unittest.TestCase):
             with self.subTest(context=context),tempfile.TemporaryDirectory() as raw:
                 root=pathlib.Path(raw);p=e.Projection();owner=context.split('/')[0]
                 for package,body in archives.items():
-                    p.add(put(root/package,body),owner+'/packages/'+package+'/'+package+'.0.4.0.nupkg')
+                    p.add(put(root/package,body),owner+'/packages/'+package+'/'+package+'.0.5.0.nupkg')
                 dependency=root/'compiled/fable_modules'
                 put(dependency/'.gitignore',b'*')
                 library=dependency/'fable-library-js.5.18.0'
@@ -88,7 +88,7 @@ class Evidence(unittest.TestCase):
                                   ('package.json',b'{"name":"@fable-org/fable-library-js","version":"2.8.0","type":"module"}'),
                                   ('Array.js',b'actual runtime'),('lib/big.js',b'actual nested runtime')):put(library/leaf,body)
                 for package,module in (('fs.gg.wasm.browser','FS.GG.Wasm.Browser'),('fs.gg.wasm.contracts','FS.GG.Wasm.Contracts')):
-                    folder=dependency/(module+'.0.4.0')
+                    folder=dependency/(module+'.0.5.0')
                     for member,body in members[package].items():
                         if not member.startswith('fable/'):continue
                         leaf=member[len('fable/'):]
@@ -97,13 +97,13 @@ class Evidence(unittest.TestCase):
                         if leaf.endswith('.fs'):put(folder/(leaf+'.js'),b'generated current source')
                 p.tree(root/'compiled',context)
                 self.assertFalse(p.errors,p.errors)
-                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.4.0/Host.fs',p.files)
-                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.4.0/Host.fs.js',p.files)
+                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.5.0/Host.fs',p.files)
+                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.5.0/Host.fs.js',p.files)
                 if owner=='consumer':
                     self.assertEqual(p.finish(root/'out',0),0)
                     joined=e.Projection();e.merge(joined,root/'out')
                     self.assertFalse(joined.errors,joined.errors);self.assertEqual(joined.files,p.files)
-                    copied=context+'/fable_modules/FS.GG.Wasm.Browser.0.4.0/Host.fs'
+                    copied=context+'/fable_modules/FS.GG.Wasm.Browser.0.5.0/Host.fs'
                     original=p.files[copied];p.files[copied]=b'changed copied source'
                     p.finish(root/'forged',0)
                     refused=e.Projection();e.merge(refused,root/'forged')
@@ -118,8 +118,8 @@ class Evidence(unittest.TestCase):
                 bad.dependency(context+'/fable_modules/fable-library-js.5.18.0/Array.js')
                 self.assertTrue(any(x['reason']=='Fable dependency differs from original package member' for x in bad.errors),bad.errors)
                 for leaf in ('fable-library-js.5.18.0/unexpected.exe','fable-library-js.5.18.0/foreign.js',
-                             'Other.0.4.0/Host.fs','FS.GG.Wasm.Browser.0.4.0/Foreign.fs',
-                             'FS.GG.Wasm.Browser.0.4.0/Foreign.fs.js'):
+                             'Other.0.5.0/Host.fs','FS.GG.Wasm.Browser.0.5.0/Foreign.fs',
+                             'FS.GG.Wasm.Browser.0.5.0/Foreign.fs.js'):
                     name=context+'/fable_modules/'+leaf
                     if leaf.endswith('foreign.js'):
                         bad.files[name]=b'foreign runtime';bad.dependency(name)

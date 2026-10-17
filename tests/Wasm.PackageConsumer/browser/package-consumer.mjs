@@ -2,14 +2,17 @@ import * as bridge from "./fable/Program.js";
 import { createHostTransport } from "./_content/FS.GG.Wasm.Browser/worker-client.mjs";
 const bytes = async name => new Uint8Array(await (await fetch(`./modules/${name}`)).arrayBuffer());
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", value)), byte => byte.toString(16).padStart(2, "0")).join("");
-async function session(artifact, prefix, outputCap = 65536, deadline = 250, inject = false) {
-  const transport = createHostTransport(new URL("./_content/FS.GG.Wasm.Browser/", import.meta.url));
+async function session(artifact, prefix, outputCap = 65536, deadline = 250, inject = false, observer, holdLoaded = false) {
+  const transport = createHostTransport(new URL("./_content/FS.GG.Wasm.Browser/", import.meta.url),observer?{observe:observer}:undefined);
   const waiting = new Map(), results = [], posts=[], terminations=[], deliveryStates=[];
   const terminate=transport.TerminateWorker;
   transport.TerminateWorker=name=>{terminations.push(name);terminate(name);};
-  let ignored=0, host;
+  let ignored=0, host;const held=[];
   const create=transport.CreateWorker;
   transport.CreateWorker=(name,receive)=>create(name,wire=>{
+    // Declared delivery-impairment control: retain a genuine loaded message,
+    // not a manufactured ABI result. The real original timer still expires.
+    if(holdLoaded&&wire.Kind==="loaded"){held.push({wire,receive});return;}
     if(inject){
       for(const wrong of [{...wire,Correlation:"wrong-correlation"},{...wire,Identity:{...wire.Identity,WorkerInstance:"wrong-worker"}},{...wire,Identity:{...wire.Identity,Generation:"99"}}]){
         const before=JSON.stringify(bridge.project(host)), deliveries=results.length;
@@ -22,7 +25,8 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
   });
   const post=transport.PostCommand;
   transport.PostCommand=(name,command)=>{posts.push({name,Kind:command.Kind,request:command.Identity.Request});post(name,command);};
-  host = bridge.createHost(prefix === "barc" ? "bar-protected" : "sc2-imported-strict", await digest(artifact), outputCap, deadline, transport, result => {
+  const artifactDigest=await digest(artifact);
+  host = bridge.createHost(prefix === "barc" ? "bar-protected" : "sc2-imported-strict", artifactDigest, outputCap, deadline, transport, result => {
     deliveryStates.push({request:result.Request,projection:bridge.project(host),terminations:[...terminations]});
     results.push(result); const pending = waiting.get(result.Request); waiting.delete(result.Request); pending?.(result);
   });
@@ -32,15 +36,67 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
     return new Promise(resolve => { waiting.set(id, resolve); bridge[method](host, transport.Now(), identity, value); });
   };
   return { host, send, results, posts, terminations, deliveryStates, transport,
+    heldCount:()=>held.length,
+    releaseHeld:()=>{for(const row of held.splice(0))row.receive(row.wire);},
     ignored:()=>ignored,
     prepare:async (artifact, transaction)=>{
       const hash=await digest(artifact), id=String(++request), identity={WorkerInstance:"candidate-worker",Request:id,Generation:"2"};
       return new Promise(resolve=>{waiting.set(id,resolve);bridge.prepare(host,transport.Now(),identity,transaction,1n,hash,artifact);});
     },
+    loadBounded:()=>{
+      const id=String(++request),identity={WorkerInstance:"installed-worker",Request:id,Generation:"1"};
+      return new Promise(resolve=>{waiting.set(id,resolve);bridge.loadBoundedSc2(host,transport.Now(),identity,artifactDigest,artifact,deadline);});
+    },
+    prepareBounded:transaction=>{
+      const id=String(++request),identity={WorkerInstance:"candidate-worker",Request:id,Generation:"2"};
+      return new Promise(resolve=>{waiting.set(id,resolve);bridge.prepareBoundedSc2(host,transport.Now(),identity,transaction,artifactDigest,artifact);});
+    },
     dispose() { bridge.dispose(host, transport.Now()); },
     projection() { return bridge.project(host); }
   };
 }
+
+// One declared history: fresh initial Worker, candidate abort, then a fresh
+// same-name candidate. No priming, retry, synthetic clock or renewed budget.
+window.runObservedFreshWorkers = async () => {
+  const trace=[],artifact=await bytes("control-ordinary.wasm"),current=await session(artifact,"sc2c",65536,250,false,row=>trace.push(row));
+  let result={fixtureFailure:null};
+  try{
+    result.loaded=await current.loadBounded();
+    if(result.loaded.State==="succeeded"){
+      result.initialized=await current.send("initialize",new Uint8Array([0]));
+      if(result.initialized.State==="succeeded"){
+        result.first=await current.prepareBounded("startup-first");
+        if(result.first.State==="succeeded"){
+          bridge.abortCandidate(current.host,current.transport.Now(),"startup-first");
+          result.afterAbort=current.projection();
+          result.second=await current.prepareBounded("startup-second");
+        }
+      }
+    }
+  }catch(error){result.fixtureFailure=String(error).slice(0,256);}
+  finally{current.dispose();}
+  return {...result,trace,status:current.transport.DiagnosticStatus(),retired:current.terminations,final:current.projection()};
+};
+
+window.runObservedColdExpiry = async () => {
+  const trace=[],artifact=await bytes("control-ordinary.wasm"),current=await session(artifact,"sc2c",65536,1,false,row=>trace.push(row));
+  let loaded;
+  try{loaded=await current.loadBounded();}finally{current.dispose();}
+  return {loaded,trace,status:current.transport.DiagnosticStatus(),retired:current.terminations,final:current.projection()};
+};
+
+window.runObservedLateLoaded = async () => {
+  const trace=[],artifact=await bytes("control-ordinary.wasm");
+  const current=await session(artifact,"sc2c",65536,250,false,row=>trace.push(row),true);
+  let result;
+  try{
+    const loaded=await current.loadBounded(),before=current.projection(),deliveriesBefore=current.results.length,held=current.heldCount();
+    current.releaseHeld();
+    result={loaded,held,before,after:current.projection(),deliveriesBefore,deliveriesAfter:current.results.length};
+  }finally{current.dispose();}
+  return {...result,trace,status:current.transport.DiagnosticStatus(),retired:current.terminations};
+};
 window.runGuest = async (name, prefix) => {
   const artifact = await bytes(name), current = await session(artifact, prefix);
   try {

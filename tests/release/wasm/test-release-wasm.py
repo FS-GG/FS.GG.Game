@@ -123,7 +123,7 @@ def source_checks() -> None:
     props = (ROOT / "eng/wasm-shared/version.props").read_text()
     policy=json.loads((ROOT / "scripts/wasm-release/api-baseline-policy.json").read_text())
     version=policy["candidateVersion"]
-    require(version == "0.4.0" and f"<WasmSharedVersion>{version}</WasmSharedVersion>" in props, "selected version origin mismatch")
+    require(version == "0.5.0" and f"<WasmSharedVersion>{version}</WasmSharedVersion>" in props, "selected version origin mismatch")
     for path in (ROOT / "src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj", ROOT / "src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj"):
         require("$(WasmSharedVersion)" in path.read_text(), f"{path} bypasses shared version origin")
     require((ROOT / "sdk/wasm/VERSION").read_text().strip() == version, "SDK version mismatch")
@@ -137,6 +137,8 @@ def source_checks() -> None:
     validate_workflow(workflow)
     supervisor_backend_checks()
     subprocess.run(["python3", str(ROOT / "tests/release/wasm/test-quint-evaluator-preparation.py")], check=True)
+    subprocess.run(["node", "--test", str(ROOT / "tests/release/wasm/test-worker-transport.mjs")], check=True)
+    subprocess.run(["python3", "-B", str(ROOT / "tests/release/wasm/test-worker-bundle-custody.py")], check=True)
     browser_setup_checks()
     subprocess.run(["python3", "-B", str(ROOT / "tests/release/wasm/test-installed-org-workflow.py")], check=True)
     promotion_tests = ["python3", "-B", str(ROOT / "tests/release/wasm/test-release-promotion.py")]

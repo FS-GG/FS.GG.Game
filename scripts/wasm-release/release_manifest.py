@@ -18,7 +18,7 @@ LEGACY_SCHEMA = "fsgg.wasm.release-custody/v1"
 API_POLICY = json.loads((Path(__file__).parent / "api-baseline-policy.json").read_text())
 # Explicit historical policies verify immutable evidence; they select no current execution.
 HISTORICAL_API_POLICIES = [json.loads((Path(__file__).parent / name).read_text()) for name in
-                           ("api-baseline-policy-0.2.0.json", "api-baseline-policy-0.3.0.json")]
+                           ("api-baseline-policy-0.2.0.json", "api-baseline-policy-0.3.0.json", "api-baseline-policy-0.4.0.json")]
 
 def api_policy(version):
     if version == API_POLICY["candidateVersion"]:
@@ -82,7 +82,59 @@ def nuspec(package: Path) -> tuple[dict[str, str], dict[str, str], list[str]]:
     return values, dependencies, names
 
 
-def inspect_package(path: Path, expected_id: str, version: str, source: str) -> dict[str, object]:
+def verify_worker_build(archive: zipfile.ZipFile, source: str, tree: str) -> dict[str, object]:
+    prefix = "contentFiles/any/any/_content/FS.GG.Wasm.Browser/"
+    def read(name, limit=8*1024*1024):
+        info = archive.getinfo(name)
+        if info.file_size > limit:
+            fail("Worker build member exceeds its bound")
+        return archive.read(name)
+    try:
+        record = json.loads(read(prefix+"worker-build.json", 256*1024))
+        if record["schema"] != "fsgg.wasm.worker-build/1" or record["sourceCommit"] != source or not re.fullmatch(r"[0-9a-f]{40}", tree) or record["sourceTree"] != tree:
+            fail("Worker build source binding differs")
+        expected = {"format":"esm","platform":"browser","target":"es2022","minify":False,"treeShaking":False,
+                    "keepNames":True,"deterministicBuildsCompared":2,"outputFiles":1,"externalImports":0}
+        if record["composition"] != expected or record["syntaxParser"] != {"name":"acorn","version":"8.19.0"} or record["scopeAnalyzer"] != {"name":"eslint-scope","version":"9.1.2"} or record["fableVersion"] != "5.18.0":
+            fail("Worker build composition/tool selection differs")
+        def matches(row, name):
+            value = read(name)
+            if row["bytes"] != len(value) or row["sha256"] != hashlib.sha256(value).hexdigest():
+                fail("Worker build member hash/length differs")
+        if record["output"]["path"] != "module-worker.mjs":
+            fail("Worker build entry differs")
+        matches(record["output"], prefix+"module-worker.mjs")
+        if record["mechanicalEntry"]["path"] != "src/Wasm.Browser/js/module-worker.mjs":
+            fail("Worker mechanical source path differs")
+        matches(record["mechanicalEntry"], "fable/js/module-worker.entry.mjs")
+        rows = record["generatedInputs"]
+        if not isinstance(rows, list) or not 5 <= len(rows) <= 256:
+            fail("Worker generated input population differs")
+        paths = [row["path"] for row in rows]
+        safe_members(paths, "Worker generated input")
+        if paths != sorted(paths) or not all(isinstance(name, str) and name.endswith(".js") and "\\" not in name and all(part not in ("", ".", "..") for part in name.split("/")) for name in paths):
+            fail("Worker generated inputs are not canonical")
+        if not {"WorkerEntry.js","Admission.js","Invocation.js","RuntimeProtocol.js"}.issubset(paths) or not any(name.endswith("/Contracts.js") for name in paths):
+            fail("Worker generated policy closure is incomplete")
+        if not all(type(row["bytes"]) is int and 0 < row["bytes"] <= 8*1024*1024 for row in rows) or sum(row["bytes"] for row in rows) > 32*1024*1024:
+            fail("Worker generated closure exceeds its bound")
+        for row in rows:
+            matches(row, prefix+"policy/"+row["path"])
+        lock_bytes = read("build-provenance/worker-bundle/package-lock.json", 256*1024)
+        if lock_bytes != (Path(__file__).parent/"worker-bundle/package-lock.json").read_bytes():
+            fail("Worker build lock differs from selected source")
+        tool = record["tool"]
+        if tool["name"] != "esbuild" or tool["version"] != "0.28.2" or not re.fullmatch(r"[0-9a-f]{64}", tool["binarySha256"]) or tool["lockSha256"] != hashlib.sha256(lock_bytes).hexdigest():
+            fail("Worker build tool/lock identity differs")
+        lock = json.loads(lock_bytes)
+        if lock["packages"][""]["devDependencies"] != {"acorn":"8.19.0","esbuild":"0.28.2","eslint-scope":"9.1.2"}:
+            fail("Worker build dependency selection differs")
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        fail(f"invalid Worker build closure: {error}")
+    return {"bundleSha256":record["output"]["sha256"],"generatedInputs":len(rows),"externalImports":0}
+
+
+def inspect_package(path: Path, expected_id: str, version: str, source: str, tree: str) -> dict[str, object]:
     values, dependencies, names = nuspec(path)
     if values != {"id": expected_id, "version": version, "repositoryCommit": source}:
         fail(f"{path.name} identity/source mismatch: {values}")
@@ -123,6 +175,10 @@ def inspect_package(path: Path, expected_id: str, version: str, source: str) -> 
         with zipfile.ZipFile(path) as archive:
             props = archive.read("fable/eng/wasm-shared/version.props").decode("utf-8-sig")
             project = archive.read("fable/FS.GG.Wasm.Browser.fsproj").decode("utf-8-sig")
+            # Historical immutable releases retain their original package
+            # layout; current producer preparation requires the closed entry.
+            if version not in ("0.1.1", "0.2.0", "0.3.0", "0.4.0"):
+                verify_worker_build(archive, source, tree)
         if f"<WasmSharedVersion>{version}</WasmSharedVersion>" not in props or 'Version="[$(WasmSharedVersion)]"' not in project:
             fail("packaged Fable dependency does not resolve through the stable version origin")
     return {
@@ -188,7 +244,7 @@ def verify_manifest(path: Path, custody: Path, source: str | None = None) -> dic
         if not artifact.is_file() or digest(artifact) != row.get("sha256"):
             fail(f"missing or mismatched custody artifact: {artifact.name}")
     expected_rows = [
-        inspect_package(custody / files[identity], identity, version, str(data["source"]))
+        inspect_package(custody / files[identity], identity, version, str(data["source"]), str(data["tree"]))
         for identity in ROSTER
     ] + [inspect_sdk(custody / files["sdk"], version)]
     if artifacts != expected_rows:
@@ -267,7 +323,7 @@ def prepare(args: argparse.Namespace) -> None:
         fail("release version must be stable SemVer")
     custody = Path(args.custody)
     files = expected_files(version)
-    packages = [inspect_package(custody / files[identity], identity, version, args.source) for identity in ROSTER]
+    packages = [inspect_package(custody / files[identity], identity, version, args.source, args.tree) for identity in ROSTER]
     sdk = inspect_sdk(custody / files["sdk"], version)
     data = {
         "schema": SCHEMA,

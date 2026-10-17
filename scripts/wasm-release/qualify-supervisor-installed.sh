@@ -12,7 +12,7 @@ feed="${WASM_PACKAGE_FEED:?}"
 receipts="${RUNNER_TEMP:?}/wasm-installed-receipts"
 [[ -f "$receipts/release-manifest.json" && -f "$receipts/promotion-binding.json" ]] || { echo 'requires genuine binder-downloaded immutable public receipts' >&2; exit 2; }
 version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
-[[ "$version" == 0.4.0 && "${RELEASE_VERSION:?}" == "$version" ]] || { echo 'requires selected current installed version' >&2; exit 2; }
+[[ "$version" == 0.5.0 && "${RELEASE_VERSION:?}" == "$version" ]] || { echo 'requires selected current installed version' >&2; exit 2; }
 q="${output}-baseline"
 "$repo/scripts/wasm-release/qualify-supervisor-custody.sh" --bootstrap "$q"
 config="${output}-NuGet.Config"

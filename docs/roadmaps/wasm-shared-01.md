@@ -1,5 +1,61 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## Current 0.5 Worker packaging source preparation
+
+The current source successor selects coherent `0.5.0` for the pair and SDK.
+Published `0.4.0` and its finite P/Q installed qualification below remain unchanged.
+The generated Worker policy currently forms an ESM import graph that must evaluate
+before the native entry installs its command handler. Request admission already
+sets the deadline before creating that Worker. A later ready event cannot move
+the start of the operation budget.
+
+The maintained `build-worker-policy.sh` route now prepares one closed ESM Worker
+from the actual generated F# policy and mechanical entry. Exact locked build-only
+esbuild, Acorn and ESLint scope tools preserve names, avoid minification and code
+splitting, check every output body for runtime imports and unresolved dynamic
+execution/network primitives, and compare two builds of the same captured inputs.
+Lexical binding matters: the admission scanner's local `require` function remains
+unchanged and is not a Node loader. The output guard also follows Fable's const
+global aliases, confines them to selected static mechanical/encoding members and
+refuses global-object escape or dynamic property access. It is not a general
+JavaScript sandbox. Package custody joins generated input hashes,
+mechanical source, actual tool/lock identity and final bundle bytes. Raw generated
+policy remains source provenance; the runtime always selects the closed entry.
+
+Optional bounded observations cover handler readiness, load receipt, strict
+admission, hashing and native compilation/instantiation, plus actual transport
+clock/timer/create/post/retirement calls. Worker-local and page clocks remain
+separate. Advisory packets are filtered before lifecycle delivery; unavailable,
+excluded, truncated and read-failed observations remain explicit. The original
+pre-create deadline, identity, capacity and termination policies are unchanged.
+A retired physical Worker's error also cannot borrow a newly created same-name
+Worker's command identity.
+
+Prepared installed controls exercise a fresh initial Worker, candidate abort and
+new physical candidate, real cold expiry, and a genuine loaded message withheld
+until expiry then released as late evidence. The latter is an explicit delivery
+impairment control, not evidence of a naturally late callback. Existing normal
+configuration, ABI/refusal/profile and lifecycle controls remain. No priming,
+retry, clock enlargement, speculative HTTP cache change or consumer asset rewrite
+is selected. The existing 35-minute hosted producer profile remains the bound;
+new tool/build/browser fit is unqualified until its original complete run.
+
+The first candidate qualifier
+[39069862111](https://github.com/FS-GG/FS.GG.Game/actions/runs/39069862111), attempt 1,
+failed static preflight on the Lifecycle.Tests project dependency range before
+compiler or runtime qualification. The connected repair selects the current
+Contracts project version in that lock edge and tests the previous published
+version as a refusal. All other restored package hashes and historical package
+locks remain unchanged; a fresh exact-head full qualifier is still required.
+
+Source preparation does not publish `0.5.0` or qualify installed adoption. Its
+actual future publication P and read-only installed qualifier cannot be guessed;
+the existing finite installed binder still identifies authentic published `0.4.0`
+until a genuine successor publication supplies the next closed binding. Consumer
+adoption and native/product outcomes remain separately owned. This rationale
+comes from the producer's own source; private consumer evidence is not part of
+the public producer record.
+
 ## Current 0.4 producer supplier acceptance
 
 Published producer and original publisher P remains

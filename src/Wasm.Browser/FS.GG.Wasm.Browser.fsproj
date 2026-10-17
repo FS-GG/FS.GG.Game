@@ -46,6 +46,11 @@
         <PackagePath>fable/js/wasm-primitives.js</PackagePath>
         <BuildAction>None</BuildAction>
       </_PackageFiles>
+      <_PackageFiles Include="js/module-worker.mjs">
+        <Pack>true</Pack>
+        <PackagePath>fable/js/module-worker.entry.mjs</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
       <_PackageFiles Include="Fable/FS.GG.Wasm.Browser.fsproj">
         <Pack>true</Pack>
         <PackagePath>fable/FS.GG.Wasm.Browser.fsproj</PackagePath>
@@ -68,16 +73,20 @@
   </Target>
 
   <Target Name="RequireGeneratedWorkerPolicy" BeforeTargets="_GetPackageFiles">
-    <Error Condition="'$(WasmWorkerPolicyRoot)' == '' Or !Exists('$(WasmWorkerPolicyRoot)/WorkerEntry.js')" Text="Pack requires the exact generated F# Worker policy in an isolated WasmWorkerPolicyRoot." />
+    <Error Condition="'$(WasmWorkerPolicyRoot)' == '' Or !Exists('$(WasmWorkerPolicyRoot)/WorkerEntry.js') Or !Exists('$(WasmWorkerPolicyRoot)/module-worker.mjs') Or !Exists('$(WasmWorkerPolicyRoot)/worker-build.json')" Text="Pack requires the generated F# policy, closed Worker bundle and exact build receipt in an isolated WasmWorkerPolicyRoot." />
 
   </Target>
 
   <ItemGroup Condition="'$(WasmWorkerPolicyRoot)' != ''">
+    <!-- Raw generated policy is retained as build/source provenance. The
+         selected runtime entry is the single closed module-worker artifact. -->
     <None Include="$(WasmWorkerPolicyRoot)/**/*.js" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/%(RecursiveDir)%(Filename)%(Extension)" PackageCopyToOutput="true" />
+    <None Include="$(WasmWorkerPolicyRoot)/module-worker.mjs" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/module-worker.mjs" PackageCopyToOutput="true" />
+    <None Include="$(WasmWorkerPolicyRoot)/worker-build.json" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/worker-build.json" PackageCopyToOutput="true" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="js/module-worker.mjs" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/module-worker.mjs" PackageCopyToOutput="true" />
+    <None Include="../../scripts/wasm-release/worker-bundle/package-lock.json" Pack="true" PackagePath="build-provenance/worker-bundle/package-lock.json" />
     <None Include="js/worker-client.mjs" Pack="true" PackagePath="contentFiles/any/any/_content/FS.GG.Wasm.Browser/worker-client.mjs" PackageCopyToOutput="true" />
     <None Include="build/FS.GG.Wasm.Browser.targets" Pack="true" PackagePath="buildTransitive/FS.GG.Wasm.Browser.targets" />
   </ItemGroup>
