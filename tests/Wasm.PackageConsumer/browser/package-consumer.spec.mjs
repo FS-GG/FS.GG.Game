@@ -83,6 +83,54 @@ test("compile deadline terminates the actual freshly created Worker",async({page
   expect(value.active).toBe("");
 });
 
+test("closed installed Worker starts fresh initially and after candidate abort under original limited budgets",async({page})=>{
+  const requested=[],physical=[];
+  const onRequest=request=>{const url=new URL(request.url());if(url.pathname.includes("/_content/FS.GG.Wasm.Browser/"))requested.push(url.pathname);};
+  page.context().on("request",onRequest);page.on("worker",worker=>physical.push(worker.url()));
+  let value;
+  try{
+    value=await page.evaluate(()=>window.runObservedFreshWorkers());
+    const report={stage:"fresh installed Worker history",states:[value.loaded?.State,value.initialized?.State,value.first?.State,value.second?.State],
+      status:value.status,trace:value.trace};
+    console.log(JSON.stringify(report));
+    expect(value.fixtureFailure,JSON.stringify(report)).toBeNull();
+    expect(report.states,JSON.stringify(report)).toEqual(["succeeded","succeeded","succeeded","succeeded"]);
+    expect(value.afterAbort.CandidateWorker).toBe("");
+    expect(value.final).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
+    expect(physical).toHaveLength(3);
+    expect(physical.every(url=>new URL(url).pathname==="/sub/app/_content/FS.GG.Wasm.Browser/module-worker.mjs")).toBe(true);
+    expect(requested.some(url=>url.endsWith("/module-worker.mjs"))).toBe(true);
+    expect(requested.some(url=>url.includes("/policy/"))).toBe(false);
+    expect(value.status).toMatchObject({enabled:true,available:true,incomplete:false,truncated:false,readFailed:false});
+    for(const id of [1,2,3]){
+      const stages=value.trace.filter(row=>row.stage==="worker-stage"&&row.physical===id).map(row=>row.workerStage);
+      expect(stages.slice(0,9)).toEqual(["handler-ready","load-received","admission-begin","admission-end","sha256-begin","sha256-end","instantiate-begin","instantiate-end","load-completed"]);
+    }
+    const retired=value.trace.findIndex(row=>row.stage==="worker-terminate"&&row.physical===2);
+    const created=value.trace.findIndex(row=>row.stage==="worker-created"&&row.physical===3);
+    expect(retired).toBeGreaterThan(-1);expect(created).toBeGreaterThan(retired);
+    await expect.poll(()=>page.workers().length).toBe(0);
+  }finally{page.context().off("request",onRequest);}
+});
+
+test("observed cold expiry keeps its one-millisecond pre-create deadline and retirement",async({page})=>{
+  const value=await page.evaluate(()=>window.runObservedColdExpiry());
+  console.log(JSON.stringify({stage:"observed cold expiry",state:value.loaded.State,status:value.status,trace:value.trace}));
+  expect(value.loaded).toMatchObject({State:"timeout",Phase:"Compile"});
+  expect(value.retired).toContain("installed-worker");expect(value.final.ActiveWorker).toBe("");
+  await expect.poll(()=>page.workers().length).toBe(0);
+});
+
+test("a genuine loaded message withheld beyond the original deadline cannot restore expired authority",async({page})=>{
+  const value=await page.evaluate(()=>window.runObservedLateLoaded());
+  console.log(JSON.stringify({stage:"declared late delivery impairment",state:value.loaded.State,held:value.held,status:value.status,trace:value.trace}));
+  expect(value.held).toBe(1); // A real compile must occur; an unexercised prefix cannot pass.
+  expect(value.loaded.State).toBe("timeout");expect(value.deliveriesAfter).toBe(value.deliveriesBefore);
+  expect(value.after).toEqual(value.before);expect(value.after.ActiveWorker).toBe("");
+  expect(value.retired).toContain("installed-worker");
+  await expect.poll(()=>page.workers().length).toBe(0);
+});
+
 test("foreign correlation, Worker and generation observations are inert on the installed host",async({page})=>{
   const value=await page.evaluate(()=>window.runForeignObservations());
   expect(value.ignored).toBeGreaterThan(9);

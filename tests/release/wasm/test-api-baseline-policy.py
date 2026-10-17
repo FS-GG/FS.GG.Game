@@ -71,7 +71,8 @@ for identity in current_policy["packages"]:
         else: raise SystemExit("additive successor accepted unavailable/breaking native verdict")
 assert manifest.api_policy(current_policy["candidateVersion"]) == current_policy
 assert current_policy["candidateVersion"] == ET.parse(ROOT / "eng/wasm-shared/version.props").findtext("./PropertyGroup/WasmSharedVersion")
-assert current_policy["baselineVersion"] == manifest.api_policy("0.3.0")["candidateVersion"]
+assert current_policy["baselineVersion"] == manifest.api_policy("0.4.0")["candidateVersion"]
+assert manifest.api_policy("0.4.0")["baselineVersion"] == "0.3.0"
 assert manifest.api_policy("0.3.0")["baselineVersion"] == "0.2.0"
 assert manifest.api_policy("0.2.0")["baselineVersion"] == "0.1.1"
 try: manifest.api_policy("0.2.1")

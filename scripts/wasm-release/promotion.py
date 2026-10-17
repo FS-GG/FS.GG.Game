@@ -95,7 +95,7 @@ PublicationSubject = namedtuple('PublicationSubject', 'producer tree version')
 def publication_identity(subject):
     need(type(subject) is PublicationSubject, 'explicit publication subject required')
     sha(subject.producer, 40); sha(subject.tree, 40)
-    need(subject.version == VERSION == '0.4.0', 'wrong published subject version')
+    need(subject.version == VERSION == '0.5.0', 'wrong published subject version')
     return subject.producer, subject.tree
 
 
@@ -133,7 +133,7 @@ def validate_binding(binding, *, subject=None):
               'workflowSha','job','event','evidence'}
     need(set(binding) == fields, 'unreviewed preparation fields')
     need(binding['schema'] == SCHEMA and binding['repository'] == REPO and binding['workflow'] == '.github/workflows/wasm-shared.yml' and binding['mode'] == 'qualify', 'unrelated preparation route')
-    need(VERSION == '0.4.0' and binding['producer'] == binding['executor'] == binding['workflowSha'] == producer and binding['producerTree'] == binding['executorTree'] == tree and binding['version'] == VERSION, 'wrong selected producer/executor/tree/version')
+    need(VERSION == '0.5.0' and binding['producer'] == binding['executor'] == binding['workflowSha'] == producer and binding['producerTree'] == binding['executorTree'] == tree and binding['version'] == VERSION, 'wrong selected producer/executor/tree/version')
     need(binding['job'] == 'qualify' and binding['event'] in ('push','workflow_dispatch'), 'premerge/generation-only custody refuses')
     need(binding['runAttempt'] == 1, 'rerun custody refuses')
     need(set(binding['evidence']) == OUTER_FILES - {'preparation-binding.json'} - set(FILES), 'wrong closed evidence roster')
@@ -641,7 +641,7 @@ def custody_plan():
 
 def freeze(custody,output):
     custody_plan()
-    need(VERSION=='0.4.0', 'only selected current release can freeze')
+    need(VERSION=='0.5.0', 'only selected current release can freeze')
     need(os.environ['GITHUB_REPOSITORY']==REPO and os.environ['GITHUB_REF']=='refs/heads/main' and os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA']==P, 'premerge/source/workflow substitution')
     event=os.environ['GITHUB_EVENT_NAME']
     need(event=='push' or (event=='workflow_dispatch' and os.environ.get('WASM_QUALIFY_EXPECTED_HEAD')==P), 'qualification dispatch needs selected protected head')

@@ -341,6 +341,31 @@ module WorkerEntry =
         let mutable loaded: (ValidatedConfiguration * HostIdentity) option = None
         let mutable busy = false
 
+        // Internal advisory envelopes are consumed by the mechanical Worker
+        // adapter, never by the lifecycle reducer. Observer failure cannot
+        // replace admission, ABI or cleanup outcomes.
+        let diagnostic (identity: HostIdentity) correlation stage =
+            let value: WorkerWireObservation =
+                {
+                    Identity = Identity.toWire identity
+                    Correlation = OperationToken.value correlation
+                    Kind = "diagnostic"
+                    Phase = stage
+                    Digest = ""
+                    Version = 0u
+                    State = ""
+                    Status = 0
+                    Diagnostic = ""
+                    CleanupDiagnostic = ""
+                    Dispatched = false
+                    Output = Array.empty
+                }
+
+            try
+                emit value
+            with _ ->
+                ()
+
         let perform configuration effect =
             async {
                 let abi = (Validation.descriptor configuration).Abi
@@ -494,16 +519,20 @@ module WorkerEntry =
                             try
                                 if wire.Kind = "load" then
                                     observe (PhaseObserved(identity, correlation, Compile))
-
-                                    match Admission.inspect configuration wire.Bytes with
+                                    diagnostic identity correlation "admission-begin"
+                                    let admission = Admission.inspect configuration wire.Bytes
+                                    diagnostic identity correlation "admission-end"
+                                    match admission with
                                     | Error issues ->
                                         observe (
                                             WorkerFailed(identity, Some correlation, $"admission refused: {issues}")
                                         )
                                     | Ok _ ->
+                                        diagnostic identity correlation "sha256-begin"
                                         let! digest =
                                             Async.FromContinuations(fun (ok, error, _) ->
                                                 native.Sha256 wire.Bytes ok (System.Exception >> error))
+                                        diagnostic identity correlation "sha256-end"
 
                                         if digest <> (Validation.configuration configuration).ArtifactSha256 then
                                             observe (
@@ -513,7 +542,7 @@ module WorkerEntry =
                                             observe (ArtifactDigestObserved(identity, correlation, digest))
                                             observe (PhaseObserved(identity, correlation, Instantiate))
                                             let abi = (Validation.descriptor configuration).Abi
-
+                                            diagnostic identity correlation "instantiate-begin"
                                             let! version =
                                                 Async.FromContinuations(fun (ok, error, _) ->
                                                     native.Compile
@@ -522,6 +551,7 @@ module WorkerEntry =
                                                         abi.VersionExport
                                                         ok
                                                         (System.Exception >> error))
+                                            diagnostic identity correlation "instantiate-end"
 
                                             if version <> abi.Version then
                                                 observe (

@@ -59,4 +59,6 @@ module WorkerEntry =
     val configurationToWire: ValidatedConfiguration -> CandidateConfigurationBoundary
     val commandToWire: ValidatedConfiguration -> WorkerCommand -> WorkerWireCommand
     val observationFromWire: WorkerWireObservation -> Result<WorkerObservation, string>
+    /// The mechanical adapter consumes internal diagnostic envelopes separately;
+    /// they are advisory and must never enter a lifecycle reducer.
     val createWireRuntime: WorkerWireMechanics -> (WorkerWireObservation -> unit) -> (WorkerWireCommand -> unit)

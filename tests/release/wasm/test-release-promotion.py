@@ -84,8 +84,8 @@ class Occupancy:
     def __init__(self,mutant=None): self.mutant=mutant; self.writes=[]
     def pages(self,path,key=None):
         if self.mutant=='denied': raise p.Refusal('403 Unknown')
-        if self.mutant=='deleted' and 'state=deleted' in path: return [{'name':'0.4.0','id':1}]
-        if self.mutant=='active' and 'state=active' in path: return [{'name':'0.4.0','id':1}]
+        if self.mutant=='deleted' and 'state=deleted' in path: return [{'name':'0.5.0','id':1}]
+        if self.mutant=='active' and 'state=active' in path: return [{'name':'0.5.0','id':1}]
         if self.mutant=='malformed-org': return [{'id':1}]
         return [{'name':'0.2.0','id':1}]
     def request(self,url,**kwargs):
@@ -94,7 +94,7 @@ class Occupancy:
         if url.endswith('/index.json'):
             if self.mutant=='missing-index': return 404,None,{}
             if self.mutant=='malformed-index': return 200,{'versions':[{}]},{}
-            return 200,{'versions':['0.1.1','0.2.0']+(['0.4.0'] if self.mutant=='unlisted' else [])},{}
+            return 200,{'versions':['0.1.1','0.2.0']+(['0.5.0'] if self.mutant=='unlisted' else [])},{}
         return (200 if self.mutant in ('contradiction','unlisted') else 404),b'',{}
 
 class Tests(unittest.TestCase):
@@ -424,20 +424,20 @@ class Tests(unittest.TestCase):
             root=pathlib.Path(raw);cache=root/'packages';record=root/'promotion-binding.json';lock=root/'packages.lock.json'
             r=reviewed();dependencies={}
             for ident in p.PACKAGES:
-                folder=cache/ident.lower()/'0.4.0';folder.mkdir(parents=True)
-                archive=folder/(ident.lower()+'.0.4.0.nupkg')
+                folder=cache/ident.lower()/'0.5.0';folder.mkdir(parents=True)
+                archive=folder/(ident.lower()+'.0.5.0.nupkg')
                 with zipfile.ZipFile(archive,'w') as z:z.writestr('ordinary.dll',b'real-payload');z.writestr('module-worker.mjs',b'real-worker')
-                r['binding']['archives'][ident+'.0.4.0.nupkg']=p.digest(archive.read_bytes())
-                r['binding']['inventories'][ident+'.0.4.0.nupkg']={'ordinary.dll':p.digest(b'real-payload'),'module-worker.mjs':p.digest(b'real-worker')}
+                r['binding']['archives'][ident+'.0.5.0.nupkg']=p.digest(archive.read_bytes())
+                r['binding']['inventories'][ident+'.0.5.0.nupkg']={'ordinary.dll':p.digest(b'real-payload'),'module-worker.mjs':p.digest(b'real-worker')}
                 content=base64.b64encode(hashlib.sha512(archive.read_bytes()).digest()).decode()
-                (folder/(ident.lower()+'.0.4.0.nupkg.sha512')).write_text(content)
+                (folder/(ident.lower()+'.0.5.0.nupkg.sha512')).write_text(content)
                 (folder/'.nupkg.metadata').write_text(json.dumps({'version':2,'contentHash':content,'source':'https://nuget.pkg.github.com/FS-GG/index.json'}))
-                dependencies[ident]={'resolved':'0.4.0','contentHash':content}
+                dependencies[ident]={'resolved':'0.5.0','contentHash':content}
             record.write_text(json.dumps({'preparation':r}));lock.write_text(json.dumps({'dependencies':{'net10.0':dependencies}}))
             with patch.dict(os.environ,{'ACCEPTED_EXECUTOR':p.P}):
                 p.check_installed(record,cache,'https://nuget.pkg.github.com/FS-GG/index.json',lock)
-                ident=p.PACKAGES[1];folder=cache/ident.lower()/'0.4.0';archive=folder/(ident.lower()+'.0.4.0.nupkg');original=archive.read_bytes()
-                sidecar=folder/(ident.lower()+'.0.4.0.nupkg.sha512');metadata=folder/'.nupkg.metadata';original_sidecar=sidecar.read_text();original_metadata=metadata.read_text()
+                ident=p.PACKAGES[1];folder=cache/ident.lower()/'0.5.0';archive=folder/(ident.lower()+'.0.5.0.nupkg');original=archive.read_bytes()
+                sidecar=folder/(ident.lower()+'.0.5.0.nupkg.sha512');metadata=folder/'.nupkg.metadata';original_sidecar=sidecar.read_text();original_metadata=metadata.read_text()
                 for mutation in ('worker','ordinary','signature-disguised-worker','lock','version','missing-cache'):
                     saved=copy.deepcopy(dependencies)
                     if mutation in ('worker','ordinary','signature-disguised-worker'):
@@ -553,17 +553,17 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'ACCEPTED_EXECUTOR':p.P}):
             root=pathlib.Path(raw);cache=root/'packages';record=root/'promotion-binding.json';lock=root/'packages.lock.json';r=reviewed();deps={};originals={}
             for ident in p.PACKAGES:
-                folder=cache/ident.lower()/'0.4.0';folder.mkdir(parents=True);archive=folder/(ident.lower()+'.0.4.0.nupkg')
+                folder=cache/ident.lower()/'0.5.0';folder.mkdir(parents=True);archive=folder/(ident.lower()+'.0.5.0.nupkg')
                 unsigned=self.package_fixture();signed=self.package_fixture(1);archive.write_bytes(signed);originals[ident]=signed
-                r['binding']['archives'][ident+'.0.4.0.nupkg']=p.digest(unsigned)
-                with p.zipfile.ZipFile(io.BytesIO(unsigned))as z:r['binding']['inventories'][ident+'.0.4.0.nupkg']={name:p.digest(z.read(name))for name in z.namelist()}
-                content=base64.b64encode(hashlib.sha512(unsigned).digest()).decode();self.assertNotEqual(base64.b64encode(hashlib.sha512(signed).digest()).decode(),content);deps[ident]={'resolved':'0.4.0','contentHash':content}
-                (folder/(ident.lower()+'.0.4.0.nupkg.sha512')).write_text(base64.b64encode(hashlib.sha512(signed).digest()).decode())
+                r['binding']['archives'][ident+'.0.5.0.nupkg']=p.digest(unsigned)
+                with p.zipfile.ZipFile(io.BytesIO(unsigned))as z:r['binding']['inventories'][ident+'.0.5.0.nupkg']={name:p.digest(z.read(name))for name in z.namelist()}
+                content=base64.b64encode(hashlib.sha512(unsigned).digest()).decode();self.assertNotEqual(base64.b64encode(hashlib.sha512(signed).digest()).decode(),content);deps[ident]={'resolved':'0.5.0','contentHash':content}
+                (folder/(ident.lower()+'.0.5.0.nupkg.sha512')).write_text(base64.b64encode(hashlib.sha512(signed).digest()).decode())
                 (folder/'.nupkg.metadata').write_text(json.dumps({'version':2,'contentHash':content,'source':feed}))
             record.write_text(json.dumps({'preparation':r}));lock.write_text(json.dumps({'dependencies':{'net10.0':deps}}))
             with patch.object(p,'repository_signature',return_value='source-controlled verification fixture')as verify:
                 p.check_installed(record,cache,feed,lock);self.assertEqual(verify.call_count,2)
-            ident=p.PACKAGES[0];folder=cache/ident.lower()/'0.4.0';archive=folder/(ident.lower()+'.0.4.0.nupkg');sidecar=folder/(ident.lower()+'.0.4.0.nupkg.sha512');metadata=folder/'.nupkg.metadata'
+            ident=p.PACKAGES[0];folder=cache/ident.lower()/'0.5.0';archive=folder/(ident.lower()+'.0.5.0.nupkg');sidecar=folder/(ident.lower()+'.0.5.0.nupkg.sha512');metadata=folder/'.nupkg.metadata'
             baseline_sidecar=sidecar.read_text();baseline_metadata=metadata.read_text();baseline_deps=copy.deepcopy(deps)
             for mutation in ('sidecar','metadata-hash','metadata-source','metadata-version','metadata-malformed','metadata-missing','metadata-duplicate','lock','unsigned-public','ordinary','payload','corrupt-compression','cache-drift','signature-trust','foreign-feed'):
                 if mutation=='sidecar':sidecar.write_text(deps[ident]['contentHash'])
@@ -651,7 +651,7 @@ class Tests(unittest.TestCase):
     def test_foreign_occupied_second_member_blocks_first_writer(self):
         class Transport(Occupancy):
             def pages(self,path,key=None):
-                return [{'name':'0.4.0','id':1}] if 'browser' in path and 'state=active' in path else []
+                return [{'name':'0.5.0','id':1}] if 'browser' in path and 'state=active' in path else []
         calls=[]
         def reject(args,**kwargs):
             calls.append(args[0])
@@ -669,11 +669,11 @@ class Tests(unittest.TestCase):
                     class Transport(Occupancy):
                         def pages(self,path,key=None):
                             if outcome=='unknown':raise p.Refusal('403 occupancy Unknown')
-                            return [{'name':'0.4.0','id':1}] if feed=='org' and 'browser' in path and 'state=active' in path else []
+                            return [{'name':'0.5.0','id':1}] if feed=='org' and 'browser' in path and 'state=active' in path else []
                         def request(self,url,**kwargs):
                             if feed!='public' or url.endswith('/v3/index.json'):return super().request(url,**kwargs)
                             exists='browser' in url
-                            return (200,{'versions':['0.2.0']+(['0.4.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
+                            return (200,{'versions':['0.2.0']+(['0.5.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
                         def checked(self,path,method='GET',data=None):
                             if method=='POST':events.append(('writer','draft'))
                             return {'id':1,'draft':True,'assets':[]}
@@ -696,7 +696,7 @@ class Tests(unittest.TestCase):
             class Transport(Occupancy):
                 def pages(self,path,key=None):
                     if outcome=='unknown':raise p.Refusal('403 occupancy Unknown')
-                    return [{'name':'0.4.0','id':1}] if 'browser' in path and 'state=active' in path else []
+                    return [{'name':'0.5.0','id':1}] if 'browser' in path and 'state=active' in path else []
             def cmd(args,**kwargs):
                 self.assertTrue(str(args[0]).endswith('readback.sh'))
                 events.append(('readback',args[1],args[-1]))
@@ -745,15 +745,15 @@ class Tests(unittest.TestCase):
         producer=binder.PUBLISHED;tree=binder.PUBLISHED_TREE;qualifier='9'*40
         with patch.object(p,'P',producer),patch.object(p,'TREE',tree):
             r=reviewed();run,jobs,artifact=native_data()
-        journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':201,'firstPromotionAttempt':1,'producer':producer,'tag':'wasm/v0.4.0'}
-        values={'PUBLISHED_SOURCE':producer,'QUALIFIER_SOURCE':qualifier,'ACCEPTED_EXECUTOR':qualifier,'RELEASE_VERSION':'0.4.0'}
+        journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':201,'firstPromotionAttempt':1,'producer':producer,'tag':'wasm/v0.5.0'}
+        values={'PUBLISHED_SOURCE':producer,'QUALIFIER_SOURCE':qualifier,'ACCEPTED_EXECUTOR':qualifier,'RELEASE_VERSION':'0.5.0'}
         class Transport:
             def __init__(self,mutation=None):
                 self.mutation=mutation;self.journal=copy.deepcopy(journal)
                 if mutation=='journal-producer':self.journal['producer']=qualifier
                 body=json.dumps(self.journal).encode();self.body=body
                 self.asset={'id':401,'name':'promotion-binding.json','url':f'https://api.github.com/repos/{p.REPO}/releases/assets/401','size':len(body),'digest':'sha256:'+p.digest(body)}
-                self.release={'id':300,'tag_name':'wasm/v0.4.0','target_commitish':qualifier if mutation=='release-source' else producer,'draft':False,'prerelease':False,'assets':[self.asset]}
+                self.release={'id':300,'tag_name':'wasm/v0.5.0','target_commitish':qualifier if mutation=='release-source' else producer,'draft':False,'prerelease':False,'assets':[self.asset]}
             def checked(self,path):
                 if path.endswith('/git/ref/heads/main'):return {'object':{'sha':'8'*40 if self.mutation=='main' else qualifier}}
                 if path.endswith('/releases/300'):return self.release
@@ -813,12 +813,12 @@ class Tests(unittest.TestCase):
                     return release
                 def pages(self,path,key=None):
                     ident=p.PACKAGES[0] if 'contracts' in path else p.PACKAGES[1]
-                    return [{'name':'0.4.0','id':1}] if 'state=active' in path and state.get(('org',ident)) else []
+                    return [{'name':'0.5.0','id':1}] if 'state=active' in path and state.get(('org',ident)) else []
                 def request(self,url,**kw):
                     if url.endswith('/v3/index.json'):return super().request(url,**kw)
                     ident=p.PACKAGES[0] if 'contracts' in url else p.PACKAGES[1]
                     exists=state.get(('public',ident))
-                    return (200,{'versions':['0.2.0']+(['0.4.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
+                    return (200,{'versions':['0.2.0']+(['0.5.0'] if exists else [])},{}) if url.endswith('/index.json') else (200 if exists else 404,b'',{})
             def rb(kind,custody,output):
                 if kind in ('org','public'):
                     if not all(state.get((kind,x)) for x in p.PACKAGES):raise p.Refusal('pair absent')
@@ -854,7 +854,7 @@ class Tests(unittest.TestCase):
                 self.assertEqual(events.count('public-contracts'),1);self.assertEqual(events.count('public-browser'),1)
 
     def test_draft_resolver_actual_transport_pagination_and_unknowns(self):
-        release={'id':402763234,'tag_name':'wasm/v0.4.0','target_commitish':p.P,'draft':True,'prerelease':False,'assets':[]}
+        release={'id':402763234,'tag_name':'wasm/v0.5.0','target_commitish':p.P,'draft':True,'prerelease':False,'assets':[]}
         class Transport(p.Native):
             def __init__(self,mutation=None):super().__init__();self.mutation=mutation;self.calls=[]
             def api(self,path,method='GET',data=None):
@@ -908,8 +908,8 @@ class Tests(unittest.TestCase):
         # are covered separately; no product or provider process runs here.
         with tempfile.TemporaryDirectory(prefix='wasm-asset-caller-control.')as raw:
             root=pathlib.Path(raw);tools=root/'bin';tools.mkdir();custody=root/'custody';custody.mkdir()
-            for name in ('fsgg-wasm-sdk-0.4.0.tar.gz','release-manifest.json','SHA256SUMS'):(custody/name).write_bytes(name.encode())
-            (custody/'release-manifest.json').write_text(json.dumps({'version':'0.4.0'}))
+            for name in ('fsgg-wasm-sdk-0.5.0.tar.gz','release-manifest.json','SHA256SUMS'):(custody/name).write_bytes(name.encode())
+            (custody/'release-manifest.json').write_text(json.dumps({'version':'0.5.0'}))
             (root/'reviewed.json').write_text(json.dumps(reviewed()))
             wrapper=tools/'python3';wrapper.write_text('#!'+sys.executable+'\n'+'''import importlib.util,sys,os,json,pathlib,hashlib,io,zipfile
 sys.dont_write_bytecode=True
@@ -919,14 +919,14 @@ if args[0]=='-c':
  sys.exit(subprocess.call([sys.executable]+args))
 s=importlib.util.spec_from_file_location('promotion',args[0]);p=importlib.util.module_from_spec(s);s.loader.exec_module(p)
 root=pathlib.Path(os.environ['FIXTURE_ROOT']);c=root/'custody'
-r=json.loads((root/'reviewed.json').read_text());journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':200,'firstPromotionAttempt':1,'producer':p.P,'tag':'wasm/v0.4.0'}
+r=json.loads((root/'reviewed.json').read_text());journal={'schema':'fsgg.wasm.promotion/v1','preparation':r,'firstPromotionRun':200,'firstPromotionAttempt':1,'producer':p.P,'tag':'wasm/v0.5.0'}
 (c/'promotion-binding.json').write_text(json.dumps(journal))
 record={'schema':'fsgg.wasm.admission/v1','reviewed':r,'mode':'promote','run':200,'attempt':1,'exchangeVerified':True,'occupancy':{k:False for k in p.OCCUPANCY_KEYS},'observedAt':'now','nugetAccountSha256':p.digest(b'offline'),'publicModeratorRemovalHistory':'Unknown','atomicReservation':'Unknown'}
 raw=io.BytesIO()
 with zipfile.ZipFile(raw,'w')as z:z.writestr('admission-binding.json',json.dumps(record))
 admission=raw.getvalue()
-rows=[dict(id=i+1,name=n,url=f'https://api.github.com/repos/{p.REPO}/releases/assets/{i+1}',size=len((c/n).read_bytes()),digest='sha256:'+p.digest((c/n).read_bytes()))for i,n in enumerate(('fsgg-wasm-sdk-0.4.0.tar.gz','release-manifest.json','SHA256SUMS','promotion-binding.json'))]
-release=dict(id=402763234,tag_name='wasm/v0.4.0',target_commitish=p.P,draft=True,prerelease=False,assets=rows)
+rows=[dict(id=i+1,name=n,url=f'https://api.github.com/repos/{p.REPO}/releases/assets/{i+1}',size=len((c/n).read_bytes()),digest='sha256:'+p.digest((c/n).read_bytes()))for i,n in enumerate(('fsgg-wasm-sdk-0.5.0.tar.gz','release-manifest.json','SHA256SUMS','promotion-binding.json'))]
+release=dict(id=402763234,tag_name='wasm/v0.5.0',target_commitish=p.P,draft=True,prerelease=False,assets=rows)
 class N(p.Native):
  def api(self,path,method='GET',data=None):
   assert method=='GET'

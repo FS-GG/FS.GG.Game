@@ -135,7 +135,7 @@ if grep -Fq "$repo/src/" "$work/consumer/obj/project.assets.json"; then
 fi
 NUGET_PACKAGES="$work/consumer-packages" dotnet build "$work/consumer/Consumer.fsproj" -c Release --no-restore --nologo
 output="$work/consumer/public/sub/app"
-for asset in module-worker.mjs worker-client.mjs policy/WorkerEntry.js policy/Invocation.js policy/Admission.js; do
+for asset in module-worker.mjs worker-client.mjs worker-build.json policy/WorkerEntry.js policy/Invocation.js policy/Admission.js; do
   test -f "$output/_content/FS.GG.Wasm.Browser/$asset"
 done
 NUGET_PACKAGES="$work/consumer-packages" dotnet tool run fable "$work/consumer/Consumer.fsproj" --outDir "$output/fable" --noCache

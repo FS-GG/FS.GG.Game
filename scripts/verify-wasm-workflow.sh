@@ -404,13 +404,13 @@ assert text.count('-p:WasmCandidateVersion="$version"')==3
 with tempfile.TemporaryDirectory() as root:
     root=pathlib.Path(root);assembly=root/'current.dll';log=root/'build.log'
     assembly.write_bytes(b'owned inert assembly fixture')
-    header='wasm-supervisor-build phase=source source=fixture-head tree=fixture-tree version=0.4.0'
+    header='wasm-supervisor-build phase=source source=fixture-head tree=fixture-tree version=0.5.0'
     good=header+'\nwasm-supervisor-assembly sha256='+hashlib.sha256(assembly.read_bytes()).hexdigest()+'\n'+header+' status=success\n'
     def run(body,phase='source',binary=None):
         log.write_text(body)
-        return subprocess.run(['bash','-c','set -euo pipefail\nsource_head=fixture-head;source_tree=fixture-tree;version=0.4.0\n'+helpers+'\nvalidate_build "$1" "$2" "$3"\nprintf admitted', 'phase-control',str(log),phase,str(binary or assembly)],capture_output=True,text=True)
+        return subprocess.run(['bash','-c','set -euo pipefail\nsource_head=fixture-head;source_tree=fixture-tree;version=0.5.0\n'+helpers+'\nvalidate_build "$1" "$2" "$3"\nprintf admitted', 'phase-control',str(log),phase,str(binary or assembly)],capture_output=True,text=True)
     result=run(good);assert result.returncode==0 and result.stdout=='admitted',result.stderr
-    for bad in ['',good.replace('fixture-head','stale-head'),good.replace('status=success','status=partial'),good.replace('version=0.4.0','version=0.3.0'),good.replace('sha256=','sha256=00')]:
+    for bad in ['',good.replace('fixture-head','stale-head'),good.replace('status=success','status=partial'),good.replace('version=0.5.0','version=0.3.0'),good.replace('sha256=','sha256=00')]:
         result=run(bad);assert result.returncode!=0 and 'admitted' not in result.stdout
     result=run(good,'installed');assert result.returncode!=0 and 'admitted' not in result.stdout
     link=root/'linked.dll';link.symlink_to(assembly)

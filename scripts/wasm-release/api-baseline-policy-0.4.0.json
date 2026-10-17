@@ -1,0 +1,20 @@
+{
+  "baselineVersion": "0.3.0",
+  "baselineTag": "wasm/v0.3.0",
+  "baselineSource": "16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c",
+  "baselineTree": "f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a",
+  "baselineManifestSha256": "a10046daf5417304732605745608b084f14481212931cb69939d51f90233ed07",
+  "candidateVersion": "0.4.0",
+  "packages": {
+    "FS.GG.Wasm.Contracts": {
+      "servedArchiveSha256": "90839f0bef2688447a55568dcb370941efec6f4e043742b9b4b8969c247acfa1",
+      "expectedStatus": "compatible",
+      "removedConstructorTypes": []
+    },
+    "FS.GG.Wasm.Browser": {
+      "servedArchiveSha256": "74a11425bfb64c152ffbeab5be2753434e08f55f806e85113cdc25cacbc86fa5",
+      "expectedStatus": "compatible",
+      "removedConstructorTypes": []
+    }
+  }
+}

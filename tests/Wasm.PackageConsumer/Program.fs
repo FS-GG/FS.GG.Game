@@ -107,6 +107,27 @@ let createHost path digest outputCap deadline (transport: HostTransport) receive
 
 let load (host: Host) now wire artifact = host.Load(now, identity wire, artifact)
 
+// The cold-start controls use the same real, pre-create enclosing deadline as
+// a limited consumer operation. Phase observations cannot renew this budget.
+let loadBoundedSc2 (host: Host) (now: int64) wire digest artifact deadline =
+    host.SubmitLimited(
+        now,
+        LimitedLoad(identity wire, configuration "sc2-imported-strict" digest 65536 deadline, artifact),
+        { MaximumDeadlineMilliseconds = deadline
+          MaximumOutputBytes = 65536
+          EnclosingDeadlineMilliseconds = Some(now + int64 deadline) }
+    ) |> unwrap
+
+let prepareBoundedSc2 (host: Host) (now: int64) wire transaction digest artifact =
+    host.SubmitLimited(
+        now,
+        LimitedCandidate(identity wire, transaction, Some 1UL,
+            configuration "sc2-imported-strict" digest 65536 250, artifact),
+        { MaximumDeadlineMilliseconds = 250
+          MaximumOutputBytes = 65536
+          EnclosingDeadlineMilliseconds = Some(now + 250L) }
+    ) |> unwrap
+
 let initialize (host: Host) now wire input =
     host.Initialize(now, identity wire, input)
 
@@ -134,6 +155,8 @@ let prepare (host: Host) now wire transaction expected digest artifact =
 
 let validateCandidate (host: Host) now transaction generation =
     host.ValidateCandidate(now, transaction, generation)
+
+let abortCandidate (host: Host) now transaction = host.AbortCandidate(now, transaction)
 
 let commitCandidate (host: Host) now transaction expected generation =
     host.CommitCandidate(now, transaction, expected, generation)
