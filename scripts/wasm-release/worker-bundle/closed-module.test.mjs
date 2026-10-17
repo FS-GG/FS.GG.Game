@@ -8,6 +8,9 @@ test("closed module accepts ordinary ESM native mechanics without dependencies",
 test("authoritative admission's locally bound require is not a runtime import",()=>{
   assert.equal(validateClosedModule("function inspect(bytes) { const require = count => count <= bytes.length; return require(1); }").externalImports,0);
 });
+test("pinned Fable Encoding const global alias retains only its selected Buffer member",()=>{
+  assert.equal(validateClosedModule('function encode(x) { const g=globalThis; const h=g; return typeof h.Buffer !== "undefined" ? h.Buffer.from(x) : new Uint8Array(); }').externalImports,0);
+});
 for(const source of [
   'import { x } from "./missing.js";',
   'export * from "./missing.js";',
@@ -26,4 +29,12 @@ for(const source of [
   'self.onmessage = () => importScripts("elsewhere.js");',
   'self.onmessage = () => new WebSocket("wss://example.invalid");',
   'self.onmessage = () => new XMLHttpRequest();'
+  ,'const g=globalThis; g.fetch("https://example.invalid");'
+  ,'const g=globalThis; const h=g; h.eval("1");'
+  ,'const {fetch:f}=globalThis; f("https://example.invalid");'
+  ,'const g=globalThis; send(g);'
+  ,'const g=globalThis; const property="fetch"; g[property]("https://example.invalid");'
+  ,'let g=globalThis; g=other;'
+  ,'const g=self; g.importScripts("elsewhere.js");'
+  ,'const g=globalThis.self; g.fetch("https://example.invalid");'
 ])test(`refuses runtime dependency/execution: ${source}`,()=>assert.throws(()=>validateClosedModule(source)));
