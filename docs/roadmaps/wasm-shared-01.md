@@ -64,7 +64,10 @@ attempt 1 at `efe2840`, failed in the early source phase before Quint, packing,
 model or browser work. Its bounded first-error diagnostics exposed an unparenthesized
 conditional record field followed by another field, plus EffectProjection/Mechanical
 inference in the new omission control. The follow-up parenthesizes the field expression
-and explicitly types both effect-search lambdas. This is actual early failure detection,
+and explicitly types both effect-search lambdas. The same head also failed required
+shell lint (`39008574510`, job `117326008491`) on SC2174: combining mkdir mode
+with parent creation. The correction creates parents separately, then creates the
+fresh private evidence directory with its explicit mode. This is actual early failure detection,
 not successful source compilation or full qualification; both failed operations remain.
 
 The connected correction annotates shared identity, outcome, settings and boundary

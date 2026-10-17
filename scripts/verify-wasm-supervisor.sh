@@ -17,7 +17,7 @@ if [[ "$mode" == compiled ]]; then
   [[ -d "$output" && ! -L "$output" && "$(stat -c '%a:%u' -- "$output")" == "700:$(id -u)" ]] || { echo 'compiled evidence root must be private and owned' >&2;exit 2; }
 else
   [[ ! -e "$output" ]] || { echo 'qualification output must be fresh' >&2; exit 2; }
-  (umask 077;mkdir -m 700 -p "$output")
+  (umask 077;mkdir -p -- "$(dirname "$output")";mkdir -m 700 -- "$output")
 fi
 q="${WASM_BASELINE_QUALIFICATION_ROOT:?requires official cache/tool root}"
 version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
