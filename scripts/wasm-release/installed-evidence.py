@@ -8,6 +8,7 @@ import os
 import pathlib
 import stat
 import tarfile
+import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MIB = 1024 * 1024
@@ -28,6 +29,44 @@ def safe_name(name):
     return name
 
 
+def fable_dependency(name):
+    """Finite roles in the actual pinned Fable dependency layout, not suffix grants."""
+    if '/fable_modules/' not in name: return None
+    prefix, relative = name.split('/fable_modules/', 1)
+    contexts = {'consumer/public/sub/app/fable', 'selected/installed-fable',
+                'selected/browser/fable', 'selected/installed-fable/Installed',
+                'selected/browser/fable/Installed',
+                'consumer/public/sub/app/_content/FS.GG.Wasm.Browser/policy',
+                'selected/browser/_content/FS.GG.Wasm.Browser/policy'}
+    if prefix not in contexts: raise ValueError('unreviewed Fable dependency context')
+    if relative == '.gitignore': return ('bookkeeping', None, None)
+    module, separator, leaf = relative.partition('/')
+    if not separator: raise ValueError('unreviewed Fable dependency module')
+    if module == 'fable-library-js.5.18.0':
+        if leaf in ('README.md', 'CHANGELOG.md', 'big.d.ts', 'package.json'):
+            return ('library-support', None, None)
+        # The exact runtime member must also occur byte-identically in the
+        # published Browser package; .js alone never establishes provenance.
+        return ('library-runtime', 'fs.gg.wasm.browser',
+                'contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/fable_modules/'+relative)
+    modules = {
+        'FS.GG.Wasm.Browser.0.4.0': ('fs.gg.wasm.browser',
+            ('Admission', 'Host', 'Invocation', 'Lifecycle', 'RuntimeProtocol', 'WorkerEntry'),
+            'FS.GG.Wasm.Browser'),
+        'FS.GG.Wasm.Contracts.0.4.0': ('fs.gg.wasm.contracts', ('Contracts',), 'FS.GG.Wasm.Contracts')}
+    if module not in modules: raise ValueError('unreviewed Fable dependency module')
+    package, stems, project = modules[module]
+    if leaf in {stem+suffix for stem in stems for suffix in ('.fs', '.fsi')}:
+        return ('package-source', package, 'fable/'+leaf)
+    if leaf in {stem+'.fs.js' for stem in stems}:
+        return ('compiled-package-source', package, 'fable/'+leaf[:-3])
+    if leaf == project+'.fableproj':
+        return ('derived-project', package, 'fable/'+project+'.fsproj')
+    if package == 'fs.gg.wasm.browser' and leaf in ('eng/wasm-shared/version.props', 'js/wasm-primitives.js'):
+        return ('package-source', package, 'fable/'+leaf)
+    raise ValueError('unreviewed Fable package dependency member')
+
+
 def consumer_member(name):
     safe_name(name)
     fixed={'consumer/release-manifest.json','consumer/NuGet.Config','consumer/consumer/packages.lock.json',
@@ -36,6 +75,9 @@ def consumer_member(name):
     for ident in PACKAGES:
         if name in {'consumer/packages/'+ident+'/'+leaf for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata')}:return True
     if name in {'consumer/core/'+leaf for leaf in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','reference-netstandard2.0.dll','reference-netstandard2.1.dll')}:return True
+    if '/fable_modules/' in name:
+        try: return fable_dependency(name) is not None
+        except ValueError: return False
     return name.startswith('consumer/public/sub/app/') and pathlib.PurePosixPath(name).suffix in SUFFIXES and not set(pathlib.PurePosixPath(name).parts)&{'node_modules','http-cache','lock-http-cache','.git'}
 
 
@@ -69,6 +111,36 @@ class Projection:
             if category: setattr(self,category,getattr(self,category)+len(body))
         except (OSError,ValueError) as error:
             self.errors.append({'member':name,'status':'absent' if not path.exists() else 'refused','reason':str(error)})
+    def dependency(self, name):
+        """Join actual dependency roles to the already retained original archive."""
+        try:
+            role = fable_dependency(name)
+            if role is None: return
+            kind, package, member = role
+            body = self.files[name]
+            if kind in ('bookkeeping', 'library-support'):
+                body.decode('utf-8')
+                if b'\0' in body: raise ValueError('binary Fable support material')
+                if name.endswith('/package.json'):
+                    metadata = json.loads(body)
+                    if not isinstance(metadata, dict): raise ValueError('invalid Fable library metadata')
+                    if (metadata.get('name'), metadata.get('version'), metadata.get('type')) != ('@fable-org/fable-library-js', '2.8.0', 'module'):
+                        raise ValueError('pinned Fable library metadata drift')
+                return
+            context = 'consumer' if name.startswith('consumer/') else 'selected'
+            original = self.files[context+'/packages/'+package+'/'+package+'.0.4.0.nupkg']
+            with zipfile.ZipFile(io.BytesIO(original)) as archive:
+                rows = [row for row in archive.infolist() if row.filename == member]
+                if len(rows) != 1 or rows[0].is_dir() or rows[0].file_size > LIMITS['file']:
+                    raise ValueError('Fable dependency absent/ambiguous in original package')
+                source = archive.read(rows[0])
+            if kind in ('library-runtime', 'package-source') and source != body:
+                raise ValueError('Fable dependency differs from original package member')
+            # Compiled .fs.js and transformed .fableproj are actual compiler
+            # outputs, not claimed byte-identical copies of their source.
+        except (OSError, ValueError, KeyError, TypeError, UnicodeError, RuntimeError, EOFError, zipfile.BadZipFile) as error:
+            self.errors.append({'member': name, 'status': 'refused', 'reason': str(error)})
+
     def tree(self, path, prefix):
         path=pathlib.Path(path)
         if not path.exists():
@@ -87,9 +159,15 @@ class Projection:
                     count+=1
                     if count>LIMITS['members']: raise ValueError('compiled output census cap')
                     file=pathlib.Path(directory,name)
-                    if file.suffix not in SUFFIXES and name!='http.log' and not (prefix=='consumer/public' and file.relative_to(path).as_posix()=='sub/app/Consumer'):
-                        self.errors.append({'member':prefix+'/'+file.relative_to(path).as_posix(),'status':'refused','reason':'unreviewed compiled output suffix'}); continue
-                    self.add(file,prefix+'/'+file.relative_to(path).as_posix())
+                    member = prefix+'/'+file.relative_to(path).as_posix()
+                    try:
+                        dependency = fable_dependency(member)
+                    except ValueError as error:
+                        self.errors.append({'member':member,'status':'refused','reason':str(error)}); continue
+                    if dependency is None and file.suffix not in SUFFIXES and name!='http.log' and not (prefix=='consumer/public' and file.relative_to(path).as_posix()=='sub/app/Consumer'):
+                        self.errors.append({'member':member,'status':'refused','reason':'unreviewed compiled output suffix'}); continue
+                    self.add(file,member)
+                    if member in self.files: self.dependency(member)
         except (OSError,ValueError) as error:
             self.errors.append({'member':prefix,'status':'refused','reason':str(error)})
     def packages(self, cache, prefix):
@@ -224,6 +302,9 @@ def merge(projection, source):
                 projection.files[member.name]=body;projection.total+=len(body)
                 if category: setattr(projection,category,getattr(projection,category)+len(body))
             if seen != set(rows)|{'evidence-manifest.json'}: raise ValueError('consumer archive roster drift')
+            # Archive order is not authority: originals may follow their copied
+            # dependencies, so join all roles only after the complete merge.
+            for name in rows: projection.dependency(name)
         projection.errors.extend(manifest['errors'])
         if manifest.get('runtimeStatus')!=0 or manifest.get('collectorStatus')!='passed' or manifest.get('eligible') is not True:
             projection.errors.append({'member':'consumer','status':'failed','reason':'consumer runtime/collection not eligible'})

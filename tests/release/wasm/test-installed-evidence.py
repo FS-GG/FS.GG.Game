@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Inert actual collector controls: no compiler, restore, browser or network."""
 import importlib.util
+import io
+import zipfile
 import json
 import os
 import pathlib
@@ -49,6 +51,87 @@ class Evidence(unittest.TestCase):
                 self.assertTrue(json.load(archive.extractfile('evidence-manifest.json'))['eligible'])
             joined=e.Projection();e.merge(joined,root/'output')
             self.assertFalse(joined.errors);self.assertEqual(joined.files,p.files)
+
+    def test_complete_fable_dependency_roles_and_original_archive_joins(self):
+        # Inert topology mirrors all three compiler/adapter outputs plus both
+        # restored Worker policy trees. Source/support is distinct from runtime.
+        members = {
+            'fs.gg.wasm.browser': {'fable/'+stem+suffix: (stem+suffix).encode()
+                for stem in ('Admission','Host','Invocation','Lifecycle','RuntimeProtocol','WorkerEntry')
+                for suffix in ('.fs','.fsi')},
+            'fs.gg.wasm.contracts': {'fable/Contracts.fs':b'Contracts.fs','fable/Contracts.fsi':b'Contracts.fsi'}}
+        for package,project in (('fs.gg.wasm.browser','FS.GG.Wasm.Browser'),('fs.gg.wasm.contracts','FS.GG.Wasm.Contracts')):
+            members[package]['fable/'+project+'.fsproj']=b'<Project />'
+        members['fs.gg.wasm.browser'].update({
+            'fable/eng/wasm-shared/version.props':b'<Project />',
+            'fable/js/wasm-primitives.js':b'actual primitives',
+            'contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/fable_modules/fable-library-js.5.18.0/Array.js':b'actual runtime',
+            'contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/fable_modules/fable-library-js.5.18.0/lib/big.js':b'actual nested runtime'})
+        archives={}
+        for package,rows in members.items():
+            output=io.BytesIO()
+            with zipfile.ZipFile(output,'w') as archive:
+                for name,body in rows.items():archive.writestr(name,body)
+            archives[package]=output.getvalue()
+        contexts=('consumer/public/sub/app/fable','selected/installed-fable','selected/browser/fable', 'selected/installed-fable/Installed','selected/browser/fable/Installed',
+                  'consumer/public/sub/app/_content/FS.GG.Wasm.Browser/policy',
+                  'selected/browser/_content/FS.GG.Wasm.Browser/policy')
+        for context in contexts:
+            with self.subTest(context=context),tempfile.TemporaryDirectory() as raw:
+                root=pathlib.Path(raw);p=e.Projection();owner=context.split('/')[0]
+                for package,body in archives.items():
+                    p.add(put(root/package,body),owner+'/packages/'+package+'/'+package+'.0.4.0.nupkg')
+                dependency=root/'compiled/fable_modules'
+                put(dependency/'.gitignore',b'*')
+                library=dependency/'fable-library-js.5.18.0'
+                for leaf,body in (('README.md',b'readme'),('CHANGELOG.md',b'changelog'),('big.d.ts',b'declare type'),
+                                  ('package.json',b'{"name":"@fable-org/fable-library-js","version":"2.8.0","type":"module"}'),
+                                  ('Array.js',b'actual runtime'),('lib/big.js',b'actual nested runtime')):put(library/leaf,body)
+                for package,module in (('fs.gg.wasm.browser','FS.GG.Wasm.Browser'),('fs.gg.wasm.contracts','FS.GG.Wasm.Contracts')):
+                    folder=dependency/(module+'.0.4.0')
+                    for member,body in members[package].items():
+                        if not member.startswith('fable/'):continue
+                        leaf=member[len('fable/'):]
+                        if leaf.endswith('.fsproj'):put(folder/(module+'.fableproj'),b'<Project><PropertyGroup /></Project>')
+                        else:put(folder/leaf,body)
+                        if leaf.endswith('.fs'):put(folder/(leaf+'.js'),b'generated current source')
+                p.tree(root/'compiled',context)
+                self.assertFalse(p.errors,p.errors)
+                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.4.0/Host.fs',p.files)
+                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.4.0/Host.fs.js',p.files)
+                if owner=='consumer':
+                    self.assertEqual(p.finish(root/'out',0),0)
+                    joined=e.Projection();e.merge(joined,root/'out')
+                    self.assertFalse(joined.errors,joined.errors);self.assertEqual(joined.files,p.files)
+                    copied=context+'/fable_modules/FS.GG.Wasm.Browser.0.4.0/Host.fs'
+                    original=p.files[copied];p.files[copied]=b'changed copied source'
+                    p.finish(root/'forged',0)
+                    refused=e.Projection();e.merge(refused,root/'forged')
+                    self.assertTrue(any(x['member']==copied and x['reason']=='Fable dependency differs from original package member' for x in refused.errors),refused.errors)
+                    p.files[copied]=original
+                # Same named runtime drift and same-suffix foreign executables
+                # must reach their actual provenance/role refusal predicates.
+                put(library/'Array.js',b'changed runtime')
+                bad=e.Projection();bad.files.update(p.files)
+                # dependency validates the collected bytes, not the path again.
+                bad.files[context+'/fable_modules/fable-library-js.5.18.0/Array.js']=b'changed runtime'
+                bad.dependency(context+'/fable_modules/fable-library-js.5.18.0/Array.js')
+                self.assertTrue(any(x['reason']=='Fable dependency differs from original package member' for x in bad.errors),bad.errors)
+                for leaf in ('fable-library-js.5.18.0/unexpected.exe','fable-library-js.5.18.0/foreign.js',
+                             'Other.0.4.0/Host.fs','FS.GG.Wasm.Browser.0.4.0/Foreign.fs',
+                             'FS.GG.Wasm.Browser.0.4.0/Foreign.fs.js'):
+                    name=context+'/fable_modules/'+leaf
+                    if leaf.endswith('foreign.js'):
+                        bad.files[name]=b'foreign runtime';bad.dependency(name)
+                        self.assertTrue(any(x['member']==name and 'absent/ambiguous' in x['reason'] for x in bad.errors))
+                    elif leaf.endswith('unexpected.exe'):
+                        bad.files[name]=b'foreign executable';bad.dependency(name)
+                        self.assertTrue(any(x['member']==name and 'absent/ambiguous' in x['reason'] for x in bad.errors))
+                    else:
+                        with self.assertRaisesRegex(ValueError,'unreviewed Fable'):e.fable_dependency(name)
+                for name in ('consumer/public/sub/app/arbitrary/fable_modules/fable-library-js.5.18.0/Array.js',
+                             'consumer/public/sub/app/fable/fable_modules/Unknown/runtime.js'):
+                    self.assertFalse(e.consumer_member(name))
 
     def test_refusals_retain_independent_evidence_and_runtime_cause(self):
         for defect in ('symlink','hardlink','traversal','duplicate','oversize','missing'):
