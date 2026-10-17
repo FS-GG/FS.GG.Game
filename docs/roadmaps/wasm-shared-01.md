@@ -1,5 +1,51 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## Bounded hosted trace preparation for the terminal correction
+
+Source preparation adds explicit `generate-traces` manual mode to the existing
+`wasm-shared` workflow. Default dispatch, PR and push retain the complete 35-minute
+qualification route. The preparation job has its own non-canceling concurrency key
+and a distinct name; it requires the reviewed expected head to match both the workflow
+and clean checkout before setup or generator execution. The existing owning plan
+and protected shared foundation supply the canonical .5-P2 → S1 lineage; ordinary
+PR admission uses its stable campaign/chain without creating a duplicate issue.
+
+`scripts/prepare-wasm-traces.sh` runs the existing generators sequentially under one
+20-minute process-group timeout with 30-second termination grace, inside a 30-minute
+hosted job. It requires Node 26, Quint 0.32.0 selected identically through QUINT/PATH,
+V8 old-space 2 GiB, core dumps disabled and a 64-MiB hard per-file limit. These are
+not aggregate RSS/storage bounds or proof of perfect descendant settlement. A timeout
+or unknown cleanup is incomplete and grants no retry. The job uses Contents-read,
+with no CLR/Rust/browser/package/publication stages.
+
+The inert helper derives the exact 53 default/16 compatible schedule census from
+allowlisted AST declarations without importing generators. Successful preparation
+requires both generators to return zero, exactly 71 regular unlinked outputs,
+unchanged source/model/generator inputs and no other tracked/untracked/ignored
+changes. Generated payload is capped at 64 MiB, retained diagnostics at 8 MiB,
+manifest at 64 KiB and the inner archive at 80 MiB. The bounded manifest retains
+source/tree/workflow/run/attempt, observed tool files/versions, schedules/seeds,
+output hashes, stage times and independent original failure/collection/cleanup facts.
+Npm version provisioning does not attest the complete dependency closure.
+
+Preflight uses the existing static workflow validator plus focused inert controls
+for dispatch/head/dirty-tree/missing-tool refusal, extra/linked outputs, unrelated
+changes, failed generation, uncertain cleanup and archive failure. No new formal
+pipeline model is justified for this linear route. Expected reuse is each relevant
+WASM workflow amendment; the source-check investment is bounded to this small route.
+Cold setup/generation fit, avoided runner minutes and monetary savings are unknown.
+The first full existing static preflight encountered its expected dirty-worktree
+refusal in release-source controls; rerun requires a committed clean candidate.
+
+Preparation artifacts are inputs for independent review and a subsequent generated
+fixture commit. They are not coherent qualification or package acceptance. Root must
+admit one exact hosted operation after source review and fresh native queue/ref facts.
+After accepted generated files are committed, run all 19 required protection checks
+and the unchanged full WASM qualification on the exact final source. Authentic model,
+.NET/Fable/browser qualification, publication and installed consumer readback remain
+separate; historical accepted 0.3 H3/H4 evidence retains its original scope.
+
+
 Protected qualifier base7397d4b408b8e7b44393fee9f837278723934867;
 genuine published producer4afacb501b9371b4cc81494b7bf91b46c880a663,
 Contracts/Browser/SDK0.2.0. Genuine prior publication and both-feed installed

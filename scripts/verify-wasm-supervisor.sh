@@ -68,4 +68,4 @@ if /usr/share/dotnet/dotnet exec "$MSBUILD_EXE_PATH" "$project" -t:Restore -m:1 
 fi
 grep -Fq 'NU1403' "$output/installed-lock-refusal.log"
 [[ -z "$(git status --porcelain)" ]] || { echo 'supervisor qualification dirtied source' >&2; exit 2; }
-printf 'wasm-supervisor: mode=%s default47+selected13 installed=locked-dotnet,fable numeric=refused publication=none\n' "$mode"
+printf 'wasm-supervisor: mode=%s default53+selected16 installed=locked-dotnet,fable numeric=refused publication=none\n' "$mode"

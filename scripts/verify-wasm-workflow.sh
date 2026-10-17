@@ -48,9 +48,43 @@ def validate(candidate: str) -> None:
     missing = [value for value in required if value not in candidate]
     if missing:
         raise ValueError(f"missing required declarations: {missing}")
-    if candidate.count("\n  qualify:\n") != 1:
-        raise ValueError("expected exactly one linear qualify job")
-    positions = [candidate.find(value) for value in ordered]
+    import re
+    jobs = candidate.split("\njobs:\n", 1)[1]
+    if set(re.findall(r"^  ([a-z0-9-]+):$", jobs, re.M)) != {"qualify", "generate-traces"}:
+        raise ValueError("expected one complete qualify job and one explicit preparation job")
+    qualify, generation = jobs.split("\n  generate-traces:\n", 1)
+    if "if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'qualify' }}" not in qualify:
+        raise ValueError("normal qualification selection changed")
+    if "if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'generate-traces' }}" not in generation:
+        raise ValueError("generation requires explicit manual mode")
+    for token in ("options: [qualify, generate-traces]", "default: qualify",
+                  "inputs.mode == 'generate-traces' && 'generate-traces' || 'qualify'",
+                  "cancel-in-progress: ${{ inputs.mode != 'generate-traces' }}"):
+        if token not in candidate:
+            raise ValueError("dispatch/concurrency contract missing: " + token)
+    for token in ('timeout-minutes: 30\n', 'ref: ${{ github.sha }}', 'persist-credentials: false',
+                  'test "$GITHUB_SHA" = "$WASM_TRACE_EXPECTED_HEAD"',
+                  'test "$GITHUB_WORKFLOW_SHA" = "$WASM_TRACE_EXPECTED_HEAD"',
+                  'test "$(git rev-parse HEAD)" = "$WASM_TRACE_EXPECTED_HEAD"',
+                  'test -z "$(git status --porcelain --untracked-files=all)"',
+                  'scripts/prepare-wasm-traces.sh', 'node-version: "26"', 'QUINT_VERSION: 0.32.0',
+                  'retention-days: 7', 'wasm-trace-preparation-${{ github.sha }}'):
+        if token not in generation:
+            raise ValueError("generation guard/bound missing: " + token)
+    if candidate.count("\npermissions:\n  contents: read\n") != 1 or "contents: write" in candidate or "packages: write" in candidate:
+        raise ValueError("trace preparation may not gain write authority")
+    for token in ('setup-dotnet', 'dotnet ', 'rustup ', 'playwright', 'scripts/wasm-release/', 'publish', 'secrets.'):
+        if token in generation:
+            raise ValueError("generation gained unrelated execution: " + token)
+    generation_order = [generation.find(value) for value in (
+        'Guard dispatch and source before setup', 'Static workflow preflight',
+        'Set up Node for trace preparation', 'Install exact trace tool',
+        'Prepare bounded canonical traces', 'Retain trace preparation evidence')]
+    if min(generation_order) < 0 or generation_order != sorted(generation_order):
+        raise ValueError("generation guard/setup/execution ordering differs")
+    if any(value not in qualify for value in required[1:]):
+        raise ValueError("complete normal qualification lost a required gate")
+    positions = [qualify.find(value) for value in ordered]
     if any(position < 0 for position in positions) or positions != sorted(positions):
         raise ValueError("qualification steps are missing or out of order")
 
@@ -63,6 +97,13 @@ for broken in (
     text.replace("scripts/verify-wasm-contracts.sh", "scripts/missing-contract-gate.sh"),
     text.replace("scripts/wasm-release/qualify-supervisor-custody.sh --custody", "scripts/missing-supervisor-gate.sh"),
     text.replace("scripts/wasm-release/qualify-supervisor-custody.sh --bootstrap", "scripts/missing-supervisor-bootstrap.sh"),
+    text.replace("github.event_name == 'workflow_dispatch' && inputs.mode == 'generate-traces'", "inputs.mode == 'generate-traces'"),
+    text.replace('test "$GITHUB_WORKFLOW_SHA" = "$WASM_TRACE_EXPECTED_HEAD"', 'true'),
+    text.replace("cancel-in-progress: ${{ inputs.mode != 'generate-traces' }}", "cancel-in-progress: true"),
+    text.replace('timeout-minutes: 30\n', 'timeout-minutes: 300'),
+    text.replace("inputs.mode == 'qualify'", "inputs.mode == 'generate-traces'", 1),
+    text.replace('contents: read', 'contents: write'),
+    text.replace('run: scripts/prepare-wasm-traces.sh', 'run: dotnet test'),
     text.replace(ordered[7], "BROKEN-A").replace(ordered[8], ordered[7]).replace("BROKEN-A", ordered[8]),
 ):
     try:
@@ -86,6 +127,86 @@ if "ACTIONLINT_VERSION: 1.7.7" not in gate or "SHELLCHECK_VERSION: 0.11.0" not i
 if "&wasm_paths" in text or "*wasm_paths" in text:
     raise SystemExit("workflow preflight: actionlint 1.7.7 requires literal path sequences")
 PY
+
+python3 - "$repo" <<'PYTRACE'
+# Inert source/collection controls: no generator import, model/tool invocation,
+# supplied runner, package setup, browser, network or publication.
+import contextlib,importlib.util,io,json,pathlib,shutil,sys,tempfile
+from unittest.mock import patch
+sys.dont_write_bytecode=True
+repo=pathlib.Path(sys.argv[1]);spec=importlib.util.spec_from_file_location('trace_support',repo/'scripts/prepare-wasm-traces.py')
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+assert m.BOUNDS=={'generationSeconds':1200,'terminationGraceSeconds':30,'nodeOldSpaceMiB':2048,'perFileBytes':67108864,'payloadBytes':67108864,'diagnosticBytes':8388608,'manifestBytes':65536,'archiveBytes':83886080}
+paths,rows=m.census(repo);assert len(paths)==71 and len(rows['default'])==53 and len(rows['compatible'])==16
+wrapper=(repo/'scripts/prepare-wasm-traces.sh').read_text()
+for token in ('timeout --kill-after=30s 20m prlimit --fsize=67108864:67108864 --core=0:0',
+              '--max-old-space-size=2048','--kill-after=5s 120s','if (( status != 0 )); then exit "$status"; fi',
+              'run_generator default tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py',
+              'run_generator compatible tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py'):
+ assert token in wrapper,token
+assert wrapper.index('prepare --root')<wrapper.index('node --version')<wrapper.index('run_generator default')<wrapper.index('run_generator compatible')
+head='a'*40
+env={'GITHUB_EVENT_NAME':'workflow_dispatch','WASM_TRACE_MODE':'generate-traces','WASM_TRACE_EXPECTED_HEAD':head,
+     'GITHUB_SHA':head,'GITHUB_WORKFLOW_SHA':head,'GITHUB_REF':'refs/heads/source-candidate'}
+def fake_git(root,*args):
+ if args==('rev-parse','HEAD'):return head
+ if args==('rev-parse','HEAD^{tree}'):return 'b'*40
+ if args[:1] in (('status',),('diff',),('ls-files',)):return ''
+ raise AssertionError(args)
+with patch.object(m,'git',fake_git):
+ assert m.source_guard(repo,env)==head
+ for field,value in [('GITHUB_EVENT_NAME','pull_request'),('WASM_TRACE_MODE','qualify'),('WASM_TRACE_EXPECTED_HEAD','bad'),('GITHUB_SHA','c'*40),('GITHUB_WORKFLOW_SHA','c'*40),('GITHUB_REF','')]:
+  broken=dict(env,**{field:value})
+  try:m.source_guard(repo,broken)
+  except ValueError:pass
+  else:raise AssertionError('bad configuration admitted: '+field)
+ with patch.object(m,'git',lambda root,*args:'dirty' if args[:1]==('status',) else fake_git(root,*args)):
+  try:m.source_guard(repo,env)
+  except ValueError:pass
+  else:raise AssertionError('dirty checkout admitted')
+ with tempfile.TemporaryDirectory(prefix='wasm-trace-inert-controls-') as raw:
+  inert=pathlib.Path(raw)/'inert-generator.py';inert.write_text("schedules=[('safe',1)]\nraise RuntimeError('generator import is forbidden')\n");assert m.schedules(inert)==[('safe',1)]
+  root=pathlib.Path(raw)/'source';root.mkdir()
+  for name in m.MODEL_INPUTS:
+   target=root/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(repo/name,target)
+  for directory in (m.DEFAULT+'/Traces',m.SELECTED+'/Traces'):(root/directory).mkdir(parents=True)
+  output=pathlib.Path(raw)/'missing-tools'
+  with patch.object(m.shutil,'which',lambda name:None):
+   try:m.prepare(root,output,env)
+   except ValueError:pass
+   else:raise AssertionError('missing tool admitted')
+  assert not output.exists(),'missing prerequisite created execution output'
+  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','unknown-cleanup','collection-failure'):
+   output=pathlib.Path(raw)/case
+   m.prepare(root,output,env)
+   for name in paths:
+    target=root/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'inert output control\n')
+   (output/'work/generation.log').write_text('inert diagnostic\n')
+   (output/'work/stages.jsonl').write_text('\n'.join(json.dumps({'generator':name,'exitCode':0}) for name in ('default','compatible'))+'\n')
+   status=7 if case=='failed-generator' else 0
+   cleanup='unknown-timeout-or-signal' if case=='unknown-cleanup' else 'generator-process-returned'
+   if case=='extra-trace':(root/m.DEFAULT/'Traces/unexpected.itf.json').write_bytes(b'extra')
+   if case=='linked-trace':(root/paths[0]).unlink();(root/paths[0]).symlink_to(root/paths[1])
+   if case=='ignored-change':(root/'ignored.txt').write_text('inert ignored change')
+   def git_impl(root,*args):
+    if case=='outside-change' and args==('diff','--name-only','HEAD'):return 'src/changed.fs'
+    if case=='ignored-change' and args==('ls-files','--others','--ignored','--exclude-standard'):return 'ignored.txt'
+    return fake_git(root,*args)
+   with patch.object(m,'git',git_impl),contextlib.redirect_stdout(io.StringIO()):
+    if case=='collection-failure':
+     with patch.object(m.zipfile,'ZipFile',side_effect=OSError('inert archive failure')):result=m.collect(root,output,status,{'node':'inert-test-double'},cleanup)
+    else:result=m.collect(root,output,status,{'node':'inert-test-double'},cleanup)
+   manifest=json.loads((output/'artifact/manifest.json').read_text())
+   assert (result==0)==(case=='good'),case
+   assert manifest['fixturePreparationComplete']==(case=='good'),case
+   assert manifest['qualification'] is False and manifest['publication'] is False
+   if case=='failed-generator':assert result==7 and manifest['outputs']==[] and manifest['firstFailure']=='generator process exited 7'
+   if case=='collection-failure':assert not (output/'artifact/trace-preparation.zip').exists()
+   if case=='ignored-change':(root/'ignored.txt').unlink()
+   if case=='extra-trace':(root/m.DEFAULT/'Traces/unexpected.itf.json').unlink()
+   if case=='linked-trace':(root/paths[0]).unlink()
+print('wasm-trace-preflight: actual 53/16 census; bad dispatch/head/dirty/tool prerequisites refused; output/cause/cleanup/archive controls passed (inert only)')
+PYTRACE
 
 grep -Fq "dotnet restore \"\$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj\" --locked-mode" \
   "$repo/scripts/verify-wasm-contracts.sh" || {
@@ -188,4 +309,4 @@ bash -n \
   "$repo/tests/Wasm.Browser.Conformance/run.sh" \
   "$repo/tests/Wasm.PackageConsumer/browser/run.sh"
 
-echo "wasm-workflow-preflight: static=pass jobs=1 order=linear inputs=pinned"
+echo "wasm-workflow-preflight: static=pass jobs=qualify+explicit-preparation order=linear inputs=pinned"
