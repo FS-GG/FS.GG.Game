@@ -81,14 +81,18 @@ for mutant in ("digest", "url", "draft", "version", "missing"):
     else:
         raise SystemExit(f"native release {mutant} mismatch accepted")
 
-# Exercise the production hash predicate with reviewed producer inventory and actual qualifier bytes.
-# The installed binding separately reads BOTH immutable Git revisions; this static check needs no history fetch.
+# Exercise the historical 0.2 audit with its exact reviewed qualifier bytes.
+# These maintained fixtures were copied from immutable 4163448cfc69d428e136853212765690265b92c6
+# and are checked by the unchanged production blob/SHA256 predicates below.
+# Current consumer source can evolve; clean shallow CI requires no history fetch.
 import hashlib
 import json
 source = "4afacb501b9371b4cc81494b7bf91b46c880a663"
 audit = json.loads((root / "scripts/wasm-release/installed-qualification-audit.json").read_text())
 producer = {row["path"]: {"blob": row["producerBlob"], "sha256": row["producerSha256"]} for row in audit["files"]}
-qualifier = {path: binding.fingerprint((root / path).read_bytes()) for path in binding.AUDITED_CONSUMER_PATHS}
+qualifier_bytes = {path: (root / "tests/release/wasm/fixtures" / ("historical-0.2-consumer-" + pathlib.Path(path).name)).read_bytes()
+                   for path in binding.AUDITED_CONSUMER_PATHS}
+qualifier = {path: binding.fingerprint(data) for path, data in qualifier_bytes.items()}
 changed = sorted(binding.AUDITED_CONSUMER_PATHS)
 binding.validate_consumer_audit(audit, source, "0.2.0", changed, producer, qualifier)
 for mutation in ("extra-consumer", "changed-spec", "changed-projection", "wrong-producer", "extra-audit-path", "duplicate-row", "wrong-blob"):
@@ -97,8 +101,8 @@ for mutation in ("extra-consumer", "changed-spec", "changed-projection", "wrong-
     bytes_ = dict(qualifier)
     producer_source = source
     if mutation == "extra-consumer": names.append("tests/Wasm.PackageConsumer/browser/package-consumer.mjs")
-    elif mutation == "changed-spec": bytes_["tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs"] = binding.fingerprint((root / "tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs").read_bytes() + b"\n// unreviewed relaxation")
-    elif mutation == "changed-projection": bytes_["tests/Wasm.PackageConsumer/Program.fs"] = binding.fingerprint((root / "tests/Wasm.PackageConsumer/Program.fs").read_bytes() + b"\n// unreviewed policy")
+    elif mutation == "changed-spec": bytes_["tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs"] = binding.fingerprint(qualifier_bytes["tests/Wasm.PackageConsumer/browser/package-consumer.spec.mjs"] + b"\n// unreviewed relaxation")
+    elif mutation == "changed-projection": bytes_["tests/Wasm.PackageConsumer/Program.fs"] = binding.fingerprint(qualifier_bytes["tests/Wasm.PackageConsumer/Program.fs"] + b"\n// unreviewed policy")
     elif mutation == "wrong-producer": producer_source = "a" * 40
     elif mutation == "extra-audit-path": broken["files"][0]["path"] = "tests/Wasm.PackageConsumer/browser/package-consumer.mjs"
     elif mutation == "duplicate-row": broken["files"].append(broken["files"][0])

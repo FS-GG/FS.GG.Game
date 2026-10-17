@@ -14,6 +14,7 @@ fi
 # Their finite setup deadline is independent of, and precedes, generation.
 status=0
 versions='{}'
+generation_started=false
 node_version=''
 quint_version=''
 python_version=''
@@ -35,6 +36,7 @@ if (( status != 0 )); then
 fi
 
 if (( status == 0 )); then
+  generation_started=true
   export QUINT
   QUINT="$(command -v quint)"
   export TMPDIR="$output/work"
@@ -60,13 +62,16 @@ if (( status == 0 )); then
   status=$?
   set -e
 fi
-cleanup=generator-process-returned
+cleanup=not-started
+if [[ "$generation_started" == true ]]; then cleanup=generator-process-returned; fi
 if (( status == 124 || status == 137 )); then
   cleanup=unknown-timeout-or-signal
 fi
 # Collection has its own finite remainder and cannot replace the first failure.
 collection_status=0
+collection_args=()
+if [[ "$generation_started" == true ]]; then collection_args+=(--generation-started); fi
 timeout --kill-after=5s 120s python3 "$repo/scripts/prepare-wasm-traces.py" collect \
-  --root "$repo" --output "$output" --status "$status" --versions "$versions" --cleanup "$cleanup" || collection_status=$?
+  --root "$repo" --output "$output" --status "$status" --versions "$versions" --cleanup "$cleanup" "${collection_args[@]}" || collection_status=$?
 if (( status != 0 )); then exit "$status"; fi
 exit "$collection_status"

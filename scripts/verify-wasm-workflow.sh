@@ -76,6 +76,8 @@ def validate(candidate: str) -> None:
     for token in ('setup-dotnet', 'dotnet ', 'rustup ', 'playwright', 'scripts/wasm-release/', 'publish', 'secrets.'):
         if token in generation:
             raise ValueError("generation gained unrelated execution: " + token)
+    if "${{ runner." in generation.split("    steps:",1)[0]:
+        raise ValueError("runner context is unavailable in job-level env")
     generation_order = [generation.find(value) for value in (
         'Guard dispatch and source before setup', 'Static workflow preflight',
         'Set up Node for trace preparation', 'Install exact trace tool',
@@ -103,6 +105,7 @@ for broken in (
     text.replace('timeout-minutes: 30\n', 'timeout-minutes: 300'),
     text.replace("inputs.mode == 'qualify'", "inputs.mode == 'generate-traces'", 1),
     text.replace('contents: read', 'contents: write'),
+    text.replace("      WASM_TRACE_MODE:", "      BAD_JOB_ENV: ${{ runner.temp }}\n      WASM_TRACE_MODE:"),
     text.replace('run: scripts/prepare-wasm-traces.sh', 'run: dotnet test'),
     text.replace(ordered[7], "BROKEN-A").replace(ordered[8], ordered[7]).replace("BROKEN-A", ordered[8]),
 ):
@@ -176,15 +179,15 @@ with patch.object(m,'git',fake_git):
    except ValueError:pass
    else:raise AssertionError('missing tool admitted')
   assert not output.exists(),'missing prerequisite created execution output'
-  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','unknown-cleanup','collection-failure'):
+  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure'):
    output=pathlib.Path(raw)/case
    m.prepare(root,output,env)
    for name in paths:
     target=root/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'inert output control\n')
    (output/'work/generation.log').write_text('inert diagnostic\n')
    (output/'work/stages.jsonl').write_text('\n'.join(json.dumps({'generator':name,'exitCode':0}) for name in ('default','compatible'))+'\n')
-   status=7 if case=='failed-generator' else 0
-   cleanup='unknown-timeout-or-signal' if case=='unknown-cleanup' else 'generator-process-returned'
+   status=7 if case in ('failed-generator','primary-and-collection-failure') else (2 if case=='tool-prerequisite' else 0)
+   cleanup='unknown-timeout-or-signal' if case=='unknown-cleanup' else ('not-started' if case=='tool-prerequisite' else 'generator-process-returned')
    if case=='extra-trace':(root/m.DEFAULT/'Traces/unexpected.itf.json').write_bytes(b'extra')
    if case=='linked-trace':(root/paths[0]).unlink();(root/paths[0]).symlink_to(root/paths[1])
    if case=='ignored-change':(root/'ignored.txt').write_text('inert ignored change')
@@ -193,15 +196,21 @@ with patch.object(m,'git',fake_git):
     if case=='ignored-change' and args==('ls-files','--others','--ignored','--exclude-standard'):return 'ignored.txt'
     return fake_git(root,*args)
    with patch.object(m,'git',git_impl),contextlib.redirect_stdout(io.StringIO()):
-    if case=='collection-failure':
+    if case in ('collection-failure','primary-and-collection-failure'):
      with patch.object(m.zipfile,'ZipFile',side_effect=OSError('inert archive failure')):result=m.collect(root,output,status,{'node':'inert-test-double'},cleanup)
-    else:result=m.collect(root,output,status,{'node':'inert-test-double'},cleanup)
+    elif case=='cleanup-failure':
+     with patch.object(m.shutil,'rmtree',side_effect=OSError('inert scratch cleanup failure')):result=m.collect(root,output,status,{'node':'inert-test-double'},cleanup)
+    else:result=m.collect(root,output,status,{'node':'inert-test-double'},cleanup,case!='tool-prerequisite')
    manifest=json.loads((output/'artifact/manifest.json').read_text())
    assert (result==0)==(case=='good'),case
    assert manifest['fixturePreparationComplete']==(case=='good'),case
    assert manifest['qualification'] is False and manifest['publication'] is False
-   if case=='failed-generator':assert result==7 and manifest['outputs']==[] and manifest['firstFailure']=='generator process exited 7'
-   if case=='collection-failure':assert not (output/'artifact/trace-preparation.zip').exists()
+   if case in ('failed-generator','primary-and-collection-failure'):assert result==7 and manifest['outputs']==[] and manifest['firstFailure']=='generator process exited 7'
+   if case=='tool-prerequisite':assert manifest['generationStarted'] is False and manifest['generationExitCode'] is None and manifest['firstFailure']=='tool prerequisite exited 2'
+   if case in ('collection-failure','primary-and-collection-failure'):assert not (output/'artifact/trace-preparation.zip').exists()
+   if case=='cleanup-failure':assert manifest['scratchCleanup']=='failed'
+   if case=='good':
+    with m.zipfile.ZipFile(output/'artifact/trace-preparation.zip') as archive:assert set(archive.namelist())==set(paths)|{'manifest.json','generation.log'}
    if case=='ignored-change':(root/'ignored.txt').unlink()
    if case=='extra-trace':(root/m.DEFAULT/'Traces/unexpected.itf.json').unlink()
    if case=='linked-trace':(root/paths[0]).unlink()

@@ -35,7 +35,13 @@ pipeline model is justified for this linear route. Expected reuse is each releva
 WASM workflow amendment; the source-check investment is bounded to this small route.
 Cold setup/generation fit, avoided runner minutes and monetary savings are unknown.
 The first full existing static preflight encountered its expected dirty-worktree
-refusal in release-source controls; rerun requires a committed clean candidate.
+refusal in release-source controls. The committed preparation source `7065525`
+then exposed an inherited historical audit test that compared evolving current
+consumer bytes with immutable 0.2 qualifier hashes. Both failures retain their
+original outcomes. The connected repair uses maintained exact historical byte
+fixtures, checked by the unchanged production blob/SHA256 audit predicates and
+mutation refusals. Clean shallow CI needs no history fetch or historical Git objects;
+the accepted audit and binder are unchanged. Rerun requires a committed clean candidate.
 
 Preparation artifacts are inputs for independent review and a subsequent generated
 fixture commit. They are not coherent qualification or package acceptance. Root must

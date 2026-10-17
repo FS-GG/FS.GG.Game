@@ -176,9 +176,9 @@ def prepare(root, output, env):
     return record
 
 
-def collect(root, output, status, versions, cleanup):
+def collect(root, output, status, versions, cleanup, generation_started=True):
     record = json.loads((output / 'preparation.json').read_text())
-    first_failure = None if status == 0 else 'generator process exited ' + str(status)
+    first_failure = None if status == 0 else ('generator process exited ' if generation_started else 'tool prerequisite exited ') + str(status)
     errors = []
     files = []
     def attempt(action):
@@ -239,16 +239,16 @@ def collect(root, output, status, versions, cleanup):
             raise ValueError('both maintained generator successes must be recorded')
     attempt(retain_stages)
     scratch_cleanup = 'not-attempted-uncertain-process-settlement'
-    if cleanup == 'generator-process-returned':
+    if cleanup in ('generator-process-returned', 'not-started'):
         if attempt(lambda: shutil.rmtree(output / 'work')) is None and not (output / 'work').exists():
             scratch_cleanup = 'owned-temporary-paths-removed'
         else:
             scratch_cleanup = 'failed'
-    accepted = status == 0 and not errors and cleanup == 'generator-process-returned'
+    accepted = generation_started and status == 0 and not errors and cleanup == 'generator-process-returned'
     manifest = {'schema': 'fsgg.wasm.trace-preparation/1', **record,
                 'elapsedSeconds': time.monotonic() - record['startedMonotonic'],
                 'commands': [{'argv': ['python3', path], 'seed': 20261002 if index == 0 else 20261003, 'backend': 'typescript'} for index, path in enumerate(GENERATORS)],
-                'generationExitCode': status, 'firstFailure': first_failure or (errors[0] if errors else ('cleanup outcome unknown' if not accepted else None)),
+                'generationStarted': generation_started, 'generationExitCode': status if generation_started else None, 'prerequisiteExitCode': status if not generation_started else 0, 'firstFailure': first_failure or (errors[0] if errors else ('cleanup outcome unknown' if not accepted else None)),
                 'collectionErrors': errors, 'cleanup': cleanup, 'scratchCleanup': scratch_cleanup, 'stages': stages,
                 'descendantSettlement': 'not-established; timeout process group and hosted VM teardown only',
                 'toolVersions': versions, 'changedPaths': changed, 'diagnostics': diagnostics,
@@ -278,6 +278,8 @@ def collect(root, output, status, versions, cleanup):
         (artifact / 'trace-preparation.pending.zip').unlink(missing_ok=True)
         if (artifact / 'generation.log').exists():
             (artifact / 'generation.log').rename(artifact / 'failed-generation.log')
+            for diagnostic in diagnostics:
+                diagnostic['path'] = 'failed-generation.log'
         manifest['fixturePreparationComplete'] = False
         manifest['outputs'] = []
         manifest['firstFailure'] = first_failure or errors[0]
@@ -288,7 +290,9 @@ def collect(root, output, status, versions, cleanup):
             (artifact / 'manifest.json').unlink(missing_ok=True)
         # Independently retain a bounded terminal failure summary if packing failed.
         fallback = (json.dumps({'schema': manifest['schema'], 'sourceHead': record['sourceHead'],
-                    'fixturePreparationComplete': False, 'generationExitCode': status,
+                    'fixturePreparationComplete': False, 'generationStarted': generation_started,
+                    'generationExitCode': status if generation_started else None,
+                    'prerequisiteExitCode': status if not generation_started else 0,
                     'sourceTree': record['sourceTree'], 'workflow': record['workflow'],
                     'toolVersions': versions, 'inputs': record['inputs'], 'diagnostics': diagnostics,
                     'firstFailure': manifest['firstFailure'], 'collectionErrors': errors[:16],
@@ -297,7 +301,10 @@ def collect(root, output, status, versions, cleanup):
         if len(fallback) <= BOUNDS['manifestBytes']:
             (artifact / 'failure.json').write_bytes(fallback)
     print(json.dumps({'fixturePreparationComplete': accepted and not errors,
-                      'generationExitCode': status, 'firstFailure': manifest['firstFailure'],
+                      'generationStarted': generation_started,
+                      'generationExitCode': status if generation_started else None,
+                      'prerequisiteExitCode': status if not generation_started else 0,
+                      'firstFailure': manifest['firstFailure'],
                       'collectionErrors': errors, 'qualification': False}, sort_keys=True))
     return 0 if accepted and not errors else (status if status else 1)
 
@@ -309,6 +316,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--status', type=int, default=1)
     parser.add_argument('--versions', default='{}')
+    parser.add_argument('--generation-started', action='store_true')
     parser.add_argument('--cleanup', default='unknown')
     args = parser.parse_args()
     root = args.root.resolve()
@@ -318,7 +326,7 @@ def main():
             prepare(root, output, os.environ)
             print('trace preparation preflight: accepted source/census/tool presence; generation not run')
             return 0
-        return collect(root, output, args.status, json.loads(args.versions), args.cleanup)
+        return collect(root, output, args.status, json.loads(args.versions), args.cleanup, args.generation_started)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print('trace preparation refused: ' + str(error), file=sys.stderr)
         return args.status if args.mode == 'collect' and args.status else 2
