@@ -384,7 +384,7 @@ def validate(version,sdk,consumer,contracts,lifecycle,lock):
 sdk=(repo/'sdk/wasm/VERSION').read_text().strip();consumer=(repo/'tests/Wasm.PackageConsumer/Consumer.fsproj').read_text();contracts=(repo/'scripts/verify-wasm-contracts.sh').read_text();lifecycle=(repo/'scripts/verify-wasm-lifecycle.sh').read_text()
 lock=json.loads((repo/'tests/Wasm.Lifecycle.Tests/packages.lock.json').read_text())
 validate(version,sdk,consumer,contracts,lifecycle,lock)
-stale=json.loads(json.dumps(lock));stale['dependencies']['net10.0']['fs.gg.wasm.browser']['dependencies']['FS.GG.Wasm.Contracts']='[0.3.0, )'
+stale=json.loads(json.dumps(lock));stale['dependencies']['net10.0']['fs.gg.wasm.browser']['dependencies']['FS.GG.Wasm.Contracts']='['+policy['baselineVersion']+', )'
 for broken in [(version,'0.2.0',consumer,contracts,lifecycle,lock),(version,sdk,consumer,contracts.replace('$version.nupkg','0.2.0.nupkg'),lifecycle,lock),(version,sdk,consumer.replace('Version="[$(WasmCandidateVersion)]"','Version="[0.2.0]"'),contracts,lifecycle,lock),(version,sdk,consumer.replace('Name="RequireCandidateVersion"','Name="MissingGuard"'),contracts,lifecycle,lock),(version,sdk,consumer,contracts,lifecycle,stale)]:
     try:validate(*broken)
     except ValueError:pass
