@@ -1,18 +1,18 @@
 {
-  "baselineVersion": "0.4.0",
-  "baselineTag": "wasm/v0.4.0",
-  "baselineSource": "6732d2371d142d5ccc5d2d127f20e4f179800892",
-  "baselineTree": "cc71e7cfe73449919376acf775940ff9e8bdab56",
-  "baselineManifestSha256": "f8f47c2f5ae6fd8b5aef474dfc83b096aa0a6ad0265eb16dc4f0df7ade7f01b7",
-  "candidateVersion": "0.5.0",
+  "baselineVersion": "0.5.0",
+  "baselineTag": "wasm/v0.5.0",
+  "baselineSource": "80540027623d9b1a8aa7715d0591de48455403b7",
+  "baselineTree": "fa2cd0160f9a7c5bb0a1ad85fd8f1eff68b867d3",
+  "baselineManifestSha256": "4874c07d6c6b4f1cd920e2a1379de2e5778529f94d211b2c8d138ed8d719483c",
+  "candidateVersion": "0.6.0",
   "packages": {
     "FS.GG.Wasm.Contracts": {
-      "servedArchiveSha256": "2c3ed82724fc41bb86141369d297b393e847a172475709254456e9ffd42a6992",
+      "servedArchiveSha256": "8cd706fd6e982c48977934015bdd34dcf05434dc78e9b290deb237424fecf8b4",
       "expectedStatus": "compatible",
       "removedConstructorTypes": []
     },
     "FS.GG.Wasm.Browser": {
-      "servedArchiveSha256": "8231d666b5001d334b1591c71795c800b87e0bb58336b55826ec6486f787de69",
+      "servedArchiveSha256": "498878e8fa7660fbeeb2883cfbc2385277f8ef743ae9a79ad0377bfbffcbad93",
       "expectedStatus": "compatible",
       "removedConstructorTypes": []
     }

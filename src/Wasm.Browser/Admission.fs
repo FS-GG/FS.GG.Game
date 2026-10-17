@@ -326,7 +326,7 @@ module private Parser =
                                         | Error e -> issue <- Some e
                                         | Ok opcode when (opcode >= 0x06uy && opcode <= 0x0auy) || opcode=0x12uy || opcode=0x13uy || opcode=0x1cuy || opcode>=0xd0uy || opcode=0xfbuy || opcode=0xfcuy || opcode=0xfduy || opcode=0xfeuy ->
                                             issue <- Some(UnsupportedFeature($"instruction opcode 0x{opcode:x2}"))
-                                        | Ok opcode when [0x0cuy;0x0duy;0x10uy;0x20uy;0x21uy;0x22uy;0x23uy;0x24uy] |> List.contains opcode ->
+                                        | Ok (0x0cuy | 0x0duy | 0x10uy | 0x20uy | 0x21uy | 0x22uy | 0x23uy | 0x24uy) ->
                                             match u32 body with Error e -> issue <- Some e | Ok _ -> ()
                                         | Ok 0x0euy ->
                                             match vectorCount body "branch table" with

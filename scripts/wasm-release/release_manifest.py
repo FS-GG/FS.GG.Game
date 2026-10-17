@@ -18,7 +18,7 @@ LEGACY_SCHEMA = "fsgg.wasm.release-custody/v1"
 API_POLICY = json.loads((Path(__file__).parent / "api-baseline-policy.json").read_text())
 # Explicit historical policies verify immutable evidence; they select no current execution.
 HISTORICAL_API_POLICIES = [json.loads((Path(__file__).parent / name).read_text()) for name in
-                           ("api-baseline-policy-0.2.0.json", "api-baseline-policy-0.3.0.json", "api-baseline-policy-0.4.0.json")]
+                           ("api-baseline-policy-0.2.0.json", "api-baseline-policy-0.3.0.json", "api-baseline-policy-0.4.0.json", "api-baseline-policy-0.5.0.json")]
 
 def api_policy(version):
     if version == API_POLICY["candidateVersion"]:

@@ -105,6 +105,77 @@ let markerOffset =
 renamedExport[markerOffset + marker.Length - 1] <- byte 'x'
 check (Admission.inspect cfg renamedExport |> Result.isError) "exact exports must refuse renamed ABI"
 
+// Public test-only rewrite of the first body in the existing owned fixture.
+// This checks Admission syntax independently; native validity remains a second gate.
+let uleb (number: int) =
+    let mutable value = uint32 number
+    let result = ResizeArray<byte>()
+    while value >= 128u do
+        result.Add(byte (value &&& 127u) ||| 128uy)
+        value <- value >>> 7
+    result.Add(byte value)
+    result.ToArray()
+
+let readUleb (data: byte array) (position: int ref) =
+    let mutable value = 0
+    let mutable shift = 0
+    let mutable more = true
+    while more do
+        let part = data[position.Value]
+        position.Value <- position.Value + 1
+        value <- value ||| ((int part &&& 127) <<< shift)
+        shift <- shift + 7
+        more <- part &&& 128uy <> 0uy
+    value
+
+let rewriteFirstBody (change: byte array -> byte array) =
+    let position = ref 8
+    let mutable changed = None
+    while position.Value < barBytes.Length && changed.IsNone do
+        let sectionStart = position.Value
+        let kind = barBytes[position.Value]
+        position.Value <- position.Value + 1
+        let length = readUleb barBytes position
+        let payloadStart = position.Value
+        let finish = payloadStart + length
+        if kind = 10uy then
+            let count = readUleb barBytes position
+            check (count > 0) "owned fixture must contain functions"
+            let sizeStart = position.Value
+            let bodySize = readUleb barBytes position
+            let bodyStart = position.Value
+            let body = change barBytes[bodyStart .. bodyStart + bodySize - 1]
+            let payload = Array.concat [barBytes[payloadStart .. sizeStart - 1]; uleb body.Length; body; barBytes[bodyStart + bodySize .. finish - 1]]
+            let newHeader = Array.concat [[|kind|]; uleb payload.Length]
+            let newBodyStart = sectionStart + newHeader.Length + (sizeStart - payloadStart) + (uleb body.Length).Length
+            changed <- Some(Array.concat [barBytes[0 .. sectionStart - 1]; newHeader; payload; barBytes[finish ..]], newBodyStart)
+        position.Value <- finish
+    changed |> Option.defaultWith (fun () -> failwith "owned fixture has no code section")
+
+let dense, _ = rewriteFirstBody (fun body ->
+    let locals = ref 0
+    let groups = readUleb body locals
+    for _ in 1..groups do
+        readUleb body locals |> ignore
+        locals.Value <- locals.Value + 1
+    Array.concat [body[0 .. locals.Value - 1]; Array.create 65536 0x01uy; body[locals.Value ..]])
+check (Admission.inspect cfg dense |> Result.isOk) "public instruction-dense body remains admissible"
+
+// Each selected opcode consumes exactly one u32, preserving first-error offsets.
+for opcode in [0x0cuy;0x0duy;0x10uy;0x20uy;0x21uy;0x22uy;0x23uy;0x24uy] do
+    for immediate in [[|0uy|]; [|0x80uy;1uy|]; [|0xffuy;0xffuy;0xffuy;0xffuy;0x0fuy|]] do
+        let syntax, _ = rewriteFirstBody (fun _ -> Array.concat [[|0uy;opcode|]; immediate; [|0x0buy|]])
+        check (Admission.inspect cfg syntax |> Result.isOk) (sprintf "opcode 0x%x consumes u32 syntax" opcode)
+    for immediate, relative, detail in
+        [ [|0x80uy|], 3, "unexpected end of input"
+          [|0x80uy;0x80uy;0x80uy;0x80uy;0x10uy|], 6, "u32 LEB overflow"
+          [|0x80uy;0x80uy;0x80uy;0x80uy;0x80uy|], 7, "unterminated u32 LEB" ] do
+        let malformed, bodyStart = rewriteFirstBody (fun _ -> Array.concat [[|0uy;opcode|]; immediate])
+        match Admission.inspect cfg malformed with
+        | Error [MalformedModule(offset, actual)] ->
+            check (offset = bodyStart + relative && actual = detail) (sprintf "opcode 0x%x retains first error offset/detail: %d %s" opcode offset actual)
+        | other -> failwithf "expected exact immediate refusal, got %A" other
+
 let mutable mechanicsCalled = false
 let mechanics =
     { Sha256Hex = fun _ -> mechanicsCalled <- true; async.Return(Ok(String.replicate 64 "a"))

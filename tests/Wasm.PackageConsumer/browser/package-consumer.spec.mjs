@@ -113,6 +113,22 @@ test("closed installed Worker starts fresh initially and after candidate abort u
   }finally{page.context().off("request",onRequest);}
 });
 
+test("public instruction-dense module admits in fresh installed Workers under the original budget",async({page})=>{
+  const value=await page.evaluate(()=>window.runObservedFreshWorkers(true));
+  const states=[value.loaded?.State,value.initialized?.State,value.first?.State,value.second?.State];
+  console.log(JSON.stringify({stage:"public dense admission",artifactBytes:value.artifactBytes,states,status:value.status,trace:value.trace}));
+  expect(value.fixtureFailure).toBeNull();
+  expect(value.artifactBytes).toBeGreaterThan(65536);
+  expect(states).toEqual(["succeeded","succeeded","succeeded","succeeded"]);
+  expect(value.status).toMatchObject({incomplete:false,truncated:false,readFailed:false});
+  for(const physical of [1,2,3]){
+    const stages=value.trace.filter(row=>row.stage==="worker-stage"&&row.physical===physical).map(row=>row.workerStage);
+    expect(stages.slice(0,9)).toEqual(["handler-ready","load-received","admission-begin","admission-end","sha256-begin","sha256-end","instantiate-begin","instantiate-end","load-completed"]);
+  }
+  expect(value.final).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
+  await expect.poll(()=>page.workers().length).toBe(0);
+});
+
 test("observed cold expiry keeps its one-millisecond pre-create deadline and retirement",async({page})=>{
   const value=await page.evaluate(()=>window.runObservedColdExpiry());
   console.log(JSON.stringify({stage:"observed cold expiry",state:value.loaded.State,status:value.status,trace:value.trace}));

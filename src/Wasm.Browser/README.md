@@ -1,9 +1,11 @@
 # FS.GG.Wasm.Browser
 
-The selected `0.5.0` source candidate prepares a closed module Worker from the
-generated F# policy. Published `0.4.0` and its accepted installed evidence retain
-their original identities; the new candidate still requires qualification and
-coherent publication.
+The selected `0.6.0` source candidate preserves the closed module Worker from the
+generated F# policy and replaces the instruction walker's repeated eight-opcode
+list allocation with equivalent pattern matching. Published `0.5.0` and its
+accepted installed evidence retain their original identities. The new candidate
+still requires actual qualification and coherent publication; this source change
+does not establish an earlier timeout's cause or future deadline fit.
 The build-transitive package boundary copies those assets under
 `_content/FS.GG.Wasm.Browser/`; `worker-client.mjs` resolves its sibling Worker from
 the deployed asset base, including non-root applications. F# retains admission,

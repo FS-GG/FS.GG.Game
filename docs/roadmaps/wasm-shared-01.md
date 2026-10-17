@@ -1,8 +1,46 @@
 # WASM-SHARED-01 — producer qualification successor
 
-## Current 0.5 closed Worker and installed qualifier
+## Current 0.6 admission dispatch preparation
 
-The current source successor selects coherent `0.5.0` for the pair and SDK.
+The selected current-only successor is coherent `0.6.0` for the pair and SDK.
+The instruction walker previously constructed an eight-element F# list and
+performed `List.contains` for every instruction; the generated JavaScript also
+constructed the array/list and equality comparer inside that loop. The selected
+change uses an exact opcode pattern for the same eight one-u32 instructions.
+The byte reader, u32 LEB parsing, first-error offsets, refusal set, memory bounds
+and native compiler's independent syntax check remain unchanged. The scan is a
+bounded linear walk; this avoids repeated allocation and traversal, without
+claiming a quadratic algorithm or proving the cause of any earlier timeout.
+Export/type checks outside the instruction loop retain their existing bounded
+list operations. The byte/LEB Result representation is outside this correction.
+
+Public regression preparation checks all eight opcodes with one-, two- and
+five-byte u32 operands and exact truncated/overflow/unterminated first errors.
+A public owned module gains 65,536 genuine nop instructions without changing its
+other function bytes. Genuine fresh installed Workers must admit, initialize,
+prepare/abort and prepare again with the existing 250 ms request budgets and
+stage observations. These controls do not copy private consumer modules, prime
+Workers, reset phase budgets or infer time spent from absent observations.
+The existing linear static preflight precedes the unchanged 35-minute hosted
+qualification; one additional public browser history has three fresh Workers,
+with the existing 15-second per-case cap. Actual compilation, generated-code
+correspondence, admission results, cleanup and whole-job fit remain unqualified
+until the exact candidate runs. Original failures and future scheduling remain
+separate from the source optimization.
+
+The mandatory ApiCompat rail compares against actual published 0.5 P805400, its
+manifest and signed served archive hashes. The exact original 0.5 candidate policy
+remains a versioned historical evidence reader, not an execution fallback.
+
+Accepted 0.5 publication/installed identities below remain immutable. The finite
+installed binder still selects that exact publication and refuses the unpublished
+0.6 successor; a later publication-specific qualifier requires genuine receipts.
+This source assignment selects no publication, installed operation, consumer
+activation, image/native workload or product outcome.
+
+## Accepted 0.5 closed Worker and installed qualifier
+
+The accepted source successor selected coherent `0.5.0` for the pair and SDK.
 Published `0.4.0` and its historical P/Q installed qualification below remain unchanged.
 The previous generated Worker policy formed an ESM import graph that had to evaluate
 before the native entry installed its command handler. Request admission still

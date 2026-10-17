@@ -123,7 +123,7 @@ def source_checks() -> None:
     props = (ROOT / "eng/wasm-shared/version.props").read_text()
     policy=json.loads((ROOT / "scripts/wasm-release/api-baseline-policy.json").read_text())
     version=policy["candidateVersion"]
-    require(version == "0.5.0" and f"<WasmSharedVersion>{version}</WasmSharedVersion>" in props, "selected version origin mismatch")
+    require(version == "0.6.0" and f"<WasmSharedVersion>{version}</WasmSharedVersion>" in props, "selected version origin mismatch")
     for path in (ROOT / "src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj", ROOT / "src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj"):
         require("$(WasmSharedVersion)" in path.read_text(), f"{path} bypasses shared version origin")
     require((ROOT / "sdk/wasm/VERSION").read_text().strip() == version, "SDK version mismatch")
