@@ -322,11 +322,6 @@ grep -Fq 'b761e3a0721dbae9c09a0059e5fdb2bf917d1b4a8a7b430fb3b5aafb0984b2c4' \
   echo "workflow preflight: WASI SDK 34 archive identity is not pinned" >&2
   exit 1
 }
-grep -Fq '<PackageReference Include="FS.GG.Wasm.Browser" Version="[0.2.0]" Condition="' \
-  "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj" || {
-  echo "workflow preflight: fresh consumer does not bind the stable 0.2.0 browser package" >&2
-  exit 1
-}
 if grep -Fq '<ProjectReference' "$repo/tests/Wasm.PackageConsumer/Consumer.fsproj"; then
   echo "workflow preflight: fresh package consumer has a sibling project reference" >&2
   exit 1
@@ -338,17 +333,22 @@ policy=json.loads((repo/'scripts/wasm-release/api-baseline-policy.json').read_te
 def validate(version,sdk,consumer,contracts,lifecycle):
     if version != policy['candidateVersion'] or sdk != version:
         raise ValueError('coherent candidate version mismatch')
-    if 'Version="[$(WasmCandidateVersion)]"' not in consumer or 'Version="[0.2.0]"' not in consumer:
-        raise ValueError('candidate override or protected default missing')
+    document=ET.fromstring(consumer)
+    references=[row for row in document.iter('PackageReference') if row.get('Include')=='FS.GG.Wasm.Browser']
+    targets=[row for row in document.iter('Target') if row.get('Name')=='RequireCandidateVersion']
+    if len(references)!=1 or references[0].get('Version')!='[$(WasmCandidateVersion)]' or references[0].get('Condition') is not None:
+        raise ValueError('consumer requires one exact explicitly selected candidate reference')
+    if len(targets)!=1 or targets[0].get('BeforeTargets')!='Restore;Build' or not any(row.get('Condition')=="'$(WasmCandidateVersion)' == ''" for row in targets[0].iter('Error')):
+        raise ValueError('consumer must refuse a missing selected version')
     if 'FS.GG.Wasm.Contracts.$version.nupkg' not in contracts or 'FS.GG.Wasm.Browser.$version.nupkg' not in lifecycle:
         raise ValueError('qualification package path bypasses coherent metadata')
 sdk=(repo/'sdk/wasm/VERSION').read_text().strip();consumer=(repo/'tests/Wasm.PackageConsumer/Consumer.fsproj').read_text();contracts=(repo/'scripts/verify-wasm-contracts.sh').read_text();lifecycle=(repo/'scripts/verify-wasm-lifecycle.sh').read_text()
 validate(version,sdk,consumer,contracts,lifecycle)
-for broken in [(version,'0.2.0',consumer,contracts,lifecycle),(version,sdk,consumer,contracts.replace('$version.nupkg','0.2.0.nupkg'),lifecycle),(version,sdk,consumer.replace('Version="[$(WasmCandidateVersion)]"','Version="[0.2.0]"'),contracts,lifecycle)]:
+for broken in [(version,'0.2.0',consumer,contracts,lifecycle),(version,sdk,consumer,contracts.replace('$version.nupkg','0.2.0.nupkg'),lifecycle),(version,sdk,consumer.replace('Version="[$(WasmCandidateVersion)]"','Version="[0.2.0]"'),contracts,lifecycle),(version,sdk,consumer.replace('Name="RequireCandidateVersion"','Name="MissingGuard"'),contracts,lifecycle)]:
     try:validate(*broken)
     except ValueError:pass
     else:raise SystemExit('known-bad candidate version binding accepted')
-print('wasm-candidate-preflight: actual coherent metadata=pass old candidate paths/default override omission=refused')
+print('wasm-candidate-preflight: coherent metadata=pass explicit selected consumer=required wrong paths/version/fallback/missing guard=refused')
 PYVERSION
 "$repo/tests/release/wasm/test-release-wasm.sh" --source-only
 python3 "$repo/tests/release/wasm/test-installed-org-workflow.py"

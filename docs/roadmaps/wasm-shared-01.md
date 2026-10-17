@@ -1,5 +1,43 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## Coherent 0.4 candidate and current published-baseline classification
+
+The unpublished terminal API selects stable coherent 0.4.0 before final source CI.
+Both .NET packages, Contracts source-profile metadata, SDK version, Rust helper and
+both Rust examples move together. Browser's exact same-version Contracts dependency
+continues to derive from `WasmSharedVersion`; no new package identity is introduced.
+This is source preparation, not a published version or a product consumer pin.
+
+Current release classification compares actual 0.3.0 from producer
+`16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, tree
+`f06c9fef54b90d9dcd190b5bc1484f2e2e72f67a`, with manifest SHA256
+`a10046daf5417304732605745608b084f14481212931cb69939d51f90233ed07`.
+The selected policy binds the actual public served archives: Browser SHA256
+`74a11425bfb64c152ffbeab5be2753434e08f55f806e85113cdc25cacbc86fa5`
+and Contracts SHA256
+`90839f0bef2688447a55568dcb370941efec6f4e043742b9b4b8969c247acfa1`.
+Read-only archive/nuspec inspection established these inputs; native API comparison
+of the new DLLs remains unexecuted. Actual classification is reported by the native
+comparison, with unavailable or unexpected results refused. Historical 0.2 and 0.3
+policy bytes remain explicit read-only evidence mappings, without granting current
+publisher authority or promising compatibility for old callers.
+
+`prepare.sh` already seals the current published-baseline comparison against the same
+candidate archives in the custody manifest. Current supervisor acceptance therefore
+removes its duplicate 0.2 DLL comparison and unused 0.2 bootstrap feed acquisition.
+Official Core/compiler/Fable/WASI preparation, canonical model and correspondence,
+BAR/SC2 ABI controls, both Host facades, locked installed consumers, numeric/content
+refusals and installed Worker/browser coverage remain required. PackageConsumer now
+requires an explicit exact selected version and refuses absence, matching the maintained
+custody and feed-only callers; its old 0.2 fallback is removed.
+
+The existing 0.3 publication and installed evidence retain their original identities.
+The separately owned current publisher/installed correction must join this metadata
+and independently reviewed genuine generated files before final coherent source CI.
+Publication, fresh both-feed installed acceptance, registry inventory and consumer
+adoption remain distinct later boundaries. Neither public 0.4 absence observed during
+planning nor source preparation establishes organization occupancy or authorization.
+
 ## Second hosted attempt: selected module scope and early model checks
 
 The new-source preparation [39003742514](https://github.com/FS-GG/FS.GG.Game/actions/runs/39003742514),
