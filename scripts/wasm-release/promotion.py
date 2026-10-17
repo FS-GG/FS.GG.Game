@@ -154,7 +154,7 @@ class SafeRedirect(urllib.request.HTTPRedirectHandler):
 
 class Native:
     def __init__(self): self.end = STAGE_END
-    def request(self, url, method='GET', data=None, github=False, binary=False):
+    def request(self, url, method='GET', data=None, github=False, binary=False, max_bytes=None):
         need(time.monotonic() < self.end, 'stage deadline expired')
         headers = {'Accept':'application/vnd.github+json' if github else 'application/json', 'Cache-Control':'no-cache'}
         if github:
@@ -167,7 +167,7 @@ class Native:
             # representation. The final redirected body remains opaque bytes.
             parsed = urllib.parse.urlsplit(url)
             actions_archive = (method == 'GET' and parsed.scheme == 'https' and parsed.netloc == 'api.github.com'
-                and re.fullmatch(r'/repos/' + re.escape(REPO) + r'/actions/(?:artifacts/[1-9][0-9]*/zip|runs/[1-9][0-9]*/(?:attempts/[1-9][0-9]*/)?logs)', parsed.path))
+                and re.fullmatch(r'/repos/' + re.escape(REPO) + r'/actions/(?:artifacts/[1-9][0-9]*/zip|jobs/[1-9][0-9]*/logs|runs/[1-9][0-9]*/(?:attempts/[1-9][0-9]*/)?logs)', parsed.path))
             headers['Accept'] = 'application/vnd.github+json' if actions_archive else 'application/octet-stream'
         try:
             with urllib.request.build_opener(SafeRedirect()).open(urllib.request.Request(url, data=data, headers=headers, method=method), timeout=min(30,max(1,self.end-time.monotonic()))) as r:
@@ -176,7 +176,7 @@ class Native:
                     need(time.monotonic() < self.end, 'native response stage deadline expired')
                     chunk=r.read(1048576)
                     if not chunk: break
-                    total+=len(chunk); need(total <= (536870912 if binary else 8388608),'native response exceeds bounded size')
+                    total+=len(chunk); need(total <= (max_bytes if max_bytes is not None else 536870912 if binary else 8388608),'native response exceeds bounded size')
                     chunks.append(chunk)
                 body=b''.join(chunks); receipt(url,method,r.status,dict(r.headers)); return r.status, body if binary else json.loads(body or b'null'), dict(r.headers)
         except urllib.error.HTTPError as e:
@@ -282,18 +282,84 @@ def required_checks():
     return tuple((name,policy['requiredCheckAppId']) for name in policy['requiredGateChecks'])
 
 
+def job_log_lines(log):
+    need(len(log)<=16*1024*1024, 'checkout job log exceeds bound')
+    text=log.decode('utf-8-sig',errors='strict')
+    text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text)
+    return [re.sub(r'^\d{4}-\d\d-\d\dT\S+Z ', '', line) for line in text.splitlines()]
+
+
+def metadata_head(log,head,expected):
+    # This exact existing producer validates PR metadata and does not check out
+    # source. Its explicit runner environment binds the subject, not tested code.
+    need(expected=={'workflowId':316870217,'path':'.github/workflows/kit-materialize.yml','event':'pull_request'}, 'metadata-only producer contract changed')
+    lines=job_log_lines(log)
+    heads=[line.removeprefix('  PR_HEAD: ') for line in lines if line.startswith('  PR_HEAD: ')]
+    need(heads==[head], 'metadata-only native PR_HEAD missing/mismatched/ambiguous')
+    need('  SELF_REPO: '+REPO in lines, 'metadata-only repository differs')
+
+
+def checkout_commit(log):
+    """Read the pinned checkout action's own git-log result, never a script echo."""
+    lines=job_log_lines(log)
+    starts=[i for i,line in enumerate(lines) if line=='##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1']
+    commits=[]
+    for start in starts:
+        end=next((i for i in range(start+1,len(lines)) if lines[i].startswith('##[group]Run ')),len(lines))
+        block=lines[start:end]
+        if 'Syncing repository: '+REPO not in block: continue
+        need(block.count('Syncing repository: '+REPO)==1, 'ambiguous checkout repository')
+        positions=[i for i,line in enumerate(block) if re.fullmatch(r'\[command\].*(?:/|\\)git(?:\.exe)?"? log -1 --format=%H',line)]
+        need(len(positions)==1 and positions[0]+1<len(block), 'checkout commit missing/ambiguous')
+        commit=block[positions[0]+1];sha(commit,40);commits.append(commit)
+    need(len(commits)==1, 'actual selected repository checkout missing/ambiguous')
+    return commits[0]
+
+
 def verify_protection(native,binding):
-    branch=native.checked(f"repos/{REPO}/branches/main")
-    need(branch["protected"] is True, "main protection unavailable")
-    protection=branch["protection"]["required_status_checks"]
-    REQUIRED_CHECKS=required_checks()
-    checks=protection["checks"]
-    need(type(checks) is list and len(checks)==19 and {(row["context"],row["app_id"]) for row in checks}==set(REQUIRED_CHECKS), "selected required protection checks changed/Unknown")
-    need(set(protection["contexts"])=={name for name,_ in REQUIRED_CHECKS}, "required context projection drift")
-    rows=native.pages(f"repos/{REPO}/commits/{binding['producer']}/check-runs?filter=latest", "check_runs")
-    for name,app in REQUIRED_CHECKS:
-        matches=[row for row in rows if row["name"]==name and row["app"]["id"]==app]
-        need(len(matches)==1 and matches[0]["head_sha"]==binding["producer"] and matches[0]["status"]=="completed" and matches[0]["conclusion"]=="success", "required exact-head check absent/failed/ambiguous: "+name)
+    branch=native.checked(f'repos/{REPO}/branches/main')
+    need(branch['protected'] is True, 'main protection unavailable')
+    protection=branch['protection']['required_status_checks'];required=required_checks()
+    checks=protection['checks']
+    need(type(checks) is list and len(checks)==19 and {(row['context'],row['app_id']) for row in checks}==set(required), 'selected required protection checks changed/Unknown')
+    need(set(protection['contexts'])=={name for name,_ in required}, 'required context projection drift')
+    # Reuse the existing Game native check-producer policy, but admit only an
+    # exact checkout tree. The ordinary observer's broader three-way semantic
+    # merge path does not authorize this selected publication window.
+    policy=load(ROOT/'policy/v2-ci-ordinary-settlement.json')['qualification']
+    pulls=native.pages(f'repos/{REPO}/commits/{binding["producer"]}/pulls')
+    need(len(pulls)==1, 'current producer needs unique native merged PR')
+    pull=native.checked(f'repos/{REPO}/pulls/{pulls[0]["number"]}')
+    need(all(pull[key]==pulls[0][key] for key in ('number','node_id','merged_at','merge_commit_sha')), 'native merged PR association drift')
+    need(pull['state']=='closed' and pull['merged_at'] and pull['merge_commit_sha']==binding['producer'] and pull['base']['ref']=='main' and pull['base']['repo']['full_name']==REPO and pull['head']['repo']['full_name']==REPO, 'foreign/unmerged producer association')
+    head=pull['head']['sha'];sha(head,40)
+    trees={}
+    def exact_tree(commit):
+        if commit not in trees:
+            value=native.checked(f'repos/{REPO}/git/commits/{commit}')
+            need(value['sha']==commit and value['tree']['sha']==binding['producerTree'], 'tested checkout tree differs from protected custody producer')
+            trees[commit]=value['tree']['sha']
+        return trees[commit]
+    exact_tree(binding['producer']);exact_tree(head)
+    rows=native.pages(f'repos/{REPO}/commits/{head}/check-runs?filter=latest','check_runs')
+    runs={};log_bytes=0
+    for name,app in required:
+        matches=[row for row in rows if row['name']==name]
+        need(len(matches)==1, 'required check absent/ambiguous: '+name)
+        check=matches[0]
+        need(check['app']['id']==app and check['head_sha']==head and check['status']=='completed' and check['conclusion']=='success', 'required native check failed/foreign: '+name)
+        match=re.fullmatch(r'https://github\.com/'+re.escape(REPO)+r'/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)',check['details_url'])
+        need(match is not None, 'required check lacks native Actions job: '+name)
+        run_id,job_id=map(int,match.groups());need(job_id==check['id'],'check/job identity differs')
+        if run_id not in runs:runs[run_id]=native.checked(f'repos/{REPO}/actions/runs/{run_id}')
+        run=runs[run_id];job=native.checked(f'repos/{REPO}/actions/jobs/{job_id}');expected=policy['checkProducers'][name]
+        need(run['id']==run_id and run['repository']['full_name']==REPO and run['workflow_id']==expected['workflowId'] and run['path']==expected['path'] and run['event']==expected['event'] and run['head_sha']==head and run['check_suite_id']==check['check_suite']['id'], 'required check producer differs: '+name)
+        need(job['id']==job_id and job['run_id']==run_id and job['head_sha']==head and job['name']==name and job['status']==check['status'] and job['conclusion']==check['conclusion'] and job['check_run_url']==f'https://api.github.com/repos/{REPO}/check-runs/{job_id}' and type(job['run_attempt']) is int and type(run['run_attempt']) is int and 1<=job['run_attempt']==run['run_attempt'], 'required native job/attempt differs: '+name)
+        status,body,_=native.request(f'https://api.github.com/repos/{REPO}/actions/jobs/{job_id}/logs',github=True,binary=True,max_bytes=min(16*1024*1024,64*1024*1024-log_bytes))
+        need(status==200, 'required checkout logs unavailable: '+name)
+        log_bytes+=len(body);need(log_bytes<=64*1024*1024, 'required checkout logs exceed total bound')
+        if name=='materialize / receiver-validate':metadata_head(body,head,expected)
+        else:exact_tree(checkout_commit(body))
 
 
 def download(native, reviewed, target):

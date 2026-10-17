@@ -228,25 +228,82 @@ class Tests(unittest.TestCase):
                 outside=root/'foreign';outside.write_bytes(original);source.symlink_to(outside)
                 with self.assertRaises(p.Refusal):p.freeze(custody,root/'symlink')
 
-    def test_live_protection_population_and_exact_checks_fail_closed(self):
+    @staticmethod
+    def checkout_log(commit,repo=None):
+        repo=repo or p.REPO
+        return ('2026-10-17T05:00:00.000Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n'
+                '2026-10-17T05:00:00.001Z Syncing repository: '+repo+'\n'
+                '2026-10-17T05:00:00.002Z [command]/usr/bin/git log -1 --format=%H\n'
+                '2026-10-17T05:00:00.003Z '+commit+'\n'
+                '2026-10-17T05:00:00.004Z ##[group]Run actual required check\n').encode()
+
+    def test_checkout_logs_require_action_repository_and_actual_commit(self):
+        body=self.checkout_log('7'*40)
+        self.assertEqual(p.checkout_commit(body),'7'*40)
+        windows=body.replace(b'/usr/bin/git log',b'"C:\\Program Files\\Git\\cmd\\git.exe" log')
+        self.assertEqual(p.checkout_commit(windows),'7'*40)
+        for bad in [body.replace(b'actions/checkout@',b'echo checkout@'),body.replace(p.REPO.encode(),b'foreign/repo'),body.replace(b'--format=%H',b'--format=summary'),body.replace(b'7'*40,b'not-a-commit'),body+body,b'Run script\n[command]/usr/bin/git log -1 --format=%H\n'+b'7'*40]:
+            with self.subTest(body=bad[:50]),self.assertRaises(p.Refusal):p.checkout_commit(bad)
+        expected={'workflowId':316870217,'path':'.github/workflows/kit-materialize.yml','event':'pull_request'}
+        metadata=('2026-10-17T05:00:00.000Z   PR_HEAD: '+'8'*40+'\n2026-10-17T05:00:00.001Z   SELF_REPO: '+p.REPO+'\n').encode()
+        p.metadata_head(metadata,'8'*40,expected)
+        for bad in [b'',metadata.replace(b'8'*40,b'9'*40),metadata+metadata,metadata.replace(p.REPO.encode(),b'foreign/repo')]:
+            with self.assertRaises(p.Refusal):p.metadata_head(bad,'8'*40,expected)
+        with self.assertRaises(p.Refusal):p.metadata_head(metadata,'8'*40,dict(expected,workflowId=1))
+
+    def test_native_required_checks_pr_checkout_tree_producer_join(self):
         selected=p.required_checks();self.assertEqual(len(selected),19)
+        policy=p.load(ROOT/'policy/v2-ci-ordinary-settlement.json')['qualification']
+        head='8'*40;checked='7'*40
         branch={'protected':True,'protection':{'required_status_checks':{'checks':[{'context':name,'app_id':app} for name,app in selected],'contexts':[name for name,_ in selected]}}}
-        rows=[{'name':name,'app':{'id':app},'head_sha':p.P,'status':'completed','conclusion':'success'} for name,app in selected]
+        pull={'id':1,'number':1,'node_id':'PR1','merged_at':'2026-10-17T05:00:00Z','merge_commit_sha':p.P,'state':'closed','head':{'sha':head,'repo':{'full_name':p.REPO}},'base':{'ref':'main','repo':{'full_name':p.REPO}}}
+        rows=[];runs={};jobs={};logs={}
+        for i,(name,app) in enumerate(selected):
+            run_id=1000+i;job_id=2000+i;expected=policy['checkProducers'][name]
+            rows.append({'id':job_id,'name':name,'app':{'id':app},'head_sha':head,'status':'completed','conclusion':'success','check_suite':{'id':3000+i},'details_url':f'https://github.com/{p.REPO}/actions/runs/{run_id}/job/{job_id}'})
+            runs[run_id]={'id':run_id,'repository':{'full_name':p.REPO},'workflow_id':expected['workflowId'],'path':expected['path'],'event':expected['event'],'head_sha':head,'check_suite_id':3000+i,'run_attempt':1}
+            jobs[job_id]={'id':job_id,'run_id':run_id,'head_sha':head,'name':name,'status':'completed','conclusion':'success','check_run_url':f'https://api.github.com/repos/{p.REPO}/check-runs/{job_id}','run_attempt':1}
+            logs[job_id]=('  PR_HEAD: '+head+'\n  SELF_REPO: '+p.REPO+'\n').encode() if name=='materialize / receiver-validate' else self.checkout_log(checked)
         class Transport:
-            def checked(self,path):return self.branch
-            def pages(self,path,key):return self.rows
-        n=Transport();n.branch=branch;n.rows=rows;p.verify_protection(n,binding())
-        for mutation in ('not-protected','missing-required','wrong-required-app','missing-check','wrong-check-app','failed','skipped','wrong-source','incomplete','duplicate'):
-            n.branch=copy.deepcopy(branch);n.rows=copy.deepcopy(rows)
+            def checked(self,path):
+                if path.endswith('/branches/main'):return self.branch
+                if '/pulls/' in path:return self.pull
+                if '/git/commits/' in path:
+                    commit=path.rsplit('/',1)[1];return {'sha':commit,'tree':{'sha':self.trees.get(commit,p.TREE)}}
+                if '/actions/jobs/' in path:return self.jobs[int(path.rsplit('/',1)[1])]
+                return self.runs[int(path.rsplit('/',1)[1])]
+            def pages(self,path,key=None):return [self.pull] if path.endswith('/pulls') else self.rows
+            def request(self,url,**kwargs):
+                return self.status,self.logs[int(url.split('/jobs/',1)[1].split('/')[0])],{}
+        def transport():
+            n=Transport();n.branch=copy.deepcopy(branch);n.pull=copy.deepcopy(pull);n.rows=copy.deepcopy(rows);n.runs=copy.deepcopy(runs);n.jobs=copy.deepcopy(jobs);n.logs=dict(logs);n.trees={};n.status=200;return n
+        p.verify_protection(transport(),binding())
+        for mutation in ('not-protected','missing-required','wrong-required-app','unmerged','wrong-merge','foreign-pr','head-tree','checkout-tree','missing-check','wrong-check-app','failed','skipped','wrong-head','incomplete','duplicate','workflow','event','run-head','job-attempt','check-job','job-name','logs-expired','checkout-echo','metadata-missing','metadata-head'):
+            n=transport()
             if mutation=='not-protected':n.branch['protected']=False
             elif mutation=='missing-required':n.branch['protection']['required_status_checks']['checks'].pop()
             elif mutation=='wrong-required-app':n.branch['protection']['required_status_checks']['checks'][0]['app_id']=1
+            elif mutation=='unmerged':n.pull['merged_at']=None
+            elif mutation=='wrong-merge':n.pull['merge_commit_sha']='9'*40
+            elif mutation=='foreign-pr':n.pull['head']['repo']['full_name']='foreign/repo'
+            elif mutation=='head-tree':n.trees[head]='9'*40
+            elif mutation=='checkout-tree':n.trees[checked]='9'*40
             elif mutation=='missing-check':n.rows.pop()
             elif mutation=='wrong-check-app':n.rows[0]['app']['id']=1
             elif mutation in ('failed','skipped'):n.rows[0]['conclusion']=mutation
-            elif mutation=='wrong-source':n.rows[0]['head_sha']='9'*40
+            elif mutation=='wrong-head':n.rows[0]['head_sha']='9'*40
             elif mutation=='incomplete':n.rows[0]['status']='in_progress'
-            else:n.rows.append(n.rows[0])
+            elif mutation=='duplicate':n.rows.append(n.rows[0])
+            elif mutation=='workflow':n.runs[1000]['workflow_id']=1
+            elif mutation=='event':n.runs[1000]['event']='push'
+            elif mutation=='run-head':n.runs[1000]['head_sha']='9'*40
+            elif mutation=='job-attempt':n.jobs[2000]['run_attempt']=2
+            elif mutation=='check-job':n.rows[0]['id']=999
+            elif mutation=='job-name':n.jobs[2000]['name']='other'
+            elif mutation=='logs-expired':n.status=410
+            elif mutation=='checkout-echo':n.logs[2000]=b'echo '+checked.encode()
+            elif mutation=='metadata-missing':n.logs[2018]=b'no explicit subject'
+            else:n.logs[2018]=n.logs[2018].replace(head.encode(),b'9'*40)
             with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.verify_protection(n,binding())
 
     def test_closed_binding(self):
