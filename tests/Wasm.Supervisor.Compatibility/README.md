@@ -85,3 +85,14 @@ tree, version, assembly hashes and successful phase logs before reusing their
 outputs; it does not repeat the builds or in-memory suites. All stages share
 the unchanged 35-minute job limit. This ordering moves diagnosis earlier;
 measured time or cost savings are not established.
+
+Shared terminal controls use one typed ready fixture deriving ABI versions from the
+current profile descriptor and immediately asserting active/initialized/idle setup
+and successful setup settlements. An explicit profile/policy table selects scenarios.
+SC2 runs all queued previous-result reentry cases; BAR runs queue-free expiry and
+ordinary-ancestor cases plus its explicit Busy refusal while one request is pending.
+That refusal preserves the active ordinary request, settles the refused terminal
+once without an ABI outcome and never dispatches or retires the session; a fresh
+subsequent terminal must then dispatch, preserve its actual result and retire. Terminal
+result/cleanup/reentry controls still run for selected SC2, default SC2 and BAR,
+through both facades. Profile/facade/case labels identify future assertion failures.

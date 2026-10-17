@@ -79,6 +79,25 @@ that complete refusal, unchanged retired state and no emitted mechanical/settlem
 effects; it changes no runtime behavior. Actual Fable/pack/model/browser/installed
 acceptance remained unreached. The failed attempt and its exact assertion remain.
 
+The following attempt [39009007033](https://github.com/FS-GG/FS.GG.Game/actions/runs/39009007033),
+attempt 1 at `abb3f3b`, again built source then failed CLR setup with
+RequestOwnerUnavailable in the expanded BAR reentry caller. The full cohort sweep
+found a hardcoded SC2 ABI in that helper and SC2 queue assumptions in three scenarios.
+Both shared terminal helpers now use one typed ready fixture deriving ABI from the
+selected descriptor and immediately asserting active worker/generation, compiled and
+initialized state, idle queues/controls, and exactly two successful setup settlements.
+SC2 retains all five reentry scenarios on both facades. BAR retains queue-free timer
+expiry and ordinary-ancestor cases and explicitly checks Busy while an ordinary
+request is pending: the refused terminal settles once without an outcome, preserves
+the admitted request, never posts/arms or retires the live session, and stays settled
+after ordinary completion. A fresh subsequent BAR terminal then actually dispatches
+once, retains its real result and retires the session. All success/rejection/adapter/synchronous terminal-result
+controls remain across current selected SC2, default SC2 and BAR settings. Failure
+messages include profile/facade/case. The cohort sweep covered exact ordered refusals,
+queue population, clocks/timers, callback retirement state, subsequent assertions and
+shared CLR/Fable includes; actual execution of the repaired cohort remains owed.
+No runtime policy, model, generator or accepted trace changes are needed.
+
 The connected correction annotates shared identity, outcome, settings and boundary
 records across all source/installed include contexts. It also accumulates command
 capture across singleton effect callbacks and adds an ordinary Post/Arm omission
