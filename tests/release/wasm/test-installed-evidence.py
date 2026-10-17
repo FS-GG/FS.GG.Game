@@ -133,6 +133,16 @@ class Evidence(unittest.TestCase):
                              'consumer/public/sub/app/fable/fable_modules/Unknown/runtime.js'):
                     self.assertFalse(e.consumer_member(name))
 
+    def test_consumer_merge_refuses_selected_dependency_context(self):
+        for name in ('selected/installed-fable/fable_modules/.gitignore',
+                     'selected/browser/fable/fable_modules/fable-library-js.5.18.0/README.md'):
+            with self.subTest(name=name),tempfile.TemporaryDirectory() as raw:
+                root=pathlib.Path(raw);p=e.Projection();p.add(put(root/'data',b'foreign support'),name)
+                self.assertEqual(p.finish(root/'forged-consumer',0),0)
+                joined=e.Projection();e.merge(joined,root/'forged-consumer')
+                self.assertTrue(any(x['reason']=='foreign consumer evidence member' for x in joined.errors),joined.errors)
+                self.assertNotIn(name,joined.files)
+
     def test_refusals_retain_independent_evidence_and_runtime_cause(self):
         for defect in ('symlink','hardlink','traversal','duplicate','oversize','missing'):
             with self.subTest(defect=defect),tempfile.TemporaryDirectory() as raw:

@@ -76,6 +76,8 @@ def consumer_member(name):
         if name in {'consumer/packages/'+ident+'/'+leaf for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata')}:return True
     if name in {'consumer/core/'+leaf for leaf in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','reference-netstandard2.0.dll','reference-netstandard2.1.dll')}:return True
     if '/fable_modules/' in name:
+        context = name.split('/fable_modules/', 1)[0]
+        if context not in {'consumer/public/sub/app/fable', 'consumer/public/sub/app/_content/FS.GG.Wasm.Browser/policy'}: return False
         try: return fable_dependency(name) is not None
         except ValueError: return False
     return name.startswith('consumer/public/sub/app/') and pathlib.PurePosixPath(name).suffix in SUFFIXES and not set(pathlib.PurePosixPath(name).parts)&{'node_modules','http-cache','lock-http-cache','.git'}
