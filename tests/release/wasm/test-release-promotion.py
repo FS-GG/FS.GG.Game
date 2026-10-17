@@ -725,13 +725,15 @@ class Tests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
         binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
         env={'GITHUB_SHA':head,'GITHUB_WORKFLOW_SHA':head,'ACCEPTED_EXECUTOR':head,'QUALIFIER_SOURCE':head,
-             'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_RUN_ATTEMPT':'1'}
+             'GITHUB_REPOSITORY':p.REPO,'GITHUB_REF':'refs/heads/main','GITHUB_EVENT_NAME':'workflow_dispatch','GITHUB_RUN_ATTEMPT':'1',
+             'GITHUB_WORKFLOW_REF':p.REPO+'/.github/workflows/wasm-installed-org.yml@refs/heads/main','GITHUB_JOB':'installed','GITHUB_RUN_ID':'707','WASM_PACKAGE_FEED':'https://nuget.pkg.github.com/FS-GG/index.json'}
         # Actual Git cleanliness/head checks remain live; the complete diff parser
         # is exercised independently against real inert Git commits by collector controls.
         with patch.dict(os.environ,env),patch.object(binder,'source_audit',return_value={'bound':True}) as audit:
-            self.assertEqual(binder.bind_executor(binder.PUBLISHED,head,p.VERSION),{'bound':True})
+            audit_row=binder.bind_executor(binder.PUBLISHED,head,p.VERSION)
+            self.assertTrue(audit_row['bound']);self.assertEqual(audit_row['execution']['run'],707)
             audit.assert_called_once_with(binder.PUBLISHED,head)
-            for key,bad in [('GITHUB_SHA','9'*40),('GITHUB_WORKFLOW_SHA','9'*40),('QUALIFIER_SOURCE','9'*40),('GITHUB_REF','refs/heads/other'),('GITHUB_EVENT_NAME','push'),('GITHUB_RUN_ATTEMPT','2')]:
+            for key,bad in [('GITHUB_SHA','9'*40),('GITHUB_WORKFLOW_SHA','9'*40),('QUALIFIER_SOURCE','9'*40),('GITHUB_REF','refs/heads/other'),('GITHUB_EVENT_NAME','push'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_WORKFLOW_REF',p.REPO+'/.github/workflows/other.yml@refs/heads/main'),('GITHUB_JOB','other'),('GITHUB_RUN_ID','0'),('WASM_PACKAGE_FEED','https://other.invalid/index.json')]:
                 with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,head,p.VERSION)
             for executor,version in [('9'*40,p.VERSION),(head,'0.3.0')]:
                 with self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,executor,version)

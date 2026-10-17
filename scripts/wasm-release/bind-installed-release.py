@@ -99,8 +99,13 @@ def source_audit(source, qualifier):
 def bind_executor(source, executor, version):
     assert version == '0.4.0' and executor == os.environ['ACCEPTED_EXECUTOR'] == os.environ['QUALIFIER_SOURCE'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA'] == git('rev-parse','HEAD'), 'wrong actual installed qualifier/executor'
     assert os.environ['GITHUB_REPOSITORY'] == REPO and os.environ['GITHUB_REF'] == 'refs/heads/main' and os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch' and os.environ['GITHUB_RUN_ATTEMPT'] == '1', 'foreign/rerun installed execution'
+    assert os.environ['GITHUB_WORKFLOW_REF'] == REPO+'/.github/workflows/wasm-installed-org.yml@refs/heads/main', 'foreign installed workflow'
+    assert os.environ['GITHUB_JOB'] == 'installed' and re.fullmatch('[1-9][0-9]*',os.environ['GITHUB_RUN_ID']), 'wrong installed native run/job'
+    assert os.environ['WASM_PACKAGE_FEED'] in ('https://api.nuget.org/v3/index.json','https://nuget.pkg.github.com/FS-GG/index.json'), 'foreign installed feed'
     assert not git('status','--porcelain'), 'dirty installed qualifier'
-    return source_audit(source, executor)
+    audit=source_audit(source, executor)
+    audit['execution']={'run':int(os.environ['GITHUB_RUN_ID']),'attempt':1,'job':'installed','workflowRef':os.environ['GITHUB_WORKFLOW_REF'],'feed':os.environ['WASM_PACKAGE_FEED']}
+    return audit
 
 
 def bind_qualification_inputs(source, qualifier_source, version, release_binding=None):

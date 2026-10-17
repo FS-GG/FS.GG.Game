@@ -30,13 +30,14 @@ class Evidence(unittest.TestCase):
                 put(work/name,b'{}')
             put(work/'sdk-artifacts/fsgg-wasm-sdk-0.4.0.tar.gz')
             put(work/'installed-member-receipt.log')
+            put(work/'consumer-http.log')
             for ident in e.PACKAGES:
                 for leaf in (ident+'.0.4.0.nupkg',ident+'.0.4.0.nupkg.sha512','.nupkg.metadata'):
                     put(work/'consumer-packages'/ident/'0.4.0'/leaf)
             for name in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','lib/netstandard2.0/FSharp.Core.dll','lib/netstandard2.1/FSharp.Core.dll'):
                 put(work/'consumer-packages/fsharp.core/10.1.302'/name)
             put(work/'consumer/browser/test-results/.last-run.json',b'{"status":"passed"}')
-            for name in ('FSharp.Core.dll','Consumer.dll','fable/Program.js','_content/FS.GG.Wasm.Browser/module-worker.mjs','_content/FS.GG.Wasm.Browser/worker-client.mjs','_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js'):
+            for name in ('FSharp.Core.dll','Consumer.dll','Consumer','fable/Program.js','_content/FS.GG.Wasm.Browser/module-worker.mjs','_content/FS.GG.Wasm.Browser/worker-client.mjs','_content/FS.GG.Wasm.Browser/policy/WorkerEntry.js'):
                 put(work/'consumer/public/sub/app'/name)
             put(work/'http-cache/cache:https.json/list.dat',b'discard HTTP cache')
             p=e.Projection();e.consumer(p,work)
@@ -80,10 +81,10 @@ class Evidence(unittest.TestCase):
     def test_combined_budget_is_enforced_on_merge(self):
         with tempfile.TemporaryDirectory() as raw:
             root=pathlib.Path(raw);file=put(root/'file',b'x'*8)
-            a=e.Projection();a.add(file,'consumer/data.log');a.finish(root/'a',0)
+            a=e.Projection();a.add(file,'consumer/installed-member-receipt.log');a.finish(root/'a',0)
             c=e.Projection();c.add(file,'selected/data.log')
             with patch.dict(e.LIMITS,logs=10):e.merge(c,root/'a')
-            self.assertTrue(c.errors)
+            self.assertTrue(any(x['reason']=='merged logs cap' for x in c.errors),c.errors)
 
     def test_owner_trap_retains_original_status_after_collection_failure(self):
         source=(ROOT/'scripts/verify-wasm-package-consumer.sh').read_text()
@@ -112,6 +113,54 @@ class Evidence(unittest.TestCase):
                 status=json.loads((pathlib.Path(raw)/'status.json').read_text())
                 self.assertEqual(status['exitCode'],expected)
                 self.assertEqual(status['commandExit'],command_exit);self.assertEqual(status['logExit'],log_exit)
+
+    def test_archive_and_external_manifest_share_one_upload_cap(self):
+        import random
+        with tempfile.TemporaryDirectory() as raw:
+            root=pathlib.Path(raw);p=e.Projection()
+            p.add(put(root/'binary',random.Random(42).randbytes(60000)),'selected/runtime.dll')
+            p.add(put(root/'log',b'original log'),'selected/first.log')
+            with patch.dict(e.LIMITS,total=61200):
+                self.assertEqual(p.finish(root/'out',37),1)
+            manifest=json.loads((root/'out/evidence-manifest.json').read_text())
+            self.assertEqual(manifest['runtimeStatus'],37);self.assertFalse(manifest['eligible'])
+            self.assertTrue(any(x['reason']=='archive plus sidecar upload cap' for x in manifest['errors']))
+            self.assertLessEqual(sum(x.stat().st_size for x in (root/'out').iterdir()),61200)
+            with tarfile.open(root/'out/installed-evidence.tar.gz') as archive:
+                self.assertEqual(archive.extractfile('selected/first.log').read(),b'original log')
+                self.assertNotIn('selected/runtime.dll',archive.getnames())
+
+    def test_both_physical_manifest_copies_count_as_metadata(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root=pathlib.Path(raw);p=e.Projection();p.add(put(root/'lock',b'{}'),'selected/lock.json')
+            p.finish(root/'reference',0)
+            metadata=len((root/'reference/evidence-manifest.json').read_bytes())
+            # One manifest fits but two cannot. The actual finish predicate,
+            # not a second implementation of it, must refuse before upload.
+            with patch.dict(e.LIMITS,metadata=p.metadata+metadata+32):
+                with self.assertRaisesRegex(ValueError,'manifest cap'):p.finish(root/'refused',0)
+
+    def test_fresh_http_capture_refuses_stale_log_and_preserves_runtime(self):
+        source=(ROOT/'scripts/verify-wasm-package-consumer.sh').read_text()
+        trap=source.split('finish_consumer() {',1)[1].split('\ntrap finish_consumer EXIT',1)[0]
+        for changed,copy_exit,runtime,expected in ((True,0,0,0),(False,0,0,1),(True,19,37,37)):
+            with self.subTest(changed=changed,copy_exit=copy_exit),tempfile.TemporaryDirectory() as raw:
+                script='set -euo pipefail\nmode=--feed-only\nrepo=/inert\nwork=/inert\nconsumer_http_started=1\nconsumer_http_before=old\nWASM_CONSUMER_EVIDENCE=/inert\nWASM_CONSUMER_STATUS='+raw+'/status.json\nstat(){ echo '+('fresh' if changed else 'old')+'; }\ncp(){ touch '+raw+'/copied; return '+str(copy_exit)+'; }\npython3(){ return 0; }\nrm(){ return 0; }\nfinish_consumer() {'+trap+'\ntrap finish_consumer EXIT\nexit '+str(runtime)
+                result=subprocess.run(['bash','-c',script],capture_output=True,text=True)
+                self.assertEqual(result.returncode,expected,result.stderr)
+                status=json.loads((pathlib.Path(raw)/'status.json').read_text())
+                self.assertEqual(status['runtime'],runtime)
+                self.assertEqual((pathlib.Path(raw)/'copied').exists(),changed)
+                self.assertEqual(status['collection'],copy_exit if changed else 1)
+
+    def test_only_named_apphost_is_admitted(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root=pathlib.Path(raw);put(root/'sub/app/Consumer');put(root/'sub/app/UnexpectedHost')
+            p=e.Projection();p.tree(root,'consumer/public')
+            self.assertIn('consumer/public/sub/app/Consumer',p.files)
+            self.assertTrue(any(x['member'].endswith('UnexpectedHost') for x in p.errors))
+            self.assertTrue(e.consumer_member('consumer/public/sub/app/Consumer'))
+            self.assertFalse(e.consumer_member('consumer/public/sub/app/UnexpectedHost'))
 
     def test_bad_consumer_retention_configuration_refuses_before_work(self):
         import shlex

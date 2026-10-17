@@ -14,12 +14,22 @@ if [[ "$mode" == --feed-only && "${MODE:-}" == installed ]]; then
 fi
 work="$(mktemp -d "${TMPDIR:-/tmp}/wasm-package-consumer.XXXXXX")"
 finish_consumer() {
-  local runtime=$? collection=0 cleanup=0
+  local runtime=$? collection=0 cleanup=0 projection=0 current_http=
   trap - EXIT
   set +e
   if [[ "$mode" == --feed-only && -n "${WASM_CONSUMER_EVIDENCE:-}" ]]; then
+    if [[ "${consumer_http_started:-0}" == 1 ]]; then
+      current_http="$(stat -c '%d:%i:%s:%y' -- /tmp/fsgg-wasm-package-consumer-http.log 2>/dev/null)"
+      if [[ -n "$current_http" && "$current_http" != "$consumer_http_before" ]]; then
+        cp -P -- /tmp/fsgg-wasm-package-consumer-http.log "$work/consumer-http.log"
+        collection=$?
+      else
+        collection=1
+      fi
+    fi
     python3 "$repo/scripts/wasm-release/installed-evidence.py" consumer --work "$work" --output "$WASM_CONSUMER_EVIDENCE" --runtime "$runtime"
-    collection=$?
+    projection=$?
+    if (( collection == 0 )); then collection=$projection; fi
   fi
   rm -rf -- "$work"
   cleanup=$?
@@ -135,6 +145,8 @@ mkdir -p "$output/modules"
 cp "$work/modules/"*.wasm "$output/modules/"
 printf '%s  %s\n' 1557e76b7a97b8e301c31c1e082c9060d8b66258a23308dcf9d2d17dbfd9de7d "$work/consumer/browser/fixtures/bar-conformance.wasm" | sha256sum --check --strict
 cp "$work/consumer/browser/fixtures/bar-conformance.wasm" "$output/modules/"
+consumer_http_before="$(stat -c '%d:%i:%s:%y' -- /tmp/fsgg-wasm-package-consumer-http.log 2>/dev/null || true)"
+consumer_http_started=1
 (
   cd "$work/consumer/browser"
   npm ci

@@ -1,6 +1,29 @@
 # WASM-SHARED-01 — producer qualification successor
 
-## Protected qualification and current checkout-reader correction
+## Current 0.4 publication and installed follow-up
+
+PR714 delivered the current reader to protected producer/publisher
+`6732d2371d142d5ccc5d2d127f20e4f179800892`, tree
+`cc71e7cfe73449919376acf775940ff9e8bdab56`. Complete protected qualification
+[39013804889](https://github.com/FS-GG/FS.GG.Game/actions/runs/39013804889),
+attempt 1, passed all eleven maintained gates and retained the independently
+accepted 39-file original custody. Original publication
+[39015233527](https://github.com/FS-GG/FS.GG.Game/actions/runs/39015233527),
+attempt 1, completed and was independently accepted: immutable tag, published
+release, original org pair, genuinely signed public pair, SDK, manifest, checksums
+and durable transaction retain that producer identity.
+
+Fresh installed operation
+[39016307973](https://github.com/FS-GG/FS.GG.Game/actions/runs/39016307973),
+attempt 1, remains failed. Org's actual consumer qualification passed, then evidence
+upload failed on NuGet HTTP-cache filenames and produced zero artifacts. Public
+was cancelled before execution. The current follow-up separates reviewed qualifier
+Q from this immutable published P, repairs bounded evidence retention, and requires
+complete new coherent qualification plus a separately selected both-feed installed
+operation. Both-feed acceptance and consumer adoption remain open. Earlier source
+and operation frontiers below retain their historical scopes.
+
+## Protected qualification and checkout-reader correction (completed source delivery)
 
 PR713 delivered the reviewed terminal correction and coherent 0.4 source to
 protected main `5e2ebd8d1df0412d4725b31bcb8d380b3c85e48a`, tree
@@ -14,8 +37,9 @@ maintained qualification gates, froze the eligible originals and uploaded artifa
 original packages, SDK, manifest, hashes and bounded evidence. This includes actual
 source/installed CLR and Fable controls, current 0.3 API classification, fresh
 53-default/16-selected trace checks and real browser suites; generation was skipped.
-The earlier failures below remain failures. Publication, fresh both-feed installed
-acceptance and product adoption have not occurred.
+The earlier failures below remain failures. At that earlier frontier, publication,
+fresh both-feed installed acceptance and product adoption had not occurred; the
+current publication and installed outcomes are recorded above.
 
 A subsequent read-only publication preflight found a current native-check reader
 defect before any publication operation. The required lock-range job
@@ -39,11 +63,13 @@ before writers; source delivery grants no publication authority.
 
 ## Coherent 0.4 candidate and current published-baseline classification
 
-The terminal API selects stable coherent 0.4.0; it remains unpublished.
+The terminal API selects stable coherent 0.4.0, now published at the immutable
+producer recorded above.
 Both .NET packages, Contracts source-profile metadata, SDK version, Rust helper and
 both Rust examples move together. Browser's exact same-version Contracts dependency
 continues to derive from `WasmSharedVersion`; no new package identity is introduced.
-This is qualified source, not a published version or a product consumer pin.
+Source qualification, publication and product consumer activation remain distinct;
+the accepted publication does not close the installed/adoption gate.
 
 Current release classification compares actual 0.3.0 from producer
 `16a401692f4c0dee7f6da1a86d0cd49e6ea3ec2c`, tree
@@ -79,10 +105,10 @@ requires an explicit exact selected version and refuses absence, matching the ma
 custody and feed-only callers; its old 0.2 fallback is removed.
 
 The existing 0.3 publication and installed evidence retain their original identities.
-The separately owned current publisher/installed correction must join this metadata
-and independently reviewed genuine generated files before final coherent source CI.
-Publication, fresh both-feed installed acceptance, registry inventory and consumer
-adoption remain distinct later boundaries. Neither public 0.4 absence observed during
+The current publisher correction joined this metadata and independently reviewed
+genuine generated files before complete coherent qualification and publication.
+Fresh both-feed installed acceptance, registry inventory and consumer adoption
+remain distinct boundaries. Neither public 0.4 absence observed during
 planning nor source preparation establishes organization occupancy or authorization.
 
 ## Current source and installed compile boundary
@@ -133,7 +159,8 @@ once, retains its real result and retires the session. All success/rejection/ada
 controls remain across current selected SC2, default SC2 and BAR settings. Failure
 messages include profile/facade/case. The cohort sweep covered exact ordered refusals,
 queue population, clocks/timers, callback retirement state, subsequent assertions and
-shared CLR/Fable includes; actual execution of the repaired cohort remains owed.
+shared CLR/Fable includes; the repaired cohort subsequently passed the complete
+PR and protected qualifications recorded above.
 No runtime policy, model, generator or accepted trace changes are needed.
 
 The connected correction annotates shared identity, outcome, settings and boundary
@@ -156,7 +183,9 @@ required; builds and in-memory suites are not duplicated. Known-stale phase evid
 is refused by the actual helper in inert preflight controls. Failure reporting now
 retains bounded first compiler errors plus the existing tail, preserving first status.
 The 35-minute job limit is unchanged. Earlier detection is the intended benefit;
-actual cold fit, runtime success and cost savings await the next hosted qualification.
+the complete current protected qualification subsequently passed in 983 seconds
+within its 35-minute job limit. That observation establishes this run, without a
+general cold-fit or cost-savings guarantee; changed Q still requires coherent CI.
 
 ## Third hosted attempt: complete generated trace preparation
 
