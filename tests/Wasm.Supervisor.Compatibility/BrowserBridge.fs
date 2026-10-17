@@ -19,6 +19,10 @@ let initialize (host:Host) now worker request generation input deadline output =
 let invoke (host:Host) now worker request generation submission input deadline output enclosing =
     let kind=if submission=0 then Ordinary elif submission=1 then OrderedEvent else ReplaceableSnapshot
     host.SubmitLimited(now,LimitedInvoke(identity worker request generation,kind,input),limits deadline output enclosing) |> unwrap
+let invokeAndRetire (host:Host) now worker request generation input deadline output enclosing =
+    host.SubmitLimited(now,LimitedInvokeAndRetire(identity worker request generation,input),limits deadline output enclosing) |> unwrap
+let shutdown (host:Host) now worker request generation deadline output =
+    host.SubmitLimited(now,LimitedShutdown(identity worker request generation),limits deadline output None) |> unwrap
 let candidate (host:Host) now worker request generation digest artifact =
     host.SubmitLimited(now,LimitedCandidate(identity worker request generation,"recovery",Some 1UL,configuration digest,artifact),limits 250 65536 None) |> unwrap
 let validate (host:Host) now = host.ValidateCandidate(now,"recovery",2UL)

@@ -4,7 +4,7 @@ module lifecycle {
   type Profile = Bar | Sc2
   type Submission = Ordinary | Ordered | Snapshot
   type Request = { id: int, worker: int, generation: int, deadline: int,
-    submission: Submission, bytes: int, operation: str, phase: str, correlation: int }
+    submission: Submission, bytes: int, operation: str, phase: str, correlation: int, retire: bool }
   type Effect = { kind: str, request: int, generation: int, worker: int, operation: str, phase: str, correlation: int, bytes: int, due: int, reason: str, outcome: str, terminalPhase: str, dispatched: bool }
   type Input = { name: str, request: Request, worker: int, phase: str, observed: int }
   type State = {
@@ -21,7 +21,7 @@ module lifecycle {
   var state: State
   var connection: Connection
   pure val emptyRequest: Request = {id:0,worker:0,generation:0,deadline:0,
-    submission:Ordinary,bytes:0,operation:"none",phase:"process",correlation:0}
+    submission:Ordinary,bytes:0,operation:"none",phase:"process",correlation:0,retire:false}
   pure def initial(profile: Profile): State = {
     profile:profile,clock:0,nextRequest:1,nextGeneration:1,activeWorker:0,activeGeneration:0,
     candidateWorker:0,candidateGeneration:0,candidateTransaction:0,candidateInitialized:false,
@@ -41,7 +41,7 @@ module lifecycle {
   pure def requestFor(s: State,worker: int,generation: int,operation: str,phase: str,submission: Submission): Request = {
     id:s.nextRequest,worker:worker,generation:generation,deadline:s.clock+250,
     submission:submission,bytes:if(operation=="shutdown")0 else 1,operation:operation,phase:phase,
-    correlation:s.nextRequest,
+    correlation:s.nextRequest,retire:false,
   }
   pure def idsFor(rs: List[Request]): List[int] = rs.foldl(List(),(out,r)=>out.append(r.id))
   pure def effectsFor(kind: str,rs: List[Request]): List[Effect] = rs.foldl(List(),(out,r)=>out.append(effect(kind,r)))
@@ -81,7 +81,16 @@ module lifecycle {
       effects:if(s.snapshot.worker==0)List() else List(effect("settleCoalesced",s.snapshot)),
       lastAction:if(s.snapshot.worker==0)"queueSnapshot" else "coalesceSnapshot"}
   }
-  pure def invalidate(s: State,worker: int,reason: str,actionName: str): State = {
+  pure def disposeState(s: State): State = {
+      val rs=pending(s)
+      val workers=(if(s.activeWorker==0)List() else List(s.activeWorker)).concat(if(s.candidateWorker==0)List() else List(s.candidateWorker)).concat(s.retiringWorkers.fold(List(),(rs,w)=>rs.append(w)))
+      if(s.disposed){...s,lastAction:"disposeAgain"}else {...s,activeWorker:0,activeGeneration:0,candidateWorker:0,candidateGeneration:0,candidateTransaction:0,candidateInitialized:false,candidateReady:false,retiringWorkers:Set(),compiledWorkers:Set(),initializedWorkers:Set(),controls:List(),current:emptyRequest,ordinary:List(),ordered:List(),snapshot:emptyRequest,disposed:true,deliveries:s.deliveries.concat(idsFor(rs)),effects:workers.foldl(List(),(out,w)=>out.append(termination(w))).concat(effectsFor("cancelTimer",rs)).concat(rs.foldl(List(),(out,r)=>out.append({...effect("settleDiscarded",r),reason:"HostDisposed"}))),lastAction:"dispose"}
+  }
+  pure def retireState(s: State,r: Request,terminal: Effect,actionName: str): State = {
+    val retired=disposeState({...s,current:emptyRequest})
+    {...retired,deliveries:retired.deliveries.append(r.id),effects:retired.effects.concat(List(effect("cancelTimer",r),terminal)),lastAction:actionName}
+  }
+  pure def invalidateCore(s: State,worker: int,reason: str,actionName: str): State = {
     val controls=s.controls.select(r=>r.worker==worker)
     val current=if(s.current.worker==worker)List(s.current) else List()
     val removed=controls.concat(current).concat(queued(s).select(r=>r.worker==worker))
@@ -97,6 +106,13 @@ module lifecycle {
       ordinary:s.ordinary.select(r=>r.worker!=worker),ordered:s.ordered.select(r=>r.worker!=worker),snapshot:if(s.snapshot.worker==worker)emptyRequest else s.snapshot,
       deliveries:s.deliveries.concat(idsFor(removed)),
       effects:List(termination(worker)).concat(effectsFor("cancelTimer",controls.concat(current))).concat(removed.foldl(List(),(out,r)=>out.append(if(reason=="settleTimedOut" or reason=="settleFaulted"){...effect(if(reason=="settleFaulted")"settleDiscarded" else reason,r),reason:if(reason=="settleTimedOut")"DeadlineExpired" else "WorkerFault:worker terminated",outcome:if(reason=="settleTimedOut")"TimedOut" else "Faulted",terminalPhase:r.phase,dispatched:(controls.concat(current).foldl(false,(found,p)=>found or p.id==r.id)) and Set("initialize","process","free","shutdown").contains(r.phase)}else effect(reason,r)))),lastAction:actionName}
+  }
+  pure def invalidate(s: State,worker: int,reason: str,actionName: str): State = {
+    val r=s.current
+    if(r.worker==worker and r.retire and Set("settleTimedOut","settleFaulted").contains(reason)){
+      val terminal={...effect(if(reason=="settleFaulted")"settleDiscarded"else reason,r),reason:if(reason=="settleTimedOut")"DeadlineExpired"else "WorkerFault:worker terminated",outcome:if(reason=="settleTimedOut")"TimedOut"else "Faulted",terminalPhase:r.phase,dispatched:Set("initialize","process","free","shutdown").contains(r.phase)}
+      retireState(s,r,terminal,actionName)
+    }else invalidateCore(s,worker,reason,actionName)
   }
   pure def expireAtState(s: State,now: int): State = {
     val time=if(now<s.clock)s.clock else now
@@ -136,7 +152,7 @@ module lifecycle {
         if(e.name=="compiled"){...following,compiledWorkers:s.compiledWorkers.union(Set(r.worker)),lastAction:"compiled"}
         else {...following,initializedWorkers:s.initializedWorkers.union(Set(r.worker)),candidateInitialized:s.candidateInitialized or r.worker==s.candidateWorker,lastAction:"candidateInitialized"}
       }
-    } else if(e.name=="ordinary")submit(s,r)
+    } else if(e.name=="ordinary" or e.name=="terminal")submit(s,r)
     else if(e.name=="ordered")submit(s,r)
     else if(e.name=="snapshot")submit(s,r)
     else if(e.name=="shutdown")submit(s,r)
@@ -147,7 +163,8 @@ module lifecycle {
         val prefix=List(effect("cancelTimer",r),effect(kind,r))
         val actionName=if(e.name=="cleanupFault")"cleanupFault" else "complete"
         val base={...s,current:emptyRequest,deliveries:s.deliveries.append(r.id),effects:prefix,lastAction:actionName}
-        if(e.name!="complete" or r.operation=="shutdown" or (historical and s.retiringWorkers.contains(r.worker))){
+        if(s.current.retire)retireState(s,s.current,effect(kind,s.current),"retireSession")
+        else if(e.name!="complete" or r.operation=="shutdown" or (historical and s.retiringWorkers.contains(r.worker))){
           val after=invalidate(base,r.worker,"settleDiscarded",actionName)
           {...after,effects:prefix.concat(after.effects)}
         }else dispatchNext(base,prefix)
@@ -171,11 +188,8 @@ module lifecycle {
       else {...s,retiringWorkers:s.retiringWorkers.exclude(Set(e.worker)),compiledWorkers:s.compiledWorkers.exclude(Set(e.worker)),initializedWorkers:s.initializedWorkers.exclude(Set(e.worker)),lastAction:"terminateRetiring"}
     else if(e.name=="freeze"){...s,frozen:true,freezeToken:7,lastAction:"freeze"}
     else if(e.name=="resume")dispatchNext({...s,frozen:false,freezeToken:0,lastAction:"resume"},List())
-    else if(e.name=="dispose"){
-      val rs=pending(s)
-      val workers=(if(s.activeWorker==0)List() else List(s.activeWorker)).concat(if(s.candidateWorker==0)List() else List(s.candidateWorker)).concat(s.retiringWorkers.fold(List(),(rs,w)=>rs.append(w)))
-      if(s.disposed){...s,lastAction:"disposeAgain"}else {...s,activeWorker:0,activeGeneration:0,candidateWorker:0,candidateGeneration:0,candidateTransaction:0,candidateInitialized:false,candidateReady:false,retiringWorkers:Set(),compiledWorkers:Set(),initializedWorkers:Set(),controls:List(),current:emptyRequest,ordinary:List(),ordered:List(),snapshot:emptyRequest,disposed:true,deliveries:s.deliveries.concat(idsFor(rs)),effects:workers.foldl(List(),(out,w)=>out.append(termination(w))).concat(effectsFor("cancelTimer",rs)).concat(rs.foldl(List(),(out,r)=>out.append({...effect("settleDiscarded",r),reason:"HostDisposed"}))),lastAction:"dispose"}
-    } else if(e.name=="timer"){...s,lastAction:if(s.effects.length()==0)"stutter" else s.lastAction}
+    else if(e.name=="dispose")disposeState(s)
+    else if(e.name=="timer"){...s,lastAction:if(s.effects.length()==0)"stutter" else s.lastAction}
     else s
   }
   pure def eventAt(s: State,e: Input,observed: int): State = {
@@ -183,9 +197,9 @@ module lifecycle {
     val captured={...s,clock:time}
     val r=if(e.name=="loadInitial" or e.name=="prepareCandidate")requestFor(captured,s.nextGeneration,s.nextGeneration,"load","compile",Ordinary)
       else if(e.name=="initialize")requestFor(captured,e.worker,if(e.worker==s.activeWorker)s.activeGeneration else s.candidateGeneration,"initialize","allocate-descriptor",Ordinary)
-      else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown")requestFor(captured,s.activeWorker,s.activeGeneration,if(e.name=="shutdown")"shutdown" else "process",if(e.name=="shutdown")"shutdown" else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
+      else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown" or e.name=="terminal")requestFor(captured,s.activeWorker,s.activeGeneration,if(e.name=="shutdown")"shutdown" else "process",if(e.name=="shutdown")"shutdown" else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
       else e.request
-    val original={...e,request:r,observed:observed}
+    val original={...e,request:if(e.name=="terminal"){...r,retire:true}else r,observed:observed}
     val expired=expireAtState(s,time)
     val result=handle({...expired,effects:List()},original)
     {...result,effects:expired.effects.concat(result.effects),input:original,lastAction:if(e.name=="timer" and expired.effects.length()>0)expired.lastAction else result.lastAction}
@@ -231,6 +245,7 @@ module lifecycle {
   action submitOrdered = event(input("ordered",emptyRequest,0,""))
   action submitSnapshot = event(input("snapshot",emptyRequest,0,""))
   action shutdown = event(input("shutdown",emptyRequest,0,""))
+  action submitTerminal = event(input("terminal",emptyRequest,0,""))
   action complete = all {state.current.worker!=0,event(input("complete",state.current,state.current.worker,""))}
   action rejectedTermination = all {state.current.worker!=0,event(input("rejectedTermination",state.current,state.current.worker,""))}
   action cleanupFault = all {state.current.worker!=0,event(input("cleanupFault",state.current,state.current.worker,""))}
@@ -288,7 +303,8 @@ module lifecycle {
   val readinessRequiresCompilation = state.initializedWorkers.subseteq(state.compiledWorkers) and state.compiledWorkers.subseteq(live(state))
   val currentRequiresReadiness = state.current.worker==0 or state.initializedWorkers.contains(state.current.worker)
   val timeoutTerminates = state.lastAction!="expireCurrent" or hasEffect(state.effects,"terminate")
-  val lifecycleSafe = and {connection.callbacksQuiescent, singleTerminalDelivery,staleCannotBeCurrent,candidateHasNoAuthority,workerCapacityIncludesRetiring,queuesBounded,orderedRequestsPreserveOrder,freezeSuppressesCurrentDelivery,cleanupFailureNeverSucceeds,disposedHasNoLiveWork,readinessRequiresCompilation,currentRequiresReadiness,timeoutTerminates }
+  val disposedHasNoDispatch = not(state.disposed) or state.effects.select(fx=>fx.kind=="post" or fx.kind=="armTimer").length()==0
+  val lifecycleSafe = and {disposedHasNoDispatch,connection.callbacksQuiescent, singleTerminalDelivery,staleCannotBeCurrent,candidateHasNoAuthority,workerCapacityIncludesRetiring,queuesBounded,orderedRequestsPreserveOrder,freezeSuppressesCurrentDelivery,cleanupFailureNeverSucceeds,disposedHasNoLiveWork,readinessRequiresCompilation,currentRequiresReadiness,timeoutTerminates }
   val sawBusyRefusal = hasEffect(state.effects,"refusedBusy")
   val sawSnapshotCoalesced = hasEffect(state.effects,"settleCoalesced")
   val sawHistoricalResult = hasEffect(state.effects,"settleHistorical")
@@ -385,13 +401,16 @@ module compatibleLifecycle {
   pure def handleCompatible(c: CompatibleState,e: Input): CompatibleState = {
     val h=c.host
     val r=e.request
-    if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown")submitCompatible(c,r)
+    if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown" or e.name=="terminal")submitCompatible(c,r)
     else if(e.name=="complete" and h.current.id==r.id and h.current.worker==r.worker){
       val historical=h.frozen or r.worker!=h.activeWorker or r.generation!=h.activeGeneration
       val kind=if(historical)"settleHistorical"else if(r.operation=="shutdown")"settleShutdown"else "settleCurrent"
       val prefix=List(effect("cancelTimer",r),effect(kind,r))
       val base={...c,host:{...h,current:emptyRequest,deliveries:h.deliveries.append(r.id),effects:List(),lastAction:"complete"}}
-      if(r.operation=="shutdown" or (historical and h.retiringWorkers.contains(r.worker))){
+      if(h.current.retire){
+        val retired=retireState(projectedHost(c),h.current,effect(kind,h.current),"retireSession")
+        {...c,host:{...retired,snapshot:emptyRequest},held:emptyRequest}
+      }else if(r.operation=="shutdown" or (historical and h.retiringWorkers.contains(r.worker))){
         val removed=invalidate(base.host,r.worker,"settleDiscarded","complete")
         {...base,host:{...removed,effects:prefix.concat(removed.effects)}}
       }else {
@@ -409,7 +428,10 @@ module compatibleLifecycle {
       }
     }else if(e.name=="resume")pumpCompatible({...c,host:{...h,frozen:false,freezeToken:0,lastAction:"resume"}})
     else if(e.name=="dispose")disposeCompatible(c)
-    else {
+    else if(h.current.retire and Set("cleanupFault","rejectedTermination","workerTerminated","terminateRetiring").contains(e.name)){
+      val following=handle(projectedHost(c),e)
+      {...c,host:{...following,snapshot:emptyRequest},held:following.snapshot}
+    }else {
       val following=handle(h,e)
       val retained=c.held.worker==0 or live(following).contains(c.held.worker)
       if(retained){...c,host:following}
@@ -421,13 +443,13 @@ module compatibleLifecycle {
     val captured={...c.host,clock:time}
     val r=if(e.name=="loadInitial" or e.name=="prepareCandidate")requestFor(captured,c.host.nextGeneration,c.host.nextGeneration,"load","compile",Ordinary)
       else if(e.name=="initialize")requestFor(captured,e.worker,if(e.worker==c.host.activeWorker)c.host.activeGeneration else c.host.candidateGeneration,"initialize","allocate-descriptor",Ordinary)
-      else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown")requestFor(captured,c.host.activeWorker,c.host.activeGeneration,if(e.name=="shutdown")"shutdown"else "process",if(e.name=="shutdown")"shutdown"else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
+      else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown" or e.name=="terminal")requestFor(captured,c.host.activeWorker,c.host.activeGeneration,if(e.name=="shutdown")"shutdown"else "process",if(e.name=="shutdown")"shutdown"else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
       else e.request
-    val admission=Set("loadInitial","prepareCandidate","initialize","ordinary","ordered","snapshot","shutdown").contains(e.name)
-    val selected=if(admission){...r,deadline:dueFor(time,limits),bytes:bytes}else r
+    val admission=Set("loadInitial","prepareCandidate","initialize","ordinary","ordered","snapshot","shutdown","terminal").contains(e.name)
+    val selected=if(admission){...r,deadline:dueFor(time,limits),bytes:bytes,retire:e.name=="terminal"}else r
     val original={...e,request:selected,observed:observed}
-    val expired=expireCompatible(c.host,time)
-    val following=handleCompatible({...c,host:{...expired,effects:List()},limits:if(admission)c.limits.put(selected.id,limits)else c.limits,selected:limits},original)
+    val expired=expireCompatible(projectedHost(c),time)
+    val following=handleCompatible({...c,held:expired.snapshot,host:{...expired,snapshot:emptyRequest,effects:List()},limits:if(admission)c.limits.put(selected.id,limits)else c.limits,selected:limits},original)
     {...following,host:{...following.host,input:original,effects:expired.effects.concat(following.host.effects),lastAction:if(e.name=="timer" and expired.effects.length()>0)expired.lastAction else following.host.lastAction}}
   }
   pure def canAdmit(c: CompatibleState,name: str,limits: Limits,bytes: int): bool = {
@@ -437,10 +459,10 @@ module compatibleLifecycle {
     and {
       not(h.disposed),not(h.frozen),limits.deadline>=1,limits.deadline<=250,limits.output>=1,limits.output<=65536,
       limits.enclosing==0 or limits.enclosing>h.clock,
-      if(Set("ordinary","ordered","snapshot","shutdown").contains(name))h.activeWorker!=0 and h.initializedWorkers.contains(h.activeWorker)else true,
+      if(Set("ordinary","ordered","snapshot","shutdown","terminal").contains(name))h.activeWorker!=0 and h.initializedWorkers.contains(h.activeWorker)else true,
       bytes>=0,bytes<=262144,
       if(name=="ordered")population.length()<256 and population.foldl(0,(total,r)=>total+r.bytes)+bytes<=4194304
-      else if(name=="ordinary" or name=="shutdown" or (name=="snapshot" and not(hasSnapshot)))h.ordinary.length()<4
+      else if(name=="ordinary" or name=="shutdown" or name=="terminal" or (name=="snapshot" and not(hasSnapshot)))h.ordinary.length()<4
       else true,
     }
   }
@@ -500,7 +522,7 @@ module compatibleLifecycle {
     val following=if(r.phase=="allocate-descriptor")"allocate-input" else if(r.phase=="allocate-input")r.operation else if(r.phase=="process")"free" else ""
     all {r.worker!=0,following!="",compatiblePhase(following,compatibleState.host.clock+1)}
   }
-  action compatibleStep = any {compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
+  action compatibleStep = any {compatibleSubmit("terminal",defaultLimits,1),compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
   val selectedSingleSettlement = compatibleState.host.deliveries.foldl(Set(),(seen,id)=>seen.union(Set(id))).size()==compatibleState.host.deliveries.length()
   pure def admissionPosition(c: CompatibleState,id: int): int = c.admitted.foldl({next:1,found:0},(p,current)=>{next:p.next+1,found:if(current==id)p.next else p.found}).found
   val mixedFifoOrdered = compatibleState.host.ordinary.foldl({ok:true,last:0},(p,r)=>{
@@ -537,5 +559,8 @@ module compatibleLifecycle {
   val sawRefusalAfterExpiry = hasEffect(compatibleState.host.effects,"refused") and hasEffect(compatibleState.host.effects,"settleTimedOut")
   val sawInclusiveHeadExpiry = compatibleState.host.disposed and compatibleState.host.effects.foldl(false,(found,fx)=>found or (fx.kind=="settleTimedOut" and fx.outcome=="TimedOut" and not(fx.dispatched)))
   val sawFrozenCommitExpiryRefused = compatibleState.host.input.name=="frozenCommit" and compatibleState.host.frozen and compatibleState.host.candidateReady and compatibleState.host.activeWorker==0 and hasEffect(compatibleState.host.effects,"settleTimedOut")
-  val compatibilitySafe = and {compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
+  val sawTerminalAdmission = compatibleState.host.current.retire or compatibleState.host.ordinary.select(r=>r.retire).length()>0
+  val sawTerminalRetirement = compatibleState.host.disposed and compatibleState.host.lastAction=="retireSession"
+  val selectedDisposedHasNoDispatch = not(compatibleState.host.disposed) or compatibleState.host.effects.select(fx=>fx.kind=="post" or fx.kind=="armTimer").length()==0
+  val compatibilitySafe = and {selectedDisposedHasNoDispatch,compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
 }

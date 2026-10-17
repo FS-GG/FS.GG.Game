@@ -11,6 +11,32 @@ module compatibleQualification {
     if(stage==0)compatibleLoad else if(stage==1)compatibleCompiled
     else if(stage==2)compatibleInitialize(1,{deadline:10,output:44,enclosing:0})
     else compatibleInitialized(1)
+  // Active snapshot -> terminal Process -> held snapshot / followers, with
+  // initialized candidate alive. No work following the terminal may dispatch.
+  action terminalHeldStep = all {stage'=stage+1,
+    if(stage<4)prefix else if(stage==4)compatibleSubmit("snapshot",roomy,1)
+    else if(stage==5)compatibleSubmit("terminal",roomy,2)
+    else if(stage==6)compatibleSubmit("snapshot",roomy,3)
+    else if(stage==7)compatibleSubmit("ordered",roomy,4)
+    else if(stage==8)compatiblePrepare else if(stage==9)compatibleCompiled
+    else if(stage==10)compatibleInitialize(2,roomy) else if(stage==11)compatibleInitialized(2)
+    else if(stage==12)compatibleValidate else if(stage==13)compatibleComplete(1)
+    else if(stage==14)compatibleComplete(2) else compatibleDispose,
+  }
+  action terminalFollowersStep = all {stage'=stage+1,
+    if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,1)
+    else if(stage==5 or stage==6)compatibleSubmit("terminal",roomy,2)
+    else if(stage==7)compatibleSubmit("shutdown",roomy,0)
+    else if(stage==8)compatibleComplete(1) else if(stage==9)compatibleComplete(2)
+    else compatibleDispose,
+  }
+  action terminalExpiryStep = all {stage'=stage+1,
+    if(stage<4)prefix else if(stage==4)compatibleSubmit("terminal",small,1)
+    else if(stage==5)compatibleSubmit("snapshot",roomy,2)
+    else if(stage==6)compatibleSubmit("snapshot",roomy,3)
+    else if(stage==7)compatiblePrepare else if(stage==8)compatibleTimer(6)
+    else compatibleDispose,
+  }
   action fifoStep = all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,1)
     else if(stage==5)compatibleSubmit("ordered",small,2)
@@ -110,4 +136,17 @@ module compatibleQualificationTest {
     })
   run enclosingBudgetRefusesFurtherWorkTest = initCompatible.then(readyCompatible).then(compatibleTimer(7))
     .expect(not(canAdmit(compatibleState,"ordinary",{deadline:10,output:44,enclosing:7},1)))
+  run terminalRetiresBeforeHeldCanPostTest = initCompatible.then(readyCompatible)
+    .then(compatibleSubmit("snapshot",defaultLimits,1))
+    .then(compatibleSubmit("terminal",defaultLimits,2))
+    .then(compatibleSubmit("snapshot",defaultLimits,3))
+    .then(compatibleComplete(1)).then(compatibleComplete(2))
+    .expect(and {compatibleState.host.disposed,completeDisposal,selectedSingleSettlement,selectedDisposedHasNoDispatch})
+  run terminalTimeoutClearsHeldAndCandidateTest = initCompatible.then(readyCompatible)
+    .then(compatibleSubmit("terminal",{deadline:5,output:64,enclosing:0},1))
+    .then(compatibleSubmit("snapshot",defaultLimits,2))
+    .then(compatibleSubmit("snapshot",defaultLimits,3))
+    .then(compatiblePrepare).then(compatibleTimer(6))
+    .expect(and {compatibleState.host.disposed,completeDisposal,selectedSingleSettlement,selectedDisposedHasNoDispatch})
+
 }

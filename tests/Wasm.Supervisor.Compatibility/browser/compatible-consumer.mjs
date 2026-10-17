@@ -4,14 +4,15 @@ async function session(initialization=44,initDeadline=250){
   const artifact=new Uint8Array(await(await fetch('./limits-guest.wasm')).arrayBuffer());
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',artifact)),x=>x.toString(16).padStart(2,'0')).join('');
   const transport=createHostTransport(new URL('./_content/FS.GG.Wasm.Browser/',import.meta.url));
-  const waiting=new Map(),results=[],posts=[];let workers=0;
+  const waiting=new Map(),results=[],posts=[],terminations=[],deliveryStates=[];let workers=0,host;
+  const terminate=transport.TerminateWorker;transport.TerminateWorker=name=>{terminations.push(name);terminate(name);};
   const create=transport.CreateWorker;transport.CreateWorker=(...args)=>{workers++;create(...args);};
   const post=transport.PostCommand;transport.PostCommand=(name,command)=>{posts.push({name,request:command.Identity.Request,kind:command.Kind});post(name,command);};
-  const host=bridge.create(digest,transport,result=>{results.push({...result,Output:Array.from(result.Output)});waiting.get(result.Request)?.(result);waiting.delete(result.Request);});
+  host=bridge.create(digest,transport,result=>{deliveryStates.push({request:result.Request,disposed:bridge.projection(host).Disposed,terminations:[...terminations]});results.push({...result,Output:Array.from(result.Output)});waiting.get(result.Request)?.(result);waiting.delete(result.Request);});
   const send=(id,call)=>new Promise((resolve,reject)=>{waiting.set(String(id),resolve);try{call(transport.Now());}catch(error){waiting.delete(String(id));reject(error);}});
   const loaded=await send(1,now=>bridge.load(host,now,'active',1n,1n,digest,artifact,250));
   const initialized=await send(2,now=>bridge.initialize(host,now,'active',2n,1n,new Uint8Array([initialization]),initDeadline,44));
-  return {host,transport,send,results,posts,digest,artifact,loaded,initialized,workers:()=>workers,dispose:()=>bridge.dispose(host,transport.Now())};
+  return {host,transport,send,results,posts,terminations,deliveryStates,digest,artifact,loaded,initialized,workers:()=>workers,dispose:()=>bridge.dispose(host,transport.Now())};
 }
 window.runLimits=async overcap=>{
   const s=await session();try{
@@ -54,5 +55,26 @@ window.runEnclosingDeadline=async()=>{
  const s=await session();try{
   const result=await s.send(3,now=>bridge.invoke(s.host,now,'active',3n,1n,0,new Uint8Array([255]),250,64,now+10n));
   return {state:result.State,output:Array.from(result.Output),active:bridge.projection(s.host).ActiveWorker};
+ }finally{s.dispose();}
+};
+
+window.runTerminalHeld = async () => {
+ const s=await session();try{
+  await s.send(7,now=>bridge.candidate(s.host,now,'candidate',7n,2n,s.digest,s.artifact));
+  await s.send(8,now=>bridge.initialize(s.host,now,'candidate',8n,2n,new Uint8Array([44]),250,44));
+  bridge.validate(s.host,s.transport.Now());
+  const first=s.send(3,now=>bridge.invoke(s.host,now,'active',3n,1n,2,new Uint8Array([60]),250,64,undefined));
+  const reset=s.send(4,now=>bridge.invokeAndRetire(s.host,now,'active',4n,1n,new Uint8Array([61]),250,64,undefined));
+  const held=s.send(5,now=>bridge.invoke(s.host,now,'active',5n,1n,2,new Uint8Array([62]),250,64,undefined));
+  const repeated=s.send(6,now=>bridge.invokeAndRetire(s.host,now,'active',6n,1n,new Uint8Array([63]),250,64,undefined));
+  const [a,r,h,f]=await Promise.all([first,reset,held,repeated]);
+  return {first:a.State,reset:r.State,output:Array.from(r.Output),followers:[h,f].map(x=>({state:x.State,dispatched:x.Dispatched,reason:x.Reason})),posts:s.posts.filter(x=>x.kind==='process').map(x=>x.request),delivery:s.deliveryStates.find(x=>x.request==='4'),deliveries:s.results.map(x=>x.Request),disposed:bridge.projection(s.host).Disposed};
+ }finally{s.dispose();}
+};
+window.runTerminalTimeout = async () => {
+ const s=await session();try{
+  await s.send(7,now=>bridge.candidate(s.host,now,'candidate',7n,2n,s.digest,s.artifact));
+  const result=await s.send(3,now=>bridge.invokeAndRetire(s.host,now,'active',3n,1n,new Uint8Array([255]),5,64,undefined));
+  return {state:result.State,output:Array.from(result.Output),delivery:s.deliveryStates.find(x=>x.request==='3'),disposed:bridge.projection(s.host).Disposed};
  }finally{s.dispose();}
 };

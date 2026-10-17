@@ -3,6 +3,8 @@ open Wasm.Lifecycle.Correspondence.GeneratedTraces
 open Wasm.Lifecycle.Correspondence.InstalledHostControls
 [<EntryPoint>]
 let main _ =
+    terminalRetirementControls (Wasm.Lifecycle.Correspondence.Correspondence.settings FS.GG.Wasm.Contracts.Sc2ImportedStrict)
+    terminalRetirementControls (Wasm.Lifecycle.Correspondence.Correspondence.settings FS.GG.Wasm.Contracts.BarProtected)
     let failures = traces |> List.collect(fun trace -> replayFacade false trace @ replayFacade true trace)
     let regression=traces |> List.find(fun trace -> trace.Name="pending-initialize-commit")
     for name,detected in nestedCallbackMutationsAreDetected regression do

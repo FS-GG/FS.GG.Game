@@ -243,6 +243,8 @@ type LimitedRequest =
     | LimitedCandidate of identity: HostIdentity * transaction: string * expectedActiveGeneration: uint64 option * configuration: ValidatedConfiguration * artifact: byte array
     | LimitedInitialize of identity: HostIdentity * input: byte array
     | LimitedInvoke of identity: HostIdentity * submission: SubmissionClass * input: byte array
+    /// Execute ordinary ProcessGuest, then retire the complete session before publishing its actual result.
+    | LimitedInvokeAndRetire of identity: HostIdentity * input: byte array
     | LimitedShutdown of identity: HostIdentity
 
 type RequestAdmissionIssue =
@@ -262,6 +264,7 @@ type HostInput =
     | LoadRequested of identity: HostIdentity * intent: LoadIntent * artifact: byte array
     | InitializeRequested of identity: HostIdentity * input: byte array
     | InvocationRequested of identity: HostIdentity * submission: SubmissionClass * input: byte array
+    | InvocationAndRetirementRequested of identity: HostIdentity * input: byte array
     | ShutdownRequested of identity: HostIdentity
     | CandidateValidated of transaction: string * candidateGeneration: uint64
     | CandidateCommitRequested of transaction: string * expectedActiveGeneration: uint64 * candidateGeneration: uint64

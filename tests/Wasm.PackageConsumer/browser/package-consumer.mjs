@@ -4,7 +4,9 @@ const bytes = async name => new Uint8Array(await (await fetch(`./modules/${name}
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", value)), byte => byte.toString(16).padStart(2, "0")).join("");
 async function session(artifact, prefix, outputCap = 65536, deadline = 250, inject = false) {
   const transport = createHostTransport(new URL("./_content/FS.GG.Wasm.Browser/", import.meta.url));
-  const waiting = new Map(), results = [], posts=[];
+  const waiting = new Map(), results = [], posts=[], terminations=[], deliveryStates=[];
+  const terminate=transport.TerminateWorker;
+  transport.TerminateWorker=name=>{terminations.push(name);terminate(name);};
   let ignored=0, host;
   const create=transport.CreateWorker;
   transport.CreateWorker=(name,receive)=>create(name,wire=>{
@@ -21,6 +23,7 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
   const post=transport.PostCommand;
   transport.PostCommand=(name,command)=>{posts.push({name,Kind:command.Kind,request:command.Identity.Request});post(name,command);};
   host = bridge.createHost(prefix === "barc" ? "bar-protected" : "sc2-imported-strict", await digest(artifact), outputCap, deadline, transport, result => {
+    deliveryStates.push({request:result.Request,projection:bridge.project(host),terminations:[...terminations]});
     results.push(result); const pending = waiting.get(result.Request); waiting.delete(result.Request); pending?.(result);
   });
   let request = 0;
@@ -28,7 +31,7 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
     const id = String(++request), identity = {WorkerInstance: owner, Request: id, Generation: generation};
     return new Promise(resolve => { waiting.set(id, resolve); bridge[method](host, transport.Now(), identity, value); });
   };
-  return { host, send, results, posts, transport,
+  return { host, send, results, posts, terminations, deliveryStates, transport,
     ignored:()=>ignored,
     prepare:async (artifact, transaction)=>{
       const hash=await digest(artifact), id=String(++request), identity={WorkerInstance:"candidate-worker",Request:id,Generation:"2"};
@@ -130,4 +133,33 @@ window.runCandidate = async () => {
     const result=await current.send("invoke",new Uint8Array([1]),"candidate-worker","2");
     return {loaded,initialized,wrongReady,frozenActive,before,oldResult,result,after:current.projection()};
   } finally {current.dispose();}
+};
+
+// Installed package, real Worker, unchanged ProcessGuest ABI. Transport records
+// observations only; retirement decisions remain entirely in the F# producer.
+window.runTerminalProcess = async (mode=18, follower="invokeAndRetire") => {
+  const artifact=await bytes("rust-sc2.wasm"), s=await session(artifact,"sc2c");
+  try {
+    await s.send("load",artifact);await s.send("initialize",new Uint8Array([mode]));
+    const candidate=await s.prepare(artifact,"terminal-candidate");
+    if(candidate.State!=="succeeded")throw new Error("candidate preparation failed");
+    const active=s.send("invoke",new Uint8Array([1]));
+    const reset=s.send("invokeAndRetire",new Uint8Array([2]));
+    const following=s.send(follower,new Uint8Array([3]));
+    const [a,r,f]=await Promise.all([active,reset,following]);
+    const retirement=s.deliveryStates.find(item=>item.request===r.Request);
+    return {active:a,reset:r,follower:f,posts:s.posts.filter(item=>item.Kind==="process"||item.Kind==="shutdown").map(item=>({request:item.request,kind:item.Kind})),retirement,deliveries:s.results.map(item=>item.Request),projection:s.projection()};
+  }finally{s.dispose();}
+};
+
+window.runTerminalRaw = async mode => {
+  const artifact=await bytes("control-ordinary.wasm"),s=await session(artifact,"sc2c");
+  try {
+    await s.send("load",artifact);await s.send("initialize",new Uint8Array([mode]));
+    await s.prepare(artifact,"terminal-candidate");
+    const reset=s.send("invokeAndRetire",new Uint8Array([1]));
+    const follower=s.send("shutdown");
+    const [r,f]=await Promise.all([reset,follower]);
+    return {reset:r,follower:f,posts:s.posts.filter(x=>x.Kind==="process"||x.Kind==="shutdown").map(x=>x.Kind),retirement:s.deliveryStates.find(x=>x.request===r.Request)};
+  }finally{s.dispose();}
 };

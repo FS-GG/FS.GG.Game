@@ -30,6 +30,19 @@ module eventBoundaryQualification {
       eventAtTime(input(kind,r,r.worker,if(kind=="phase")"instantiate" else ""),r.deadline+offset)
     }else dispose,
   }
+  action terminalStep(kind: str,offset: int): bool = all {
+    stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
+    else if(stage==4)submitTerminal else if(stage==5)submitOrdinary
+    else if(stage==6)prepareCandidate
+    else if(stage==7)eventAtTime(input(kind,state.current,state.current.worker,""),state.current.deadline+offset)
+    else dispose,
+  }
+  action terminalBefore = terminalStep("complete",-1)
+  action terminalAt = terminalStep("complete",0)
+  action terminalAfter = terminalStep("complete",1)
+  action terminalRejected = terminalStep("rejectedTermination",-1)
+  action terminalCleanup = terminalStep("cleanupFault",-1)
   action disposeBefore = boundaryStep("dispose",-1)
   action disposeAt = boundaryStep("dispose",0)
   action disposeAfter = boundaryStep("dispose",1)

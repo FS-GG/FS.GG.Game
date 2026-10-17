@@ -125,3 +125,26 @@ test("unsafe output after guest rejection preserves status and removes dead Work
   expect(Array.from(value.result.Output)).toEqual([]);
   expect(value.active).toBe("");
 });
+
+for(const follower of ["invokeAndRetire","shutdown"])test(`terminal Process retires actual package Workers before result and ${follower}`,async({page})=>{
+ const value=await page.evaluate(follower=>window.runTerminalProcess(18,follower),follower);
+ expect(value.reset).toMatchObject({State:"succeeded",Phase:"Process",Dispatched:true});
+ expect(Array.from(value.reset.Output)).toEqual([83,67,50,51]);
+ expect(value.posts.map(item=>item.kind)).toEqual(["process","process"]);
+ expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Reason:"HostDisposed"});
+ expect(value.retirement.projection).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
+ expect(new Set(value.retirement.terminations)).toEqual(new Set(["installed-worker","candidate-worker"]));
+ expect(value.deliveries.indexOf(value.follower.Request)).toBeLessThan(value.deliveries.indexOf(value.reset.Request));
+ expect(new Set(value.deliveries).size).toBe(value.deliveries.length);
+});
+
+for(const [mode,state,status] of [[18,"succeeded",0],[19,"rejected",92],[16,"faulted",0],[17,"faulted",0],[11,"timeout",0]])
+test(`terminal Process preserves actual installed ABI and cleanup evidence mode ${mode}`,async({page})=>{
+ const r=await page.evaluate(mode=>window.runTerminalRaw(mode),mode);
+ expect(r.reset).toMatchObject({State:state,GuestStatus:status,Dispatched:true});
+ if(mode===16||mode===17)expect(r.reset.CleanupDiagnostic).toContain("unreachable");
+ expect(r.posts).toEqual(["process"]);
+ expect(r.retirement.projection).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
+ expect(new Set(r.retirement.terminations)).toEqual(new Set(["installed-worker","candidate-worker"]));
+ expect(r.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Reason:"HostDisposed"});
+});

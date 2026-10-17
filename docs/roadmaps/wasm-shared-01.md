@@ -5,6 +5,49 @@ genuine published producer4afacb501b9371b4cc81494b7bf91b46c880a663,
 Contracts/Browser/SDK0.2.0. Genuine prior publication and both-feed installed
 qualification37047631080 remain historical CLOSED for their tested scope.
 
+## S1-discovered terminal Process correction — existing .5-P2 → .5-S1
+
+The original 0.3.0 H3 publication and H4/.5-P2 installed qualification remain
+accepted for their tested scope (shared foundation evidence, `.github` PR4485,
+run37191263989). S1's complete-supervisor-API inventory adds one corrective
+assertion: a reset executes its supplied ordinary Process payload and retires the
+complete session before the next dispatch or public completion. This is remaining
+work under WASM-SHARED-01/.5-P2 feeding S1, without reopening those original receipts.
+
+`LimitedInvokeAndRetire(identity,input)` uses the existing `SubmitLimited` request
+limits and unchanged `ProcessGuest(Ordinary,input)` Worker ABI. An immutable flag
+on the admitted request selects session retirement on its matching terminal result,
+including rejected ABI status, trap, timeout, worker loss and cleanup failure.
+The reducer clears active/candidate/retiring/controls/queues/held state before effects;
+workers, timers and followers retire before publishing the preserved actual result.
+Queued cancellation, invalid-limit refusal, ordinary admission ceilings and captured
+composite deadlines retain their existing behavior. BAR normal invocation/shutdown
+and SC2 normal ordinary/ordered/snapshot/replacement paths retain their selected behavior.
+Product F# still owns closing/reset state and queue-overflow result mapping.
+
+- [ ] Independently review the exact producer correction, canonical model and
+  prepared focused reducer/facade/installed-browser qualification sources.
+- [ ] Under separately admitted resources, typecheck/run the canonical model and
+  existing boundary/expiry/compatible witnesses, regenerate authentic traces, and
+  execute source .NET/Fable correspondence plus both facades and causal mutations.
+- [ ] Execute real installed Worker qualification for terminal success/rejection,
+  traps/cleanup/timeouts, repeated terminal followers, held snapshots and candidate
+  retirement; preserve exact ABI evidence and retirement-before-result ordering.
+- [ ] Deliver reviewed source with relevant checks and required coherent CI through
+  the existing canonical owner route, which programme ownership must reconcile.
+- [ ] Select and qualify an unused coherent successor version, then separately
+  authorize publication and verify fresh both-feed installed readback before an S1
+  consumer pin. Published 0.3.0 does not expose this new capability.
+
+Current boundary: source preparation only. Model execution, trace regeneration,
+CLR/Fable/browser/Worker execution, SDK restore/build/pack, remote source delivery,
+publication and installed acceptance have not run for this correction. Committed
+pre-existing generated traces remain historical until the maintained generators run;
+new required mutation checks intentionally depend on those regenerated fixtures.
+The owning shared foundation S1/final .5-P2 contract remains the integration authority.
+No runtime shim, JavaScript queue, transport freeze hook or new guest ABI is selected.
+
+
 ## Event boundary model correction
 
 - [x] Select documented universal pre-event expiry; keep published runtime unchanged.

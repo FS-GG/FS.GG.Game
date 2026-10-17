@@ -100,3 +100,79 @@ let nestedCallbackMutationsAreDetected (trace:ModelTrace) =
           match step.ConnectedEffects with
           | first::second::third::rest -> {step with ConnectedEffects=first::third::second::rest}
           | _ -> step) ]
+
+// Runs against both public facades (and the installed package build). Transport
+// is inert: this checks real reducer/effect/callback ordering without guest code.
+let terminalRetirementControls selectedSettings =
+    let require condition message = if not condition then failwith ("terminal retirement: " + message)
+    let unwrap = function Ok value -> value | Error issues -> failwithf "%A" issues
+    let identity request = { WorkerInstance = "terminal-worker"; Request = request; Generation = 1UL }
+    let correlation (id:HostIdentity) = OperationToken.create $"request-{id.Generation}-{id.Request}" |> unwrap
+    let outcome phase id = { Identity=id; Phase=phase; State=Succeeded; Dispatch=Dispatched; CleanupFault=None; CopiedOutput=Array.empty; EffectEligibility=ProductAdapterMustDecide }
+    let limits = { MaximumDeadlineMilliseconds=100; MaximumOutputBytes=64; EnclosingDeadlineMilliseconds=None }
+    for connected in [false;true] do
+        for rejected in [false;true] do
+            let mutable host:Host option=None
+            let mutable mechanics=[]
+            let mutable results:BrowserResult list=[]
+            let mutable reentered=false
+            let mutable completed=false
+            let reset=identity 3UL
+            let follower=identity 4UL
+            let fresh=identity 5UL
+            let record value = mechanics <- mechanics @ [value]
+            let settle result =
+                results <- results @ [result]
+                if result.Identity=reset then
+                    require host.Value.Projection.Disposed "disposed state must precede callback"
+                    require (mechanics |> List.contains "terminate") "worker retired before result"
+                    completed <- true
+                    let admission=host.Value.SubmitLimited(2L,LimitedInvoke(fresh,Ordinary,[|9uy|]),limits)
+                    require (admission=Error[RequestRefused HostDisposed]) "callback reentry refused"
+                    reentered <- true
+            let transport:HostTransport =
+                { Now=(fun () -> 2L)
+                  CreateWorker=(fun _ _ -> ())
+                  PostCommand=(fun _ command -> record ("post:"+command.Kind))
+                  TerminateWorker=(fun _ -> record "terminate")
+                  ArmTimer=(fun _ _ _ -> record "arm")
+                  CancelTimer=(fun _ -> record "cancel") }
+            let interpret effects =
+                for effect in effects do
+                    match effect with
+                    | Settle result -> settle result
+                    | TerminateWorker _ -> record "terminate"
+                    | PostToWorker(_,command) -> record (match command.Operation with ProcessGuest _ -> "post:process" | _ -> "post:other")
+                    | ArmTimer _ -> record "arm"
+                    | CancelTimer _ -> record "cancel"
+                    | _ -> ()
+            let value = if connected then Host.CreateConnected(selectedSettings,transport,settle) else Host.Create(selectedSettings,interpret)
+            host <- Some (value |> unwrap)
+            let h=host.Value
+            let load=identity 1UL
+            let initialize=identity 2UL
+            h.Load(0L,load,[|0uy|])
+            let version=if (Validation.descriptor (HostSettings.configuration selectedSettings)).Path=BarProtected then 1u else 0x10000u
+            h.Observe(0L,load.WorkerInstance,AbiVersionObserved(load,correlation load,version))
+            h.Initialize(0L,initialize,[|1uy|])
+            h.Observe(0L,initialize.WorkerInstance,InvocationObserved(outcome Initialize initialize,correlation initialize))
+            mechanics <- [];results <- []
+            h.SubmitLimited(0L,LimitedInvokeAndRetire(reset,[|8uy|]),limits) |> unwrap
+            // BAR retains its single-pending refusal; SC2 queues this follower.
+            let sc2=(Validation.descriptor (HostSettings.configuration selectedSettings)).Path=Sc2ImportedStrict
+            if sc2 then h.SubmitLimited(0L,LimitedInvokeAndRetire(follower,[|7uy|]),limits) |> unwrap
+            let actual={ outcome Process reset with State=if rejected then GuestRejected 27 else Succeeded; CopiedOutput=[|4uy;5uy|] }
+            h.Observe(1L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
+            require completed "terminal completion delivered"
+            require reentered "synchronous callback attempted reentry"
+            require ((results |> List.find(fun result -> result.Identity=reset)).Outcome=Some actual) "raw ABI evidence preserved"
+            require ((mechanics |> List.filter(fun item -> item="post:process")).Length=1) "no precomputed following post survives"
+            require ((mechanics |> List.filter(fun item -> item="arm")).Length=1) "no timer armed after retirement"
+            if sc2 then
+                let followerIndex=results |> List.findIndex(fun result -> result.Identity=follower)
+                let resetIndex=results |> List.findIndex(fun result -> result.Identity=reset)
+                require (followerIndex<resetIndex) "queued terminal follower settles before reset"
+            let before=results.Length
+            h.Observe(2L,reset.WorkerInstance,InvocationObserved(actual,correlation reset))
+            h.Dispose(2L)
+            require (results.Length=before) "duplicates and repeated disposal settle nothing twice"

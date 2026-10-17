@@ -113,6 +113,12 @@ let initialize (host: Host) now wire input =
 let invoke (host: Host) now wire input =
     host.Invoke(now, identity wire, Ordinary, input)
 
+let invokeAndRetire (host: Host) now wire input =
+    host.SubmitLimited(now, LimitedInvokeAndRetire(identity wire, input),
+        { MaximumDeadlineMilliseconds = 250
+          MaximumOutputBytes = 65536
+          EnclosingDeadlineMilliseconds = None }) |> unwrap
+
 let shutdown (host: Host) now wire = host.Shutdown(now, identity wire)
 let dispose (host: Host) now = host.Dispose now
 

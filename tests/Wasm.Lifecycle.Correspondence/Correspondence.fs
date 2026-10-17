@@ -86,6 +86,7 @@ let eventFor (previous: ModelStep) (target: ModelStep) =
         | "ordinary" | "ordered" | "snapshot" ->
             let submission = match original.Name with "ordered" -> OrderedEvent | "snapshot" -> ReplaceableSnapshot | _ -> Ordinary
             InvocationRequested(id, submission, Array.zeroCreate request.Bytes)
+        | "terminal" -> InvocationAndRetirementRequested(id, Array.zeroCreate request.Bytes)
         | "shutdown" -> ShutdownRequested id
         | "candidateValidated" -> CandidateValidated(prior.CandidateTransaction, prior.CandidateGeneration)
         | "commitCandidate" -> CandidateCommitRequested(prior.CandidateTransaction, prior.ActiveGeneration, prior.CandidateGeneration)

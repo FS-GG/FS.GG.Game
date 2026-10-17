@@ -202,6 +202,7 @@ let workerLimits () = async {
 }
 [<EntryPoint>]
 let main _ =
+    Wasm.Lifecycle.Correspondence.InstalledHostControls.terminalRetirementControls (CompatibilityCorrespondence.selectedSettings())
     runSynchronous()
     let defaultFailures=Wasm.Lifecycle.Correspondence.GeneratedTraces.traces |> List.collect(fun trace ->
         Wasm.Lifecycle.Correspondence.InstalledHostControls.replayFacade false trace @ Wasm.Lifecycle.Correspondence.InstalledHostControls.replayFacade true trace)
@@ -210,7 +211,7 @@ let main _ =
     let correspondenceFailures=GeneratedCompatibilityTraces.traces |> List.collect CompatibilityCorrespondence.replay
     if not correspondenceFailures.IsEmpty then failwithf "%s" (String.concat "\n" correspondenceFailures)
     let detected=GeneratedCompatibilityTraces.traces |> List.filter(fun trace->trace.Name<>"capacity") |> List.collect CompatibilityCorrespondence.causalMutationsAreDetected
-    for name in ["loaded-deadline-retained";"output-narrowing-ignored";"next-budget-overwritten";"ordinary-priority";"ordinary-bytes-omitted";"held-deadline-started-early";"snapshot-promoted-before-pump";"individual-head-expiry";"retained-frozen-queues";"temporary-resume-commit";"cleared-recovery-token";"discarded-refusal-expiry-effects";"discarded-frozen-commit-expiry-effects"] do
+    for name in ["lost-terminal-flag";"dispatch-before-retire";"active-only-retirement";"held-snapshot-resurrection";"terminal-result-dropped";"loaded-deadline-retained";"output-narrowing-ignored";"next-budget-overwritten";"ordinary-priority";"ordinary-bytes-omitted";"held-deadline-started-early";"snapshot-promoted-before-pump";"individual-head-expiry";"retained-frozen-queues";"temporary-resume-commit";"cleared-recovery-token";"discarded-refusal-expiry-effects";"discarded-frozen-commit-expiry-effects"] do
         check (detected |> List.exists(fun (control,refused)->control=name && refused)) ("causal model mutation accepted: "+name)
     printfn "selected canonical correspondence: all full pure/connected states, ordered mechanical effects, callbacks, raw terminals and captured command limits PASS"
     #if FABLE_COMPILER

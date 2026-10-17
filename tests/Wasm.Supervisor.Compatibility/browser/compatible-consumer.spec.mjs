@@ -22,3 +22,19 @@ for(const initialize of [true,false])test(`selected ${initialize?'10 ms initiali
 test('absolute enclosing deadline contains a looping guest within a larger selected request ceiling',async({page})=>{
  const r=await page.evaluate(()=>window.runEnclosingDeadline());expect(r).toEqual({state:'TimedOut',output:[],active:''});
 });
+
+test('terminal Process retires initialized candidate, promoted held snapshot and repeated reset before callback',async({page})=>{
+ const r=await page.evaluate(()=>window.runTerminalHeld());
+ expect(r).toMatchObject({first:'Succeeded',reset:'Succeeded',disposed:true,posts:['3','4']});
+ expect(r.output).toHaveLength(61);
+ expect(r.followers.every(x=>x.state==='None'&&!x.dispatched&&x.reason.includes('HostDisposed'))).toBe(true);
+ expect(r.delivery.disposed).toBe(true);expect(new Set(r.delivery.terminations)).toEqual(new Set(['active','candidate']));
+ expect(r.deliveries.indexOf('5')).toBeLessThan(r.deliveries.indexOf('4'));
+ expect(r.deliveries.indexOf('6')).toBeLessThan(r.deliveries.indexOf('4'));
+ expect(new Set(r.deliveries).size).toBe(r.deliveries.length);
+});
+test('terminal Process timeout retires whole installed session before actual timeout callback',async({page})=>{
+ const r=await page.evaluate(()=>window.runTerminalTimeout());
+ expect(r).toMatchObject({state:'TimedOut',output:[],disposed:true,delivery:{disposed:true}});
+ expect(new Set(r.delivery.terminations)).toEqual(new Set(['active','candidate']));
+});
