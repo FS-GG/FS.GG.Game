@@ -137,6 +137,7 @@ module callbackClosureTest {
       not(currentResultsHaveAuthority({...completed,effects:List({...result,generation:result.generation+1})})),
       not(currentResultsHaveAuthority({...completed,input:{...completed.input,request:{...completed.input.request,id:result.request+1}}})),
       not(currentResultsHaveAuthority({...completed,input:{...completed.input,name:"timer"}})),
+      not(currentResultsHaveAuthority({...completed,input:{...completed.input,worker:completed.input.worker+1}})),
       not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityWorker:completed.input.authorityWorker+1}})),
       not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityGeneration:completed.input.authorityGeneration+1}})),
       not(currentResultsHaveAuthority({...completed,input:{...completed.input,authorityWorker:0,authorityGeneration:0}})),

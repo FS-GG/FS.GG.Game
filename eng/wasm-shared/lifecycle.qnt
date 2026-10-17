@@ -312,7 +312,7 @@ module lifecycle {
       Set("compiled","initialized","complete").contains(s.input.name),
       s.input.authorityWorker!=0,s.input.authorityGeneration!=0,
       e.request==s.input.request.id,e.worker==s.input.request.worker,e.generation==s.input.request.generation,
-      e.worker==s.input.authorityWorker,e.generation==s.input.authorityGeneration,
+      e.worker==s.input.worker,e.worker==s.input.authorityWorker,e.generation==s.input.authorityGeneration,
     }))
   val staleCannotBeCurrent = currentResultsHaveAuthority(state)
   val candidateHasNoAuthority = state.candidateWorker==0 or state.candidateGeneration!=state.activeGeneration

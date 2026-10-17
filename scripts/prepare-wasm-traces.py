@@ -221,11 +221,13 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
     log = work / 'generation.log'
     remaining_diagnostics = BOUNDS['diagnosticBytes']
     failed_schedule = None
+    failed_evidence_present = any((work / name).exists() or (work / name).is_symlink()
+                                  for name in ('failure-schedule.json', 'counterexample.itf'))
     def retain_failed_evidence():
         nonlocal remaining_diagnostics, failed_schedule
         for name, limit in (('failure-schedule.json', 8192), ('counterexample.itf', 4*MIB)):
             source = work / name
-            if not source.exists():
+            if not source.exists() and not source.is_symlink():
                 continue
             regular(work, name)
             size = source.stat().st_size
@@ -236,9 +238,12 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
                                 'retainedBytes': size, 'omittedBytes': 0})
             remaining_diagnostics -= size
             if name == 'failure-schedule.json':
-                failed_schedule = json.loads(source.read_text())
+                metadata = json.loads(source.read_text())
+                if not isinstance(metadata, dict) or not isinstance(metadata.get('schedule'), str) or not isinstance(metadata.get('argv'), list) or any(not isinstance(value, str) for value in metadata['argv']) or not isinstance(metadata.get('exitCode'), int) or metadata['exitCode'] == 0:
+                    raise ValueError('failed schedule metadata has invalid shape')
+                failed_schedule = metadata
     attempt(retain_failed_evidence)
-    if status == 0 and (failed_schedule is not None or (work / 'counterexample.itf').exists()):
+    if status == 0 and failed_evidence_present:
         errors.append('successful generation unexpectedly left failed-schedule evidence')
     def retain_log():
         if not log.exists():

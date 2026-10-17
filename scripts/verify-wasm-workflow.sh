@@ -221,7 +221,7 @@ with patch.object(m,'git',fake_git):
    except ValueError:pass
    else:raise AssertionError('missing tool admitted')
   assert not output.exists(),'missing prerequisite created execution output'
-  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure','hardlinked-trace','failed-evidence','unexpected-failure-evidence'):
+  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure','hardlinked-trace','failed-evidence','unexpected-failure-evidence','null-failure-evidence','malformed-failure-evidence'):
    output=pathlib.Path(raw)/case
    with patch.object(m.shutil,'which',lambda name:str(inert_tool)):
     m.prepare(root,output,env)
@@ -230,10 +230,12 @@ with patch.object(m,'git',fake_git):
    (output/'work/generation.log').write_text('inert diagnostic\n')
    (output/'work/stages.jsonl').write_text('\n'.join(json.dumps({'generator':name,'exitCode':0}) for name in ('default','compatible'))+'\n')
    status=7 if case in ('failed-generator','primary-and-collection-failure','failed-evidence') else (2 if case=='tool-prerequisite' else 0)
-   if case in ('failed-evidence','unexpected-failure-evidence'):
-    (output/'work/failure-schedule.json').write_text(json.dumps({'schedule':'inert-failed','exitCode':7,'gap':'inert control only'}))
+   if case in ('failed-evidence','unexpected-failure-evidence','null-failure-evidence','malformed-failure-evidence'):
+    (output/'work/failure-schedule.json').write_text(json.dumps({'schedule':'inert-failed','argv':['inert-quint'],'exitCode':7,'gap':'inert control only'}))
     (output/'work/counterexample.itf').write_bytes(b'x'*(4*1024*1024))
     (output/'work/generation.log').write_bytes(b'x'*(5*1024*1024))
+   if case=='null-failure-evidence':(output/'work/failure-schedule.json').write_text('null')
+   if case=='malformed-failure-evidence':(output/'work/failure-schedule.json').write_text('{')
    cleanup='unknown-timeout-or-signal' if case=='unknown-cleanup' else ('not-started' if case=='tool-prerequisite' else 'generator-process-returned')
    if case=='extra-trace':(root/m.DEFAULT/'Traces/unexpected.itf.json').write_bytes(b'extra')
    if case in ('linked-trace','hardlinked-trace'):(root/paths[0]).unlink();(root/paths[0]).symlink_to(root/paths[1])
