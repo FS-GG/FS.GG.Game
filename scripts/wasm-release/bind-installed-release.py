@@ -28,6 +28,8 @@ INSTALLED_PATHS = frozenset({
     'tests/release/wasm/test-installed-evidence.py',
     'scripts/verify-wasm-workflow.sh',
     'docs/roadmaps/wasm-shared-01.md',
+    'docs/atlas/catalog.json',
+    'docs/atlas/records/264a2f7887a9b6473cbc24102e1bf9be70e57f6d7ba224138140efa094d541f4.json',
 })
 
 
