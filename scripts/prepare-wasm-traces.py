@@ -21,6 +21,7 @@ import zipfile
 DEFAULT = 'tests/Wasm.Lifecycle.Correspondence'
 SELECTED = 'tests/Wasm.Supervisor.Compatibility'
 GENERATORS = [DEFAULT + '/regenerate-event-traces.py', SELECTED + '/generate-compatible-traces.py']
+TYPECHECK_INPUTS = ['eng/wasm-shared/event-boundary-qualification.qnt', 'eng/wasm-shared/compatible-qualification.qnt']
 MODEL_INPUTS = ['eng/wasm-shared/lifecycle.qnt', 'eng/wasm-shared/event-boundary-qualification.qnt',
                 'eng/wasm-shared/expiry-qualification.qnt', 'eng/wasm-shared/compatible-qualification.qnt',
                 DEFAULT + '/generate-traces.py', *GENERATORS]
@@ -263,10 +264,18 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
         if path.exists():
             if path.stat().st_size > 4096:
                 raise ValueError('stage metadata exceeds 4 KiB')
-            stages.extend(json.loads(line) for line in path.read_text().splitlines())
-        if status == 0 and ([item.get('generator') for item in stages] != ['default', 'compatible'] or any(item.get('exitCode') != 0 for item in stages)):
-            raise ValueError('both maintained generator successes must be recorded')
+            loaded = [json.loads(line) for line in path.read_text().splitlines()]
+            if any(not isinstance(item, dict) or not isinstance(item.get('exitCode'), int) or (('typecheck' in item) == ('generator' in item)) for item in loaded):
+                raise ValueError('stage metadata has invalid shape')
+            stages.extend(loaded)
+        expected = [('typecheck', model) for model in TYPECHECK_INPUTS] + [('generator', name) for name in ('default', 'compatible')]
+        actual = [('typecheck', item['typecheck']) if 'typecheck' in item else ('generator', item.get('generator')) for item in stages]
+        if status == 0 and (actual != expected or any(item.get('exitCode') != 0 for item in stages)):
+            raise ValueError('both early typechecks and maintained generator successes must be recorded')
     attempt(retain_stages)
+    failed_stage = next((item for item in stages if item.get('exitCode') != 0), None)
+    if status != 0 and failed_stage is not None and 'typecheck' in failed_stage:
+        first_failure = 'typecheck process exited ' + str(status)
     scratch_cleanup = 'not-attempted-uncertain-process-settlement'
     if cleanup in ('generator-process-returned', 'not-started'):
         if attempt(lambda: shutil.rmtree(output / 'work')) is None and not (output / 'work').exists():
@@ -276,13 +285,13 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
     accepted = generation_started and status == 0 and not errors and cleanup == 'generator-process-returned'
     manifest = {'schema': 'fsgg.wasm.trace-preparation/1', **record,
                 'elapsedSeconds': time.monotonic() - record['startedMonotonic'],
-                'commands': [{'argv': ['python3', path], 'seed': 20261002 if index == 0 else 20261003, 'backend': 'typescript'} for index, path in enumerate(GENERATORS)],
+                'commands': [{'argv': ['quint', 'typecheck', model], 'stage': 'typecheck'} for model in TYPECHECK_INPUTS] + [{'argv': ['python3', path], 'seed': 20261002 if index == 0 else 20261003, 'backend': 'typescript', 'quintVerbosity': 1} for index, path in enumerate(GENERATORS)],
                 'generationStarted': generation_started, 'generationExitCode': status if generation_started else None, 'prerequisiteExitCode': status if not generation_started else 0, 'firstFailure': first_failure or (errors[0] if errors else ('cleanup outcome unknown' if not accepted else None)),
-                'collectionErrors': errors, 'cleanup': cleanup, 'scratchCleanup': scratch_cleanup, 'stages': stages,
+                'collectionErrors': errors, 'cleanup': cleanup, 'scratchCleanup': scratch_cleanup, 'stages': stages, 'failedStage': failed_stage,
                 'descendantSettlement': 'not-established; timeout process group and hosted VM teardown only',
                 'toolVersions': versions, 'changedPaths': changed, 'diagnostics': diagnostics,
                 'failedSchedule': failed_schedule,
-                'diagnosticEvidenceGap': ('generator failed without retained schedule metadata; original log only' if generation_started and status != 0 and failed_schedule is None else None),
+                'diagnosticEvidenceGap': ('generator failed without retained schedule metadata; original log only' if generation_started and status != 0 and failed_schedule is None and (failed_stage is None or 'typecheck' not in failed_stage) else None),
                 'fixturePreparationComplete': accepted, 'qualification': False, 'publication': False,
                 'outputs': files if accepted else []}
     artifact = output / 'artifact'
@@ -328,7 +337,7 @@ def collect(root, output, status, versions, cleanup, generation_started=True):
                     'prerequisiteExitCode': status if not generation_started else 0,
                     'sourceTree': record['sourceTree'], 'workflow': record['workflow'],
                     'toolVersions': versions, 'inputs': record['inputs'], 'diagnostics': diagnostics,
-                    'failedSchedule': failed_schedule, 'diagnosticEvidenceGap': manifest['diagnosticEvidenceGap'],
+                    'failedStage': failed_stage, 'failedSchedule': failed_schedule, 'diagnosticEvidenceGap': manifest['diagnosticEvidenceGap'],
                     'firstFailure': manifest['firstFailure'], 'collectionErrors': errors[:16],
                     'cleanup': cleanup, 'scratchCleanup': scratch_cleanup, 'qualification': False},
                     sort_keys=True) + '\n').encode()

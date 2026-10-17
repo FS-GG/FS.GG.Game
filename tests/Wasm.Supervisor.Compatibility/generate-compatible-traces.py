@@ -36,7 +36,7 @@ def main():
  values=[]
  for name,action,count in schedules:
   path=destination/(name+'_0.itf.json')
-  legacy.run_quint_schedule(['quint','run','--backend=typescript','--main=compatibleQualification','--init=initQualification','--step='+action,'--invariant=compatibilitySafe','--max-samples=1','--max-steps='+str(count),'--seed=20261003','--out-itf='+str(path),str(ROOT/'eng/wasm-shared/compatible-qualification.qnt')],name,path)
+  legacy.run_quint_schedule(['quint','run','--verbosity=1','--backend=typescript','--main=compatibleQualification','--init=initQualification','--step='+action,'--invariant=compatibilitySafe','--max-samples=1','--max-steps='+str(count),'--seed=20261003','--out-itf='+str(path),str(ROOT/'eng/wasm-shared/compatible-qualification.qnt')],name,path)
   d=json.loads(path.read_text());d['vars']=sorted(d['vars']);d['#meta'].pop('description',None);d['#meta'].pop('timestamp',None);d['#meta']['source']='eng/wasm-shared/compatible-qualification.qnt';d['#meta']['canonicalSource']='eng/wasm-shared/lifecycle.qnt';path.write_text(json.dumps(d,sort_keys=True,separators=(',',':'))+'\n')
   # Stream gzip emits the portable OS header on Python 3.12 as well as 3.14.
   # gzip.compress(mtime=0) delegates its header to zlib on older runtimes.

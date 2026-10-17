@@ -141,12 +141,12 @@ module compatibleQualificationTest {
     .then(compatibleSubmit("terminal",defaultLimits,2))
     .then(compatibleSubmit("snapshot",defaultLimits,3))
     .then(compatibleComplete(1)).then(compatibleComplete(2))
-    .expect(and {compatibleState.host.disposed,completeDisposal,selectedSingleSettlement,selectedDisposedHasNoDispatch,currentResultsHaveAuthority(compatibleState.host)})
+    .expect(and {compatibleState.host.disposed,completeDisposal,selectedSingleSettlement,selectedDisposedHasNoDispatch,selectedCurrentResultsHaveAuthority})
   run terminalTimeoutClearsHeldAndCandidateTest = initCompatible.then(readyCompatible)
     .then(compatibleSubmit("terminal",{deadline:5,output:64,enclosing:0},1))
     .then(compatibleSubmit("snapshot",defaultLimits,2))
     .then(compatibleSubmit("snapshot",defaultLimits,3))
     .then(compatiblePrepare).then(compatibleTimer(6))
-    .expect(and {compatibleState.host.disposed,completeDisposal,selectedSingleSettlement,selectedDisposedHasNoDispatch,currentResultsHaveAuthority(compatibleState.host)})
+    .expect(and {compatibleState.host.disposed,completeDisposal,selectedSingleSettlement,selectedDisposedHasNoDispatch,selectedCurrentResultsHaveAuthority})
 
 }

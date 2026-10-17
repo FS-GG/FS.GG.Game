@@ -1,5 +1,44 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## Second hosted attempt: selected module scope and early model checks
+
+The new-source preparation [39003742514](https://github.com/FS-GG/FS.GG.Game/actions/runs/39003742514),
+attempt 1 at `75854a55d7a8ee42d52f8b0cd4f664286154506f`, failed separately from
+the original attempt. All 53 default schedules and their F# projection completed
+successfully. The first selected schedule, `terminal-held`, stopped during parsing:
+`QNT404` could not resolve `currentResultsHaveAuthority` in the selected test module.
+No selected simulation ran. Wildcard import of `compatibleLifecycle` does not
+re-export a helper that module imports from `lifecycle`.
+
+Artifact `12090088469`, outer SHA256
+`7f6d080abcc9ec8991c30d00cfd2187a336e452f984951e8242543b6db4dca41`,
+retains exact failed-schedule metadata and the complete 6,730,681-byte generation
+log with zero omitted bytes. No fresh ITF exists for this parse failure; the gap is
+explicit. Collection reported no errors, direct process return and owned scratch
+removal, with full descendant settlement unproven. No partial fixtures or coherent
+qualification are accepted, and neither failed operation grants another dispatch.
+
+The correction exports `selectedCurrentResultsHaveAuthority` as a module-owned
+observation and uses it in selected tests and `compatibilitySafe`. Its predicate,
+production runtime, seeds, sample counts, step bounds and ITF semantics are unchanged.
+Before any schedule simulation, the existing bounded preparation shell typechecks
+the default event-boundary entry (including the canonical lifecycle model) and the
+selected compatibility entry. Both commands share the original 20-minute window;
+ordered stage/status records identify a typecheck refusal before either generator.
+These new commands and the corrected selected module remain unexecuted.
+
+Both generators add `--verbosity=1`, recorded in the actual command log and manifest.
+Quint's pinned [verbosity definitions](https://github.com/informalsystems/quint/blob/v0.32.0/quint/src/verbosity.ts)
+and [simulator path](https://github.com/informalsystems/quint/blob/v0.32.0/quint/src/cliCommands.ts)
+retain result and violated-invariant reporting while suppressing full state dumps;
+the [ITF hook](https://github.com/informalsystems/quint/blob/v0.32.0/quint/src/cliReporting.ts)
+remains independent. The observed default success log was already 6.7 MiB; overflow
+from later selected state dumps is a prospective risk, not an observed failure.
+Fresh failed ITF remains bounded diagnostic evidence, with explicit missing/partial
+gaps and the existing shared diagnostic budget. No new streaming runner or deadline
+is introduced. Static/inert checks and independent source review precede any further
+separately admitted generation or final coherent CI.
+
 ## First hosted terminal trace attempt and model authority correction
 
 The separately admitted trace preparation [39002952646](https://github.com/FS-GG/FS.GG.Game/actions/runs/39002952646),
@@ -25,7 +64,7 @@ worker/generation/request/event rejection without exempting disposed states. Bot
 default and selected event boundaries capture the same provenance; production
 reducer, Host, result classification and Worker ABI are unchanged. Existing selected
 model tests gain prepared terminal, expiry, historical and forged-authority controls;
-these tests and the changed model have not been run.
+those tests and the changed model were initially unexecuted. The second attempt above records later default-schedule execution; prepared mutation tests remain unexecuted.
 
 Both maintained generators reuse one original-call wrapper in the existing projection
 helper. Each scheduled output is removed immediately before its original Quint call,

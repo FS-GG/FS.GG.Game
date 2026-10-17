@@ -547,6 +547,8 @@ module compatibleLifecycle {
   }
   action compatibleRejectTerminalAdapter = all {compatibleState.host.current.worker!=0,compatibleState.host.current.retire,compatibleState.host.current.generation==compatibleState.host.activeGeneration,compatibleEvent(input("adapterRejected",compatibleState.host.current,compatibleState.host.current.worker,""),compatibleState.host.clock,defaultLimits,0)}
   action compatibleStep = any {compatibleRejectTerminalAdapter,compatibleSubmit("terminal",defaultLimits,1),compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
+  // Export a module-owned observation; wildcard imports do not re-export helpers.
+  val selectedCurrentResultsHaveAuthority = currentResultsHaveAuthority(compatibleState.host)
   val selectedSingleSettlement = compatibleState.host.deliveries.foldl(Set(),(seen,id)=>seen.union(Set(id))).size()==compatibleState.host.deliveries.length()
   pure def admissionPosition(c: CompatibleState,id: int): int = c.admitted.foldl({next:1,found:0},(p,current)=>{next:p.next+1,found:if(current==id)p.next else p.found}).found
   val mixedFifoOrdered = compatibleState.host.ordinary.foldl({ok:true,last:0},(p,r)=>{
@@ -586,5 +588,5 @@ module compatibleLifecycle {
   val sawTerminalAdmission = compatibleState.host.current.retire or compatibleState.host.ordinary.select(r=>r.retire).length()>0
   val sawTerminalRetirement = compatibleState.host.disposed and compatibleState.host.lastAction=="retireSession"
   val selectedDisposedHasNoDispatch = not(compatibleState.host.disposed) or compatibleState.host.effects.select(fx=>fx.kind=="post" or fx.kind=="armTimer").length()==0
-  val compatibilitySafe = and {currentResultsHaveAuthority(compatibleState.host),selectedDisposedHasNoDispatch,compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
+  val compatibilitySafe = and {selectedCurrentResultsHaveAuthority,selectedDisposedHasNoDispatch,compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
 }

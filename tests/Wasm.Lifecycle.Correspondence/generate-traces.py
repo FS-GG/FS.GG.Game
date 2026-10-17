@@ -15,7 +15,7 @@ from pathlib import Path
 def run_quint_schedule(command, schedule, trace_path):
     """Run the original call once; retain fresh failed evidence, never old fixtures."""
     trace_path.unlink(missing_ok=True)
-    print('canonical Quint schedule: ' + schedule, flush=True)
+    print('canonical Quint schedule: ' + schedule + ' argv=' + json.dumps(command), flush=True)
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as failure:

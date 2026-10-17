@@ -28,7 +28,7 @@ for boundary in ['Before','At','After']:
 schedules.append(('pending-load-commit','pendingLoadCommitQualification','initRegression','regressionStep',14,'event-boundary-qualification.qnt'))
 schedules.append(('pending-initialize-commit','pendingInitializeCommitQualification','initRegression','regressionStep',10,'event-boundary-qualification.qnt'))
 for name,module,initial,step,count,model in schedules:
- projection.run_quint_schedule([quint,'run','--backend=typescript','--main='+module,'--init='+initial,'--step='+step,'--invariant=lifecycleSafe','--max-steps='+str(count),'--max-samples=1','--seed=20261002','--out-itf='+str(out/(name+'_{seq}.itf.json')),str(ROOT/'eng/wasm-shared'/model)],name,out/(name+'_0.itf.json'))
+ projection.run_quint_schedule([quint,'run','--verbosity=1','--backend=typescript','--main='+module,'--init='+initial,'--step='+step,'--invariant=lifecycleSafe','--max-steps='+str(count),'--max-samples=1','--seed=20261002','--out-itf='+str(out/(name+'_{seq}.itf.json')),str(ROOT/'eng/wasm-shared'/model)],name,out/(name+'_0.itf.json'))
 target=out/'GeneratedTraces.fs' if check else HERE/'GeneratedTraces.fs'
 subprocess.run([sys.executable,str(HERE/'generate-traces.py'),'--traces',str(out),'--output',str(target)],check=True)
 if check:

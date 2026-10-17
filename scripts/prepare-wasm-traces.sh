@@ -70,6 +70,18 @@ if (( status == 0 )); then
         if (( code != 0 )); then return "$code"; fi
         return "$metadata_code"
       }
+      run_typecheck() {
+        local model=$1 started ended code=0 metadata_code=0
+        started=$(date +%s)
+        printf "canonical Quint typecheck: %s\n" "$model"
+        "$QUINT" typecheck "$model" || code=$?
+        ended=$(date +%s)
+        printf "{\"typecheck\":\"%s\",\"startedUnix\":%s,\"finishedUnix\":%s,\"exitCode\":%s}\n" "$model" "$started" "$ended" "$code" >> "$TMPDIR/stages.jsonl" || metadata_code=$?
+        if (( code != 0 )); then return "$code"; fi
+        return "$metadata_code"
+      }
+      run_typecheck eng/wasm-shared/event-boundary-qualification.qnt
+      run_typecheck eng/wasm-shared/compatible-qualification.qnt
       run_generator default tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py
       run_generator compatible tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py
     ' wasm-trace-generation "$repo" > "$output/work/generation.log" 2>&1

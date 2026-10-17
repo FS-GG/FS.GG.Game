@@ -147,10 +147,12 @@ paths,rows=m.census(repo);assert len(paths)==71 and len(rows['default'])==53 and
 wrapper=(repo/'scripts/prepare-wasm-traces.sh').read_text()
 for token in ('timeout --kill-after=30s 20m prlimit --fsize=67108864:67108864 --core=0:0',
               '--max-old-space-size=2048','--kill-after=5s 120s','if (( status != 0 )); then exit "$status"; fi',
+              'run_typecheck eng/wasm-shared/event-boundary-qualification.qnt',
+              'run_typecheck eng/wasm-shared/compatible-qualification.qnt',
               'run_generator default tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py',
               'run_generator compatible tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py'):
  assert token in wrapper,token
-assert wrapper.index('prepare --root')<wrapper.index('node --version')<wrapper.index('run_generator default')<wrapper.index('run_generator compatible')
+assert wrapper.index('prepare --root')<wrapper.index('node --version')<wrapper.index('run_typecheck eng/wasm-shared/event-boundary-qualification.qnt')<wrapper.index('run_typecheck eng/wasm-shared/compatible-qualification.qnt')<wrapper.index('run_generator default')<wrapper.index('run_generator compatible')
 # Exercise only the pure shell cutoff predicate; no tools or generator body.
 cutoff=wrapper.split('setup_window_open() {\n',1)[1].split('\n}',1)[0]
 for deadline,now,expected in [('1300','1000',0),('1001','1000',0),('1000','1000',1),('999','1000',1),('1301','1000',1),('bad','1000',1),('','1000',1)]:
@@ -221,15 +223,18 @@ with patch.object(m,'git',fake_git):
    except ValueError:pass
    else:raise AssertionError('missing tool admitted')
   assert not output.exists(),'missing prerequisite created execution output'
-  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure','hardlinked-trace','failed-evidence','unexpected-failure-evidence','null-failure-evidence','malformed-failure-evidence','failed-malformed-evidence','linked-failure-evidence'):
+  for case in ('good','outside-change','ignored-change','extra-trace','linked-trace','failed-generator','tool-prerequisite','unknown-cleanup','collection-failure','primary-and-collection-failure','cleanup-failure','hardlinked-trace','failed-evidence','unexpected-failure-evidence','null-failure-evidence','malformed-failure-evidence','failed-malformed-evidence','linked-failure-evidence','failed-typecheck','missing-typecheck'):
    output=pathlib.Path(raw)/case
    with patch.object(m.shutil,'which',lambda name:str(inert_tool)):
     m.prepare(root,output,env)
    for name in paths:
     target=root/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'inert output control\n')
    (output/'work/generation.log').write_text('inert diagnostic\n')
-   (output/'work/stages.jsonl').write_text('\n'.join(json.dumps({'generator':name,'exitCode':0}) for name in ('default','compatible'))+'\n')
-   status=7 if case in ('failed-generator','primary-and-collection-failure','failed-evidence','failed-malformed-evidence') else (2 if case=='tool-prerequisite' else 0)
+   stage_rows=[{'typecheck':model,'exitCode':0} for model in m.TYPECHECK_INPUTS]+[{'generator':name,'exitCode':0} for name in ('default','compatible')]
+   if case=='failed-typecheck':stage_rows=[{'typecheck':m.TYPECHECK_INPUTS[0],'exitCode':7}]
+   if case=='missing-typecheck':stage_rows=stage_rows[1:]
+   (output/'work/stages.jsonl').write_text('\n'.join(json.dumps(row) for row in stage_rows)+'\n')
+   status=7 if case in ('failed-generator','primary-and-collection-failure','failed-evidence','failed-malformed-evidence','failed-typecheck') else (2 if case=='tool-prerequisite' else 0)
    if case in ('failed-evidence','unexpected-failure-evidence','null-failure-evidence','malformed-failure-evidence','failed-malformed-evidence','linked-failure-evidence'):
     (output/'work/failure-schedule.json').write_text(json.dumps({'schedule':'inert-failed','argv':['inert-quint'],'exitCode':7,'gap':'inert control only'}))
     (output/'work/counterexample.itf').write_bytes(b'x'*(4*1024*1024))
@@ -267,6 +272,7 @@ with patch.object(m,'git',fake_git):
     assert sum(item['retainedBytes'] for item in manifest['diagnostics'])<=8*1024*1024
     assert any(item['path']=='failed-generation.log' for item in manifest['diagnostics'])
     if case=='failed-malformed-evidence':assert result==7 and manifest['firstFailure']=='generator process exited 7'
+   if case=='failed-typecheck':assert result==7 and manifest['firstFailure']=='typecheck process exited 7' and manifest['failedStage']['typecheck']==m.TYPECHECK_INPUTS[0] and manifest['diagnosticEvidenceGap'] is None
    if case=='tool-prerequisite':assert manifest['generationStarted'] is False and manifest['generationExitCode'] is None and manifest['firstFailure']=='tool prerequisite exited 2'
    if case in ('collection-failure','primary-and-collection-failure'):assert not (output/'artifact/trace-preparation.zip').exists()
    if case=='cleanup-failure':assert manifest['scratchCleanup']=='failed'
