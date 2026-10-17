@@ -539,7 +539,7 @@ def freeze(custody,output):
     need(os.environ['GITHUB_RUN_ATTEMPT']=='1', 'rerun custody refuses')
     need(not git('status','--porcelain'), 'dirty qualification source')
     custody=pathlib.Path(custody); output=pathlib.Path(output)
-    need(not output.exists(), 'eligible output must be fresh')
+    need(not output.exists() and not output.is_symlink() and not output.resolve().is_relative_to(ROOT.resolve()), 'eligible output must be fresh and outside source')
     selected={name:custody/name for name in (*FILES,*CUSTODY_METADATA,*BASELINE_LOGS)}
     selected.update({'evidence/'+name:pathlib.Path(os.environ['RUNNER_TEMP'])/relative for name,relative in EVIDENCE.items()})
     # Validate the complete input roster before copying anything. Symlinks in any
@@ -567,7 +567,7 @@ def freeze(custody,output):
     output.mkdir(mode=0o700)
     for name,path in selected.items():
         destination=output/name; destination.parent.mkdir(parents=True,exist_ok=True); shutil.copyfile(path,destination)
-        need(digest(destination.read_bytes())==digest(path.read_bytes()), 'custody changed during retention')
+        need(digest(destination.read_bytes())==(b['archives'][name] if name in FILES else evidence[name]), 'custody changed during retention')
     (output/'preparation-binding.json').write_bytes(binding_bytes)
     print(f'wasm-custody-size: files={len(OUTER_FILES)} totalBytes={sum(sizes.values())+len(binding_bytes)} diagnosticBytes={sum(sizes[name] for name in evidence)} metadataBytes={metadata}')
     with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('binding_sha256='+digest(binding_bytes)+'\nversion='+VERSION+'\n')

@@ -60,6 +60,7 @@ jobs:
           [[ "$(git rev-parse HEAD)" == "$ACCEPTED_EXECUTOR" && -z "$(git status --porcelain)" ]]
           [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" == "$ACCEPTED_EXECUTOR" ]]
           [[ -n "$REVIEWED_TUPLE" && "$GITHUB_RUN_ATTEMPT" == 1 ]]
+          if [[ "$MODE" == promote ]]; then [[ -z "$FIRST_PROMOTION_RUN" && -z "$FIRST_PROMOTION_ATTEMPT" ]]; fi
           [[ "$GITHUB_WORKFLOW_SHA" == "$ACCEPTED_EXECUTOR" ]]
           bash tests/release/wasm/test-release-wasm.sh --source-only
 
@@ -70,6 +71,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: write
       id-token: write
@@ -113,6 +115,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: write
     steps:
@@ -152,6 +155,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: write
     steps:
@@ -190,6 +194,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: write
       id-token: write
@@ -234,6 +239,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: read
     steps:
@@ -272,6 +278,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: read
     steps:
@@ -310,6 +317,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: read
     steps:
@@ -348,6 +356,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: read
+      checks: read
       contents: write
       packages: read
     steps:

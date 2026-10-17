@@ -9,7 +9,6 @@ import os
 import pathlib
 import re
 import subprocess
-import urllib.request
 import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -24,11 +23,9 @@ def checked_inputs(environment, tracked_version):
         assert re.fullmatch(r"[0-9a-f]{40}", values[key]), "source must be an immutable commit"
     for key in ("MANIFEST_SHA256", "SDK_SHA256"):
         assert re.fullmatch(r"[0-9a-f]{64}", values[key]), "receipt must be an exact SHA-256"
-    if values["RELEASE_VERSION"] == "0.4.0":
-        for key, length in (("ACCEPTED_EXECUTOR",40),("PROMOTION_BINDING_SHA256",64)):
-            values[key] = environment[key]
-            assert re.fullmatch(r"[0-9a-f]{%d}" % length, values[key]), "invalid explicit executor/transaction binding"
-        assert values["QUALIFIER_SOURCE"] == values["ACCEPTED_EXECUTOR"]
+    for key, length in (("ACCEPTED_EXECUTOR",40),("PROMOTION_BINDING_SHA256",64)):
+        values[key] = environment[key]
+        assert re.fullmatch(r"[0-9a-f]{%d}" % length, values[key]), "invalid explicit executor/transaction binding"
     assert values["RELEASE_VERSION"] == "0.4.0", "historical release is not the selected current route"
     assert values["PUBLISHED_SOURCE"] == values["QUALIFIER_SOURCE"] == values["ACCEPTED_EXECUTOR"], "current producer must equal executor/qualifier"
     assert not environment.get("EXECUTION_BINDING") and not environment.get("CANONICAL_QUALIFICATION_AUDIT"), "historical overlays cannot authorize current qualification"
@@ -37,6 +34,7 @@ def checked_inputs(environment, tracked_version):
 
 def validate_release(release, values):
     version = values["RELEASE_VERSION"]
+    assert version == "0.4.0", "only selected current release can qualify"
     tag = f"wasm/v{version}"
     assert release["tag_name"] == tag and not release["draft"] and not release["prerelease"]
     assert release["published_at"], "release is unpublished"
@@ -48,13 +46,12 @@ def validate_release(release, values):
         assert item["browser_download_url"] == f"https://github.com/{REPO}/releases/download/{tag}/{name}", "asset identity mismatch"
         assert item.get("digest") == "sha256:" + expected, "native release asset digest mismatch"
         selected[name] = item["browser_download_url"]
-    if version == "0.4.0":
-        sha = values["PROMOTION_BINDING_SHA256"]
-        assert re.fullmatch(r"[0-9a-f]{64}", sha), "invalid promotion record hash"
-        row = assets["promotion-binding.json"]
-        assert row.get("digest") == "sha256:" + sha, "native transaction digest mismatch"
-        assert row["browser_download_url"] == f"https://github.com/{REPO}/releases/download/{tag}/promotion-binding.json"
-        selected["promotion-binding.json"] = row["browser_download_url"]
+    sha = values["PROMOTION_BINDING_SHA256"]
+    assert re.fullmatch(r"[0-9a-f]{64}", sha), "invalid promotion record hash"
+    row = assets["promotion-binding.json"]
+    assert row.get("digest") == "sha256:" + sha, "native transaction digest mismatch"
+    assert row["browser_download_url"] == f"https://github.com/{REPO}/releases/download/{tag}/promotion-binding.json"
+    selected["promotion-binding.json"] = row["browser_download_url"]
     return selected
 
 
@@ -77,8 +74,11 @@ def bind_promotion_execution(promotion, transaction, values, release, receipts):
     reviewed=promotion.validate_tuple(transaction['preparation'])
     assert promotion.execution_input() is None
     assert reviewed['binding']['producer'] == reviewed['binding']['executor'] == values['PUBLISHED_SOURCE'] == values['ACCEPTED_EXECUTOR']
-    promotion.execution_checkout(promotion.Native(),reviewed,installed=True)
-    promotion.verify_transaction(promotion.Native(),release,reviewed)
+    native=promotion.Native()
+    promotion.execution_checkout(native,reviewed,installed=True)
+    _,actual=promotion.release_state(native)
+    assert actual==release, 'native tag/list/by-ID published release disagreement'
+    promotion.verify_transaction(native,release,reviewed)
     return reviewed
 
 
@@ -91,9 +91,7 @@ def main():
     tag = "wasm/v" + values["RELEASE_VERSION"]
     assert git("rev-parse", f"refs/tags/{tag}^{{commit}}") == source, "tag does not name published source"
     subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", source, "origin/main"], check=True)
-    # Preserve every producer/SDK/toolchain input. Only the two exact reviewed
-    # consumer projection/assertion blobs may differ, bound by the immutable audit.
-    # Model amendments are decided only after genuine immutable release receipts are acquired.
+    # Current installed acceptance uses the identical protected producer inputs.
     spec=importlib.util.spec_from_file_location('promotion',ROOT/'scripts/wasm-release/promotion.py')
     promotion=importlib.util.module_from_spec(spec);spec.loader.exec_module(promotion)
     release=promotion.Native().checked(f"repos/{REPO}/releases/tags/wasm%2Fv{values['RELEASE_VERSION']}")
@@ -115,17 +113,16 @@ def main():
     assert sdk["sha256"] == values["SDK_SHA256"]
     release_binding = {"manifestSha256": values["MANIFEST_SHA256"], "sdkSha256": values["SDK_SHA256"],
                        "packages": [{"name": row["file"], "sha256": row["sha256"]} for row in manifest["artifacts"] if row["file"].endswith(".nupkg")]}
-    if values["RELEASE_VERSION"] == "0.4.0":
-        spec = importlib.util.spec_from_file_location("promotion", ROOT / "scripts/wasm-release/promotion.py")
-        promotion = importlib.util.module_from_spec(spec); spec.loader.exec_module(promotion)
-        transaction = json.loads((receipts / "promotion-binding.json").read_text())
-        reviewed = promotion.validate_tuple(transaction["preparation"])
-        bound = reviewed["binding"]
-        assert transaction["schema"] == "fsgg.wasm.promotion/v1" and transaction["producer"] == source and transaction["tag"] == tag
-        bind_promotion_execution(promotion,transaction,values,release,receipts)
-        assert bound["manifestSha256"] == values["MANIFEST_SHA256"]
-        assert bound["archives"][sdk["file"]] == values["SDK_SHA256"]
-        assert {row["file"]:row["sha256"] for row in manifest["artifacts"]} == bound["archives"]
+    spec = importlib.util.spec_from_file_location("promotion", ROOT / "scripts/wasm-release/promotion.py")
+    promotion = importlib.util.module_from_spec(spec); spec.loader.exec_module(promotion)
+    transaction = json.loads((receipts / "promotion-binding.json").read_text())
+    reviewed = promotion.validate_tuple(transaction["preparation"])
+    bound = reviewed["binding"]
+    assert transaction["schema"] == "fsgg.wasm.promotion/v1" and transaction["producer"] == source and transaction["tag"] == tag
+    bind_promotion_execution(promotion,transaction,values,release,receipts)
+    assert bound["manifestSha256"] == values["MANIFEST_SHA256"]
+    assert bound["archives"][sdk["file"]] == values["SDK_SHA256"]
+    assert {row["file"]:row["sha256"] for row in manifest["artifacts"]} == bound["archives"]
     input_audit = bind_qualification_inputs(source, values["QUALIFIER_SOURCE"], values["RELEASE_VERSION"], release_binding)
     print("wasm-installed-input-audit: " + json.dumps(input_audit, sort_keys=True))
     print(f"wasm-installed-binding: qualifier={values['QUALIFIER_SOURCE']} published={source} tag={tag} native-assets=verified manifest={values['MANIFEST_SHA256']} sdk={values['SDK_SHA256']}")

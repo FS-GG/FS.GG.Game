@@ -251,7 +251,7 @@ class Tests(unittest.TestCase):
 
     def test_closed_binding(self):
         p.validate_tuple(reviewed())
-        for key,value in [('producer','9'*40),('executor','main'),('producerTree','9'*40),('version','0.2.0'),('mode','publish'),('runAttempt',0),('repository','foreign/repo')]:
+        for key,value in [('producer','9'*40),('executor','main'),('producerTree','9'*40),('version','0.2.0'),('mode','publish'),('runAttempt',0),('repository','foreign/repo'),('version','0.3.0'),('event','pull_request'),('workflowSha','9'*40),('job','generate-traces'),('workflow','.github/workflows/release-wasm.yml'),('executor','9'*40)]:
             x=reviewed();x['binding'][key]=value
             with self.subTest(key=key),self.assertRaises(p.Refusal):p.validate_tuple(x)
         for mutation in ('gate','roster','inventory','extra','duplicate-surrogate'):
@@ -264,7 +264,7 @@ class Tests(unittest.TestCase):
             with self.subTest(mutation=mutation),self.assertRaises(p.Refusal):p.validate_tuple(x)
     def test_real_native_run_attempt_and_gate_join(self):
         run,jobs,artifact=native_data();p.validate_run(reviewed(),run,jobs,artifact)
-        for target,key,value in [('run','run_attempt',2),('run','conclusion','failure'),('run','head_sha','9'*40),('run','event','pull_request'),('artifact','expired',True),('artifact','digest','sha256:'+'9'*64),('artifact','name','wasm-ineligible-100-2')]:
+        for target,key,value in [('run','run_attempt',2),('run','conclusion','failure'),('run','head_sha','9'*40),('run','event','pull_request'),('run','head_branch','feature'),('artifact','expired',True),('artifact','digest','sha256:'+'9'*64),('artifact','name','wasm-ineligible-100-2')]:
             r,j,a=copy.deepcopy((run,jobs,artifact)); (r if target=='run' else a)[key]=value
             with self.subTest(target=target,key=key),self.assertRaises(p.Refusal):p.validate_run(reviewed(),r,j,a)
         broken=copy.deepcopy(jobs);broken[0]['steps'][3]['conclusion']='skipped'
@@ -505,11 +505,12 @@ class Tests(unittest.TestCase):
             with self.assertRaises(p.Refusal):p.begin(Transport(),reviewed(),'.',False)
     def test_artifact_digest_safe_members_and_binding_refusal(self):
         import io,zipfile
-        for mutation in ('none','artifact-digest','traversal','missing-binding','changed-binding'):
+        for mutation in ('none','artifact-digest','traversal','missing-binding','changed-binding','changed-evidence','extra-cache','member-size','evidence-total'):
             r=reviewed();body=io.BytesIO();binding_body=(json.dumps(r['binding'])+'\n').encode()
             r['bindingSha256']=p.digest(binding_body)
             with zipfile.ZipFile(body,'w') as z:
-                for name in p.OUTER_FILES-{'preparation-binding.json'}:z.writestr(name,b'evidence')
+                for name in p.OUTER_FILES-{'preparation-binding.json'}:z.writestr(name,b'changed' if mutation=='changed-evidence' and name=='evidence/contracts.log' else b'evidence')
+                if mutation=='extra-cache':z.writestr('packages/foreign.nupkg',b'ineligible cache')
                 r['binding']['evidence']={name:p.digest(b'evidence') for name in r['binding']['evidence']}
                 binding_body=(json.dumps(r['binding'])+'\n').encode();r['bindingSha256']=p.digest(binding_body)
                 if mutation!='missing-binding':z.writestr('preparation-binding.json',b'{}' if mutation=='changed-binding' else binding_body)
@@ -523,7 +524,7 @@ class Tests(unittest.TestCase):
                     return artifact if '/artifacts/' in path else run
                 def pages(self,*args):return jobs
                 def request(self,*args,**kwargs):return 200,payload,{}
-            with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'GITHUB_SHA':p.P,'ACCEPTED_EXECUTOR':p.P}),patch.object(p,'verify_originals') as verify,patch.object(p,'executor_checkout'),patch.object(p,'verify_protection'),patch.object(p,'execution_checkout'):
+            with tempfile.TemporaryDirectory() as raw,patch.dict(os.environ,{'GITHUB_SHA':p.P,'ACCEPTED_EXECUTOR':p.P}),patch.object(p,'verify_originals') as verify,patch.object(p,'executor_checkout'),patch.object(p,'verify_protection'),patch.object(p,'execution_checkout'),patch.object(p,'MAX_METADATA',1 if mutation=='member-size' else p.MAX_METADATA),patch.object(p,'MAX_DIAGNOSTICS',1 if mutation=='evidence-total' else p.MAX_DIAGNOSTICS):
                 if mutation=='none':
                     p.download(Transport(),r,pathlib.Path(raw)/'custody');verify.assert_called_once()
                 else:
