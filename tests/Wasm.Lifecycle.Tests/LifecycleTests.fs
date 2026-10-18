@@ -547,6 +547,106 @@ let terminalProcess =
             let _, resumed = update 3L (ResumeRequested "unused") state
             Expect.isEmpty resumed "resume cannot revive retired held work"
 
+        for shutdownFollower in [ false; true ] do
+            for observed in [ 4L; 5L; 6L ] do
+                testCase (sprintf "Default follower strict due at %d shutdown=%b" observed shutdownFollower) <| fun _ ->
+                    let reset = identity "worker-1" 1UL 1UL
+                    let follower = identity "worker-1" 2UL 1UL
+                    let candidate = identity "worker-2" 3UL 2UL
+                    let state = loadedSelected DefaultCompatibility
+                    let state = next 0L (LoadRequested(candidate, PrepareCandidate("due-candidate", Some 1UL), [| 0uy |])) state
+                    let state = limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) { terminalLimits with MaximumDeadlineMilliseconds = 3 } state
+                    let following = if shutdownFollower then LimitedShutdown follower else LimitedInvokeAndRetire(follower, [| 2uy |])
+                    let state = limited 0L following { terminalLimits with MaximumDeadlineMilliseconds = 5 } state
+                    let state = next 1L (WorkerObserved("worker-1", PhaseObserved(reset, tokenFor reset, AllocateInput))) state
+                    let state = next 2L (WorkerObserved("worker-1", PhaseObserved(reset, tokenFor reset, Process))) state
+                    let before = Lifecycle.project state
+                    Expect.equal before.Current.DeadlineMilliseconds 3L "phase callbacks keep original active due"
+                    Expect.equal before.Ordinary.Head.Id follower.Request "follower is actually queued"
+                    Expect.equal before.Ordinary.Head.DeadlineMilliseconds 5L "original admitted follower due"
+                    let state, effects = update observed (TimerObserved { Identity = reset; Correlation = tokenFor reset; Phase = Process }) state
+                    expectRetired state effects reset [ "worker-1"; "worker-2" ]
+                    Expect.equal (Lifecycle.project state).Clock observed "settlement uses exact producer clock"
+                    let results = terminalResults effects
+                    let destroyed = results |> List.find (fun result -> result.Identity = follower)
+                    Expect.equal destroyed.Outcome None "queued follower never invokes an ABI"
+                    Expect.equal destroyed.Disposition Discarded "no follower delivery authority"
+                    Expect.equal destroyed.Reason (Some(if 5L < observed then DeadlineExpired else HostDisposed)) "strict queued expiry precedes terminal retirement; exact due is unexpired"
+                    Expect.equal (results |> List.filter (fun result -> result.Identity = follower)).Length 1 "follower settles once"
+                    let actual = results |> List.last
+                    Expect.equal actual.Identity reset "actual terminal follows follower settlement"
+                    Expect.isTrue (actual.Outcome |> Option.exists (fun outcome -> outcome.State = TimedOut && outcome.Dispatch = Dispatched)) "active Process timeout keeps actual ABI dispatch"
+                    let _, duplicate = update (observed + 1L) (TimerObserved { Identity = reset; Correlation = tokenFor reset; Phase = Process }) state
+                    Expect.isEmpty duplicate "duplicate timer cannot settle or dispatch again"
+
+        // Actual connected interpreter with declared inert mechanics. Termination
+        // advances only this injected port clock, reproducing Observe(Now) reentry.
+        // This is not a browser timing or ABI-execution claim.
+        for observed in [ 4L; 5L; 6L ] do
+            testCase (sprintf "connected retirement decision clock survives reentry at %d" observed) <| fun _ ->
+                let mutable portClock = 0L
+                let mutable connected: Host option = None
+                let timers = System.Collections.Generic.Dictionary<string, int * (unit -> unit)>()
+                let events = ResizeArray<string * int64>()
+                let results = ResizeArray<BrowserResult * int64>()
+                let posts = ResizeArray<WorkerWireCommand>()
+                let transport: HostTransport =
+                    { Now = fun () -> portClock
+                      CreateWorker = fun _ _ -> ()
+                      PostCommand = fun _ command -> posts.Add command
+                      TerminateWorker = fun worker ->
+                          events.Add(("terminate:" + worker, connected.Value.Projection.Clock))
+                          portClock <- 6L
+                      ArmTimer = fun key delay callback -> timers[key] <- (delay, callback)
+                      CancelTimer = fun key -> timers.Remove key |> ignore }
+                let receive (result: BrowserResult) =
+                    let clock = connected.Value.Projection.Clock
+                    events.Add(("settle:" + string result.Identity.Request, clock))
+                    results.Add((result, clock))
+                let host = Host.CreateConnected(settings Sc2ImportedStrict, transport, receive) |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+                connected <- Some host
+                let load = identity "worker-1" 100UL 1UL
+                let initialize = identity "worker-1" 101UL 1UL
+                let reset = identity "worker-1" 1UL 1UL
+                let follower = identity "worker-1" 2UL 1UL
+                host.Load(0L, load, [| 0uy |])
+                host.Observe(0L, "worker-1", AbiVersionObserved(load, tokenFor load, 0x10000u))
+                host.Initialize(0L, initialize, [| 0uy |])
+                host.Observe(0L, "worker-1", InvocationObserved(success Initialize initialize, tokenFor initialize))
+                host.SubmitLimited(0L, LimitedInvokeAndRetire(reset, [| 1uy |]), { terminalLimits with MaximumDeadlineMilliseconds = 3 }) |> fun result -> Expect.equal result (Ok ()) "terminal admitted"
+                host.SubmitLimited(0L, LimitedShutdown follower, { terminalLimits with MaximumDeadlineMilliseconds = 5 }) |> fun result -> Expect.equal result (Ok ()) "follower admitted"
+                for at, phase in [ 1L, AllocateInput; 2L, Process ] do
+                    portClock <- at
+                    host.Observe(at, "worker-1", PhaseObserved(reset, tokenFor reset, phase))
+                Expect.equal host.Projection.Current.Id reset.Request "actual current terminal identity"
+                Expect.equal host.Projection.Current.Worker reset.WorkerInstance "actual current worker"
+                Expect.equal host.Projection.Current.DeadlineMilliseconds 3L "active due remains original"
+                Expect.equal host.Projection.Ordinary.Head.Id follower.Request "actual queued follower identity"
+                Expect.equal host.Projection.Ordinary.Head.DeadlineMilliseconds 5L "actual queued due"
+                Expect.equal timers.Count 1 "only actual active phase timer remains"
+                let timer = timers |> Seq.exactlyOne
+                Expect.equal timer.Key $"{reset.WorkerInstance}:{reset.Generation}:{reset.Request}:{OperationToken.value (tokenFor reset)}:Process" "exact current request/correlation/phase timer selected"
+                let delay, fire = timer.Value
+                Expect.equal delay 2 "actual strict timer uses due-now+1"
+                events.Clear(); results.Clear(); posts.Clear()
+                portClock <- observed
+                fire ()
+                let firstTermination = events |> Seq.find (fun (kind, _) -> kind.StartsWith("terminate:"))
+                Expect.equal (snd firstTermination) observed "capture outer producer clock before termination reentry"
+                let destroyed, callbackClock = results |> Seq.find (fun (result, _) -> result.Identity = follower)
+                Expect.equal destroyed.Reason (Some(if 5L < observed then DeadlineExpired else HostDisposed)) "reason binds decision, not later callback clock"
+                Expect.equal destroyed.Outcome None "no follower ABI"
+                Expect.equal destroyed.Disposition Discarded "no follower authority"
+                Expect.equal callbackClock 6L "connected termination advances callback clock even when queue was unexpired"
+                let kinds = events |> Seq.map fst |> Seq.toList
+                Expect.equal ((kinds |> List.findIndex ((=) "settle:2")) < (kinds |> List.findIndex ((=) "terminate:worker-1"))) (5L < observed) "queued expiry precedes termination; disposal follows it"
+                Expect.equal kinds.[kinds.Length - 1] "settle:1" "terminal result follows retirement/follower"
+                Expect.isTrue host.Projection.Disposed "whole session retired"
+                Expect.isEmpty posts "no following post"
+                let count = results.Count
+                fire ()
+                Expect.equal results.Count count "stale real timer callback cannot settle twice"
+
         for observed, expired in [ 4L, false; 5L, true; 6L, true ] do
             testCase (sprintf "queued terminal head boundary %d" observed) <| fun _ ->
                 let a = identity "worker-1" 1UL 1UL

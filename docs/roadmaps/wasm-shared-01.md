@@ -38,6 +38,64 @@ installed binder still selects that exact publication and refuses the unpublishe
 This source assignment selects no publication, installed operation, consumer
 activation, image/native workload or product outcome.
 
+### First 0.6 source qualification and exact follower-expiry proof
+
+[PR722](https://github.com/FS-GG/FS.GG.Game/pull/722) delivered the opcode change
+at `bc78722f7a62a1ce5f0351d7969a26c307ec4fe7`, exact tested/delivered tree
+`9df5fea131983d4d9ec98176106df62f143ad529`. Its original PR qualification
+39079271365/attempt1 passed the parser controls, 36 package-browser cases and
+source/candidate-installed cohorts. The first protected qualification
+[39080719438/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39080719438)
+failed with35 package-browser cases passed and one inherited terminal-mode11
+assertion failed: the undispatched follower retained `DeadlineExpired`, while the
+fixture required `HostDisposed`. The new66,524-byte dense fixture passed all four
+operations and its94 complete stage observations. This failed original retained
+model evidence only; it produced no eligible package custody and selects no
+publication or unchanged rerun. The successful PR result is not protected-current
+acceptance or proof of an earlier timeout's cause.
+
+The producer's unchanged `DefaultCompatibility` update expires queued requests
+at strict `original due < producer Clock` before active invalidation/whole-session
+retirement. A real late timer can therefore expire both nearby250ms requests;
+first cause must not be relabeled as disposal. The connected test correction reads
+the follower's actual admitted queue due and actual producer clock at the first
+retirement effect, before native termination and connected Host reentry, then
+requires exactly the reason selected by that strict comparison. Both default
+terminal families retain no ABI outcome, discarded authority, no follower Post,
+distinct identity, once-only settlement, follower-before-terminal order and actual
+whole-worker retirement before the terminal callback. The later follower-callback
+clock is retained separately: connected termination
+reenters `Observe(Now)` and can advance it beyond the original decision. Queued
+expiry must settle before the first termination, disposal after it. No additional
+clock sample sets the expected result. Missing actual queue admission or retirement
+batch remains a setup failure.
+
+Six direct Lifecycle controls independently exercise before/exact/after follower
+due for shutdown and terminal-Process followers, including actual phase setup,
+original due, duplicate-timer refusal and complete retirement effect order. Three
+additional actual connected-Host controls reproduce mechanical termination
+reentry with declared inert ports: before/equal/after decision clocks, captured
+actual timer identity/delay, and a later callback clock beyond the queued due.
+They are logical interpreter controls, not browser timing or ABI execution proof.
+The separate compatible SC2 queue-head `>=` boundary and held-snapshot semantics remain
+unchanged; Default expiry is not generalized to that profile. Producer code,
+parser, deadlines/caps/version and all36 real-browser cases remain unchanged.
+The repaired current source still requires independent review, exact native
+qualification, complete custody and fit under the existing35-minute profile.
+
+The first corrected source attempt, [39082520529/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39082520529),
+compiled and passed all50 Lifecycle controls, including the six new reducer and
+three connected-host boundaries. Its browser cohort failed29PASS/7FAIL: the new
+shared assertion compared an actual Fable `Uint8Array` receipt to plain `[]`.
+All seven first failures were this representation mismatch, with matched reason
+and no-outcome/discarded/undispatched fields. The reports retain the actual clocks;
+mode11 recorded due458, decision457 and callback459. Assertions after that shared
+comparison remained blocked and are not accepted. The repair compares actual byte
+content with `Array.from`, as existing ABI assertions already do, while preserving
+all first-cause, identity, ordering, no-post and retirement checks. Runtime code
+and all36 browser cases remain unchanged. Fresh exact-head full qualification
+is required; this failed original yielded no eligible package custody.
+
 ## Accepted 0.5 closed Worker and installed qualifier
 
 The accepted source successor selected coherent `0.5.0` for the pair and SDK.

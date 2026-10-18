@@ -190,12 +190,49 @@ test("unsafe output after guest rejection preserves status and removes dead Work
   expect(value.active).toBe("");
 });
 
+// DefaultCompatibility expires queued work before active retirement, using the
+// strict original due < producer decision Clock boundary. Read actual queue/effect
+// state instead of assuming that a late timer fires between two nearby deadlines.
+function reportTerminal(value) {
+ const decision=value.retirementBatch[0];
+ const complete=/^[0-9]+$/.test(value.followerDue??"")&&/^[0-9]+$/.test(decision?.clock??"");
+ console.log(JSON.stringify({stage:"terminal follower original deadline",resetRequest:value.reset.Request,resetState:value.reset.State,resetPhase:value.reset.Phase,resetDispatched:value.reset.Dispatched,followerRequest:value.follower.Request,due:value.followerDue,decisionClock:decision?.clock,followerCallbackClock:value.followerClock,reason:value.follower.Reason,complete,expired:complete?BigInt(value.followerDue)<BigInt(decision.clock):null}));
+}
+function expectTerminalFollower(value) {
+ expect(value.followerDue,"actual follower must have entered the producer queue").toMatch(/^[0-9]+$/);
+ const decision=value.retirementBatch[0];
+ expect(decision,"actual retirement effect precedes terminal publication").toBeDefined();
+ expect(decision.clock,"producer Clock before termination/Observe reentry").toMatch(/^[0-9]+$/);
+ expect(decision.disposed).toBe(true);
+ expect(decision.settledRequests).not.toContain(value.reset.Request);
+ const expired=BigInt(value.followerDue)<BigInt(decision.clock);
+ expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Dispatched:false,Reason:expired?"DeadlineExpired":"HostDisposed"});
+ // The actual Fable byte[] receipt remains a Uint8Array across page.evaluate.
+ // Compare its bytes, as the other actual ABI receipt assertions do.
+ expect(Array.from(value.follower.Output)).toEqual([]);
+ expect(value.followerClock).toMatch(/^[0-9]+$/);
+ if(expired){
+   expect(decision.settledRequests).toContain(value.follower.Request);
+   expect(value.followerClock).toBe(decision.clock);
+ }else{
+   expect(decision.settledRequests).not.toContain(value.follower.Request);
+   // Mechanical termination reenters Observe(Now), so the later callback clock
+   // is evidence, not the earlier queue-expiry decision clock.
+   expect(BigInt(value.followerClock)>=BigInt(decision.clock)).toBe(true);
+ }
+ expect(value.follower.Request).not.toBe(value.reset.Request);
+ expect(value.deliveries.indexOf(value.follower.Request)).toBeGreaterThanOrEqual(0);
+ expect(value.deliveries.indexOf(value.follower.Request)).toBeLessThan(value.deliveries.indexOf(value.reset.Request));
+ expect(new Set(value.deliveries).size).toBe(value.deliveries.length);
+}
+
 for(const follower of ["invokeAndRetire","shutdown"])test(`terminal Process retires actual package Workers before result and ${follower}`,async({page})=>{
  const value=await page.evaluate(follower=>window.runTerminalProcess(18,follower),follower);
+ reportTerminal(value);
  expect(value.reset).toMatchObject({State:"succeeded",Phase:"Process",Dispatched:true});
  expect(Array.from(value.reset.Output)).toEqual([83,67,50,51]);
  expect(value.posts.map(item=>item.kind)).toEqual(["process","process"]);
- expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Reason:"HostDisposed"});
+ expectTerminalFollower(value);
  expect(value.retirement.projection).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
  expect(new Set(value.retirement.terminations)).toEqual(new Set(["installed-worker","candidate-worker"]));
  expect(value.deliveries.indexOf(value.follower.Request)).toBeLessThan(value.deliveries.indexOf(value.reset.Request));
@@ -205,10 +242,11 @@ for(const follower of ["invokeAndRetire","shutdown"])test(`terminal Process reti
 for(const [mode,state,status] of [[18,"succeeded",0],[19,"rejected",92],[16,"faulted",0],[17,"faulted",0],[11,"timeout",0]])
 test(`terminal Process preserves actual installed ABI and cleanup evidence mode ${mode}`,async({page})=>{
  const r=await page.evaluate(mode=>window.runTerminalRaw(mode),mode);
+ reportTerminal(r);
  expect(r.reset).toMatchObject({State:state,GuestStatus:status,Dispatched:true});
  if(mode===16||mode===17)expect(r.reset.CleanupDiagnostic).toContain("unreachable");
  expect(r.posts).toEqual(["process"]);
  expect(r.retirement.projection).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
  expect(new Set(r.retirement.terminations)).toEqual(new Set(["installed-worker","candidate-worker"]));
- expect(r.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Reason:"HostDisposed"});
+ expectTerminalFollower(r);
 });

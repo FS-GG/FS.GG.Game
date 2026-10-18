@@ -105,6 +105,14 @@ let createHost path digest outputCap deadline (transport: HostTransport) receive
 
     Host.CreateConnected(settings, transport, settle) |> unwrap
 
+// Test observation of actual producer state; never samples/advances its clock.
+let producerClock (host: Host) = string host.Projection.Clock
+let queuedDeadline (host: Host) request =
+    host.Projection.Ordinary
+    |> List.tryFind (fun pending -> string pending.Id = request)
+    |> Option.map (fun pending -> string pending.DeadlineMilliseconds)
+    |> Option.defaultValue ""
+
 let load (host: Host) now wire artifact = host.Load(now, identity wire, artifact)
 
 // The cold-start controls use the same real, pre-create enclosing deadline as
