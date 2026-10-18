@@ -193,11 +193,14 @@ test("unsafe output after guest rejection preserves status and removes dead Work
 // DefaultCompatibility expires queued work before active retirement, using the
 // strict original due < producer Clock boundary. Read the actual queue/settlement
 // state instead of assuming that a late timer fires between two nearby deadlines.
+function reportTerminal(value) {
+ const complete=/^[0-9]+$/.test(value.followerDue??"")&&/^[0-9]+$/.test(value.followerClock??"");
+ console.log(JSON.stringify({stage:"terminal follower original deadline",resetRequest:value.reset.Request,resetState:value.reset.State,resetPhase:value.reset.Phase,resetDispatched:value.reset.Dispatched,followerRequest:value.follower.Request,due:value.followerDue,settledAt:value.followerClock,reason:value.follower.Reason,complete,expired:complete?BigInt(value.followerDue)<BigInt(value.followerClock):null}));
+}
 function expectTerminalFollower(value) {
  expect(value.followerDue,"actual follower must have entered the producer queue").toMatch(/^[0-9]+$/);
  expect(value.followerClock,"actual producer settlement clock").toMatch(/^[0-9]+$/);
  const expired=BigInt(value.followerDue)<BigInt(value.followerClock);
- console.log(JSON.stringify({stage:"terminal follower original deadline",resetRequest:value.reset.Request,followerRequest:value.follower.Request,due:value.followerDue,settledAt:value.followerClock,reason:value.follower.Reason,expired}));
  expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Dispatched:false,Output:[],Reason:expired?"DeadlineExpired":"HostDisposed"});
  expect(value.follower.Request).not.toBe(value.reset.Request);
  expect(value.deliveries.indexOf(value.follower.Request)).toBeGreaterThanOrEqual(0);
@@ -207,6 +210,7 @@ function expectTerminalFollower(value) {
 
 for(const follower of ["invokeAndRetire","shutdown"])test(`terminal Process retires actual package Workers before result and ${follower}`,async({page})=>{
  const value=await page.evaluate(follower=>window.runTerminalProcess(18,follower),follower);
+ reportTerminal(value);
  expect(value.reset).toMatchObject({State:"succeeded",Phase:"Process",Dispatched:true});
  expect(Array.from(value.reset.Output)).toEqual([83,67,50,51]);
  expect(value.posts.map(item=>item.kind)).toEqual(["process","process"]);
@@ -220,6 +224,7 @@ for(const follower of ["invokeAndRetire","shutdown"])test(`terminal Process reti
 for(const [mode,state,status] of [[18,"succeeded",0],[19,"rejected",92],[16,"faulted",0],[17,"faulted",0],[11,"timeout",0]])
 test(`terminal Process preserves actual installed ABI and cleanup evidence mode ${mode}`,async({page})=>{
  const r=await page.evaluate(mode=>window.runTerminalRaw(mode),mode);
+ reportTerminal(r);
  expect(r.reset).toMatchObject({State:state,GuestStatus:status,Dispatched:true});
  if(mode===16||mode===17)expect(r.reset.CleanupDiagnostic).toContain("unreachable");
  expect(r.posts).toEqual(["process"]);
