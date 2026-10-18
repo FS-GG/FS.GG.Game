@@ -547,6 +547,38 @@ let terminalProcess =
             let _, resumed = update 3L (ResumeRequested "unused") state
             Expect.isEmpty resumed "resume cannot revive retired held work"
 
+        for shutdownFollower in [ false; true ] do
+            for observed in [ 4L; 5L; 6L ] do
+                testCase (sprintf "Default follower strict due at %d shutdown=%b" observed shutdownFollower) <| fun _ ->
+                    let reset = identity "worker-1" 1UL 1UL
+                    let follower = identity "worker-1" 2UL 1UL
+                    let candidate = identity "worker-2" 3UL 2UL
+                    let state = loadedSelected DefaultCompatibility
+                    let state = next 0L (LoadRequested(candidate, PrepareCandidate("due-candidate", Some 1UL), [| 0uy |])) state
+                    let state = limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) { terminalLimits with MaximumDeadlineMilliseconds = 3 } state
+                    let following = if shutdownFollower then LimitedShutdown follower else LimitedInvokeAndRetire(follower, [| 2uy |])
+                    let state = limited 0L following { terminalLimits with MaximumDeadlineMilliseconds = 5 } state
+                    let state = next 1L (WorkerObserved("worker-1", PhaseObserved(reset, tokenFor reset, AllocateInput))) state
+                    let state = next 2L (WorkerObserved("worker-1", PhaseObserved(reset, tokenFor reset, Process))) state
+                    let before = Lifecycle.project state
+                    Expect.equal before.Current.DeadlineMilliseconds 3L "phase callbacks keep original active due"
+                    Expect.equal before.Ordinary.Head.Id follower.Request "follower is actually queued"
+                    Expect.equal before.Ordinary.Head.DeadlineMilliseconds 5L "original admitted follower due"
+                    let state, effects = update observed (TimerObserved { Identity = reset; Correlation = tokenFor reset; Phase = Process }) state
+                    expectRetired state effects reset [ "worker-1"; "worker-2" ]
+                    Expect.equal (Lifecycle.project state).Clock observed "settlement uses exact producer clock"
+                    let results = terminalResults effects
+                    let destroyed = results |> List.find (fun result -> result.Identity = follower)
+                    Expect.equal destroyed.Outcome None "queued follower never invokes an ABI"
+                    Expect.equal destroyed.Disposition Discarded "no follower delivery authority"
+                    Expect.equal destroyed.Reason (Some(if 5L < observed then DeadlineExpired else HostDisposed)) "strict queued expiry precedes terminal retirement; exact due is unexpired"
+                    Expect.equal (results |> List.filter (fun result -> result.Identity = follower)).Length 1 "follower settles once"
+                    let actual = results |> List.last
+                    Expect.equal actual.Identity reset "actual terminal follows follower settlement"
+                    Expect.isTrue (actual.Outcome |> Option.exists (fun outcome -> outcome.State = TimedOut && outcome.Dispatch = Dispatched)) "active Process timeout keeps actual ABI dispatch"
+                    let _, duplicate = update (observed + 1L) (TimerObserved { Identity = reset; Correlation = tokenFor reset; Phase = Process }) state
+                    Expect.isEmpty duplicate "duplicate timer cannot settle or dispatch again"
+
         for observed, expired in [ 4L, false; 5L, true; 6L, true ] do
             testCase (sprintf "queued terminal head boundary %d" observed) <| fun _ ->
                 let a = identity "worker-1" 1UL 1UL

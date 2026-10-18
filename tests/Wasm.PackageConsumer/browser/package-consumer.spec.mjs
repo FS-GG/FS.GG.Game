@@ -190,12 +190,27 @@ test("unsafe output after guest rejection preserves status and removes dead Work
   expect(value.active).toBe("");
 });
 
+// DefaultCompatibility expires queued work before active retirement, using the
+// strict original due < producer Clock boundary. Read the actual queue/settlement
+// state instead of assuming that a late timer fires between two nearby deadlines.
+function expectTerminalFollower(value) {
+ expect(value.followerDue,"actual follower must have entered the producer queue").toMatch(/^[0-9]+$/);
+ expect(value.followerClock,"actual producer settlement clock").toMatch(/^[0-9]+$/);
+ const expired=BigInt(value.followerDue)<BigInt(value.followerClock);
+ console.log(JSON.stringify({stage:"terminal follower original deadline",resetRequest:value.reset.Request,followerRequest:value.follower.Request,due:value.followerDue,settledAt:value.followerClock,reason:value.follower.Reason,expired}));
+ expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Dispatched:false,Output:[],Reason:expired?"DeadlineExpired":"HostDisposed"});
+ expect(value.follower.Request).not.toBe(value.reset.Request);
+ expect(value.deliveries.indexOf(value.follower.Request)).toBeGreaterThanOrEqual(0);
+ expect(value.deliveries.indexOf(value.follower.Request)).toBeLessThan(value.deliveries.indexOf(value.reset.Request));
+ expect(new Set(value.deliveries).size).toBe(value.deliveries.length);
+}
+
 for(const follower of ["invokeAndRetire","shutdown"])test(`terminal Process retires actual package Workers before result and ${follower}`,async({page})=>{
  const value=await page.evaluate(follower=>window.runTerminalProcess(18,follower),follower);
  expect(value.reset).toMatchObject({State:"succeeded",Phase:"Process",Dispatched:true});
  expect(Array.from(value.reset.Output)).toEqual([83,67,50,51]);
  expect(value.posts.map(item=>item.kind)).toEqual(["process","process"]);
- expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Reason:"HostDisposed"});
+ expectTerminalFollower(value);
  expect(value.retirement.projection).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
  expect(new Set(value.retirement.terminations)).toEqual(new Set(["installed-worker","candidate-worker"]));
  expect(value.deliveries.indexOf(value.follower.Request)).toBeLessThan(value.deliveries.indexOf(value.reset.Request));
@@ -210,5 +225,5 @@ test(`terminal Process preserves actual installed ABI and cleanup evidence mode 
  expect(r.posts).toEqual(["process"]);
  expect(r.retirement.projection).toMatchObject({Disposed:true,ActiveWorker:"",CandidateWorker:""});
  expect(new Set(r.retirement.terminations)).toEqual(new Set(["installed-worker","candidate-worker"]));
- expect(r.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Reason:"HostDisposed"});
+ expectTerminalFollower(r);
 });

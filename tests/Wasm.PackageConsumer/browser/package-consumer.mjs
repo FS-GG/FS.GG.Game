@@ -4,7 +4,7 @@ const bytes = async name => new Uint8Array(await (await fetch(`./modules/${name}
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", value)), byte => byte.toString(16).padStart(2, "0")).join("");
 async function session(artifact, prefix, outputCap = 65536, deadline = 250, inject = false, observer, holdLoaded = false) {
   const transport = createHostTransport(new URL("./_content/FS.GG.Wasm.Browser/", import.meta.url),observer?{observe:observer}:undefined);
-  const waiting = new Map(), results = [], posts=[], terminations=[], deliveryStates=[];
+  const waiting = new Map(), results = [], posts=[], terminations=[], deliveryStates=[], admissions=[];
   const terminate=transport.TerminateWorker;
   transport.TerminateWorker=name=>{terminations.push(name);terminate(name);};
   let ignored=0, host;const held=[];
@@ -27,15 +27,19 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
   transport.PostCommand=(name,command)=>{posts.push({name,Kind:command.Kind,request:command.Identity.Request});post(name,command);};
   const artifactDigest=await digest(artifact);
   host = bridge.createHost(prefix === "barc" ? "bar-protected" : "sc2-imported-strict", artifactDigest, outputCap, deadline, transport, result => {
-    deliveryStates.push({request:result.Request,projection:bridge.project(host),terminations:[...terminations]});
+    deliveryStates.push({request:result.Request,clock:bridge.producerClock(host),projection:bridge.project(host),terminations:[...terminations]});
     results.push(result); const pending = waiting.get(result.Request); waiting.delete(result.Request); pending?.(result);
   });
   let request = 0;
   const send = (method, value, owner = "installed-worker", generation = "1") => {
     const id = String(++request), identity = {WorkerInstance: owner, Request: id, Generation: generation};
-    return new Promise(resolve => { waiting.set(id, resolve); bridge[method](host, transport.Now(), identity, value); });
+    return new Promise(resolve => {
+      waiting.set(id, resolve);
+      bridge[method](host, transport.Now(), identity, value);
+      admissions.push({request:id,queuedDeadline:bridge.queuedDeadline(host,id)});
+    });
   };
-  return { host, send, results, posts, terminations, deliveryStates, transport,
+  return { host, send, results, posts, terminations, deliveryStates, admissions, transport,
     heldCount:()=>held.length,
     releaseHeld:()=>{for(const row of held.splice(0))row.receive(row.wire);},
     ignored:()=>ignored,
@@ -227,18 +231,19 @@ window.runTerminalProcess = async (mode=18, follower="invokeAndRetire") => {
     const following=s.send(follower,new Uint8Array([3]));
     const [a,r,f]=await Promise.all([active,reset,following]);
     const retirement=s.deliveryStates.find(item=>item.request===r.Request);
-    return {active:a,reset:r,follower:f,posts:s.posts.filter(item=>item.Kind==="process"||item.Kind==="shutdown").map(item=>({request:item.request,kind:item.Kind})),retirement,deliveries:s.results.map(item=>item.Request),projection:s.projection()};
+    return {active:a,reset:r,follower:f,followerDue:s.admissions.find(x=>x.request===f.Request)?.queuedDeadline,followerClock:s.deliveryStates.find(x=>x.request===f.Request)?.clock,posts:s.posts.filter(item=>item.Kind==="process"||item.Kind==="shutdown").map(item=>({request:item.request,kind:item.Kind})),retirement,deliveries:s.results.map(item=>item.Request),projection:s.projection()};
   }finally{s.dispose();}
 };
 
 window.runTerminalRaw = async mode => {
   const artifact=await bytes("control-ordinary.wasm"),s=await session(artifact,"sc2c");
   try {
-    await s.send("load",artifact);await s.send("initialize",new Uint8Array([mode]));
-    await s.prepare(artifact,"terminal-candidate");
+    const loaded=await s.send("load",artifact),initialized=await s.send("initialize",new Uint8Array([mode]));
+    const candidate=await s.prepare(artifact,"terminal-candidate");
+    if([loaded,initialized,candidate].some(x=>x.State!=="succeeded"))throw new Error("terminal raw setup did not succeed");
     const reset=s.send("invokeAndRetire",new Uint8Array([1]));
     const follower=s.send("shutdown");
     const [r,f]=await Promise.all([reset,follower]);
-    return {reset:r,follower:f,posts:s.posts.filter(x=>x.Kind==="process"||x.Kind==="shutdown").map(x=>x.Kind),retirement:s.deliveryStates.find(x=>x.request===r.Request)};
+    return {reset:r,follower:f,followerDue:s.admissions.find(x=>x.request===f.Request)?.queuedDeadline,followerClock:s.deliveryStates.find(x=>x.request===f.Request)?.clock,deliveries:s.results.map(x=>x.Request),posts:s.posts.filter(x=>x.Kind==="process"||x.Kind==="shutdown").map(x=>x.Kind),retirement:s.deliveryStates.find(x=>x.request===r.Request)};
   }finally{s.dispose();}
 };
