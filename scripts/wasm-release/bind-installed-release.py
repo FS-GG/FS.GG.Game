@@ -27,6 +27,7 @@ INSTALLED_PATHS = frozenset({
     'docs/atlas/catalog.json',
     'docs/atlas/records/7f62ef13b4b46b4f23cae9536c977c15c85320a253ed2bc609eb7a1f0afdcf56.json',
     'docs/atlas/records/be492023350541da5256d6f653711b5f736d5216cf121a7e02ca43e1887215e4.json',
+    'docs/atlas/records/5466c617291eff27f59b569a2d42a18dc0c134d4935d52d802c5a71b8a594281.json',
 })
 
 
