@@ -79,7 +79,7 @@ Both ineligible original artifacts and native failures remain retained. Neither
 the successful consumer runtime nor the later failed collector is installed
 acceptance, and no unchanged retry or package replacement is selected.
 
-The prepared collector correction derives one current namespace from the audited
+The delivered collector correction derives one current namespace from the audited
 tracked `version.props`, with stable-version validation and no environment/CLI
 version override or historical fallback. Consumer, selected dependency originals,
 Fable roles, SDK, merge and authenticated receipt joins use that same input.
@@ -94,10 +94,38 @@ with a reviewed finite P-to-Q file/blob audit and genuine original publication
 receipts. Collector/test changes require an explicit bounded qualifier closure;
 the earlier seven-file binder does not authorize them. Runtime, workflow, package
 pins and profile remain unchanged. Historical0.5/0.4 successes remain immutable
-evidence, not execution alternatives. Fresh source qualification and a separately
-selected installed operation remain required. Last accepted installed remains0.5
-at Q `c938e9158542e3a0572b62dd09c01ad01cbb344f`; installed0.6, image/native and
-whole-product acceptance remain open.
+evidence, not execution alternatives.
+
+[PR725](https://github.com/FS-GG/FS.GG.Game/pull/725) delivered the finite collector
+successor at Q `9a98f5da4043ec5d231acca97edfeebba7d4efb2`, exact tested/delivered
+tree `6d08b4bf144227bc85fa0e75a56e987c71ee11b6`. Its original source qualification
+[39089882371/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39089882371)
+passed37 promotion and18 collector controls,50 Lifecycle controls,36 real browser
+cases and the default53/selected16 compiled cohorts. The complete P-to-Q audit
+contains exactly ten reviewed leaves. The original published pair, SDK, runtime,
+workflow, version and package inputs remain P-identical; collection code is a Q
+qualification input, not part of the P SDK.
+
+The separately selected original
+[39091471055/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39091471055)
+then passed both served-feed installed jobs at that exact Q/P pair. Org and public
+ran serially, each passing36 consumer and10 selected-supervisor browser cases,
+with default53/selected16 compiled cohorts. Both original artifacts retain575
+eligible members, including428 dependency-role paths, exact published pair/SDK,
+closed Worker/build, official compiler/runtime Core and all authenticated source,
+publication and P/Q receipts. Independent original-data review and Programme
+acceptance completed on2026-10-18 at03:01:07 UTC. Org artifact12123211425 has
+SHA-256 `200bf3c6a2be2e40cf3eb87fc1ca6527b7582d5ef4851eb4c61f91dbd63e1ce5`;
+public artifact12122564546 has SHA-256
+`9344aeba1878fa9d3f5a60de7a4ac247ca2d1d72b4f50a11ebd61f3c25c253e8`.
+
+Runtime, collection and direct cleanup are0 on both feeds; all four browser status
+records passed. Native upload and post-job cleanup succeeded. Global descendant
+settlement remains unproved. The temporary Q source hold ended only after actual
+terminal/readback acceptance. This accepts the demonstrated served installed0.6
+producer scope; it does not erase390886's failure, establish old timeout cause or
+future timing fit, or supply SC2, image/native, whole-S1 or product acceptance.
+Historical installed0.5 at Qc938 remains its own accepted original.
 
 ### First 0.6 source qualification and exact follower-expiry proof
 
