@@ -747,8 +747,13 @@ class Tests(unittest.TestCase):
         # The finite current qualifier selects genuine published 0.6 only;
         # neither the old installed subject nor an arbitrary executor is accepted.
         self.assertEqual(binder.PUBLISHED,'8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e')
+        values={'RELEASE_VERSION':'0.6.0','PUBLISHED_SOURCE':binder.PUBLISHED,
+                'QUALIFIER_SOURCE':'9'*40,'ACCEPTED_EXECUTOR':'9'*40,
+                'MANIFEST_SHA256':'c'*64,'SDK_SHA256':'d'*64,
+                'PROMOTION_BINDING_SHA256':'e'*64}
+        self.assertEqual(binder.checked_inputs(values,'0.6.0'),values)
         with self.assertRaises(AssertionError):
-            binder.bind_executor(binder.PUBLISHED,'9'*40,p.VERSION)
+            binder.checked_inputs(dict(values,PUBLISHED_SOURCE='80540027623d9b1a8aa7715d0591de48455403b7'),'0.6.0')
 
 
     def test_explicit_read_only_publication_subject_does_not_relax_writer(self):
