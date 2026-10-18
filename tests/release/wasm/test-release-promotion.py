@@ -744,8 +744,8 @@ class Tests(unittest.TestCase):
     def test_current_installed_binder_requires_the_exact_published_subject(self):
         spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
         binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
-        # The finite current qualifier selects genuine published 0.6 only;
-        # neither the old installed subject nor an arbitrary executor is accepted.
+        # A valid current input cannot retag the old installed publication.
+        # Actual executor/workflow guards are exercised by the control above.
         self.assertEqual(binder.PUBLISHED,'8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e')
         values={'RELEASE_VERSION':'0.6.0','PUBLISHED_SOURCE':binder.PUBLISHED,
                 'QUALIFIER_SOURCE':'9'*40,'ACCEPTED_EXECUTOR':'9'*40,
