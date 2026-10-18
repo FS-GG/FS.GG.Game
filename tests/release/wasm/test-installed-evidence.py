@@ -11,9 +11,11 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 sys.dont_write_bytecode=True
 ROOT=pathlib.Path(__file__).resolve().parents[3]
+CURRENT=ET.parse(ROOT/'eng/wasm-shared/version.props').findtext('.//WasmSharedVersion')
 spec=importlib.util.spec_from_file_location('evidence',ROOT/'scripts/wasm-release/installed-evidence.py')
 e=importlib.util.module_from_spec(spec);spec.loader.exec_module(e)
 spec=importlib.util.spec_from_file_location('binder',ROOT/'scripts/wasm-release/bind-installed-release.py')
@@ -24,18 +26,160 @@ def put(path, body=b'actual control bytes'):
     path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(body);return path
 
 
+def current_cli_topology(root):
+    """Inert files for the actual two CLI actions; no file is executed as code.
+
+    The maintained collector bytes and tracked version are copied unchanged to
+    an isolated source root so selected() reads its real fixed runtime paths.
+    This proves projection/caller composition, never installed/runtime proof.
+    """
+    source=root/'source';script=source/'scripts/wasm-release/installed-evidence.py'
+    put(script,(ROOT/'scripts/wasm-release/installed-evidence.py').read_bytes())
+    put(source/'eng/wasm-shared/version.props',(ROOT/'eng/wasm-shared/version.props').read_bytes())
+    work=root/'consumer-work';selected=root/'selected';receipts=root/'receipts';logs=root/'logs'
+    manifest=json.dumps({'version':CURRENT}).encode();sdk=b'inert current SDK fixture'
+    for name,body in (('release-manifest.json',manifest),('NuGet.Config',b'<configuration />'),
+                      ('consumer/packages.lock.json',b'{}'),('installed-member-receipt.log',b'fixture'),
+                      ('consumer-http.log',b'fixture'),('consumer/browser/test-results/.last-run.json',b'{"status":"passed"}')):
+        put(work/name,body)
+    put(work/'sdk-artifacts'/f'fsgg-wasm-sdk-{CURRENT}.tar.gz',sdk)
+    for name in ('release-manifest.json','promotion-binding.json','installed-input-audit.json','published-native.json'):
+        put(receipts/name,manifest if name=='release-manifest.json' else b'{}')
+    put(receipts/f'fsgg-wasm-sdk-{CURRENT}.tar.gz',sdk)
+    put(root/'wasm-installed-receipts/release-manifest.json',manifest)
+    put(root/'wasm-installed-receipts/promotion-binding.json',b'{}')
+    archives={}
+    for ident in e.PACKAGES:
+        out=io.BytesIO()
+        with zipfile.ZipFile(out,'w') as z:
+            if ident=='fs.gg.wasm.browser':
+                z.writestr('fable/Host.fs',b'current Host source fixture')
+                z.writestr('contentFiles/any/any/_content/FS.GG.Wasm.Browser/policy/fable_modules/fable-library-js.5.18.0/Array.js',b'current library fixture')
+            else:z.writestr('fable/Contracts.fs',b'current Contracts source fixture')
+        archives[ident]=out.getvalue()
+    for cache in (work/'consumer-packages',selected/'packages'):
+        for ident,body in archives.items():
+            for name,data in ((f'{ident}.{CURRENT}.nupkg',body),(f'{ident}.{CURRENT}.nupkg.sha512',b'fixture'),('.nupkg.metadata',b'{}')):
+                put(cache/ident/CURRENT/name,data)
+        for name in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata',
+                     'lib/netstandard2.0/FSharp.Core.dll','lib/netstandard2.1/FSharp.Core.dll'):
+            put(cache/'fsharp.core/10.1.302'/name)
+    public=work/'consumer/public/sub/app'
+    for name in ('FSharp.Core.dll','Consumer.dll','Consumer','fable/Program.js'):
+        put(public/name)
+    for context in (public,root/'selected-browser'):
+        for name in ('module-worker.mjs','worker-client.mjs','worker-build.json','policy/WorkerEntry.js'):
+            put(context/'_content/FS.GG.Wasm.Browser'/name)
+        put(context/'_content/FS.GG.Wasm.Browser/policy/fable_modules/fable-library-js.5.18.0/Array.js',b'current library fixture')
+    for context in (public/'fable',selected/'installed-fable',root/'selected-browser/fable'):
+        put(context/'Program.js');put(context/'BrowserBridge.js')
+        put(context/f'fable_modules/FS.GG.Wasm.Browser.{CURRENT}/Host.fs',b'current Host source fixture')
+        put(context/f'fable_modules/FS.GG.Wasm.Contracts.{CURRENT}/Contracts.fs',b'current Contracts source fixture')
+    for name in ('limits-guest.wasm','http.log'):put(root/'selected-browser'/name)
+    for name in (*e.LOGS,'installed.packages.lock.json','installed.bad-hash.lock.json','official-core-joins.json'):
+        put(selected/name,b'{}' if name.endswith('.json') else b'fixture')
+    put(root/'selected-NuGet.Config',b'<configuration />')
+    baseline=root/'selected-baseline'
+    for name in ('receipt.json','fsharp.core.10.1.302.nupkg','fsharp.core.10.1.401.nupkg','fsharp.core.10.1.203.nupkg',
+                 'FSharp.Core.10.1.302.netstandard2.0.dll','FSharp.Core.10.1.302.netstandard2.1.dll',
+                 'FSharp.Core.10.1.401.netstandard2.0.dll','FSharp.Core.10.1.401.netstandard2.1.dll','FSharp.Core.10.1.203.netstandard2.1.dll'):
+        put(baseline/'official-core'/name,b'{}' if name.endswith('.json') else b'fixture')
+    put(baseline/'compiler/FSharp.Core.dll')
+    put(baseline/'tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/FSharp.Core.dll')
+    put(source/'tests/Wasm.Supervisor.Compatibility/browser/test-results/.last-run.json',b'{"status":"passed"}')
+    for name in ('InstalledCompatibility.dll','InstalledCompatibility.deps.json','InstalledCompatibility.runtimeconfig.json','FSharp.Core.dll'):
+        put(source/'tests/Wasm.Supervisor.Compatibility/Installed/bin/Debug/net10.0'/name)
+    for name,body in (('consumer.log',b'fixture'),('selected.log',b'fixture'),('runtime-status.json',b'{"exitCode":0}'),
+                      ('consumer-status.json',b'{"runtime":0,"collection":0,"cleanup":0,"descendants":"unproved"}')):
+        put(logs/name,body)
+    return script,work,selected,receipts,logs
+
+
 class Evidence(unittest.TestCase):
+    def test_actual_current_cli_consumer_merge_and_assemble(self):
+        self.assertEqual(e.VERSION,CURRENT)
+        for defect in (None,'old-cache-only','different-authenticated-sdk'):
+            with self.subTest(defect=defect),tempfile.TemporaryDirectory() as raw:
+                root=pathlib.Path(raw);script,work,selected,receipts,logs=current_cli_topology(root)
+                if defect=='old-cache-only':
+                    for ident in e.PACKAGES:
+                        folder=work/'consumer-packages'/ident/CURRENT
+                        folder.rename(folder.with_name('0.5.0'))
+                        for leaf in folder.with_name('0.5.0').iterdir():
+                            if CURRENT in leaf.name:leaf.rename(leaf.with_name(leaf.name.replace(CURRENT,'0.5.0')))
+                environment=dict(os.environ,RUNNER_TEMP=raw,RELEASE_VERSION='0.5.0',WASM_CANDIDATE_VERSION='0.5.0')
+                consumer=subprocess.run([sys.executable,str(script),'consumer','--work',str(work),'--output',str(root/'consumer-output'),'--runtime','0'],env=environment,capture_output=True,text=True)
+                manifest=json.loads((root/'consumer-output/evidence-manifest.json').read_text())
+                if defect=='old-cache-only':
+                    self.assertEqual(consumer.returncode,1);self.assertFalse(manifest['eligible'])
+                    self.assertTrue(any(f'.{CURRENT}.nupkg' in row['member'] for row in manifest['errors']))
+                    continue
+                self.assertEqual(consumer.returncode,0,consumer.stderr);self.assertTrue(manifest['eligible'])
+                if defect:put(receipts/f'fsgg-wasm-sdk-{CURRENT}.tar.gz',b'wrong authenticated receipt fixture')
+                assembled=subprocess.run([sys.executable,str(script),'assemble','--work',str(selected),'--consumer',str(root/'consumer-output'),
+                                          '--receipts',str(receipts),'--logs',str(logs),'--output',str(root/'assembled'),'--runtime','0'],env=environment,capture_output=True,text=True)
+                final=json.loads((root/'assembled/evidence-manifest.json').read_text())
+                self.assertEqual(assembled.returncode,int(defect is not None),assembled.stderr)
+                self.assertEqual(final['eligible'],defect is None)
+                if defect:self.assertTrue(any(row['reason']=='consumer original differs from authenticated publication receipt' for row in final['errors']))
+                else:
+                    self.assertFalse(final['errors'])
+                    names={row['path'] for row in final['members']}
+                    self.assertIn(f'receipts/fsgg-wasm-sdk-{CURRENT}.tar.gz',names)
+                    self.assertIn(f'selected/packages/fs.gg.wasm.browser/fs.gg.wasm.browser.{CURRENT}.nupkg',names)
+                    self.assertTrue(all('0.5.0' not in name for name in names))
+
+    def test_old_fable_and_package_names_are_not_current_fallbacks(self):
+        self.assertNotEqual(CURRENT,'0.5.0')
+        for project in ('FS.GG.Wasm.Browser','FS.GG.Wasm.Contracts'):
+            with self.assertRaisesRegex(ValueError,'unreviewed Fable dependency module'):
+                e.fable_dependency(f'consumer/public/sub/app/fable/fable_modules/{project}.0.5.0/Host.fs')
+        self.assertFalse(e.consumer_member('consumer/packages/fs.gg.wasm.browser/fs.gg.wasm.browser.0.5.0.nupkg'))
+        self.assertFalse(e.consumer_member('consumer/fsgg-wasm-sdk-0.5.0.tar.gz'))
+
+    def test_ambiguous_or_invalid_tracked_version_refuses_before_collection(self):
+        for xml in ('<Project />','<Project><WasmSharedVersion>0.6.0</WasmSharedVersion><WasmSharedVersion>0.5.0</WasmSharedVersion></Project>',
+                    '<Project><WasmSharedVersion>current</WasmSharedVersion></Project>'):
+            with self.subTest(xml=xml),tempfile.TemporaryDirectory() as raw:
+                root=pathlib.Path(raw);script,work,*_=current_cli_topology(root)
+                put(root/'source/eng/wasm-shared/version.props',xml.encode())
+                result=subprocess.run([sys.executable,str(script),'consumer','--work',str(work),'--output',str(root/'out'),'--runtime','0'],capture_output=True,text=True)
+                self.assertNotEqual(result.returncode,0)
+                self.assertFalse((root/'out').exists())
+
+    def test_actual_owner_trap_runs_current_collector_and_preserves_cleanup(self):
+        import shlex
+        source=(ROOT/'scripts/verify-wasm-package-consumer.sh').read_text()
+        trap=source.split('finish_consumer() {',1)[1].split('\ntrap finish_consumer EXIT',1)[0]
+        for missing in (False,True):
+            with self.subTest(missing=missing),tempfile.TemporaryDirectory() as raw:
+                root=pathlib.Path(raw);script,work,*_=current_cli_topology(root)
+                if missing:
+                    (work/'consumer-packages/fs.gg.wasm.browser'/CURRENT/f'fs.gg.wasm.browser.{CURRENT}.nupkg').unlink()
+                status=root/'status.json';output=root/'consumer-output'
+                values={'mode':'--feed-only','repo':str(root/'source'),'work':str(work),
+                        'WASM_CONSUMER_EVIDENCE':str(output),'WASM_CONSUMER_STATUS':str(status)}
+                command='set -euo pipefail\n'+'\n'.join(key+'='+shlex.quote(value) for key,value in values.items())
+                command+='\nfinish_consumer() {'+trap+'\ntrap finish_consumer EXIT\nexit 0\n'
+                result=subprocess.run(['bash','-c',command],capture_output=True,text=True)
+                self.assertEqual(result.returncode,int(missing),result.stderr)
+                actual=json.loads(status.read_text())
+                self.assertEqual(actual,{'runtime':0,'collection':int(missing),'cleanup':0,'descendants':'unproved'})
+                self.assertFalse(work.exists())
+                merged=e.Projection();e.merge(merged,output)
+                self.assertEqual(bool(merged.errors),missing,merged.errors)
+
     def test_hidden_metadata_and_colon_cache_exclusion(self):
         with tempfile.TemporaryDirectory() as raw:
             root=pathlib.Path(raw);work=root/'work'
             for name in ('release-manifest.json','NuGet.Config','consumer/packages.lock.json'):
                 put(work/name,b'{}')
-            put(work/'sdk-artifacts/fsgg-wasm-sdk-0.5.0.tar.gz')
+            put(work/'sdk-artifacts'/f'fsgg-wasm-sdk-{CURRENT}.tar.gz')
             put(work/'installed-member-receipt.log')
             put(work/'consumer-http.log')
             for ident in e.PACKAGES:
-                for leaf in (ident+'.0.5.0.nupkg',ident+'.0.5.0.nupkg.sha512','.nupkg.metadata'):
-                    put(work/'consumer-packages'/ident/'0.5.0'/leaf)
+                for leaf in (f'{ident}.{CURRENT}.nupkg',f'{ident}.{CURRENT}.nupkg.sha512','.nupkg.metadata'):
+                    put(work/'consumer-packages'/ident/CURRENT/leaf)
             for name in ('fsharp.core.10.1.302.nupkg','fsharp.core.10.1.302.nupkg.sha512','.nupkg.metadata','lib/netstandard2.0/FSharp.Core.dll','lib/netstandard2.1/FSharp.Core.dll'):
                 put(work/'consumer-packages/fsharp.core/10.1.302'/name)
             put(work/'consumer/browser/test-results/.last-run.json',b'{"status":"passed"}')
@@ -80,7 +224,7 @@ class Evidence(unittest.TestCase):
             with self.subTest(context=context),tempfile.TemporaryDirectory() as raw:
                 root=pathlib.Path(raw);p=e.Projection();owner=context.split('/')[0]
                 for package,body in archives.items():
-                    p.add(put(root/package,body),owner+'/packages/'+package+'/'+package+'.0.5.0.nupkg')
+                    p.add(put(root/package,body),owner+'/packages/'+package+'/'+f'{package}.{CURRENT}.nupkg')
                 dependency=root/'compiled/fable_modules'
                 put(dependency/'.gitignore',b'*')
                 library=dependency/'fable-library-js.5.18.0'
@@ -88,7 +232,7 @@ class Evidence(unittest.TestCase):
                                   ('package.json',b'{"name":"@fable-org/fable-library-js","version":"2.8.0","type":"module"}'),
                                   ('Array.js',b'actual runtime'),('lib/big.js',b'actual nested runtime')):put(library/leaf,body)
                 for package,module in (('fs.gg.wasm.browser','FS.GG.Wasm.Browser'),('fs.gg.wasm.contracts','FS.GG.Wasm.Contracts')):
-                    folder=dependency/(module+'.0.5.0')
+                    folder=dependency/(module+'.'+CURRENT)
                     for member,body in members[package].items():
                         if not member.startswith('fable/'):continue
                         leaf=member[len('fable/'):]
@@ -97,13 +241,13 @@ class Evidence(unittest.TestCase):
                         if leaf.endswith('.fs'):put(folder/(leaf+'.js'),b'generated current source')
                 p.tree(root/'compiled',context)
                 self.assertFalse(p.errors,p.errors)
-                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.5.0/Host.fs',p.files)
-                self.assertIn(context+'/fable_modules/FS.GG.Wasm.Browser.0.5.0/Host.fs.js',p.files)
+                self.assertIn(context+f'/fable_modules/FS.GG.Wasm.Browser.{CURRENT}/Host.fs',p.files)
+                self.assertIn(context+f'/fable_modules/FS.GG.Wasm.Browser.{CURRENT}/Host.fs.js',p.files)
                 if owner=='consumer':
                     self.assertEqual(p.finish(root/'out',0),0)
                     joined=e.Projection();e.merge(joined,root/'out')
                     self.assertFalse(joined.errors,joined.errors);self.assertEqual(joined.files,p.files)
-                    copied=context+'/fable_modules/FS.GG.Wasm.Browser.0.5.0/Host.fs'
+                    copied=context+f'/fable_modules/FS.GG.Wasm.Browser.{CURRENT}/Host.fs'
                     original=p.files[copied];p.files[copied]=b'changed copied source'
                     p.finish(root/'forged',0)
                     refused=e.Projection();e.merge(refused,root/'forged')
@@ -118,8 +262,8 @@ class Evidence(unittest.TestCase):
                 bad.dependency(context+'/fable_modules/fable-library-js.5.18.0/Array.js')
                 self.assertTrue(any(x['reason']=='Fable dependency differs from original package member' for x in bad.errors),bad.errors)
                 for leaf in ('fable-library-js.5.18.0/unexpected.exe','fable-library-js.5.18.0/foreign.js',
-                             'Other.0.5.0/Host.fs','FS.GG.Wasm.Browser.0.5.0/Foreign.fs',
-                             'FS.GG.Wasm.Browser.0.5.0/Foreign.fs.js'):
+                             f'Other.{CURRENT}/Host.fs',f'FS.GG.Wasm.Browser.{CURRENT}/Foreign.fs',
+                             f'FS.GG.Wasm.Browser.{CURRENT}/Foreign.fs.js'):
                     name=context+'/fable_modules/'+leaf
                     if leaf.endswith('foreign.js'):
                         bad.files[name]=b'foreign runtime';bad.dependency(name)
@@ -184,13 +328,14 @@ class Evidence(unittest.TestCase):
         trap=source.split('finish_consumer() {',1)[1].split('\ntrap finish_consumer EXIT',1)[0]
         # Run only the maintained shell trap body with inert collection/cleanup
         # functions. No consumer command or downloaded source is executed.
-        for runtime,collection,expected in ((37,19,37),(0,19,19),(0,0,0)):
+        for runtime,collection,cleanup,expected in ((37,19,23,37),(0,19,23,19),(0,0,23,23),(0,0,0,0)):
             with tempfile.TemporaryDirectory() as raw:
-                script='set -euo pipefail\nmode=--feed-only\nrepo=/inert\nwork=/inert\nWASM_CONSUMER_EVIDENCE=/inert\nWASM_CONSUMER_STATUS='+raw+'/status.json\npython3(){ return '+str(collection)+'; }\nrm(){ return 0; }\nfinish_consumer() {'+trap+'\ntrap finish_consumer EXIT\nexit '+str(runtime)
+                script='set -euo pipefail\nmode=--feed-only\nrepo=/inert\nwork=/inert\nWASM_CONSUMER_EVIDENCE=/inert\nWASM_CONSUMER_STATUS='+raw+'/status.json\npython3(){ return '+str(collection)+'; }\nrm(){ return '+str(cleanup)+'; }\nfinish_consumer() {'+trap+'\ntrap finish_consumer EXIT\nexit '+str(runtime)
                 result=subprocess.run(['bash','-c',script],capture_output=True,text=True)
                 self.assertEqual(result.returncode,expected,result.stderr)
                 status=json.loads((pathlib.Path(raw)/'status.json').read_text())
                 self.assertEqual(status['runtime'],runtime);self.assertEqual(status['collection'],collection)
+                self.assertEqual(status['cleanup'],cleanup)
 
     def test_workflow_preserves_command_first_cause_and_native_log_failure(self):
         text=(ROOT/'.github/workflows/wasm-installed-org.yml').read_text()
@@ -274,16 +419,31 @@ class Evidence(unittest.TestCase):
             root=pathlib.Path(raw)
             def git(*args):return subprocess.check_output(['git','-C',raw,*args],text=True,stderr=subprocess.DEVNULL).strip()
             git('init','-q');git('config','user.name','inert control');git('config','user.email','control@example.invalid')
-            allowed='scripts/wasm-release/bind-installed-release.py'
-            put(root/allowed,b'old');git('add','.');git('commit','-qm','P');p=git('rev-parse','HEAD');tree=git('rev-parse','HEAD^{tree}')
-            put(root/allowed,b'new');git('add','.');git('commit','-qm','Q');q=git('rev-parse','HEAD')
+            allowed=('scripts/wasm-release/installed-evidence.py','tests/release/wasm/test-installed-evidence.py')
+            excluded=('eng/wasm-shared/version.props','src/Wasm.Browser/Host.fs','sdk/wasm/verify-sdk.sh',
+                      '.github/workflows/wasm-installed-org.yml','scripts/wasm-release/promotion.py','unlisted.txt')
+            for name in (*allowed,*excluded):put(root/name,b'old')
+            git('add','.');git('commit','-qm','P');p=git('rev-parse','HEAD');tree=git('rev-parse','HEAD^{tree}')
+            for name in allowed:put(root/name,b'new')
+            git('add','.');git('commit','-qm','Q');q=git('rev-parse','HEAD')
             with patch.object(b,'ROOT',root),patch.object(b,'PUBLISHED',p),patch.object(b,'PUBLISHED_TREE',tree):
-                audit=b.source_audit(p,q);self.assertEqual(len(audit['changes']),1)
+                audit=b.source_audit(p,q);self.assertEqual({row['path'] for row in audit['changes']},set(allowed))
                 row=audit['changes'][0];self.assertEqual(row['new']['sha256'],e.hashlib.sha256(b'new').hexdigest())
-                self.assertEqual(row['old']['blob'],git('rev-parse',p+':'+allowed))
-                put(root/'src/Wasm.Browser/Host.fs',b'semantic mutation');git('add','.');git('commit','-qm','bad')
-                with self.assertRaises(AssertionError):b.source_audit(p,git('rev-parse','HEAD'))
+                self.assertEqual(row['old']['blob'],git('rev-parse',p+':'+row['path']))
+                with patch.object(b,'INSTALLED_PATHS',b.INSTALLED_PATHS-{allowed[0]}),self.assertRaises(AssertionError):b.source_audit(p,q)
+                for name in excluded:
+                    git('reset','--hard',q);put(root/name,b'forbidden change');git('add','.');git('commit','-qm','excluded leaf')
+                    with self.subTest(excluded=name),self.assertRaises(AssertionError):b.source_audit(p,git('rev-parse','HEAD'))
+                for defect in ('mode','delete','rename','symlink'):
+                    git('reset','--hard',q);path=root/allowed[0]
+                    if defect=='mode':path.chmod(0o755)
+                    elif defect=='delete':path.unlink()
+                    elif defect=='rename':path.rename(path.with_name('renamed.py'))
+                    else:path.unlink();path.symlink_to(root/allowed[1])
+                    git('add','.');git('commit','-qm',defect)
+                    with self.subTest(defect=defect),self.assertRaises(AssertionError):b.source_audit(p,git('rev-parse','HEAD'))
                 with self.assertRaises(AssertionError):b.source_audit('a'*40,q)
+                with patch.object(b,'PUBLISHED_TREE','a'*40),self.assertRaises(AssertionError):b.source_audit(p,q)
 
 
 if __name__=='__main__':unittest.main()

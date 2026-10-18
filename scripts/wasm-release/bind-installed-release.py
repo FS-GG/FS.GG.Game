@@ -19,12 +19,15 @@ PUBLISHED_TREE = "090906c22f0ef0cd3ca453a28ca20ce8686e0753"
 # for arbitrary descendants or semantic changes inside a broad scripts prefix.
 INSTALLED_PATHS = frozenset({
     'scripts/wasm-release/bind-installed-release.py',
+    'scripts/wasm-release/installed-evidence.py',
+    'tests/release/wasm/test-installed-evidence.py',
     'tests/release/wasm/test-installed-org-workflow.py',
     'tests/release/wasm/test-release-promotion.py',
     'docs/roadmaps/wasm-shared-01.md',
     'docs/atlas/catalog.json',
     'docs/atlas/records/7f62ef13b4b46b4f23cae9536c977c15c85320a253ed2bc609eb7a1f0afdcf56.json',
     'docs/atlas/records/be492023350541da5256d6f653711b5f736d5216cf121a7e02ca43e1887215e4.json',
+    'docs/atlas/records/5466c617291eff27f59b569a2d42a18dc0c134d4935d52d802c5a71b8a594281.json',
 })
 
 
@@ -90,7 +93,7 @@ def source_audit(source, qualifier):
     assert rows, 'installed correction must be an explicit reviewed source change'
     return {'schema':'fsgg.wasm.installed-inputs/v1','publishedSource':source,'publishedTree':PUBLISHED_TREE,
             'qualifierSource':qualifier,'qualifierTree':git('rev-parse',qualifier+'^{tree}'),'changes':rows,
-            'consumerInputs':'all paths outside exact reviewed repair closure byte-identical'}
+            'consumerInputs':'all paths outside exact reviewed qualifier correction byte-identical to P; published packages/SDK remain P inputs, evidence collector/binder are selected Q inputs'}
 
 
 def bind_executor(source, executor, version):
