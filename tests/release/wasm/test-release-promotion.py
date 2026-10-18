@@ -730,23 +730,23 @@ class Tests(unittest.TestCase):
         # Actual Git cleanliness/head checks remain live; the complete diff parser
         # is exercised independently against real inert Git commits by collector controls.
         with patch.dict(os.environ,env),patch.object(binder,'source_audit',return_value={'bound':True}) as audit:
-            # This read-only binder selects the exact 0.5 publication producer;
+            # This read-only binder selects the exact 0.6 publication producer;
             # neither historical versions nor arbitrary executors can replace it.
-            audit_row=binder.bind_executor(binder.PUBLISHED,head,'0.5.0')
+            audit_row=binder.bind_executor(binder.PUBLISHED,head,'0.6.0')
             self.assertTrue(audit_row['bound']);self.assertEqual(audit_row['execution']['run'],707)
             audit.assert_called_once_with(binder.PUBLISHED,head)
             for key,bad in [('GITHUB_SHA','9'*40),('GITHUB_WORKFLOW_SHA','9'*40),('QUALIFIER_SOURCE','9'*40),('GITHUB_REF','refs/heads/other'),('GITHUB_EVENT_NAME','push'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_WORKFLOW_REF',p.REPO+'/.github/workflows/other.yml@refs/heads/main'),('GITHUB_JOB','other'),('GITHUB_RUN_ID','0'),('WASM_PACKAGE_FEED','https://other.invalid/index.json')]:
-                with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,head,'0.5.0')
-            for executor,version in [('9'*40,'0.5.0'),(head,'0.3.0'),(head,'0.4.0')]:
+                with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,head,'0.6.0')
+            for executor,version in [('9'*40,'0.6.0'),(head,'0.3.0'),(head,'0.4.0'),(head,'0.5.0')]:
                 with self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,executor,version)
         with patch.dict(os.environ,{'EXECUTION_BINDING':'{"schema":"historical"}'}),self.assertRaises(p.Refusal):p.execution_input()
 
-    def test_historical_installed_binder_refuses_the_unpublished_current_successor(self):
+    def test_current_installed_binder_requires_the_exact_published_subject(self):
         spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
         binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
-        # The finite installed binder still selects immutable published 0.5.
-        # A later publication-specific Q must be reviewed before 0.6 can run.
-        self.assertEqual(binder.PUBLISHED,'80540027623d9b1a8aa7715d0591de48455403b7')
+        # The finite current qualifier selects genuine published 0.6 only;
+        # neither the old installed subject nor an arbitrary executor is accepted.
+        self.assertEqual(binder.PUBLISHED,'8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e')
         with self.assertRaises(AssertionError):
             binder.bind_executor(binder.PUBLISHED,'9'*40,p.VERSION)
 

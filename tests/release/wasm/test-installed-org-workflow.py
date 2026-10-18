@@ -62,33 +62,34 @@ for broken in (
     else:
         raise SystemExit("known-bad installed qualification route accepted")
 
-values = {"RELEASE_VERSION": "0.5.0", "PUBLISHED_SOURCE": binding.PUBLISHED, "QUALIFIER_SOURCE": "a" * 40, "ACCEPTED_EXECUTOR": "a" * 40, "PROMOTION_BINDING_SHA256": "e" * 64, "MANIFEST_SHA256": "c" * 64, "SDK_SHA256": "d" * 64}
-assert binding.checked_inputs(values, "0.5.0") == values
-try:
-    binding.checked_inputs(dict(values, RELEASE_VERSION="0.4.0"), "0.4.0")
-except AssertionError:
-    pass
-else:
-    raise SystemExit("historical installed release accepted as current")
-for key, value in (("PUBLISHED_SOURCE", "main"), ("QUALIFIER_SOURCE", "wasm/v0.5.0"), ("SDK_SHA256", "unknown"), ("RELEASE_VERSION", "0.1.1"), ("MANIFEST_SHA256", "$(false)")):
+values = {"RELEASE_VERSION": "0.6.0", "PUBLISHED_SOURCE": binding.PUBLISHED, "QUALIFIER_SOURCE": "a" * 40, "ACCEPTED_EXECUTOR": "a" * 40, "PROMOTION_BINDING_SHA256": "e" * 64, "MANIFEST_SHA256": "c" * 64, "SDK_SHA256": "d" * 64}
+assert binding.checked_inputs(values, "0.6.0") == values
+for historical in ("0.4.0", "0.5.0"):
     try:
-        binding.checked_inputs(dict(values, **{key: value}), "0.5.0")
+        binding.checked_inputs(dict(values, RELEASE_VERSION=historical), historical)
+    except AssertionError:
+        pass
+    else:
+        raise SystemExit("historical installed release accepted as current")
+for key, value in (("PUBLISHED_SOURCE", "main"), ("QUALIFIER_SOURCE", "wasm/v0.6.0"), ("SDK_SHA256", "unknown"), ("RELEASE_VERSION", "0.1.1"), ("MANIFEST_SHA256", "$(false)")):
+    try:
+        binding.checked_inputs(dict(values, **{key: value}), "0.6.0")
     except AssertionError:
         pass
     else:
         raise SystemExit(f"unbound dispatch {key} accepted")
 for missing in ('ACCEPTED_EXECUTOR','PROMOTION_BINDING_SHA256'):
     broken=dict(values);broken.pop(missing)
-    try:binding.checked_inputs(broken,'0.5.0')
+    try:binding.checked_inputs(broken,'0.6.0')
     except (AssertionError,KeyError):pass
     else:raise SystemExit('missing current transaction/executor accepted')
 for key, value in [('PUBLISHED_SOURCE','b'*40),('QUALIFIER_SOURCE','b'*40),('EXECUTION_BINDING','{}'),('CANONICAL_QUALIFICATION_AUDIT','historical')]:
-    try:binding.checked_inputs(dict(values,**{key:value}),'0.5.0')
+    try:binding.checked_inputs(dict(values,**{key:value}),'0.6.0')
     except (AssertionError,KeyError):pass
     else:raise SystemExit('current source/overlay substitution accepted')
-release = {"tag_name": "wasm/v0.5.0", "draft": False, "prerelease": False, "published_at": "2026-10-02T00:00:00Z", "assets": []}
-for name, digest in (("release-manifest.json", "c" * 64), ("fsgg-wasm-sdk-0.5.0.tar.gz", "d" * 64), ("promotion-binding.json", "e" * 64)):
-    release["assets"].append({"name": name, "digest": "sha256:" + digest, "browser_download_url": f"https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v0.5.0/{name}"})
+release = {"tag_name": "wasm/v0.6.0", "draft": False, "prerelease": False, "published_at": "2026-10-02T00:00:00Z", "assets": []}
+for name, digest in (("release-manifest.json", "c" * 64), ("fsgg-wasm-sdk-0.6.0.tar.gz", "d" * 64), ("promotion-binding.json", "e" * 64)):
+    release["assets"].append({"name": name, "digest": "sha256:" + digest, "browser_download_url": f"https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v0.6.0/{name}"})
 assert len(binding.validate_release(release, values)) == 3
 for mutant in ("digest", "url", "draft", "version", "missing"):
     broken = copy.deepcopy(release)
