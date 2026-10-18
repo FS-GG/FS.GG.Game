@@ -58,17 +58,24 @@ The producer's unchanged `DefaultCompatibility` update expires queued requests
 at strict `original due < producer Clock` before active invalidation/whole-session
 retirement. A real late timer can therefore expire both nearby250ms requests;
 first cause must not be relabeled as disposal. The connected test correction reads
-the follower's actual admitted queue due and actual producer clock at settlement,
-then requires exactly the reason selected by that strict comparison. Both default
+the follower's actual admitted queue due and actual producer clock at the first
+retirement effect, before native termination and connected Host reentry, then
+requires exactly the reason selected by that strict comparison. Both default
 terminal families retain no ABI outcome, discarded authority, no follower Post,
 distinct identity, once-only settlement, follower-before-terminal order and actual
-whole-worker retirement before the terminal callback. No additional clock sample
-sets the expected result. Missing actual queue admission remains a setup failure.
+whole-worker retirement before the terminal callback. The later follower-callback clock is retained separately: connected termination
+reenters `Observe(Now)` and can advance it beyond the original decision. Queued
+expiry must settle before the first termination, disposal after it. No additional
+clock sample sets the expected result. Missing actual queue admission or retirement
+batch remains a setup failure.
 
 Six direct Lifecycle controls independently exercise before/exact/after follower
 due for shutdown and terminal-Process followers, including actual phase setup,
-original due, duplicate-timer refusal and complete retirement effect order. The
-separate compatible SC2 queue-head `>=` boundary and held-snapshot semantics remain
+original due, duplicate-timer refusal and complete retirement effect order. Three additional actual connected-Host controls reproduce mechanical termination
+reentry with declared inert ports: before/equal/after decision clocks, captured
+actual timer identity/delay, and a later callback clock beyond the queued due.
+They are logical interpreter controls, not browser timing or ABI execution proof.
+The separate compatible SC2 queue-head `>=` boundary and held-snapshot semantics remain
 unchanged; Default expiry is not generalized to that profile. Producer code,
 parser, deadlines/caps/version and all36 real-browser cases remain unchanged.
 The repaired current source still requires independent review, exact native

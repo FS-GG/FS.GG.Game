@@ -579,6 +579,71 @@ let terminalProcess =
                     let _, duplicate = update (observed + 1L) (TimerObserved { Identity = reset; Correlation = tokenFor reset; Phase = Process }) state
                     Expect.isEmpty duplicate "duplicate timer cannot settle or dispatch again"
 
+        // Actual connected interpreter with declared inert mechanics. Termination
+        // advances only this injected port clock, reproducing Observe(Now) reentry.
+        // This is not a browser timing or ABI-execution claim.
+        for observed in [ 4L; 5L; 6L ] do
+            testCase (sprintf "connected retirement decision clock survives reentry at %d" observed) <| fun _ ->
+                let mutable portClock = 0L
+                let mutable connected: Host option = None
+                let timers = System.Collections.Generic.Dictionary<string, int * (unit -> unit)>()
+                let events = ResizeArray<string * int64>()
+                let results = ResizeArray<BrowserResult * int64>()
+                let posts = ResizeArray<WorkerWireCommand>()
+                let transport: HostTransport =
+                    { Now = fun () -> portClock
+                      CreateWorker = fun _ _ -> ()
+                      PostCommand = fun _ command -> posts.Add command
+                      TerminateWorker = fun worker ->
+                          events.Add(("terminate:" + worker, connected.Value.Projection.Clock))
+                          portClock <- 6L
+                      ArmTimer = fun key delay callback -> timers[key] <- (delay, callback)
+                      CancelTimer = fun key -> timers.Remove key |> ignore }
+                let receive (result: BrowserResult) =
+                    let clock = connected.Value.Projection.Clock
+                    events.Add(("settle:" + string result.Identity.Request, clock))
+                    results.Add((result, clock))
+                let host = Host.CreateConnected(settings Sc2ImportedStrict, transport, receive) |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+                connected <- Some host
+                let load = identity "worker-1" 100UL 1UL
+                let initialize = identity "worker-1" 101UL 1UL
+                let reset = identity "worker-1" 1UL 1UL
+                let follower = identity "worker-1" 2UL 1UL
+                host.Load(0L, load, [| 0uy |])
+                host.Observe(0L, "worker-1", AbiVersionObserved(load, tokenFor load, 0x10000u))
+                host.Initialize(0L, initialize, [| 0uy |])
+                host.Observe(0L, "worker-1", InvocationObserved(success Initialize initialize, tokenFor initialize))
+                host.SubmitLimited(0L, LimitedInvokeAndRetire(reset, [| 1uy |]), { terminalLimits with MaximumDeadlineMilliseconds = 3 }) |> fun result -> Expect.equal result (Ok ()) "terminal admitted"
+                host.SubmitLimited(0L, LimitedShutdown follower, { terminalLimits with MaximumDeadlineMilliseconds = 5 }) |> fun result -> Expect.equal result (Ok ()) "follower admitted"
+                for at, phase in [ 1L, AllocateInput; 2L, Process ] do
+                    portClock <- at
+                    host.Observe(at, "worker-1", PhaseObserved(reset, tokenFor reset, phase))
+                Expect.equal host.Projection.Current.DeadlineMilliseconds 3L "active due remains original"
+                Expect.equal host.Projection.Ordinary.Head.DeadlineMilliseconds 5L "actual queued due"
+                Expect.equal timers.Count 1 "only actual active phase timer remains"
+                let timer = timers |> Seq.exactlyOne
+                Expect.isTrue (timer.Key.EndsWith(":Process")) "actual Process timer selected"
+                let delay, fire = timer.Value
+                Expect.equal delay 2 "actual strict timer uses due-now+1"
+                events.Clear(); results.Clear(); posts.Clear()
+                portClock <- observed
+                fire ()
+                let firstTermination = events |> Seq.find (fun (kind, _) -> kind.StartsWith("terminate:"))
+                Expect.equal (snd firstTermination) observed "capture outer producer clock before termination reentry"
+                let destroyed, callbackClock = results |> Seq.find (fun (result, _) -> result.Identity = follower)
+                Expect.equal destroyed.Reason (Some(if 5L < observed then DeadlineExpired else HostDisposed)) "reason binds decision, not later callback clock"
+                Expect.equal destroyed.Outcome None "no follower ABI"
+                Expect.equal destroyed.Disposition Discarded "no follower authority"
+                Expect.equal callbackClock 6L "connected termination advances callback clock even when queue was unexpired"
+                let kinds = events |> Seq.map fst |> Seq.toList
+                Expect.equal ((kinds |> List.findIndex ((=) "settle:2")) < (kinds |> List.findIndex ((=) "terminate:worker-1"))) (5L < observed) "queued expiry precedes termination; disposal follows it"
+                Expect.equal kinds.[kinds.Length - 1] "settle:1" "terminal result follows retirement/follower"
+                Expect.isTrue host.Projection.Disposed "whole session retired"
+                Expect.isEmpty posts "no following post"
+                let count = results.Count
+                fire ()
+                Expect.equal results.Count count "stale real timer callback cannot settle twice"
+
         for observed, expired in [ 4L, false; 5L, true; 6L, true ] do
             testCase (sprintf "queued terminal head boundary %d" observed) <| fun _ ->
                 let a = identity "worker-1" 1UL 1UL

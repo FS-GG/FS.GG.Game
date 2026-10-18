@@ -191,17 +191,32 @@ test("unsafe output after guest rejection preserves status and removes dead Work
 });
 
 // DefaultCompatibility expires queued work before active retirement, using the
-// strict original due < producer Clock boundary. Read the actual queue/settlement
+// strict original due < producer decision Clock boundary. Read actual queue/effect
 // state instead of assuming that a late timer fires between two nearby deadlines.
 function reportTerminal(value) {
- const complete=/^[0-9]+$/.test(value.followerDue??"")&&/^[0-9]+$/.test(value.followerClock??"");
- console.log(JSON.stringify({stage:"terminal follower original deadline",resetRequest:value.reset.Request,resetState:value.reset.State,resetPhase:value.reset.Phase,resetDispatched:value.reset.Dispatched,followerRequest:value.follower.Request,due:value.followerDue,settledAt:value.followerClock,reason:value.follower.Reason,complete,expired:complete?BigInt(value.followerDue)<BigInt(value.followerClock):null}));
+ const decision=value.retirementBatch[0];
+ const complete=/^[0-9]+$/.test(value.followerDue??"")&&/^[0-9]+$/.test(decision?.clock??"");
+ console.log(JSON.stringify({stage:"terminal follower original deadline",resetRequest:value.reset.Request,resetState:value.reset.State,resetPhase:value.reset.Phase,resetDispatched:value.reset.Dispatched,followerRequest:value.follower.Request,due:value.followerDue,decisionClock:decision?.clock,followerCallbackClock:value.followerClock,reason:value.follower.Reason,complete,expired:complete?BigInt(value.followerDue)<BigInt(decision.clock):null}));
 }
 function expectTerminalFollower(value) {
  expect(value.followerDue,"actual follower must have entered the producer queue").toMatch(/^[0-9]+$/);
- expect(value.followerClock,"actual producer settlement clock").toMatch(/^[0-9]+$/);
- const expired=BigInt(value.followerDue)<BigInt(value.followerClock);
+ const decision=value.retirementBatch[0];
+ expect(decision,"actual retirement effect precedes terminal publication").toBeDefined();
+ expect(decision.clock,"producer Clock before termination/Observe reentry").toMatch(/^[0-9]+$/);
+ expect(decision.disposed).toBe(true);
+ expect(decision.settledRequests).not.toContain(value.reset.Request);
+ const expired=BigInt(value.followerDue)<BigInt(decision.clock);
  expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Dispatched:false,Output:[],Reason:expired?"DeadlineExpired":"HostDisposed"});
+ expect(value.followerClock).toMatch(/^[0-9]+$/);
+ if(expired){
+   expect(decision.settledRequests).toContain(value.follower.Request);
+   expect(value.followerClock).toBe(decision.clock);
+ }else{
+   expect(decision.settledRequests).not.toContain(value.follower.Request);
+   // Mechanical termination reenters Observe(Now), so the later callback clock
+   // is evidence, not the earlier queue-expiry decision clock.
+   expect(BigInt(value.followerClock)>=BigInt(decision.clock)).toBe(true);
+ }
  expect(value.follower.Request).not.toBe(value.reset.Request);
  expect(value.deliveries.indexOf(value.follower.Request)).toBeGreaterThanOrEqual(0);
  expect(value.deliveries.indexOf(value.follower.Request)).toBeLessThan(value.deliveries.indexOf(value.reset.Request));
