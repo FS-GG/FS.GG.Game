@@ -618,11 +618,14 @@ let terminalProcess =
                 for at, phase in [ 1L, AllocateInput; 2L, Process ] do
                     portClock <- at
                     host.Observe(at, "worker-1", PhaseObserved(reset, tokenFor reset, phase))
+                Expect.equal host.Projection.Current.Id reset.Request "actual current terminal identity"
+                Expect.equal host.Projection.Current.Worker reset.WorkerInstance "actual current worker"
                 Expect.equal host.Projection.Current.DeadlineMilliseconds 3L "active due remains original"
+                Expect.equal host.Projection.Ordinary.Head.Id follower.Request "actual queued follower identity"
                 Expect.equal host.Projection.Ordinary.Head.DeadlineMilliseconds 5L "actual queued due"
                 Expect.equal timers.Count 1 "only actual active phase timer remains"
                 let timer = timers |> Seq.exactlyOne
-                Expect.isTrue (timer.Key.EndsWith(":Process")) "actual Process timer selected"
+                Expect.equal timer.Key $"{reset.WorkerInstance}:{reset.Generation}:{reset.Request}:{OperationToken.value (tokenFor reset)}:Process" "exact current request/correlation/phase timer selected"
                 let delay, fire = timer.Value
                 Expect.equal delay 2 "actual strict timer uses due-now+1"
                 events.Clear(); results.Clear(); posts.Clear()
