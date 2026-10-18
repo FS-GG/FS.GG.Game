@@ -19,6 +19,8 @@ PUBLISHED_TREE = "090906c22f0ef0cd3ca453a28ca20ce8686e0753"
 # for arbitrary descendants or semantic changes inside a broad scripts prefix.
 INSTALLED_PATHS = frozenset({
     'scripts/wasm-release/bind-installed-release.py',
+    'scripts/wasm-release/installed-evidence.py',
+    'tests/release/wasm/test-installed-evidence.py',
     'tests/release/wasm/test-installed-org-workflow.py',
     'tests/release/wasm/test-release-promotion.py',
     'docs/roadmaps/wasm-shared-01.md',
@@ -90,7 +92,7 @@ def source_audit(source, qualifier):
     assert rows, 'installed correction must be an explicit reviewed source change'
     return {'schema':'fsgg.wasm.installed-inputs/v1','publishedSource':source,'publishedTree':PUBLISHED_TREE,
             'qualifierSource':qualifier,'qualifierTree':git('rev-parse',qualifier+'^{tree}'),'changes':rows,
-            'consumerInputs':'all paths outside exact reviewed repair closure byte-identical'}
+            'consumerInputs':'all paths outside exact reviewed qualifier correction byte-identical to P; published packages/SDK remain P inputs, evidence collector/binder are selected Q inputs'}
 
 
 def bind_executor(source, executor, version):

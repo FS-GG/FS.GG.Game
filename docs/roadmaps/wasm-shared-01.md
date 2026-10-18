@@ -57,15 +57,47 @@ and original promotion-binding SHA-256 is
 `fa7a48d1b389116b18f00b5ec94dd83e82bfd3fd9e4032fe052eb13eab019119`.
 The source hold ended after accepted original terminal/readback evidence.
 
-The finite read-only installed binder now selects only this published 0.6 P/tree.
-The selected qualifier Q must be the actual clean current main/dispatch executor,
-with the complete closed P-to-Q path audit and genuine original publication
-receipts. Runtime, build, workflow and profile bytes remain unchanged. Historical
-0.5/0.4 installed successes stay immutable evidence, not alternative current
-execution routes. Qualifier source CI/delivery and a separately selected fresh
-org/public installed operation remain required. Last accepted installed remains
-0.5 at Q `c938e9158542e3a0572b62dd09c01ad01cbb344f`; publication alone accepts
-no installed 0.6, SC2 adoption, image/native workload or product outcome.
+The finite read-only installed binder selects only this published 0.6 P/tree.
+[PR724](https://github.com/FS-GG/FS.GG.Game/pull/724) delivered qualifier
+`025cbfd4b3efed0a3baf87c52ebae404124cd814`, with exact tested/delivered tree
+`4fc6eb4b9d745d1f0869fa32a411ea00a7f09448`. Its original source qualification
+39086999965/attempt1 passed50 Lifecycle controls,36 browser cases and the final
+default53/selected16 compiled cohorts. That source result did not exercise the
+feed-only evidence projection.
+
+The first selected served-feed operation,
+[39088631914/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39088631914),
+failed on both feeds. Each actual consumer compiled and passed36 browser cases;
+the consumer's recorded runtime was0, collection1 and direct cleanup0, with
+descendant settlement unproved. The first recorded projection refusal concerns
+the actual Fable library `Array.js`: the collector requested an obsolete
+`fs.gg.wasm.browser.0.5.0.nupkg` original. The same duplicated version assumption
+also affected package-cache, Fable package-module, SDK and assembled receipt
+paths. The existing shell trap preserved the runtime/collection distinction and
+exited1 on collection failure; the selected-supervisor stage was not reached.
+Both ineligible original artifacts and native failures remain retained. Neither
+the successful consumer runtime nor the later failed collector is installed
+acceptance, and no unchanged retry or package replacement is selected.
+
+The prepared collector correction derives one current namespace from the audited
+tracked `version.props`, with stable-version validation and no environment/CLI
+version override or historical fallback. Consumer, selected dependency originals,
+Fable roles, SDK, merge and authenticated receipt joins use that same input.
+Existing mandatory roles, byte joins, link/census/size refusals and first-cause
+ordering remain. Inert controls run the maintained consumer and assemble CLI
+actions against a declared synthetic file topology, including current dependency
+bytes, stale-cache refusal and a mismatched authenticated SDK receipt. These are
+projection controls; they execute no fixture runtime or installed consumer.
+
+Any successor qualifier must be the actual clean current main/dispatch executor,
+with a reviewed finite P-to-Q file/blob audit and genuine original publication
+receipts. Collector/test changes require an explicit bounded qualifier closure;
+the earlier seven-file binder does not authorize them. Runtime, workflow, package
+pins and profile remain unchanged. Historical0.5/0.4 successes remain immutable
+evidence, not execution alternatives. Fresh source qualification and a separately
+selected installed operation remain required. Last accepted installed remains0.5
+at Q `c938e9158542e3a0572b62dd09c01ad01cbb344f`; installed0.6, image/native and
+whole-product acceptance remain open.
 
 ### First 0.6 source qualification and exact follower-expiry proof
 
