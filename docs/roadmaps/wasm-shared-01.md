@@ -1,8 +1,8 @@
 # WASM-SHARED-01 — producer qualification successor
 
-## Current 0.6 admission dispatch preparation
+## Current 0.6 publication and installed qualification
 
-The selected current-only successor is coherent `0.6.0` for the pair and SDK.
+The published current-only successor is coherent `0.6.0` for the pair and SDK.
 The instruction walker previously constructed an eight-element F# list and
 performed `List.contains` for every instruction; the generated JavaScript also
 constructed the array/list and equality comparer inside that loop. The selected
@@ -14,7 +14,7 @@ claiming a quadratic algorithm or proving the cause of any earlier timeout.
 Export/type checks outside the instruction loop retain their existing bounded
 list operations. The byte/LEB Result representation is outside this correction.
 
-Public regression preparation checks all eight opcodes with one-, two- and
+Public regressions cover all eight opcodes with one-, two- and
 five-byte u32 operands and exact truncated/overflow/unterminated first errors.
 A public owned module gains 65,536 genuine nop instructions without changing its
 other function bytes. Genuine fresh installed Workers must admit, initialize,
@@ -23,20 +23,49 @@ stage observations. These controls do not copy private consumer modules, prime
 Workers, reset phase budgets or infer time spent from absent observations.
 The existing linear static preflight precedes the unchanged 35-minute hosted
 qualification; one additional public browser history has three fresh Workers,
-with the existing 15-second per-case cap. Actual compilation, generated-code
-correspondence, admission results, cleanup and whole-job fit remain unqualified
-until the exact candidate runs. Original failures and future scheduling remain
-separate from the source optimization.
+with the existing 15-second per-case cap. Exact protected qualification
+[39084881928/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39084881928)
+passed all 50 Lifecycle controls, 36 package-browser cases (7.8 seconds), and
+default 53/selected 16 source and candidate-installed CLR/Fable/numeric cohorts.
+Its 13-minute 7-second job stayed within the unchanged 35-minute limit.
+Original failures and future scheduling remain separate from this finite result;
+the optimization does not establish an earlier timeout's CPU cause.
 
 The mandatory ApiCompat rail compares against actual published 0.5 P805400, its
 manifest and signed served archive hashes. The exact original 0.5 candidate policy
 remains a versioned historical evidence reader, not an execution fallback.
 
-Accepted 0.5 publication/installed identities below remain immutable. The finite
-installed binder still selects that exact publication and refuses the unpublished
-0.6 successor; a later publication-specific qualifier requires genuine receipts.
-This source assignment selects no publication, installed operation, consumer
-activation, image/native workload or product outcome.
+### Accepted publication and selected read-only qualifier
+
+Producer P is `8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e`, with tree
+`090906c22f0ef0cd3ca453a28ca20ce8686e0753`. Original protected artifact
+12120591664 retains all 39 eligible custody members and three candidate archives;
+independent original-data review and programme acceptance passed. Original
+[publication 39085989107/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39085989107)
+then completed all seven selected stages and cleanup successfully, publishing
+[release 416167085](https://github.com/FS-GG/FS.GG.Game/releases/tag/wasm/v0.6.0).
+Independent review verified the literal P tag, six original artifacts, exact
+transaction, both feeds and all four served release assets. Org archives match
+the originals; public payloads match with only repository signing added, backed
+by the retained native signature-verification logs.
+
+The immutable manifest SHA-256 is
+`e40258fe5cf6471c868afe0f6405d482a5a60ccfdb192f8cdb36b36adf08b8ff`,
+SDK SHA-256 is
+`b06bdd4a75e9f9727f58cdbeb272e42f1c88607f2326152c67feb5dc5aeccd6f`,
+and original promotion-binding SHA-256 is
+`fa7a48d1b389116b18f00b5ec94dd83e82bfd3fd9e4032fe052eb13eab019119`.
+The source hold ended after accepted original terminal/readback evidence.
+
+The finite read-only installed binder now selects only this published 0.6 P/tree.
+The selected qualifier Q must be the actual clean current main/dispatch executor,
+with the complete closed P-to-Q path audit and genuine original publication
+receipts. Runtime, build, workflow and profile bytes remain unchanged. Historical
+0.5/0.4 installed successes stay immutable evidence, not alternative current
+execution routes. Qualifier source CI/delivery and a separately selected fresh
+org/public installed operation remain required. Last accepted installed remains
+0.5 at Q `c938e9158542e3a0572b62dd09c01ad01cbb344f`; publication alone accepts
+no installed 0.6, SC2 adoption, image/native workload or product outcome.
 
 ### First 0.6 source qualification and exact follower-expiry proof
 
