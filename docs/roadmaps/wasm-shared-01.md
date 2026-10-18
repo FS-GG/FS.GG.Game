@@ -83,6 +83,19 @@ parser, deadlines/caps/version and all36 real-browser cases remain unchanged.
 The repaired current source still requires independent review, exact native
 qualification, complete custody and fit under the existing35-minute profile.
 
+The first corrected source attempt, [39082520529/attempt1](https://github.com/FS-GG/FS.GG.Game/actions/runs/39082520529),
+compiled and passed all50 Lifecycle controls, including the six new reducer and
+three connected-host boundaries. Its browser cohort failed29PASS/7FAIL: the new
+shared assertion compared an actual Fable `Uint8Array` receipt to plain `[]`.
+All seven first failures were this representation mismatch, with matched reason
+and no-outcome/discarded/undispatched fields. The reports retain the actual clocks;
+mode11 recorded due458, decision457 and callback459. Assertions after that shared
+comparison remained blocked and are not accepted. The repair compares actual byte
+content with `Array.from`, as existing ABI assertions already do, while preserving
+all first-cause, identity, ordering, no-post and retirement checks. Runtime code
+and all36 browser cases remain unchanged. Fresh exact-head full qualification
+is required; this failed original yielded no eligible package custody.
+
 ## Accepted 0.5 closed Worker and installed qualifier
 
 The accepted source successor selected coherent `0.5.0` for the pair and SDK.

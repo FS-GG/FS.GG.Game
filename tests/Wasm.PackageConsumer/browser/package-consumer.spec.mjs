@@ -206,7 +206,10 @@ function expectTerminalFollower(value) {
  expect(decision.disposed).toBe(true);
  expect(decision.settledRequests).not.toContain(value.reset.Request);
  const expired=BigInt(value.followerDue)<BigInt(decision.clock);
- expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Dispatched:false,Output:[],Reason:expired?"DeadlineExpired":"HostDisposed"});
+ expect(value.follower).toMatchObject({HasOutcome:false,Disposition:"Discarded",Dispatched:false,Reason:expired?"DeadlineExpired":"HostDisposed"});
+ // The actual Fable byte[] receipt remains a Uint8Array across page.evaluate.
+ // Compare its bytes, as the other actual ABI receipt assertions do.
+ expect(Array.from(value.follower.Output)).toEqual([]);
  expect(value.followerClock).toMatch(/^[0-9]+$/);
  if(expired){
    expect(decision.settledRequests).toContain(value.follower.Request);
