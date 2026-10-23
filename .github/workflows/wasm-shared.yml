@@ -95,7 +95,9 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'qualify' }}
     name: Shared WASM source, model, package, and browser qualification
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Three browser engines add a system-package download whose hosted apt mirror
+    # throughput varies widely (41 s to 16 min observed); keep visible headroom.
+    timeout-minutes: 55
     env:
       QUINT_VERSION: 0.32.0
       RUST_VERSION: 1.90.0
@@ -176,12 +178,18 @@ jobs:
           set -euo pipefail
           scripts/wasm-release/qualify-supervisor-custody.sh --compile-installed artifacts/wasm-release "$RUNNER_TEMP/wasm-supervisor-evidence"
 
-      - name: Install pinned Playwright Chromium
+      - name: Install pinned Playwright browsers
         working-directory: tests/Wasm.Browser.Conformance
+        timeout-minutes: 20
         run: |
           npm ci
           test "$(node -p "require('@playwright/test/package.json').version")" = "$PLAYWRIGHT_VERSION"
-          npx playwright install --with-deps chromium
+          # One bounded retry for a transient mirror/download failure.
+          for attempt in 1 2; do
+            if timeout 540 npx playwright install --with-deps chromium firefox webkit; then break; fi
+            test "$attempt" -lt 2 || exit 1
+            echo "browser install attempt $attempt failed; retrying once" >&2
+          done
 
       - name: Rebuild pinned WebAssembly fixtures
         run: |
@@ -208,9 +216,20 @@ jobs:
           tests/Wasm.Browser.Conformance/run.sh 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/browser.log"
 
       - name: Verify SDK archive and fresh package consumer
+        env:
+          WASM_COLD_LOAD_REPORT_DIR: ${{ runner.temp }}/wasm-cold-load
         run: |
           set -euo pipefail
           scripts/verify-wasm-package-consumer.sh --custody artifacts/wasm-release 2>&1 | tee "$RUNNER_TEMP/wasm-custody-logs/package-consumer.log"
+
+      - name: Retain cold-load browser timing evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: wasm-cold-load-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/wasm-cold-load/
 
       - name: Qualify compatible supervisor source and installed custody
         run: |

@@ -13,7 +13,7 @@ module compatibleQualification {
     else compatibleInitialized(1)
   // Active snapshot -> terminal Process -> held snapshot / followers, with
   // initialized candidate alive. No work following the terminal may dispatch.
-  action terminalHeldStep = all {stage'=stage+1,
+  action terminalHeldStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("snapshot",roomy,1)
     else if(stage==5)compatibleSubmit("terminal",roomy,2)
     else if(stage==6)compatibleSubmit("snapshot",roomy,3)
@@ -23,28 +23,28 @@ module compatibleQualification {
     else if(stage==12)compatibleValidate else if(stage==13)compatibleComplete(1)
     else if(stage==14)compatibleComplete(2) else compatibleDispose,
   }
-  action terminalFollowersStep = all {stage'=stage+1,
+  action terminalFollowersStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,1)
     else if(stage==5 or stage==6)compatibleSubmit("terminal",roomy,2)
     else if(stage==7)compatibleSubmit("shutdown",roomy,0)
     else if(stage==8)compatibleComplete(1) else if(stage==9)compatibleComplete(2)
     else compatibleDispose,
   }
-  action terminalExpiryStep = all {stage'=stage+1,
+  action terminalExpiryStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("terminal",small,1)
     else if(stage==5)compatibleSubmit("snapshot",roomy,2)
     else if(stage==6)compatibleSubmit("snapshot",roomy,3)
     else if(stage==7)compatiblePrepare else if(stage==8)compatibleTimer(6)
     else compatibleDispose,
   }
-  action fifoStep = all {stage'=stage+1,
+  action fifoStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,1)
     else if(stage==5)compatibleSubmit("ordered",small,2)
     else if(stage==6)compatibleSubmit("ordinary",{deadline:50,output:100,enclosing:0},3)
     else if(stage==7)compatibleComplete(1) else if(stage==8)compatibleComplete(2)
     else if(stage==9)compatibleComplete(3) else compatibleDispose,
   }
-  action snapshotStep = all {stage'=stage+1,
+  action snapshotStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("snapshot",roomy,1)
     else if(stage==5)compatibleSubmit("ordinary",roomy,2)
     else if(stage==6)compatibleSubmit("snapshot",small,3)
@@ -52,23 +52,23 @@ module compatibleQualification {
     else if(stage==8)compatibleComplete(10) else if(stage==9)compatibleComplete(11)
     else if(stage==10)compatibleComplete(12) else compatibleDispose,
   }
-  action ownerExpiryRefusalStep = all {stage'=stage+1,
+  action ownerExpiryRefusalStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",small,1)
     else if(stage==5)compatibleSubmitAt("ordinary",roomy,1,6) else compatibleDispose,
   }
-  action frozenCommitExpiryStep = all {stage'=stage+1,
+  action frozenCommitExpiryStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",small,1)
     else if(stage==5)compatiblePrepare else if(stage==6)compatibleCompiled
     else if(stage==7)compatibleInitialize(2,defaultLimits) else if(stage==8)compatibleInitialized(2)
     else if(stage==9)compatibleValidate else if(stage==10)compatibleFreeze
     else if(stage==11)compatibleFrozenCommitAt(6) else compatibleDispose,
   }
-  action heldEnclosingStep = all {stage'=stage+1,
+  action heldEnclosingStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("snapshot",roomy,1)
     else if(stage==5)compatibleSubmit("snapshot",{deadline:10,output:44,enclosing:5},2)
     else if(stage==6)compatibleComplete(5) else compatibleDispose,
   }
-  action freezeStep(activeFinished: bool): bool = all {stage'=stage+1,
+  action freezeStep(activeFinished: bool): bool = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,1)
     else if(stage==5)compatibleSubmit("ordered",roomy,2)
     else if(stage==6)compatibleSubmit("snapshot",roomy,3)
@@ -86,7 +86,7 @@ module compatibleQualification {
   }
   action freezeActive = freezeStep(false)
   action freezeCompleted = freezeStep(true)
-  action expiryStep(observed: int): bool = all {stage'=stage+1,
+  action expiryStep(observed: int): bool = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,1)
     else if(stage==5)compatiblePrepare else if(stage==6)compatibleCompiled
     else if(stage==7)compatibleInitialize(2,roomy) else if(stage==8)compatibleInitialized(2)
@@ -97,17 +97,17 @@ module compatibleQualification {
   action headBefore = expiryStep(4)
   action headAt = expiryStep(5)
   action headAfter = expiryStep(6)
-  action compositeStep = all {stage'=stage+1,
+  action compositeStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:7},1)
     else if(stage==5)compatiblePhase("allocate-input",3)
     else if(stage==6)compatibleComplete(6) else compatibleDispose,
   }
-  action bytesStep = all {stage'=stage+1,
+  action bytesStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,262144)
     else if(stage<20)compatibleSubmit("ordered",roomy,262144)
     else compatibleDispose,
   }
-  action capacityStep = all {stage'=stage+1,
+  action capacityStep = if(compatibleStarting)all {stage'=stage,compatibleReady} else all {stage'=stage+1,
     if(stage<4)prefix else if(stage==4)compatibleSubmit("ordinary",roomy,1)
     else if(stage<260)compatibleSubmit("ordered",roomy,1)
     else compatibleDispose,
@@ -126,7 +126,7 @@ module compatibleQualificationTest {
     .then(compatibleSubmit("ordered",defaultLimits,1)).then(compatibleSubmit("ordered",defaultLimits,1))
     .expect(not(canAdmit(compatibleState,"ordinary",defaultLimits,1)))
   run frozenReceiptMustMatchTest = initCompatible.then(readyCompatible).then(compatiblePrepare)
-    .then(compatibleCompiled).then(compatibleInitialize(2,defaultLimits)).then(compatibleInitialized(2))
+    .then(compatibleReady).then(compatibleCompiled).then(compatibleInitialize(2,defaultLimits)).then(compatibleInitialized(2))
     .then(compatibleValidate).then(compatibleFreeze).expect(and {
       canCommitFrozen(compatibleState,7,2,1,2),
       not(canCommitFrozen(compatibleState,8,2,1,2)),

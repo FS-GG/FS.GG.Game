@@ -49,7 +49,7 @@ let private configuration path digest outputCap deadline =
         }
     |> unwrap
 
-let createHost path digest outputCap deadline (transport: HostTransport) receive =
+let createHostWithStartup path digest outputCap deadline (startup: int) (transport: HostTransport) receive =
     let profile =
         if path = "bar-protected" then
             BarProtected
@@ -58,7 +58,11 @@ let createHost path digest outputCap deadline (transport: HostTransport) receive
 
     let configuration = configuration path digest outputCap deadline
     let role = if profile = BarProtected then None else Some Controller
-    let settings = HostSettings.create configuration role |> unwrap
+    let settings =
+        HostSettings.create configuration role
+        |> Result.bind (fun selected ->
+            if startup = 0 then Ok selected else HostSettings.withWorkerStartTimeout startup selected)
+        |> unwrap
 
     let settle (result: BrowserResult) =
         let state, phase, output, diagnostic, cleanup, status, dispatched =
@@ -105,6 +109,9 @@ let createHost path digest outputCap deadline (transport: HostTransport) receive
 
     Host.CreateConnected(settings, transport, settle) |> unwrap
 
+let createHost path digest outputCap deadline (transport: HostTransport) receive =
+    createHostWithStartup path digest outputCap deadline 0 transport receive
+
 // Test observation of actual producer state; never samples/advances its clock.
 let producerClock (host: Host) = string host.Projection.Clock
 let queuedDeadline (host: Host) request =
@@ -115,8 +122,8 @@ let queuedDeadline (host: Host) request =
 
 let load (host: Host) now wire artifact = host.Load(now, identity wire, artifact)
 
-// The cold-start controls use the same real, pre-create enclosing deadline as
-// a limited consumer operation. Phase observations cannot renew this budget.
+// A caller-enclosing deadline is absolute: it caps Worker startup as well as the
+// policy budget. Phase observations cannot renew this budget.
 let loadBoundedSc2 (host: Host) (now: int64) wire digest artifact deadline =
     host.SubmitLimited(
         now,
@@ -124,6 +131,27 @@ let loadBoundedSc2 (host: Host) (now: int64) wire digest artifact deadline =
         { MaximumDeadlineMilliseconds = deadline
           MaximumOutputBytes = 65536
           EnclosingDeadlineMilliseconds = Some(now + int64 deadline) }
+    ) |> unwrap
+
+// Without an enclosing deadline the selected policy budget starts only when the
+// fresh Worker reports readiness; startup has its own bound.
+let loadLimitedSc2 (host: Host) (now: int64) wire digest artifact deadline =
+    host.SubmitLimited(
+        now,
+        LimitedLoad(identity wire, configuration "sc2-imported-strict" digest 65536 deadline, artifact),
+        { MaximumDeadlineMilliseconds = deadline
+          MaximumOutputBytes = 65536
+          EnclosingDeadlineMilliseconds = None }
+    ) |> unwrap
+
+let prepareLimitedSc2 (host: Host) (now: int64) wire transaction digest artifact =
+    host.SubmitLimited(
+        now,
+        LimitedCandidate(identity wire, transaction, Some 1UL,
+            configuration "sc2-imported-strict" digest 65536 250, artifact),
+        { MaximumDeadlineMilliseconds = 250
+          MaximumOutputBytes = 65536
+          EnclosingDeadlineMilliseconds = None }
     ) |> unwrap
 
 let prepareBoundedSc2 (host: Host) (now: int64) wire transaction digest artifact =

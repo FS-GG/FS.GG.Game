@@ -28,7 +28,7 @@ let private mechanicalExpectation (observed:int64) (state:HostProjection) (effec
         let key = $"{effect.Worker}:{effect.Generation}:{effect.Request}:{effect.Correlation}:{phaseName effect.Phase}"
         {empty with Kind=effect.Kind;Timer=key;Delay=if effect.Kind="armTimer" then int(min (int64 Int32.MaxValue) (max 1L (effect.Due-observed+1L))) else 0}
     | value when value.StartsWith("settle") || value.StartsWith("refused") ->
-        let disposition = if value.StartsWith("refused") then "Refused" elif value="settleHistorical" then "HistoricalOnly" elif value="settleCoalesced" then "Coalesced" elif value="settleDiscarded" || value="settleTimedOut" || value="settleInvalidated" then "Discarded" else "Current"
+        let disposition = if value.StartsWith("refused") then "Refused" elif value="settleHistorical" then "HistoricalOnly" elif value="settleCoalesced" then "Coalesced" elif value="settleDiscarded" || value="settleTimedOut" || value="settleStartTimedOut" || value="settleInvalidated" then "Discarded" else "Current"
         {empty with Kind="settle";Request=effect.Request;Generation=effect.Generation;Disposition=disposition}
     | value -> failwithf "unmapped mechanical effect %s" value
 
@@ -78,7 +78,7 @@ let replayFacadeWith (selectedSettings:HostSettings) dispatch (connected:bool) (
             match results |> List.tryFind(fun result -> result.Identity.Request=terminal.Request) with
             | None -> failures <- $"{trace.Name} terminal callback missing" :: failures
             | Some result ->
-                let reason=match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:"+diagnostic | Some (AdapterRejected diagnostic) -> "AdapterRejected:"+diagnostic | _ -> ""
+                let reason=match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some WorkerStartTimeout -> "WorkerStartTimeout" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:"+diagnostic | Some (AdapterRejected diagnostic) -> "AdapterRejected:"+diagnostic | _ -> ""
                 let outcome=result.Outcome |> Option.map(fun value -> match value.State with TimedOut -> "TimedOut" | Faulted _ -> "Faulted" | _ -> "unexpected") |> Option.defaultValue ""
                 let phase=result.Outcome |> Option.map(fun value -> rawPhase value.Phase) |> Option.defaultValue ""
                 let dispatched=result.Outcome |> Option.exists(fun value -> value.Dispatch=Dispatched)
@@ -113,6 +113,7 @@ let private readyTerminalHost (settings:HostSettings) (host:Host) (results:unit 
     let load=terminalIdentity 1UL
     let initialize=terminalIdentity 2UL
     host.Load(0L,load,[|0uy|])
+    host.Observe(0L,load.WorkerInstance,PhaseObserved(load,terminalCorrelation load,Compile))
     host.Observe(0L,load.WorkerInstance,AbiVersionObserved(load,terminalCorrelation load,descriptor.Abi.Version))
     host.Initialize(0L,initialize,[|1uy|])
     host.Observe(0L,initialize.WorkerInstance,InvocationObserved(terminalOutcome Initialize initialize,terminalCorrelation initialize))

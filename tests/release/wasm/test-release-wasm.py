@@ -88,7 +88,7 @@ def browser_setup_checks() -> None:
         tools = base / "tools"
         tools.mkdir()
         npm = tools / "npm"
-        npm.write_text("#!/bin/sh\nset -eu\n[ \"$1\" = ci ]\ncmp package.json \"$EXPECTED_FIXTURE/package.json\"\ncmp package-lock.json \"$EXPECTED_FIXTURE/package-lock.json\"\nmkdir -p node_modules/.bin\nprintf '#!/bin/sh\\n[ \"$*\" = \"install --with-deps chromium\" ]\\n' > node_modules/.bin/playwright\nchmod +x node_modules/.bin/playwright\n")
+        npm.write_text("#!/bin/sh\nset -eu\n[ \"$1\" = ci ]\ncmp package.json \"$EXPECTED_FIXTURE/package.json\"\ncmp package-lock.json \"$EXPECTED_FIXTURE/package-lock.json\"\nmkdir -p node_modules/.bin\nprintf '#!/bin/sh\\n[ \"$*\" = \"install --with-deps chromium firefox webkit\" ]\\n' > node_modules/.bin/playwright\nchmod +x node_modules/.bin/playwright\n")
         npm.chmod(0o755)
         dotnet = tools / "dotnet"
         dotnet.write_text("#!/bin/sh\necho qualification-tool-sentinel >&2\nexit 17\n")
@@ -123,7 +123,7 @@ def source_checks() -> None:
     props = (ROOT / "eng/wasm-shared/version.props").read_text()
     policy=json.loads((ROOT / "scripts/wasm-release/api-baseline-policy.json").read_text())
     version=policy["candidateVersion"]
-    require(version == "0.6.0" and f"<WasmSharedVersion>{version}</WasmSharedVersion>" in props, "selected version origin mismatch")
+    require(version == "0.7.0" and f"<WasmSharedVersion>{version}</WasmSharedVersion>" in props, "selected version origin mismatch")
     for path in (ROOT / "src/Wasm.Contracts/FS.GG.Wasm.Contracts.fsproj", ROOT / "src/Wasm.Browser/FS.GG.Wasm.Browser.fsproj"):
         require("$(WasmSharedVersion)" in path.read_text(), f"{path} bypasses shared version origin")
     require((ROOT / "sdk/wasm/VERSION").read_text().strip() == version, "SDK version mismatch")

@@ -1,11 +1,13 @@
 # FS.GG.Wasm.Browser
 
-The selected `0.6.0` source candidate preserves the closed module Worker from the
-generated F# policy and replaces the instruction walker's repeated eight-opcode
-list allocation with equivalent pattern matching. Published `0.5.0` and its
-accepted installed evidence retain their original identities. The new candidate
-still requires actual qualification and coherent publication; this source change
-does not establish an earlier timeout's cause or future deadline fit.
+The selected `0.7.0` source candidate bounds Worker startup separately from guest
+policy work (FS-GG/FS.GG.Game#727). A fresh Worker's readiness report (its first
+`Compile` receipt for the load command) starts the unchanged policy deadline.
+Before readiness only the startup bound applies (default 5,000 ms,
+`HostSettings.withWorkerStartTimeout`), and its expiry is refused distinctly as
+`WorkerStartTimeout`. Published `0.6.0` and its accepted installed evidence retain
+their original identities. The candidate still requires actual qualification and
+coherent publication.
 The build-transitive package boundary copies those assets under
 `_content/FS.GG.Wasm.Browser/`; `worker-client.mjs` resolves its sibling Worker from
 the deployed asset base, including non-root applications. F# retains admission,
@@ -23,7 +25,7 @@ gap while ordinary native effects continue. `DiagnosticStatus()` reports disable
 unavailable, observed, truncated or read-failed health; it grants no readiness,
 authority, complete coverage or successful cleanup. Worker-local elapsed values
 and page clock values are separate clocks. Diagnostics never enter the lifecycle
-reducer or renew its pre-create deadline.
+reducer or renew its startup or policy deadlines.
 
 The normal transport has diagnostics disabled. Observed mode retains the same
 request limits and adds real observation overhead. The build uses exact locked

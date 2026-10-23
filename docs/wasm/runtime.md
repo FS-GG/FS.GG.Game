@@ -37,6 +37,25 @@ transactional candidate. A candidate needs successful initialization plus an
 exact transaction and generation validation before commit. Retiring workers
 continue to consume capacity until their termination is observed. Completions
 from a frozen or retired generation are historical and cannot become current.
+Worker infrastructure startup and guest policy work have separate bounds. A load
+creates a fresh module Worker and posts its command at once; the browser queues the
+command until the Worker's module graph has loaded. The Worker's first receipt for
+that command (its `Compile` phase observation) is its readiness report. Until then
+the load control is projected in phase `start` and only the startup bound applies:
+`HostSettings.defaultWorkerStartTimeoutMilliseconds` (5,000 ms), selectable in
+1–60,000 ms with `HostSettings.withWorkerStartTimeout`, or an earlier caller
+enclosing deadline. Expiry before readiness settles `Discarded` with the distinct
+reason `WorkerStartTimeout`, a `TimedOut`/`Compile`/not-dispatched outcome, and
+terminates the Worker; no guest policy was admitted and no game authority follows.
+Readiness replaces the startup timer with the policy timer: the profile budget
+(SC2 250 ms `EndToEndFromEnqueue`, BAR 250 ms phase watchdog) starts at the
+readiness report, capped by any enclosing deadline. Policy expiry after readiness
+remains `DeadlineExpired`. Compilation, phase and digest receipts before
+readiness, a repeated readiness report and readiness after expiry are inert; a
+Worker failure, Worker termination or protocol-violating invocation receipt before
+readiness still faults and retires the starting Worker. Requests to an
+already-ready Worker are unchanged: their budget still starts at enqueue.
+
 Every event checks host-observed monotonic time; a request may complete at its
 deadline and expires after it. The event boundary first clamps the original
 observation time, expires elapsed work, then handles the same original input.

@@ -71,14 +71,15 @@ for identity in current_policy["packages"]:
         else: raise SystemExit("additive successor accepted unavailable/breaking native verdict")
 assert manifest.api_policy(current_policy["candidateVersion"]) == current_policy
 assert current_policy["candidateVersion"] == ET.parse(ROOT / "eng/wasm-shared/version.props").findtext("./PropertyGroup/WasmSharedVersion")
-assert current_policy["baselineVersion"] == manifest.api_policy("0.5.0")["candidateVersion"]
+assert current_policy["baselineVersion"] == manifest.api_policy("0.6.0")["candidateVersion"]
+assert manifest.api_policy("0.6.0")["baselineVersion"] == "0.5.0"
 assert manifest.api_policy("0.5.0")["baselineVersion"] == "0.4.0"
 assert manifest.api_policy("0.4.0")["baselineVersion"] == "0.3.0"
 assert manifest.api_policy("0.3.0")["baselineVersion"] == "0.2.0"
 assert manifest.api_policy("0.2.0")["baselineVersion"] == "0.1.1"
 # Exercise both exact current and immutable predecessor policy readers through
 # the actual receipt validator, including changed valid-looking source/hash data.
-for selected in (current_policy, manifest.api_policy("0.5.0")):
+for selected in (current_policy, manifest.api_policy("0.6.0")):
     selected_rows = [{"id": identity, "baselineArchiveSha256": expected["servedArchiveSha256"],
                       "candidateArchiveSha256": "e" * 64, "baselineApiSurface": {"api-surface/test.fsi": "f" * 64},
                       "candidateApiSurface": {"api-surface/test.fsi": "f" * 64}, "nativeLogSha256": "a" * 64,

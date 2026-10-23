@@ -112,10 +112,13 @@ type RequestLimits =
       MaximumOutputBytes: int
       EnclosingDeadlineMilliseconds: int64 option }
 
-type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings * HostCompatibility
+type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings * HostCompatibility * workerStartTimeoutMilliseconds: int
 
 [<RequireQualifiedAccess>]
 module HostSettings =
+    let defaultWorkerStartTimeoutMilliseconds = 5000
+    let maximumWorkerStartTimeoutMilliseconds = 60000
+
     let create configuration role =
         let descriptor = Validation.descriptor configuration
 
@@ -152,21 +155,32 @@ module HostSettings =
                         Ordinary = descriptor.Scheduling
                         Realtime = realtime
                     },
-                    DefaultCompatibility
+                    DefaultCompatibility,
+                    defaultWorkerStartTimeoutMilliseconds
                 )
             )
 
-    let configuration (HostSettings(configuration, _, _, _)) = configuration
-    let role (HostSettings(_, role, _, _)) = role
-    let scheduling (HostSettings(_, _, scheduling, _)) = scheduling
-    let compatibility (HostSettings(_, _, _, selected)) = selected
+    let configuration (HostSettings(configuration, _, _, _, _)) = configuration
+    let role (HostSettings(_, role, _, _, _)) = role
+    let scheduling (HostSettings(_, _, scheduling, _, _)) = scheduling
+    let compatibility (HostSettings(_, _, _, selected, _)) = selected
+    let workerStartTimeoutMilliseconds (HostSettings(_, _, _, _, timeout)) = timeout
+
+    let withWorkerStartTimeout timeout (HostSettings(configuration, role, scheduling, selected, _)) =
+        // Values crossing an erased Fable boundary must still be finite integers.
+        let number = float timeout
+        if Double.IsNaN number || Double.IsInfinity number || floor number <> number
+           || timeout < 1 || timeout > maximumWorkerStartTimeoutMilliseconds then
+            Error [ InvalidSchedulingLimit "workerStartTimeoutMilliseconds" ]
+        else
+            Ok(HostSettings(configuration, role, scheduling, selected, timeout))
     let createCompatible configuration role selected =
         if selected = Sc2SupervisorV1 && (Validation.descriptor configuration).Path <> Sc2ImportedStrict then
             Error [ InvalidSchedulingLimit "compatibility" ]
         else
             create configuration role
-            |> Result.map (fun (HostSettings(configuration, role, scheduling, _)) ->
-                HostSettings(configuration, role, scheduling, selected))
+            |> Result.map (fun (HostSettings(configuration, role, scheduling, _, timeout)) ->
+                HostSettings(configuration, role, scheduling, selected, timeout))
 
 type WorkerSlot =
     | Active
@@ -228,6 +242,7 @@ type DeliveryReason =
     | WorkerFault of diagnostic: string
     | AdapterRejected of diagnostic: string
     | ProtocolRejected of ProtocolIssue list
+    | WorkerStartTimeout
 
 type BrowserResult =
     {

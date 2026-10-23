@@ -5,7 +5,7 @@ module eventBoundaryQualification {
   var captured: Request
   action initBoundary = all { initSc2,stage'=0,captured'=emptyRequest }
   action initBarBoundary = all { initBar,stage'=0,captured'=emptyRequest }
-  action boundaryStep(kind: str,offset: int): bool = all {
+  action boundaryStep(kind: str,offset: int): bool = if(starting(state).length()>0)all {stage'=stage,captured'=captured,readyNow} else all {
     stage'=stage+1,
     captured'=if(stage==6)state.current else captured,
     if(stage==0)loadInitial
@@ -20,7 +20,7 @@ module eventBoundaryQualification {
     else if(stage==7 or (stage==8 and kind=="resume"))dispose
     else eventAtTime(input("complete",captured,captured.worker,""),state.clock+1),
   }
-  action controlStep(kind: str,offset: int): bool = all {
+  action controlStep(kind: str,offset: int): bool = if(starting(state).length()>0)all {stage'=stage,captured'=captured,readyNow} else all {
     stage'=stage+1,captured'=captured,
     if(stage==0)loadInitial
     else if(stage==1 and kind=="initialized")compiled
@@ -30,7 +30,7 @@ module eventBoundaryQualification {
       eventAtTime(input(kind,r,r.worker,if(kind=="phase")"instantiate" else ""),r.deadline+offset)
     }else dispose,
   }
-  action terminalStep(kind: str,offset: int): bool = all {
+  action terminalStep(kind: str,offset: int): bool = if(starting(state).length()>0)all {stage'=stage,captured'=captured,readyNow} else all {
     stage'=stage+1,captured'=captured,
     if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
     else if(stage==4)submitTerminal else if(stage==5)submitOrdinary
@@ -70,7 +70,7 @@ module eventBoundaryQualification {
   action initializeAt = controlStep("initialized",0)
   action initializeAfter = controlStep("initialized",1)
   // Candidate control survives active expiry; retiring current must not gain authority.
-  action populationStep(retiring: bool,offset: int): bool = all {
+  action populationStep(retiring: bool,offset: int): bool = if(starting(state).length()>0)all {stage'=stage,captured'=captured,readyNow} else all {
     stage'=stage+1,captured'=captured,
     if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
     else if(stage==4)submitOrdinary else if(stage==5)prepareCandidate else if(stage==6)compiled else if(stage==7)initialize
@@ -84,7 +84,7 @@ module eventBoundaryQualification {
   action retiringBefore = populationStep(true,-1)
   action retiringAt = populationStep(true,0)
   action retiringAfter = populationStep(true,1)
-  action mixedStep(offset: int): bool = all {
+  action mixedStep(offset: int): bool = if(starting(state).length()>0)all {stage'=stage,captured'=captured,readyNow} else all {
     stage'=stage+1,captured'=captured,
     if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
     else if(stage==4)submitOrdinary else if(stage==5)submitOrdered else if(stage==6)submitSnapshot
@@ -94,11 +94,47 @@ module eventBoundaryQualification {
   action mixedCurrentExpired = mixedStep(1)
   action mixedOrderedExpired = mixedStep(2)
   action mixedAllExpired = mixedStep(3)
-  action clampStep = all {stage'=stage+1,captured'=captured,
+  action clampStep = if(starting(state).length()>0)all {stage'=stage,captured'=captured,readyNow} else all {stage'=stage+1,captured'=captured,
     if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
     else if(stage==4)submitOrdinary else if(stage==5)dispose
     else if(stage==6)eventAtTime(input("dispose",emptyRequest,0,""),state.clock-1)
     else eventAtTime(input("timer",emptyRequest,0,""),state.clock-1),
+  }
+  // Startup boundary: readiness exactly before, at and after the startup bound.
+  // After it, the distinct startup refusal has already retired the Worker.
+  action startStep(offset: int): bool = all {
+    stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial
+    else if(stage==1){
+      val r=state.controls.head()
+      eventAtTime(input("phase",r,r.worker,"compile"),r.deadline+offset)
+    }else if(stage==2 and state.controls.length()>0)compiled
+    else dispose,
+  }
+  action startBefore = startStep(-1)
+  action startAt = startStep(0)
+  action startAfter = startStep(1)
+  // A compilation receipt before readiness is inert; readiness then admits it.
+  action earlyCompiledStep = all {
+    stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial
+    else if(stage==1){
+      val r=state.controls.head()
+      eventAtTime(input("compiled",r,r.worker,""),state.clock+1)
+    }else if(stage==2)readyNow
+    else if(stage==3)compiled
+    else dispose,
+  }
+  // A candidate whose Worker never reports readiness is refused distinctly;
+  // the active authority it would replace is retained.
+  action candidateStartStep = if(stage<5 and starting(state).length()>0)all {stage'=stage,captured'=captured,readyNow} else all {
+    stage'=stage+1,captured'=captured,
+    if(stage==0)loadInitial else if(stage==1)compiled else if(stage==2)initialize else if(stage==3)initialized
+    else if(stage==4)prepareCandidate
+    else if(stage==5){
+      val r=state.controls.select(control=>control.worker==state.candidateWorker).head()
+      eventAtTime(input("timer",emptyRequest,0,""),r.deadline+1)
+    }else dispose,
   }
   val originalInputRetained = stage<7 or state.input.name!=""
 }
@@ -109,7 +145,7 @@ module pendingLoadCommitQualification {
   action initRegression = all {initSc2,stage'=0}
   // Reach the counterexample through public actions: expire old active, retain
   // ready candidate, load a new active control, then commit that candidate.
-  action regressionStep = all {
+  action regressionStep = if(starting(state).length()>0)all {stage'=stage,readyNow} else all {
     stage'=stage+1,
     if(stage==0)loadInitial else if(stage==1)compiled
     else if(stage==2)initialize else if(stage==3)initialized
@@ -176,7 +212,7 @@ module pendingInitializeCommitQualification {
   import lifecycle.* from "./lifecycle"
   var stage: int
   action initRegression = all {initSc2,stage'=0}
-  action regressionStep = all {
+  action regressionStep = if(starting(state).length()>0)all {stage'=stage,readyNow} else all {
     stage'=stage+1,
     if(stage==0)loadInitial else if(stage==1)compiled
     else if(stage==2)initialize // Keep the active initialization control pending.

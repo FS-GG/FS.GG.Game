@@ -9,6 +9,8 @@ type EffectInterpreter = HostEffect list -> unit
 /// effects are interpreted one at a time, rejecting timer arms and Worker posts
 /// after disposal and checking the exact current identity/correlation for a selected
 /// terminal request (including the timer phase) after each synchronous callback.
+/// The connected interpreter delivers a timer observation only once the transport
+/// clock has passed the armed due time; an early browser callback re-arms the rest.
 [<Sealed>]
 type Host =
     static member CreateConnected:

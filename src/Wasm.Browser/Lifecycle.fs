@@ -92,6 +92,9 @@ type private PendingRequest =
         DeadlineMilliseconds: int64
         SelectedLimits: RequestLimits
         RetireSession: bool
+        /// A load control whose fresh Worker has not yet reported readiness. Its
+        /// deadline is the startup bound; the policy deadline starts at readiness.
+        Starting: bool
     }
 
 type private CandidateState =
@@ -177,6 +180,7 @@ module Lifecycle =
                  | _ -> "other")
             Phase =
                 (match request.Phase with
+                 | _ when request.Starting -> "start"
                  | Compile -> "compile"
                  | Instantiate -> "instantiate"
                  | AllocateDescriptor -> "allocate-descriptor"
@@ -360,6 +364,7 @@ module Lifecycle =
                     | HistoricalOnly, _ -> "settleHistorical"
                     | Coalesced, _ -> "settleCoalesced"
                     | Discarded, Some DeadlineExpired -> "settleTimedOut"
+                    | Discarded, Some WorkerStartTimeout -> "settleStartTimedOut"
                     | Discarded, Some GenerationRetired -> "settleInvalidated"
                     | Discarded, _ -> "settleDiscarded"
                     | Refused, Some Busy -> "refusedBusy"
@@ -514,7 +519,8 @@ module Lifecycle =
           Input = Array.copy input
           DeadlineMilliseconds = selected.EnclosingDeadlineMilliseconds |> Option.map (min due) |> Option.defaultValue due
           SelectedLimits = selected
-          RetireSession = false }
+          RetireSession = false
+          Starting = false }
 
     let private capacity state =
         HostSettings.configuration state.Settings
@@ -650,10 +656,12 @@ module Lifecycle =
                 let outcome =
                     match reason with
                     | DeadlineExpired
+                    | WorkerStartTimeout
                     | WorkerFault _ ->
                         let terminal =
                             match reason with
-                            | DeadlineExpired -> TimedOut
+                            | DeadlineExpired
+                            | WorkerStartTimeout -> TimedOut
                             | WorkerFault diagnostic -> Faulted diagnostic
                             | _ -> TimedOut
 
@@ -748,14 +756,16 @@ module Lifecycle =
             |> Map.toList
             |> List.choose (fun (worker, pending) ->
                 if pending.DeadlineMilliseconds < now then
-                    Some worker
+                    // A Worker that never reported readiness is refused distinctly:
+                    // its guest policy was never admitted, so no policy deadline ran.
+                    Some(worker, (if pending.Starting then WorkerStartTimeout else DeadlineExpired))
                 else
                     None)
 
         let afterControls, controlEffects =
             ((afterQueued, []), expiredControls)
-            ||> List.fold (fun (current, effects) worker ->
-                let next, more = invalidateWorker worker DeadlineExpired "expireControl" current
+            ||> List.fold (fun (current, effects) (worker, reason) ->
+                let next, more = invalidateWorker worker reason "expireControl" current
                 next, effects @ more)
 
         match afterControls.Current with
@@ -943,7 +953,19 @@ module Lifecycle =
 
     let private applyLoad (identity: HostIdentity) (intent: LoadIntent) configuration artifact (state: LifecycleState) =
         let pending =
-            request state identity Ordinary (InspectAndCompile(configuration, Array.copy artifact)) Compile artifact
+            let admitted =
+                request state identity Ordinary (InspectAndCompile(configuration, Array.copy artifact)) Compile artifact
+            // Worker startup is bounded separately from guest policy work. Until the
+            // fresh Worker acknowledges this command, only the startup bound (or an
+            // earlier caller-enclosing deadline) applies.
+            let startup = int64 (HostSettings.workerStartTimeoutMilliseconds state.Settings)
+            let due = if state.Clock > Int64.MaxValue - startup then Int64.MaxValue else state.Clock + startup
+            { admitted with
+                Starting = true
+                DeadlineMilliseconds =
+                    admitted.SelectedLimits.EnclosingDeadlineMilliseconds
+                    |> Option.map (min due)
+                    |> Option.defaultValue due }
 
         let worker: WorkerRef =
             {
@@ -1107,6 +1129,20 @@ module Lifecycle =
 
             match selected with
             | None -> state, []
+            | Some(pending, true) when pending.Starting ->
+                // The Worker's first receipt for this load (Compile phase) is its
+                // readiness report. Only then does the policy deadline begin.
+                match pending.Operation, phase with
+                | InspectAndCompile _, Compile ->
+                    let budget = int64 pending.SelectedLimits.MaximumDeadlineMilliseconds
+                    let relative = if state.Clock > Int64.MaxValue - budget then Int64.MaxValue else state.Clock + budget
+                    let due = pending.SelectedLimits.EnclosingDeadlineMilliseconds |> Option.map (min relative) |> Option.defaultValue relative
+                    let ready = { pending with Starting = false; DeadlineMilliseconds = due }
+                    { state with
+                        Controls = state.Controls.Add(workerInstance, ready)
+                        LastAction = "workerReady" },
+                    [ CancelTimer(timerFor pending); ArmTimer(timerFor ready, due) ]
+                | _ -> state, []
             | Some(pending, control) ->
                 let permitted =
                     match pending.Operation, pending.Phase, phase with
@@ -1152,6 +1188,7 @@ module Lifecycle =
             match state.Controls.TryFind workerInstance with
             | Some pending when
                 matching identity correlation pending
+                && not pending.Starting
                 && (match pending.Operation with
                     | InspectAndCompile _ -> true
                     | _ -> false)

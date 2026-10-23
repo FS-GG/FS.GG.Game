@@ -118,9 +118,13 @@ quint="${QUINT:-quint}"
 "$quint" test --backend=typescript eng/wasm-shared/compatible-qualification.qnt --main=compatibleQualificationTest --seed=20261003 > "$output/model-controls.log" 2>&1
 python3 tests/Wasm.Supervisor.Compatibility/check-receipt-mutation.py > "$output/receipt-mutation.log"
 witnesses=(sawSelectedLoad sawSelectedCompile sawSelectedInitialize sawSelectedInitialized sawMixedOrdinary sawMixedOrdered sawAdmittedSnapshot sawHeldSnapshot sawHeldPromotion sawSelectedPhase sawNarrowDeadline sawNarrowOutput sawEnclosingBudget sawCandidatePrepared sawCandidateInitialized sawCandidateValidated sawSelectedFreeze sawAtomicFrozenCommit sawSelectedHistorical sawSelectedResume sawSelectedDisposal sawRefusalAfterExpiry sawInclusiveHeadExpiry sawFrozenCommitExpiryRefused)
-for entry in initCompatible 'initCompatible.then(readyCompatible)'; do
+# Fresh-Worker readiness is an explicit step, so an initialized-candidate entry is
+# sampled too; it appends to the retained ready log rather than adding an evidence leaf.
+for entry in initCompatible 'initCompatible.then(readyCompatible)' 'initCompatible.then(readyCandidateCompatible)'; do
   name=cold; [[ "$entry" == initCompatible ]] || name=ready
-  "$quint" run --backend=typescript eng/wasm-shared/lifecycle.qnt --main=compatibleLifecycle --init="$entry" --step=compatibleStep --invariant=compatibilitySafe --witnesses "${witnesses[@]}" --max-samples=1000 --max-steps=40 --seed=20261003 > "$output/model-$name.log" 2>&1
+  if [[ "$entry" == *readyCandidateCompatible* ]]; then exec 3>>"$output/model-$name.log"; else exec 3>"$output/model-$name.log"; fi
+  "$quint" run --backend=typescript eng/wasm-shared/lifecycle.qnt --main=compatibleLifecycle --init="$entry" --step=compatibleStep --invariant=compatibilitySafe --witnesses "${witnesses[@]}" --max-samples=1000 --max-steps=40 --seed=20261003 >&3 2>&1
+  exec 3>&-
 done
 for witness in "${witnesses[@]}"; do
   grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$output/model-cold.log" "$output/model-ready.log"
@@ -129,4 +133,4 @@ python3 tests/Wasm.Lifecycle.Correspondence/regenerate-event-traces.py --check >
 python3 tests/Wasm.Supervisor.Compatibility/generate-compatible-traces.py --check > "$output/selected-traces.log"
 fi
 [[ -z "$(git status --porcelain)" ]] || { echo 'supervisor qualification dirtied source' >&2; exit 2; }
-printf 'wasm-supervisor: mode=%s default53+selected16 installed=locked-dotnet,fable numeric=refused publication=none\n' "$mode"
+printf 'wasm-supervisor: mode=%s default58+selected16 installed=locked-dotnet,fable numeric=refused publication=none\n' "$mode"

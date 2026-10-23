@@ -8,6 +8,6 @@ module expiryQualification {
     else if (state.clock == 2) initialize
     else if (state.clock == 3) initialized
     else submitOrdinary
-  action earlyStep = if (state.clock < 7) queuedPrefix else eventAtTime(input("timer",emptyRequest,0,""),256)
-  action lateStep = if (state.clock < 7) queuedPrefix else eventAtTime(input("timer",emptyRequest,0,""),259)
+  action earlyStep = if (starting(state).length() > 0) readyNow else if (state.clock < 7) queuedPrefix else eventAtTime(input("timer",emptyRequest,0,""),256)
+  action lateStep = if (starting(state).length() > 0) readyNow else if (state.clock < 7) queuedPrefix else eventAtTime(input("timer",emptyRequest,0,""),259)
 }

@@ -11,4 +11,4 @@ cp "$repo/tests/Wasm.PackageConsumer/browser/package.json" \
   "$repo/tests/Wasm.PackageConsumer/browser/package-lock.json" "$work/"
 cd "$work"
 npm ci
-./node_modules/.bin/playwright install --with-deps chromium
+./node_modules/.bin/playwright install --with-deps chromium firefox webkit

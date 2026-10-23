@@ -8,7 +8,7 @@ published 0.2.0. It is gap evidence, not successor acceptance.
 `Compatibility.fsproj` uses production source. `Installed/InstalledCompatibility.fsproj`
 uses an exact package selected by `WasmCandidateVersion`; restore it into a
 fresh package cache with explicit candidate source mapping, then rebuild in
-locked mode. Both replay the 53 default canonical traces and all 16
+locked mode. Both replay the 58 default canonical traces and all 16
 selected traces through `Host.Create` and `Host.CreateConnected`, compare full
 states and ordered effects, and check connected callbacks and raw terminals.
 The additional wire fixture exercises the actual F# receiver with controlled
