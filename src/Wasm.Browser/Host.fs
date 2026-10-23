@@ -182,12 +182,22 @@ type Host private (initialState: HostState, interpret: EffectInterpreter) =
                     host
                     |> Option.iter (fun current -> current.Observe(transport.Now(), worker, WorkerTerminated worker))
                 | ArmTimer(timer, due) ->
-                    let remaining = max 1L (due - transport.Now() + 1L)
-                    let delay = int (min remaining (int64 System.Int32.MaxValue))
+                    // A browser timer may fire before the host clock passes its due time
+                    // (Firefox reduced timer precision observes floor(now) <= due). Such an
+                    // early callback is not an expiry observation: re-arm the remainder so
+                    // a looping guest is always retired, instead of stuttering forever.
+                    let rec arm () =
+                        let remaining = max 1L (due - transport.Now() + 1L)
+                        let delay = int (min remaining (int64 System.Int32.MaxValue))
 
-                    transport.ArmTimer (timerKey timer) delay (fun () ->
-                        host
-                        |> Option.iter (fun current -> current.ObserveTimer(transport.Now(), timer)))
+                        transport.ArmTimer (timerKey timer) delay (fun () ->
+                            host
+                            |> Option.iter (fun current ->
+                                let now = transport.Now()
+                                if now <= due && not current.Projection.Disposed then arm ()
+                                else current.ObserveTimer(now, timer)))
+
+                    arm ()
                 | CancelTimer timer -> transport.CancelTimer(timerKey timer)
                 | Settle result -> settled result
 

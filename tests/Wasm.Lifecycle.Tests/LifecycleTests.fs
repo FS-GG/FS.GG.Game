@@ -911,6 +911,32 @@ let workerStartup =
             Expect.equal projection.InitializedWorkers [ "worker-1" ] "active readiness retained"
             Expect.equal projection.CandidateWorker "" "candidate removed"
 
+        testCase "connected interpreter re-arms a browser timer that fires before its due time" <| fun _ ->
+            let mutable clock = 0L
+            let timers = System.Collections.Generic.Dictionary<string, int * (unit -> unit)>()
+            let results = ResizeArray<BrowserResult>()
+            let transport: HostTransport =
+                { Now = fun () -> clock
+                  CreateWorker = fun _ _ -> ()
+                  PostCommand = fun _ _ -> ()
+                  TerminateWorker = fun _ -> ()
+                  ArmTimer = fun key delay callback -> timers[key] <- (delay, callback)
+                  CancelTimer = fun key -> timers.Remove key |> ignore }
+            let host = Host.CreateConnected(settings Sc2ImportedStrict, transport, results.Add) |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+            let load = identity "worker-1" 1UL 1UL
+            host.Load(0L, load, [| 0uy |])
+            host.Observe(0L, "worker-1", PhaseObserved(load, tokenFor load, Compile))
+            let key, (delay, fire) = timers |> Seq.exactlyOne |> fun pair -> pair.Key, pair.Value
+            Expect.equal delay 251 "policy timer is armed from readiness"
+            clock <- 250L
+            fire ()
+            Expect.isEmpty results "an early browser callback is not an expiry observation"
+            Expect.equal (fst timers[key]) 1 "the remaining time is re-armed"
+            clock <- 251L
+            (snd timers[key]) ()
+            Expect.equal (results |> Seq.exactlyOne |> _.Reason) (Some DeadlineExpired) "the re-armed timer expires the looping load"
+            Expect.equal host.Projection.ActiveWorker "" "the Worker is retired"
+
         testCase "disposal during startup settles the starting load once" <| fun _ ->
             let load = identity "worker-1" 1UL 1UL
             let state = fresh Sc2ImportedStrict |> next 0L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
