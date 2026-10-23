@@ -95,7 +95,9 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'qualify' }}
     name: Shared WASM source, model, package, and browser qualification
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Three browser engines add a system-package download whose hosted apt mirror
+    # throughput varies widely (41 s to 16 min observed); keep visible headroom.
+    timeout-minutes: 55
     env:
       QUINT_VERSION: 0.32.0
       RUST_VERSION: 1.90.0
@@ -178,10 +180,16 @@ jobs:
 
       - name: Install pinned Playwright browsers
         working-directory: tests/Wasm.Browser.Conformance
+        timeout-minutes: 20
         run: |
           npm ci
           test "$(node -p "require('@playwright/test/package.json').version")" = "$PLAYWRIGHT_VERSION"
-          npx playwright install --with-deps chromium firefox webkit
+          # One bounded retry for a transient mirror/download failure.
+          for attempt in 1 2; do
+            if timeout 540 npx playwright install --with-deps chromium firefox webkit; then break; fi
+            test "$attempt" -lt 2 || exit 1
+            echo "browser install attempt $attempt failed; retrying once" >&2
+          done
 
       - name: Rebuild pinned WebAssembly fixtures
         run: |

@@ -14,7 +14,7 @@ text = workflow.read_text(encoding="utf-8")
 
 required = [
     "permissions:\n  contents: read",
-    "timeout-minutes: 35",
+    "timeout-minutes: 55",
     'dotnet-version: "10.0.401"',
     'node-version: "26"',
     "QUINT_VERSION: 0.32.0",

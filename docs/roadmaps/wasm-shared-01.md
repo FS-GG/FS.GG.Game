@@ -44,6 +44,11 @@ policy-load timings for 20 fresh-profile loads under a hosted-like 4-CPU budget
 (hosted runners have 4 vCPUs; larger hosts pin browsers to 4 CPUs) and retains
 them as the `wasm-cold-load-*` artifact. The 0.5 closed single-module Worker
 bundle already removed the 0.3 module waterfall; receivers adopt it by re-pinning.
+The three-engine install adds a system-package download whose hosted apt mirror
+throughput varied from 41 s to 16 min 28 s; that slow original cancelled run
+39884877948 at the former 35-minute limit after every earlier gate passed. The
+qualify job limit is now 55 minutes, with a 20-minute install step bound and one
+retry, against about 27 minutes of nominal work.
 Publication, receiver re-pin and installed acceptance remain separate boundaries.
 
 ## Current 0.6 publication and installed qualification
