@@ -39,7 +39,7 @@ ordered = [
     "Install pinned Rust",
     "Prepare coherent candidate custody",
     "Compile current installed supervisor",
-    "Install pinned Playwright Chromium",
+    "Install pinned Playwright browsers",
     "Rebuild pinned WebAssembly fixtures",
     "Verify compatibility contracts",
     "Verify lifecycle, packages, and Fable consumers",
@@ -145,7 +145,7 @@ for broken in (
     text.replace('path: ${{ runner.temp }}/wasm-eligible/', 'path: artifacts/'),
     text.replace('      - name: Freeze eligible binding', '      - name: Missing custody freeze'),
     text.replace('Compile current supervisor source', 'BROKEN-SOURCE').replace('Install pinned Quint', 'Compile current supervisor source').replace('BROKEN-SOURCE', 'Install pinned Quint'),
-    text.replace('Compile current installed supervisor', 'BROKEN-INSTALLED').replace('Install pinned Playwright Chromium', 'Compile current installed supervisor').replace('BROKEN-INSTALLED', 'Install pinned Playwright Chromium'),
+    text.replace('Compile current installed supervisor', 'BROKEN-INSTALLED').replace('Install pinned Playwright browsers', 'Compile current installed supervisor').replace('BROKEN-INSTALLED', 'Install pinned Playwright browsers'),
     text.replace('scripts/wasm-release/prepare.sh artifacts/wasm-release', 'true'),
 ):
     try:
@@ -179,7 +179,7 @@ sys.dont_write_bytecode=True
 repo=pathlib.Path(sys.argv[1]);spec=importlib.util.spec_from_file_location('trace_support',repo/'scripts/prepare-wasm-traces.py')
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 assert m.BOUNDS=={'setupSeconds':300,'generationSeconds':1200,'terminationGraceSeconds':30,'nodeOldSpaceMiB':2048,'perFileBytes':67108864,'payloadBytes':67108864,'diagnosticBytes':8388608,'manifestBytes':65536,'archiveBytes':83886080}
-paths,rows=m.census(repo);assert len(paths)==71 and len(rows['default'])==53 and len(rows['compatible'])==16
+paths,rows=m.census(repo);assert len(paths)==76 and len(rows['default'])==58 and len(rows['compatible'])==16
 wrapper=(repo/'scripts/prepare-wasm-traces.sh').read_text()
 for token in ('timeout --kill-after=30s 20m prlimit --fsize=67108864:67108864 --core=0:0',
               '--max-old-space-size=2048','--kill-after=5s 120s','if (( status != 0 )); then exit "$status"; fi',
@@ -317,7 +317,7 @@ with patch.object(m,'git',fake_git):
    if case=='ignored-change':(root/'ignored.txt').unlink()
    if case=='extra-trace':(root/m.DEFAULT/'Traces/unexpected.itf.json').unlink()
    if case in ('linked-trace','hardlinked-trace'):(root/paths[0]).unlink()
-print('wasm-trace-preflight: actual 53/16 census; bad dispatch/head/dirty/tool prerequisites refused; output/cause/cleanup/archive controls passed (inert only)')
+print('wasm-trace-preflight: actual 58/16 census; bad dispatch/head/dirty/tool prerequisites refused; output/cause/cleanup/archive controls passed (inert only)')
 PYTRACE
 
 grep -Fq "dotnet restore \"\$repo/tests/Wasm.Contracts.Tests/FS.GG.Wasm.Contracts.Tests.fsproj\" --locked-mode" \
@@ -348,8 +348,8 @@ grep -Fq 'quint-lifecycle-tests: passed=' "$repo/scripts/verify-wasm-lifecycle.s
   echo "workflow preflight: Quint gate does not report its selected named-test count" >&2
   exit 1
 }
-test "$(grep -Ec '^  run [A-Za-z0-9]+Test =' "$repo/eng/wasm-shared/lifecycle.qnt")" -eq 8 || {
-  echo "workflow preflight: expected eight explicitly named Quint lifecycle tests" >&2
+test "$(grep -Ec '^  run [A-Za-z0-9]+Test =' "$repo/eng/wasm-shared/lifecycle.qnt")" -eq 13 || {
+  echo "workflow preflight: expected thirteen explicitly named Quint lifecycle tests" >&2
   exit 1
 }
 

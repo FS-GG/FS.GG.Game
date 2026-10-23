@@ -23,6 +23,10 @@ module lifecycle {
   type Connection = {host: State, effects: List[Effect], callbacks: List[Input], beforeEffects: List[State], callbacksQuiescent: bool}
   var state: State
   var connection: Connection
+  // Guest policy work is bounded by the profile budget from Worker readiness.
+  // Worker infrastructure startup has its own separate bound (HostSettings default).
+  pure val policyBudget = 250
+  pure val workerStartBound = 5000
   pure val emptyRequest: Request = {id:0,worker:0,generation:0,deadline:0,
     submission:Ordinary,bytes:0,operation:"none",phase:"process",correlation:0,retire:false}
   pure def initial(profile: Profile): State = {
@@ -35,17 +39,17 @@ module lifecycle {
   pure def effect(kind: str,r: Request): Effect = {
     kind:kind,request:r.id,generation:r.generation,worker:r.worker,
     operation:if(kind=="post")r.operation else "",
-    phase:if(kind=="armTimer" or kind=="cancelTimer")r.phase else "",
+    phase:if(kind=="armTimer" or kind=="cancelTimer")(if(r.phase=="start")"compile" else r.phase) else "",
     correlation:if(kind=="post" or kind=="armTimer" or kind=="cancelTimer")r.correlation else 0,
     bytes:if(kind=="post")r.bytes else 0,due:if(kind=="armTimer")r.deadline else 0,
-    reason:if(kind=="settleTimedOut")"DeadlineExpired" else "",outcome:"",terminalPhase:"",dispatched:false,
+    reason:if(kind=="settleTimedOut")"DeadlineExpired" else if(kind=="settleStartTimedOut")"WorkerStartTimeout" else "",outcome:"",terminalPhase:"",dispatched:false,
   }
   pure def termination(worker: int): Effect = {kind:"terminate",request:0,generation:0,worker:worker,operation:"",phase:"",correlation:0,bytes:0,due:0,reason:"",outcome:"",terminalPhase:"",dispatched:false}
   pure def dispatchEffects(r: Request): List[Effect] =
     if(r.retire)List(effect("armTimer",r),effect("post",r))
     else List(effect("post",r),effect("armTimer",r))
   pure def requestFor(s: State,worker: int,generation: int,operation: str,phase: str,submission: Submission): Request = {
-    id:s.nextRequest,worker:worker,generation:generation,deadline:s.clock+250,
+    id:s.nextRequest,worker:worker,generation:generation,deadline:s.clock+(if(phase=="start")workerStartBound else policyBudget),
     submission:submission,bytes:if(operation=="shutdown")0 else 1,operation:operation,phase:phase,
     correlation:s.nextRequest,retire:false,
   }
@@ -111,7 +115,7 @@ module lifecycle {
       controls:s.controls.select(r=>r.worker!=worker),current:if(s.current.worker==worker)emptyRequest else s.current,
       ordinary:s.ordinary.select(r=>r.worker!=worker),ordered:s.ordered.select(r=>r.worker!=worker),snapshot:if(s.snapshot.worker==worker)emptyRequest else s.snapshot,
       deliveries:s.deliveries.concat(idsFor(removed)),
-      effects:List(termination(worker)).concat(effectsFor("cancelTimer",controls.concat(current))).concat(removed.foldl(List(),(out,r)=>out.append(if(reason=="settleTimedOut" or reason=="settleFaulted"){...effect(if(reason=="settleFaulted")"settleDiscarded" else reason,r),reason:if(reason=="settleTimedOut")"DeadlineExpired" else "WorkerFault:worker terminated",outcome:if(reason=="settleTimedOut")"TimedOut" else "Faulted",terminalPhase:r.phase,dispatched:(controls.concat(current).foldl(false,(found,p)=>found or p.id==r.id)) and Set("initialize","process","free","shutdown").contains(r.phase)}else effect(reason,r)))),lastAction:actionName}
+      effects:List(termination(worker)).concat(effectsFor("cancelTimer",controls.concat(current))).concat(removed.foldl(List(),(out,r)=>out.append(if(reason=="settleStartTimedOut"){...effect(reason,r),outcome:"TimedOut",terminalPhase:"compile",dispatched:false}else if(reason=="settleTimedOut" or reason=="settleFaulted"){...effect(if(reason=="settleFaulted")"settleDiscarded" else reason,r),reason:if(reason=="settleTimedOut")"DeadlineExpired" else "WorkerFault:worker terminated",outcome:if(reason=="settleTimedOut")"TimedOut" else "Faulted",terminalPhase:r.phase,dispatched:(controls.concat(current).foldl(false,(found,p)=>found or p.id==r.id)) and Set("initialize","process","free","shutdown").contains(r.phase)}else effect(reason,r)))),lastAction:actionName}
   }
   pure def invalidate(s: State,worker: int,reason: str,actionName: str): State = {
     val r=s.current
@@ -127,7 +131,7 @@ module lifecycle {
       deliveries:s.deliveries.concat(idsFor(expired)),effects:effectsFor("settleTimedOut",expired),lastAction:if(expired.length()>0)"expireOrdinary" else s.lastAction}
     val controls=base.controls.select(r=>r.deadline<time)
     val after=controls.foldl(base,(current,r)=>{
-      val following=invalidate(current,r.worker,"settleTimedOut","expireControl")
+      val following=invalidate(current,r.worker,if(r.phase=="start")"settleStartTimedOut" else "settleTimedOut","expireControl")
       {...following,effects:current.effects.concat(following.effects)}
     })
     if(after.current.worker!=0 and after.current.deadline<time){
@@ -139,6 +143,9 @@ module lifecycle {
   // Handler runs at the already-clamped event clock; it never advances time.
   pure def input(name: str,r: Request,worker: int,phase: str): Input = {name:name,request:r,worker:worker,phase:phase,observed:0,authorityWorker:0,authorityGeneration:0}
   pure def requestPresent(s: State,r: Request): bool = pending(s).foldl(false,(found,p)=>found or (p.id==r.id and p.worker==r.worker and p.generation==r.generation))
+  // A load control whose fresh Worker has not yet acknowledged its command.
+  pure def controlStarting(s: State,r: Request): bool = s.controls.foldl(false,(found,p)=>found or (p.id==r.id and p.worker==r.worker and p.generation==r.generation and p.phase=="start"))
+  pure def starting(s: State): List[Request] = s.controls.select(r=>r.phase=="start")
   pure def handle(s: State,e: Input): State = {
     val r=e.request
     if(e.name=="loadInitial" or e.name=="prepareCandidate"){
@@ -153,7 +160,8 @@ module lifecycle {
     } else if(e.name=="initialize")
       if(not(live(s).contains(e.worker))) refuse(s,r,"refused") else startControl(s,r,"initialize")
     else if(e.name=="compiled" or e.name=="initialized"){
-      if(not(requestPresent(s,r)))s else {
+      // Compilation cannot be accepted before the Worker reported readiness.
+      if(not(requestPresent(s,r)) or controlStarting(s,r))s else {
         val following={...s,controls:s.controls.select(p=>p.id!=r.id),deliveries:s.deliveries.append(r.id),effects:List(effect("cancelTimer",r),effect(if(s.frozen or r.worker==s.candidateWorker)"settleHistorical" else "settleCurrent",r))}
         if(e.name=="compiled"){...following,compiledWorkers:s.compiledWorkers.union(Set(r.worker)),lastAction:"compiled"}
         else {...following,initializedWorkers:s.initializedWorkers.union(Set(r.worker)),candidateInitialized:s.candidateInitialized or r.worker==s.candidateWorker,lastAction:"candidateInitialized"}
@@ -180,9 +188,11 @@ module lifecycle {
         retireState(s,s.current,{...effect("settleDiscarded",s.current),reason:"AdapterRejected:adapter rejection"},"adapterRejected")
       else s
     } else if(e.name=="phase"){
-      if(not(requestPresent(s,r)))s else {
-        val updated={...r,phase:e.phase,deadline:if(s.profile==Bar)s.clock+250 else r.deadline}
-        {...s,controls:s.controls.foldl(List(),(out,p)=>out.append(if(p.id==r.id)updated else p)),current:if(s.current.id==r.id)updated else s.current,effects:List(effect("cancelTimer",r),effect("armTimer",updated)),lastAction:"phase"}
+      val ready=controlStarting(s,r)
+      if(not(requestPresent(s,r)) or (ready and e.phase!="compile") or (not(ready) and r.phase=="start"))s else {
+        // Readiness (the Worker's first Compile receipt) starts the policy budget.
+        val updated={...r,phase:e.phase,deadline:if(ready or s.profile==Bar)s.clock+policyBudget else r.deadline}
+        {...s,controls:s.controls.foldl(List(),(out,p)=>out.append(if(p.id==r.id)updated else p)),current:if(s.current.id==r.id)updated else s.current,effects:List(effect("cancelTimer",r),effect("armTimer",updated)),lastAction:if(ready)"workerReady" else "phase"}
       }
     } else if(e.name=="candidateValidated")
       if(s.candidateWorker==0)s else {...s,candidateReady:true,lastAction:"candidateValidated"}
@@ -205,7 +215,7 @@ module lifecycle {
   pure def eventAt(s: State,e: Input,observed: int): State = {
     val time=if(observed<s.clock)s.clock else observed
     val captured={...s,clock:time}
-    val r=if(e.name=="loadInitial" or e.name=="prepareCandidate")requestFor(captured,s.nextGeneration,s.nextGeneration,"load","compile",Ordinary)
+    val r=if(e.name=="loadInitial" or e.name=="prepareCandidate")requestFor(captured,s.nextGeneration,s.nextGeneration,"load","start",Ordinary)
       else if(e.name=="initialize")requestFor(captured,e.worker,if(e.worker==s.activeWorker)s.activeGeneration else s.candidateGeneration,"initialize","allocate-descriptor",Ordinary)
       else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown" or e.name=="terminal")requestFor(captured,s.activeWorker,s.activeGeneration,if(e.name=="shutdown")"shutdown" else "process",if(e.name=="shutdown")"shutdown" else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
       else e.request
@@ -249,7 +259,7 @@ module lifecycle {
   action event(e: Input): bool = eventAtTime(e,state.clock+1)
   action loadInitial = all {not(state.disposed),not(state.frozen),state.activeWorker==0,event(input("loadInitial",emptyRequest,0,""))}
   action prepareCandidate = all {state.profile==Sc2,not(state.disposed),not(state.frozen),state.candidateWorker==0,live(state).size()<4,event(input("prepareCandidate",emptyRequest,0,""))}
-  action compiled = {val rs=state.controls.select(r=>r.operation=="load") nondet index=rs.indices().oneOf() all {rs.length()>0,event(input("compiled",rs.nth(index),rs.nth(index).worker,""))}}
+  action compiled = {val rs=state.controls.select(r=>r.operation=="load" and r.phase!="start") nondet index=rs.indices().oneOf() all {rs.length()>0,event(input("compiled",rs.nth(index),rs.nth(index).worker,""))}}
   action initialize = {val available=state.compiledWorkers.exclude(state.initializedWorkers).filter(w=>not(state.controls.foldl(false,(found,r)=>found or r.worker==w))) nondet worker=available.oneOf() all {not(state.disposed),not(state.frozen),available.size()>0,event(input("initialize",emptyRequest,worker,""))}}
   action initialized = {val rs=state.controls.select(r=>r.operation=="initialize") nondet index=rs.indices().oneOf() all {rs.length()>0,event(input("initialized",rs.nth(index),rs.nth(index).worker,""))}}
   action submitOrdinary = event(input("ordinary",emptyRequest,0,""))
@@ -261,7 +271,12 @@ module lifecycle {
   action complete = all {state.current.worker!=0,event(input("complete",state.current,state.current.worker,""))}
   action rejectedTermination = all {state.current.worker!=0,event(input("rejectedTermination",state.current,state.current.worker,""))}
   action cleanupFault = all {state.current.worker!=0,event(input("cleanupFault",state.current,state.current.worker,""))}
-  action phaseObserved = {val rs=state.controls.concat(if(state.current.worker==0)List()else List(state.current)) nondet index=rs.indices().oneOf() val r=rs.nth(index) val alternatives=if(r.operation=="load" and r.phase=="compile")Set("instantiate")else if(r.phase=="allocate-descriptor")Set("allocate-input")else if(r.phase=="allocate-input")Set(r.operation)else if(r.phase=="initialize" or r.phase=="process")Set("free")else Set() nondet phase=alternatives.oneOf() all {rs.length()>0,alternatives.size()>0,event(input("phase",r,r.worker,phase))}}
+  action phaseObserved = {val rs=state.controls.concat(if(state.current.worker==0)List()else List(state.current)) nondet index=rs.indices().oneOf() val r=rs.nth(index) val alternatives=if(r.operation=="load" and r.phase=="start")Set("compile")else if(r.operation=="load" and r.phase=="compile")Set("instantiate")else if(r.phase=="allocate-descriptor")Set("allocate-input")else if(r.phase=="allocate-input")Set(r.operation)else if(r.phase=="initialize" or r.phase=="process")Set("free")else Set() nondet phase=alternatives.oneOf() all {rs.length()>0,alternatives.size()>0,event(input("phase",r,r.worker,phase))}}
+  // The fresh Worker's readiness receipt, at a later or the same observed time.
+  action workerReadyAt(observed: int): bool = {val rs=starting(state) all {rs.length()>0,eventAtTime(input("phase",rs.head(),rs.head().worker,"compile"),observed)}}
+  action workerReady = {val rs=starting(state) nondet index=rs.indices().oneOf() all {rs.length()>0,event(input("phase",rs.nth(index),rs.nth(index).worker,"compile"))}}
+  action readyNow = workerReadyAt(state.clock)
+  action advanceAndExpireControls = {val rs=state.controls nondet index=rs.indices().oneOf() all {rs.length()>0,eventAtTime(input("timer",emptyRequest,0,""),rs.nth(index).deadline+1)}}
   action expireDeadlines = event(input("timer",emptyRequest,0,""))
   action advanceAndExpireDeadlines = all {state.current.worker!=0,eventAtTime(input("timer",emptyRequest,0,""),state.current.deadline+1)}
   action candidateValidated = all {state.candidateWorker!=0,state.candidateInitialized,event(input("candidateValidated",emptyRequest,state.candidateWorker,""))}
@@ -273,30 +288,30 @@ module lifecycle {
   action resume = all {state.frozen,event(input("resume",emptyRequest,0,""))}
   action dispose = event(input("dispose",emptyRequest,0,""))
   action stutter = event(input("timer",emptyRequest,0,""))
-  action step = any {submitTerminal,rejectTerminalAdapter,loadInitial,prepareCandidate,compiled,initialize,initialized,submitOrdinary,submitOrdered,submitSnapshot,shutdown,complete,rejectedTermination,cleanupFault,phaseObserved,expireDeadlines,advanceAndExpireDeadlines,candidateValidated,commitCandidate,abortCandidate,candidateFailed,terminateRetiring,freeze,resume,dispose,stutter}
-  action readyActive = loadInitial.then(compiled).then(initialize).then(initialized)
+  action step = any {submitTerminal,rejectTerminalAdapter,loadInitial,prepareCandidate,workerReady,advanceAndExpireControls,compiled,initialize,initialized,submitOrdinary,submitOrdered,submitSnapshot,shutdown,complete,rejectedTermination,cleanupFault,phaseObserved,expireDeadlines,advanceAndExpireDeadlines,candidateValidated,commitCandidate,abortCandidate,candidateFailed,terminateRetiring,freeze,resume,dispose,stutter}
+  action readyActive = loadInitial.then(workerReady).then(compiled).then(initialize).then(initialized)
   // Reachable initialized entry complements cold-start sampling; readiness is
   // established by the same explicit load/compile/initialize actions.
   action initReady = init.then(readyActive)
-  action readyCandidate = prepareCandidate.then(compiled).then(initialize).then(initialized)
+  action readyCandidate = prepareCandidate.then(workerReady).then(compiled).then(initialize).then(initialized)
   action barCorrespondenceStep =
-    if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
+    if(starting(state).length()>0)readyNow else if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
     else if(state.clock==4)submitOrdinary else if(state.clock==5)submitOrdinary else if(state.clock==6)complete else if(state.clock==7)shutdown else if(state.clock==8)complete else dispose
   action sc2CorrespondenceStep =
-    if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
+    if(starting(state).length()>0)readyNow else if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
     else if(state.clock==4)submitOrdinary else if(state.clock==5)submitSnapshot else if(state.clock==6)submitSnapshot else if(state.clock==7)prepareCandidate
     else if(state.clock==8)compiled else if(state.clock==9)initialize else if(state.clock==10)initialized else if(state.clock==11)candidateValidated
     else if(state.clock==12)commitCandidate else if(state.clock==13)complete else if(state.clock==14)freeze else if(state.clock==15)submitOrdinary else if(state.clock==16)resume else dispose
   action timeoutCorrespondenceStep =
-    if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
+    if(starting(state).length()>0)readyNow else if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
     else if(state.clock==4)submitOrdinary else if(state.clock==5)submitOrdinary else if(state.clock==6)advanceAndExpireDeadlines else dispose
   action phaseCorrespondenceStep =
-    if(state.clock==0)loadInitial else if(state.clock==1)phaseObserved else if(state.clock==2)compiled
+    if(starting(state).length()>0)readyNow else if(state.clock==0)loadInitial else if(state.clock==1)phaseObserved else if(state.clock==2)compiled
     else if(state.clock==3)initialize else if(state.clock>=4 and state.clock<=6)phaseObserved else if(state.clock==7)initialized
     else if(state.clock==8)submitOrdinary else if(state.clock>=9 and state.clock<=11)phaseObserved
     else if(state.clock==12)complete else if(state.clock==13)shutdown else if(state.clock==14)complete else dispose
   action cleanupCorrespondenceStep =
-    if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
+    if(starting(state).length()>0)readyNow else if(state.clock==0)loadInitial else if(state.clock==1)compiled else if(state.clock==2)initialize else if(state.clock==3)initialized
     else if(state.clock==4)submitOrdinary else if(state.clock==5)prepareCandidate else if(state.clock==6)compiled
     else if(state.clock==7)initialize else if(state.clock==8)initialized else if(state.clock==9)candidateValidated
     else if(state.clock==10)commitCandidate else if(state.clock==11)terminateRetiring
@@ -326,11 +341,22 @@ module lifecycle {
   val currentRequiresReadiness = state.current.worker==0 or state.initializedWorkers.contains(state.current.worker)
   val timeoutTerminates = state.lastAction!="expireCurrent" or hasEffect(state.effects,"terminate")
   val disposedHasNoDispatch = not(state.disposed) or state.effects.select(fx=>fx.kind=="post" or fx.kind=="armTimer").length()==0
-  val lifecycleSafe = and {disposedHasNoDispatch,connection.callbacksQuiescent, singleTerminalDelivery,staleCannotBeCurrent,candidateHasNoAuthority,workerCapacityIncludesRetiring,queuesBounded,orderedRequestsPreserveOrder,freezeSuppressesCurrentDelivery,cleanupFailureNeverSucceeds,disposedHasNoLiveWork,readinessRequiresCompilation,currentRequiresReadiness,timeoutTerminates }
+  // A Worker that has not reported readiness holds no compiled or initialized authority.
+  val startingHasNoAuthority = starting(state).foldl(true,(ok,r)=>ok and not(state.compiledWorkers.contains(r.worker)) and not(state.initializedWorkers.contains(r.worker)))
+  // Startup is bounded by its own bound; every admitted policy deadline lies within one budget of now.
+  val deadlinesBounded = pending(state).foldl(true,(ok,r)=>ok and r.deadline<=state.clock+(if(r.phase=="start")workerStartBound else policyBudget))
+  // Startup expiry is distinguishable from policy expiry and never claims dispatch.
+  val startTimeoutIsDistinct = state.effects.foldl(true,(ok,fx)=>ok
+    and (fx.kind!="settleStartTimedOut" or (fx.reason=="WorkerStartTimeout" and fx.outcome=="TimedOut" and fx.terminalPhase=="compile" and not(fx.dispatched)))
+    and (fx.kind!="settleTimedOut" or fx.reason=="DeadlineExpired"))
+  val startTimeoutTerminates = not(hasEffect(state.effects,"settleStartTimedOut")) or hasEffect(state.effects,"terminate")
+  val lifecycleSafe = and {startingHasNoAuthority,deadlinesBounded,startTimeoutIsDistinct,startTimeoutTerminates,disposedHasNoDispatch,connection.callbacksQuiescent, singleTerminalDelivery,staleCannotBeCurrent,candidateHasNoAuthority,workerCapacityIncludesRetiring,queuesBounded,orderedRequestsPreserveOrder,freezeSuppressesCurrentDelivery,cleanupFailureNeverSucceeds,disposedHasNoLiveWork,readinessRequiresCompilation,currentRequiresReadiness,timeoutTerminates }
   val sawBusyRefusal = hasEffect(state.effects,"refusedBusy")
   val sawSnapshotCoalesced = hasEffect(state.effects,"settleCoalesced")
   val sawHistoricalResult = hasEffect(state.effects,"settleHistorical")
   val sawQueuedTimeout = hasEffect(state.effects,"settleTimedOut")
+  val sawWorkerReady = state.lastAction=="workerReady"
+  val sawStartTimeout = hasEffect(state.effects,"settleStartTimedOut")
 }
 module lifecycleTest {
   import lifecycle.*
@@ -341,6 +367,21 @@ module lifecycleTest {
   run commitMakesOldCompletionHistoricalTest = initSc2.then(readyActive).then(submitOrdinary).then(readyCandidate).then(candidateValidated).then(commitCandidate).then(complete).expect(hasEffect(state.effects,"settleHistorical"))
   run freezeBlocksAndSuppressesTest = initSc2.then(readyActive).then(submitOrdinary).then(freeze).then(complete).then(submitOrdinary).expect(and {state.frozen,hasEffect(state.effects,"refusedFrozen")})
   run cleanupFaultIsNotSuccessTest = initSc2.then(readyActive).then(submitOrdinary).then(cleanupFault).expect(and {state.activeWorker==0,hasEffect(state.effects,"terminate")})
+  run startTimeoutIsDistinctTest = initSc2.then(loadInitial).then(advanceAndExpireControls).expect(and {
+    hasEffect(state.effects,"settleStartTimedOut"),not(hasEffect(state.effects,"settleTimedOut")),
+    hasEffect(state.effects,"terminate"),state.activeWorker==0,state.controls.length()==0,singleTerminalDelivery})
+  run readinessStartsPolicyDeadlineTest = initSc2.then(loadInitial).then(workerReadyAt(4000)).expect(and {
+    state.controls.length()==1,state.controls.head().phase=="compile",state.controls.head().deadline==4000+policyBudget,
+    state.lastAction=="workerReady"})
+  run policyExpiryAfterReadinessIsDeadlineExpiredTest = initBar.then(loadInitial).then(workerReadyAt(4000)).then(advanceAndExpireControls).expect(and {
+    hasEffect(state.effects,"settleTimedOut"),not(hasEffect(state.effects,"settleStartTimedOut")),state.activeWorker==0})
+  run compiledBeforeReadinessIsInertTest = initSc2.then(loadInitial).expect({
+    val r=state.controls.head()
+    val following=eventAt(state,input("compiled",r,r.worker,""),state.clock+1)
+    and {following.compiledWorkers.size()==0,following.controls.length()==1,following.effects.length()==0,following.deliveries.length()==0}
+  })
+  run candidateStartTimeoutPreservesActiveTest = initSc2.then(readyActive).then(prepareCandidate).then(advanceAndExpireControls).expect(and {
+    state.activeWorker==1,state.candidateWorker==0,state.initializedWorkers.contains(1),hasEffect(state.effects,"settleStartTimedOut")})
   run disposalSettlesEverythingOnceTest = initSc2.then(readyActive).then(submitOrdinary).then(submitOrdinary).then(prepareCandidate).then(dispose).then(dispose).expect(and {state.disposed,state.controls.length()==0,singleTerminalDelivery})
 }
 
@@ -358,12 +399,14 @@ module compatibleLifecycle {
   action initCompatible = all {initSc2,compatibleState'=initialCompatible,compatibleConnection'={host:initialCompatible,effects:List(),callbacks:List(),beforeEffects:List(),callbacksQuiescent:true}}
   pure def selectedFor(c: CompatibleState,r: Request): Limits = if(c.limits.keys().contains(r.id))c.limits.get(r.id)else defaultLimits
   pure def dueFor(time: int,limits: Limits): int = if(limits.enclosing==0)time+limits.deadline else if(time+limits.deadline<limits.enclosing)time+limits.deadline else limits.enclosing
+  // Worker startup uses its own bound; a caller's enclosing deadline still caps it.
+  pure def startDueFor(time: int,limits: Limits): int = if(limits.enclosing==0)time+workerStartBound else if(time+workerStartBound<limits.enclosing)time+workerStartBound else limits.enclosing
   pure def projectedHost(c: CompatibleState): State = {...c.host,snapshot:c.held}
   pure def expireCompatible(s: State,time: int): State = {
     val base={...s,clock:time,effects:List()}
     val expiredControls=base.controls.select(r=>r.deadline<time)
     val afterControls=expiredControls.foldl(base,(current,r)=>{
-      val following=invalidate(current,r.worker,"settleTimedOut","expireControl")
+      val following=invalidate(current,r.worker,if(r.phase=="start")"settleStartTimedOut" else "settleTimedOut","expireControl")
       {...following,effects:current.effects.concat(following.effects)}
     })
     if(afterControls.current.worker!=0 and afterControls.current.deadline<time){
@@ -439,6 +482,12 @@ module compatibleLifecycle {
         val pumped=pumpCompatible(base)
         {...pumped,host:{...pumped.host,effects:prefix.concat(pumped.host.effects)}}
       }
+    }else if(e.name=="phase" and controlStarting(h,r)){
+      // Readiness starts this load's captured policy limits; startup used its own bound.
+      if(e.phase!="compile")c else {
+        val updated={...r,phase:"compile",deadline:dueFor(h.clock,selectedFor(c,r))}
+        {...c,host:{...h,controls:h.controls.foldl(List(),(out,p)=>out.append(if(p.id==r.id)updated else p)),effects:List(effect("cancelTimer",r),effect("armTimer",updated)),lastAction:"workerReady"}}
+      }
     }else if(e.name=="freeze" and not(h.disposed) and not(h.frozen)){
       val pending=h.ordinary.concat(if(c.held.worker==0)List()else List(c.held))
       {...c,held:emptyRequest,host:{...h,frozen:true,freezeToken:7,ordinary:List(),effects:effectsFor("settleInvalidated",pending),deliveries:h.deliveries.concat(idsFor(pending)),lastAction:"freeze"}}
@@ -463,12 +512,12 @@ module compatibleLifecycle {
   pure def compatibleEventAt(c: CompatibleState,e: Input,observed: int,limits: Limits,bytes: int): CompatibleState = {
     val time=if(observed<c.host.clock)c.host.clock else observed
     val captured={...c.host,clock:time}
-    val r=if(e.name=="loadInitial" or e.name=="prepareCandidate")requestFor(captured,c.host.nextGeneration,c.host.nextGeneration,"load","compile",Ordinary)
+    val r=if(e.name=="loadInitial" or e.name=="prepareCandidate")requestFor(captured,c.host.nextGeneration,c.host.nextGeneration,"load","start",Ordinary)
       else if(e.name=="initialize")requestFor(captured,e.worker,if(e.worker==c.host.activeWorker)c.host.activeGeneration else c.host.candidateGeneration,"initialize","allocate-descriptor",Ordinary)
       else if(e.name=="ordinary" or e.name=="ordered" or e.name=="snapshot" or e.name=="shutdown" or e.name=="terminal")requestFor(captured,c.host.activeWorker,c.host.activeGeneration,if(e.name=="shutdown")"shutdown"else "process",if(e.name=="shutdown")"shutdown"else "allocate-descriptor",if(e.name=="ordered")Ordered else if(e.name=="snapshot")Snapshot else Ordinary)
       else e.request
     val admission=Set("loadInitial","prepareCandidate","initialize","ordinary","ordered","snapshot","shutdown","terminal").contains(e.name)
-    val selected=if(admission){...r,deadline:dueFor(time,limits),bytes:bytes,retire:e.name=="terminal"}else r
+    val selected=if(admission){...r,deadline:if(r.phase=="start")startDueFor(time,limits) else dueFor(time,limits),bytes:bytes,retire:e.name=="terminal"}else r
     val expired=expireCompatible(projectedHost(c),time)
     val original={...e,request:selected,observed:observed,
       authorityWorker:expired.activeWorker,authorityGeneration:expired.activeGeneration}
@@ -513,9 +562,15 @@ module compatibleLifecycle {
   }
   action compatibleLoad = all {canAdmit(compatibleState,"loadInitial",defaultLimits,1),compatibleState.host.activeWorker==0,compatibleEvent(input("loadInitial",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,1)}
   action compatibleCompiled = {
-    val requests=compatibleState.host.controls.select(r=>r.operation=="load")
+    val requests=compatibleState.host.controls.select(r=>r.operation=="load" and r.phase!="start")
     nondet index=requests.indices().oneOf()
     all {requests.length()>0,compatibleEvent(input("compiled",requests.nth(index),requests.nth(index).worker,""),compatibleState.host.clock,defaultLimits,0)}
+  }
+  // Export a module-owned readiness guard for qualification schedules.
+  val compatibleStarting = starting(compatibleState.host).length()>0
+  action compatibleReady = {
+    val requests=starting(compatibleState.host)
+    all {requests.length()>0,compatibleEvent(input("phase",requests.head(),requests.head().worker,"compile"),compatibleState.host.clock,defaultLimits,0)}
   }
   action compatibleInitialize(worker: int,limits: Limits): bool = all {canAdmit(compatibleState,"initialize",limits,1),compatibleState.host.compiledWorkers.contains(worker),not(compatibleState.host.controls.foldl(false,(found,r)=>found or r.worker==worker)),compatibleEvent(input("initialize",emptyRequest,worker,""),compatibleState.host.clock,limits,1)}
   action compatibleInitialized(worker: int): bool = {
@@ -539,14 +594,21 @@ module compatibleLifecycle {
   action compatibleResume = all {compatibleState.host.frozen,compatibleEvent(input("resume",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,0)}
   action compatibleDispose = compatibleEvent(input("dispose",emptyRequest,0,""),compatibleState.host.clock,defaultLimits,0)
   action compatibleTimer(observed: int): bool = compatibleEvent(input("timer",emptyRequest,0,""),observed,defaultLimits,0)
-  action readyCompatible = compatibleLoad.then(compatibleCompiled).then(compatibleInitialize(1,{deadline:10,output:44,enclosing:0})).then(compatibleInitialized(1))
+  action readyCompatible = compatibleLoad.then(compatibleReady).then(compatibleCompiled).then(compatibleInitialize(1,{deadline:10,output:44,enclosing:0})).then(compatibleInitialized(1))
+  // Reachable initialized-candidate entry: candidate readiness costs explicit steps,
+  // so frozen promotion and its expiry refusal are sampled from this prefix too.
+  action readyCandidateCompatible = readyCompatible.then(compatiblePrepare).then(compatibleReady).then(compatibleCompiled)
+    .then(compatibleInitialize(2,defaultLimits)).then(compatibleInitialized(2))
   action compatibleProgressPhase = {
     val r=compatibleState.host.current
     val following=if(r.phase=="allocate-descriptor")"allocate-input" else if(r.phase=="allocate-input")r.operation else if(r.phase=="process")"free" else ""
     all {r.worker!=0,following!="",compatiblePhase(following,compatibleState.host.clock+1)}
   }
   action compatibleRejectTerminalAdapter = all {compatibleState.host.current.worker!=0,compatibleState.host.current.retire,compatibleState.host.current.generation==compatibleState.host.activeGeneration,compatibleEvent(input("adapterRejected",compatibleState.host.current,compatibleState.host.current.worker,""),compatibleState.host.clock,defaultLimits,0)}
-  action compatibleStep = any {compatibleRejectTerminalAdapter,compatibleSubmit("terminal",defaultLimits,1),compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
+  // A starting Worker reports readiness with even odds against every other step, so
+  // readiness does not dilute the reachable selected-policy population.
+  action compatibleStep = if(compatibleStarting)any {compatibleReady,compatibleOtherStep} else compatibleOtherStep
+  action compatibleOtherStep = any {compatibleRejectTerminalAdapter,compatibleSubmit("terminal",defaultLimits,1),compatibleProgressPhase,compatibleFrozenCommitAt(compatibleState.host.clock+6),compatibleSubmit("ordinary",{deadline:10,output:44,enclosing:compatibleState.host.clock+7},1),compatibleSubmitAt("ordinary",{deadline:100,output:64,enclosing:0},1,compatibleState.host.clock+6),compatibleLoad,compatibleReady,compatibleCompiled,compatibleInitialize(compatibleState.host.activeWorker,defaultLimits),compatibleInitialized(compatibleState.host.activeWorker),compatibleSubmit("ordinary",{deadline:5,output:44,enclosing:0},1),compatibleSubmit("ordered",{deadline:10,output:64,enclosing:0},1),compatibleSubmit("snapshot",{deadline:5,output:44,enclosing:0},1),compatibleComplete(compatibleState.host.clock+1),compatiblePrepare,compatibleInitialize(compatibleState.host.candidateWorker,defaultLimits),compatibleInitialized(compatibleState.host.candidateWorker),compatibleValidate,compatibleFreeze,compatibleFrozenCommit,compatibleResume,compatibleDispose,compatibleTimer(compatibleState.host.clock+1)}
   // Export a module-owned observation; wildcard imports do not re-export helpers.
   val selectedCurrentResultsHaveAuthority = currentResultsHaveAuthority(compatibleState.host)
   val selectedSingleSettlement = compatibleState.host.deliveries.foldl(Set(),(seen,id)=>seen.union(Set(id))).size()==compatibleState.host.deliveries.length()
@@ -588,5 +650,6 @@ module compatibleLifecycle {
   val sawTerminalAdmission = compatibleState.host.current.retire or compatibleState.host.ordinary.select(r=>r.retire).length()>0
   val sawTerminalRetirement = compatibleState.host.disposed and compatibleState.host.lastAction=="retireSession"
   val selectedDisposedHasNoDispatch = not(compatibleState.host.disposed) or compatibleState.host.effects.select(fx=>fx.kind=="post" or fx.kind=="armTimer").length()==0
-  val compatibilitySafe = and {selectedCurrentResultsHaveAuthority,selectedDisposedHasNoDispatch,compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
+  val selectedStartingHasNoAuthority = starting(compatibleState.host).foldl(true,(ok,r)=>ok and not(compatibleState.host.compiledWorkers.contains(r.worker)) and not(compatibleState.host.initializedWorkers.contains(r.worker)))
+  val compatibilitySafe = and {selectedStartingHasNoAuthority,selectedCurrentResultsHaveAuthority,selectedDisposedHasNoDispatch,compatibleConnection.callbacksQuiescent,selectedSingleSettlement,mixedFifoOrdered,admittedSnapshotUnique,frozenQueuesEmpty,frozenHasNoCurrentDelivery,completeDisposal,capturedLimitsBounded,selectedCapacityBounded}
 }

@@ -51,6 +51,10 @@ let private success phase identity =
         EffectEligibility = ProductAdapterMustDecide
     }
 
+/// The fresh Worker's readiness report: its first Compile receipt for the load.
+let private ready (load: HostIdentity) =
+    WorkerObserved(load.WorkerInstance, PhaseObserved(load, tokenFor load, Compile))
+
 let private update at input state =
     Lifecycle.update
         {
@@ -72,6 +76,7 @@ let private loaded path =
 
     state
     |> next 0L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
+    |> next 0L (ready load)
     |> next 0L (WorkerObserved(load.WorkerInstance, AbiVersionObserved(load, tokenFor load, version)))
     |> next 0L (InitializeRequested(initialize, [| 1uy |]))
     |> next
@@ -135,10 +140,10 @@ let lifecycle =
                 Expect.equal (Lifecycle.project state).ActiveGeneration 1UL "uninitialized candidate cannot commit"
 
                 let state =
-                    next
+                    next 3L (ready candidate) state
+                    |> next
                         3L
                         (WorkerObserved("worker-2", AbiVersionObserved(candidate, tokenFor candidate, 0x10000u)))
-                        state
 
                 let initialized = identity "worker-2" 1UL 2UL
                 let state = next 3L (InitializeRequested(initialized, [| 1uy |])) state
@@ -475,6 +480,7 @@ let private loadedSelected policy =
     Lifecycle.create selected
     |> Result.defaultWith (fun issues -> failtestf "%A" issues)
     |> next 0L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
+    |> next 0L (ready load)
     |> next 0L (WorkerObserved("worker-1", AbiVersionObserved(load, tokenFor load, 0x10000u)))
     |> next 0L (InitializeRequested(initialize, [| 1uy |]))
     |> next 0L (WorkerObserved("worker-1", InvocationObserved(success Initialize initialize, tokenFor initialize)))
@@ -610,6 +616,7 @@ let terminalProcess =
                 let reset = identity "worker-1" 1UL 1UL
                 let follower = identity "worker-1" 2UL 1UL
                 host.Load(0L, load, [| 0uy |])
+                host.Observe(0L, "worker-1", PhaseObserved(load, tokenFor load, Compile))
                 host.Observe(0L, "worker-1", AbiVersionObserved(load, tokenFor load, 0x10000u))
                 host.Initialize(0L, initialize, [| 0uy |])
                 host.Observe(0L, "worker-1", InvocationObserved(success Initialize initialize, tokenFor initialize))
@@ -716,6 +723,7 @@ let terminalProcess =
             let future = identity "worker-3" 4UL 3UL
             let state = loadedSelected Sc2SupervisorV1 |> limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits
             let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+            let state = next 0L (ready candidate) state
             let state = next 0L (WorkerObserved("worker-2", AbiVersionObserved(candidate, tokenFor candidate, 0x10000u))) state
             let state = next 0L (InitializeRequested(initialize, [| 1uy |])) state
             let state = next 0L (WorkerObserved("worker-2", InvocationObserved(success Initialize initialize, tokenFor initialize))) state
@@ -760,6 +768,7 @@ let terminalProcess =
             let initialize = identity "worker-2" 3UL 2UL
             let state = loadedSelected Sc2SupervisorV1 |> limited 0L (LimitedInvokeAndRetire(reset, [| 1uy |])) terminalLimits
             let state = next 0L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |])) state
+            let state = next 0L (ready candidate) state
             let state = next 0L (WorkerObserved("worker-2", AbiVersionObserved(candidate, tokenFor candidate, 0x10000u))) state
             let state = next 0L (InitializeRequested(initialize, [| 1uy |])) state
             let state, effects = update 1L (WorkerObserved("worker-1", InvocationObserved(success Process reset, tokenFor reset))) state
@@ -781,4 +790,134 @@ let terminalProcess =
             let result = terminalResults effects |> List.last
             Expect.equal result.Reason (Some(AdapterRejected "adapter rejection")) "adapter first cause retained"
             Expect.equal result.Outcome None "adapter refusal invents no actual ABI outcome"
+    ]
+
+let private fresh path =
+    Lifecycle.create (settings path) |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+
+let private settled effects =
+    effects |> List.choose (function Settle result -> Some result | _ -> None)
+
+let private startupOutcome load =
+    Some
+        { Identity = load
+          Phase = Compile
+          State = TimedOut
+          Dispatch = NotDispatched
+          CleanupFault = None
+          CopiedOutput = Array.empty
+          EffectEligibility = ProductAdapterMustDecide }
+
+[<Tests>]
+let workerStartup =
+    testList "Worker startup is bounded separately from policy" [
+        for path in [ BarProtected; Sc2ImportedStrict ] do
+            testCase (sprintf "%A startup bound refuses distinctly and retires the Worker" path) <| fun _ ->
+                let load = identity "worker-1" 1UL 1UL
+                let state, effects = update 10L (LoadRequested(load, ReplaceCurrent, [| 0uy |])) (fresh path)
+                let control = (Lifecycle.project state).Controls |> List.exactlyOne
+                Expect.equal control.Phase "start" "a fresh Worker is starting until it reports readiness"
+                Expect.equal control.DeadlineMilliseconds (10L + int64 HostSettings.defaultWorkerStartTimeoutMilliseconds) "startup has its own bound"
+                Expect.equal (Lifecycle.projectEffects effects |> List.map _.Kind) [ "createActive"; "armTimer"; "post" ] "the command is posted at creation and queues until readiness"
+                let atBound, none = update 5010L (TimerObserved { Identity = load; Correlation = tokenFor load; Phase = Compile }) state
+                Expect.isEmpty (settled none) "the startup bound itself is still admissible"
+                let expired, effects = update 5011L (TimerObserved { Identity = load; Correlation = tokenFor load; Phase = Compile }) atBound
+                let result = settled effects |> List.exactlyOne
+                Expect.equal result.Reason (Some WorkerStartTimeout) "startup expiry is not a policy DeadlineExpired"
+                Expect.equal result.Disposition Discarded "no game authority on a startup refusal"
+                Expect.equal result.Outcome (startupOutcome load) "no guest dispatch is claimed"
+                Expect.contains (Lifecycle.projectEffects effects |> List.map _.Kind) "settleStartTimedOut" "projected distinctly"
+                Expect.isTrue (effects |> List.exists (function TerminateWorker "worker-1" -> true | _ -> false)) "the unready Worker is terminated"
+                Expect.equal (Lifecycle.project expired).ActiveWorker "" "no active authority remains"
+                let late, lateEffects = update 5012L (WorkerObserved("worker-1", PhaseObserved(load, tokenFor load, Compile))) expired
+                Expect.isEmpty lateEffects "a late readiness report cannot restore the Worker"
+                Expect.equal (Lifecycle.project late).ActiveWorker "" "still no authority"
+
+            testCase (sprintf "%A readiness starts the policy deadline" path) <| fun _ ->
+                let load = identity "worker-1" 1UL 1UL
+                let state = fresh path |> next 0L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
+                let readyState, effects = update 4000L (ready load) state
+                let control = (Lifecycle.project readyState).Controls |> List.exactlyOne
+                Expect.equal control.Phase "compile" "readiness admits compilation"
+                Expect.equal control.DeadlineMilliseconds 4250L "the policy budget starts at readiness"
+                Expect.equal (Lifecycle.project readyState).LastAction "workerReady" "readiness is explicit"
+                Expect.equal
+                    (Lifecycle.projectEffects effects |> List.map (fun effect -> effect.Kind, effect.Due))
+                    [ "cancelTimer", 0L; "armTimer", 4250L ]
+                    "the startup timer is replaced by the policy timer"
+                let duplicate, none = update 4100L (ready load) readyState
+                Expect.isEmpty none "a repeated readiness report cannot renew the budget"
+                Expect.equal ((Lifecycle.project duplicate).Controls |> List.exactlyOne).DeadlineMilliseconds 4250L "budget unchanged"
+                let version = if path = BarProtected then 1u else 0x10000u
+                let compiled = next 4250L (WorkerObserved("worker-1", AbiVersionObserved(load, tokenFor load, version))) duplicate
+                Expect.equal (Lifecycle.project compiled).CompiledWorkers [ "worker-1" ] "compilation within the policy budget succeeds"
+                let expired, expiry = update 4251L (TimerObserved { Identity = load; Correlation = tokenFor load; Phase = Compile }) duplicate
+                Expect.equal ((settled expiry |> List.exactlyOne).Reason) (Some DeadlineExpired) "policy expiry after readiness remains DeadlineExpired"
+                Expect.equal (Lifecycle.project expired).ActiveWorker "" "policy expiry retires the Worker"
+
+        testCase "compilation and foreign readiness before readiness are inert" <| fun _ ->
+            let load = identity "worker-1" 1UL 1UL
+            let state = fresh Sc2ImportedStrict |> next 0L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
+            let before = Lifecycle.project state
+            let wrong = OperationToken.create "wrong" |> Result.defaultWith (fun issue -> failtestf "%A" issue)
+            for observation in
+                [ AbiVersionObserved(load, tokenFor load, 0x10000u)
+                  PhaseObserved(load, wrong, Compile)
+                  PhaseObserved({ load with Generation = 2UL }, tokenFor load, Compile)
+                  PhaseObserved(load, tokenFor load, Instantiate) ] do
+                let after, effects = update 1L (WorkerObserved("worker-1", observation)) state
+                Expect.isEmpty effects (sprintf "%A cannot advance a starting Worker" observation)
+                Expect.equal { (Lifecycle.project after) with Clock = before.Clock } before "state unchanged"
+            let foreign, effects = update 1L (WorkerObserved("worker-2", PhaseObserved(load, tokenFor load, Compile))) state
+            Expect.isEmpty effects "another Worker's report is inert"
+            Expect.equal ((Lifecycle.project foreign).Controls |> List.exactlyOne).Phase "start" "still starting"
+
+        testCase "startup bound is configurable within a validated range" <| fun _ ->
+            let baseline = settings Sc2ImportedStrict
+            Expect.equal (HostSettings.workerStartTimeoutMilliseconds baseline) 5000 "default startup bound"
+            for invalid in [ 0; -1; HostSettings.maximumWorkerStartTimeoutMilliseconds + 1 ] do
+                Expect.equal (HostSettings.withWorkerStartTimeout invalid baseline) (Error [ InvalidSchedulingLimit "workerStartTimeoutMilliseconds" ]) "out of range refused"
+            let selected = HostSettings.withWorkerStartTimeout 120 baseline |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+            let compatible =
+                HostSettings.createCompatible (HostSettings.configuration baseline) (Some Controller) Sc2SupervisorV1
+                |> Result.bind (HostSettings.withWorkerStartTimeout 120)
+                |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+            Expect.equal (HostSettings.compatibility compatible) Sc2SupervisorV1 "compatibility retained"
+            let load = identity "worker-1" 1UL 1UL
+            for chosen in [ selected; compatible ] do
+                let state =
+                    Lifecycle.create chosen |> Result.defaultWith (fun issues -> failtestf "%A" issues)
+                    |> next 3L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
+                Expect.equal ((Lifecycle.project state).Controls |> List.exactlyOne).DeadlineMilliseconds 123L "selected bound applies"
+
+        testCase "an enclosing deadline caps startup and the policy budget" <| fun _ ->
+            let load = identity "worker-1" 1UL 1UL
+            let configuration = HostSettings.configuration (settings Sc2ImportedStrict)
+            let limits = { MaximumDeadlineMilliseconds = 250; MaximumOutputBytes = 64; EnclosingDeadlineMilliseconds = Some 100L }
+            let state = limited 0L (LimitedLoad(load, configuration, [| 0uy |])) limits (fresh Sc2ImportedStrict)
+            Expect.equal ((Lifecycle.project state).Controls |> List.exactlyOne).DeadlineMilliseconds 100L "caller budget caps startup"
+            let readyState = next 40L (ready load) state
+            Expect.equal ((Lifecycle.project readyState).Controls |> List.exactlyOne).DeadlineMilliseconds 100L "caller budget caps policy"
+            let _, effects = update 101L (TimerObserved { Identity = load; Correlation = tokenFor load; Phase = Compile }) state
+            Expect.equal ((settled effects |> List.exactlyOne).Reason) (Some WorkerStartTimeout) "unready at the caller bound is a startup refusal"
+
+        testCase "candidate startup refusal preserves active authority" <| fun _ ->
+            let candidate = identity "worker-2" 200UL 2UL
+            let state = loaded Sc2ImportedStrict |> next 10L (LoadRequested(candidate, PrepareCandidate("tx", Some 1UL), [| 0uy |]))
+            let after, effects = update 5011L (TimerObserved { Identity = candidate; Correlation = tokenFor candidate; Phase = Compile }) state
+            Expect.equal ((settled effects |> List.exactlyOne).Reason) (Some WorkerStartTimeout) "candidate refused distinctly"
+            let projection = Lifecycle.project after
+            Expect.equal projection.ActiveWorker "worker-1" "active retained"
+            Expect.equal projection.InitializedWorkers [ "worker-1" ] "active readiness retained"
+            Expect.equal projection.CandidateWorker "" "candidate removed"
+
+        testCase "disposal during startup settles the starting load once" <| fun _ ->
+            let load = identity "worker-1" 1UL 1UL
+            let state = fresh Sc2ImportedStrict |> next 0L (LoadRequested(load, ReplaceCurrent, [| 0uy |]))
+            let disposed, effects = update 1L DisposeRequested state
+            Expect.equal ((settled effects |> List.exactlyOne).Reason) (Some HostDisposed) "disposal reason retained"
+            Expect.isTrue (effects |> List.exists (function TerminateWorker "worker-1" -> true | _ -> false)) "starting Worker terminated"
+            Expect.isTrue (effects |> List.exists (function CancelTimer _ -> true | _ -> false)) "startup timer canceled"
+            let _, late = update 2L (ready load) disposed
+            Expect.isEmpty late "readiness after disposal is inert"
     ]

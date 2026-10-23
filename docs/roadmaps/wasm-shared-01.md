@@ -1,5 +1,48 @@
 # WASM-SHARED-01 — producer qualification successor
 
+## Current 0.7 source candidate: separate Worker startup bound
+
+Installed-C run [39874053570](https://github.com/FS-GG/FS.GG.Templates/actions/runs/39874053570)
+refused a correct cold Firefox load with `DeadlineExpired` on a hosted 4-vCPU
+runner: the 250 ms policy deadline was armed at enqueue, together with creating a
+fresh module Worker whose (then unbundled 0.3) module graph alone took about
+252 ms (FS-GG/FS.GG.Game#727). The owner direction is that the policy deadline
+bounds policy work only.
+
+The coherent `0.7.0` source candidate posts the load command at Worker creation,
+as before, but treats the Worker's first `Compile` receipt as its readiness report.
+Until readiness the control is in phase `start` under a separate startup bound
+(default 5,000 ms, selectable 1–60,000 ms, capped by any enclosing deadline);
+its expiry is the distinct, appended `DeliveryReason.WorkerStartTimeout` with no
+dispatch and no game authority. Readiness starts the unchanged 250 ms policy
+budget. Requests to ready Workers, disposal, replacement, candidate, freeze and
+retirement semantics are unchanged; receipts before readiness are inert.
+
+The startup default is twenty policy budgets. It separates a Worker that never
+becomes ready (blocked asset, hung fetch) from ordinary cold starts with at least
+an order of magnitude margin over the measured hosted cold starts recorded by the
+cold-load qualification, and keeps a worst-case refusal visible within seconds.
+Products with slower deployment networks may select a larger bound.
+
+The canonical model adds the `start` phase, readiness as a `compile` phase
+observation, startup expiry as `settleStartTimedOut`/`WorkerStartTimeout`, and
+invariants that a starting Worker has no compiled or initialized authority, that
+startup and policy deadlines stay within their own bounds, and that startup expiry
+is distinct, undispatched and terminating. Correspondence schedules deliver each
+fresh Worker's readiness at its load time; five new deterministic schedules cover
+the startup boundary before/at/after, an early compile receipt and a candidate
+startup refusal (default 58, selected 16). The selected sampled run adds an
+initialized-candidate entry because the readiness step otherwise made the frozen
+commit expiry witness unreachable at the pinned seed (it was a 1-in-1,000 sample).
+
+The producer's package-consumer and raw conformance browser suites now run in
+Chromium, Firefox and WebKit. A cold-load case records per-browser startup and
+policy-load timings for 20 fresh-profile loads under a hosted-like 4-CPU budget
+(hosted runners have 4 vCPUs; larger hosts pin browsers to 4 CPUs) and retains
+them as the `wasm-cold-load-*` artifact. The 0.5 closed single-module Worker
+bundle already removed the 0.3 module waterfall; receivers adopt it by re-pinning.
+Publication, receiver re-pin and installed acceptance remain separate boundaries.
+
 ## Current 0.6 publication and installed qualification
 
 The published current-only successor is coherent `0.6.0` for the pair and SDK.

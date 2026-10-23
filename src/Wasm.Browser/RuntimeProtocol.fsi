@@ -57,13 +57,21 @@ type RequestLimits =
       MaximumOutputBytes: int
       EnclosingDeadlineMilliseconds: int64 option }
 
-type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings * HostCompatibility
+type HostSettings = private HostSettings of ValidatedConfiguration * ProductRole option * SchedulingSettings * HostCompatibility * workerStartTimeoutMilliseconds: int
 
 [<RequireQualifiedAccess>]
 module HostSettings =
     val create: ValidatedConfiguration -> ProductRole option -> Result<HostSettings, ProtocolIssue list>
     val createCompatible: ValidatedConfiguration -> ProductRole option -> HostCompatibility -> Result<HostSettings, ProtocolIssue list>
     val compatibility: HostSettings -> HostCompatibility
+    /// Bound on Worker infrastructure startup: from Worker creation until the Worker
+    /// reports readiness by acknowledging the load command. It is separate from the
+    /// guest policy deadline, which starts only at that readiness report.
+    val defaultWorkerStartTimeoutMilliseconds: int
+    val maximumWorkerStartTimeoutMilliseconds: int
+    val workerStartTimeoutMilliseconds: HostSettings -> int
+    /// Selects a startup bound in [1, maximumWorkerStartTimeoutMilliseconds]; other values are refused.
+    val withWorkerStartTimeout: int -> HostSettings -> Result<HostSettings, ProtocolIssue list>
     val configuration: HostSettings -> ValidatedConfiguration
     val role: HostSettings -> ProductRole option
     val scheduling: HostSettings -> SchedulingSettings
@@ -128,6 +136,10 @@ type DeliveryReason =
     | WorkerFault of diagnostic: string
     | AdapterRejected of diagnostic: string
     | ProtocolRejected of ProtocolIssue list
+    /// The Worker did not report readiness before its startup bound (or an earlier
+    /// enclosing deadline). No guest policy work was admitted or timed. Appended so
+    /// existing case tags are unchanged for already-compiled consumers.
+    | WorkerStartTimeout
 
 type BrowserResult =
     {

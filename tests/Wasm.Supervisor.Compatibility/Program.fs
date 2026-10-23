@@ -21,12 +21,12 @@ let make selected =
     h,(fun ()->effects),clear,cfg
 let ready (h:Host) worker generation first =
     let load=id worker first generation
-    h.Load(0L,load,[|0uy|]);h.Observe(0L,worker,AbiVersionObserved(load,token load,0x10000u))
+    h.Load(0L,load,[|0uy|]);h.Observe(0L,worker,PhaseObserved(load,token load,Compile));h.Observe(0L,worker,AbiVersionObserved(load,token load,0x10000u))
     let initialize=id worker (first+1UL) generation
     h.Initialize(0L,initialize,[|1uy|]);h.Observe(0L,worker,InvocationObserved(success Initialize initialize,token initialize))
 let candidate (h:Host) =
     let load=id "candidate" 100UL 2UL
-    h.PrepareCandidate(0L,load,"tx",Some 1UL,[|0uy|]);h.Observe(0L,"candidate",AbiVersionObserved(load,token load,0x10000u))
+    h.PrepareCandidate(0L,load,"tx",Some 1UL,[|0uy|]);h.Observe(0L,"candidate",PhaseObserved(load,token load,Compile));h.Observe(0L,"candidate",AbiVersionObserved(load,token load,0x10000u))
     let initialize=id "candidate" 101UL 2UL
     h.Initialize(0L,initialize,[|1uy|]);h.Observe(0L,"candidate",InvocationObserved(success Initialize initialize,token initialize));h.ValidateCandidate(0L,"tx",2UL)
 let complete (h:Host) now (identity:HostIdentity) = h.Observe(now,identity.WorkerInstance,InvocationObserved(success Process identity,token identity))

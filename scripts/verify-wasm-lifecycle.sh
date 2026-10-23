@@ -64,6 +64,11 @@ expected = {
     "freezeBlocksAndSuppressesTest",
     "cleanupFaultIsNotSuccessTest",
     "disposalSettlesEverythingOnceTest",
+    "startTimeoutIsDistinctTest",
+    "readinessStartsPolicyDeadlineTest",
+    "policyExpiryAfterReadinessIsDeadlineExpiredTest",
+    "compiledBeforeReadinessIsInertTest",
+    "candidateStartTimeoutPreservesActiveTest",
 }
 passed = set(result["passed"])
 if passed != expected or result["failed"] or result["ignored"]:
@@ -77,10 +82,10 @@ PY
 # The same 2,000 sample budget covers cold start and reachable initialized work.
 for entry in init initReady; do
   "$quint" run --backend=typescript --main=lifecycle --init="$entry" --step=step --invariant=lifecycleSafe \
-    --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout \
+    --witnesses=sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout sawWorkerReady sawStartTimeout \
     --max-steps=40 --max-samples=1000 --seed=20261002 --out-itf="$proof/quint-sampled-$entry.itf.json" "$model" > "$proof/quint-sampled-$entry.txt" 2>&1
 done
-for witness in sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout; do
+for witness in sawBusyRefusal sawSnapshotCoalesced sawHistoricalResult sawQueuedTimeout sawWorkerReady sawStartTimeout; do
   grep -Eq "^${witness} was witnessed in [1-9][0-9]* trace" "$proof/quint-sampled-init.txt" "$proof/quint-sampled-initReady.txt"
 done
 

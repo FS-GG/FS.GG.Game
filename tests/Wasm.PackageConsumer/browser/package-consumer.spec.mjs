@@ -77,13 +77,30 @@ test("ABI version mismatch never grants initialized authority",async({page})=>{
   expect(value.loaded.Diagnostic).toContain("ABI version mismatch");
   expect(value.active).toBe("");
 });
-test("compile deadline terminates the actual freshly created Worker",async({page})=>{
-  const value=await page.evaluate(()=>window.runControl("control-ordinary.wasm",0,1));
-  expect(value.loaded).toMatchObject({State:"timeout",Phase:"Compile"});
-  expect(value.active).toBe("");
+test("a one-millisecond policy budget starts at readiness and terminates the fresh Worker",async({page})=>{
+  const value=await page.evaluate(()=>window.runPolicyExpiryAfterReadiness());
+  expect(value.readyObserved,"the genuine readiness report reached the producer").toBe(true);
+  expect(value.held).toBe(1); // A real compile must occur; an unexercised prefix cannot pass.
+  expect(value.loaded).toMatchObject({State:"timeout",Reason:"DeadlineExpired",Disposition:"Discarded",Dispatched:false});
+  expect(["Compile","Instantiate"]).toContain(value.loaded.Phase);
+  expect(value.active).toBe("");expect(value.retired).toContain("installed-worker");
+  await expect.poll(()=>page.workers().length).toBe(0);
 });
 
-test("closed installed Worker starts fresh initially and after candidate abort under original limited budgets",async({page})=>{
+test("withheld readiness is refused by the separate startup bound without game authority",async({page})=>{
+  const value=await page.evaluate(()=>window.runHeldReadiness(100));
+  expect(value.held).toBe(1);
+  expect(value.posts).toEqual(["load"]);
+  expect(value.loaded).toMatchObject({State:"timeout",Phase:"Compile",Reason:"WorkerStartTimeout",Disposition:"Discarded",Dispatched:false});
+  expect(value.elapsed).toBeGreaterThanOrEqual(90);
+  expect(value.before).toMatchObject({ActiveWorker:"",InitializedWorkers:[]});
+  expect(value.retired).toContain("installed-worker");
+  // A late genuine readiness report cannot restore the retired Worker.
+  expect(value.after).toEqual(value.before);expect(value.deliveriesAfter).toBe(value.deliveriesBefore);
+  await expect.poll(()=>page.workers().length).toBe(0);
+});
+
+test("closed installed Worker starts fresh initially and after candidate abort under policy budgets from readiness",async({page})=>{
   const requested=[],physical=[];
   const onRequest=request=>{const url=new URL(request.url());if(url.pathname.includes("/_content/FS.GG.Wasm.Browser/"))requested.push(url.pathname);};
   page.context().on("request",onRequest);page.on("worker",worker=>physical.push(worker.url()));
@@ -129,10 +146,10 @@ test("public instruction-dense module admits in fresh installed Workers under th
   await expect.poll(()=>page.workers().length).toBe(0);
 });
 
-test("observed cold expiry keeps its one-millisecond pre-create deadline and retirement",async({page})=>{
+test("a one-millisecond enclosing budget caps cold startup as a distinct startup refusal",async({page})=>{
   const value=await page.evaluate(()=>window.runObservedColdExpiry());
-  console.log(JSON.stringify({stage:"observed cold expiry",state:value.loaded.State,status:value.status,trace:value.trace}));
-  expect(value.loaded).toMatchObject({State:"timeout",Phase:"Compile"});
+  console.log(JSON.stringify({stage:"observed cold expiry",state:value.loaded.State,reason:value.loaded.Reason,status:value.status,trace:value.trace}));
+  expect(value.loaded).toMatchObject({State:"timeout",Phase:"Compile",Reason:"WorkerStartTimeout",Disposition:"Discarded",Dispatched:false});
   expect(value.retired).toContain("installed-worker");expect(value.final.ActiveWorker).toBe("");
   await expect.poll(()=>page.workers().length).toBe(0);
 });
@@ -141,7 +158,7 @@ test("a genuine loaded message withheld beyond the original deadline cannot rest
   const value=await page.evaluate(()=>window.runObservedLateLoaded());
   console.log(JSON.stringify({stage:"declared late delivery impairment",state:value.loaded.State,held:value.held,status:value.status,trace:value.trace}));
   expect(value.held).toBe(1); // A real compile must occur; an unexercised prefix cannot pass.
-  expect(value.loaded.State).toBe("timeout");expect(value.deliveriesAfter).toBe(value.deliveriesBefore);
+  expect(value.loaded).toMatchObject({State:"timeout",Reason:"DeadlineExpired"});expect(value.deliveriesAfter).toBe(value.deliveriesBefore);
   expect(value.after).toEqual(value.before);expect(value.after.ActiveWorker).toBe("");
   expect(value.retired).toContain("installed-worker");
   await expect.poll(()=>page.workers().length).toBe(0);

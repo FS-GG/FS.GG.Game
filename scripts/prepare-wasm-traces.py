@@ -83,13 +83,13 @@ def schedules(path):
 
 def census(root):
     first, second = [schedules(root / name) for name in GENERATORS]
-    if (len(first), len(second)) != (53, 16):
-        raise ValueError('reviewed schedule census changed (expected 53/16)')
+    if (len(first), len(second)) != (58, 16):
+        raise ValueError('reviewed schedule census changed (expected 58/16)')
     paths = [DEFAULT + '/Traces/' + row[0] + '_0.itf.json' for row in first]
     paths += [SELECTED + '/Traces/' + row[0] + '_0.itf.json.gz' for row in second]
     paths += [DEFAULT + '/GeneratedTraces.fs', SELECTED + '/GeneratedCompatibilityTraces.fs']
-    if len(paths) != 71 or len(set(paths)) != 71:
-        raise ValueError('reviewed output census is not 71 unique paths')
+    if len(paths) != 76 or len(set(paths)) != 76:
+        raise ValueError('reviewed output census is not 76 unique paths')
     return paths, {'default': first, 'compatible': second}
 
 

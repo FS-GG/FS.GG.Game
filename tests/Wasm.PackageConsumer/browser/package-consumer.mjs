@@ -2,7 +2,7 @@ import * as bridge from "./fable/Program.js";
 import { createHostTransport } from "./_content/FS.GG.Wasm.Browser/worker-client.mjs";
 const bytes = async name => new Uint8Array(await (await fetch(`./modules/${name}`)).arrayBuffer());
 const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", value)), byte => byte.toString(16).padStart(2, "0")).join("");
-async function session(artifact, prefix, outputCap = 65536, deadline = 250, inject = false, observer, holdLoaded = false) {
+async function session(artifact, prefix, outputCap = 65536, deadline = 250, inject = false, observer, holdLoaded = false, options = {}) {
   const transport = createHostTransport(new URL("./_content/FS.GG.Wasm.Browser/", import.meta.url),observer?{observe:observer}:undefined);
   const waiting = new Map(), results = [], posts=[], terminations=[], deliveryStates=[], admissions=[], terminationStates=[];
   const terminate=transport.TerminateWorker;
@@ -14,7 +14,14 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
   };
   let ignored=0, host;const held=[];
   const create=transport.CreateWorker;
-  transport.CreateWorker=(name,receive)=>create(name,wire=>{
+  // Page-clock timing is measurement only; the F# producer owns every decision.
+  const timing={created:new Map(),ready:new Map(),settled:new Map()};
+  transport.CreateWorker=(name,receive)=>{timing.created.set(name,performance.now());return create(name,wire=>{
+    // The fresh Worker's first Compile receipt is its readiness report.
+    if(wire.Kind==="phase"&&wire.Phase==="compile"){
+      if(options.holdReady){held.push({wire,receive});return;}
+      if(!timing.ready.has(name))timing.ready.set(name,performance.now());
+    }
     // Declared delivery-impairment control: retain a genuine loaded message,
     // not a manufactured ABI result. The real original timer still expires.
     if(holdLoaded&&wire.Kind==="loaded"){held.push({wire,receive});return;}
@@ -27,11 +34,12 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
       }
     }
     receive(wire);
-  });
+  });};
   const post=transport.PostCommand;
   transport.PostCommand=(name,command)=>{posts.push({name,Kind:command.Kind,request:command.Identity.Request});post(name,command);};
   const artifactDigest=await digest(artifact);
-  host = bridge.createHost(prefix === "barc" ? "bar-protected" : "sc2-imported-strict", artifactDigest, outputCap, deadline, transport, result => {
+  host = bridge.createHostWithStartup(prefix === "barc" ? "bar-protected" : "sc2-imported-strict", artifactDigest, outputCap, deadline, options.startup ?? 0, transport, result => {
+    timing.settled.set(result.Request,performance.now());
     deliveryStates.push({request:result.Request,clock:bridge.producerClock(host),projection:bridge.project(host),terminations:[...terminations],terminationStates:[...terminationStates]});
     results.push(result); const pending = waiting.get(result.Request); waiting.delete(result.Request); pending?.(result);
   });
@@ -44,7 +52,7 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
       admissions.push({request:id,queuedDeadline:bridge.queuedDeadline(host,id)});
     });
   };
-  return { host, send, results, posts, terminations, deliveryStates, admissions, terminationStates, transport,
+  return { host, send, results, posts, terminations, deliveryStates, admissions, terminationStates, transport, timing,
     heldCount:()=>held.length,
     releaseHeld:()=>{for(const row of held.splice(0))row.receive(row.wire);},
     ignored:()=>ignored,
@@ -55,6 +63,14 @@ async function session(artifact, prefix, outputCap = 65536, deadline = 250, inje
     loadBounded:()=>{
       const id=String(++request),identity={WorkerInstance:"installed-worker",Request:id,Generation:"1"};
       return new Promise(resolve=>{waiting.set(id,resolve);bridge.loadBoundedSc2(host,transport.Now(),identity,artifactDigest,artifact,deadline);});
+    },
+    loadLimited:()=>{
+      const id=String(++request),identity={WorkerInstance:"installed-worker",Request:id,Generation:"1"};
+      return new Promise(resolve=>{waiting.set(id,resolve);bridge.loadLimitedSc2(host,transport.Now(),identity,artifactDigest,artifact,deadline);});
+    },
+    prepareLimited:transaction=>{
+      const id=String(++request),identity={WorkerInstance:"candidate-worker",Request:id,Generation:"2"};
+      return new Promise(resolve=>{waiting.set(id,resolve);bridge.prepareLimitedSc2(host,transport.Now(),identity,transaction,artifactDigest,artifact);});
     },
     prepareBounded:transaction=>{
       const id=String(++request),identity={WorkerInstance:"candidate-worker",Request:id,Generation:"2"};
@@ -94,15 +110,15 @@ window.runObservedFreshWorkers = async (dense=false) => {
   const trace=[],original=await bytes("control-ordinary.wasm"),artifact=dense?instructionDense(original):original,current=await session(artifact,"sc2c",65536,250,false,row=>trace.push(row));
   let result={fixtureFailure:null};
   try{
-    result.loaded=await current.loadBounded();
+    result.loaded=await current.loadLimited();
     if(result.loaded.State==="succeeded"){
       result.initialized=await current.send("initialize",new Uint8Array([0]));
       if(result.initialized.State==="succeeded"){
-        result.first=await current.prepareBounded("startup-first");
+        result.first=await current.prepareLimited("startup-first");
         if(result.first.State==="succeeded"){
           bridge.abortCandidate(current.host,current.transport.Now(),"startup-first");
           result.afterAbort=current.projection();
-          result.second=await current.prepareBounded("startup-second");
+          result.second=await current.prepareLimited("startup-second");
         }
       }
     }
@@ -123,11 +139,57 @@ window.runObservedLateLoaded = async () => {
   const current=await session(artifact,"sc2c",65536,250,false,row=>trace.push(row),true);
   let result;
   try{
-    const loaded=await current.loadBounded(),before=current.projection(),deliveriesBefore=current.results.length,held=current.heldCount();
+    const loaded=await current.loadLimited(),before=current.projection(),deliveriesBefore=current.results.length,held=current.heldCount();
     current.releaseHeld();
     result={loaded,held,before,after:current.projection(),deliveriesBefore,deliveriesAfter:current.results.length};
   }finally{current.dispose();}
   return {...result,trace,status:current.transport.DiagnosticStatus(),retired:current.terminations};
+};
+// Declared delivery impairment: withhold the genuine readiness receipt so the
+// separate startup bound expires. The real command was posted at creation.
+window.runHeldReadiness = async (startup=100) => {
+  const artifact=await bytes("control-ordinary.wasm");
+  const current=await session(artifact,"sc2c",65536,250,false,undefined,false,{startup,holdReady:true});
+  try{
+    const started=performance.now();
+    const loaded=await current.send("load",artifact);
+    const elapsed=performance.now()-started,before=current.projection(),deliveriesBefore=current.results.length,held=current.heldCount();
+    current.releaseHeld();
+    return {loaded,elapsed,held,before,after:current.projection(),deliveriesBefore,deliveriesAfter:current.results.length,retired:current.terminations,posts:current.posts.map(x=>x.Kind)};
+  }finally{current.dispose();}
+};
+
+// One cold page load: create the package Worker, wait for its readiness report,
+// load (admit/compile/instantiate) the policy, initialize it and request one
+// advisory result, exactly as a product receiver does. Page-clock measurements only.
+window.runColdLoad = async (name="c-sc2.wasm") => {
+  const artifact=await bytes(name),current=await session(artifact,"sc2c");
+  const worker="installed-worker";
+  try{
+    const loaded=await current.send("load",artifact);
+    const created=current.timing.created.get(worker),ready=current.timing.ready.get(worker),loadedAt=current.timing.settled.get(loaded.Request);
+    const row={loaded:loaded.State,reason:loaded.Reason,phase:loaded.Phase,
+      startupMilliseconds:ready===undefined?null:ready-created,
+      policyLoadMilliseconds:ready===undefined?null:loadedAt-ready,
+      endToEndLoadMilliseconds:loadedAt-created,hardwareConcurrency:navigator.hardwareConcurrency};
+    if(loaded.State!=="succeeded")return row;
+    const initializeStart=performance.now(),initialized=await current.send("initialize",new Uint8Array([1,2,3,4]));
+    row.initialized=initialized.State;row.initializeMilliseconds=performance.now()-initializeStart;
+    if(initialized.State!=="succeeded")return row;
+    const adviceStart=performance.now(),advice=await current.send("invoke",new Uint8Array([1,2,3,4]));
+    row.advice=advice.State;row.adviceMilliseconds=performance.now()-adviceStart;row.adviceOutput=Array.from(advice.Output);
+    return row;
+  }finally{current.dispose();}
+};
+// Declared delivery impairment with readiness intact: the genuine loaded receipt is
+// withheld, so the one-millisecond policy budget (started at readiness) expires.
+window.runPolicyExpiryAfterReadiness = async () => {
+  const artifact=await bytes("control-ordinary.wasm");
+  const current=await session(artifact,"sc2c",65536,1,false,undefined,true);
+  try{
+    const loaded=await current.send("load",artifact);
+    return {loaded,readyObserved:current.timing.ready.has("installed-worker"),held:current.heldCount(),active:current.projection().ActiveWorker,retired:current.terminations};
+  }finally{current.dispose();}
 };
 window.runGuest = async (name, prefix) => {
   const artifact = await bytes(name), current = await session(artifact, prefix);

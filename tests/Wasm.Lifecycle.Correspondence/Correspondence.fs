@@ -76,6 +76,7 @@ let eventFor (previous: ModelStep) (target: ModelStep) =
         | "phase" ->
             let phase =
                 match original.Phase with
+                | "compile" -> Compile
                 | "instantiate" -> Instantiate
                 | "allocate-input" -> AllocateInput
                 | "initialize" -> Initialize
@@ -132,7 +133,7 @@ let private replayWithMutations (mutate: ModelStep -> EffectProjection list -> E
         let terminals =
             effects |> List.choose (function
                 | Settle result ->
-                    let reason = match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:" + diagnostic | Some (AdapterRejected diagnostic) -> "AdapterRejected:" + diagnostic | _ -> ""
+                    let reason = match result.Reason with Some DeadlineExpired -> "DeadlineExpired" | Some WorkerStartTimeout -> "WorkerStartTimeout" | Some HostDisposed -> "HostDisposed" | Some (WorkerFault diagnostic) -> "WorkerFault:" + diagnostic | Some (AdapterRejected diagnostic) -> "AdapterRejected:" + diagnostic | _ -> ""
                     if reason = "" then None else
                         let phase = result.Outcome |> Option.map (fun value -> match value.Phase with Compile -> "compile" | Instantiate -> "instantiate" | AllocateDescriptor -> "allocate-descriptor" | AllocateInput -> "allocate-input" | Initialize -> "initialize" | Process -> "process" | Free -> "free" | Shutdown -> "shutdown") |> Option.defaultValue ""
                         Some ({ Request = result.Identity.Request; Reason = reason; Outcome = result.Outcome |> Option.map (fun value -> match value.State with TimedOut -> "TimedOut" | Faulted _ -> "Faulted" | _ -> "unexpected") |> Option.defaultValue ""; Phase = phase; Dispatched = result.Outcome |> Option.exists (fun value -> value.Dispatch = Dispatched) } : TerminalExpectation)
@@ -217,7 +218,9 @@ let eventBoundaryMutationsAreDetected (trace: ModelTrace) =
       "drop-current-cancel", (fun _ effects -> effects |> List.filter(fun effect -> effect.Kind <> "cancelTimer"))
       "late-completion-current", (fun expected effects -> if expected.Input.Name = "complete" then effects |> List.map(fun effect -> if effect.Kind = "settleTimedOut" then { effect with Kind = "settleCurrent" } else effect) else effects)
       "queued-dispatch-after-expiry", (fun _ effects -> match effects |> List.tryFind(fun effect -> effect.Kind = "settleTimedOut") with Some terminal -> effects @ [{ terminal with Kind = "post"; Operation = "process"; Bytes = 1 }] | None -> effects)
-      "wrong-terminal-correlation", (fun _ effects -> effects |> List.map(fun effect -> if effect.Kind = "cancelTimer" then { effect with Correlation = "foreign" } else effect)) ]
+      "wrong-terminal-correlation", (fun _ effects -> effects |> List.map(fun effect -> if effect.Kind = "cancelTimer" then { effect with Correlation = "foreign" } else effect))
+      "startup-expiry-as-policy-expiry", (fun _ effects -> effects |> List.map(fun effect -> if effect.Kind = "settleStartTimedOut" then { effect with Kind = "settleTimedOut" } else effect))
+      "readiness-keeps-startup-deadline", (fun expected effects -> if expected.State.LastAction = "workerReady" then effects |> List.map(fun effect -> if effect.Kind = "armTimer" then { effect with Due = effect.Due + 4750L } else effect) else effects) ]
     |> List.map(fun (name,mutate) -> name,hasFailure mutate)
 
 let rawTerminalMutationsAreDetected (trace: ModelTrace) =
@@ -228,4 +231,5 @@ let rawTerminalMutationsAreDetected (trace: ModelTrace) =
       "not-dispatched-to-dispatched", corrupt (fun terminal -> { terminal with Dispatched = true })
       "invalidation-outcome-dropped", corrupt (fun terminal -> { terminal with Outcome = "" })
       "queued-own-expiry-invents-outcome", corrupt (fun terminal -> if terminal.Reason = "DeadlineExpired" && terminal.Outcome = "" then { terminal with Outcome = "TimedOut" } else terminal)
-      "terminal-phase-normalized-process", corrupt (fun terminal -> if terminal.Phase <> "" then { terminal with Phase = "process" } else terminal) ]
+      "terminal-phase-normalized-process", corrupt (fun terminal -> if terminal.Phase <> "" then { terminal with Phase = "process" } else terminal)
+      "startup-cause-to-deadline", corrupt (fun terminal -> if terminal.Reason = "WorkerStartTimeout" then { terminal with Reason = "DeadlineExpired" } else terminal) ]
