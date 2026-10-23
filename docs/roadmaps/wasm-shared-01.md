@@ -16,7 +16,10 @@ Until readiness the control is in phase `start` under a separate startup bound
 its expiry is the distinct, appended `DeliveryReason.WorkerStartTimeout` with no
 dispatch and no game authority. Readiness starts the unchanged 250 ms policy
 budget. Requests to ready Workers, disposal, replacement, candidate, freeze and
-retirement semantics are unchanged; receipts before readiness are inert.
+retirement semantics are unchanged. Compilation, phase and digest receipts before
+readiness are inert; a Worker failure, termination or protocol-violating invocation
+receipt before readiness still faults it. A caller enclosing deadline on a load also caps startup, so receivers that
+want only the policy budget should not pass one for loads.
 
 The startup default is twenty policy budgets. It separates a Worker that never
 becomes ready (blocked asset, hung fetch) from ordinary cold starts with at least

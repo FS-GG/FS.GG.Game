@@ -50,8 +50,10 @@ terminates the Worker; no guest policy was admitted and no game authority follow
 Readiness replaces the startup timer with the policy timer: the profile budget
 (SC2 250 ms `EndToEndFromEnqueue`, BAR 250 ms phase watchdog) starts at the
 readiness report, capped by any enclosing deadline. Policy expiry after readiness
-remains `DeadlineExpired`. Compilation and other receipts before readiness, a
-repeated readiness report and readiness after expiry are inert. Requests to an
+remains `DeadlineExpired`. Compilation, phase and digest receipts before
+readiness, a repeated readiness report and readiness after expiry are inert; a
+Worker failure, Worker termination or protocol-violating invocation receipt before
+readiness still faults and retires the starting Worker. Requests to an
 already-ready Worker are unchanged: their budget still starts at enqueue.
 
 Every event checks host-observed monotonic time; a request may complete at its
