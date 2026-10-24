@@ -65,10 +65,11 @@ jobs:
           bash tests/release/wasm/test-release-wasm.sh --source-only
 
   admission:
+    name: admission [org-publication-writer]
     needs: [preflight]
     if: inputs.mode == 'promote' || inputs.mode == 'recovery' || inputs.mode == 'readback'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     permissions:
       actions: read
       checks: read
@@ -76,6 +77,11 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
@@ -109,16 +115,22 @@ jobs:
           retention-days: 90
 
   begin:
+    name: begin [org-publication-writer]
     needs: [admission]
     if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       actions: read
       checks: read
       contents: write
       packages: write
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
@@ -149,16 +161,22 @@ jobs:
           retention-days: 90
 
   org:
+    name: org [org-publication-writer]
     needs: [begin]
     if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       actions: read
       checks: read
       contents: write
       packages: write
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
@@ -188,10 +206,11 @@ jobs:
           retention-days: 90
 
   public:
+    name: public [org-publication-writer]
     needs: [org]
     if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       actions: read
       checks: read
@@ -199,6 +218,11 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
@@ -233,16 +257,22 @@ jobs:
           retention-days: 90
 
   assets:
+    name: assets [org-publication-writer]
     needs: [public]
     if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       actions: read
       checks: read
       contents: write
       packages: read
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
@@ -272,16 +302,22 @@ jobs:
           retention-days: 90
 
   complete:
+    name: complete [org-publication-writer]
     needs: [org, public, assets]
     if: inputs.mode == 'promote' || inputs.mode == 'recovery'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     permissions:
       actions: read
       checks: read
       contents: write
       packages: read
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0

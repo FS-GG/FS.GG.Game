@@ -84,7 +84,7 @@ jobs:
         run: dotnet test FS.GG.Game.slnx -c Debug --no-restore
 
   publish-packages:
-    name: Publish FS.GG.Game.* (org feed + nuget.org, release-only)
+    name: Publish FS.GG.Game.* (org feed + nuget.org, release-only) [org-publication-writer]
     runs-on: ubuntu-latest
     if: github.repository == 'FS-GG/FS.GG.Game' && (github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')) && (github.event_name != 'workflow_dispatch' || inputs.admission_only != true)
     needs: [verify]
@@ -94,6 +94,11 @@ jobs:
       packages: write
       id-token: write   # ADR-0013: mint the GitHub OIDC token for nuget.org Trusted Publishing
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.version != '' && format('refs/tags/v{0}', inputs.version) || github.ref }}
@@ -339,15 +344,20 @@ jobs:
           retention-days: 90
 
   admission:
-    name: Observe registry and OIDC admission (no publication)
+    name: Observe registry and OIDC admission (no publication) [org-publication-writer]
     if: github.repository == 'FS-GG/FS.GG.Game' && github.event_name == 'workflow_dispatch' && inputs.admission_only == true
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 35
     permissions:
       contents: read
       packages: write # Match the publisher principal; this job makes only registry GET requests.
       id-token: write
     steps:
+      - name: Acquire org publication writer lock
+        uses: FS-GG/.github/.github/actions/publication-writer-lock@c799a9f9b21d52eb9766cf0950722e3e55145d39 # ADR-0097
+        with:
+          max-wait-minutes: 30
+        timeout-minutes: 32
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Guard isolated observation mode
         shell: bash
