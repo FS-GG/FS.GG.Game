@@ -106,8 +106,16 @@ materialize() {
     die "the template's npm lock does not carry the pinned $package integrity"
   [[ -f $product/src/$project/Bindings.fs ]] || die "the instantiated template has no src/$project/Bindings.fs"
 
+  # The generated source must be exactly the source the pin names: a moved template, a changed generator or a
+  # tampered file all show here, before anything compiles it.
+  expected="$(pin "${prefix}_BINDINGS_SHA256")"
+  actual="$(sha256sum "$product/src/$project/Bindings.fs" | cut -d' ' -f1)"
+  [[ -n $expected ]] || die "the pin file has no ${prefix}_BINDINGS_SHA256 (generated Bindings.fs is $actual)"
+  [[ $actual == "$expected" ]] ||
+    die "$corpus: the generated Bindings.fs is $actual, but the pin names $expected (${prefix}_BINDINGS_SHA256 in eng/js-bindings/pin.env)"
+
   cp "$product/package.json" "$product/package-lock.json" "$OUT/$corpus/npm/"
-  echo "materialize-js-bindings: OK — $corpus: $project from FS.GG.Templates ${TEMPLATES_COMMIT:0:8}, $package $version, Bindings.fs sha256=$(sha256sum "$product/src/$project/Bindings.fs" | cut -d' ' -f1)"
+  echo "materialize-js-bindings: OK — $corpus: $project from FS.GG.Templates ${TEMPLATES_COMMIT:0:8}, $package $version, Bindings.fs sha256=$actual"
 }
 
 if [[ $CORPUS == all ]]; then

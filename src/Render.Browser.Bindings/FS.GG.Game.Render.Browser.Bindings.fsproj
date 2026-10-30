@@ -33,4 +33,28 @@
     <PackageReference Include="Fable.Core" />
   </ItemGroup>
 
+  <!-- Refuse to build against generated sources that are missing, stale or edited: each must hash to the sha256
+       eng/js-bindings/pin.env records for its corpus. Regenerate with scripts/materialize-js-bindings.sh. -->
+  <PropertyGroup>
+    <JsBindingsPin>$(MSBuildThisFileDirectory)../../eng/js-bindings/pin.env</JsBindingsPin>
+  </PropertyGroup>
+
+  <Target Name="VerifyGeneratedBindings" BeforeTargets="CoreCompile;ResolveAssemblyReferences;ResolveAssemblyReferencesDesignTime">
+    <PropertyGroup>
+      <PinText>$([System.IO.File]::ReadAllText('$(JsBindingsPin)'))</PinText>
+      <BabylonPinned>$([System.Text.RegularExpressions.Regex]::Replace('$(PinText)', '(?s).*BABYLON_BINDINGS_SHA256=([0-9a-f]+).*', '$1'))</BabylonPinned>
+      <PixiPinned>$([System.Text.RegularExpressions.Regex]::Replace('$(PinText)', '(?s).*PIXI_BINDINGS_SHA256=([0-9a-f]+).*', '$1'))</PixiPinned>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(BabylonBindingsSource)')" Text="Generated Babylon bindings are missing ($(BabylonBindingsSource)). Run scripts/materialize-js-bindings.sh all." />
+    <Error Condition="!Exists('$(PixiBindingsSource)')" Text="Generated Pixi bindings are missing ($(PixiBindingsSource)). Run scripts/materialize-js-bindings.sh all." />
+    <GetFileHash Files="$(BabylonBindingsSource)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Hash" PropertyName="BabylonActual" />
+    </GetFileHash>
+    <GetFileHash Files="$(PixiBindingsSource)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Hash" PropertyName="PixiActual" />
+    </GetFileHash>
+    <Error Condition="'$(BabylonActual.ToLowerInvariant())' != '$(BabylonPinned)'" Text="Generated Babylon bindings are stale or edited: Bindings.fs is $(BabylonActual.ToLowerInvariant()) but eng/js-bindings/pin.env pins $(BabylonPinned). Run scripts/materialize-js-bindings.sh all." />
+    <Error Condition="'$(PixiActual.ToLowerInvariant())' != '$(PixiPinned)'" Text="Generated Pixi bindings are stale or edited: Bindings.fs is $(PixiActual.ToLowerInvariant()) but eng/js-bindings/pin.env pins $(PixiPinned). Run scripts/materialize-js-bindings.sh all." />
+  </Target>
+
 </Project>

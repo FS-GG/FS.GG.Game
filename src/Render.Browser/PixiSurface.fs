@@ -289,6 +289,7 @@ module PixiSurface =
                                 options.OnFailure ex.Message),
                     (fun error ->
                         failedInit.Value <- true
+                        initFailures <- initFailures + 1
 
                         if disposed.Value then
                             try
@@ -298,7 +299,6 @@ module PixiSurface =
                         else
                             let message = sprintf "Pixi could not start: %O" error
                             failed.Value <- Some message
-                            initFailures <- initFailures + 1
                             options.OnFailure message)
                 )
                 |> ignore

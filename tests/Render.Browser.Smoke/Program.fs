@@ -504,7 +504,7 @@ module Probe =
     let pixel (canvas: HTMLCanvasElement) (x: int) (y: int) : int[] = jsNative
 
     /// Wrap `getContext` once so the page can count the WebGL contexts it created, and refuse contexts on demand.
-    [<Emit("(() => { if (window.__glHook) return; const h = { calls: 0, limit: Infinity, records: [] }; window.__glHook = h; const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function (type, ...rest) { h.calls++; if (h.calls > h.limit) return null; const c = o.call(this, type, ...rest); if (c && /webgl/.test(String(type))) h.records.push(c); return c } })()")>]
+    [<Emit("(() => { if (window.__glHook) return; const h = { calls: 0, limit: Infinity, records: [], blocked: new Set() }; window.__glHook = h; const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function (type, ...rest) { h.calls++; if (h.calls > h.limit || h.blocked.has(this)) return null; const c = o.call(this, type, ...rest); if (c && /webgl/.test(String(type))) h.records.push(c); return c } })()")>]
     let installGlHook () : unit = jsNative
 
     /// WebGL contexts of adapter canvases (`data-renderer`) created since the hook was installed and not lost: the
@@ -516,6 +516,25 @@ module Probe =
     /// function lifts the refusal. `n = 0` refuses all of them.
     [<Emit("(() => { const h = window.__glHook; h.limit = h.calls + $0; return () => { h.limit = Infinity } })()")>]
     let refuseContextsAfter (n: int) : unit -> unit = jsNative
+
+    /// Refuse `getContext` on this one canvas element (every other canvas, including the throwaway one an adapter
+    /// asks first, is unaffected) until the returned function lifts the refusal.
+    [<Emit("(() => { const h = window.__glHook; h.blocked.add($0); return () => { h.blocked.delete($0) } })()")>]
+    let refuseCanvas (canvas: HTMLCanvasElement) : unit -> unit = jsNative
+
+    /// Make the one live Babylon engine's `stopRenderLoop` throw ONCE: the FIRST step of the adapter's release. It
+    /// throws only on that first call because `Engine.dispose` calls `stopRenderLoop` itself, and a fault that also
+    /// broke the engine's own disposal would test Babylon, not the adapter's release sequence.
+    [<Import("EngineStore", "@babylonjs/core/Engines/engineStore.js");
+      Emit("(() => { const engine = $0.Instances[0]; const original = engine.stopRenderLoop; let thrown = false; engine.stopRenderLoop = function (...args) { if (!thrown) { thrown = true; throw new Error('release boom') } return original.apply(this, args) } })()")>]
+    let breakBabylonStopRenderLoop () : unit = jsNative
+
+    /// Make `Application.destroy` throw (after remembering the application): the step of the Pixi release that
+    /// destroys the application. The returned function restores it and destroys what was remembered, so the throw
+    /// leaves nothing behind in the page.
+    [<Import("Application", "pixi.js");
+      Emit("(() => { const original = $0.prototype.destroy; const kept = []; $0.prototype.destroy = function () { kept.push(this); throw new Error('release boom') }; return () => { $0.prototype.destroy = original; for (const app of kept) original.call(app, { removeView: false }, { children: true }) } })()")>]
+    let breakPixiDestroy () : unit -> unit = jsNative
 
 let near (expected: int[]) (actual: int[]) (tolerance: int) =
     actual.Length >= 3
@@ -960,6 +979,48 @@ let runBabylon () : Async<unit> =
             "no engine or adapter WebGL context survived the whole babylon section"
             (Probe.engines () = 0 && Probe.scenes () = 0 && Probe.liveContexts () = 0)
             (sprintf "%d %d contexts=%d" (Probe.engines ()) (Probe.scenes ()) (Probe.liveContexts ()))
+
+        // 12. A release step that throws must not stop the ones after it. The FIRST step of the Babylon release
+        //     (stopping the render loop) is made to throw: the meshes, scene, engine, WebGL context and canvas must
+        //     still be released, and the host must report the failure without losing the selection.
+        let releaseDriver =
+            RendererDriver.start registry { Tick = 400; TokenX = 40.0 } ignore
+
+        releaseDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+
+        check
+            "the release probe starts with babylon mounted"
+            (releaseDriver.Mounted = Some RendererBackend.Babylon && Probe.engines () = 1)
+            (sprintf "%A engines=%d" releaseDriver.Mounted (Probe.engines ()))
+
+        Probe.breakBabylonStopRenderLoop ()
+        releaseDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "a throwing first release step is reported, and the selection moves on to svg"
+            (releaseDriver.Model.Selected = RendererBackend.Svg
+             && releaseDriver.Mounted = Some RendererBackend.Svg
+             && (match releaseDriver.Model.Refusal with
+                 | Some(RendererRefusal.DisposeFailed(RendererBackend.Babylon, _)) -> true
+                 | _ -> false))
+            (sprintf "%A %A %A" releaseDriver.Model.Selected releaseDriver.Mounted releaseDriver.Model.Refusal)
+
+        check
+            "every release step after the throwing one still ran (meshes, scene, engine, context, canvas)"
+            (Probe.meshes () = 0
+             && Probe.scenes () = 0
+             && Probe.engines () = 0
+             && Probe.liveContexts () = 0
+             && count container "canvas" = 0)
+            (sprintf
+                "meshes=%d scenes=%d engines=%d contexts=%d canvas=%d"
+                (Probe.meshes ())
+                (Probe.scenes ())
+                (Probe.engines ())
+                (Probe.liveContexts ())
+                (count container "canvas"))
+
+        (releaseDriver :> System.IDisposable).Dispose()
     }
 
 let settle (frames: int) : Async<unit> =
@@ -1328,6 +1389,44 @@ let runPixi () : Async<unit> =
             ((live ()).Applications = 0 && count container "canvas" = 0)
             (sprintf "%A %s" (live ()) container.innerHTML)
 
+        // 9b. A failure that arrives LATE, from a mount that was already disposed, must not fail the mount that is
+        //     live now. Pixi's context request on the first canvas is refused; the mount is abandoned before it
+        //     settles; Pixi is selected again on a healthy canvas. The old rejection then arrives while the new mount
+        //     is live and the model is on Pixi, which is exactly when a report would be taken for the new mount's.
+        let lateBefore = (PixiSurface.counters ()).InitFailures
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        let abandoned = pixiCanvas ()
+        let liftRefusal = Probe.refuseCanvas abandoned
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+
+        let! _ =
+            waitUntil
+                (fun () ->
+                    (PixiSurface.counters ()).InitFailures > lateBefore
+                    && (live ()).Applications = 1
+                    && (live ()).DisplayObjects = 2)
+                600
+
+        let! _ = settle 20
+        liftRefusal ()
+
+        check
+            "the abandoned mount's initialisation did fail (the late failure really arrived)"
+            ((PixiSurface.counters ()).InitFailures = lateBefore + 1)
+            (sprintf "%d -> %d" lateBefore (PixiSurface.counters ()).InitFailures)
+
+        check
+            "a late failure from a disposed mount does not fail the live pixi mount"
+            (driver.Model.Selected = RendererBackend.Pixi
+             && driver.Mounted = Some RendererBackend.Pixi
+             && driver.Model.Status = RendererStatus.Active
+             && (live ()).Applications = 1
+             && (live ()).DisplayObjects = 2)
+            (sprintf "%A %A %A %A" driver.Model.Selected driver.Mounted driver.Model.Status (live ()))
+
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
         // 10. Options the adapter refuses are reported as a refused mount too.
         let invalidRegistry =
             RendererRegistry.register
@@ -1415,6 +1514,43 @@ let runPixi () : Async<unit> =
             counterLine
 
         check "nothing is left in the container" (container.children.length = 0) container.innerHTML
+
+        // 13. A release step that throws must not stop the ones after it. `Application.destroy`, the step that
+        //     destroys the application, is made to throw: the WebGL context must still be lost and the canvas
+        //     removed, and the host must report the failure without losing the selection.
+        let releaseDriver =
+            RendererDriver.start registry { Tick = 400; TokenX = 40.0 } ignore
+
+        releaseDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        let! _ = waitUntil (fun () -> (live ()).DisplayObjects = 2) 600
+
+        check
+            "the release probe starts with pixi mounted and drawn"
+            (releaseDriver.Mounted = Some RendererBackend.Pixi
+             && (live ()).Applications = 1
+             && Probe.liveContexts () = 1)
+            (sprintf "%A %A contexts=%d" releaseDriver.Mounted (live ()) (Probe.liveContexts ()))
+
+        let repair = Probe.breakPixiDestroy ()
+        releaseDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "a throwing destroy is reported, and the selection moves on to svg"
+            (releaseDriver.Model.Selected = RendererBackend.Svg
+             && releaseDriver.Mounted = Some RendererBackend.Svg
+             && (match releaseDriver.Model.Refusal with
+                 | Some(RendererRefusal.DisposeFailed(RendererBackend.Pixi, _)) -> true
+                 | _ -> false))
+            (sprintf "%A %A %A" releaseDriver.Model.Selected releaseDriver.Mounted releaseDriver.Model.Refusal)
+
+        check
+            "the release steps after the throwing destroy still ran (context lost, canvas removed)"
+            (Probe.liveContexts () = 0 && count container "canvas" = 0)
+            (sprintf "contexts=%d canvas=%d" (Probe.liveContexts ()) (count container "canvas"))
+
+        repair ()
+        let! _ = waitUntil (fun () -> (live ()).Applications = 0) 600
+        (releaseDriver :> System.IDisposable).Dispose()
 
         check
             "no pixi application or WebGL context survived the pixi section"
