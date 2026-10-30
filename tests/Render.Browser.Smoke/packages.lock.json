@@ -46,21 +46,21 @@
           "Fable.Core": "3.2.8"
         }
       },
-      "fs.gg.game.render.babylonbindings": {
-        "type": "Project",
-        "dependencies": {
-          "Fable.Core": "[5.6.1, )"
-        }
-      },
       "fs.gg.game.render.browser": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Render.BabylonBindings": "[0.1.0, )",
+          "FS.GG.Game.Render.Browser.Bindings": "[0.17.0, )",
           "FS.GG.Game.Render.Fable.Metadata": "[0.17.0, )",
           "FS.GG.UI.Scene": "[0.31.0, )",
           "FS.GG.UI.Scene.SvgBrowser": "[0.31.0, )",
           "FSharp.Core": "[10.1.302, )",
-          "Fable.Browser.Dom": "[2.20.0, )",
+          "Fable.Browser.Dom": "[2.20.0, )"
+        }
+      },
+      "fs.gg.game.render.browser.bindings": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )",
           "Fable.Core": "[5.6.1, )"
         }
       },

@@ -15,9 +15,9 @@
 # resource released. It does NOT exercise PixiJS (its adapter waits for the Templates#808 bindings).
 #
 # The Babylon bindings are not vendored. scripts/materialize-babylon-bindings.sh generates them from the pinned
-# FS.GG.Templates commit (eng/babylon-bindings/pin.env) under artifacts/babylon-bindings, and src/Render.Browser
-# references the generated library project; the exact Babylon npm closure is installed beside the output and mapped
-# with an import map.
+# FS.GG.Templates commit (eng/babylon-bindings/pin.env) under artifacts/babylon-bindings, and the committed
+# src/Render.Browser.Bindings project compiles the generated source; the exact Babylon npm closure is installed
+# beside the output and mapped with an import map.
 #
 #   usage: scripts/test-render-browser-host.sh
 #   env:   RENDER_SMOKE_BROWSER=<chrome binary>   (default: first of chromium, google-chrome, chrome)

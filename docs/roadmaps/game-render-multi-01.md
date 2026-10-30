@@ -90,17 +90,18 @@ its `Exists()` conditions. The `pixi` adapter and the refusing `babylon` adapter
 
 ### Babylon adapter (Templates#809 bindings)
 
-- **Consumption route: a project reference to a workspace generated from the pinned template, not the packed
-  NuGet.** The Babylon bindings are template-generated (`fs-gg-fable-bindings`, Templates PR #812) and not
-  published. `scripts/materialize-babylon-bindings.sh` instantiates that template from the commit pinned in
-  `eng/babylon-bindings/pin.env` under `artifacts/babylon-bindings` (git-ignored; nothing generated is committed),
-  and `src/Render.Browser` references the generated library project. The packed NuGet was tried first and
-  rejected: the same template compiled by SDK 10.0.401 and SDK 10.0.403 (the CI runner) packs byte-different
-  assemblies, and the NuGet lock records the archive's content hash, so a committed lock cannot hold for a package
-  built on the consumer's machine. A project reference has no content hash and the generated workspace keeps its own
-  committed, locked restore. Copying the generated `Bindings.fs` into this repository was rejected as ad hoc
-  vendoring. The exact `@babylonjs/core@9.33.1` closure is installed from the template's own `package-lock.json`
-  and mapped with an import map.
+- **Consumption route: the generated bindings source, compiled by a committed wrapper project; neither the packed
+  NuGet nor a project reference to the generated project.** The Babylon bindings are template-generated
+  (`fs-gg-fable-bindings`, Templates PR #812) and not published. `scripts/materialize-babylon-bindings.sh`
+  instantiates that template from the commit pinned in `eng/babylon-bindings/pin.env` under
+  `artifacts/babylon-bindings` (git-ignored; nothing generated is committed), and the committed
+  `src/Render.Browser.Bindings` project compiles its `Bindings.fs` for the host. Two routes were tried and rejected
+  by evidence. The packed NuGet: the same template compiled by SDK 10.0.401 and by SDK 10.0.403 (the CI runner) packs
+  byte-different assemblies, and the NuGet lock records the archive's content hash, so a committed lock cannot hold
+  for a package built on the consumer's machine. A project reference to the generated project: the org
+  lock-range gate requires every project a lock names to be a committed project file. Copying the generated
+  `Bindings.fs` into the repository was rejected as ad hoc vendoring. The exact `@babylonjs/core@9.33.1` closure is
+  installed from the template's own `package-lock.json` and mapped with an import map.
 - `BabylonSurface` (`src/Render.Browser`) is the adapter, registered with `RendererRegistry.register`. It projects
   the SAME `FS.GG.UI.Scene` the SVG adapter draws: `Rectangle`, `FilledEllipse` and `Circle` become flat meshes
   (later nodes nearer the camera), `Group`/`Translate`/`Empty` are structural and any other node is counted in

@@ -4,17 +4,17 @@
 #
 # The bindings are owned by FS.GG.Templates (`templates/fs-gg-fable-bindings`, Templates#809 / PR #812) and are not
 # published. This script instantiates that template from a PINNED Templates commit (eng/babylon-bindings/pin.env)
-# into a git-ignored directory; src/Render.Browser references the generated library project and Fable compiles its
-# source with the host. Nothing generated is committed to this repository.
+# into a git-ignored directory; the committed src/Render.Browser.Bindings project compiles its Bindings.fs for the
+# browser host. Nothing generated is committed to this repository.
 #
-# Why a project reference and not the packed NuGet the Templates composition lane builds: a packed archive's bytes
-# depend on the .NET SDK that compiled it (the same template compiled by SDK 10.0.401 and 10.0.403 packs
-# different assemblies), and the NuGet lock file records the archive's content hash, so a committed lock cannot
-# hold for a package built on the consumer's machine. A project reference has no content hash, and the generated
-# workspace keeps its own committed, locked restore.
+# Why the source and not the packed NuGet the Templates composition lane builds: a packed archive's bytes depend on
+# the .NET SDK that compiled it (the same template compiled by SDK 10.0.401 and 10.0.403 packs different
+# assemblies), and the NuGet lock file records the archive's content hash, so a committed lock cannot hold for a
+# package built on the consumer's machine. Why not a ProjectReference to the generated project: the org lock-range
+# gate requires every project a lock names to be a committed project file.
 #
 #   usage: scripts/materialize-babylon-bindings.sh [output-dir]      (default: artifacts/babylon-bindings)
-#   writes: <output-dir>/product/                      the generated workspace (its library is src/<id>/<id>.fsproj)
+#   writes: <output-dir>/product/                      the generated workspace (its source is src/<id>/Bindings.fs)
 #           <output-dir>/npm/package.json, package-lock.json   the exact Babylon npm closure
 #   env:    BABYLON_BINDINGS_TEMPLATES_ROOT=<checkout>   use this FS.GG.Templates checkout instead of fetching it;
 #                                                          its HEAD must be the pinned commit
