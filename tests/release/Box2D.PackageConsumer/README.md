@@ -14,7 +14,7 @@ The real entry point then drives 240 ticks from recorded commands, observes fall
 a distance joint, sensor enter/exit and floor contact, and compares exact per-tick copied
 poses/events in two fresh worlds. It also executes the copied real five-tick rotated portal
 scene against package APIs, requiring one live traveller after transfer, transformed pose/momentum,
-one step per local world per tick, one traversal, no repeated transfer and exact replay. SDK10.0.401 and runtime10.0.12 scope this result; output
+one step per local world per tick, one traversal, no repeated transfer and exact replay. SDK10.0.403 and runtime10.0.14 scope this result; output
 reports the actual OS/architecture/runtime. Candidate smoke cannot claim public installed
 support; neither smoke selects a product/template or establishes cross-platform determinism.
 
@@ -36,7 +36,7 @@ boundary and falling-body/portal entrypoint.
 
 The presentation route generates a lock through public restore, checks unchanged locked
 restore, and builds the copied source. It runs the actual default and `--presentation`
-entrypoint modes under runtime `10.0.12`; an invalid argument must print usage and exit 2.
+entrypoint modes under runtime `10.0.14`; an invalid argument must print usage and exit 2.
 Presentation checks destination-only traversal snaps and ordinary interpolation over
 five ticks and twelve frames. Generated locks, package inputs and invalid-argument output
 remain in the new private directory. The invoking owner must separately admit acquisition

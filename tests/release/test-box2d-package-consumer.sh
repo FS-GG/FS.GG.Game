@@ -72,11 +72,11 @@ if [[ "$presentation" == true ]]; then
 fi
 dotnet build Consumer.fsproj -c Release --no-restore -m:1 --disable-build-servers
 # SDK pin and explicit runtime selection scope replay evidence to this profile.
-dotnet exec --fx-version 10.0.12 bin/Release/net10.0/Consumer.dll
+dotnet exec --fx-version 10.0.14 bin/Release/net10.0/Consumer.dll
 if [[ "$presentation" == true ]]; then
-  dotnet exec --fx-version 10.0.12 bin/Release/net10.0/Consumer.dll --presentation
+  dotnet exec --fx-version 10.0.14 bin/Release/net10.0/Consumer.dll --presentation
   invalid_exit=0
-  dotnet exec --fx-version 10.0.12 bin/Release/net10.0/Consumer.dll --invalid > invalid-argument.log 2>&1 || invalid_exit=$?
+  dotnet exec --fx-version 10.0.14 bin/Release/net10.0/Consumer.dll --invalid > invalid-argument.log 2>&1 || invalid_exit=$?
   [[ "$invalid_exit" == 2 ]] && grep -qF 'Usage: Box2D.Portals [--presentation]' invalid-argument.log || { echo 'invalid presentation argument did not refuse with usage/exit 2' >&2; exit 1; }
 fi
 printf 'Box2D package-only qualification passed mode=%s; lock and restored inputs retained in %s\n' "$mode" "$output"
