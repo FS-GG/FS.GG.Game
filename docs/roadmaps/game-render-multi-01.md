@@ -1,6 +1,7 @@
 # GAME-RENDER-MULTI-01.4 — Elmish renderer selection in Game.Render
 
-Status: Elmish switching core and SVG default delivered in the routine change for FS.GG.Game#730. Pixi
+Status: Elmish switching core and SVG default delivered in the routine change for FS.GG.Game#730,
+followed by the binding-independent Fable browser host with the SVG adapter wired end to end. Pixi
 and Babylon adapters and the three-backend browser test remain open, waiting on the bindings.
 Route: routine. Parent Outcome: FS-GG/.github#4930.
 
@@ -41,15 +42,57 @@ dispatch synchronously.
 The package takes no new dependency. Elmish wiring stays with the host, which maps effects to a
 command, so this core needs no `Fable.Elmish` package edge.
 
-Evidence: `tests/Game.Render.Tests/RendererSelectionTests.fs` (22 tests) covers registry
+Evidence: `tests/Game.Render.Tests/RendererSelectionTests.fs` (24 tests) covers registry
 availability, state-preserving switches, refusal of unavailable backends, exactly-once disposal,
 fallback after a mount failure, a failed SVG fallback that keeps both reasons and recovers, recovery
-after an unavailable selection, throwing `Dispose` and `Present`, stale same-backend attempts, and SVG output identical to the existing `Adapter`
-Scene. The existing Adapter, keymap and portal presentation tests are unchanged.
+after an unavailable selection, throwing `Dispose` and `Present` (including a throwing `Present` on the default backend, which releases its
+mount, and a host `Dispose` that swallows a throwing mount `Dispose`), stale same-backend attempts, and SVG output
+identical to the existing `Adapter` Scene. The existing Adapter, keymap and portal presentation tests are unchanged.
+
+## Browser host (binding-independent part)
+
+Host shape: Game.Render keeps the portable selection core and ships a bounded Fable source view of it;
+a separate Fable-only host project owns every adapter that needs JavaScript interop. This is the shape the
+plan already implies. The PixiJS and BabylonJS bindings are Fable-only packages (Templates#808/#809), so no
+.NET assembly such as `FS.GG.Game.Render` can reference them. The registry and adapter record they plug
+into live in Game.Render, so the host must compile those same sources.
+
+- `FS.GG.Game.Render` gains `FablePackageType=library` through `Fable.Package.SDK`, the pattern Game.Core and
+  `FS.GG.UI.Scene.SvgBrowser` already use. The `fable/` view is deliberately bounded to
+  `RendererSelection.fsi/.fs`, the only files that reach `FS.GG.UI.Scene` alone. `Adapter` reaches Game.Core's
+  .NET-only `Grids` and `DefaultKeymap` reaches the .NET KeyboardInput build, so both stay out, as the
+  compatibility profile records. The public `.fsi` surface is unchanged and the surface baselines
+  are byte-identical.
+- `src/Render.Browser` (`FS.GG.Game.Render.Browser`, not packed) is the host. `SvgSurface` is the retained SVG
+  surface for `RendererAdapter.svg`: it mounts one `SvgBrowser` root per mount and reconciles each presented
+  `Scene` through the portable reducer, so SVG output is the existing path. `RendererDriver` runs the
+  `RendererSelection` loop with the `RendererHost` for a page that is not an Elmish program. A fallback has
+  finished by the time `Dispatch` returns, and messages dispatched during a run are queued, so `Run` is never
+  reentered.
+- Later adapters plug in with `RendererRegistry.register` against the same `RendererAdapter<'State>` record,
+  in this project and not in Game.Render: `RendererAdapter` carries no interop and the registry stays keyed by
+  the state type.
+- A Fable game projects state onto `SceneNode` values directly. The `Scene` builder module and `Adapter`
+  are .NET-only, because the Fable view of `FS.GG.UI.Scene` ships only its data types and the SVG pipeline.
+
+Evidence: `scripts/test-render-browser-host.sh` packs Game.Render and checks that the `fable/` payload is
+exactly `RendererSelection.fsi/.fs` plus the metadata project, byte-identical to the canonical sources.
+It then compiles `tests/Render.Browser.Smoke` with Fable and runs 30 checks in headless Chrome:
+SVG default renders two rects through the retained SvgBrowser surface; 50 presents leave one root and a
+stable node count; an unavailable Pixi is refused with the DOM untouched; a registered probe adapter
+owning a `<canvas>` is mounted only after the SVG root is released, receives state, is disposed exactly once
+and hands the same state back to SVG; a refusing backend falls back to SVG; and disposal empties the
+container. The `pixi` and `babylon` adapters in that smoke are plug-in probes, not PixiJS or BabylonJS.
+`.github/workflows/render-browser-host.yml` runs the script on pull requests that touch those paths.
 
 ## Remaining for #730
 
-- Pixi and Babylon `RendererAdapter` values for at least one shared game state. These need the
-  FS.GG.Templates#808 (PixiJS) and #809 (Babylon) bindings.
-- A browser test proving that all three backends render and switch. This needs a Fable-consumable view
-  of `FS.GG.Game.Render`, which is not packaged today, or a host-side composition that owns it.
+- Pixi and Babylon `RendererAdapter` values for at least one shared game state, in `src/Render.Browser`. These
+  need the FS.GG.Templates#808 (PixiJS) and #809 (Babylon) bindings.
+- A browser test proving that all three backends render and switch, built on the same driver and smoke.
+- Publication of the host and of the new Game.Render `fable/` view is not part of this slice. It needs its own
+  selected Delivery and coherent version.
+- Known low edge: a fallback to SVG keeps its cause only in `RendererModel.Refusal`. If another refusal
+  (for example `Unavailable` from a selection) replaces it before the SVG mount fails, the failure list loses
+  the original reason. Fixing it needs a model field (public surface and baseline change), so it was not
+  folded into this slice.

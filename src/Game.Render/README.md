@@ -40,5 +40,13 @@ Ordering contract: **unmount-then-mount, with SVG fallback.**
 - Adapters must not dispatch messages synchronously from `Mount`, `Present` or `Dispose`, because `Run`
   is not reentrant.
 
+### Fable and the browser host
+
+The package also ships a bounded Fable source view (`fable/RendererSelection.fsi` and `.fs`) so a
+Fable-compiled browser host can register adapters against the same `RendererRegistry`. `Adapter` and
+`DefaultKeymap` are .NET-only and are not in that view. The repository's `src/Render.Browser` project
+(not packed) is that host: it mounts the existing SVG surface (`SvgBrowser`) and is where the PixiJS and
+BabylonJS adapters will live. `scripts/test-render-browser-host.sh` proves it in a headless browser.
+
 House style: `.fsi` is the sole public surface; `net10.0`; `-preview` channel.
 See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) and [ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md).
