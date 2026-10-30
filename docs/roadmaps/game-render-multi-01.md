@@ -141,6 +141,22 @@ its `Exists()` conditions. The `pixi` adapter and the refusing `babylon` adapter
   directions on one game state: state preserved at every step, exactly one backend holding resources, every canvas
   mount starting with the previous backend fully released, and nothing left after dispose.
 
+### Hardening (review follow-ups)
+
+- A failure reported late by a mount that was already disposed must not fail the live mount: the smoke abandons a
+  Pixi mount whose context request is refused, selects Pixi again, and requires the model to stay on Pixi.
+  `RendererDriver.failBackend` documents that its caller must guarantee the report comes from the live mount.
+- A release step that throws must not stop the ones after it: the smoke makes the first Babylon release step and the
+  Pixi `Application.destroy` throw and requires every later step (meshes, scene, engine, WebGL context, canvas) to
+  still run, with the failure reported as `DisposeFailed`.
+- `eng/js-bindings/pin.env` records the sha256 of each generated `Bindings.fs`. `materialize-js-bindings.sh`
+  refuses a template whose output differs, and building (or Fable-compiling) `src/Render.Browser.Bindings`
+  refuses a generated source that is missing, stale or edited.
+- Not done, and why: the Babylon projection ignores `Color.Alpha` and lights its meshes (Babylon pixels are 0.75 of
+  the scene colour; SVG and Pixi draw it exactly). Honouring alpha and drawing unlit need a material alpha and an
+  emissive colour, and the curated Babylon surface (Templates#809) has neither (`setDiffuseColor` only). That is a
+  bindings change in FS.GG.Templates, not a small adapter edit.
+
 ## Remaining for #730
 
 - Publication of the host and of the new Game.Render `fable/` view is not part of this slice. It needs its own

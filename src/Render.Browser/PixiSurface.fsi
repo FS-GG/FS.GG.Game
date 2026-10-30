@@ -38,7 +38,8 @@ type PixiCounters =
         ShapesCreated: int
         /// Display objects destroyed.
         ShapesDestroyed: int
-        /// Asynchronous renderer initialisations that failed.
+        /// Asynchronous renderer initialisations that failed, including those of mounts already disposed (a disposed
+        /// mount counts the failure but reports nothing to the host).
         InitFailures: int
         /// Scene nodes the Pixi projection has no shape for, summed over every presented scene.
         UnsupportedNodes: int

@@ -42,4 +42,9 @@ module RendererDriver =
     /// initialises asynchronously). It dispatches `RendererMsg.MountFailed` for the model's CURRENT attempt, so it is
     /// ignored unless `backend` is the selected backend and its mount is active; the usual fallback to SVG follows.
     /// Call it from a promise callback, never synchronously from `Mount`, `Present` or `Dispose`.
+    ///
+    /// The caller must guarantee that the report comes from the LIVE mount of `backend`. The driver cannot tell
+    /// mounts of the same backend apart: a report from a mount that was already disposed, arriving after the backend
+    /// was selected again, would be taken for the new mount's failure and would fall back wrongly. An adapter
+    /// therefore reports only while it has not been disposed (`PixiSurface` checks this in its rejection handler).
     val failBackend: driver: RendererDriver<'State> -> backend: RendererBackend -> reason: string -> unit
