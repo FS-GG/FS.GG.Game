@@ -2,7 +2,8 @@
 
 Status: Elmish switching core and SVG default delivered in the routine change for FS.GG.Game#730,
 followed by the binding-independent Fable browser host with the SVG adapter wired end to end, then the
-Babylon adapter over the Templates#809 bindings. The Pixi adapter and the three-backend browser test remain open.
+Babylon adapter over the Templates#809 bindings, then the Pixi adapter over the Templates#808 bindings and the
+three-backend browser test.
 Route: routine. Parent Outcome: FS-GG/.github#4930.
 
 ## Delivered in this slice
@@ -91,11 +92,11 @@ its `Exists()` conditions. The `pixi` adapter and the refusing `babylon` adapter
 ### Babylon adapter (Templates#809 bindings)
 
 - **Consumption route: the generated bindings source, compiled by a committed wrapper project; neither the packed
-  NuGet nor a project reference to the generated project.** The Babylon bindings are template-generated
-  (`fs-gg-fable-bindings`, Templates PR #812) and not published. `scripts/materialize-babylon-bindings.sh`
-  instantiates that template from the commit pinned in `eng/babylon-bindings/pin.env` under
-  `artifacts/babylon-bindings` (git-ignored; nothing generated is committed), and the committed
-  `src/Render.Browser.Bindings` project compiles its `Bindings.fs` for the host. Two routes were tried and rejected
+  NuGet nor a project reference to the generated project.** The Babylon and Pixi bindings are template-generated
+  (`fs-gg-fable-bindings`, Templates PR #812 and #814) and not published. `scripts/materialize-js-bindings.sh`
+  instantiates that template from the commit pinned in `eng/js-bindings/pin.env`, once per corpus, under
+  `artifacts/js-bindings` (git-ignored; nothing generated is committed), and the committed
+  `src/Render.Browser.Bindings` project compiles each `Bindings.fs` for the host. Two routes were tried and rejected
   by evidence. The packed NuGet: the same template compiled by SDK 10.0.401 and by SDK 10.0.403 (the CI runner) packs
   byte-different assemblies, and the NuGet lock records the archive's content hash, so a committed lock cannot hold
   for a package built on the consumer's machine. A project reference to the generated project: the org
@@ -121,11 +122,27 @@ its `Exists()` conditions. The `pixi` adapter and the refusing `babylon` adapter
   constructor that throws would leave a half-built engine with no handle. The adapter asks a throwaway canvas for
   a context first and refuses before Babylon is touched.
 
+### Pixi adapter (Templates#808 bindings) and the three-backend test
+
+- `PixiSurface` (`src/Render.Browser`) is registered with `RendererRegistry.register` and projects the same
+  `FS.GG.UI.Scene` as the SVG and Babylon adapters (the projection is shared in an internal `SceneShapes`): one
+  `Graphics` display object per drawable node, reconciled in place, later nodes on top. Pixi is unlit, so its pixels
+  are the scene colours to within 2 per channel.
+- Pixi's renderer initialises asynchronously, after `Mount` has returned `Ok`. States presented meanwhile are kept
+  (the latest wins) and drawn when initialisation completes. A `Dispose` during initialisation removes the canvas at
+  once and destroys the application when initialisation settles. An initialisation that fails is reported by
+  `PixiOptions.OnFailure`, which a host wires to the new `RendererDriver.failBackend`; the driver then falls back to
+  SVG, and a host that does not wire it still gets the failure from the next `Present`.
+- Both canvas adapters now lose their WebGL context on dispose. Disposing an engine or destroying an application
+  does not release it, a browser keeps about sixteen, and a runtime switch would otherwise leave one live context per
+  mount until garbage collection.
+- The smoke reads Pixi's own books (live applications by Pixi's destroyed marker, ticker listeners, stage children),
+  the browser's account of adapter WebGL contexts and the canvas pixels, and switches SVG, Pixi and Babylon in both
+  directions on one game state: state preserved at every step, exactly one backend holding resources, every canvas
+  mount starting with the previous backend fully released, and nothing left after dispose.
+
 ## Remaining for #730
 
-- The Pixi `RendererAdapter` for a shared game state, in `src/Render.Browser` (Templates#808 bindings).
-- A browser test proving that all three backends render and switch, built on the same driver and smoke. SVG
-  <-> Babylon is covered; the Pixi leg is owed.
 - Publication of the host and of the new Game.Render `fable/` view is not part of this slice. It needs its own
   selected Delivery and coherent version.
 - Known low edge: a fallback to SVG keeps its cause only in `RendererModel.Refusal`. If another refusal

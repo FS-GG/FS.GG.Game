@@ -8,10 +8,11 @@ module FS.GG.Game.Render.Browser.Smoke.Program
 //
 // The "pixi" adapter and the refusing "babylon" adapter in run() are PLUG-IN PROBES (a stub canvas / a refusing
 // mount). They are NOT PixiJS or BabylonJS adapters and prove nothing about those engines. The REAL BabylonJS
-// adapter (BabylonSurface over the packed Babylon bindings) is exercised by runBabylon(): a WebGL canvas, an
-// engine, meshes and a render loop are acquired, a pixel is read back from the canvas, structural counters are
-// read from Babylon's own engine store, and SVG -> Babylon -> SVG switches are checked for state and disposal.
-// The PixiJS adapter waits for Templates#808.
+// adapter (BabylonSurface over the Babylon bindings generated from the pinned Templates source) is exercised by
+// runBabylon(): a WebGL canvas, an engine, meshes and a render loop are acquired, a pixel is read back from the
+// canvas, structural counters are read from Babylon's own engine store, and SVG -> Babylon -> SVG switches are
+// checked for state and disposal. runPixi() does the same for the real PixiJS adapter (PixiSurface), and
+// runThreeBackends() switches SVG <-> Pixi <-> Babylon on one game state.
 
 open Browser.Dom
 open Browser.Types
@@ -502,15 +503,24 @@ module Probe =
     [<Emit("((cv, px, py) => { const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g2 = t.getContext('2d'); g2.drawImage(cv, 0, 0); return Array.from(g2.getImageData(px, py, 1, 1).data) })($0, $1, $2)")>]
     let pixel (canvas: HTMLCanvasElement) (x: int) (y: int) : int[] = jsNative
 
-    /// Make every canvas refuse `getContext` (no WebGL, no 2D) until the returned function restores it.
-    [<Emit("(() => { const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function () { return null }; return () => { p.getContext = o } })()")>]
-    let blockContexts () : unit -> unit = jsNative
+    /// Wrap `getContext` once so the page can count the WebGL contexts it created, and refuse contexts on demand.
+    [<Emit("(() => { if (window.__glHook) return; const h = { calls: 0, limit: Infinity, records: [] }; window.__glHook = h; const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function (type, ...rest) { h.calls++; if (h.calls > h.limit) return null; const c = o.call(this, type, ...rest); if (c && /webgl/.test(String(type))) h.records.push(c); return c } })()")>]
+    let installGlHook () : unit = jsNative
+
+    /// WebGL contexts of adapter canvases (`data-renderer`) created since the hook was installed and not lost: the
+    /// browser's own account of the GPU contexts the adapters hold, whether or not their canvases are still in the page.
+    [<Emit("window.__glHook.records.filter(c => c.canvas && c.canvas.getAttribute('data-renderer') && !c.isContextLost()).length")>]
+    let liveContexts () : int = jsNative
+
+    /// Let `n` more `getContext` calls succeed, then refuse every canvas (no WebGL, no 2D) until the returned
+    /// function lifts the refusal. `n = 0` refuses all of them.
+    [<Emit("(() => { const h = window.__glHook; h.limit = h.calls + $0; return () => { h.limit = Infinity } })()")>]
+    let refuseContextsAfter (n: int) : unit -> unit = jsNative
 
 let near (expected: int[]) (actual: int[]) (tolerance: int) =
     actual.Length >= 3
     && Array.forall2 (fun e a -> abs (e - a) <= tolerance) expected.[0..2] actual.[0..2]
 
-/// The same game state, drawn by the Babylon adapter: `view` is the very function the SVG adapter uses.
 let nextFrame: Async<unit> =
     Async.FromContinuations(fun (continuation, _, _) ->
         window.requestAnimationFrame (fun _ -> continuation ()) |> ignore)
@@ -538,12 +548,14 @@ let awaitPixel
         return pixel.Value, frames.Value
     }
 
+/// The same game state, drawn by the Babylon adapter: `view` is the very function the SVG adapter uses.
 let runBabylon () : Async<unit> =
     async {
         let container = document.createElement "div"
         container.id <- "stage-babylon"
         document.body.appendChild container |> ignore
 
+        Probe.installGlHook ()
         let glInfo = Probe.webGlInfo ()
         info "webgl" glInfo
         info "user-agent" (Probe.userAgent ())
@@ -713,6 +725,11 @@ let runBabylon () : Async<unit> =
         check "no scene remains" (Probe.scenes () = 0) (string (Probe.scenes ()))
         check "no mesh remains" (Probe.meshes () = 0) (string (Probe.meshes ()))
 
+        check
+            "babylon released its WebGL context, not just its engine"
+            (Probe.liveContexts () = 0)
+            (string (Probe.liveContexts ()))
+
         // 6. Repeated switching never holds two engines and ends released.
         let maxEngines = ref 0
         let maxCanvases = ref 0
@@ -811,7 +828,7 @@ let runBabylon () : Async<unit> =
             (sprintf "canvas=%d engines=%d" (count container "canvas") (Probe.engines ()))
 
         // 8. No WebGL: the mount is refused, SVG takes over with the state intact, nothing is left behind.
-        let restore = Probe.blockContexts ()
+        let restore = Probe.refuseContextsAfter 0
         driver.Dispatch(RendererMsg.StateChanged { Tick = 300; TokenX = 30.0 })
         driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
         restore ()
@@ -940,9 +957,679 @@ let runBabylon () : Async<unit> =
         check "nothing is left in the container" (container.children.length = 0) container.innerHTML
 
         check
-            "no engine survived the whole babylon section"
-            (Probe.engines () = 0 && Probe.scenes () = 0)
-            (sprintf "%d %d" (Probe.engines ()) (Probe.scenes ()))
+            "no engine or adapter WebGL context survived the whole babylon section"
+            (Probe.engines () = 0 && Probe.scenes () = 0 && Probe.liveContexts () = 0)
+            (sprintf "%d %d contexts=%d" (Probe.engines ()) (Probe.scenes ()) (Probe.liveContexts ()))
+    }
+
+let settle (frames: int) : Async<unit> =
+    async {
+        for _ in 1..frames do
+            do! nextFrame
+    }
+
+/// Wait, frame by frame, until `condition` holds (at most `maxFrames`); returns the frames it took.
+let waitUntil (condition: unit -> bool) (maxFrames: int) : Async<int> =
+    async {
+        let frames = ref 0
+
+        while not (condition ()) && frames.Value < maxFrames do
+            do! nextFrame
+            frames.Value <- frames.Value + 1
+
+        return frames.Value
+    }
+
+/// The Pixi adapter on the same game state: `view` is the function the SVG and Babylon adapters use, and Pixi
+/// draws it unlit, so its pixels are the scene colours to within 2 per channel.
+let runPixi () : Async<unit> =
+    async {
+        let container = document.createElement "div"
+        container.id <- "stage-pixi"
+        document.body.appendChild container |> ignore
+
+        let svgOptions = SvgSurface.defaultOptions "Smoke board" 200.0 100.0
+        let driverRef: RendererDriver<Board> option ref = ref None
+
+        let pixiOptions =
+            { PixiSurface.defaultOptions "Smoke board (pixi)" 200.0 100.0 with
+                OnFailure =
+                    fun reason ->
+                        match driverRef.Value with
+                        | Some d -> RendererDriver.failBackend d RendererBackend.Pixi reason
+                        | None -> ()
+            }
+
+        let before = PixiSurface.counters ()
+        let contextsBefore = Probe.liveContexts ()
+
+        let registry =
+            SvgSurface.registry container svgOptions view
+            |> PixiSurface.register container pixiOptions view
+
+        let initial = { Tick = 0; TokenX = 10.0 }
+        let pixiAudit = ObserverAudit()
+        let driver = RendererDriver.start registry initial (pixiAudit.Observe false)
+        pixiAudit.Driver <- Some driver
+        driverRef.Value <- Some driver
+
+        let pixiCanvas () =
+            container.querySelector "canvas[data-renderer=pixi]" :?> HTMLCanvasElement
+
+        let live () = PixiSurface.live ()
+
+        check
+            "pixi is offered beside svg once registered"
+            (RendererSelection.available driver.Model = [ RendererBackend.Svg; RendererBackend.Pixi ])
+            (sprintf "%A" (RendererSelection.available driver.Model))
+
+        check
+            "svg stays the default with pixi registered"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Mounted = Some RendererBackend.Svg
+             && (live ()).Applications = 0)
+            (sprintf "%A %A %A" driver.Model.Selected driver.Mounted (live ()))
+
+        // 1. SVG -> Pixi.
+        driver.Dispatch(RendererMsg.StateChanged { Tick = 5; TokenX = 70.0 })
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+
+        check
+            "switch to pixi mounts it and selects it"
+            (driver.Model.Selected = RendererBackend.Pixi
+             && driver.Mounted = Some RendererBackend.Pixi
+             && driver.Model.Status = RendererStatus.Active)
+            (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.Status)
+
+        check
+            "game state survived svg -> pixi"
+            (driver.Model.State = { Tick = 5; TokenX = 70.0 })
+            (sprintf "%A" driver.Model.State)
+
+        check
+            "the svg root was released before pixi mounted (one canvas, no svg)"
+            (count container "svg" = 0
+             && count container "canvas" = 1
+             && count container "canvas[data-renderer=pixi]" = 1)
+            container.innerHTML
+
+        check
+            "one pixi application exists as soon as the mount returns (initialisation pending)"
+            ((live ()).Applications = 1)
+            (sprintf "%A" (live ()))
+
+        // 2. Pixi initialises asynchronously: wait for the first drawn frame, then read pixels back.
+        let! tokenPixel, framesToFirstPixel =
+            awaitPixel driver pixiCanvas 80 50 (fun p -> p.[0] > 40) 600
+
+        info "pixi frames until the first drawn pixel" (string framesToFirstPixel)
+        let backgroundPixel = Probe.pixel (pixiCanvas ()) 20 20
+        info "pixel pixi token (80,50)" (sprintf "%A" tokenPixel)
+        info "pixel pixi background (20,20)" (sprintf "%A" backgroundPixel)
+
+        check
+            "pixi drew its first frame within 600 frames"
+            (tokenPixel.[0] > 40)
+            (sprintf "%A after %d frames" tokenPixel framesToFirstPixel)
+
+        check
+            "the token pixel is the token colour within 2 per channel (200,40,90)"
+            (near [| 200; 40; 90 |] tokenPixel 2)
+            (sprintf "%A" tokenPixel)
+
+        check
+            "the background pixel is the background colour within 2 per channel (10,20,30)"
+            (near [| 10; 20; 30 |] backgroundPixel 2)
+            (sprintf "%A" backgroundPixel)
+
+        check
+            "pixi's own books: one application, one render callback on its ticker, one display object per node"
+            ((live ()).Applications = 1
+             && (live ()).TickerListeners = 1
+             && (live ()).DisplayObjects = 2)
+            (sprintf "%A" (live ()))
+
+        check
+            "pixi holds exactly one live adapter WebGL context"
+            (Probe.liveContexts () = contextsBefore + 1)
+            (sprintf "%d -> %d" contextsBefore (Probe.liveContexts ()))
+
+        // 3. 101 presents move the token in place: nothing is created, nothing leaks.
+        let created = (PixiSurface.counters ()).ShapesCreated
+
+        for tick in 1..100 do
+            driver.Dispatch(
+                RendererMsg.StateChanged
+                    {
+                        Tick = 5 + tick
+                        TokenX = 70.0 + float (tick % 50)
+                    }
+            )
+
+        driver.Dispatch(RendererMsg.StateChanged { Tick = 200; TokenX = 150.0 })
+
+        check
+            "state advanced on pixi"
+            (driver.Model.State = { Tick = 200; TokenX = 150.0 })
+            (sprintf "%A" driver.Model.State)
+
+        check "still one pixi application after 101 presents" ((live ()).Applications = 1) (sprintf "%A" (live ()))
+        check "still one render callback after 101 presents" ((live ()).TickerListeners = 1) (sprintf "%A" (live ()))
+        check "display object count is stable across presents" ((live ()).DisplayObjects = 2) (sprintf "%A" (live ()))
+        check "still one canvas after 101 presents" (count container "canvas" = 1) (string (count container "canvas"))
+
+        check
+            "no display object was created by a present"
+            ((PixiSurface.counters ()).ShapesCreated = created)
+            (sprintf "%d -> %d" created (PixiSurface.counters ()).ShapesCreated)
+
+        let moved = Probe.pixel (pixiCanvas ()) 160 50
+        let vacated = Probe.pixel (pixiCanvas ()) 80 50
+        info "pixel pixi moved token (160,50)" (sprintf "%A" moved)
+        check "the token pixel followed the state" (near [| 200; 40; 90 |] moved 2) (sprintf "%A" moved)
+        check "the vacated pixel is background again" (near [| 10; 20; 30 |] vacated 2) (sprintf "%A" vacated)
+
+        // 4. Pixi -> SVG releases everything, synchronously (the application was initialised).
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "switch back to svg with the state pixi was showing"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Mounted = Some RendererBackend.Svg
+             && driver.Model.State = { Tick = 200; TokenX = 150.0 }
+             && count container "svg" = 1
+             && has "x=\"150\" y=\"40\"" container.innerHTML)
+            (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.State)
+
+        check "no pixi canvas remains" (count container "canvas" = 0) container.innerHTML
+        check "no pixi application remains" ((live ()).Applications = 0) (sprintf "%A" (live ()))
+        check "no pixi render callback remains" ((live ()).TickerListeners = 0) (sprintf "%A" (live ()))
+
+        check
+            "pixi released its WebGL context"
+            (Probe.liveContexts () = contextsBefore)
+            (sprintf "%d -> %d" contextsBefore (Probe.liveContexts ()))
+
+        // 5. Switching away while initialisation is still pending: the canvas goes at once, the application when
+        //    initialisation settles, and nothing throws.
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "a dispose during initialisation removes the canvas at once"
+            (count container "canvas" = 0 && count container "svg" = 1)
+            container.innerHTML
+
+        let! _ = waitUntil (fun () -> (live ()).Applications = 0) 600
+
+        check
+            "the pending application is destroyed once initialisation settles"
+            ((live ()).Applications = 0)
+            (sprintf "%A" (live ()))
+
+        check
+            "the model stayed on svg through the abandoned pixi mount"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Model.Status = RendererStatus.Active)
+            (sprintf "%A" driver.Model.Status)
+
+        // 6. Repeated switching never holds two applications and ends released.
+        let maxApplications = ref 0
+        let maxCanvases = ref 0
+
+        for round in 1..5 do
+            driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+            maxApplications.Value <- max maxApplications.Value (live ()).Applications
+            maxCanvases.Value <- max maxCanvases.Value (count container "canvas")
+            let! _ = waitUntil (fun () -> (live ()).DisplayObjects = 2) 600
+
+            driver.Dispatch(
+                RendererMsg.StateChanged
+                    {
+                        Tick = 200 + round
+                        TokenX = 20.0 * float round
+                    }
+            )
+
+            driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "five svg -> pixi -> svg rounds never held two applications"
+            (maxApplications.Value = 1)
+            (string maxApplications.Value)
+
+        check "five rounds never held two canvases" (maxCanvases.Value = 1) (string maxCanvases.Value)
+
+        check
+            "five rounds ended on svg with the latest state and nothing left over"
+            (driver.Mounted = Some RendererBackend.Svg
+             && driver.Model.State = { Tick = 205; TokenX = 100.0 }
+             && count container "canvas" = 0
+             && (live ()).Applications = 0
+             && Probe.liveContexts () = contextsBefore)
+            (sprintf "%A %A contexts=%d" driver.Model.State (live ()) (Probe.liveContexts ()))
+
+        // 7. A node set that grows and shrinks keeps one display object per node.
+        let swarm (board: Board) : Scene =
+            {
+                Nodes =
+                    SceneNode.Rectangle((0.0, 0.0, 200.0, 100.0), background)
+                    :: [
+                        for i in 0 .. (board.Tick % 4) ->
+                            SceneNode.Rectangle((10.0 + 40.0 * float i, 40.0, 20.0, 20.0), tokenColor)
+                    ]
+            }
+
+        let swarmRegistry =
+            SvgSurface.registry container svgOptions swarm
+            |> PixiSurface.register container pixiOptions swarm
+
+        let swarmDriver =
+            RendererDriver.start swarmRegistry { Tick = 3; TokenX = 0.0 } ignore
+
+        swarmDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+
+        let nodeCount () =
+            1 + (swarmDriver.Model.State.Tick % 4) + 1
+
+        let! _ = waitUntil (fun () -> (live ()).DisplayObjects = nodeCount ()) 600
+
+        check
+            "pixi draws one display object per node of a larger scene"
+            ((live ()).DisplayObjects = nodeCount ())
+            (sprintf "%d vs %d" (live ()).DisplayObjects (nodeCount ()))
+
+        let tracks = ref true
+
+        for tick in 0..40 do
+            swarmDriver.Dispatch(RendererMsg.StateChanged { Tick = tick; TokenX = 0.0 })
+
+            if (live ()).DisplayObjects <> nodeCount () then
+                tracks.Value <- false
+
+        check "display object count tracked the node count through 41 grow/shrink presents" tracks.Value "diverged"
+
+        check
+            "still one application and one render callback after grow/shrink"
+            ((live ()).Applications = 1 && (live ()).TickerListeners = 1)
+            (sprintf "%A" (live ()))
+
+        (swarmDriver :> System.IDisposable).Dispose()
+
+        check
+            "disposing the driver on pixi releases the canvas, application and display objects"
+            (count container "canvas" = 0
+             && (live ()).Applications = 0
+             && (live ()).DisplayObjects = 0)
+            (sprintf "canvas=%d %A" (count container "canvas") (live ()))
+
+        // 8. No WebGL: refused, SVG takes over with the state intact, nothing left behind.
+        let restore = Probe.refuseContextsAfter 0
+        driver.Dispatch(RendererMsg.StateChanged { Tick = 300; TokenX = 30.0 })
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        restore ()
+
+        check
+            "a browser with no WebGL falls back to svg"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Mounted = Some RendererBackend.Svg
+             && driver.Model.State = { Tick = 300; TokenX = 30.0 })
+            (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.State)
+
+        check
+            "the fallback names pixi as the cause"
+            (match driver.Model.Refusal with
+             | Some(RendererRefusal.MountFailed(RendererBackend.Pixi, _)) -> true
+             | _ -> false)
+            (sprintf "%A" driver.Model.Refusal)
+
+        check
+            "the refused mount left no canvas or application"
+            (count container "canvas" = 0 && (live ()).Applications = 0)
+            (sprintf "%s %A" container.innerHTML (live ()))
+
+        // 9. Pixi's asynchronous initialisation fails after Mount returned Ok: the live mount reports it, the
+        //    driver falls back to SVG, and the half-started application is released.
+        let failuresBefore = (PixiSurface.counters ()).InitFailures
+        let restoreAsync = Probe.refuseContextsAfter 1
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+
+        check
+            "the mount is accepted before the asynchronous failure (pixi selected, canvas present)"
+            (driver.Model.Selected = RendererBackend.Pixi && count container "canvas" = 1)
+            (sprintf "%A" driver.Model.Selected)
+
+        let! _ = waitUntil (fun () -> driver.Model.Selected = RendererBackend.Svg) 600
+        restoreAsync ()
+
+        check
+            "an asynchronous initialisation failure falls back to svg"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Mounted = Some RendererBackend.Svg
+             && driver.Model.State = { Tick = 300; TokenX = 30.0 })
+            (sprintf "%A %A" driver.Model.Selected driver.Mounted)
+
+        check
+            "the asynchronous failure is recorded against pixi"
+            (match driver.Model.Refusal with
+             | Some(RendererRefusal.MountFailed(RendererBackend.Pixi, _)) -> true
+             | _ -> false)
+            (sprintf "%A" driver.Model.Refusal)
+
+        check
+            "the failed initialisation was counted"
+            ((PixiSurface.counters ()).InitFailures = failuresBefore + 1)
+            (sprintf "%A" (PixiSurface.counters ()))
+
+        let! _ = waitUntil (fun () -> (live ()).Applications = 0) 600
+
+        check
+            "the failed application and its canvas were released"
+            ((live ()).Applications = 0 && count container "canvas" = 0)
+            (sprintf "%A %s" (live ()) container.innerHTML)
+
+        // 10. Options the adapter refuses are reported as a refused mount too.
+        let invalidRegistry =
+            RendererRegistry.register
+                (PixiSurface.adapter container (PixiSurface.defaultOptions "bad" 0.0 100.0) view)
+                (SvgSurface.registry container svgOptions view)
+
+        let invalidDriver = RendererDriver.start invalidRegistry initial ignore
+        invalidDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+
+        check
+            "a zero-width pixi canvas is refused and falls back to svg"
+            (invalidDriver.Model.Selected = RendererBackend.Svg
+             && invalidDriver.Mounted = Some RendererBackend.Svg
+             && count container "canvas" = 0)
+            (sprintf "%A %A" invalidDriver.Model.Selected invalidDriver.Mounted)
+
+        (invalidDriver :> System.IDisposable).Dispose()
+
+        // 11. A Present that throws is contained: the pixi mount is released and SVG shows the same state.
+        let fragile (board: Board) : Scene =
+            if board.Tick = 99 then failwith "view boom" else view board
+
+        let fragileDriver =
+            RendererDriver.start
+                (SvgSurface.registry container svgOptions view
+                 |> PixiSurface.register container pixiOptions fragile)
+                { Tick = 1; TokenX = 10.0 }
+                ignore
+
+        fragileDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        let! _ = waitUntil (fun () -> (live ()).DisplayObjects = 2) 600
+
+        check
+            "the fragile view mounts on pixi first"
+            (fragileDriver.Mounted = Some RendererBackend.Pixi && (live ()).Applications = 1)
+            (sprintf "%A %A" fragileDriver.Mounted (live ()))
+
+        fragileDriver.Dispatch(RendererMsg.StateChanged { Tick = 99; TokenX = 99.0 })
+
+        check
+            "a throwing present falls back to svg with the state that threw"
+            (fragileDriver.Model.Selected = RendererBackend.Svg
+             && fragileDriver.Mounted = Some RendererBackend.Svg
+             && fragileDriver.Model.State = { Tick = 99; TokenX = 99.0 })
+            (sprintf "%A %A %A" fragileDriver.Model.Selected fragileDriver.Mounted fragileDriver.Model.State)
+
+        check
+            "the throwing present released the canvas and application"
+            (count container "canvas" = 0 && (live ()).Applications = 0)
+            (sprintf "canvas=%d %A" (count container "canvas") (live ()))
+
+        (fragileDriver :> System.IDisposable).Dispose()
+
+        // 12. The adapter's own books balance with Pixi's.
+        check
+            "the observer never saw a model whose backend was not the one mounted (Mounted asserted inside it)"
+            (pixiAudit.Violations.Count = 0 && pixiAudit.Realised >= 14)
+            (sprintf "realised=%d violations=%s" pixiAudit.Realised (String.concat "; " pixiAudit.Violations))
+
+        (driver :> System.IDisposable).Dispose()
+        let! _ = waitUntil (fun () -> (live ()).Applications = 0) 600
+        let after = PixiSurface.counters ()
+        let made = after.ApplicationsCreated - before.ApplicationsCreated
+
+        let counterLine =
+            sprintf
+                "applications %d/%d shapes %d/%d init failures %d unsupported %d (created/destroyed)"
+                after.ApplicationsCreated
+                after.ApplicationsDestroyed
+                after.ShapesCreated
+                after.ShapesDestroyed
+                after.InitFailures
+                after.UnsupportedNodes
+
+        info "pixi adapter counters" counterLine
+
+        check
+            "every application the adapter created was destroyed"
+            (made > 0 && made = after.ApplicationsDestroyed - before.ApplicationsDestroyed)
+            counterLine
+
+        check
+            "every display object the adapter created was destroyed"
+            (after.ShapesCreated - before.ShapesCreated = after.ShapesDestroyed - before.ShapesDestroyed)
+            counterLine
+
+        check "nothing is left in the container" (container.children.length = 0) container.innerHTML
+
+        check
+            "no pixi application or WebGL context survived the pixi section"
+            ((live ()).Applications = 0 && Probe.liveContexts () = contextsBefore)
+            (sprintf "%A contexts=%d" (live ()) (Probe.liveContexts ()))
+    }
+
+/// All three backends on one game state: SVG <-> Pixi <-> Babylon, state preserved across every switch, exactly
+/// one backend holding resources at any time, and everything released at the end.
+let runThreeBackends () : Async<unit> =
+    async {
+        let container = document.createElement "div"
+        container.id <- "stage-three"
+        document.body.appendChild container |> ignore
+
+        let svgOptions = SvgSurface.defaultOptions "Smoke board" 200.0 100.0
+        let driverRef: RendererDriver<Board> option ref = ref None
+
+        let pixiOptions =
+            { PixiSurface.defaultOptions "Smoke board (pixi)" 200.0 100.0 with
+                OnFailure =
+                    fun reason ->
+                        match driverRef.Value with
+                        | Some d -> RendererDriver.failBackend d RendererBackend.Pixi reason
+                        | None -> ()
+            }
+
+        let babylonOptions =
+            BabylonSurface.defaultOptions "Smoke board (babylon)" 200.0 100.0
+
+        // Each canvas adapter's view is called at the start of its Mount, before it acquires anything. At that
+        // moment the previous backend must already be fully released: no svg root, no canvas, no engine, no application.
+        let atMount = ResizeArray<string>()
+
+        let sampled (name: string) (board: Board) : Scene =
+            match driverRef.Value with
+            | Some d when d.Mounted.IsNone ->
+                atMount.Add(
+                    sprintf
+                        "%s: svg=%d canvas=%d engines=%d applications=%d"
+                        name
+                        (count container "svg")
+                        (count container "canvas")
+                        (Probe.engines ())
+                        (PixiSurface.live ()).Applications
+                )
+            | _ -> ()
+
+            view board
+
+        let registry =
+            SvgSurface.registry container svgOptions view
+            |> PixiSurface.register container pixiOptions (sampled "pixi")
+            |> BabylonSurface.register container babylonOptions (sampled "babylon")
+
+        let audit = ObserverAudit()
+
+        let driver =
+            RendererDriver.start registry { Tick = 0; TokenX = 10.0 } (audit.Observe false)
+
+        audit.Driver <- Some driver
+        driverRef.Value <- Some driver
+
+        check
+            "all three backends are offered, in declared order"
+            (RendererSelection.available driver.Model = RendererBackend.all)
+            (sprintf "%A" (RendererSelection.available driver.Model))
+
+        let canvasOf (token: string) =
+            container.querySelector (sprintf "canvas[data-renderer=%s]" token) :?> HTMLCanvasElement
+
+        let steps =
+            [
+                RendererBackend.Pixi
+                RendererBackend.Babylon
+                RendererBackend.Svg
+                RendererBackend.Babylon
+                RendererBackend.Pixi
+                RendererBackend.Svg
+                RendererBackend.Pixi
+                RendererBackend.Svg
+            ]
+
+        let mutable previous = RendererBackend.Svg
+        let stepNumber = ref 0
+        let exclusive = ref true
+        let renderedRight = ref 0
+
+        for backend in steps do
+            stepNumber.Value <- stepNumber.Value + 1
+            let n = stepNumber.Value
+
+            let state =
+                {
+                    Tick = 100 + n
+                    TokenX = 20.0 + 10.0 * float n
+                }
+
+            let name =
+                sprintf "step %d: %s -> %s" n (RendererBackend.id previous) (RendererBackend.id backend)
+
+            driver.Dispatch(RendererMsg.StateChanged state)
+            driver.Dispatch(RendererMsg.SelectBackend backend)
+
+            check
+                (name + " selects and mounts the backend with the state intact")
+                (driver.Model.Selected = backend
+                 && driver.Mounted = Some backend
+                 && driver.Model.State = state
+                 && driver.Model.Status = RendererStatus.Active)
+                (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.State)
+
+            // The canvas backends draw asynchronously (shader compilation / renderer initialisation): wait for the
+            // token to appear where the state puts it, then require that backend's colour (Pixi within 2 per channel, Babylon within 4 of the lit colour).
+            match backend with
+            | RendererBackend.Svg ->
+                check
+                    (name + ": svg shows the state")
+                    (count container "svg" = 1
+                     && has (sprintf "x=\"%g\" y=\"40\"" state.TokenX) container.innerHTML)
+                    container.innerHTML
+            | RendererBackend.Pixi ->
+                let! pixel, _ =
+                    awaitPixel driver (fun () -> canvasOf "pixi") (int state.TokenX + 10) 50 (fun p -> p.[0] > 40) 600
+
+                if near [| 200; 40; 90 |] pixel 2 then
+                    renderedRight.Value <- renderedRight.Value + 1
+
+                check
+                    (name + ": the pixi token pixel is within 2 per channel (200,40,90)")
+                    (near [| 200; 40; 90 |] pixel 2)
+                    (sprintf "%A" pixel)
+            | RendererBackend.Babylon ->
+                let! pixel, _ =
+                    awaitPixel
+                        driver
+                        (fun () -> canvasOf "babylon")
+                        (int state.TokenX + 10)
+                        50
+                        (fun p -> p.[0] > 40)
+                        600
+
+                if near [| 150; 30; 68 |] pixel 4 then
+                    renderedRight.Value <- renderedRight.Value + 1
+
+                check
+                    (name + ": the babylon token pixel is lit as expected (150,30,68)")
+                    (near [| 150; 30; 68 |] pixel 4)
+                    (sprintf "%A" pixel)
+
+            let canvases = count container "canvas"
+            let engines = Probe.engines ()
+            let applications = (PixiSurface.live ()).Applications
+
+            let expected =
+                match backend with
+                | RendererBackend.Svg -> (0, 0, 0)
+                | RendererBackend.Pixi -> (1, 0, 1)
+                | RendererBackend.Babylon -> (1, 1, 0)
+
+            if (canvases, engines, applications) <> expected then
+                exclusive.Value <- false
+
+            check
+                (name + ": only that backend holds resources")
+                ((canvases, engines, applications) = expected)
+                (sprintf "canvas=%d engines=%d applications=%d" canvases engines applications)
+
+            previous <- backend
+
+        check
+            "all five canvas renders matched their expected pixels"
+            (renderedRight.Value = 5)
+            (string renderedRight.Value)
+
+        check "no step ever held resources of two backends" exclusive.Value "overlap"
+
+        check
+            "every canvas mount started with the previous backend fully released"
+            (atMount.Count >= 5
+             && atMount
+                |> Seq.forall (fun line -> line.EndsWith "svg=0 canvas=0 engines=0 applications=0"))
+            (String.concat " | " atMount)
+
+        check
+            "the observer never saw a model whose backend was not the one mounted (Mounted asserted inside it)"
+            (audit.Violations.Count = 0 && audit.Realised >= steps.Length)
+            (sprintf "realised=%d violations=%s" audit.Realised (String.concat "; " audit.Violations))
+
+        // Straight Pixi -> Babylon -> Pixi with no SVG between, then dispose while Babylon is mounted.
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+        let! _ = waitUntil (fun () -> (PixiSurface.live ()).Applications = 0) 600
+
+        check
+            "direct pixi <-> babylon switching, abandoning a pending pixi initialisation, ends on babylon with one engine and no application"
+            (driver.Mounted = Some RendererBackend.Babylon
+             && Probe.engines () = 1
+             && (PixiSurface.live ()).Applications = 0
+             && count container "canvas" = 1)
+            (sprintf "%A engines=%d %A" driver.Mounted (Probe.engines ()) (PixiSurface.live ()))
+
+        (driver :> System.IDisposable).Dispose()
+        let! _ = waitUntil (fun () -> (PixiSurface.live ()).Applications = 0) 600
+
+        check
+            "disposing the driver leaves no canvas, svg, engine, application or adapter WebGL context"
+            (container.children.length = 0
+             && Probe.engines () = 0
+             && Probe.renderLoops () = 0
+             && (PixiSurface.live ()).Applications = 0
+             && Probe.liveContexts () = 0)
+            (sprintf "%s engines=%d %A" container.innerHTML (Probe.engines ()) (PixiSurface.live ()))
     }
 
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
@@ -963,8 +1650,11 @@ let report () =
 
 async {
     try
+        Probe.installGlHook ()
         run ()
         do! runBabylon ()
+        do! runPixi ()
+        do! runThreeBackends ()
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

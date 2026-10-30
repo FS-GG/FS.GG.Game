@@ -5,6 +5,7 @@ open Browser.Types
 open Fable.Core
 open FS.GG.Game.Render
 open FS.GG.UI.Scene
+open FS.GG.Game.Render.Browser.SceneShapes
 
 [<NoEquality; NoComparison>]
 type BabylonOptions =
@@ -60,67 +61,6 @@ module BabylonSurface =
             Antialias = true
         }
 
-    // ── Scene projection ─────────────────────────────────────────────────────────────────────
-    type private Kind =
-        | Flat
-        | Round
-
-    /// One drawable: where it sits in scene coordinates (y down, like the SVG) and what colour it is.
-    type private Shape =
-        {
-            Kind: Kind
-            X: float
-            Y: float
-            Width: float
-            Height: float
-            Fill: Color
-        }
-
-    let rec private collect (dx: float, dy: float) (scene: Scene) (shapes: ResizeArray<Shape>) : int =
-        let mutable unsupported = 0
-
-        for node in scene.Nodes do
-            match node with
-            | SceneNode.Empty -> ()
-            | SceneNode.Group inner ->
-                for s in inner do
-                    unsupported <- unsupported + collect (dx, dy) s shapes
-            | SceneNode.Translate((ox, oy), inner) ->
-                unsupported <- unsupported + collect (dx + ox, dy + oy) inner shapes
-            | SceneNode.Rectangle((x, y, w, h), fill) ->
-                shapes.Add
-                    {
-                        Kind = Flat
-                        X = x + dx
-                        Y = y + dy
-                        Width = w
-                        Height = h
-                        Fill = fill
-                    }
-            | SceneNode.FilledEllipse(bounds, fill) ->
-                shapes.Add
-                    {
-                        Kind = Round
-                        X = bounds.X + dx
-                        Y = bounds.Y + dy
-                        Width = bounds.Width
-                        Height = bounds.Height
-                        Fill = fill
-                    }
-            | SceneNode.Circle(center, radius, fill) ->
-                shapes.Add
-                    {
-                        Kind = Round
-                        X = center.X - radius + dx
-                        Y = center.Y - radius + dy
-                        Width = 2.0 * radius
-                        Height = 2.0 * radius
-                        Fill = fill
-                    }
-            | _ -> unsupported <- unsupported + 1
-
-        unsupported
-
     let private channel (value: byte) = float value / 255.0
 
     /// Vertical field of view of Babylon's default camera, in radians.
@@ -139,16 +79,6 @@ module BabylonSurface =
             mutable Fill: Color
         }
 
-    /// Whether the browser can create a WebGL context at all, asked of a throwaway canvas whose context is released
-    /// at once. Babylon's `Engine` registers itself in its engine store before it asks for a context, so a
-    /// constructor that then throws would leave a half-built engine behind with no handle to dispose; asking first
-    /// keeps the failure outside Babylon.
-    [<Emit("(() => { const c = document.createElement('canvas'); const g = c.getContext('webgl2') || c.getContext('webgl'); if (!g) return false; const l = g.getExtension('WEBGL_lose_context'); if (l) l.loseContext(); return true })()")>]
-    let private webGlAvailable () : bool = jsNative
-
-    let private isFinitePositive (value: float) =
-        not (System.Double.IsNaN value || System.Double.IsInfinity value) && value > 0.0
-
     let mountScene
         (container: HTMLElement)
         (options: BabylonOptions)
@@ -156,9 +86,14 @@ module BabylonSurface =
         : Result<RendererMount<Scene>, string> =
         if System.String.IsNullOrWhiteSpace options.Label then
             Error "Babylon surface refused the scene: the accessible label is blank"
-        elif not (isFinitePositive options.Width && isFinitePositive options.Height) then
+        elif
+            not (
+                CanvasSupport.isFinitePositive options.Width
+                && CanvasSupport.isFinitePositive options.Height
+            )
+        then
             Error(sprintf "Babylon surface refused the scene: invalid size %Ax%A" options.Width options.Height)
-        elif not (webGlAvailable ()) then
+        elif not (CanvasSupport.webGlAvailable ()) then
             Error "Babylon surface refused the scene: the browser has no WebGL context"
         else
             // Everything acquired so far, most recent first. Mount failure and Dispose both run it.
@@ -198,8 +133,11 @@ module BabylonSurface =
                 enginesCreated <- enginesCreated + 1
 
                 acquire (fun () ->
-                    B.disposeEngine engine
-                    enginesDisposed <- enginesDisposed + 1)
+                    try
+                        B.disposeEngine engine
+                        enginesDisposed <- enginesDisposed + 1
+                    finally
+                        CanvasSupport.loseContext canvas)
 
                 let babylon = B.scene engine
                 acquire (fun () -> B.disposeScene babylon)
