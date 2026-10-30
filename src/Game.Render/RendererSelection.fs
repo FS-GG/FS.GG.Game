@@ -88,16 +88,23 @@ module RendererRegistry =
 type RendererRefusal =
     | Unavailable of backend: RendererBackend
     | MountFailed of backend: RendererBackend * reason: string
+    | DisposeFailed of backend: RendererBackend * reason: string
+
+[<RequireQualifiedAccess>]
+type RendererStatus =
+    | Active
+    | Failed of failures: (RendererBackend * string) list
 
 [<RequireQualifiedAccess>]
 type RendererMsg<'State> =
     | SelectBackend of backend: RendererBackend
     | StateChanged of state: 'State
-    | MountFailed of backend: RendererBackend * reason: string
+    | MountFailed of backend: RendererBackend * attempt: int * reason: string
+    | DisposeFailed of backend: RendererBackend * reason: string
 
 [<RequireQualifiedAccess>]
 type RendererEffect<'State> =
-    | Mount of backend: RendererBackend * state: 'State
+    | Mount of backend: RendererBackend * attempt: int * state: 'State
     | Present of backend: RendererBackend * state: 'State
     | Unmount of backend: RendererBackend
 
@@ -107,6 +114,8 @@ type RendererModel<'State> =
         Registry: RendererRegistry<'State>
         Selected: RendererBackend
         State: 'State
+        Attempt: int
+        Status: RendererStatus
         Refusal: RendererRefusal option
     }
 
@@ -118,69 +127,87 @@ module RendererSelection =
             Registry = registry
             Selected = RendererBackend.defaultBackend
             State = state
+            Attempt = 1
+            Status = RendererStatus.Active
             Refusal = None
         },
-        [ RendererEffect.Mount(RendererBackend.defaultBackend, state) ]
+        [ RendererEffect.Mount(RendererBackend.defaultBackend, 1, state) ]
 
-    let private mountFailed (model: RendererModel<'State>) =
-        match model.Refusal with
-        | Some(RendererRefusal.MountFailed(backend, _)) -> backend = model.Selected
-        | _ -> false
+    /// Issue a fresh mount attempt of `backend`, after `prefix` effects (an `Unmount`, when switching).
+    let private mountNext backend refusal prefix (model: RendererModel<'State>) =
+        let attempt = model.Attempt + 1
+
+        { model with
+            Selected = backend
+            Attempt = attempt
+            Status = RendererStatus.Active
+            Refusal = refusal
+        },
+        prefix @ [ RendererEffect.Mount(backend, attempt, model.State) ]
 
     let update (msg: RendererMsg<'State>) (model: RendererModel<'State>) =
         match msg with
         | RendererMsg.SelectBackend backend when backend = model.Selected ->
-            if mountFailed model then
-                { model with Refusal = None }, [ RendererEffect.Mount(backend, model.State) ]
-            else
-                model, []
+            match model.Status with
+            | RendererStatus.Failed _ -> mountNext backend None [] model
+            | RendererStatus.Active -> model, []
         | RendererMsg.SelectBackend backend when not (RendererRegistry.isAvailable backend model.Registry) ->
             { model with
                 Refusal = Some(RendererRefusal.Unavailable backend)
             },
             []
-        | RendererMsg.SelectBackend backend ->
-            { model with
-                Selected = backend
-                Refusal = None
-            },
-            [
-                RendererEffect.Unmount model.Selected
-                RendererEffect.Mount(backend, model.State)
-            ]
+        | RendererMsg.SelectBackend backend -> mountNext backend None [ RendererEffect.Unmount model.Selected ] model
         | RendererMsg.StateChanged state ->
-            { model with State = state }, [ RendererEffect.Present(model.Selected, state) ]
-        | RendererMsg.MountFailed(backend, _) when backend <> model.Selected -> model, []
-        | RendererMsg.MountFailed(backend, reason) when backend = RendererBackend.defaultBackend ->
+            match model.Status with
+            | RendererStatus.Active -> { model with State = state }, [ RendererEffect.Present(model.Selected, state) ]
+            | RendererStatus.Failed _ -> { model with State = state }, []
+        | RendererMsg.MountFailed(backend, attempt, _) when attempt <> model.Attempt || backend <> model.Selected ->
+            model, []
+        | RendererMsg.MountFailed(backend, _, reason) when backend = RendererBackend.defaultBackend ->
+            // Keep the failure that caused an SVG fallback, if that is what this attempt was.
+            let cause =
+                match model.Refusal with
+                | Some(RendererRefusal.MountFailed(previous, previousReason)) when previous <> backend ->
+                    [ previous, previousReason ]
+                | _ -> []
+
             { model with
+                Status = RendererStatus.Failed((backend, reason) :: cause)
                 Refusal = Some(RendererRefusal.MountFailed(backend, reason))
             },
             []
-        | RendererMsg.MountFailed(backend, reason) ->
+        | RendererMsg.MountFailed(backend, _, reason) ->
+            mountNext RendererBackend.defaultBackend (Some(RendererRefusal.MountFailed(backend, reason))) [] model
+        | RendererMsg.DisposeFailed(backend, reason) ->
             { model with
-                Selected = RendererBackend.defaultBackend
-                Refusal = Some(RendererRefusal.MountFailed(backend, reason))
+                Refusal = Some(RendererRefusal.DisposeFailed(backend, reason))
             },
-            [ RendererEffect.Mount(RendererBackend.defaultBackend, model.State) ]
+            []
 
     let available (model: RendererModel<'State>) =
         RendererRegistry.available model.Registry
 
 [<Sealed>]
 type RendererHost<'State>(registry: RendererRegistry<'State>) =
-    let mutable mounted: (RendererBackend * RendererMount<'State>) option = None
+    let mutable mounted: (RendererBackend * int * RendererMount<'State>) option = None
     let mutable disposed = false
 
-    /// Clear ownership BEFORE calling Dispose, so a throwing Dispose can never be retried.
-    let release () =
+    /// Clear ownership BEFORE calling Dispose, so a throwing Dispose can never be retried, and report
+    /// the failure instead of letting it escape `Run`.
+    let release () : RendererMsg<'State> list =
         match mounted with
-        | Some(_, mount) ->
+        | Some(backend, _, mount) ->
             mounted <- None
-            mount.Dispose()
-        | None -> ()
 
-    let mount backend state : RendererMsg<'State> list =
-        release ()
+            try
+                mount.Dispose()
+                []
+            with ex ->
+                [ RendererMsg.DisposeFailed(backend, ex.Message) ]
+        | None -> []
+
+    let mount backend attempt state : RendererMsg<'State> list =
+        let released = release ()
 
         let outcome =
             match RendererRegistry.tryFind backend registry with
@@ -193,27 +220,29 @@ type RendererHost<'State>(registry: RendererRegistry<'State>) =
 
         match outcome with
         | Ok mount ->
-            mounted <- Some(backend, mount)
-            []
-        | Error reason -> [ RendererMsg.MountFailed(backend, reason) ]
+            mounted <- Some(backend, attempt, mount)
+            released
+        | Error reason -> released @ [ RendererMsg.MountFailed(backend, attempt, reason) ]
 
     let run (effect: RendererEffect<'State>) : RendererMsg<'State> list =
         match effect with
-        | RendererEffect.Mount(backend, state) -> mount backend state
+        | RendererEffect.Mount(backend, attempt, state) -> mount backend attempt state
         | RendererEffect.Present(backend, state) ->
             match mounted with
-            | Some(current, mount) when current = backend -> mount.Present state
-            | _ -> ()
-
-            []
+            | Some(current, attempt, mount) when current = backend ->
+                try
+                    mount.Present state
+                    []
+                with ex ->
+                    // A backend that cannot present is broken: release it and report it as failed.
+                    RendererMsg.MountFailed(backend, attempt, ex.Message) :: release ()
+            | _ -> []
         | RendererEffect.Unmount backend ->
             match mounted with
-            | Some(current, _) when current = backend -> release ()
-            | _ -> ()
+            | Some(current, _, _) when current = backend -> release ()
+            | _ -> []
 
-            []
-
-    member _.Mounted = mounted |> Option.map fst
+    member _.Mounted = mounted |> Option.map (fun (backend, _, _) -> backend)
 
     member _.Run(effects: RendererEffect<'State> list) : RendererMsg<'State> list =
         if disposed then [] else effects |> List.collect run
@@ -222,7 +251,7 @@ type RendererHost<'State>(registry: RendererRegistry<'State>) =
         member _.Dispose() =
             if not disposed then
                 disposed <- true
-                release ()
+                release () |> ignore
 
 [<RequireQualifiedAccess>]
 module RendererHost =

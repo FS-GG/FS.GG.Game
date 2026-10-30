@@ -76,6 +76,44 @@ let private start (host: RendererHost<Arena>) registry state =
     let model, effects = RendererSelection.init registry state
     drive host model (host.Run effects)
 
+/// An adapter whose resources fail on demand, recording each call.
+let private faultyAdapter
+    (journal: Journal)
+    (backend: RendererBackend)
+    (presentFails: bool)
+    (disposeFails: bool)
+    : RendererAdapter<Arena> =
+    let name = RendererBackend.id backend
+
+    {
+        Backend = backend
+        Mount =
+            fun _ ->
+                journal.Events.Add(name + ":mount")
+
+                Ok
+                    {
+                        Present =
+                            fun _ ->
+                                journal.Events.Add(name + ":present")
+
+                                if presentFails then
+                                    failwith "lost context"
+                        Dispose =
+                            fun () ->
+                                journal.Events.Add(name + ":dispose")
+
+                                if disposeFails then
+                                    failwith "dispose threw"
+                    }
+    }
+
+let private failingAdapter (backend: RendererBackend) (reason: string) : RendererAdapter<Arena> =
+    {
+        Backend = backend
+        Mount = fun _ -> Error reason
+    }
+
 [<Tests>]
 let tests =
     testList
@@ -126,7 +164,7 @@ let tests =
                 Expect.equal model.Selected RendererBackend.Svg "default backend"
                 Expect.equal model.State (arena 0 2) "state kept"
                 Expect.isNone model.Refusal "nothing refused"
-                Expect.equal effects [ RendererEffect.Mount(RendererBackend.Svg, arena 0 2) ] "mount SVG"
+                Expect.equal effects [ RendererEffect.Mount(RendererBackend.Svg, 1, arena 0 2) ] "mount SVG"
                 Expect.equal (RendererSelection.available model) [ RendererBackend.Svg ] "selector offers SVG"
             }
 
@@ -150,7 +188,7 @@ let tests =
                     effects
                     [
                         RendererEffect.Unmount RendererBackend.Svg
-                        RendererEffect.Mount(RendererBackend.Pixi, arena 7 4)
+                        RendererEffect.Mount(RendererBackend.Pixi, 2, arena 7 4)
                     ]
                     "unmount previous, mount next with the current state"
 
@@ -217,7 +255,7 @@ let tests =
                 Expect.equal (journal.Count "svg:dispose") 2 "second SVG mount disposed once, idempotently"
                 Expect.isNone host.Mounted "nothing owned after disposal"
 
-                let after = host.Run [ RendererEffect.Mount(RendererBackend.Svg, arena 2 2) ]
+                let after = host.Run [ RendererEffect.Mount(RendererBackend.Svg, 9, arena 2 2) ]
                 Expect.isEmpty after "disposed host is inert"
                 Expect.equal (journal.Count "svg:mount") 2 "no mount after disposal"
             }
@@ -230,8 +268,8 @@ let tests =
                     |> RendererRegistry.register (fakeAdapter journal RendererBackend.Pixi)
 
                 use host = RendererHost.create registry
-                host.Run [ RendererEffect.Mount(RendererBackend.Svg, arena 0 0) ] |> ignore
-                host.Run [ RendererEffect.Mount(RendererBackend.Pixi, arena 0 0) ] |> ignore
+                host.Run [ RendererEffect.Mount(RendererBackend.Svg, 1, arena 0 0) ] |> ignore
+                host.Run [ RendererEffect.Mount(RendererBackend.Pixi, 2, arena 0 0) ] |> ignore
 
                 Expect.equal
                     (List.ofSeq journal.Events)
@@ -283,16 +321,16 @@ let tests =
 
                 let registry = svgRegistry (Journal()) |> RendererRegistry.register throwing
                 use host = RendererHost.create registry
-                let feedback = host.Run [ RendererEffect.Mount(RendererBackend.Pixi, arena 0 0) ]
-                Expect.equal feedback [ RendererMsg.MountFailed(RendererBackend.Pixi, "boom") ] "exception captured"
+                let feedback = host.Run [ RendererEffect.Mount(RendererBackend.Pixi, 2, arena 0 0) ]
+                Expect.equal feedback [ RendererMsg.MountFailed(RendererBackend.Pixi, 2, "boom") ] "exception captured"
                 Expect.isNone host.Mounted "nothing mounted"
             }
 
             test "a mount of an unregistered backend is reported, never silently skipped" {
                 use host = RendererHost.create (svgRegistry (Journal()))
 
-                match host.Run [ RendererEffect.Mount(RendererBackend.Pixi, arena 0 0) ] with
-                | [ RendererMsg.MountFailed(RendererBackend.Pixi, _) ] -> ()
+                match host.Run [ RendererEffect.Mount(RendererBackend.Pixi, 2, arena 0 0) ] with
+                | [ RendererMsg.MountFailed(RendererBackend.Pixi, 2, _) ] -> ()
                 | other -> failtestf "expected a Pixi mount failure, got %A" other
             }
 
@@ -300,7 +338,9 @@ let tests =
                 let model, _ = RendererSelection.init (svgRegistry (Journal())) (arena 0 0)
 
                 let failed, effects =
-                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Svg, "detached container")) model
+                    RendererSelection.update
+                        (RendererMsg.MountFailed(RendererBackend.Svg, 1, "detached container"))
+                        model
 
                 Expect.equal failed.Selected RendererBackend.Svg "nothing to fall back to"
                 Expect.isEmpty effects "no fallback loop"
@@ -309,14 +349,14 @@ let tests =
                     RendererSelection.update (RendererMsg.SelectBackend RendererBackend.Svg) failed
 
                 Expect.isNone retried.Refusal "retry clears the refusal"
-                Expect.equal effects [ RendererEffect.Mount(RendererBackend.Svg, arena 0 0) ] "retry mounts"
+                Expect.equal effects [ RendererEffect.Mount(RendererBackend.Svg, 2, arena 0 0) ] "retry mounts"
             }
 
             test "a mount failure for a superseded backend is ignored" {
                 let model, _ = RendererSelection.init (svgRegistry (Journal())) (arena 0 0)
 
                 let same, effects =
-                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Pixi, "late")) model
+                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Pixi, 1, "late")) model
 
                 Expect.equal same.Selected RendererBackend.Svg "selection kept"
                 Expect.isNone same.Refusal "nothing recorded"
@@ -336,5 +376,184 @@ let tests =
                     (List.ofSeq presented)
                     (states |> List.map (fun s -> Adapter.drawCell 16.0 fill s.Player))
                     "SVG output is the unchanged Scene projection"
+            }
+
+            test "a failed default stays recoverable after an unavailable selection (review #1)" {
+                let model, _ = RendererSelection.init (svgRegistry (Journal())) (arena 0 0)
+
+                let model, _ =
+                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Svg, 1, "detached")) model
+
+                let model, effects =
+                    RendererSelection.update (RendererMsg.SelectBackend RendererBackend.Pixi) model
+
+                Expect.isEmpty effects "Pixi is unavailable"
+                Expect.equal model.Refusal (Some(RendererRefusal.Unavailable RendererBackend.Pixi)) "refusal shown"
+                Expect.equal model.Status (RendererStatus.Failed [ RendererBackend.Svg, "detached" ]) "failure kept"
+
+                let model, effects =
+                    RendererSelection.update (RendererMsg.SelectBackend RendererBackend.Svg) model
+
+                Expect.equal effects [ RendererEffect.Mount(RendererBackend.Svg, 2, arena 0 0) ] "SVG retried"
+                Expect.equal model.Status RendererStatus.Active "retry is live"
+            }
+
+            test "a failed SVG fallback keeps both reasons and stays recoverable" {
+                let journal = Journal()
+                let mutable svgBroken = true
+
+                let svg =
+                    RendererRegistry.svg view (fun scene ->
+                        if svgBroken then
+                            Error "svg host missing"
+                        else
+                            svgSurface journal (ResizeArray()) scene)
+
+                let registry =
+                    svg
+                    |> RendererRegistry.register (failingAdapter RendererBackend.Pixi "no WebGL")
+
+                use host = RendererHost.create registry
+                let model = start host registry (arena 0 0)
+                let model = drive host model [ RendererMsg.SelectBackend RendererBackend.Pixi ]
+
+                Expect.equal model.Selected RendererBackend.Svg "fell back to SVG"
+
+                Expect.equal
+                    model.Status
+                    (RendererStatus.Failed [ RendererBackend.Svg, "svg host missing"; RendererBackend.Pixi, "no WebGL" ])
+                    "both reasons, most recent first"
+
+                Expect.isNone host.Mounted "nothing mounted"
+                let model = drive host model [ RendererMsg.StateChanged(arena 4 4) ]
+                Expect.equal model.State (arena 4 4) "state still tracked while failed"
+
+                svgBroken <- false
+                let model = drive host model [ RendererMsg.SelectBackend RendererBackend.Svg ]
+                Expect.equal model.Status RendererStatus.Active "retry succeeded"
+                Expect.equal host.Mounted (Some RendererBackend.Svg) "SVG mounted"
+            }
+
+            test "a throwing Dispose during Unmount is reported and the switch still mounts (review #2)" {
+                let journal = Journal()
+
+                let registry =
+                    RendererRegistry.svg view (svgSurface journal (ResizeArray()))
+                    |> RendererRegistry.register (faultyAdapter journal RendererBackend.Svg false true)
+                    |> RendererRegistry.register (fakeAdapter journal RendererBackend.Pixi)
+
+                use host = RendererHost.create registry
+                let model = start host registry (arena 0 0)
+
+                let model, effects =
+                    RendererSelection.update (RendererMsg.SelectBackend RendererBackend.Pixi) model
+
+                let feedback = host.Run effects
+
+                Expect.equal feedback [ RendererMsg.DisposeFailed(RendererBackend.Svg, "dispose threw") ] "reported"
+                Expect.equal host.Mounted (Some RendererBackend.Pixi) "pending mount still ran"
+
+                let model = drive host model feedback
+                Expect.equal model.Selected RendererBackend.Pixi "selection kept"
+
+                Expect.equal
+                    model.Refusal
+                    (Some(RendererRefusal.DisposeFailed(RendererBackend.Svg, "dispose threw")))
+                    "recorded"
+
+                (host :> System.IDisposable).Dispose()
+                Expect.equal (journal.Count "svg:dispose") 1 "throwing dispose never retried"
+            }
+
+            test "a throwing Dispose during pre-mount release is reported and the mount still runs" {
+                let journal = Journal()
+
+                let registry =
+                    RendererRegistry.svg view (svgSurface journal (ResizeArray()))
+                    |> RendererRegistry.register (faultyAdapter journal RendererBackend.Svg false true)
+                    |> RendererRegistry.register (fakeAdapter journal RendererBackend.Pixi)
+
+                use host = RendererHost.create registry
+                host.Run [ RendererEffect.Mount(RendererBackend.Svg, 1, arena 0 0) ] |> ignore
+                let feedback = host.Run [ RendererEffect.Mount(RendererBackend.Pixi, 2, arena 0 0) ]
+
+                Expect.equal feedback [ RendererMsg.DisposeFailed(RendererBackend.Svg, "dispose threw") ] "reported"
+                Expect.equal host.Mounted (Some RendererBackend.Pixi) "mount still ran"
+                Expect.equal (journal.Count "svg:dispose") 1 "disposed once"
+            }
+
+            test "a throwing Present releases the backend and falls back to SVG" {
+                let journal = Journal()
+
+                let registry =
+                    svgRegistry journal
+                    |> RendererRegistry.register (faultyAdapter journal RendererBackend.Pixi true false)
+
+                use host = RendererHost.create registry
+                let model = start host registry (arena 0 0)
+
+                let model =
+                    drive
+                        host
+                        model
+                        [
+                            RendererMsg.SelectBackend RendererBackend.Pixi
+                            RendererMsg.StateChanged(arena 6 2)
+                        ]
+
+                Expect.equal model.Selected RendererBackend.Svg "fell back"
+                Expect.equal model.State (arena 6 2) "state kept"
+                Expect.equal model.Status RendererStatus.Active "SVG live"
+
+                Expect.equal
+                    model.Refusal
+                    (Some(RendererRefusal.MountFailed(RendererBackend.Pixi, "lost context")))
+                    "present failure recorded"
+
+                Expect.equal (journal.Count "pixi:dispose") 1 "broken Pixi mount released once"
+                Expect.equal host.Mounted (Some RendererBackend.Svg) "SVG mounted"
+            }
+
+            test "a late failure from a superseded attempt of the same backend is ignored (review #3)" {
+                let journal = Journal()
+
+                let registry =
+                    svgRegistry journal
+                    |> RendererRegistry.register (fakeAdapter journal RendererBackend.Pixi)
+
+                let model, _ = RendererSelection.init registry (arena 0 0)
+
+                let model, e1 =
+                    RendererSelection.update (RendererMsg.SelectBackend RendererBackend.Pixi) model
+
+                let model, _ =
+                    RendererSelection.update (RendererMsg.SelectBackend RendererBackend.Svg) model
+
+                let model, e3 =
+                    RendererSelection.update (RendererMsg.SelectBackend RendererBackend.Pixi) model
+
+                Expect.contains e1 (RendererEffect.Mount(RendererBackend.Pixi, 2, arena 0 0)) "first Pixi attempt"
+                Expect.contains e3 (RendererEffect.Mount(RendererBackend.Pixi, 4, arena 0 0)) "second Pixi attempt"
+
+                let late, effects =
+                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Pixi, 2, "late")) model
+
+                Expect.equal late.Selected RendererBackend.Pixi "selection kept"
+                Expect.equal late.Status RendererStatus.Active "still live"
+                Expect.isNone late.Refusal "nothing recorded"
+                Expect.isEmpty effects "no fallback"
+            }
+
+            test "state changes while failed are kept without presenting" {
+                let model, _ = RendererSelection.init (svgRegistry (Journal())) (arena 0 0)
+
+                let model, _ =
+                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Svg, 1, "x")) model
+
+                let model, effects =
+                    RendererSelection.update (RendererMsg.StateChanged(arena 3 3)) model
+
+                Expect.equal model.State (arena 3 3) "state kept"
+                Expect.isEmpty effects "nothing to present on"
             }
         ]

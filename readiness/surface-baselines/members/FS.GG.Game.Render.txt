@@ -26,17 +26,21 @@ FS.GG.Game.Render.RendererEffect`1+Tags.Unmount : System.Int32
 FS.GG.Game.Render.RendererHost.create<State>(RendererRegistry<State>) : RendererHost<State>
 FS.GG.Game.Render.RendererHost`1.Mounted : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.RendererBackend> [get]
 FS.GG.Game.Render.RendererHost`1.Run(FSharpList<RendererEffect<State>>) : FSharpList<RendererMsg<State>>
+FS.GG.Game.Render.RendererModel`1.Attempt : System.Int32 [get]
 FS.GG.Game.Render.RendererModel`1.Refusal : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.RendererRefusal> [get]
 FS.GG.Game.Render.RendererModel`1.Registry : RendererRegistry<State> [get]
 FS.GG.Game.Render.RendererModel`1.Selected : FS.GG.Game.Render.RendererBackend [get]
 FS.GG.Game.Render.RendererModel`1.State : State [get]
-FS.GG.Game.Render.RendererModel`1.new(RendererRegistry<State>, FS.GG.Game.Render.RendererBackend, State, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.RendererRefusal>)
+FS.GG.Game.Render.RendererModel`1.Status : FS.GG.Game.Render.RendererStatus [get]
+FS.GG.Game.Render.RendererModel`1.new(RendererRegistry<State>, FS.GG.Game.Render.RendererBackend, State, System.Int32, FS.GG.Game.Render.RendererStatus, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.RendererRefusal>)
 FS.GG.Game.Render.RendererMount`1.Dispose : Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit> [get]
 FS.GG.Game.Render.RendererMount`1.Present : FSharpFunc<State, Microsoft.FSharp.Core.Unit> [get]
 FS.GG.Game.Render.RendererMount`1.new(FSharpFunc<State, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>)
+FS.GG.Game.Render.RendererMsg`1+Tags.DisposeFailed : System.Int32
 FS.GG.Game.Render.RendererMsg`1+Tags.MountFailed : System.Int32
 FS.GG.Game.Render.RendererMsg`1+Tags.SelectBackend : System.Int32
 FS.GG.Game.Render.RendererMsg`1+Tags.StateChanged : System.Int32
+FS.GG.Game.Render.RendererRefusal+Tags.DisposeFailed : System.Int32
 FS.GG.Game.Render.RendererRefusal+Tags.MountFailed : System.Int32
 FS.GG.Game.Render.RendererRefusal+Tags.Unavailable : System.Int32
 FS.GG.Game.Render.RendererRegistry.available<State>(RendererRegistry<State>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>
@@ -47,3 +51,5 @@ FS.GG.Game.Render.RendererRegistry.tryFind<State>(FS.GG.Game.Render.RendererBack
 FS.GG.Game.Render.RendererSelection.available<State>(RendererModel<State>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>
 FS.GG.Game.Render.RendererSelection.init<State>(RendererRegistry<State>, State) : Tuple<RendererModel<State>, FSharpList<RendererEffect<State>>>
 FS.GG.Game.Render.RendererSelection.update<State>(RendererMsg<State>, RendererModel<State>) : Tuple<RendererModel<State>, FSharpList<RendererEffect<State>>>
+FS.GG.Game.Render.RendererStatus+Tags.Active : System.Int32
+FS.GG.Game.Render.RendererStatus+Tags.Failed : System.Int32

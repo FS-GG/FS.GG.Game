@@ -114,13 +114,27 @@ module RendererRegistry =
     val available: registry: RendererRegistry<'State> -> RendererBackend list
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
-/// Why a requested backend is not the one presenting.
+/// Why a requested backend is not the one presenting, or why a backend's resources misbehaved.
 [<RequireQualifiedAccess>]
 type RendererRefusal =
     /// No adapter is registered for the backend at this state type; the selection is unchanged.
     | Unavailable of backend: RendererBackend
-    /// The backend's adapter refused or failed to mount.
+    /// The backend's adapter refused or failed to mount, or failed to present an accepted state.
     | MountFailed of backend: RendererBackend * reason: string
+    /// A released mount's `Dispose` failed. Ownership was still released; the selection is unchanged.
+    | DisposeFailed of backend: RendererBackend * reason: string
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+/// Whether the selected backend's latest mount attempt is live. Tracked explicitly rather than inferred
+/// from `RendererModel.Refusal`, so an unrelated refusal can never hide a failed mount.
+[<RequireQualifiedAccess>]
+type RendererStatus =
+    /// The latest `Mount` for the selected backend was issued and has not reported failure.
+    | Active
+    /// Nothing is mounted: the selected backend's latest mount failed. `failures` are the mount failures
+    /// that led here, most recent first — a failed SVG fallback keeps the failure that caused the fallback.
+    /// Re-selecting the selected backend retries it.
+    | Failed of failures: (RendererBackend * string) list
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 /// Elmish messages for renderer selection.
@@ -130,15 +144,18 @@ type RendererMsg<'State> =
     | SelectBackend of backend: RendererBackend
     /// A newer game state to present on the selected backend.
     | StateChanged of state: 'State
-    /// Host feedback: mounting `backend` failed. Emitted by `RendererHost.Run`.
-    | MountFailed of backend: RendererBackend * reason: string
+    /// Host feedback: mount `attempt` of `backend` failed, or its mount threw from `Present`. A failure
+    /// whose `attempt` is not the model's current `Attempt` is stale and ignored.
+    | MountFailed of backend: RendererBackend * attempt: int * reason: string
+    /// Host feedback: a released mount's `Dispose` threw. Recorded only.
+    | DisposeFailed of backend: RendererBackend * reason: string
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 /// Resource effects `RendererSelection.update` asks the host to perform, in order.
 [<RequireQualifiedAccess>]
 type RendererEffect<'State> =
-    /// Acquire `backend`'s resources and present `state`.
-    | Mount of backend: RendererBackend * state: 'State
+    /// Acquire `backend`'s resources as mount `attempt` and present `state`.
+    | Mount of backend: RendererBackend * attempt: int * state: 'State
     /// Present `state` on the mounted `backend`.
     | Present of backend: RendererBackend * state: 'State
     /// Release every resource `backend` owns.
@@ -155,7 +172,12 @@ type RendererModel<'State> =
         Selected: RendererBackend
         /// The current game state, independent of the backend presenting it.
         State: 'State
-        /// The most recent refusal, cleared by the next accepted selection.
+        /// The token of the latest `Mount` effect. Feedback for any other attempt is stale.
+        Attempt: int
+        /// Whether the selected backend's latest mount is live or failed.
+        Status: RendererStatus
+        /// The most recent refusal, for display. Cleared by the next accepted selection. Never used to
+        /// decide recoverability — that is `Status`.
         Refusal: RendererRefusal option
     }
 
@@ -166,19 +188,27 @@ type RendererModel<'State> =
 /// external-resource-outside-the-model rule the generated Elmish client follows. An Elmish program
 /// turns the effects into one command that runs them on its `RendererHost` and dispatches each returned
 /// feedback message (wrapped in the program's own message type) back into `update`.
+///
+/// Ordering contract: unmount-then-mount, with SVG fallback. A switch emits `Unmount` of the current
+/// backend strictly before `Mount` of the next, so two backends never own resources at once. If the
+/// next backend's mount fails (or it later throws from `Present`), selection falls back to mounting the
+/// default SVG backend with the same game state. If SVG itself fails, nothing is mounted, `Status` is
+/// `Failed` and re-selecting SVG (or selecting any available backend) retries.
 [<RequireQualifiedAccess>]
 module RendererSelection =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Select the default backend and mount it with `state`.
+    /// Select the default backend and mount it, as attempt 1, with `state`.
     val init: registry: RendererRegistry<'State> -> state: 'State -> RendererModel<'State> * RendererEffect<'State> list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Apply one message. Selecting an available backend unmounts the current one and mounts the new one
-    /// with the unchanged game state. Selecting an unavailable backend records `Unavailable` and emits
-    /// nothing. Re-selecting the current backend is a no-op unless its mount failed, which retries it.
-    /// `StateChanged` replaces the state and presents it. A `MountFailed` for a non-default backend falls
-    /// back to mounting the default; for the default it is recorded; for a superseded backend it is ignored.
+    /// with the unchanged game state under a new attempt. Selecting an unavailable backend records
+    /// `Unavailable` and emits nothing; `Status` is untouched. Re-selecting the current backend is a no-op
+    /// while it is `Active` and a retry while it is `Failed`. `StateChanged` replaces the state and
+    /// presents it when `Active`. A current-attempt `MountFailed` for a non-default backend falls back to
+    /// mounting the default; for the default it sets `Failed`; a stale attempt is ignored.
+    /// `DisposeFailed` is recorded in `Refusal` only.
     val update:
         msg: RendererMsg<'State> -> model: RendererModel<'State> -> RendererModel<'State> * RendererEffect<'State> list
 
@@ -190,7 +220,14 @@ module RendererSelection =
 ///
 /// The effect interpreter that owns the mounted backend's resources. At most one backend is mounted at a
 /// time: a `Mount` while another backend is mounted disposes that one first, so no resources leak even
-/// when an `Unmount` is missing. Each mount is disposed exactly once. After `Dispose` the host is inert.
+/// when an `Unmount` is missing. Each mount is disposed exactly once; ownership is cleared before its
+/// `Dispose` runs. No adapter exception escapes `Run`: a failing `Mount` or `Present` becomes
+/// `RendererMsg.MountFailed` (a throwing `Present` also releases that mount), and a failing `Dispose`
+/// becomes `RendererMsg.DisposeFailed` while the remaining effects, including a pending `Mount`, still
+/// run. After `Dispose` the host is inert; a mount's failing `Dispose` during host disposal is not rethrown.
+///
+/// `Run` is not reentrant. Adapters must not dispatch Elmish messages synchronously from `Mount`,
+/// `Present` or `Dispose`; report outcomes through their return value or schedule a later dispatch.
 [<Sealed>]
 type RendererHost<'State> =
     interface System.IDisposable
@@ -198,7 +235,7 @@ type RendererHost<'State> =
     /// The backend currently mounted, if any.
     member Mounted: RendererBackend option
 
-    /// Perform effects in order and return feedback messages (`RendererMsg.MountFailed`) to dispatch.
+    /// Perform effects in order and return feedback messages to dispatch, in the order they occurred.
     member Run: effects: RendererEffect<'State> list -> RendererMsg<'State> list
 
 /// Public contract module exposed by the FS.GG.Game.Render package.

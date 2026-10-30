@@ -24,7 +24,21 @@ refused with `RendererRefusal.Unavailable`.
 
 Switching (`RendererMsg.SelectBackend`) keeps `Model.State` and emits `Unmount`/`Mount` effects.
 `RendererHost` performs those effects, owns the mounted backend's resources outside the model and
-disposes each mount exactly once. A failed non-default mount falls back to SVG.
+disposes each mount exactly once.
+
+Ordering contract: **unmount-then-mount, with SVG fallback.**
+
+- A switch always unmounts the current backend before it mounts the next one, so two backends never
+  own resources at the same time.
+- Each `Mount` carries a new attempt token. Failure feedback from a superseded attempt is ignored.
+- If a non-default backend fails to mount, or throws from `Present`, the selection falls back to SVG
+  with the same game state.
+- If SVG itself fails, nothing is mounted and `Model.Status` is `Failed`, with every reason that led
+  there. Selecting SVG again retries it. An unrelated refusal never hides that failure.
+- No adapter exception escapes `RendererHost.Run`. A throwing `Dispose` becomes `DisposeFailed`, and the
+  pending `Mount` still runs.
+- Adapters must not dispatch messages synchronously from `Mount`, `Present` or `Dispose`, because `Run`
+  is not reentrant.
 
 House style: `.fsi` is the sole public surface; `net10.0`; `-preview` channel.
 See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) and [ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md).
