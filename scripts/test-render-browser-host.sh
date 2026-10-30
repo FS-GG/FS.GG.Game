@@ -14,10 +14,10 @@
 # canvas, one engine, meshes, a pixel read back, SVG -> Babylon -> SVG with the game state preserved and every
 # resource released. It does NOT exercise PixiJS (its adapter waits for the Templates#808 bindings).
 #
-# The Babylon bindings are not vendored. scripts/build-babylon-bindings-feed.sh packs them from the pinned
-# FS.GG.Templates commit (eng/babylon-bindings/pin.env) into artifacts/babylon-bindings/feed, which the two Fable
-# projects restore as an ordinary PackageReference; the exact Babylon npm closure is installed beside the output
-# and mapped with an import map.
+# The Babylon bindings are not vendored. scripts/materialize-babylon-bindings.sh generates them from the pinned
+# FS.GG.Templates commit (eng/babylon-bindings/pin.env) under artifacts/babylon-bindings, and src/Render.Browser
+# references the generated library project; the exact Babylon npm closure is installed beside the output and mapped
+# with an import map.
 #
 #   usage: scripts/test-render-browser-host.sh
 #   env:   RENDER_SMOKE_BROWSER=<chrome binary>   (default: first of chromium, google-chrome, chrome)
@@ -69,7 +69,7 @@ cd "$REPO_ROOT"
 dotnet tool restore >/dev/null
 
 # 0. The packed Babylon bindings and their exact npm closure (never committed; see the header).
-"$SCRIPT_DIR/build-babylon-bindings-feed.sh" "$REPO_ROOT/artifacts/babylon-bindings"
+"$SCRIPT_DIR/materialize-babylon-bindings.sh" "$REPO_ROOT/artifacts/babylon-bindings"
 BABYLON_INTEGRITY="$(sed -n 's/^BABYLON_CORE_INTEGRITY=//p' "$REPO_ROOT/eng/babylon-bindings/pin.env" | head -n 1)"
 
 # 1. The packed Fable source view.

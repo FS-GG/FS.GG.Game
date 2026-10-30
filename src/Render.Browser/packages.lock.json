@@ -24,15 +24,6 @@
           "FSharp.Core": "4.7.2"
         }
       },
-      "FS.GG.Game.Render.BabylonBindings": {
-        "type": "Direct",
-        "requested": "[0.1.0, )",
-        "resolved": "0.1.0",
-        "contentHash": "PLN4S/hRuRbCl323/YOmdlhy0q5TOQjWwih/u/eLVUZZuH1uxAt1Zm+BPSdL7bpHuL53P0fd1ogigaQ6/Y1aaA==",
-        "dependencies": {
-          "Fable.Core": "5.6.1"
-        }
-      },
       "FS.GG.UI.Scene": {
         "type": "Direct",
         "requested": "[0.31.0, )",
@@ -96,6 +87,12 @@
           "FSharp.Core": "4.7.2",
           "Fable.Browser.Event": "1.6.0",
           "Fable.Core": "3.2.8"
+        }
+      },
+      "fs.gg.game.render.babylonbindings": {
+        "type": "Project",
+        "dependencies": {
+          "Fable.Core": "[5.6.1, )"
         }
       },
       "FS.GG.Game.Render.Fable.Metadata": {

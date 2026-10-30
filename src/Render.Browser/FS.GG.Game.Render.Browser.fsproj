@@ -3,8 +3,8 @@
   <!-- The Fable-only browser host for GAME-RENDER-MULTI-01.4 (FS.GG.Game#730). Game.Render owns the
        renderer-selection core and its bounded Fable source view; THIS project owns the browser
        adapters that need JavaScript interop: today the retained SVG surface, later the PixiJS and
-       BabylonJS adapters. The Babylon adapter consumes the packed Babylon bindings (Templates#809 / PR #812)
-       through an ordinary PackageReference restored from a generated local feed (see BabylonBindingsFeed below);
+       BabylonJS adapters. The Babylon adapter consumes the Babylon bindings (Templates#809 / PR #812) through a
+       project reference to a workspace generated from a pinned template commit (see BabylonBindingsProject below);
        the PixiJS adapter waits for Templates#808. It is built and exercised by
        scripts/test-render-browser-host.sh, not by the .NET solution, exactly like Wasm.Browser.
        Not packed: publication is explicit later scope for the plan. -->
@@ -16,12 +16,12 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
-  <!-- The Babylon bindings are not published. scripts/build-babylon-bindings-feed.sh instantiates the pinned
-       FS.GG.Templates `fs-gg-fable-bindings` template (eng/babylon-bindings/pin.env), packs it and writes this
-       feed; nothing generated is committed. A restore without the feed fails NU1101 on the package id. -->
+  <!-- The Babylon bindings are not published. scripts/materialize-babylon-bindings.sh instantiates the pinned
+       FS.GG.Templates `fs-gg-fable-bindings` template (eng/babylon-bindings/pin.env) under artifacts/ (git-ignored;
+       nothing generated is committed) and Fable compiles that library with this host. A project reference rather than
+       the template's packed NuGet: the archive's bytes depend on the compiling SDK, which a committed lock cannot hold. -->
   <PropertyGroup>
-    <BabylonBindingsFeed Condition="'$(BabylonBindingsFeed)' == ''">$(MSBuildThisFileDirectory)../../artifacts/babylon-bindings/feed</BabylonBindingsFeed>
-    <RestoreAdditionalProjectSources Condition="Exists('$(BabylonBindingsFeed)')">$(RestoreAdditionalProjectSources);$(BabylonBindingsFeed)</RestoreAdditionalProjectSources>
+    <BabylonBindingsProject Condition="'$(BabylonBindingsProject)' == ''">$(MSBuildThisFileDirectory)../../artifacts/babylon-bindings/product/src/FS.GG.Game.Render.BabylonBindings/FS.GG.Game.Render.BabylonBindings.fsproj</BabylonBindingsProject>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,7 +39,7 @@
     <PackageReference Include="FS.GG.UI.Scene.SvgBrowser" />
     <PackageReference Include="Fable.Browser.Dom" />
     <PackageReference Include="Fable.Core" />
-    <PackageReference Include="FS.GG.Game.Render.BabylonBindings" />
+    <ProjectReference Include="$(BabylonBindingsProject)" />
   </ItemGroup>
 
 </Project>

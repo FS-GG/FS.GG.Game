@@ -2,7 +2,7 @@
 
 Status: Elmish switching core and SVG default delivered in the routine change for FS.GG.Game#730,
 followed by the binding-independent Fable browser host with the SVG adapter wired end to end, then the
-Babylon adapter over the packed Templates#809 bindings. The Pixi adapter and the three-backend browser test remain open.
+Babylon adapter over the Templates#809 bindings. The Pixi adapter and the three-backend browser test remain open.
 Route: routine. Parent Outcome: FS-GG/.github#4930.
 
 ## Delivered in this slice
@@ -90,18 +90,17 @@ its `Exists()` conditions. The `pixi` adapter and the refusing `babylon` adapter
 
 ### Babylon adapter (Templates#809 bindings)
 
-- **Consumption route: a package reference to the packed bindings, not a source or project route.**
-  The Babylon bindings are template-generated (`fs-gg-fable-bindings`, Templates PR #812) and not published, so
-  `scripts/build-babylon-bindings-feed.sh` instantiates that template from the commit pinned in
-  `eng/babylon-bindings/pin.env`, restores it in locked mode, builds and packs it, and writes a local feed under
-  `artifacts/babylon-bindings` (git-ignored). `src/Render.Browser` and the smoke restore
-  `FS.GG.Game.Render.BabylonBindings` from that feed as an ordinary `PackageReference` with a committed lock entry.
-  Nothing generated is committed. A source route would copy a generated, drift-locked workspace into this
-  repository and lose the package's npm metadata and the lock; a project route would still need the same
-  generation step. The archive is normalised (fixed timestamps, stored entries) and built with a path map so its
-  content hash, which the NuGet lock records, does not depend on the machine or temporary path. The exact
-  `@babylonjs/core@9.33.1` closure is installed from the template's own `package-lock.json` and mapped with an
-  import map.
+- **Consumption route: a project reference to a workspace generated from the pinned template, not the packed
+  NuGet.** The Babylon bindings are template-generated (`fs-gg-fable-bindings`, Templates PR #812) and not
+  published. `scripts/materialize-babylon-bindings.sh` instantiates that template from the commit pinned in
+  `eng/babylon-bindings/pin.env` under `artifacts/babylon-bindings` (git-ignored; nothing generated is committed),
+  and `src/Render.Browser` references the generated library project. The packed NuGet was tried first and
+  rejected: the same template compiled by SDK 10.0.401 and SDK 10.0.403 (the CI runner) packs byte-different
+  assemblies, and the NuGet lock records the archive's content hash, so a committed lock cannot hold for a package
+  built on the consumer's machine. A project reference has no content hash and the generated workspace keeps its own
+  committed, locked restore. Copying the generated `Bindings.fs` into this repository was rejected as ad hoc
+  vendoring. The exact `@babylonjs/core@9.33.1` closure is installed from the template's own `package-lock.json`
+  and mapped with an import map.
 - `BabylonSurface` (`src/Render.Browser`) is the adapter, registered with `RendererRegistry.register`. It projects
   the SAME `FS.GG.UI.Scene` the SVG adapter draws: `Rectangle`, `FilledEllipse` and `Circle` become flat meshes
   (later nodes nearer the camera), `Group`/`Translate`/`Empty` are structural and any other node is counted in
