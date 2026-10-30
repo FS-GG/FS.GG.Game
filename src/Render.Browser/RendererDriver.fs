@@ -98,3 +98,9 @@ module RendererDriver =
 
     let start registry state onChange =
         new RendererDriver<'State>(registry, state, onChange)
+
+    let failBackend (driver: RendererDriver<'State>) backend reason =
+        let model = driver.Model
+
+        if model.Selected = backend && model.Status = RendererStatus.Active then
+            driver.Dispatch(RendererMsg.MountFailed(backend, model.Attempt, reason))

@@ -19,8 +19,14 @@
   <ItemGroup>
     <Compile Include="SvgSurface.fsi" />
     <Compile Include="SvgSurface.fs" />
+    <Compile Include="CanvasSupport.fsi" />
+    <Compile Include="CanvasSupport.fs" />
+    <Compile Include="SceneShapes.fsi" />
+    <Compile Include="SceneShapes.fs" />
     <Compile Include="BabylonSurface.fsi" />
     <Compile Include="BabylonSurface.fs" />
+    <Compile Include="PixiSurface.fsi" />
+    <Compile Include="PixiSurface.fs" />
     <Compile Include="RendererDriver.fsi" />
     <Compile Include="RendererDriver.fs" />
   </ItemGroup>

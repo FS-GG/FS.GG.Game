@@ -1,10 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The generated JavaScript bindings the browser host consumes (GAME-RENDER-MULTI-01.4, FS.GG.Game#730).
-       The BabylonJS bindings (module Qualification.Babylon) are owned by FS.GG.Templates (template
-       `fs-gg-fable-bindings`, Templates#809 / PR #812) and are not published. scripts/materialize-babylon-bindings.sh
-       instantiates that template from the commit pinned in eng/babylon-bindings/pin.env under artifacts/ (git-ignored;
-       nothing generated is committed), and this project compiles its Bindings.fs with the host's Fable build.
+       The BabylonJS (module Qualification.Babylon) and PixiJS (module Qualification.Pixi) bindings are owned by
+       FS.GG.Templates (template `fs-gg-fable-bindings`, Templates#809 / PR #812 and #808 / PR #814) and are not
+       published. scripts/materialize-js-bindings.sh instantiates that template from the commit pinned in
+       eng/js-bindings/pin.env under artifacts/ (git-ignored; nothing generated is committed), and this project
+       compiles each Bindings.fs with the host's Fable build.
 
        Why a source file and not the template's packed NuGet: the archive's bytes depend on the .NET SDK that compiled it
        (SDK 10.0.401 and 10.0.403 pack different assemblies), and the NuGet lock records that content hash, so a
@@ -19,11 +20,13 @@
     <IsPackable>false</IsPackable>
     <Nullable>disable</Nullable>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <BabylonBindingsSource Condition="'$(BabylonBindingsSource)' == ''">$(MSBuildThisFileDirectory)../../artifacts/babylon-bindings/product/src/FS.GG.Game.Render.BabylonBindings/Bindings.fs</BabylonBindingsSource>
+    <BabylonBindingsSource Condition="'$(BabylonBindingsSource)' == ''">$(MSBuildThisFileDirectory)../../artifacts/js-bindings/babylon/product/src/FS.GG.Game.Render.BabylonBindings/Bindings.fs</BabylonBindingsSource>
+    <PixiBindingsSource Condition="'$(PixiBindingsSource)' == ''">$(MSBuildThisFileDirectory)../../artifacts/js-bindings/pixi/product/src/FS.GG.Game.Render.PixiBindings/Bindings.fs</PixiBindingsSource>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="$(BabylonBindingsSource)" Link="generated/BabylonBindings.fs" />
+    <Compile Include="$(PixiBindingsSource)" Link="generated/PixiBindings.fs" />
   </ItemGroup>
 
   <ItemGroup>

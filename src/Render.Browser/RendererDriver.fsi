@@ -37,3 +37,9 @@ module RendererDriver =
         state: 'State ->
         onChange: (RendererModel<'State> -> unit) ->
             RendererDriver<'State>
+
+    /// Report that `backend`'s live mount failed after `Mount` had already returned `Ok` (a renderer that
+    /// initialises asynchronously). It dispatches `RendererMsg.MountFailed` for the model's CURRENT attempt, so it is
+    /// ignored unless `backend` is the selected backend and its mount is active; the usual fallback to SVG follows.
+    /// Call it from a promise callback, never synchronously from `Mount`, `Present` or `Dispose`.
+    val failBackend: driver: RendererDriver<'State> -> backend: RendererBackend -> reason: string -> unit

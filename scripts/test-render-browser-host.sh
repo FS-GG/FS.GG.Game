@@ -12,11 +12,11 @@
 # The smoke proves the SVG adapter renders through RendererSelection + RendererHost + the retained
 # SvgBrowser surface, that a later adapter can plug in, and that the BabylonJS adapter really renders: a WebGL
 # canvas, one engine, meshes, a pixel read back, SVG -> Babylon -> SVG with the game state preserved and every
-# resource released. It does NOT exercise PixiJS (its adapter waits for the Templates#808 bindings).
+# resource released; the same for PixiJS; and SVG <-> Pixi <-> Babylon switching.
 #
-# The Babylon bindings are not vendored. scripts/materialize-babylon-bindings.sh generates them from the pinned
-# FS.GG.Templates commit (eng/babylon-bindings/pin.env) under artifacts/babylon-bindings, and the committed
-# src/Render.Browser.Bindings project compiles the generated source; the exact Babylon npm closure is installed
+# The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
+# FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
+# src/Render.Browser.Bindings project compiles the generated sources; the exact Babylon and Pixi npm closures are installed
 # beside the output and mapped with an import map.
 #
 #   usage: scripts/test-render-browser-host.sh
@@ -32,7 +32,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=96
+MIN_CHECKS=179
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -68,9 +68,11 @@ mkdir -p "$TMP/feed" "$TMP/js"
 cd "$REPO_ROOT"
 dotnet tool restore >/dev/null
 
-# 0. The packed Babylon bindings and their exact npm closure (never committed; see the header).
-"$SCRIPT_DIR/materialize-babylon-bindings.sh" "$REPO_ROOT/artifacts/babylon-bindings"
-BABYLON_INTEGRITY="$(sed -n 's/^BABYLON_CORE_INTEGRITY=//p' "$REPO_ROOT/eng/babylon-bindings/pin.env" | head -n 1)"
+# 0. The Babylon and Pixi bindings and their exact npm closures (never committed; see the header).
+"$SCRIPT_DIR/materialize-js-bindings.sh" all "$REPO_ROOT/artifacts/js-bindings"
+pin() { sed -n "s/^$1=//p" "$REPO_ROOT/eng/js-bindings/pin.env" | head -n 1; }
+BABYLON_INTEGRITY="$(pin BABYLON_NPM_INTEGRITY)"
+PIXI_INTEGRITY="$(pin PIXI_NPM_INTEGRITY)"
 
 # 1. The packed Fable source view.
 dotnet pack src/Game.Render/FS.GG.Game.Render.fsproj -c Release -p:PackageVersion="$PACK_VERSION" -o "$TMP/feed" >/dev/null
@@ -128,16 +130,28 @@ dotnet restore tests/Render.Browser.Smoke/FS.GG.Game.Render.Browser.Smoke.fsproj
 dotnet fable tests/Render.Browser.Smoke --outDir "$TMP/js" --noCache
 echo
 
-# The exact Babylon npm closure the bindings were qualified against, resolved by an import map because the Fable
-# output imports `@babylonjs/core/...` by bare specifier.
-cp "$REPO_ROOT/artifacts/babylon-bindings/npm/package.json" "$REPO_ROOT/artifacts/babylon-bindings/npm/package-lock.json" "$TMP/js/"
-(cd "$TMP/js" && npm ci --ignore-scripts --omit=dev --no-audit --no-fund >/dev/null)
-grep -Fq "$BABYLON_INTEGRITY" "$TMP/js/package-lock.json" || {
+# The exact npm closures the bindings were qualified against, resolved by an import map because the Fable output
+# imports `@babylonjs/core/...` and `pixi.js` by bare specifier. Pixi resolves to its self-contained `dist/pixi.mjs`
+# (the `lib/` modules need a bundler for two CommonJS-only dependencies), as the Templates browser smoke does.
+for corpus in babylon pixi; do
+  mkdir -p "$TMP/js/npm-$corpus"
+  cp "$REPO_ROOT/artifacts/js-bindings/$corpus/npm/package.json" "$REPO_ROOT/artifacts/js-bindings/$corpus/npm/package-lock.json" "$TMP/js/npm-$corpus/"
+  (cd "$TMP/js/npm-$corpus" && npm ci --ignore-scripts --omit=dev --no-audit --no-fund >/dev/null)
+done
+grep -Fq "$BABYLON_INTEGRITY" "$TMP/js/npm-babylon/package-lock.json" || {
   echo "test-render-browser-host: the installed Babylon closure is not the pinned @babylonjs/core integrity" >&2
   exit 1
 }
-[[ -f $TMP/js/node_modules/@babylonjs/core/Engines/engineStore.js ]] || {
+grep -Fq "$PIXI_INTEGRITY" "$TMP/js/npm-pixi/package-lock.json" || {
+  echo "test-render-browser-host: the installed Pixi closure is not the pinned pixi.js integrity" >&2
+  exit 1
+}
+[[ -f $TMP/js/npm-babylon/node_modules/@babylonjs/core/Engines/engineStore.js ]] || {
   echo "test-render-browser-host: @babylonjs/core did not install" >&2
+  exit 1
+}
+[[ -f $TMP/js/npm-pixi/node_modules/pixi.js/dist/pixi.mjs ]] || {
+  echo "test-render-browser-host: pixi.js did not install" >&2
   exit 1
 }
 
@@ -145,7 +159,7 @@ printf '%s\n' \
   '<!doctype html>' \
   '<meta charset="utf-8">' \
   '<title>FS.GG.Game.Render browser host smoke</title>' \
-  '<script type="importmap">{"imports":{"@babylonjs/core/":"./node_modules/@babylonjs/core/","@babylonjs/loaders/":"./node_modules/@babylonjs/loaders/"}}</script>' \
+  '<script type="importmap">{"imports":{"@babylonjs/core/":"./npm-babylon/node_modules/@babylonjs/core/","@babylonjs/loaders/":"./npm-babylon/node_modules/@babylonjs/loaders/","pixi.js":"./npm-pixi/node_modules/pixi.js/dist/pixi.mjs","pixi.js/events":"./npm-pixi/node_modules/pixi.js/dist/pixi.mjs"}}</script>' \
   '<script type="module" src="./Program.js"></script>' \
   >"$TMP/js/index.html"
 

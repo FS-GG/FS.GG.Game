@@ -41,7 +41,7 @@ type BabylonCounters =
     }
 
 /// The BabylonJS renderer adapter for the renderer-selection core, over the Babylon bindings
-/// (`FS.GG.Game.Render.BabylonBindings`, generated from FS.GG.Templates#809 by `scripts/materialize-babylon-bindings.sh`).
+/// (`FS.GG.Game.Render.BabylonBindings`, generated from FS.GG.Templates#809 by `scripts/materialize-js-bindings.sh`).
 ///
 /// It projects the SAME `FS.GG.UI.Scene` the SVG adapter draws, so one `view: 'State -> Scene` can feed both:
 /// `Rectangle`, `FilledEllipse` and `Circle` become flat meshes in the plane of the scene (later nodes nearer
