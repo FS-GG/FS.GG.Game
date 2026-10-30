@@ -15,6 +15,10 @@ name: kit-materialize
 on:
   pull_request:
     branches: [main]
+    # `edited` re-runs the reusable workflow's closing-keywords job when the PR title or body changes,
+    # as SDD and Rendering already do (FS-GG/.github#4730). Without it an edit is only re-checked on the
+    # next push.
+    types: [opened, synchronize, reopened, edited]
   # THE ON-DEMAND REPAIR BUTTON (FS-GG/.github#1845, #1853).
   #
   # Actions -> kit-materialize -> Run workflow, on any branch, by anyone with WRITE access.
