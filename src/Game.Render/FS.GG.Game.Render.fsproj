@@ -7,7 +7,8 @@
     <AssemblyName>FS.GG.Game.Render</AssemblyName>
     <Title>FS.GG.Game.Render</Title>
     <Description>Pure Scene adapter and input policy for FS.GG.Game — projects FS.GG.Game.Core simulation primitives (Point/Rect/Cell and pathfinding routes) onto FS.GG.UI.Scene drawables at the render edge, and ships the default command→key keymap binding the Game.Core command vocabulary onto FS.GG.UI.KeyboardInput's keymap mechanism. Also provides Elmish-shaped renderer backend selection (SVG default; Pixi/Babylon declared) over an adapter registry keyed by game-state type. Reaches UP to FS.GG.UI.*; no Skia, deterministic. Per ADR-0022 §2.</Description>
-    <PackageTags>fsharp;game;simulation;rendering;scene;adapter</PackageTags>
+    <PackageTags>fsharp;game;simulation;rendering;scene;adapter;fable-javascript;fable-dotnet</PackageTags>
+    <FablePackageType>library</FablePackageType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,10 +29,42 @@
     <Compile Include="DefaultKeymap.fs" />
   </ItemGroup>
 
+  <!-- Bounded Fable source view (same pattern as Game.Core / Scene.SvgBrowser): the renderer-selection
+       core is the only part that is portable to the browser, so it is the only part curated into
+       fable/. Adapter.fs reaches Game.Core Grids (DotNetOnly) and DefaultKeymap.fs reaches the .NET
+       KeyboardInput build. The files stay the SAME files compiled into the .NET assembly; this target
+       only curates which canonical sources enter fable/. A browser host (Fable-only, owns the Pixi,
+       Babylon and SVG browser adapters) consumes this view to register adapters. -->
+  <Target Name="CurateFableCompatibilityView"
+          AfterTargets="CreateFablePackageFiles">
+    <ItemGroup>
+      <_PackageFiles Remove="@(_PackageFiles)" />
+      <_PackageFiles Include="RendererSelection.fsi;RendererSelection.fs">
+        <Pack>true</Pack>
+        <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+      <_PackageFiles Include="Fable/FS.GG.Game.Render.fsproj">
+        <Pack>true</Pack>
+        <PackagePath>fable/FS.GG.Game.Render.fsproj</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup Label="fable-compatibility-metadata">
+    <None Include="Fable/compatibility-profile.v1.json"
+          Pack="true"
+          PackagePath="fable-compatibility/compatibility-profile.v1.json" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Game.Core\FS.GG.Game.Core.fsproj" />
     <PackageReference Include="FS.GG.UI.Scene" />
     <PackageReference Include="FS.GG.UI.KeyboardInput" />
+    <PackageReference Include="Fable.Package.SDK"
+                      PrivateAssets="all"
+                      IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
   </ItemGroup>
 
 </Project>

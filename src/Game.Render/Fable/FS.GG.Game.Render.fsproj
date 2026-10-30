@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    This project is package metadata, not a second implementation project. It is packed as
+    fable/FS.GG.Game.Render.fsproj beside the canonical source files selected below. The source files
+    themselves come directly from src/Game.Render and are compiled into the normal .NET assembly too.
+    Adapter.fs (Game.Core Grids) and DefaultKeymap.fs (KeyboardInput) stay outside this bounded view.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>FS.GG.Game.Render.Fable.Metadata</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+
+  <!-- Packed layout: the sources sit beside this project (fable/RendererSelection.fs). In-repo layout:
+       they sit one directory up in src/Game.Render, so a repo-local Fable host can reference this very
+       project and compile exactly the files the package would ship. -->
+  <ItemGroup Condition="Exists('RendererSelection.fs')">
+    <Compile Include="RendererSelection.fsi" />
+    <Compile Include="RendererSelection.fs" />
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('RendererSelection.fs')">
+    <Compile Include="../RendererSelection.fsi" />
+    <Compile Include="../RendererSelection.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FS.GG.UI.Scene" />
+  </ItemGroup>
+
+</Project>

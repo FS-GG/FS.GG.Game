@@ -514,6 +514,79 @@ let tests =
                 Expect.equal host.Mounted (Some RendererBackend.Svg) "SVG mounted"
             }
 
+            test "a throwing Present on the default backend releases its mount and leaves SVG Failed (#731 review)" {
+                let journal = Journal()
+
+                // The default backend itself breaks on Present: there is no fallback target, so the
+                // host must still release the broken mount rather than keep owning it.
+                let registry =
+                    svgRegistry journal
+                    |> RendererRegistry.register (faultyAdapter journal RendererBackend.Svg true false)
+
+                use host = RendererHost.create registry
+                let model = start host registry (arena 0 0)
+                Expect.equal host.Mounted (Some RendererBackend.Svg) "SVG mounted before the failing present"
+                Expect.equal (journal.Count "svg:dispose") 0 "nothing released yet"
+
+                // Host level: the failure is reported against the live attempt and the mount is released.
+                let feedback = host.Run [ RendererEffect.Present(RendererBackend.Svg, arena 1 1) ]
+
+                Expect.equal
+                    feedback
+                    [ RendererMsg.MountFailed(RendererBackend.Svg, 1, "lost context") ]
+                    "the present failure is reported against the live attempt"
+
+                Expect.isNone host.Mounted "the broken default mount is released, not retained"
+                Expect.equal (journal.Count "svg:dispose") 1 "released exactly once"
+
+                // Elmish level: the same failure, fed back, leaves SVG Failed with nothing to fall back to.
+                let model = drive host model feedback
+                Expect.equal model.Selected RendererBackend.Svg "nothing to fall back to"
+
+                Expect.equal
+                    model.Status
+                    (RendererStatus.Failed [ RendererBackend.Svg, "lost context" ])
+                    "SVG failed; no fallback loop"
+
+                let model = drive host model [ RendererMsg.StateChanged(arena 2 2) ]
+                Expect.equal model.State (arena 2 2) "state still tracked while failed"
+                Expect.isNone host.Mounted "still nothing mounted"
+                Expect.equal (journal.Count "svg:mount") 1 "no remount loop"
+                Expect.equal (journal.Count "svg:dispose") 1 "the released mount is never disposed again"
+
+                (host :> System.IDisposable).Dispose()
+                Expect.equal (journal.Count "svg:dispose") 1 "host disposal does not dispose a released mount again"
+            }
+
+            test "host Dispose swallows a throwing mount Dispose and never retries it (#731 review)" {
+                let journal = Journal()
+
+                let registry =
+                    svgRegistry journal
+                    |> RendererRegistry.register (faultyAdapter journal RendererBackend.Svg false true)
+
+                let host = RendererHost.create registry
+                host.Run [ RendererEffect.Mount(RendererBackend.Svg, 1, arena 0 0) ] |> ignore
+                Expect.equal host.Mounted (Some RendererBackend.Svg) "mounted"
+
+                try
+                    (host :> System.IDisposable).Dispose()
+                with ex ->
+                    failtestf "host Dispose must not throw when the mount's Dispose does: %s" ex.Message
+
+                Expect.equal (journal.Count "svg:dispose") 1 "the mount's Dispose was attempted once"
+                Expect.isNone host.Mounted "ownership released even though Dispose threw"
+
+                (host :> System.IDisposable).Dispose()
+                Expect.equal (journal.Count "svg:dispose") 1 "a second host Dispose does not retry the failed Dispose"
+
+                Expect.isEmpty
+                    (host.Run [ RendererEffect.Mount(RendererBackend.Svg, 2, arena 0 0) ])
+                    "the disposed host stays inert"
+
+                Expect.equal (journal.Count "svg:mount") 1 "no mount after disposal"
+            }
+
             test "a late failure from a superseded attempt of the same backend is ignored (review #3)" {
                 let journal = Journal()
 

@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.fable-compatibility-profile/v1",
+  "package": "FS.GG.Game.Render",
+  "runtime": "javascript-browser",
+  "publicDependencies": [
+    "FS.GG.UI.Scene"
+  ],
+  "nativeDependencies": [],
+  "scope": [
+    "RendererBackend identity, stable tokens and default",
+    "RendererRegistry keyed by game-state type and RendererAdapter extension point",
+    "RendererSelection Elmish model, messages, effects and attempt-token ordering contract",
+    "RendererHost effect interpreter with contained Mount, Present and Dispose failures"
+  ],
+  "dotNetOnly": [
+    "Adapter (Game.Core Grids projection)",
+    "DefaultKeymap (KeyboardInput keymap binding)"
+  ]
+}

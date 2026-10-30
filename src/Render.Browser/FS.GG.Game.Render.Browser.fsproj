@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Fable-only browser host for GAME-RENDER-MULTI-01.4 (FS.GG.Game#730). Game.Render owns the
+       renderer-selection core and its bounded Fable source view; THIS project owns the browser
+       adapters that need JavaScript interop: today the retained SVG surface, later the PixiJS and
+       BabylonJS adapters (Templates#808 / #809 bindings). It is built and exercised by
+       scripts/test-render-browser-host.sh, not by the .NET solution, exactly like Wasm.Browser.
+       Not packed: publication is explicit later scope for the plan. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>FS.GG.Game.Render.Browser</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="SvgSurface.fsi" />
+    <Compile Include="SvgSurface.fs" />
+    <Compile Include="RendererDriver.fsi" />
+    <Compile Include="RendererDriver.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Render\Fable\FS.GG.Game.Render.fsproj" />
+    <PackageReference Include="FS.GG.UI.Scene" />
+    <PackageReference Include="FS.GG.UI.Scene.SvgBrowser" />
+    <PackageReference Include="Fable.Browser.Dom" />
+  </ItemGroup>
+
+</Project>
