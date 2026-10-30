@@ -6,7 +6,7 @@
     <PackageId>FS.GG.Game.Render</PackageId>
     <AssemblyName>FS.GG.Game.Render</AssemblyName>
     <Title>FS.GG.Game.Render</Title>
-    <Description>Pure Scene adapter and input policy for FS.GG.Game — projects FS.GG.Game.Core simulation primitives (Point/Rect/Cell and pathfinding routes) onto FS.GG.UI.Scene drawables at the render edge, and ships the default command→key keymap binding the Game.Core command vocabulary onto FS.GG.UI.KeyboardInput's keymap mechanism. Reaches UP to FS.GG.UI.*; no Skia, deterministic. Per ADR-0022 §2.</Description>
+    <Description>Pure Scene adapter and input policy for FS.GG.Game — projects FS.GG.Game.Core simulation primitives (Point/Rect/Cell and pathfinding routes) onto FS.GG.UI.Scene drawables at the render edge, and ships the default command→key keymap binding the Game.Core command vocabulary onto FS.GG.UI.KeyboardInput's keymap mechanism. Also provides Elmish-shaped renderer backend selection (SVG default; Pixi/Babylon declared) over an adapter registry keyed by game-state type. Reaches UP to FS.GG.UI.*; no Skia, deterministic. Per ADR-0022 §2.</Description>
     <PackageTags>fsharp;game;simulation;rendering;scene;adapter</PackageTags>
   </PropertyGroup>
 
@@ -22,6 +22,8 @@
   <ItemGroup>
     <Compile Include="Adapter.fsi" />
     <Compile Include="Adapter.fs" />
+    <Compile Include="RendererSelection.fsi" />
+    <Compile Include="RendererSelection.fs" />
     <Compile Include="DefaultKeymap.fsi" />
     <Compile Include="DefaultKeymap.fs" />
   </ItemGroup>

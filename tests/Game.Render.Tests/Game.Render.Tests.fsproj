@@ -13,6 +13,7 @@
     <Compile Include="AdapterTests.fs" />
     <Compile Include="DefaultKeymapTests.fs" />
     <Compile Include="PortalPresentationTests.fs" />
+    <Compile Include="RendererSelectionTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

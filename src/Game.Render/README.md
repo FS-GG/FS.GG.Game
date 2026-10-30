@@ -13,5 +13,18 @@ FS.GG.Game.Render ──▶ FS.GG.UI.Scene   (adapter reaches UP — allowed)
 FS.GG.Game.Core   ──▶ (nothing)        (bottom layer)
 ```
 
+## Renderer backend selection
+
+`RendererSelection` is a pure Elmish `init`/`update` for choosing how a game state is presented at
+runtime. `RendererRegistry<'State>` holds the adapters for one game-state type; a backend is offered
+(`RendererRegistry.available`) only when an adapter is registered for it. `RendererRegistry.svg`
+registers the existing Scene path as the default SVG backend. `RendererBackend.Pixi` and
+`RendererBackend.Babylon` are declared but have no adapter until their bindings land, so they are
+refused with `RendererRefusal.Unavailable`.
+
+Switching (`RendererMsg.SelectBackend`) keeps `Model.State` and emits `Unmount`/`Mount` effects.
+`RendererHost` performs those effects, owns the mounted backend's resources outside the model and
+disposes each mount exactly once. A failed non-default mount falls back to SVG.
+
 House style: `.fsi` is the sole public surface; `net10.0`; `-preview` channel.
 See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) and [ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md).
