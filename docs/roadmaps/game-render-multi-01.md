@@ -77,12 +77,15 @@ into live in Game.Render, so the host must compile those same sources.
 
 Evidence: `scripts/test-render-browser-host.sh` packs Game.Render and checks that the `fable/` payload is
 exactly `RendererSelection.fsi/.fs` plus the metadata project, byte-identical to the canonical sources.
-It then compiles `tests/Render.Browser.Smoke` with Fable and runs 30 checks in headless Chrome:
+It then compiles `tests/Render.Browser.Smoke` with Fable and runs 42 checks in headless Chrome:
 SVG default renders two rects through the retained SvgBrowser surface; 50 presents leave one root and a
 stable node count; an unavailable Pixi is refused with the DOM untouched; a registered probe adapter
 owning a `<canvas>` is mounted only after the SVG root is released, receives state, is disposed exactly once
-and hands the same state back to SVG; a refusing backend falls back to SVG; and disposal empties the
-container. The `pixi` and `babylon` adapters in that smoke are plug-in probes, not PixiJS or BabylonJS.
+and hands the same state back to SVG; a refusing backend falls back to SVG; an adapter that dispatches from
+`Mount`, `Present` and `Dispose` never nests effects (maximum callback depth 1) and the queued messages reach
+the final model; a throwing model observer leaves model and host in sync; and disposal empties the container.
+The script also builds the unpacked `fable/` project on its own, which exercises the packed-layout branch of
+its `Exists()` conditions. The `pixi` and `babylon` adapters in that smoke are plug-in probes, not PixiJS or BabylonJS.
 `.github/workflows/render-browser-host.yml` runs the script on pull requests that touch those paths.
 
 ## Remaining for #730
@@ -96,3 +99,7 @@ container. The `pixi` and `babylon` adapters in that smoke are plug-in probes, n
   (for example `Unavailable` from a selection) replaces it before the SVG mount fails, the failure list loses
   the original reason. Fixing it needs a model field (public surface and baseline change), so it was not
   folded into this slice.
+- Known pre-existing edge (not changed here): `RendererHost` records a mount only after `adapter.Mount` returns.
+  An adapter that disposes the host re-entrantly while its own `Mount` is still running therefore leaks that mount.
+  `RendererHost.Run` is documented as not reentrant and adapters must not dispatch synchronously, so
+  `RendererDriver` queues such messages, but a direct `IDisposable.Dispose` from inside `Mount` is not guarded.

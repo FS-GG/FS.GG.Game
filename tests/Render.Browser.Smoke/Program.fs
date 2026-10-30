@@ -97,6 +97,45 @@ let refusingProbe (backend: RendererBackend) (reason: string) : RendererAdapter<
         Mount = fun _ -> Error reason
     }
 
+/// A canvas-owning probe whose Mount, Present and Dispose each call back into the page (`hook`), the way an
+/// adapter that dispatches from a callback would. `depth` counts adapter callbacks currently on the stack, so
+/// a driver that ran nested effects would show up as a maximum depth above 1.
+let reentrantProbe
+    (container: HTMLElement)
+    (backend: RendererBackend)
+    (depth: int ref)
+    (maxDepth: int ref)
+    (hook: (string -> unit) ref)
+    : RendererAdapter<Board> =
+    let name = RendererBackend.id backend
+
+    let around (event: string) (action: unit -> unit) =
+        depth.Value <- depth.Value + 1
+        maxDepth.Value <- max maxDepth.Value depth.Value
+
+        try
+            action ()
+            journal.Add(name + ":" + event)
+            hook.Value event
+        finally
+            depth.Value <- depth.Value - 1
+
+    {
+        Backend = backend
+        Mount =
+            fun _ ->
+                let canvas = document.createElement "canvas"
+                canvas.setAttribute ("data-probe", name)
+
+                around "mount" (fun () -> container.appendChild canvas |> ignore)
+
+                Ok
+                    {
+                        Present = fun _ -> around "present" ignore
+                        Dispose = fun () -> around "dispose" (fun () -> container.removeChild canvas |> ignore)
+                    }
+    }
+
 let run () =
     let container = document.createElement "div"
     container.id <- "stage"
@@ -272,6 +311,120 @@ let run () =
         (container.innerHTML)
 
     (badDriver :> System.IDisposable).Dispose()
+
+    // 8. Adapters that dispatch from Mount, Present and Dispose: the driver queues the messages, so effects
+    //    never nest (RendererHost.Run is not reentrant) and every queued message is still applied in order.
+    journal.Clear()
+    let depth = ref 0
+    let maxDepth = ref 0
+    let hook: (string -> unit) ref = ref ignore
+    let reentrantDriver: RendererDriver<Board> option ref = ref None
+
+    let reentrantRegistry =
+        svgRegistry
+        |> RendererRegistry.register (reentrantProbe container RendererBackend.Pixi depth maxDepth hook)
+
+    let reentrant =
+        RendererDriver.start reentrantRegistry { Tick = 20; TokenX = 20.0 } ignore
+
+    reentrantDriver.Value <- Some reentrant
+
+    hook.Value <-
+        fun event ->
+            match reentrantDriver.Value with
+            | None -> ()
+            | Some d ->
+                match event with
+                | "mount" -> d.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi) // a no-op re-selection
+                | "present" -> d.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+                | _ -> d.Dispatch(RendererMsg.StateChanged { Tick = 22; TokenX = 22.0 })
+
+    reentrant.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+    reentrant.Dispatch(RendererMsg.StateChanged { Tick = 21; TokenX = 21.0 })
+
+    check
+        "adapter callbacks never nest (max depth 1)"
+        (maxDepth.Value = 1 && depth.Value = 0)
+        (sprintf "max=%d now=%d journal=%s" maxDepth.Value depth.Value (String.concat "," journal))
+
+    check
+        "queued re-entrant messages ran in order (mount, present, dispose)"
+        (List.ofSeq journal = [ "pixi:mount"; "pixi:present"; "pixi:dispose" ])
+        (String.concat "," journal)
+
+    check
+        "re-entrant dispatches reach the final model"
+        (reentrant.Model.Selected = RendererBackend.Svg
+         && reentrant.Model.State.Tick = 22
+         && reentrant.Model.Status = RendererStatus.Active)
+        (sprintf "%A %A" reentrant.Model.Selected reentrant.Model.State)
+
+    check
+        "the host realised the final model (svg mounted, probe canvas gone)"
+        (reentrant.Mounted = Some RendererBackend.Svg
+         && count container "svg" = 1
+         && count container "canvas" = 0)
+        (container.innerHTML)
+
+    check "svg shows the last re-entrant state" (has "x=\"22\" y=\"40\"" container.innerHTML) (container.innerHTML)
+
+    (reentrant :> System.IDisposable).Dispose()
+    check "re-entrant driver leaves the container empty" (container.children.length = 0) (container.innerHTML)
+
+    check
+        "re-entrant probe balanced"
+        (journalCount "pixi:mount" = journalCount "pixi:dispose")
+        (String.concat "," journal)
+
+    // 9. A throwing model observer must not leave the model ahead of the host or drop the effects.
+    let observerThrows = ref true
+    let observedSelections = ResizeArray<RendererBackend>()
+
+    let observed =
+        RendererDriver.start
+            (svgRegistry
+             |> RendererRegistry.register (canvasProbe container RendererBackend.Pixi))
+            { Tick = 30; TokenX = 30.0 }
+            (fun m ->
+                observedSelections.Add m.Selected
+
+                if observerThrows.Value && m.Selected = RendererBackend.Pixi then
+                    failwith "observer boom")
+
+    let mutable raised = ""
+
+    try
+        observed.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+    with ex ->
+        raised <- ex.Message
+
+    check "a throwing observer's failure reaches the dispatcher" (raised = "observer boom") raised
+
+    check
+        "model and host stay in sync after a throwing observer"
+        (observed.Model.Selected = RendererBackend.Pixi
+         && observed.Mounted = Some RendererBackend.Pixi
+         && count container "canvas[data-probe=pixi]" = 1
+         && count container "svg" = 0)
+        (sprintf "%A %A %s" observed.Model.Selected observed.Mounted container.innerHTML)
+
+    observerThrows.Value <- false
+    observed.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+    check
+        "the driver keeps working after an observer failure"
+        (observed.Mounted = Some RendererBackend.Svg
+         && count container "svg" = 1
+         && count container "canvas" = 0)
+        (container.innerHTML)
+
+    check
+        "the observer saw every model"
+        (List.ofSeq observedSelections = [ RendererBackend.Svg; RendererBackend.Pixi; RendererBackend.Svg ])
+        (sprintf "%A" (List.ofSeq observedSelections))
+
+    (observed :> System.IDisposable).Dispose()
+    check "observer driver leaves the container empty" (container.children.length = 0) (container.innerHTML)
 
 let report () =
     let pre = document.createElement "pre"

@@ -21,7 +21,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=30
+MIN_CHECKS=42
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -91,6 +91,22 @@ unzip -q "$TMP/feed/$PACKAGE" 'fable/*' -d "$TMP/unpacked"
 cmp "$TMP/unpacked/fable/RendererSelection.fs" src/Game.Render/RendererSelection.fs
 cmp "$TMP/unpacked/fable/RendererSelection.fsi" src/Game.Render/RendererSelection.fsi
 cmp "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" src/Game.Render/Fable/FS.GG.Game.Render.fsproj
+
+# The packed layout puts the sources beside the project (the in-repo layout reaches one directory up), so
+# build the unpacked view on its own to exercise that branch of the project's Exists() conditions. The
+# consumer's central package pin stands in for the one a Fable consumer's restore provides.
+SCENE_VERSION="$(sed -n 's/.*Include="FS.GG.UI.Scene" Version="\([^"]*\)".*/\1/p' Directory.Packages.local.props | head -n 1)"
+[[ -n $SCENE_VERSION ]] || {
+  echo "test-render-browser-host: could not read the FS.GG.UI.Scene pin" >&2
+  exit 1
+}
+printf '%s\n' \
+  '<Project>' \
+  '  <PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup>' \
+  "  <ItemGroup><PackageVersion Include=\"FS.GG.UI.Scene\" Version=\"$SCENE_VERSION\" /></ItemGroup>" \
+  '</Project>' \
+  >"$TMP/unpacked/Directory.Packages.props"
+NUGET_PACKAGES="$TMP/packed-view-packages" dotnet build "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" -c Release -v quiet >/dev/null
 
 # 2. Fable compile of the host and smoke.
 dotnet restore tests/Render.Browser.Smoke/FS.GG.Game.Render.Browser.Smoke.fsproj >/dev/null

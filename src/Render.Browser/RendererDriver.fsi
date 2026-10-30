@@ -27,7 +27,10 @@ type RendererDriver<'State> =
 module RendererDriver =
 
     /// Select the default backend, mount it with `state` and return the driver. `onChange` observes every
-    /// model produced, in order, including the initial one.
+    /// model produced, in order, including the initial one, AFTER that model's effects have run, so it never
+    /// sees a model the host has not realised. A throwing observer cannot abort the drain: the remaining
+    /// messages and effects still run, and its first failure is raised from the `Dispatch` (or `start`) that
+    /// was draining.
     val start:
         registry: RendererRegistry<'State> ->
         state: 'State ->
