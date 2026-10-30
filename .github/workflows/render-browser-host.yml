@@ -47,7 +47,7 @@ permissions:
 
 jobs:
   browser-host:
-    name: Renderer host browser smoke (SVG through Fable)
+    name: Renderer host browser smoke (SVG, Pixi and Babylon through Fable)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

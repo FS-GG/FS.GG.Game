@@ -2,10 +2,10 @@
 
   <!-- The Fable-only browser host for GAME-RENDER-MULTI-01.4 (FS.GG.Game#730). Game.Render owns the
        renderer-selection core and its bounded Fable source view; THIS project owns the browser
-       adapters that need JavaScript interop: today the retained SVG surface, later the PixiJS and
-       BabylonJS adapters. The Babylon adapter consumes the Babylon bindings (Templates#809 / PR #812) through
-       src/Render.Browser.Bindings, which compiles the bindings source generated from a pinned template commit;
-       the PixiJS adapter waits for Templates#808. It is built and exercised by
+       adapters that need JavaScript interop: the retained SVG surface and the PixiJS and BabylonJS
+       adapters. The Babylon and Pixi adapters consume the bindings (Templates#809 / PR #812 and #808 / PR #814)
+       through src/Render.Browser.Bindings, which compiles the bindings source generated from a pinned template
+       commit. It is built and exercised by
        scripts/test-render-browser-host.sh, not by the .NET solution, exactly like Wasm.Browser.
        Not packed: publication is explicit later scope for the plan. -->
   <PropertyGroup>

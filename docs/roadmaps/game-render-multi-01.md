@@ -127,7 +127,7 @@ its `Exists()` conditions. The `pixi` adapter and the refusing `babylon` adapter
 - `PixiSurface` (`src/Render.Browser`) is registered with `RendererRegistry.register` and projects the same
   `FS.GG.UI.Scene` as the SVG and Babylon adapters (the projection is shared in an internal `SceneShapes`): one
   `Graphics` display object per drawable node, reconciled in place, later nodes on top. Pixi is unlit, so its pixels
-  are the scene colours exactly.
+  are the scene colours to within 2 per channel.
 - Pixi's renderer initialises asynchronously, after `Mount` has returned `Ok`. States presented meanwhile are kept
   (the latest wins) and drawn when initialisation completes. A `Dispose` during initialisation removes the canvas at
   once and destroys the application when initialisation settles. An initialisation that fails is reported by

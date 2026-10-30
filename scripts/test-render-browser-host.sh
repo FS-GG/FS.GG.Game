@@ -26,7 +26,7 @@
 #                                                 "--headless=new --no-sandbox --use-angle=vulkan
 #                                                 --enable-features=Vulkan --ignore-gpu-blocklist"
 #          RENDER_SMOKE_KEEP=1                    keep the temp directory for inspection
-#          BABYLON_BINDINGS_TEMPLATES_ROOT=<dir>  a FS.GG.Templates checkout at the pinned commit (offline use)
+#          JS_BINDINGS_TEMPLATES_ROOT=<dir>       a FS.GG.Templates checkout at the pinned commit (offline use)
 #
 set -euo pipefail
 

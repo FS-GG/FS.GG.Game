@@ -8,10 +8,11 @@ module FS.GG.Game.Render.Browser.Smoke.Program
 //
 // The "pixi" adapter and the refusing "babylon" adapter in run() are PLUG-IN PROBES (a stub canvas / a refusing
 // mount). They are NOT PixiJS or BabylonJS adapters and prove nothing about those engines. The REAL BabylonJS
-// adapter (BabylonSurface over the packed Babylon bindings) is exercised by runBabylon(): a WebGL canvas, an
-// engine, meshes and a render loop are acquired, a pixel is read back from the canvas, structural counters are
-// read from Babylon's own engine store, and SVG -> Babylon -> SVG switches are checked for state and disposal.
-// The PixiJS adapter waits for Templates#808.
+// adapter (BabylonSurface over the Babylon bindings generated from the pinned Templates source) is exercised by
+// runBabylon(): a WebGL canvas, an engine, meshes and a render loop are acquired, a pixel is read back from the
+// canvas, structural counters are read from Babylon's own engine store, and SVG -> Babylon -> SVG switches are
+// checked for state and disposal. runPixi() does the same for the real PixiJS adapter (PixiSurface), and
+// runThreeBackends() switches SVG <-> Pixi <-> Babylon on one game state.
 
 open Browser.Dom
 open Browser.Types
@@ -980,7 +981,7 @@ let waitUntil (condition: unit -> bool) (maxFrames: int) : Async<int> =
     }
 
 /// The Pixi adapter on the same game state: `view` is the function the SVG and Babylon adapters use, and Pixi
-/// draws it unlit, so its pixels are the scene colours exactly.
+/// draws it unlit, so its pixels are the scene colours to within 2 per channel.
 let runPixi () : Async<unit> =
     async {
         let container = document.createElement "div"
@@ -1072,12 +1073,12 @@ let runPixi () : Async<unit> =
             (sprintf "%A after %d frames" tokenPixel framesToFirstPixel)
 
         check
-            "the token pixel is the token colour exactly (200,40,90)"
+            "the token pixel is the token colour within 2 per channel (200,40,90)"
             (near [| 200; 40; 90 |] tokenPixel 2)
             (sprintf "%A" tokenPixel)
 
         check
-            "the background pixel is the background colour exactly (10,20,30)"
+            "the background pixel is the background colour within 2 per channel (10,20,30)"
             (near [| 10; 20; 30 |] backgroundPixel 2)
             (sprintf "%A" backgroundPixel)
 
@@ -1527,7 +1528,7 @@ let runThreeBackends () : Async<unit> =
                 (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.State)
 
             // The canvas backends draw asynchronously (shader compilation / renderer initialisation): wait for the
-            // token to appear where the state puts it, then require the exact colour for that backend.
+            // token to appear where the state puts it, then require that backend's colour (Pixi within 2 per channel, Babylon within 4 of the lit colour).
             match backend with
             | RendererBackend.Svg ->
                 check
@@ -1543,7 +1544,7 @@ let runThreeBackends () : Async<unit> =
                     renderedRight.Value <- renderedRight.Value + 1
 
                 check
-                    (name + ": the pixi token pixel is exact (200,40,90)")
+                    (name + ": the pixi token pixel is within 2 per channel (200,40,90)")
                     (near [| 200; 40; 90 |] pixel 2)
                     (sprintf "%A" pixel)
             | RendererBackend.Babylon ->
@@ -1585,7 +1586,7 @@ let runThreeBackends () : Async<unit> =
             previous <- backend
 
         check
-            "all four canvas renders matched their expected pixels"
+            "all five canvas renders matched their expected pixels"
             (renderedRight.Value = 5)
             (string renderedRight.Value)
 
