@@ -10,22 +10,33 @@
 # 3. Loads the output in headless Chromium/Chrome and requires every smoke check to pass.
 #
 # The smoke proves the SVG adapter renders through RendererSelection + RendererHost + the retained
-# SvgBrowser surface, and that a later adapter can plug in. It does NOT exercise PixiJS or BabylonJS
-# (their adapters wait for the Templates#808/#809 bindings).
+# SvgBrowser surface, that a later adapter can plug in, and that the BabylonJS adapter really renders: a WebGL
+# canvas, one engine, meshes, a pixel read back, SVG -> Babylon -> SVG with the game state preserved and every
+# resource released. It does NOT exercise PixiJS (its adapter waits for the Templates#808 bindings).
+#
+# The Babylon bindings are not vendored. scripts/materialize-babylon-bindings.sh generates them from the pinned
+# FS.GG.Templates commit (eng/babylon-bindings/pin.env) under artifacts/babylon-bindings, and the committed
+# src/Render.Browser.Bindings project compiles the generated source; the exact Babylon npm closure is installed
+# beside the output and mapped with an import map.
 #
 #   usage: scripts/test-render-browser-host.sh
 #   env:   RENDER_SMOKE_BROWSER=<chrome binary>   (default: first of chromium, google-chrome, chrome)
+#          RENDER_SMOKE_BROWSER_FLAGS=<flags>     browser flags (default: headless, software WebGL through
+#                                                 SwiftShader, which is what CI uses). For a GPU host use e.g.
+#                                                 "--headless=new --no-sandbox --use-angle=vulkan
+#                                                 --enable-features=Vulkan --ignore-gpu-blocklist"
 #          RENDER_SMOKE_KEEP=1                    keep the temp directory for inspection
+#          BABYLON_BINDINGS_TEMPLATES_ROOT=<dir>  a FS.GG.Templates checkout at the pinned commit (offline use)
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=42
+MIN_CHECKS=96
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
-for command in dotnet node unzip cmp grep sed; do
+for command in dotnet node npm git python3 unzip cmp grep sed; do
   command -v "$command" >/dev/null || {
     echo "test-render-browser-host: required command '$command' was not found" >&2
     exit 2
@@ -56,6 +67,10 @@ mkdir -p "$TMP/feed" "$TMP/js"
 
 cd "$REPO_ROOT"
 dotnet tool restore >/dev/null
+
+# 0. The packed Babylon bindings and their exact npm closure (never committed; see the header).
+"$SCRIPT_DIR/materialize-babylon-bindings.sh" "$REPO_ROOT/artifacts/babylon-bindings"
+BABYLON_INTEGRITY="$(sed -n 's/^BABYLON_CORE_INTEGRITY=//p' "$REPO_ROOT/eng/babylon-bindings/pin.env" | head -n 1)"
 
 # 1. The packed Fable source view.
 dotnet pack src/Game.Render/FS.GG.Game.Render.fsproj -c Release -p:PackageVersion="$PACK_VERSION" -o "$TMP/feed" >/dev/null
@@ -113,36 +128,88 @@ dotnet restore tests/Render.Browser.Smoke/FS.GG.Game.Render.Browser.Smoke.fsproj
 dotnet fable tests/Render.Browser.Smoke --outDir "$TMP/js" --noCache
 echo
 
+# The exact Babylon npm closure the bindings were qualified against, resolved by an import map because the Fable
+# output imports `@babylonjs/core/...` by bare specifier.
+cp "$REPO_ROOT/artifacts/babylon-bindings/npm/package.json" "$REPO_ROOT/artifacts/babylon-bindings/npm/package-lock.json" "$TMP/js/"
+(cd "$TMP/js" && npm ci --ignore-scripts --omit=dev --no-audit --no-fund >/dev/null)
+grep -Fq "$BABYLON_INTEGRITY" "$TMP/js/package-lock.json" || {
+  echo "test-render-browser-host: the installed Babylon closure is not the pinned @babylonjs/core integrity" >&2
+  exit 1
+}
+[[ -f $TMP/js/node_modules/@babylonjs/core/Engines/engineStore.js ]] || {
+  echo "test-render-browser-host: @babylonjs/core did not install" >&2
+  exit 1
+}
+
 printf '%s\n' \
   '<!doctype html>' \
   '<meta charset="utf-8">' \
   '<title>FS.GG.Game.Render browser host smoke</title>' \
+  '<script type="importmap">{"imports":{"@babylonjs/core/":"./node_modules/@babylonjs/core/","@babylonjs/loaders/":"./node_modules/@babylonjs/loaders/"}}</script>' \
   '<script type="module" src="./Program.js"></script>' \
   >"$TMP/js/index.html"
 
-# 3. Real browser run.
-"$BROWSER" \
-  --headless=new \
-  --no-sandbox \
-  --disable-gpu \
+# 3. Real browser run, in REAL time. A WebGL canvas needs compositor frames (Babylon compiles shaders
+#    asynchronously and the smoke waits for the first drawn frame), and a virtual-time browser run delivers only a
+#    couple of animation frames, so the page reports through the console instead: it logs one
+#    RENDER-SMOKE-RESULT line (counts and a base64 report) when it is done and this script waits for that line,
+#    bounded, then stops the browser.
+#
+#    The default flags give WebGL through SwiftShader (software), which is what a CI runner has;
+#    RENDER_SMOKE_BROWSER_FLAGS selects a GPU instead. The result names the WebGL renderer that ran.
+BROWSER_FLAGS="${RENDER_SMOKE_BROWSER_FLAGS:---headless=new --no-sandbox --disable-gpu --enable-unsafe-swiftshader --use-angle=swiftshader}"
+BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-120}"
+mkdir -p "$TMP/profile"
+: >"$TMP/browser.stderr"
+# shellcheck disable=SC2086
+setsid "$BROWSER" \
+  $BROWSER_FLAGS \
+  --user-data-dir="$TMP/profile" \
   --allow-file-access-from-files \
-  --virtual-time-budget=10000 \
-  --dump-dom "file://$TMP/js/index.html" \
-  >"$TMP/browser-dom.html" 2>"$TMP/browser.stderr"
+  --enable-logging=stderr --v=0 \
+  "file://$TMP/js/index.html" \
+  >/dev/null 2>"$TMP/browser.stderr" &
+BROWSER_PID=$!
+stop_browser() { kill -- "-$BROWSER_PID" 2>/dev/null || kill "$BROWSER_PID" 2>/dev/null || true; }
+trap 'stop_browser; [[ ${RENDER_SMOKE_KEEP:-0} == 1 ]] || rm -rf "$TMP"' EXIT
 
-unescape() { sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&quot;/"/g' -e 's/&amp;/\&/g'; }
+waited=0
+until grep -q 'RENDER-SMOKE-RESULT' "$TMP/browser.stderr" 2>/dev/null; do
+  if ! kill -0 "$BROWSER_PID" 2>/dev/null; then
+    break
+  fi
+  if [[ $waited -ge $((BROWSER_TIMEOUT * 4)) ]]; then
+    break
+  fi
+  sleep 0.25
+  waited=$((waited + 1))
+done
+stop_browser
 
-if ! grep -q 'id="smoke-result"' "$TMP/browser-dom.html"; then
-  echo "test-render-browser-host: the page never reported a result (the module did not run)" >&2
-  cat "$TMP/browser-dom.html" "$TMP/browser.stderr" >&2
+if ! grep -q 'RENDER-SMOKE-RESULT' "$TMP/browser.stderr"; then
+  echo "test-render-browser-host: the page never reported a result within ${BROWSER_TIMEOUT}s (the module did not run or did not finish)" >&2
+  grep -E 'CONSOLE|Uncaught' "$TMP/browser.stderr" | head -n 40 >&2 || true
   exit 1
 fi
 
-CHECKS="$(sed -n 's/.*id="smoke-result"[^>]*data-checks="\([0-9]*\)".*/\1/p' "$TMP/browser-dom.html" | head -n 1)"
-FAILURES="$(sed -n 's/.*id="smoke-result"[^>]*data-failures="\([0-9]*\)".*/\1/p' "$TMP/browser-dom.html" | head -n 1)"
-unescape <"$TMP/browser-dom.html" |
-  sed -e 's|^.*<pre id="smoke-result"[^>]*>||' -e 's|</pre>.*$||' |
-  grep -E '^(PASS|FAIL) ' || true
+# The report line is: RENDER-SMOKE-RESULT checks=<n> failures=<n> <base64 of the PASS/FAIL/INFO lines>
+python3 -I - "$TMP/browser.stderr" "$TMP/result.txt" "$TMP/result.counts" <<'PY'
+import base64, re, sys
+
+stderr, report, counts = sys.argv[1:4]
+found = None
+for line in open(stderr, errors="replace"):
+    match = re.search(r"RENDER-SMOKE-RESULT checks=(\d+) failures=(\d+) ([A-Za-z0-9+/=]*)", line)
+    if match:
+        found = match
+if found is None:
+    sys.exit("test-render-browser-host: could not read the smoke result")
+open(report, "w").write(base64.b64decode(found.group(3)).decode())
+open(counts, "w").write(f"{found.group(1)} {found.group(2)}\n")
+PY
+
+read -r CHECKS FAILURES <"$TMP/result.counts"
+grep -E '^(PASS|FAIL|INFO) ' "$TMP/result.txt" || true
 
 if [[ -z $CHECKS || -z $FAILURES ]]; then
   echo "test-render-browser-host: could not read the smoke result" >&2
@@ -155,9 +222,10 @@ if [[ $CHECKS -lt $MIN_CHECKS ]]; then
   exit 1
 fi
 
-if [[ $FAILURES -ne 0 ]] || ! grep -q 'data-smoke="pass"' "$TMP/browser-dom.html"; then
+if [[ $FAILURES -ne 0 ]] || grep -q '^FAIL ' "$TMP/result.txt"; then
   echo "test-render-browser-host: $FAILURES of $CHECKS browser checks failed" >&2
   exit 1
 fi
 
-echo "test-render-browser-host: OK — $CHECKS browser checks passed; package=$PACKAGE browser=$("$BROWSER" --version 2>/dev/null | head -n 1)"
+WEBGL="$(grep -E '^INFO webgl: ' "$TMP/result.txt" | head -n 1 | sed 's/^INFO webgl: //')"
+echo "test-render-browser-host: OK — $CHECKS browser checks passed; package=$PACKAGE browser=$("$BROWSER" --version 2>/dev/null | head -n 1) flags=[$BROWSER_FLAGS] webgl=[$WEBGL]"

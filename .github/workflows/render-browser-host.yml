@@ -2,8 +2,9 @@ name: render-browser-host
 
 # GAME-RENDER-MULTI-01.4 (FS.GG.Game#730): the Fable-only browser host for the renderer-selection core.
 # Packs FS.GG.Game.Render, checks its bounded Fable source view, compiles src/Render.Browser and
-# tests/Render.Browser.Smoke with Fable, and runs every smoke check in headless Chrome. It does not
-# exercise PixiJS or BabylonJS: their adapters wait for the Templates#808/#809 bindings.
+# tests/Render.Browser.Smoke with Fable, and runs every smoke check in headless Chrome, including the BabylonJS
+# adapter on WebGL (software, through SwiftShader, on this runner). The Babylon bindings are generated from the
+# pinned FS.GG.Templates commit by scripts/materialize-babylon-bindings.sh. It does not exercise PixiJS.
 on:
   push:
     branches: [main]
@@ -15,8 +16,11 @@ on:
       - "Directory.Packages.*"
       - "src/Game.Render/**"
       - "src/Render.Browser/**"
+      - "src/Render.Browser.Bindings/**"
       - "tests/Render.Browser.Smoke/**"
       - "scripts/test-render-browser-host.sh"
+      - "scripts/materialize-babylon-bindings.sh"
+      - "eng/babylon-bindings/**"
   pull_request:
     branches: [main]
     paths:
@@ -27,8 +31,11 @@ on:
       - "Directory.Packages.*"
       - "src/Game.Render/**"
       - "src/Render.Browser/**"
+      - "src/Render.Browser.Bindings/**"
       - "tests/Render.Browser.Smoke/**"
       - "scripts/test-render-browser-host.sh"
+      - "scripts/materialize-babylon-bindings.sh"
+      - "eng/babylon-bindings/**"
   workflow_dispatch:
 
 concurrency:

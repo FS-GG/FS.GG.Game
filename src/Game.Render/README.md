@@ -19,8 +19,8 @@ FS.GG.Game.Core   ──▶ (nothing)        (bottom layer)
 runtime. `RendererRegistry<'State>` holds the adapters for one game-state type; a backend is offered
 (`RendererRegistry.available`) only when an adapter is registered for it. `RendererRegistry.svg`
 registers the existing Scene path as the default SVG backend. `RendererBackend.Pixi` and
-`RendererBackend.Babylon` are declared but have no adapter until their bindings land, so they are
-refused with `RendererRefusal.Unavailable`.
+`RendererBackend.Babylon` are declared but this package ships no adapter for either (the Babylon adapter lives in the
+Fable-only `src/Render.Browser` host), so a backend nobody registered is refused with `RendererRefusal.Unavailable`.
 
 Switching (`RendererMsg.SelectBackend`) keeps `Model.State` and emits `Unmount`/`Mount` effects.
 `RendererHost` performs those effects, owns the mounted backend's resources outside the model and
@@ -45,8 +45,8 @@ Ordering contract: **unmount-then-mount, with SVG fallback.**
 The package also ships a bounded Fable source view (`fable/RendererSelection.fsi` and `.fs`) so a
 Fable-compiled browser host can register adapters against the same `RendererRegistry`. `Adapter` and
 `DefaultKeymap` are .NET-only and are not in that view. The repository's `src/Render.Browser` project
-(not packed) is that host: it mounts the existing SVG surface (`SvgBrowser`) and is where the PixiJS and
-BabylonJS adapters will live. `scripts/test-render-browser-host.sh` proves it in a headless browser.
+(not packed) is that host: it mounts the existing SVG surface (`SvgBrowser`), hosts the BabylonJS adapter
+(over the packed Templates#809 bindings) and is where the PixiJS adapter will live. `scripts/test-render-browser-host.sh` proves it in a headless browser.
 
 House style: `.fsi` is the sole public surface; `net10.0`; `-preview` channel.
 See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) and [ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md).

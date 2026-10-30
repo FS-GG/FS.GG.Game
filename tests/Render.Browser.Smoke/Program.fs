@@ -6,12 +6,16 @@ module FS.GG.Game.Render.Browser.Smoke.Program
 // state survives switching, an unavailable backend is refused without touching the DOM, and later adapters
 // (Pixi/Babylon) can plug in through RendererRegistry.register and own/release real DOM resources.
 //
-// The "pixi" and "babylon" adapters below are PLUG-IN PROBES (a stub canvas / a refusing mount). They are
-// NOT PixiJS or BabylonJS adapters and prove nothing about those engines: the three-backend render test
-// stays owed until the Templates#808/#809 bindings exist.
+// The "pixi" adapter and the refusing "babylon" adapter in run() are PLUG-IN PROBES (a stub canvas / a refusing
+// mount). They are NOT PixiJS or BabylonJS adapters and prove nothing about those engines. The REAL BabylonJS
+// adapter (BabylonSurface over the packed Babylon bindings) is exercised by runBabylon(): a WebGL canvas, an
+// engine, meshes and a render loop are acquired, a pixel is read back from the canvas, structural counters are
+// read from Babylon's own engine store, and SVG -> Babylon -> SVG switches are checked for state and disposal.
+// The PixiJS adapter waits for Templates#808.
 
 open Browser.Dom
 open Browser.Types
+open Fable.Core
 open FS.GG.Game.Render
 open FS.GG.Game.Render.Browser
 open FS.GG.UI.Scene
@@ -46,7 +50,12 @@ let view (board: Board) : Scene =
     }
 
 let results = ResizeArray<string>()
+let infos = ResizeArray<string>()
 let mutable failures = 0
+
+/// Environment facts the evidence needs (never counted as a check).
+let info (name: string) (value: string) =
+    infos.Add("INFO " + name + ": " + value)
 
 let check (name: string) (ok: bool) (detail: string) =
     if ok then
@@ -135,6 +144,29 @@ let reentrantProbe
                         Dispose = fun () -> around "dispose" (fun () -> container.removeChild canvas |> ignore)
                     }
     }
+
+/// Asserts, from INSIDE the observer, that the host has realised the model it is told about (the driver's
+/// "the observer never sees an unrealised model" contract). `Mounted` must be the selected backend, or nothing
+/// when the selected backend's mount has just failed and its fallback is still queued; it may never be the
+/// previous backend. The initial model is observed while `start` is still running, before the driver value
+/// exists, so it is not asserted from inside. `strict` additionally requires the selected backend to be mounted
+/// (for runs where every mount succeeds). Violations are collected and checked by the caller.
+type ObserverAudit() =
+    member val Violations = ResizeArray<string>()
+    member val Realised = 0 with get, set
+    member val Driver: RendererDriver<Board> option = None with get, set
+
+    member this.Observe(strict: bool) : RendererModel<Board> -> unit =
+        fun m ->
+            match this.Driver with
+            | None -> ()
+            | Some d ->
+                let selected = Some m.Selected
+
+                if d.Mounted = selected then
+                    this.Realised <- this.Realised + 1
+                elif strict || d.Mounted.IsSome then
+                    this.Violations.Add(sprintf "%A observed while %A was mounted" m.Selected d.Mounted)
 
 let run () =
     let container = document.createElement "div"
@@ -379,6 +411,8 @@ let run () =
     // 9. A throwing model observer must not leave the model ahead of the host or drop the effects.
     let observerThrows = ref true
     let observedSelections = ResizeArray<RendererBackend>()
+    let audit = ObserverAudit()
+    let observeRealised = audit.Observe true
 
     let observed =
         RendererDriver.start
@@ -387,10 +421,12 @@ let run () =
             { Tick = 30; TokenX = 30.0 }
             (fun m ->
                 observedSelections.Add m.Selected
+                observeRealised m
 
                 if observerThrows.Value && m.Selected = RendererBackend.Pixi then
                     failwith "observer boom")
 
+    audit.Driver <- Some observed
     let mutable raised = ""
 
     try
@@ -423,22 +459,516 @@ let run () =
         (List.ofSeq observedSelections = [ RendererBackend.Svg; RendererBackend.Pixi; RendererBackend.Svg ])
         (sprintf "%A" (List.ofSeq observedSelections))
 
+    check
+        "the observer never saw an unrealised model (Mounted asserted inside it)"
+        (audit.Violations.Count = 0 && audit.Realised = 2)
+        (sprintf "realised=%d violations=%s" audit.Realised (String.concat "; " audit.Violations))
+
     (observed :> System.IDisposable).Dispose()
     check "observer driver leaves the container empty" (container.children.length = 0) (container.innerHTML)
 
+
+/// Babylon's own books, read straight from its engine store and the live scenes: independent of the adapter's
+/// counters, so a leak the adapter does not know about still shows.
+module Probe =
+    [<Import("EngineStore", "@babylonjs/core/Engines/engineStore.js"); Emit("$0.Instances.length")>]
+    let engines () : int = jsNative
+
+    [<Import("EngineStore", "@babylonjs/core/Engines/engineStore.js");
+      Emit("$0.Instances.reduce((n, e) => n + e.activeRenderLoops.length, 0)")>]
+    let renderLoops () : int = jsNative
+
+    [<Import("EngineStore", "@babylonjs/core/Engines/engineStore.js");
+      Emit("$0.Instances.reduce((n, e) => n + e.scenes.length, 0)")>]
+    let scenes () : int = jsNative
+
+    [<Import("EngineStore", "@babylonjs/core/Engines/engineStore.js");
+      Emit("$0.Instances.reduce((n, e) => n + e.scenes.reduce((m, s) => m + s.meshes.length, 0), 0)")>]
+    let meshes () : int = jsNative
+
+    [<Import("EngineStore", "@babylonjs/core/Engines/engineStore.js");
+      Emit("$0.Instances.reduce((n, e) => n + e.scenes.reduce((m, s) => m + s.materials.length, 0), 0)")>]
+    let materials () : int = jsNative
+
+    [<Emit("navigator.userAgent")>]
+    let userAgent () : string = jsNative
+
+    /// A throwaway WebGL context's version and unmasked renderer string.
+    [<Emit("(() => { const c = document.createElement('canvas'); const g = c.getContext('webgl2') || c.getContext('webgl'); if (!g) return 'none'; const e = g.getExtension('WEBGL_debug_renderer_info'); const r = e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER); const v = g.getParameter(g.VERSION); const l = g.getExtension('WEBGL_lose_context'); if (l) l.loseContext(); return v + ' | ' + r })()")>]
+    let webGlInfo () : string = jsNative
+
+    /// RGBA of one pixel of a WebGL canvas, read in the task that rendered it (before the drawing buffer is
+    /// presented and cleared), through a 2D canvas.
+    [<Emit("((cv, px, py) => { const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g2 = t.getContext('2d'); g2.drawImage(cv, 0, 0); return Array.from(g2.getImageData(px, py, 1, 1).data) })($0, $1, $2)")>]
+    let pixel (canvas: HTMLCanvasElement) (x: int) (y: int) : int[] = jsNative
+
+    /// Make every canvas refuse `getContext` (no WebGL, no 2D) until the returned function restores it.
+    [<Emit("(() => { const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function () { return null }; return () => { p.getContext = o } })()")>]
+    let blockContexts () : unit -> unit = jsNative
+
+let near (expected: int[]) (actual: int[]) (tolerance: int) =
+    actual.Length >= 3
+    && Array.forall2 (fun e a -> abs (e - a) <= tolerance) expected.[0..2] actual.[0..2]
+
+/// The same game state, drawn by the Babylon adapter: `view` is the very function the SVG adapter uses.
+let nextFrame: Async<unit> =
+    Async.FromContinuations(fun (continuation, _, _) ->
+        window.requestAnimationFrame (fun _ -> continuation ()) |> ignore)
+
+/// Present the unchanged state frame by frame until the pixel at (x, y) satisfies `accept`, at most `maxFrames`
+/// frames; returns the last pixel and the frames it took.
+let awaitPixel
+    (driver: RendererDriver<Board>)
+    (canvas: unit -> HTMLCanvasElement)
+    (x: int)
+    (y: int)
+    (accept: int[] -> bool)
+    (maxFrames: int)
+    : Async<int[] * int> =
+    async {
+        let pixel = ref (Probe.pixel (canvas ()) x y)
+        let frames = ref 0
+
+        while not (accept pixel.Value) && frames.Value < maxFrames do
+            do! nextFrame
+            driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+            pixel.Value <- Probe.pixel (canvas ()) x y
+            frames.Value <- frames.Value + 1
+
+        return pixel.Value, frames.Value
+    }
+
+let runBabylon () : Async<unit> =
+    async {
+        let container = document.createElement "div"
+        container.id <- "stage-babylon"
+        document.body.appendChild container |> ignore
+
+        let glInfo = Probe.webGlInfo ()
+        info "webgl" glInfo
+        info "user-agent" (Probe.userAgent ())
+        check "this browser offers a WebGL context" (glInfo <> "none") glInfo
+
+        let svgOptions = SvgSurface.defaultOptions "Smoke board" 200.0 100.0
+
+        let babylonOptions =
+            BabylonSurface.defaultOptions "Smoke board (babylon)" 200.0 100.0
+
+        let before = BabylonSurface.counters ()
+
+        let registry =
+            SvgSurface.registry container svgOptions view
+            |> BabylonSurface.register container babylonOptions view
+
+        let initial = { Tick = 0; TokenX = 10.0 }
+        let babylonAudit = ObserverAudit()
+        let driver = RendererDriver.start registry initial (babylonAudit.Observe false)
+        babylonAudit.Driver <- Some driver
+
+        let babylonCanvas () =
+            container.querySelector "canvas[data-renderer=babylon]" :?> HTMLCanvasElement
+
+        check
+            "babylon is offered beside svg once registered"
+            (RendererSelection.available driver.Model = [ RendererBackend.Svg; RendererBackend.Babylon ])
+            (sprintf "%A" (RendererSelection.available driver.Model))
+
+        check
+            "svg stays the default with babylon registered"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Mounted = Some RendererBackend.Svg
+             && Probe.engines () = 0)
+            (sprintf "%A %A engines=%d" driver.Model.Selected driver.Mounted (Probe.engines ()))
+
+        // 1. SVG -> Babylon. The game state is advanced on SVG first so the switch has something to preserve.
+        driver.Dispatch(RendererMsg.StateChanged { Tick = 5; TokenX = 70.0 })
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+
+        check
+            "switch to babylon mounts it and selects it"
+            (driver.Model.Selected = RendererBackend.Babylon
+             && driver.Mounted = Some RendererBackend.Babylon
+             && driver.Model.Status = RendererStatus.Active)
+            (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.Status)
+
+        check
+            "game state survived svg -> babylon"
+            (driver.Model.State = { Tick = 5; TokenX = 70.0 })
+            (sprintf "%A" driver.Model.State)
+
+        check
+            "the svg root was released before babylon mounted (one canvas, no svg)"
+            (count container "svg" = 0
+             && count container "canvas" = 1
+             && count container "canvas[data-renderer=babylon]" = 1)
+            container.innerHTML
+
+        // 2. Structural counters from Babylon's own books.
+        check "exactly one babylon engine is alive" (Probe.engines () = 1) (string (Probe.engines ()))
+
+        check "exactly one render loop is running" (Probe.renderLoops () = 1) (string (Probe.renderLoops ()))
+        check "exactly one scene" (Probe.scenes () = 1) (string (Probe.scenes ()))
+        check "one mesh per scene node (background and token)" (Probe.meshes () = 2) (string (Probe.meshes ()))
+        check "one material per mesh" (Probe.materials () = 2) (string (Probe.materials ()))
+
+        // 3. Pixels: the token and the background are drawn where the scene puts them.
+        let canvas = babylonCanvas ()
+
+        check
+            "the babylon canvas has the requested pixel size"
+            (not (isNull canvas) && canvas.width = 200.0 && canvas.height = 100.0)
+            (if isNull canvas then
+                 "no canvas"
+             else
+                 sprintf "%gx%g" canvas.width canvas.height)
+
+        // Babylon compiles shaders asynchronously, so the first frames can draw nothing: present the unchanged state
+        // frame by frame (each present renders synchronously, in the task that reads the pixel) until it is drawn.
+        let! tokenPixel, framesToFirstPixel =
+            awaitPixel driver babylonCanvas 80 50 (fun p -> p.[0] > 40) 600
+
+        let backgroundPixel = Probe.pixel (babylonCanvas ()) 20 20
+        info "frames until the first drawn pixel" (string framesToFirstPixel)
+
+        check
+            "the first frame was drawn within 600 frames"
+            (tokenPixel.[0] > 40)
+            (sprintf "%A after %d frames" tokenPixel framesToFirstPixel)
+
+        info "pixel token (80,50)" (sprintf "%A" tokenPixel)
+        info "pixel background (20,20)" (sprintf "%A" backgroundPixel)
+
+        // A face toward the camera is lit at 3/4 by the tilted hemispheric light, with no specular highlight.
+        check
+            "the token pixel is the token colour, lit (about 200,40,90 x 0.75)"
+            (near [| 150; 30; 68 |] tokenPixel 4)
+            (sprintf "%A" tokenPixel)
+
+        check
+            "the background pixel is the background colour, lit (about 10,20,30 x 0.75)"
+            (near [| 8; 15; 23 |] backgroundPixel 4)
+            (sprintf "%A" backgroundPixel)
+
+        // 4. Presenting 100 newer states moves the token in place: nothing is created, nothing leaks.
+        let created = (BabylonSurface.counters ()).MeshesCreated
+        let materialsBefore = Probe.materials ()
+
+        for tick in 1..100 do
+            driver.Dispatch(
+                RendererMsg.StateChanged
+                    {
+                        Tick = 5 + tick
+                        TokenX = 70.0 + float (tick % 50)
+                    }
+            )
+
+        // 105 and 70 + (100 % 50) = 70: put the token somewhere else so the pixel proves the last state was drawn.
+        driver.Dispatch(RendererMsg.StateChanged { Tick = 200; TokenX = 150.0 })
+
+        check
+            "state advanced on babylon"
+            (driver.Model.State = { Tick = 200; TokenX = 150.0 })
+            (sprintf "%A" driver.Model.State)
+
+        check "still one engine after 101 presents" (Probe.engines () = 1) (string (Probe.engines ()))
+        check "still one render loop after 101 presents" (Probe.renderLoops () = 1) (string (Probe.renderLoops ()))
+        check "still one canvas after 101 presents" (count container "canvas" = 1) (string (count container "canvas"))
+        check "mesh count is stable across presents" (Probe.meshes () = 2) (string (Probe.meshes ()))
+
+        check
+            "material count is stable across presents"
+            (Probe.materials () = materialsBefore)
+            (sprintf "%d -> %d" materialsBefore (Probe.materials ()))
+
+        check
+            "no mesh was created by a present"
+            ((BabylonSurface.counters ()).MeshesCreated = created)
+            (sprintf "%d -> %d" created (BabylonSurface.counters ()).MeshesCreated)
+
+        let! moved, _ = awaitPixel driver babylonCanvas 160 50 (fun p -> p.[0] > 40) 600
+        let vacated = Probe.pixel (babylonCanvas ()) 80 50
+        info "pixel moved token (160,50)" (sprintf "%A" moved)
+
+        check "the token pixel followed the state" (near [| 150; 30; 68 |] moved 4) (sprintf "%A" moved)
+        check "the vacated pixel is background again" (near [| 8; 15; 23 |] vacated 4) (sprintf "%A" vacated)
+
+        // 5. Babylon -> SVG: everything is released, the latest state is shown.
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "switch back to svg"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Mounted = Some RendererBackend.Svg
+             && driver.Model.State = { Tick = 200; TokenX = 150.0 })
+            (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.State)
+
+        check
+            "svg shows the state babylon was showing"
+            (count container "svg" = 1 && has "x=\"150\" y=\"40\"" container.innerHTML)
+            container.innerHTML
+
+        check "no babylon canvas remains" (count container "canvas" = 0) container.innerHTML
+        check "no babylon engine remains" (Probe.engines () = 0) (string (Probe.engines ()))
+        check "no render loop remains" (Probe.renderLoops () = 0) (string (Probe.renderLoops ()))
+        check "no scene remains" (Probe.scenes () = 0) (string (Probe.scenes ()))
+        check "no mesh remains" (Probe.meshes () = 0) (string (Probe.meshes ()))
+
+        // 6. Repeated switching never holds two engines and ends released.
+        let maxEngines = ref 0
+        let maxCanvases = ref 0
+
+        for round in 1..5 do
+            driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+            maxEngines.Value <- max maxEngines.Value (Probe.engines ())
+            maxCanvases.Value <- max maxCanvases.Value (count container "canvas")
+
+            driver.Dispatch(
+                RendererMsg.StateChanged
+                    {
+                        Tick = 200 + round
+                        TokenX = 20.0 * float round
+                    }
+            )
+
+            driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "five svg -> babylon -> svg rounds never held two engines"
+            (maxEngines.Value = 1)
+            (string maxEngines.Value)
+
+        check "five rounds never held two canvases" (maxCanvases.Value = 1) (string maxCanvases.Value)
+
+        check
+            "five rounds ended on svg with the latest state and nothing left over"
+            (driver.Mounted = Some RendererBackend.Svg
+             && driver.Model.State = { Tick = 205; TokenX = 100.0 }
+             && count container "canvas" = 0
+             && Probe.engines () = 0
+             && Probe.renderLoops () = 0
+             && Probe.meshes () = 0)
+            (sprintf "%A engines=%d loops=%d" driver.Model.State (Probe.engines ()) (Probe.renderLoops ()))
+
+        // 7. A node set that grows and shrinks keeps one mesh per node and reuses materials.
+        let swarm (board: Board) : Scene =
+            {
+                Nodes =
+                    SceneNode.Rectangle((0.0, 0.0, 200.0, 100.0), background)
+                    :: [
+                        for i in 0 .. (board.Tick % 4) ->
+                            SceneNode.Rectangle((10.0 + 40.0 * float i, 40.0, 20.0, 20.0), tokenColor)
+                    ]
+            }
+
+        let swarmRegistry =
+            SvgSurface.registry container svgOptions swarm
+            |> BabylonSurface.register container babylonOptions swarm
+
+        let swarmDriver =
+            RendererDriver.start swarmRegistry { Tick = 3; TokenX = 0.0 } ignore
+
+        swarmDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+
+        let nodeCount () =
+            1 + (swarmDriver.Model.State.Tick % 4) + 1
+
+        check
+            "babylon draws one mesh per node of a larger scene"
+            (Probe.meshes () = nodeCount ())
+            (sprintf "%d vs %d" (Probe.meshes ()) (nodeCount ()))
+
+        let meshesTrackNodes = ref true
+        let peakMaterials = ref 0
+
+        for tick in 0..40 do
+            swarmDriver.Dispatch(RendererMsg.StateChanged { Tick = tick; TokenX = 0.0 })
+            peakMaterials.Value <- max peakMaterials.Value (Probe.materials ())
+
+            if Probe.meshes () <> nodeCount () then
+                meshesTrackNodes.Value <- false
+
+        check "mesh count tracked the node count through 41 grow/shrink presents" meshesTrackNodes.Value "diverged"
+
+        check
+            "materials never exceed the most nodes ever drawn (5)"
+            (peakMaterials.Value <= 5)
+            (string peakMaterials.Value)
+
+        check
+            "still one engine and one loop after grow/shrink"
+            (Probe.engines () = 1 && Probe.renderLoops () = 1)
+            (sprintf "%d %d" (Probe.engines ()) (Probe.renderLoops ()))
+
+        (swarmDriver :> System.IDisposable).Dispose()
+
+        check
+            "disposing the driver on babylon releases the canvas, engine, loop and meshes"
+            (count container "canvas" = 0
+             && Probe.engines () = 0
+             && Probe.renderLoops () = 0
+             && Probe.scenes () = 0
+             && Probe.meshes () = 0)
+            (sprintf "canvas=%d engines=%d" (count container "canvas") (Probe.engines ()))
+
+        // 8. No WebGL: the mount is refused, SVG takes over with the state intact, nothing is left behind.
+        let restore = Probe.blockContexts ()
+        driver.Dispatch(RendererMsg.StateChanged { Tick = 300; TokenX = 30.0 })
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+        restore ()
+
+        check
+            "a browser with no WebGL falls back to svg"
+            (driver.Model.Selected = RendererBackend.Svg
+             && driver.Mounted = Some RendererBackend.Svg
+             && driver.Model.Status = RendererStatus.Active)
+            (sprintf "%A %A %A" driver.Model.Selected driver.Mounted driver.Model.Status)
+
+        check
+            "the fallback names babylon as the cause"
+            (match driver.Model.Refusal with
+             | Some(RendererRefusal.MountFailed(RendererBackend.Babylon, _)) -> true
+             | _ -> false)
+            (sprintf "%A" driver.Model.Refusal)
+
+        check
+            "the fallback kept the game state"
+            (driver.Model.State = { Tick = 300; TokenX = 30.0 })
+            (sprintf "%A" driver.Model.State)
+
+        check
+            "the refused mount left no canvas, engine or loop"
+            (count container "canvas" = 0
+             && Probe.engines () = 0
+             && Probe.renderLoops () = 0
+             && count container "svg" = 1)
+            (sprintf "%s engines=%d" container.innerHTML (Probe.engines ()))
+
+        // 9. Options the adapter refuses are reported as a refused mount too.
+        let invalid =
+            RendererRegistry.register
+                (BabylonSurface.adapter container (BabylonSurface.defaultOptions "bad" 0.0 100.0) view)
+                (SvgSurface.registry container svgOptions view)
+
+        let invalidDriver = RendererDriver.start invalid initial ignore
+        invalidDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+
+        check
+            "a zero-width babylon canvas is refused and falls back to svg"
+            (invalidDriver.Model.Selected = RendererBackend.Svg
+             && invalidDriver.Mounted = Some RendererBackend.Svg
+             && count container "canvas" = 0)
+            (sprintf "%A %A" invalidDriver.Model.Selected invalidDriver.Mounted)
+
+        (invalidDriver :> System.IDisposable).Dispose()
+
+        // 10. A Present that throws is contained: the babylon mount is released and SVG shows the same state.
+        let fragile (board: Board) : Scene =
+            if board.Tick = 99 then failwith "view boom" else view board
+
+        let fragileRegistry =
+            SvgSurface.registry container svgOptions view
+            |> BabylonSurface.register container babylonOptions fragile
+
+        let fragileDriver =
+            RendererDriver.start fragileRegistry { Tick = 1; TokenX = 10.0 } ignore
+
+        fragileDriver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+
+        check
+            "the fragile view mounts on babylon first"
+            (fragileDriver.Mounted = Some RendererBackend.Babylon && Probe.engines () = 1)
+            (sprintf "%A %d" fragileDriver.Mounted (Probe.engines ()))
+
+        fragileDriver.Dispatch(RendererMsg.StateChanged { Tick = 99; TokenX = 99.0 })
+
+        check
+            "a throwing present falls back to svg with the state that threw"
+            (fragileDriver.Model.Selected = RendererBackend.Svg
+             && fragileDriver.Mounted = Some RendererBackend.Svg
+             && fragileDriver.Model.State = { Tick = 99; TokenX = 99.0 })
+            (sprintf "%A %A %A" fragileDriver.Model.Selected fragileDriver.Mounted fragileDriver.Model.State)
+
+        check
+            "the throwing present released the canvas, engine, loop and meshes"
+            (count container "canvas" = 0
+             && Probe.engines () = 0
+             && Probe.renderLoops () = 0
+             && Probe.meshes () = 0)
+            (sprintf "canvas=%d engines=%d" (count container "canvas") (Probe.engines ()))
+
+        (fragileDriver :> System.IDisposable).Dispose()
+
+        // 11. The adapter's own books balance with Babylon's.
+        check
+            "the observer never saw a model whose backend was not the one mounted (Mounted asserted inside it)"
+            (babylonAudit.Violations.Count = 0 && babylonAudit.Realised >= 12)
+            (sprintf "realised=%d violations=%s" babylonAudit.Realised (String.concat "; " babylonAudit.Violations))
+
+        (driver :> System.IDisposable).Dispose()
+        let after = BabylonSurface.counters ()
+        let created = after.EnginesCreated - before.EnginesCreated
+
+        let counterLine =
+            sprintf
+                "engines %d/%d loops %d/%d meshes %d/%d unsupported %d (created/disposed)"
+                after.EnginesCreated
+                after.EnginesDisposed
+                after.LoopsStarted
+                after.LoopsStopped
+                after.MeshesCreated
+                after.MeshesDisposed
+                after.UnsupportedNodes
+
+        info "adapter counters" counterLine
+
+        check
+            "every engine the adapter created was disposed"
+            (created > 0 && created = after.EnginesDisposed - before.EnginesDisposed)
+            (sprintf "%A" after)
+
+        check
+            "every render loop the adapter started was stopped"
+            (after.LoopsStarted - before.LoopsStarted = created
+             && after.LoopsStopped - before.LoopsStopped = created)
+            (sprintf "%A" after)
+
+        check
+            "every mesh the adapter created was disposed"
+            (after.MeshesCreated - before.MeshesCreated = after.MeshesDisposed - before.MeshesDisposed)
+            (sprintf "%A" after)
+
+        check "nothing is left in the container" (container.children.length = 0) container.innerHTML
+
+        check
+            "no engine survived the whole babylon section"
+            (Probe.engines () = 0 && Probe.scenes () = 0)
+            (sprintf "%d %d" (Probe.engines ()) (Probe.scenes ()))
+    }
+
+/// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
+/// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
+[<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
+let announce (checks: int) (failures: int) (report: string) : unit = jsNative
+
 let report () =
+    let text = String.concat "\n" (Seq.append results infos)
     let pre = document.createElement "pre"
     pre.id <- "smoke-result"
     pre.setAttribute ("data-failures", string failures)
     pre.setAttribute ("data-checks", string results.Count)
-    pre.textContent <- String.concat "\n" results
+    pre.textContent <- text
     document.body.appendChild pre |> ignore
     document.body.setAttribute ("data-smoke", (if failures = 0 then "pass" else "fail"))
+    announce results.Count failures text
 
-try
-    run ()
-with ex ->
-    failures <- failures + 1
-    results.Add("FAIL smoke raised: " + ex.Message)
+async {
+    try
+        run ()
+        do! runBabylon ()
+    with ex ->
+        failures <- failures + 1
+        results.Add("FAIL smoke raised: " + ex.Message)
 
-report ()
+    report ()
+}
+|> Async.StartImmediate
