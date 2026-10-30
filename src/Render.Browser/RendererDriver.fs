@@ -36,6 +36,7 @@ type RendererDriver<'State>(registry: RendererRegistry<'State>, state: 'State, o
     /// failed mount has fallen back before anything dispatched later is looked at.
     let drain () =
         running <- true
+        let mutable completed = false
 
         try
             while not disposed && not pending.IsEmpty do
@@ -45,8 +46,15 @@ type RendererDriver<'State>(registry: RendererRegistry<'State>, state: 'State, o
                 model <- next
                 pending <- host.Run effects @ pending
                 notify model
+
+            completed <- true
         finally
             running <- false
+
+            // A drain that was cut short has no caller to report an observer failure to; keeping it would raise a
+            // stale exception from the next, unrelated Dispatch.
+            if not completed then
+                observerFailure <- None
 
         raiseObserverFailure ()
 

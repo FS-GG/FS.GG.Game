@@ -7,6 +7,12 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
+  <!-- Same generated Babylon bindings feed as src/Render.Browser (scripts/build-babylon-bindings-feed.sh). -->
+  <PropertyGroup>
+    <BabylonBindingsFeed Condition="'$(BabylonBindingsFeed)' == ''">$(MSBuildThisFileDirectory)../../artifacts/babylon-bindings/feed</BabylonBindingsFeed>
+    <RestoreAdditionalProjectSources Condition="Exists('$(BabylonBindingsFeed)')">$(RestoreAdditionalProjectSources);$(BabylonBindingsFeed)</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="Program.fs" />
   </ItemGroup>

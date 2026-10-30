@@ -30,7 +30,8 @@ module RendererDriver =
     /// model produced, in order, including the initial one, AFTER that model's effects have run, so it never
     /// sees a model the host has not realised. A throwing observer cannot abort the drain: the remaining
     /// messages and effects still run, and its first failure is raised from the `Dispatch` (or `start`) that
-    /// was draining.
+    /// was draining. A drain that is cut short drops the
+    /// failure it was holding, so it never surfaces from a later `Dispatch`.
     val start:
         registry: RendererRegistry<'State> ->
         state: 'State ->

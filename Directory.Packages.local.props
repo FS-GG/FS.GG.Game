@@ -45,6 +45,11 @@
   <ItemGroup Label="Browser host (Fable, not shipped)">
     <PackageVersion Include="FS.GG.UI.Scene.SvgBrowser" Version="0.31.0" />
     <PackageVersion Include="Fable.Browser.Dom" Version="2.20.0" />
+    <!-- The Babylon adapter (Game#730). The bindings come from the generated local feed built from the commit pinned
+         in eng/babylon-bindings/pin.env; BINDINGS_PACKAGE_VERSION there MUST equal this version. Fable.Core is the
+         floor the packed bindings declare (Templates#809: Fable.Core 5.6.1). -->
+    <PackageVersion Include="FS.GG.Game.Render.BabylonBindings" Version="0.1.0" />
+    <PackageVersion Include="Fable.Core" Version="5.6.1" />
   </ItemGroup>
 
   <ItemGroup Label="Test-only">
