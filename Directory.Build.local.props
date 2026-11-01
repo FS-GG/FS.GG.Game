@@ -63,14 +63,14 @@
     <!-- The release tag is authoritative: release.yml packs with -p:Version="$VER" from the tag,
          which overrides this. This is the selected source release scalar;
          native both-feed readback separately establishes its published status. -->
-    <!-- 0.18.0 adds the three-adapter authoring kit to Game.Render (SceneRenderers, RendererConformance) and
-         first publishes the Fable browser host, FS.GG.Game.Render.Browser (FS.GG.Game#745). Core, Render,
-         Harness, Physics.Box2D and Render.Browser keep one scalar and publish together through release.yml. -->
-    <Version>0.18.0</Version>
-    <!-- Existing packages compare against their actual published predecessor, 0.17.0. Render.Browser has
-         no predecessor on its first release: enable current-package validation, without asking NuGet for
-         a nonexistent baseline package. Add its baseline after first publication. -->
-    <PackageValidationBaselineVersion Condition="'$(MSBuildProjectName)' == 'FS.GG.Game.Core' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Render' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Harness' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Physics.Box2D'">0.17.0</PackageValidationBaselineVersion>
+    <!-- 0.19.0: Babylon draws 2D scenes through an orthographic camera, the conformance kit reads pixels back, and
+         a CSS-scaled canvas picks correctly (FS.GG.Game#753, #778); additive API. Core, Render, Harness,
+         Physics.Box2D and Render.Browser keep one scalar and publish together through release.yml. -->
+    <Version>0.19.0</Version>
+    <!-- Every package compares against its actual published predecessor, 0.18.0 (Render.Browser's first). -->
+    <PackageValidationBaselineVersion Condition="'$(MSBuildProjectName)' == 'FS.GG.Game.Core' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Render' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Harness' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Physics.Box2D' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Render.Browser'">0.18.0</PackageValidationBaselineVersion>
+    <!-- Release notes live in CHANGELOG.md at the release tag. -->
+    <PackageReleaseNotes>https://github.com/FS-GG/FS.GG.Game/blob/v$(Version)/CHANGELOG.md</PackageReleaseNotes>
     <Authors>FS.GG Contributors</Authors>
     <Company>FS.GG Contributors</Company>
     <RepositoryType>git</RepositoryType>

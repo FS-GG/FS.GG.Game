@@ -18,7 +18,7 @@
         "type": "Project",
         "dependencies": {
           "Box2D.NET": "[3.1.654, )",
-          "FS.GG.Game.Core": "[0.18.0, )",
+          "FS.GG.Game.Core": "[0.19.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },

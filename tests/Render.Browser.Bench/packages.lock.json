@@ -55,7 +55,7 @@
       "fs.gg.game.render": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Core": "[0.18.0, )",
+          "FS.GG.Game.Core": "[0.19.0, )",
           "FS.GG.UI.KeyboardInput": "[0.31.0, )",
           "FS.GG.UI.Scene": "[0.31.0, )",
           "FSharp.Core": "[10.1.302, )"
@@ -64,7 +64,7 @@
       "fs.gg.game.render.browser": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Render": "[0.18.0, )",
+          "FS.GG.Game.Render": "[0.19.0, )",
           "FS.GG.UI.Scene": "[0.31.0, )",
           "FS.GG.UI.Scene.SvgBrowser": "[0.31.0, )",
           "FSharp.Core": "[10.1.302, )",

@@ -15,8 +15,8 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FS.GG.Game.Physics.Box2D" Version="[0.18.0]" />
-    <PackageReference Include="FS.GG.Game.Render" Version="[0.18.0]" />
+    <PackageReference Include="FS.GG.Game.Physics.Box2D" Version="[0.19.0]" />
+    <PackageReference Include="FS.GG.Game.Render" Version="[0.19.0]" />
     <PackageReference Include="FSharp.Core" Version="[10.1.302]" />
   </ItemGroup>
 </Project>

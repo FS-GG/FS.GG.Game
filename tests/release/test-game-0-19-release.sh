@@ -18,8 +18,8 @@ props="$root/Directory.Build.local.props"
 workflow="$root/.github/workflows/release.yml"
 
 version="$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' "$props")"
-[[ "$version" == "0.18.0" ]] || {
-  echo "release scalar must be 0.18.0, observed '$version'" >&2
+[[ "$version" == "0.19.0" ]] || {
+  echo "release scalar must be 0.19.0, observed '$version'" >&2
   exit 1
 }
 
@@ -29,12 +29,12 @@ import pathlib, sys, xml.etree.ElementTree as ET
 text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
 props = ET.parse(sys.argv[2]).getroot()
 baselines = props.findall('.//PackageValidationBaselineVersion')
-if len(baselines) != 1 or baselines[0].text != '0.17.0':
-    raise SystemExit('existing packages must use the published 0.17.0 API baseline')
+if len(baselines) != 1 or baselines[0].text != '0.18.0':
+    raise SystemExit('every package must use the published 0.18.0 API baseline')
 condition = baselines[0].attrib.get('Condition', '')
-expected = "'$(MSBuildProjectName)' == 'FS.GG.Game.Core' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Render' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Harness' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Physics.Box2D'"
+expected = "'$(MSBuildProjectName)' == 'FS.GG.Game.Core' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Render' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Harness' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Physics.Box2D' Or '$(MSBuildProjectName)' == 'FS.GG.Game.Render.Browser'"
 if condition != expected or '-p:PackageValidationBaselineVersion=' in text:
-    raise SystemExit('API baseline must apply only to the four published packages; the new browser host has no predecessor')
+    raise SystemExit('API baseline must apply to all five published packages')
 if '[ "$count" = 5 ]' not in text or 'len(rows) != 5' not in text:
     raise SystemExit('release custody and dual-feed readback must each require five packages')
 required = {
@@ -90,7 +90,7 @@ if text.index("NuGet login", pushes[1]) > pushes[2]:
     raise SystemExit("release workflow must push the org feed before nuget.org")
 if "dotnet pack" in text[pushes[0]:]:
     raise SystemExit("release workflow must not re-pack after first publication")
-preflight = text.index('tests/release/test-game-0-18-release.sh --source-only')
+preflight = text.index('tests/release/test-game-0-19-release.sh --source-only')
 if preflight >= text.index('target: FS.GG.Game.slnx'):
     raise SystemExit('release source preflight must precede restore')
 for candidate_check in ('tests/release/test-box2d-package-consumer.sh --packages artifacts/packages',
@@ -132,14 +132,14 @@ python3 -I "$here/check-fable-views.py" --root "$root"
 
 mapfile -t nupkgs < <(find "$packages" -maxdepth 1 -type f -name '*.nupkg' ! -name '*.symbols.nupkg' -printf '%f\n' | sort)
 expected=(
-  FS.GG.Game.Core.0.18.0.nupkg
-  FS.GG.Game.Harness.0.18.0.nupkg
-  FS.GG.Game.Physics.Box2D.0.18.0.nupkg
-  FS.GG.Game.Render.0.18.0.nupkg
-  FS.GG.Game.Render.Browser.0.18.0.nupkg
+  FS.GG.Game.Core.0.19.0.nupkg
+  FS.GG.Game.Harness.0.19.0.nupkg
+  FS.GG.Game.Physics.Box2D.0.19.0.nupkg
+  FS.GG.Game.Render.0.19.0.nupkg
+  FS.GG.Game.Render.Browser.0.19.0.nupkg
 )
 [[ "${nupkgs[*]}" == "${expected[*]}" ]] || {
-  echo "expected exactly the coherent 0.18.0 package set" >&2
+  echo "expected exactly the coherent 0.19.0 package set" >&2
   printf 'observed: %s\n' "${nupkgs[*]:-<none>}" >&2
   exit 1
 }
@@ -149,15 +149,15 @@ for package in "${nupkgs[@]}"; do
   nuspec="$(unzip -Z1 "$packages/$package" | sed -n '/\.nuspec$/p')"
   [[ -n "$nuspec" ]] || { echo "$package has no nuspec" >&2; exit 1; }
   metadata="$(unzip -p "$packages/$package" "$nuspec")"
-  grep -q '<version>0.18.0</version>' <<<"$metadata" || {
-    echo "$package does not declare version 0.18.0" >&2; exit 1;
+  grep -q '<version>0.19.0</version>' <<<"$metadata" || {
+    echo "$package does not declare version 0.19.0" >&2; exit 1;
   }
   grep -q "commit=\"$expected_commit\"" <<<"$metadata" || {
     echo "$package does not bind repository commit $expected_commit" >&2; exit 1;
   }
 done
 
-core="$packages/FS.GG.Game.Core.0.18.0.nupkg"
+core="$packages/FS.GG.Game.Core.0.19.0.nupkg"
 # List once: under pipefail, `unzip -Z1 | grep -q` fails whenever grep exits before unzip finishes writing.
 core_entries="$(unzip -Z1 "$core")"
 for entry in \
@@ -171,7 +171,7 @@ for entry in \
   fable-compatibility/fixtures/v1/cases.json \
   fable-compatibility/fixtures/v1/expected.bin; do
   grep -Fxq "$entry" <<<"$core_entries" || {
-    echo "FS.GG.Game.Core 0.18.0 is missing required Fable entry $entry" >&2
+    echo "FS.GG.Game.Core 0.19.0 is missing required Fable entry $entry" >&2
     exit 1
   }
 done
@@ -184,7 +184,7 @@ from zipfile import ZipFile
 import re, sys, xml.etree.ElementTree as ET
 packages = Path(sys.argv[1])
 def metadata(package):
-    with ZipFile(packages / (package + '.0.18.0.nupkg')) as archive:
+    with ZipFile(packages / (package + '.0.19.0.nupkg')) as archive:
         names = archive.namelist()
         nuspec = [name for name in names if name.endswith('.nuspec')]
         assert len(nuspec) == 1, 'one genuine nuspec required'
@@ -195,16 +195,16 @@ core, _ = metadata('FS.GG.Game.Core')
 assert set(core) == {'FSharp.Core'}, 'Core must keep its FSharp.Core/BCL runtime boundary'
 adapter, names = metadata('FS.GG.Game.Physics.Box2D')
 assert set(adapter) == {'FS.GG.Game.Core', 'FSharp.Core', 'Box2D.NET'}, 'adapter must have no rendering dependency'
-assert adapter['FS.GG.Game.Core'].strip('[]()').split(',')[0].strip() == '0.18.0', 'adapter/Core coherent dependency mismatch'
+assert adapter['FS.GG.Game.Core'].strip('[]()').split(',')[0].strip() == '0.19.0', 'adapter/Core coherent dependency mismatch'
 assert adapter['Box2D.NET'].strip('[]()').split(',')[0].strip() == '3.1.654', 'adapter engine dependency differs from qualified pin'
 for entry in ('lib/net10.0/FS.GG.Game.Physics.Box2D.dll', 'api-surface/Types.fsi', 'api-surface/Runtime.fsi', 'api-surface/AreaRuntime.fsi'):
     assert entry in names, 'adapter missing package API entry: ' + entry
 def entries(package):
-    with ZipFile(packages / (package + '.0.18.0.nupkg')) as archive:
+    with ZipFile(packages / (package + '.0.19.0.nupkg')) as archive:
         return {name: archive.read(name) for name in archive.namelist()}
 browser_deps, _ = metadata('FS.GG.Game.Render.Browser')
 assert set(browser_deps) == {'FS.GG.Game.Render', 'FS.GG.UI.Scene', 'FS.GG.UI.Scene.SvgBrowser', 'FS.GG.UI.KeyboardInput', 'Fable.Browser.Dom', 'Fable.Core', 'FSharp.Core'}, 'browser host dependency boundary changed: ' + repr(sorted(browser_deps))
-assert browser_deps['FS.GG.Game.Render'].strip('[]()').split(',')[0].strip() == '0.18.0', 'browser host/Render coherent dependency mismatch'
+assert browser_deps['FS.GG.Game.Render'].strip('[]()').split(',')[0].strip() == '0.19.0', 'browser host/Render coherent dependency mismatch'
 browser = entries('FS.GG.Game.Render.Browser')
 for entry in ('lib/net10.0/FS.GG.Game.Render.Browser.dll', 'api-surface/BrowserRenderers.fsi', 'api-surface/RendererDriver.fsi',
               'fable-compatibility/compatibility-profile.v1.json', 'js-bindings/babylon/package-lock.json', 'js-bindings/pixi/package-lock.json'):
@@ -212,7 +212,7 @@ for entry in ('lib/net10.0/FS.GG.Game.Render.Browser.dll', 'api-surface/BrowserR
 print('coherent package metadata passed: adapter API, exact engine pin, Core boundary, no rendering dependency and browser host boundary')
 PY_PACKAGE
 python3 -I "$here/check-fable-views.py" --root "$root" \
-  --render "$packages/FS.GG.Game.Render.0.18.0.nupkg" --browser "$packages/FS.GG.Game.Render.Browser.0.18.0.nupkg"
+  --render "$packages/FS.GG.Game.Render.0.19.0.nupkg" --browser "$packages/FS.GG.Game.Render.Browser.0.19.0.nupkg"
 
 consumer="$(mktemp -d)"
 trap 'rm -rf "$consumer"' EXIT
@@ -225,7 +225,7 @@ cat >"$consumer/src/Consumer.fsproj" <<'EOF'
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework></PropertyGroup>
   <ItemGroup><Compile Include="Program.fs" /></ItemGroup>
-  <ItemGroup><PackageReference Include="FS.GG.Game.Harness" Version="0.18.0" /></ItemGroup>
+  <ItemGroup><PackageReference Include="FS.GG.Game.Harness" Version="0.19.0" /></ItemGroup>
 </Project>
 EOF
 cat >"$consumer/src/Program.fs" <<'EOF'
