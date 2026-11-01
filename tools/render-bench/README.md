@@ -198,8 +198,8 @@ values, the script, the scenes and the measurement code are unchanged, and the t
 **Reading it.**
 
 - **The GPU path is real.** WebGL backends on `gpu-angle-vulkan` get the RADV renderer and measured GPU time. The same
-  scenes on SwiftShader take many times longer (see `software`). Example: Pixi at 100 nodes takes about 0.8 ms per
-  frame on the GPU and about 19 ms on SwiftShader.
+  scenes on SwiftShader take many times longer (see `software`). At the p50 frame time, Pixi `room-tiles` at 100 nodes takes
+  0.84 ms on the GPU and 17.8 ms on SwiftShader. Babylon `room-swarm` at 1,000 nodes takes 7.7 ms and 666 ms.
 - **SVG cost** is main-thread work: the frame time tracks main-thread CPU at every size, about 117 ms per frame at
   5,000 nodes. It is the same in both modes. Under `software`, only SVG's raster and compositing move to the CPU.
 - **Pixi** batches the whole scene into 2 draw calls and stays under 6 ms at 5,000 nodes.
@@ -244,4 +244,36 @@ as noise on this host.
 
 ### `software`
 
-Pending: the software-control session (same harness commit) is still running under the capacity gate. It is added to this PR when it completes.
+`baselines/fdev-2026-11-01-software.json`. Harness commit `a111e5abcf82` (`dirty: false`). Session 2026-11-01T11:22Z to 2026-11-01T13:48Z (UTC, including capacity holds). 54 runs, 54 ok. 3 repeats × 300 recorded frames after 60 warm-up frames. 1-minute load at run start: 0.33 to 3.21 (the capacity probe admitted every run at `--max-load-per-core 0.25`). No other browser GPU process ran beside any run (`foreignGpuProcessesBefore` maximum 0).
+
+- WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`
+- chrome://gpu: webgl `enabled_readback`, gpu_compositing `disabled_software`, rasterization `enabled`, vulkan `disabled_off`, webgpu `unavailable_software`
+- WebGPU adapter: none (requestAdapter returned null)
+- Browser: Chrome/153.0.8010.12
+
+| scene | size | backend | drawn | frame p50 / p95 / p99 ms | p50 CV | main-thread CPU ms/frame | GPU-process CPU ms/frame | GPU time p50 ms | draw calls/frame | heap after GC MB |
+|---|---:|---|---:|---|---:|---:|---:|---:|---:|---:|
+| room-tiles | 100 | svg | 100 | 2.44 / 3.34 / 4.045 | 2.4% | 2.533 | 0.836 | Unknown | Unknown | 6.12 |
+| room-tiles | 100 | pixi | 100 | 17.805 / 34.11 / 34.66 | 5.7% | 1.038 | 153.597 | 15.641 | 2 | 7.89 |
+| room-tiles | 100 | babylon | 100 | 18.955 / 34.225 / 35.28 | 8.1% | 2.354 | 176.126 | 16.062 | 200 | 11.42 |
+| room-tiles | 1000 | svg | 1000 | 21.015 / 26.74 / 28.355 | 1.1% | 21.461 | 1.221 | Unknown | Unknown | 6.29 |
+| room-tiles | 1000 | pixi | 1000 | 15.345 / 32.705 / 33.945 | 14.5% | 1.449 | 154.984 | 13.204 | 2 | 10.5 |
+| room-tiles | 1000 | babylon | 576 (partial) | 28.155 / 32.195 / 46.185 | 4.8% | 9.395 | 230.861 | 21.731 | 1152 | 29.34 |
+| room-tiles | 5000 | svg | 5000 | 114.18 / 131.25 / 137.85 | 2.7% | 114.373 | 2.616 | Unknown | Unknown | 7.02 |
+| room-tiles | 5000 | pixi | 5000 | 18.92 / 24.15 / 36.065 | 3.6% | 3.452 | 180.691 | 14.945 | 2 | 24.13 |
+| room-tiles | 5000 | babylon | 80 (partial) | 20.335 / 23.555 / 28.3 | 6.6% | 14.175 | 96.987 | 15.96 | 160 | 84.56 |
+| room-swarm | 100 | svg | 100 | 2.365 / 3.395 / 6.47 | 3.1% | 2.492 | 0.831 | Unknown | Unknown | 6.09 |
+| room-swarm | 100 | pixi | 100 | 14.08 / 16.35 / 31.195 | 2.4% | 1.083 | 148.066 | 12.261 | 2 | 7.49 |
+| room-swarm | 100 | babylon | 100 | 129.285 / 152.36 / 154.37 | 2.3% | 2.638 | 1380.46 | 126.031 | 200 | 24.4 |
+| room-swarm | 1000 | svg | 1000 | 18.69 / 35.1 / 35.685 | 3.9% | 19.289 | 1.151 | Unknown | Unknown | 6.23 |
+| room-swarm | 1000 | pixi | 1000 | 22.335 / 24.96 / 27.325 | 3.9% | 2.016 | 227.294 | 19.55 | 2 | 12.04 |
+| room-swarm | 1000 | babylon | 557 (partial) | 666.19 / 719.695 / 911.715 | 2.7% | 10.298 | 7331.85 | 659.013 | 1118 | 162.81 |
+| room-swarm | 5000 | svg | 5000 | 102.935 / 128.53 / 149.565 | 2.1% | 104.556 | 2.384 | Unknown | Unknown | 6.8 |
+| room-swarm | 5000 | pixi | 5000 | 41.355 / 44.695 / 46.075 | 1.5% | 5.31 | 402.881 | 34.883 | 2 | 29.61 |
+| room-swarm | 5000 | babylon | 64 (partial) | 72.2 / 85.87 / 86.62 | 3.4% | 18.112 | 704.007 | 65.521 | 128 | 752.93 |
+
+
+**Run-to-run variance (`software`, 18 configurations, 3 repeats).** CV of p50 frame time: 1.1–14.5%, median 3.3%.
+CV of p95: 0.5–35.5%, median 6.0%. CV of p99: 0.1–67%, median 5.3%. Under SwiftShader, the "GPU-process CPU" of the
+WebGL backends exceeds their frame time because SwiftShader rasterises on several threads. That is the CPU cost
+which the GPU mode moves to the GPU.
