@@ -12,7 +12,8 @@
        committed lock cannot hold for a package built on the consumer's machine. Why not a ProjectReference to the
        generated project: the lock-range gate requires every project a lock names to be a committed project file.
        The source is nullness-oblivious generated code, so nullable analysis is off for this project only.
-       Fable-only; built by scripts/test-render-browser-host.sh, not by the .NET solution. Not packed. -->
+       Fable-only; built by scripts/test-render-browser-host.sh, not by the .NET solution. Not packed as an assembly:
+       FS.GG.Game.Render.Browser packs the two generated Bindings.fs files as Fable source (fable/generated/). -->
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>net10.0</TargetFramework>

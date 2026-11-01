@@ -2,7 +2,7 @@
 
 `../test-box2d-package-consumer.sh --packages /absolute/retained/packages` copies this
 source into a new private directory outside the repository and qualifies candidate packages.
-`../test-box2d-package-consumer.sh --public` instead cold-restores the exact published0.17.0
+`../test-box2d-package-consumer.sh --public` instead cold-restores the exact published 0.18.0
 package from public nuget.org; it is the installed-consumer route after both-feed publication
 and readback. An optional `--output /absolute/new/directory` retains all restored inputs and
 lock evidence at a chosen private location. Every attempt uses a new package cache.
@@ -24,12 +24,12 @@ support; neither smoke selects a product/template or establishes cross-platform 
 selects the presentation consumer. It copies the real portal presentation and command-line
 modules from `examples/Box2D.Portals`, together with the existing package-only portal scene,
 into a fresh directory outside the checkout. The consumer has exact PackageReferences to
-Game Physics.Box2D and Render `0.17.0` and FSharp.Core `10.1.302`; it uses no sibling projects,
+Game Physics.Box2D and Render `0.18.0` and FSharp.Core `10.1.302`; it uses no sibling projects,
 repository imports or linked sources. Presentation selection requires the public feed.
 
 Before restore, the route rejects missing or linked inputs and validates the copied project
 and exact direct pins. After restore, it requires exactly seven packages: Game Core,
-Physics.Box2D and Render `0.17.0`, Box2D.NET `3.1.654`, FSharp.Core `10.1.302`, and
+Physics.Box2D and Render `0.18.0`, Box2D.NET `3.1.654`, FSharp.Core `10.1.302`, and
 UI Scene and KeyboardInput `0.31.0`. Missing, foreign or project dependencies refuse
 before compilation. The original no-presentation route keeps its four-package physics
 boundary and falling-body/portal entrypoint.

@@ -6,8 +6,8 @@ ref and skips both the full release verifier and the publisher. It does not need
 a release tag, pack, restore, or package upload. Leave `source_run_id` empty.
 
 The job reads both registries using the actual repository workflow token, checks
-the known Core 0.16.0 predecessor to distinguish registry authentication from an
-unqualified 404, and refuses a visible 0.17.0 collision or unavailable response.
+the known Core 0.17.0 predecessor to distinguish registry authentication from an
+unqualified 404, and refuses a visible 0.18.0 collision or unavailable response.
 Registry absence means absent to that principal; it does not prove permission
 to create a package or reveal unrelated private packages.
 
@@ -21,9 +21,10 @@ source/run, time and limitation data become artifacts.
 
 A successful observation is deliberately limited. NuGet's exchange response
 contains token type, expiry and key, with no scope readback. Its verify-key route
-looks up a package before evaluating its scope; a missing adapter identity
+looks up a package before evaluating its scope; a missing new identity (for 0.18.0,
+`FS.GG.Game.Render.Browser`)
 returns 404 without testing new-package creation permission. Therefore the report
-always marks adapter creation scope **not exposed and unproven**. It must not be
+always marks new-identity creation scope **not exposed and unproven**. It must not be
 interpreted as full publication authorization. The account policy roster is a
 sign-in-protected UI; the GitHub OIDC exchange does not authorize that UI read.
 
@@ -33,6 +34,20 @@ These boundaries were checked against [NuGetGallery source at
 and `UsersController.TrustedPublishing`. [Current NuGet documentation](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing)
 supports new packages through policy scopes and globs. Platform capability is
 distinct from the effective account's scope.
+
+Since late October 2026, NuGet answers verify-key with HTTP 400 for every id under the trusted-publishing
+temporary key, existing and new alike. The Game 0.18.0 admission run 41323090013 saw this, and FS-GG Atlas
+`github/nuget-trusted-publishing-policy-scope` records the same answer for Rendering, whose packages still
+published. A 400 therefore marks that id **unverifiable**: it is recorded, raised as a workflow warning, and not
+treated as a refusal. Every other unexpected answer still refuses. For an existing id that means 401, 403, 404
+or no response. For the new identity it means anything but 404 (or 400).
+
+Because authority for the new identity cannot be observed, `release.yml` pushes it first and alone on each feed,
+before any existing id. A refusal for lack of package-creation authority therefore publishes nothing more to that
+feed. The org feed is still pushed in full before nuget.org (ADR-0012 §4), so a nuget.org refusal leaves the org
+feed complete and nuget.org empty. The retained custody bytes then resume through `source_run_id`, with no
+re-pack. The release contract (`test-game-0-18-release.sh`) pins this order, and its selftest refuses mutations of
+it.
 
 This source change creates no mandatory manual approval or owner-policy-export
 gate. It provides a machine route to observe what the existing interfaces expose.
@@ -45,8 +60,8 @@ Offline qualification:
 
 ```sh
 python3 tests/release/test-release-admission.py
-tests/release/test-game-0-17-release.sh --source-only
-tests/release/test-game-0-17-release-selftest.sh
+tests/release/test-game-0-18-release.sh --source-only
+tests/release/test-game-0-18-release-selftest.sh
 ```
 
 The offline controls cover visible collisions, unauthorized/unavailable registry

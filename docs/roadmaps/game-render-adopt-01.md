@@ -1,7 +1,8 @@
 # GAME-RENDER-ADOPT-01.1 — Three-adapter authoring kit
 
-Status: source slice delivered in the routine change for FS.GG.Game#745. The held remainder is publication
-through the canonical release route, of `FS.GG.Game.Render` and of the browser host (`Render.Browser`).
+Status: source slice delivered in the routine change for FS.GG.Game#745 (#749). The packaging change makes the
+browser host the `FS.GG.Game.Render.Browser` package and prepares the coherent 0.18.0 release (see "Publication"
+below). The held remainder is publication through the canonical release route, then the public consumer check.
 Route: routine. Parent Outcome: FS-GG/.github#5179. Builds on GAME-RENDER-MULTI-01 (`game-render-multi-01.md`).
 
 ## Goal
@@ -27,7 +28,7 @@ uniform path, and every adapter is held to one shared conformance kit.
 - The bounded Fable view now carries `RendererSelection`, `SceneRenderers` and `RendererConformance`. The
   compatibility profile records the wider scope.
 
-### Browser host (`src/Render.Browser`, not packed)
+### Browser host (`src/Render.Browser`, packed as `FS.GG.Game.Render.Browser` from 0.18.0)
 
 - `SvgSurface.surface`, `PixiSurface.surface` and `BabylonSurface.surface` return `SceneSurface`. The Pixi and
   Babylon `adapter` functions are now `SceneSurface.adapter` over them, and their behaviour is unchanged.
@@ -110,6 +111,39 @@ new functions in the unpacked browser host. No existing signature changed, and t
 `readiness/surface-baselines` only add lines. Under SemVer this is a minor change, to be set by the release
 route at publication.
 
+## Publication (FS.GG.Game#745 remainder)
+
+- `src/Render.Browser` packs as `FS.GG.Game.Render.Browser`, a Fable library package. `fable/` holds its seven
+  modules, the two generated bindings at the sha256 that `eng/js-bindings/pin.env` pins (`fable/generated/`), and a
+  packed project that lists them unconditionally. The package depends on `FS.GG.Game.Render` at the same version.
+  The bindings assembly is not a dependency. `js-bindings/` carries the exact npm closures, and the packed project
+  declares `@babylonjs/core@9.33.1` and `pixi.js@8.22.0` for Femto.
+- Fable does not evaluate MSBuild conditions in a package's project file. The view project #733 added used
+  conditional item groups, so its packed `fable/FS.GG.Game.Render.fsproj` would have compiled no sources for a
+  package consumer. That form was never published: #733 merged after `v0.17.0` (its commit `eba5ce12` is not an
+  ancestor of the tag), and the published `FS.GG.Game.Render` 0.17.0 has no `fable/` entries at all. A clean
+  consumer compile of the 0.18.0 candidate showed the failure, while the repository smoke had passed because it
+  builds that view with MSBuild. The in-repo project is now unconditional, and the packed copy is generated from it
+  at pack. The release contract refuses a conditional packed project. 0.18.0 is the first release with a
+  `FS.GG.Game.Render` Fable view.
+- `src/Render.Browser` references `FS.GG.Game.Render` two ways. Fable cracks projects with a design-time build
+  and compiles every referenced project's sources, so a design-time build (Fable, editors) references the bounded
+  view, `src/Game.Render/Fable`. A normal restore, build and pack references `src/Game.Render`. The packed assembly
+  then references `FS.GG.Game.Render`, and the nuspec depends on `FS.GG.Game.Render` at the same version, as a
+  consumer resolves them. Two rejected alternatives:
+  - Giving the view project that package identity collides with the org lock-range gate (one package id, one
+    project).
+  - A non-output reference to `src/Game.Render` makes Fable compile the .NET-only `Adapter`.
+- `tests/release/test-render-browser-package-consumer.sh` creates a clean consumer with only a
+  `FS.GG.Game.Render.Browser` reference, generates its renderer module with `scripts/new-game-renderers.sh`,
+  restores into an empty package folder, builds it with .NET, and compiles it with Fable. It runs in three places:
+  in the browser-host smoke against the PR's packs, in `release.yml` against the candidate set before
+  publication, and with `--public` after both feeds read back.
+- The release is the coherent 0.18.0 set of five packages. The four published packages keep their 0.17.0 API
+  baseline. The browser host is validated against itself on its first release, and its surface baseline is
+  `readiness/surface-baselines/FS.GG.Game.Render.Browser.txt`, refreshed with `--browser` and drift-checked by
+  `render-browser-host.yml`.
+
 ## For FS.GG.Templates#834 (not done here)
 
 The `fs-gg-fable-game` template should carry the same path, so a new game does not copy machinery:
@@ -120,13 +154,13 @@ The `fs-gg-fable-game` template should carry the same path, so a new game does n
 - add a browser test page that runs `RendererConformance.run` on the generated `conformance` subject;
 - add the JS bindings materialization and the import map that `scripts/test-render-browser-host.sh` uses.
 
-Template adoption is blocked on publishing the browser host (`Render.Browser`: `RendererDriver`,
+Template adoption is blocked on publishing the browser host (`FS.GG.Game.Render.Browser`: `RendererDriver`,
 `BrowserRenderers`, `BrowserConformance` and the surfaces). That publication is part of #745's held remainder.
 
 ## Follow-up candidates (upstream gaps found)
 
-1. **Publish the browser host** (held remainder of #745). `FS.GG.Game.Render.Browser` and its bindings project
-   are unpacked. A game
+1. **Publish the browser host** (held remainder of #745; packaging is above, publication is pending). Until it is
+   published, a game
    repository (FourD, SC2, BAR) cannot consume `BrowserRenderers`, the surfaces or `BrowserConformance` without
    copying them. A published package is needed, with a deterministic route for the generated Pixi and Babylon
    bindings. The roadmap above records why the packed bindings NuGet is not reproducible across SDKs.

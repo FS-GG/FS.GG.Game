@@ -4,7 +4,8 @@
 #
 # 1. Packs FS.GG.Game.Render and asserts its bounded Fable source view (fable/RendererSelection.*,
 #    SceneRenderers.* and RendererConformance.*, the metadata project and the compatibility profile) is present,
-#    byte-identical to the canonical sources, and excludes the .NET-only Adapter/DefaultKeymap.
+#    byte-identical to the canonical sources, and excludes the .NET-only Adapter/DefaultKeymap (SceneInteraction
+#    joined the view with FS.GG.Game#751).
 # 2. Compiles tests/Render.Browser.Smoke (which references src/Render.Browser and, through the SAME
 #    Fable/FS.GG.Game.Render.fsproj the package ships, the renderer-selection sources) with Fable.
 # 3. Loads the output in headless Chromium/Chrome and requires every smoke check to pass.
@@ -14,7 +15,9 @@
 # canvas, one engine, meshes, a pixel read back, SVG -> Babylon -> SVG with the game state preserved and every
 # resource released; the same for PixiJS; and SVG <-> Pixi <-> Babylon switching. Then the conformance kit
 # (RendererConformance, GAME-RENDER-ADOPT-01.1) runs on the reference game's renderer declaration and on the
-# generator's sample (scripts/new-game-renderers.sh), on all three real backends.
+# generator's sample (scripts/new-game-renderers.sh), on all three real backends; the reference game's run includes
+# the kit's interaction section (FS.GG.Game#751: hit test, keyboard, accessible mirror and input-host disposal on
+# every backend), and the reference game is then played by pointer through its renderer driver on each backend.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -34,7 +37,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=397
+MIN_CHECKS=441
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -58,6 +61,19 @@ fi
   echo "test-render-browser-host: required browser 'chromium' or 'google-chrome' was not found" >&2
   exit 2
 }
+# Playwright launches the browser from an executable PATH, never a command name, so resolve the bare name (from the
+# default list or RENDER_SMOKE_BROWSER) and any symlinks to the real file.
+RESOLVED="$(command -v "$BROWSER" || true)"
+[[ -n $RESOLVED ]] || {
+  echo "test-render-browser-host: browser '$BROWSER' was not found" >&2
+  exit 2
+}
+BROWSER="$(readlink -f "$RESOLVED")"
+[[ -x $BROWSER ]] || {
+  echo "test-render-browser-host: browser '$BROWSER' is not executable" >&2
+  exit 2
+}
+echo "test-render-browser-host: browser executable $BROWSER ($("$BROWSER" --version 2>/dev/null | head -n 1))"
 
 TMP="$(mktemp -d)"
 if [[ ${RENDER_SMOKE_KEEP:-0} == 1 ]]; then
@@ -84,44 +100,20 @@ dotnet pack src/Game.Render/FS.GG.Game.Render.fsproj -c Release -p:PackageVersio
 }
 
 PACKAGE_LIST="$(unzip -Z1 "$TMP/feed/$PACKAGE")"
-FABLE_SOURCES=(RendererSelection SceneRenderers RendererConformance)
-for entry in \
-  fable/FS.GG.Game.Render.fsproj \
-  "${FABLE_SOURCES[@]/#/fable/}" \
-  fable-compatibility/compatibility-profile.v1.json; do
-  case $entry in
-    *.fsproj | *.json) entries=("$entry") ;;
-    *) entries=("$entry.fsi" "$entry.fs") ;;
-  esac
-  for file in "${entries[@]}"; do
-    grep -Fx "$file" <<<"$PACKAGE_LIST" >/dev/null || {
-      echo "test-render-browser-host: package is missing $file" >&2
-      exit 1
-    }
-  done
-done
-
+grep -Fx fable-compatibility/compatibility-profile.v1.json <<<"$PACKAGE_LIST" >/dev/null || {
+  echo "test-render-browser-host: package is missing fable-compatibility/compatibility-profile.v1.json" >&2
+  exit 1
+}
 if grep -E '^fable/(Adapter|DefaultKeymap)\.fsi?$' <<<"$PACKAGE_LIST" >/dev/null; then
   echo "test-render-browser-host: the bounded Fable view contains a .NET-only source file" >&2
   exit 1
 fi
-
-if [[ $(grep -c '^fable/.*\.fsi\?$' <<<"$PACKAGE_LIST") -ne $((2 * ${#FABLE_SOURCES[@]})) ]]; then
-  echo "test-render-browser-host: the bounded Fable view must contain exactly ${FABLE_SOURCES[*]} (.fsi/.fs)" >&2
-  exit 1
-fi
-
 mkdir -p "$TMP/unpacked"
 unzip -q "$TMP/feed/$PACKAGE" 'fable/*' -d "$TMP/unpacked"
-for source in "${FABLE_SOURCES[@]}"; do
-  cmp "$TMP/unpacked/fable/$source.fs" "src/Game.Render/$source.fs"
-  cmp "$TMP/unpacked/fable/$source.fsi" "src/Game.Render/$source.fsi"
-done
-cmp "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" src/Game.Render/Fable/FS.GG.Game.Render.fsproj
 
-# The packed layout puts the sources beside the project (the in-repo layout reaches one directory up), so
-# build the unpacked view on its own to exercise that branch of the project's Exists() conditions. The
-# consumer's central package pin stands in for the one a Fable consumer's restore provides.
+# The packed layout puts the sources beside the project (the in-repo layout reaches one directory up), so build the
+# unpacked view on its own: the packed project must compile its sources where they sit. The consumer's central
+# package pin stands in for the one a Fable consumer's restore provides.
 SCENE_VERSION="$(sed -n 's/.*Include="FS.GG.UI.Scene" Version="\([^"]*\)".*/\1/p' Directory.Packages.local.props | head -n 1)"
 [[ -n $SCENE_VERSION ]] || {
   echo "test-render-browser-host: could not read the FS.GG.UI.Scene pin" >&2
@@ -134,6 +126,42 @@ printf '%s\n' \
   '</Project>' \
   >"$TMP/unpacked/Directory.Packages.props"
 NUGET_PACKAGES="$TMP/packed-view-packages" dotnet build "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" -c Release -v quiet >/dev/null
+
+# 1b. The packed browser host (FS.GG.Game.Render.Browser, #745): its Fable view is the host's sources byte for byte,
+#     the two generated bindings at the pinned sha256, and the packed project that lists exactly those files; the
+#     bindings assembly is not a dependency. Then a clean consumer restores both packages (and Game.Core) from this
+#     feed, generates its renderer module, builds it with .NET and compiles it with Fable from the packed sources.
+BROWSER_PACKAGE="FS.GG.Game.Render.Browser.${PACK_VERSION}.nupkg"
+dotnet pack src/Render.Browser/FS.GG.Game.Render.Browser.fsproj -c Release -p:PackageVersion="$PACK_VERSION" -o "$TMP/feed" >/dev/null
+dotnet pack src/Game.Core/FS.GG.Game.Core.fsproj -c Release -p:PackageVersion="$PACK_VERSION" -o "$TMP/feed" >/dev/null
+[[ -f $TMP/feed/$BROWSER_PACKAGE ]] || {
+  echo "test-render-browser-host: expected package was not produced: $BROWSER_PACKAGE" >&2
+  exit 1
+}
+# Both packed Fable views against the source tree: lists derived from src/Game.Render/Fable and src/Render.Browser
+# (bindings first), no MSBuild condition anywhere in either packed project (parsed as XML), every listed source in the
+# package and byte-identical to the tree, and the bindings at the pinned sha256 (tests/release/check-fable-views.py).
+python3 -I "$REPO_ROOT/tests/release/check-fable-views.py" --root "$REPO_ROOT" \
+  --render "$TMP/feed/$PACKAGE" --browser "$TMP/feed/$BROWSER_PACKAGE"
+mkdir -p "$TMP/unpacked-browser"
+unzip -q "$TMP/feed/$BROWSER_PACKAGE" -d "$TMP/unpacked-browser"
+cmp "$TMP/unpacked-browser/fable/FS.GG.Game.Render.Browser.fsproj" src/Render.Browser/Fable/FS.GG.Game.Render.Browser.fsproj
+cmp "$TMP/unpacked-browser/fable-compatibility/compatibility-profile.v1.json" src/Render.Browser/Fable/compatibility-profile.v1.json
+for corpus in babylon pixi; do
+  for file in package.json package-lock.json; do
+    cmp "$TMP/unpacked-browser/js-bindings/$corpus/$file" "$REPO_ROOT/artifacts/js-bindings/$corpus/npm/$file"
+  done
+done
+NUSPEC="$(unzip -p "$TMP/feed/$BROWSER_PACKAGE" FS.GG.Game.Render.Browser.nuspec)"
+grep -q "<dependency id=\"FS.GG.Game.Render\" version=\"$PACK_VERSION\"" <<<"$NUSPEC" || {
+  echo "test-render-browser-host: the browser host package does not depend on FS.GG.Game.Render $PACK_VERSION" >&2
+  exit 1
+}
+if grep -Eq 'Bindings|Fable\.Metadata|Fable\.Package\.SDK' <<<"$NUSPEC"; then
+  echo "test-render-browser-host: the browser host package depends on a repository-only project or build tool" >&2
+  exit 1
+fi
+"$REPO_ROOT/tests/release/test-render-browser-package-consumer.sh" --packages "$TMP/feed" --version "$PACK_VERSION"
 
 # The generator's sample is its output for the smoke's arguments, byte for byte, so the template the smoke compiles
 # and runs the conformance kit on is the template a game gets (GAME-RENDER-ADOPT-01.1, FS.GG.Game#745).
@@ -184,43 +212,32 @@ printf '%s\n' \
 # 3. Real browser run, in REAL time. A WebGL canvas needs compositor frames (Babylon compiles shaders
 #    asynchronously and the smoke waits for the first drawn frame), and a virtual-time browser run delivers only a
 #    couple of animation frames, so the page reports through the console instead: it logs one
-#    RENDER-SMOKE-RESULT line (counts and a base64 report) when it is done and this script waits for that line,
-#    bounded, then stops the browser.
+#    RENDER-SMOKE-RESULT line (counts and a base64 report) when it is done.
+#
+#    The browser is driven by tests/Render.Browser.Smoke/driver/run-smoke.mjs (Playwright, pinned in its
+#    package-lock.json), because the interaction checks (FS.GG.Game#751) need REAL input: the driver performs the
+#    page's pointer and keyboard requests with Playwright's trusted page.mouse and page.keyboard. It writes every
+#    console line to the log this script parses and stops the browser once the result is reported, bounded.
 #
 #    The default flags give WebGL through SwiftShader (software), which is what a CI runner has;
 #    RENDER_SMOKE_BROWSER_FLAGS selects a GPU instead. The result names the WebGL renderer that ran.
 BROWSER_FLAGS="${RENDER_SMOKE_BROWSER_FLAGS:---headless=new --no-sandbox --disable-gpu --enable-unsafe-swiftshader --use-angle=swiftshader}"
-BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-120}"
-mkdir -p "$TMP/profile"
+BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-180}"
+mkdir -p "$TMP/driver"
+cp tests/Render.Browser.Smoke/driver/package.json tests/Render.Browser.Smoke/driver/package-lock.json \
+  tests/Render.Browser.Smoke/driver/run-smoke.mjs "$TMP/driver/"
+(cd "$TMP/driver" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)
 : >"$TMP/browser.stderr"
 # shellcheck disable=SC2086
-setsid "$BROWSER" \
-  $BROWSER_FLAGS \
-  --user-data-dir="$TMP/profile" \
-  --allow-file-access-from-files \
-  --enable-logging=stderr --v=0 \
-  "file://$TMP/js/index.html" \
-  >/dev/null 2>"$TMP/browser.stderr" &
-BROWSER_PID=$!
-stop_browser() { kill -- "-$BROWSER_PID" 2>/dev/null || kill "$BROWSER_PID" 2>/dev/null || true; }
-trap 'stop_browser; [[ ${RENDER_SMOKE_KEEP:-0} == 1 ]] || rm -rf "$TMP"' EXIT
-
-waited=0
-until grep -q 'RENDER-SMOKE-RESULT' "$TMP/browser.stderr" 2>/dev/null; do
-  if ! kill -0 "$BROWSER_PID" 2>/dev/null; then
-    break
-  fi
-  if [[ $waited -ge $((BROWSER_TIMEOUT * 4)) ]]; then
-    break
-  fi
-  sleep 0.25
-  waited=$((waited + 1))
-done
-stop_browser
+node "$TMP/driver/run-smoke.mjs" "$TMP/js/index.html" "$BROWSER" "$TMP/browser.stderr" "$BROWSER_TIMEOUT" $BROWSER_FLAGS || {
+  echo "test-render-browser-host: the real-input driver failed" >&2
+  grep -E 'CONSOLE|Uncaught|DRIVER' "$TMP/browser.stderr" | head -n 40 >&2 || true
+  exit 1
+}
 
 if ! grep -q 'RENDER-SMOKE-RESULT' "$TMP/browser.stderr"; then
   echo "test-render-browser-host: the page never reported a result within ${BROWSER_TIMEOUT}s (the module did not run or did not finish)" >&2
-  grep -E 'CONSOLE|Uncaught' "$TMP/browser.stderr" | head -n 40 >&2 || true
+  grep -E 'CONSOLE|Uncaught|DRIVER' "$TMP/browser.stderr" | head -n 40 >&2 || true
   exit 1
 fi
 

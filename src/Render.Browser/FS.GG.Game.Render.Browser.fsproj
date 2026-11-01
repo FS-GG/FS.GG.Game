@@ -5,18 +5,33 @@
        adapters that need JavaScript interop: the retained SVG surface and the PixiJS and BabylonJS
        adapters. The Babylon and Pixi adapters consume the bindings (Templates#809 / PR #812 and #808 / PR #814)
        through src/Render.Browser.Bindings, which compiles the bindings source generated from a pinned template
-       commit. It is built and exercised by
-       scripts/test-render-browser-host.sh, not by the .NET solution, exactly like Wasm.Browser.
-       Not packed: publication is explicit later scope for the plan. -->
+       commit. It is built and exercised by scripts/test-render-browser-host.sh, not by the .NET solution,
+       exactly like Wasm.Browser.
+
+       Packed as FS.GG.Game.Render.Browser (GAME-RENDER-ADOPT-01.1, FS.GG.Game#745), a Fable library package:
+       fable/ carries this project's sources and the two generated Bindings.fs files, which a Fable consumer
+       compiles from source. Packing requires the generated sources (scripts/materialize-js-bindings.sh all);
+       the bindings project's VerifyGeneratedBindings target refuses a missing, stale or edited one, and the
+       pack refuses again below before it copies them. The bindings ship as source, not as a compiled
+       assembly, because the source is what eng/js-bindings/pin.env pins (the compiled bytes differ by SDK).
+       The package's npm dependencies (the exact Babylon and Pixi pins) are declared on the packed project
+       for Femto, and their exact npm closures ship under js-bindings/. -->
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageId>FS.GG.Game.Render.Browser</PackageId>
     <AssemblyName>FS.GG.Game.Render.Browser</AssemblyName>
-    <IsPackable>false</IsPackable>
+    <Title>FS.GG.Game.Render.Browser</Title>
+    <Description>Fable browser host for FS.GG.Game.Render renderer selection: the RendererDriver, the retained SVG, PixiJS and BabylonJS scene surfaces, BrowserRenderers (declare and start all three backends for one game-state type) and BrowserConformance (the browser side of the RendererConformance kit). Ships as Fable source, including the PixiJS 8.22.0 and BabylonJS 9.33.1 bindings generated from a pinned FS.GG.Templates commit.</Description>
+    <PackageTags>fsharp;game;rendering;scene;svg;pixijs;babylonjs;webgl;browser;fable-javascript</PackageTags>
+    <FablePackageType>library</FablePackageType>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="CanvasInput.fsi" />
+    <Compile Include="CanvasInput.fs" />
     <Compile Include="SvgSurface.fsi" />
     <Compile Include="SvgSurface.fs" />
     <Compile Include="RetainedSvgSurface.fsi" />
@@ -35,12 +50,116 @@
     <Compile Include="BrowserRenderers.fs" />
   </ItemGroup>
 
+  <!-- The host's own sources, captured at evaluation, before the SDK adds generated AssemblyInfo files to Compile.
+       The package's fable/ view and the packed project's list are checked against exactly this. -->
   <ItemGroup>
-    <ProjectReference Include="..\Game.Render\Fable\FS.GG.Game.Render.fsproj" />
+    <_HostFableSource Include="@(Compile)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- FS.GG.Game.Render, two ways (FS.GG.Game#745). Fable cracks a project with a design-time build
+         (DesignTimeBuild=true) and compiles every referenced project's sources, so in a design-time build (Fable,
+         editors) this references the bounded Fable view, src/Game.Render/Fable. A normal build, restore and pack
+         reference src/Game.Render itself: this assembly then references FS.GG.Game.Render, and the package depends
+         on FS.GG.Game.Render at the same version, exactly as a consumer resolves them. The view's sources are a
+         subset of that project's, so both compile the same code. -->
+    <ProjectReference Include="..\Game.Render\Fable\FS.GG.Game.Render.fsproj" Condition="'$(DesignTimeBuild)' == 'true'" />
+    <ProjectReference Include="..\Game.Render\FS.GG.Game.Render.fsproj" Condition="'$(DesignTimeBuild)' != 'true'" />
     <PackageReference Include="FS.GG.UI.Scene" />
     <PackageReference Include="FS.GG.UI.Scene.SvgBrowser" />
     <PackageReference Include="Fable.Browser.Dom" />
-    <ProjectReference Include="..\Render.Browser.Bindings\FS.GG.Game.Render.Browser.Bindings.fsproj" />
+    <!-- Private: no package carries the bindings assembly. The bindings ship as source in fable/, and no public
+         signature of this package names a bindings type. Fable.Core, which the bindings need, becomes a direct
+         package dependency below. -->
+    <ProjectReference Include="..\Render.Browser.Bindings\FS.GG.Game.Render.Browser.Bindings.fsproj" PrivateAssets="all" />
+    <PackageReference Include="Fable.Core" />
+    <PackageReference Include="Fable.Package.SDK"
+                      PrivateAssets="all"
+                      IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <JsBindingsRoot Condition="'$(JsBindingsRoot)' == ''">$(MSBuildThisFileDirectory)../../artifacts/js-bindings</JsBindingsRoot>
+    <BabylonBindingsSource>$(JsBindingsRoot)/babylon/product/src/FS.GG.Game.Render.BabylonBindings/Bindings.fs</BabylonBindingsSource>
+    <PixiBindingsSource>$(JsBindingsRoot)/pixi/product/src/FS.GG.Game.Render.PixiBindings/Bindings.fs</PixiBindingsSource>
+  </PropertyGroup>
+
+  <!-- The bounded Fable source view: this project's sources, the generated bindings it compiles against, and the
+       packed project that orders them. Same pattern as Game.Render. -->
+  <Target Name="CurateFableCompatibilityView"
+          AfterTargets="CreateFablePackageFiles">
+    <ItemGroup>
+      <_PackageFiles Remove="@(_PackageFiles)" />
+      <!-- Exactly the sources this project compiles: a module added to the host is packed with no second list. -->
+      <_PackageFiles Include="@(_HostFableSource)">
+        <Pack>true</Pack>
+        <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+      <_PackageFiles Include="$(BabylonBindingsSource)">
+        <Pack>true</Pack>
+        <PackagePath>fable/generated/BabylonBindings.fs</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+      <_PackageFiles Include="$(PixiBindingsSource)">
+        <Pack>true</Pack>
+        <PackagePath>fable/generated/PixiBindings.fs</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+      <_PackageFiles Include="Fable/FS.GG.Game.Render.Browser.fsproj">
+        <Pack>true</Pack>
+        <PackagePath>fable/FS.GG.Game.Render.Browser.fsproj</PackagePath>
+        <BuildAction>None</BuildAction>
+      </_PackageFiles>
+    </ItemGroup>
+  </Target>
+
+  <!-- The packed project (Fable/FS.GG.Game.Render.Browser.fsproj) is the list a Fable consumer compiles. Fable does not
+       evaluate MSBuild conditions in it, so it must have none (read as XML, on any element), and it must list exactly
+       the two generated bindings followed by this project's own Compile items, in order. -->
+  <Target Name="RequirePackedFableProjectMatchesHost" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)Fable/FS.GG.Game.Render.Browser.fsproj" Query="//@*[local-name()='Condition']">
+      <Output TaskParameter="Result" ItemName="_PackedFableCondition" />
+    </XmlPeek>
+    <Error Condition="'@(_PackedFableCondition)' != ''" Text="Fable/FS.GG.Game.Render.Browser.fsproj must not use MSBuild conditions: Fable does not evaluate them in a package's project file." />
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)Fable/FS.GG.Game.Render.Browser.fsproj" Query="//*[local-name()='Compile']/@Include">
+      <Output TaskParameter="Result" ItemName="_PackedFableSource" />
+    </XmlPeek>
+    <ItemGroup>
+      <_ExpectedPackedFableSource Include="generated/BabylonBindings.fs;generated/PixiBindings.fs" />
+      <_ExpectedPackedFableSource Include="@(_HostFableSource->'%(Identity)')" />
+    </ItemGroup>
+    <Error Condition="'@(_PackedFableSource)' != '@(_ExpectedPackedFableSource)'" Text="Fable/FS.GG.Game.Render.Browser.fsproj lists [@(_PackedFableSource)], but the package carries [@(_ExpectedPackedFableSource)]: the two generated bindings, then this project's Compile items in order. Add the module to the packed project." />
+  </Target>
+
+  <!-- Refuse to pack generated bindings that are missing or are not the pinned bytes, whatever path supplied them. -->
+  <Target Name="RequirePinnedBindingsForPack" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <PropertyGroup>
+      <_PinText>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../eng/js-bindings/pin.env'))</_PinText>
+      <_BabylonPinned>$([System.Text.RegularExpressions.Regex]::Replace('$(_PinText)', '(?s).*BABYLON_BINDINGS_SHA256=([0-9a-f]+).*', '$1'))</_BabylonPinned>
+      <_PixiPinned>$([System.Text.RegularExpressions.Regex]::Replace('$(_PinText)', '(?s).*PIXI_BINDINGS_SHA256=([0-9a-f]+).*', '$1'))</_PixiPinned>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(BabylonBindingsSource)') Or !Exists('$(PixiBindingsSource)')" Text="Packing FS.GG.Game.Render.Browser requires the generated bindings under $(JsBindingsRoot). Run scripts/materialize-js-bindings.sh all." />
+    <GetFileHash Files="$(BabylonBindingsSource)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Hash" PropertyName="_BabylonPackHash" />
+    </GetFileHash>
+    <GetFileHash Files="$(PixiBindingsSource)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Hash" PropertyName="_PixiPackHash" />
+    </GetFileHash>
+    <Error Condition="'$(_BabylonPackHash.ToLowerInvariant())' != '$(_BabylonPinned)' Or '$(_PixiPackHash.ToLowerInvariant())' != '$(_PixiPinned)'" Text="The generated bindings to pack are not the bytes eng/js-bindings/pin.env pins. Run scripts/materialize-js-bindings.sh all." />
+  </Target>
+
+  <ItemGroup Label="fable-compatibility-metadata">
+    <None Include="Fable/compatibility-profile.v1.json"
+          Pack="true"
+          PackagePath="fable-compatibility/compatibility-profile.v1.json" />
+    <!-- The exact npm closures the bindings were generated against (inert: never fed to a consumer's build). -->
+    <None Include="$(JsBindingsRoot)/babylon/npm/package.json;$(JsBindingsRoot)/babylon/npm/package-lock.json"
+          Pack="true"
+          PackagePath="js-bindings/babylon/%(Filename)%(Extension)" />
+    <None Include="$(JsBindingsRoot)/pixi/npm/package.json;$(JsBindingsRoot)/pixi/npm/package-lock.json"
+          Pack="true"
+          PackagePath="js-bindings/pixi/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

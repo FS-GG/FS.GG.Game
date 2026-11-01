@@ -348,4 +348,3 @@ def report_findings(name: str, findings: Sequence[str]) -> int:
         print(f"::error::{f}", file=sys.stderr)
     print(f"::error::{name} FAILED — {len(findings)} finding(s)", file=sys.stderr)
     return int(ExitCode.FINDING)
-
