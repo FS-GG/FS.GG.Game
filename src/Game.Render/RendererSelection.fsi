@@ -82,7 +82,7 @@ module RendererAdapter =
 ///
 /// The renderer adapters available for ONE game-state type. The type parameter is the key: an adapter
 /// for one state type cannot be registered for, or selected by, another. Built only by
-/// `RendererRegistry.svg`, so the default `Svg` backend always has an adapter.
+/// `RendererRegistry.svg` or `RendererRegistry.create`, so the default `Svg` backend always has an adapter.
 [<NoEquality; NoComparison>]
 type RendererRegistry<'State>
 
@@ -96,6 +96,12 @@ module RendererRegistry =
         view: ('State -> FS.GG.UI.Scene.Scene) ->
         mountScene: (FS.GG.UI.Scene.Scene -> Result<RendererMount<FS.GG.UI.Scene.Scene>, string>) ->
             RendererRegistry<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A registry whose default adapter is `adapter`, a ready SVG adapter at the game-state type itself (for a game
+    /// that owns a retained SVG surface and has no `FS.GG.UI.Scene` projection to hand to `svg`). `Error` when
+    /// `adapter` realises another backend, because only an SVG adapter can be the default; nothing is built then.
+    val create: adapter: RendererAdapter<'State> -> Result<RendererRegistry<'State>, string>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Register an adapter for its backend, replacing any adapter already registered for that backend.

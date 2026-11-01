@@ -1,7 +1,5 @@
 namespace FS.GG.Game.Render
 
-open FS.GG.UI.Scene
-
 /// See RendererConformance.fsi for the contract.
 [<Sealed>]
 type ConformanceResult internal (check: string, passed: bool, detail: string) =
@@ -204,13 +202,21 @@ module RendererConformance =
 
             let offered = RendererRegistry.available subject.Registry
 
+            // The instrumented copy of the subject's registry. It starts from the instrumented default adapter, so the
+            // kit never builds a placeholder default, and a registry built from a ready adapter is held to the same
+            // checks as one built from a Scene.
             let registry =
-                offered
-                |> List.choose (fun backend -> RendererRegistry.tryFind backend subject.Registry)
-                |> List.fold
-                    (fun registry adapter -> RendererRegistry.register (instrument adapter) registry)
-                    // Replaced by the instrumented SVG adapter: every registry offers SVG.
-                    (RendererRegistry.svg (fun _ -> ({ Nodes = [] }: Scene)) (fun _ -> Error "placeholder"))
+                let adapters =
+                    offered
+                    |> List.choose (fun backend -> RendererRegistry.tryFind backend subject.Registry)
+                    |> List.map instrument
+
+                match adapters |> List.partition (fun adapter -> adapter.Backend = RendererBackend.defaultBackend) with
+                | [ svg ], others ->
+                    match RendererRegistry.create svg with
+                    | Ok created -> others |> List.fold (fun registry adapter -> RendererRegistry.register adapter registry) created
+                    | Error reason -> failwith reason
+                | _ -> failwith "a registry always offers exactly one default adapter"
 
             let mountsOf backend =
                 mounts |> Seq.filter (fun record -> record.Backend = backend) |> List.ofSeq

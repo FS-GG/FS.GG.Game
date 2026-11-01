@@ -88,6 +88,26 @@ The reference game does exactly this: `src/ReferenceGame/Renderers.fs` declares 
 browser smoke runs the kit on it on all three real backends. `tests/Render.Browser.Smoke/GeneratedRenderers.fs`
 is the generator's unedited output, compiled and run through the kit too.
 
+### Registering a ready adapter
+
+A game with its own retained SVG surface (selectable objects, accessible labels, a camera, an input host) has no
+`Scene` to hand to `RendererRegistry.svg`, and `SceneSurface` would flatten that surface into one non-selectable
+object. `RendererRegistry.create adapter` registers the ready adapter as the default instead: no placeholder is
+built, and `Error` says why when the adapter is not an SVG adapter (only SVG can be the default). Canvas adapters
+join with `RendererRegistry.register`, and the kit runs on the result like on any other registry.
+
+```fsharp
+match RendererRegistry.create { Backend = RendererBackend.Svg; Mount = mountMyBoard } with
+| Ok registry -> registry |> RendererRegistry.register myCanvasAdapter
+| Error reason -> failwith reason
+```
+
+In the browser host, `RetainedSvgSurface` is that adapter for any game whose state projects onto a
+`FS.GG.UI.Scene.RetainedScene`: `RetainedSvgSurface.create container label size scene`, with
+`withSelection selected onSelect` and `withInput attach`, and `RetainedSvgSurface.registry`. It owns the scene
+revisions, keeps the user's camera across presents, keeps the surface's selection in step with the state (and
+reports the user's own selections), and releases the input host with the mount.
+
 ### The conformance kit
 
 `RendererConformance.run` takes a `ConformanceSubject` and returns one `ConformanceResult` per requirement.
