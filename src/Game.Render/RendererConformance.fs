@@ -73,6 +73,172 @@ module InteractionProbe =
     let create press move focus key focused mirror liveWrites tabIndex inputHosts =
         InteractionProbe(press, move, focus, key, focused, mirror, liveWrites, tabIndex, inputHosts)
 
+/// One pixel a backend must show: the pixel containing `Point` (scene coordinates, y down) is the scene colour `Colour`.
+type PixelExpectation =
+    {
+        Point: Point
+        Colour: Color
+    }
+
+[<Sealed>]
+type PixelProbe
+    internal
+    (
+        read: RendererBackend -> Point list -> Async<(int * int * int) option list>,
+        appearance: RendererBackend -> Color -> int * int * int,
+        tolerance: RendererBackend -> int
+    ) =
+    member internal _.Read backend points = read backend points
+    member internal _.Appearance backend colour = appearance backend colour
+    member internal _.Tolerance backend = tolerance backend
+
+[<RequireQualifiedAccess>]
+module PixelProbe =
+
+    let create read appearance tolerance = PixelProbe(read, appearance, tolerance)
+
+[<RequireQualifiedAccess>]
+module ScenePixels =
+
+    /// A drawn node with its bounds in scene coordinates.
+    type private Drawn =
+        | Box of left: float * top: float * right: float * bottom: float * colour: Color
+        | Oval of cx: float * cy: float * rx: float * ry: float * colour: Color
+
+    let private colourOf drawn =
+        match drawn with
+        | Box(_, _, _, _, colour)
+        | Oval(_, _, _, _, colour) -> colour
+
+    let rec private flatten (dx: float, dy: float) (scene: Scene) (drawn: ResizeArray<Drawn>) : unit =
+        for node in scene.Nodes do
+            match node with
+            | SceneNode.Group inner ->
+                for scene in inner do
+                    flatten (dx, dy) scene drawn
+            | SceneNode.Translate((ox, oy), inner) -> flatten (dx + ox, dy + oy) inner drawn
+            | SceneNode.Rectangle((x, y, w, h), fill) ->
+                drawn.Add(Box(x + dx, y + dy, x + dx + w, y + dy + h, fill))
+            | SceneNode.FilledEllipse(bounds, fill) ->
+                drawn.Add(
+                    Oval(
+                        bounds.X + dx + bounds.Width / 2.0,
+                        bounds.Y + dy + bounds.Height / 2.0,
+                        bounds.Width / 2.0,
+                        bounds.Height / 2.0,
+                        fill
+                    )
+                )
+            | SceneNode.Circle(center, radius, fill) -> drawn.Add(Oval(center.X + dx, center.Y + dy, radius, radius, fill))
+            | _ -> ()
+
+    /// How a node covers the unit pixel `[col, col+1] x [row, row+1]`.
+    type private Cover =
+        | Full
+        | Partial
+        | Clear
+
+    let private cover (col: int) (row: int) (drawn: Drawn) : Cover =
+        let x0 = float col
+        let y0 = float row
+        let x1 = x0 + 1.0
+        let y1 = y0 + 1.0
+        let epsilon = 1e-9
+
+        match drawn with
+        | Box(l, t, r, b, _) ->
+            if x1 <= l + epsilon || x0 >= r - epsilon || y1 <= t + epsilon || y0 >= b - epsilon then
+                Clear
+            elif x0 >= l - epsilon && x1 <= r + epsilon && y0 >= t - epsilon && y1 <= b + epsilon then
+                Full
+            else
+                Partial
+        | Oval(cx, cy, rx, ry, _) ->
+            // In the ellipse's own unit space the pixel is still an axis-aligned box.
+            let ux0 = (x0 - cx) / rx
+            let ux1 = (x1 - cx) / rx
+            let uy0 = (y0 - cy) / ry
+            let uy1 = (y1 - cy) / ry
+            let nearX = if ux0 > 0.0 then ux0 elif ux1 < 0.0 then ux1 else 0.0
+            let nearY = if uy0 > 0.0 then uy0 elif uy1 < 0.0 then uy1 else 0.0
+
+            if nearX * nearX + nearY * nearY >= 1.0 - epsilon then
+                Clear
+            else
+                let farX = max (abs ux0) (abs ux1)
+                let farY = max (abs uy0) (abs uy1)
+                if farX * farX + farY * farY <= 1.0 - 1e-6 then Full else Partial
+
+    /// The scene colour a pixel must show, when the scene decides it: the topmost node that wholly covers it is opaque
+    /// and no node covers it in part. `None` when nothing is drawn there or the scene leaves it open.
+    let private colourAt (drawn: ResizeArray<Drawn>) (col: int) (row: int) : Color option =
+        let mutable top: Color option = None
+        let mutable unsure = false
+
+        for node in drawn do
+            match cover col row node with
+            | Clear -> ()
+            | Partial -> unsure <- true
+            | Full ->
+                let colour = colourOf node
+                top <- if colour.Alpha = 255uy then Some colour else None
+                unsure <- unsure || colour.Alpha <> 255uy
+
+        if unsure then None else top
+
+    let private ceilInt (value: float) = int (System.Math.Ceiling value)
+    let private floorInt (value: float) = int (System.Math.Floor value)
+
+    let expectations (scene: Scene) : PixelExpectation list =
+        let drawn = ResizeArray<Drawn>()
+        flatten (0.0, 0.0) scene drawn
+        let seen = System.Collections.Generic.HashSet<int * int>()
+        let found = ResizeArray<PixelExpectation>()
+
+        let sample (col: int) (row: int) =
+            if seen.Add((col, row)) then
+                match colourAt drawn col row with
+                | Some colour ->
+                    found.Add
+                        {
+                            Point =
+                                {
+                                    X = float col + 0.5
+                                    Y = float row + 0.5
+                                }
+                            Colour = colour
+                        }
+                | None -> ()
+
+        for node in drawn do
+            match node with
+            | Box(l, t, r, b, _) ->
+                let midRow = floorInt ((t + b) / 2.0)
+                let midCol = floorInt ((l + r) / 2.0)
+                // The first whole pixel inside and the first whole pixel outside each edge, on the middle row or column.
+                sample midCol midRow
+                sample (ceilInt l) midRow
+                sample (floorInt l - 1) midRow
+                sample (floorInt r - 1) midRow
+                sample (ceilInt r) midRow
+                sample midCol (ceilInt t)
+                sample midCol (floorInt t - 1)
+                sample midCol (floorInt b - 1)
+                sample midCol (ceilInt b)
+            | Oval(cx, cy, rx, ry, _) ->
+                // The centre, and the pixel one clear of the extreme on each axis: a round shape's inside is shaded
+                // differently by lit backends, so its edge is read from outside, and the pixel the extreme touches
+                // takes a share of the shape's colour from a GPU-rasterised SVG (about 13% of a white circle's).
+                let midRow = floorInt cy
+                let midCol = floorInt cx
+                sample midCol midRow
+                sample (ceilInt (cx + rx) + 1) midRow
+                sample (floorInt (cx - rx) - 2) midRow
+                sample midCol (ceilInt (cy + ry) + 1)
+                sample midCol (floorInt (cy - ry) - 2)
+
+        List.ofSeq found
+
 /// Opaque behind the .fsi: built by `RendererConformance.subject` and its `with*` functions only, so a field added
 /// later is not a breaking change.
 [<NoEquality; NoComparison>]
@@ -88,6 +254,7 @@ type ConformanceSubject<'State> =
         LateFailures: Map<RendererBackend, LateFailureTrigger>
         Viewport: (('State -> float * float) * (ConformanceHost<'State> -> RendererBackend -> Async<(float * float) option>)) option
         Interaction: (SceneInteraction<'State> * SelectionRoute * InteractionProbe) option
+        Pixels: (('State -> PixelExpectation list) * PixelProbe) option
     }
 
 /// One mount the instrumented registry handed out: the states it received (newest first, the mount's own state
@@ -166,6 +333,7 @@ module RendererConformance =
             LateFailures = Map.empty
             Viewport = None
             Interaction = None
+            Pixels = None
         }
 
     let withStart start (subject: ConformanceSubject<'State>) = { subject with Start = start }
@@ -185,6 +353,11 @@ module RendererConformance =
     let withInteraction interaction route probe (subject: ConformanceSubject<'State>) =
         { subject with
             Interaction = Some(interaction, route, probe)
+        }
+
+    let withPixels expected probe (subject: ConformanceSubject<'State>) =
+        { subject with
+            Pixels = Some(expected, probe)
         }
 
     let failures (results: ConformanceResult list) =
@@ -919,6 +1092,238 @@ module RendererConformance =
                                 (sprintf "%d mounts for %d changes" (mountsOf backend).Length changes)
 
                         do! stop host
+
+                // pixels -----------------------------------------------------------------------------------------
+                match subject.Pixels with
+                | None -> ()
+                | Some(expectedPixels, pixelProbe) ->
+                    let perState = states |> Array.map expectedPixels
+
+                    check
+                        "pixels: every state declares at least one pixel to read back"
+                        (perState |> Array.forall (fun wanted -> not wanted.IsEmpty))
+                        (sprintf
+                            "pixels per state: %s"
+                            (perState |> Array.map (fun wanted -> string wanted.Length) |> String.concat ","))
+
+                    // One frame: a condition that holds on its second evaluation.
+                    let oneFrame () =
+                        let calls = ref 0
+
+                        subject.WaitUntil(fun () ->
+                            calls.Value <- calls.Value + 1
+                            calls.Value > 1)
+
+                    let differences (backend: RendererBackend) (wanted: PixelExpectation list) (got: (int * int * int) option list) =
+                        let tolerance = pixelProbe.Tolerance backend
+
+                        if wanted.Length <> got.Length then
+                            [ sprintf "the probe returned %d pixels for %d points" got.Length wanted.Length ]
+                        else
+                            List.zip wanted got
+                            |> List.choose (fun (expectation, shown) ->
+                                let wantR, wantG, wantB = pixelProbe.Appearance backend expectation.Colour
+
+                                match shown with
+                                | Some(r, g, b) when abs (r - wantR) <= tolerance && abs (g - wantG) <= tolerance && abs (b - wantB) <= tolerance ->
+                                    None
+                                | _ ->
+                                    Some(
+                                        sprintf
+                                            "(%g, %g) wants (%d,%d,%d) shows %A"
+                                            expectation.Point.X
+                                            expectation.Point.Y
+                                            wantR
+                                            wantG
+                                            wantB
+                                            shown
+                                    ))
+
+                    // The state's pixels, polled frame by frame: asynchronous backends need frames to draw, and a canvas
+                    // that renders when it is presented is read in the task that presented it.
+                    let settle (host: ConformanceHost<'State>) backend (state: 'State) (wanted: PixelExpectation list) (frames: int) =
+                        async {
+                            let points = wanted |> List.map (fun expectation -> expectation.Point)
+                            let remaining = ref frames
+                            let finished = ref false
+                            let last: string list ref = ref [ "not read" ]
+
+                            while not finished.Value do
+                                host.Dispatch(RendererMsg.StateChanged state)
+                                let! got = pixelProbe.Read backend points
+                                last.Value <- differences backend wanted got
+
+                                if last.Value.IsEmpty || remaining.Value <= 0 then
+                                    finished.Value <- true
+                                else
+                                    remaining.Value <- remaining.Value - 1
+                                    let! _ = oneFrame ()
+                                    ()
+
+                            return last.Value
+                        }
+
+                    for backend in offered do
+                        let name = id backend
+                        let host = subject.Start registry initial
+
+                        if backend <> RendererBackend.Svg then
+                            select host backend
+
+                        let wrong = ResizeArray<string>()
+
+                        for index in 0 .. states.Length - 1 do
+                            host.Dispatch(RendererMsg.StateChanged states.[index])
+                            let! left = settle host backend states.[index] perState.[index] (if index = 0 then 600 else 120)
+
+                            if not left.IsEmpty then
+                                wrong.Add(
+                                    sprintf
+                                        "state %d: %d of %d pixels differ, e.g. %s"
+                                        index
+                                        left.Length
+                                        perState.[index].Length
+                                        (left |> List.truncate 3 |> String.concat "; ")
+                                )
+
+                        check
+                            (sprintf "pixels %s: every state's nodes are drawn at their declared positions and sizes" name)
+                            (wrong.Count = 0 && isOn host backend)
+                            (String.concat " | " wrong + " " + describe host)
+
+                        do! stop host
+
+                    // Hit regions and drawn pixels agree: at the first whole pixel inside and outside each edge of a box
+                    // object, the backend's hit test is the one `SceneInteraction.hitTest` gives, and the drawn pixels
+                    // differ, so the object is drawn where it is hit.
+                    match subject.Interaction with
+                    | None -> ()
+                    | Some(interaction, route, probe) ->
+                        let objectsOf = SceneInteraction.objects interaction
+
+                        let play =
+                            subject.States
+                            |> List.tryFind (fun state ->
+                                objectsOf state |> List.exists (fun target -> target.Shape = SelectableShape.Box))
+                            |> Option.map (SceneInteraction.apply interaction SelectionRequest.Clear)
+
+                        let ceil' (value: float) = int (System.Math.Ceiling value)
+                        let floor' (value: float) = int (System.Math.Floor value)
+
+                        let centre (col: int) (row: int) : Point =
+                            {
+                                X = float col + 0.5
+                                Y = float row + 0.5
+                            }
+
+                        // (inside, outside) at the middle of each of the four edges.
+                        let edges (bounds: Rect) =
+                            let midRow = floor' (bounds.Y + bounds.Height / 2.0)
+                            let midCol = floor' (bounds.X + bounds.Width / 2.0)
+
+                            [
+                                centre (ceil' bounds.X) midRow, centre (floor' bounds.X - 1) midRow
+                                centre (floor' (bounds.X + bounds.Width) - 1) midRow, centre (ceil' (bounds.X + bounds.Width)) midRow
+                                centre midCol (ceil' bounds.Y), centre midCol (floor' bounds.Y - 1)
+                                centre midCol (floor' (bounds.Y + bounds.Height) - 1), centre midCol (ceil' (bounds.Y + bounds.Height))
+                            ]
+
+                        for backend in offered do
+                            let name = id backend
+                            let baseline = RendererBackend.all |> List.map (fun other -> other, probe.InputHosts other) |> Map.ofList
+                            let host = subject.Start registry initial
+                            let requests = ResizeArray<SelectionRequest>()
+
+                            route
+                            |> SelectionRoute.bind (fun request ->
+                                requests.Add request
+
+                                host.Dispatch(
+                                    RendererMsg.StateChanged(SceneInteraction.apply interaction request (host.Model()).State)
+                                ))
+
+                            if backend <> RendererBackend.Svg then
+                                select host backend
+
+                            let problems = ResizeArray<string>()
+
+                            match play with
+                            | None -> problems.Add "no state has a box object to compare"
+                            | Some play ->
+                                host.Dispatch(RendererMsg.StateChanged play)
+                                let objects = objectsOf play
+                                let! attached = subject.WaitUntil(fun () -> probe.InputHosts backend > baseline.[backend])
+
+                                if not attached then
+                                    problems.Add "the input host never attached"
+
+                                for target in objects |> List.filter (fun target -> target.Shape = SelectableShape.Box) do
+                                    for inside, outside in edges target.Bounds do
+                                        let wanted =
+                                            [ inside; outside ]
+                                            |> List.map (fun point -> point, SceneInteraction.hitTest point objects)
+
+                                        // Drawn: the two pixels differ (the state is presented again, with nothing selected, in
+                                        // the task that reads; a backend that draws asynchronously gets a few frames).
+                                        let tolerance = pixelProbe.Tolerance backend
+                                        let differ = ref false
+                                        let remaining = ref 30
+                                        let shown: (int * int * int) option list ref = ref []
+
+                                        while not differ.Value && remaining.Value >= 0 do
+                                            host.Dispatch(RendererMsg.StateChanged play)
+                                            let! got = pixelProbe.Read backend [ inside; outside ]
+                                            shown.Value <- got
+
+                                            match got with
+                                            | [ Some(r1, g1, b1); Some(r2, g2, b2) ] ->
+                                                differ.Value <-
+                                                    abs (r1 - r2) > tolerance || abs (g1 - g2) > tolerance || abs (b1 - b2) > tolerance
+                                            | _ -> ()
+
+                                            if not differ.Value then
+                                                remaining.Value <- remaining.Value - 1
+                                                let! _ = oneFrame ()
+                                                ()
+
+                                        if not differ.Value then
+                                            problems.Add(
+                                                sprintf
+                                                    "%s: no drawn edge between (%g, %g) and (%g, %g): %A"
+                                                    target.Id
+                                                    inside.X
+                                                    inside.Y
+                                                    outside.X
+                                                    outside.Y
+                                                    shown.Value
+                                            )
+
+                                        // Hit: a real press on each lands where the hit test says.
+                                        for point, expected in wanted do
+                                            host.Dispatch(RendererMsg.StateChanged play)
+                                            requests.Clear()
+                                            do! probe.Press backend point
+
+                                            let selected = SceneInteraction.selected interaction (host.Model()).State
+
+                                            if selected <> expected then
+                                                problems.Add(
+                                                    sprintf
+                                                        "%s: a press at (%g, %g) selected %A, the hit test says %A"
+                                                        target.Id
+                                                        point.X
+                                                        point.Y
+                                                        selected
+                                                        expected
+                                                )
+
+                            check
+                                (sprintf "pixels %s: the hit region and the drawn edge of each box object coincide" name)
+                                (problems.Count = 0 && isOn host backend)
+                                (String.concat "; " (Seq.truncate 4 problems) + " " + describe host)
+
+                            do! stop host
+                            SelectionRoute.unbind route
 
                 // interaction ------------------------------------------------------------------------------------
                 match subject.Interaction with

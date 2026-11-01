@@ -1779,6 +1779,9 @@ let kitChecks = 73
 /// The kit's interaction section on three backends (FS.GG.Game#751): one subject check and twelve per backend.
 let interactionChecks = 37
 
+/// The kit's pixels section (FS.GG.Game#753): the subject check, one per backend, and one hit-and-edge check per backend.
+let pixelChecks = 7
+
 /// Kit checks that fail for a known, routed reason, each with its owner. The smoke asserts that they still fail, so the
 /// gap stays visible and the fix that closes it must remove the entry. The retained SVG host of FS.GG.UI.Scene 0.31.0
 /// re-appends every mirror button and rewrites its status on each Present (focus drops to the body, the live region
@@ -1958,7 +1961,7 @@ let runConformance () : Async<unit> =
         do!
             runKit
                 "reference kit"
-                (kitChecks + interactionChecks)
+                (kitChecks + interactionChecks + pixelChecks)
                 (BrowserConformance.subject
                     container
                     route
@@ -1969,7 +1972,10 @@ let runConformance () : Async<unit> =
                  |> RendererConformance.withInteraction
                      ReferenceRenderers.interaction
                      selection
-                     (BrowserConformance.interactionProbe container))
+                     (BrowserConformance.interactionProbe container)
+                 |> RendererConformance.withPixels
+                     (fun model -> ScenePixels.expectations (ReferenceRenderers.view model))
+                     (BrowserConformance.pixelProbe container))
 
         check
             "reference kit: the stage is empty afterwards"
@@ -2134,6 +2140,181 @@ let runConformance () : Async<unit> =
         check "generated start: disposing releases the pending pixi application" released (sprintf "%A" (PixiSurface.live ()))
     }
 
+/// FS.GG.Game#753: Babylon draws a 2D scene at its declared positions and sizes at any node count. A grid of
+/// `columns x rows` small squares (every fifth one round) over a background is mounted on Babylon alone. Every node
+/// must be among Babylon's active meshes, and the pixels `ScenePixels.expectations` decides for the background and
+/// every `stride`-th node (which the grid's non-overlapping nodes leave valid) must be read back. A perspective camera
+/// drew the later nodes magnified about the centre of the canvas and culled those beyond about 400.
+let runBabylonScale (columns: int) (rows: int) (stride: int) : Async<unit> =
+    async {
+        let cell = 10.0
+        let width = float columns * cell
+        let height = float rows * cell
+
+        let node (index: int) =
+            let x = float (index % columns) * cell + 2.0
+            let y = float (index / columns) * cell + 2.0
+
+            let color: Color =
+                {
+                    Red = byte (40 + (index * 7) % 200)
+                    Green = byte (60 + (index * 13) % 180)
+                    Blue = byte (80 + (index * 29) % 150)
+                    Alpha = 255uy
+                }
+
+            if index % 5 = 4 then
+                SceneNode.Circle({ X = x + 3.0; Y = y + 3.0 }, 3.0, color)
+            else
+                SceneNode.Rectangle((x, y, 6.0, 6.0), color)
+
+        let backgroundColor: Color =
+            {
+                Red = 10uy
+                Green = 20uy
+                Blue = 30uy
+                Alpha = 255uy
+            }
+
+        let background = SceneNode.Rectangle((0.0, 0.0, width, height), backgroundColor)
+        let total = columns * rows + 1
+        let scene: Scene = { Nodes = background :: [ for index in 0 .. columns * rows - 1 -> node index ] }
+
+        let sample: Scene =
+            { Nodes = background :: [ for index in 0..stride .. columns * rows - 1 -> node index ] }
+
+        let wanted = ScenePixels.expectations sample
+        let points = wanted |> List.map (fun expectation -> expectation.Point)
+        let container = document.createElement "div"
+        document.body.appendChild container |> ignore
+        let name = sprintf "babylon scale %d nodes" total
+
+        match BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene with
+        | Error reason -> check (name + ": mounts") false reason
+        | Ok mount ->
+            let frames = ref 0
+            let finished = ref false
+            let wrong = ref [ "not read" ]
+            let active = ref 0
+
+            // Shaders compile asynchronously: present the same scene frame by frame (each present renders in the task
+            // that reads) until every pixel is drawn and every mesh is active.
+            while not finished.Value do
+                mount.Present scene
+                let! shown = BrowserConformance.drawnPixels container RendererBackend.Babylon points
+                active.Value <- BrowserConformance.babylonActiveMeshes ()
+
+                wrong.Value <-
+                    List.zip wanted shown
+                    |> List.choose (fun (expectation, got) ->
+                        let lit = litOf expectation.Colour
+                        let wantR, wantG, wantB = lit.[0], lit.[1], lit.[2]
+
+                        match got with
+                        | Some(r, g, b) when abs (r - wantR) <= 4 && abs (g - wantG) <= 4 && abs (b - wantB) <= 4 -> None
+                        | _ -> Some(sprintf "(%g, %g) wants (%d,%d,%d) shows %A" expectation.Point.X expectation.Point.Y wantR wantG wantB got))
+
+                if (wrong.Value.IsEmpty && active.Value = total) || frames.Value >= 600 then
+                    finished.Value <- true
+                else
+                    frames.Value <- frames.Value + 1
+                    do! BrowserConformance.waitUntil 1 (fun () -> false) |> Async.Ignore
+
+            info (name + ": frames until drawn") (string frames.Value)
+
+            check
+                (sprintf "%s: every node is among babylon's active meshes" name)
+                (active.Value = total)
+                (sprintf "%d active of %d nodes" active.Value total)
+
+            check
+                (sprintf "%s: %d sampled pixels are drawn at their declared positions and sizes" name wanted.Length)
+                (not wanted.IsEmpty && wrong.Value.IsEmpty)
+                (sprintf "%d differ, e.g. %s" wrong.Value.Length (wrong.Value |> List.truncate 3 |> String.concat "; "))
+
+            mount.Dispose()
+
+        container.remove ()
+    }
+
+/// FS.GG.Game#753: draw calls and CPU time of Babylon's present, for the before/after record. WebGL draw calls are
+/// counted at the context, independent of Babylon's own counters.
+module DrawCalls =
+    [<Emit("(() => { if (!window.__draws) { const h = { n: 0 }; window.__draws = h; for (const C of [window.WebGLRenderingContext, window.WebGL2RenderingContext]) { if (!C) continue; for (const f of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced', 'drawRangeElements']) { const o = C.prototype[f]; if (o) C.prototype[f] = function (...a) { h.n++; return o.apply(this, a) } } } } })()")>]
+    let install () : unit = jsNative
+
+    [<Emit("window.__draws.n")>]
+    let total () : int = jsNative
+
+    [<Emit("performance.now()")>]
+    let now () : float = jsNative
+
+let measureBabylon (columns: int) (rows: int) : Async<unit> =
+    async {
+        DrawCalls.install ()
+        let cell = 10.0
+        let width = float columns * cell
+        let height = float rows * cell
+
+        let node (index: int) =
+            let x = float (index % columns) * cell + 2.0
+            let y = float (index / columns) * cell + 2.0
+
+            let color: Color =
+                {
+                    Red = byte (40 + (index * 7) % 200)
+                    Green = byte (60 + (index * 13) % 180)
+                    Blue = byte (80 + (index * 29) % 150)
+                    Alpha = 255uy
+                }
+
+            if index % 5 = 4 then
+                SceneNode.Circle({ X = x + 3.0; Y = y + 3.0 }, 3.0, color)
+            else
+                SceneNode.Rectangle((x, y, 6.0, 6.0), color)
+
+        let total = columns * rows + 1
+
+        let scene: Scene =
+            { Nodes = SceneNode.Rectangle((0.0, 0.0, width, height), { Red = 10uy; Green = 20uy; Blue = 30uy; Alpha = 255uy }) :: [ for index in 0 .. columns * rows - 1 -> node index ] }
+
+        let container = document.createElement "div"
+        document.body.appendChild container |> ignore
+        let name = sprintf "babylon measure %d nodes" total
+
+        match BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene with
+        | Error reason -> info name reason
+        | Ok mount ->
+            // Let the shaders compile and the loop settle.
+            let! _ = BrowserConformance.waitUntil 120 (fun () -> false)
+            let presents = 20
+            let before = DrawCalls.total ()
+            let started = DrawCalls.now ()
+
+            for _ in 1..presents do
+                mount.Present scene
+
+            let elapsed = DrawCalls.now () - started
+            let perPresent = float (DrawCalls.total () - before) / float presents
+            let idleBefore = DrawCalls.total ()
+            let! _ = BrowserConformance.waitUntil 60 (fun () -> false)
+            let perIdleFrame = float (DrawCalls.total () - idleBefore) / 60.0
+
+            info
+                (name + ": draw calls")
+                (sprintf
+                    "%.1f per present, %.1f per idle frame (60 frames), present %.2f ms CPU, active meshes %d of %d"
+                    perPresent
+                    perIdleFrame
+                    (elapsed / float presents)
+                    (BrowserConformance.babylonActiveMeshes ())
+                    total)
+
+            mount.Dispose()
+
+        container.remove ()
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -2158,6 +2339,10 @@ async {
         do! runPixi ()
         do! runThreeBackends ()
         do! runConformance ()
+        do! runBabylonScale 40 30 17
+        do! runBabylonScale 100 50 97
+        do! measureBabylon 10 10
+        do! measureBabylon 40 30
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1

@@ -213,6 +213,65 @@ module BrowserConformance =
             return pixel.Value
         }
 
+    // FS.GG.Game#753: what a backend drew, read the same way on all three. A canvas is copied to a 2D canvas in the
+    // task that reads it; the SVG root is serialised and rasterised by the browser.
+    let private pixelsOfCanvas (canvas: HTMLCanvasElement) (points: float[][]) : int[][] =
+        emitJsExpr
+            (canvas, points)
+            "(() => { const cv = $0; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g2 = t.getContext('2d'); g2.drawImage(cv, 0, 0); return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0]), Math.floor(p[1]), 1, 1).data)) })()"
+
+    let private pixelsOfSvg (root: Element) (points: float[][]) : Async<int[][]> =
+        let pending: JS.Promise<int[][]> =
+            emitJsExpr
+                (root, points)
+                "(async () => { const svg = $0; const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg)); const img = new Image(); await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('the SVG could not be rasterised')); img.src = url }); const w = parseFloat(svg.getAttribute('width')); const h = parseFloat(svg.getAttribute('height')); const t = document.createElement('canvas'); t.width = w; t.height = h; const g2 = t.getContext('2d'); g2.drawImage(img, 0, 0, w, h); return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0]), Math.floor(p[1]), 1, 1).data)) })()"
+
+        Async.AwaitPromise pending
+
+    let drawnPixels (container: HTMLElement) (backend: RendererBackend) (points: Point list) : Async<(int * int * int) option list> =
+        async {
+            let coordinates = points |> List.map (fun point -> [| point.X; point.Y |]) |> Array.ofList
+
+            let! rows =
+                match backend with
+                | RendererBackend.Svg ->
+                    match container.querySelector "svg[data-renderer=svg]" with
+                    | null -> async { return [||] }
+                    | root -> pixelsOfSvg root coordinates
+                | other ->
+                    match container.querySelector (sprintf "canvas[data-renderer=%s]" (RendererBackend.id other)) with
+                    | null -> async { return [||] }
+                    | canvas -> async { return pixelsOfCanvas (canvas :?> HTMLCanvasElement) coordinates }
+
+            return
+                points
+                |> List.mapi (fun index _ ->
+                    if index < rows.Length && rows.[index].Length >= 3 then
+                        Some(rows.[index].[0], rows.[index].[1], rows.[index].[2])
+                    else
+                        None)
+        }
+
+    let pixelProbe (container: HTMLElement) : PixelProbe =
+        let read = drawnPixels container
+
+        // Babylon draws a flat shape lit, at 0.75 of its colour.
+        let appearance (backend: RendererBackend) (colour: Color) =
+            let channel (value: byte) =
+                match backend with
+                | RendererBackend.Babylon -> int (System.Math.Round(float value * 0.75))
+                | _ -> int value
+
+            channel colour.Red, channel colour.Green, channel colour.Blue
+
+        PixelProbe.create
+            read
+            appearance
+            (fun backend -> if backend = RendererBackend.Babylon then 4 else 2)
+
+    let babylonActiveMeshes () : int =
+        emitJsExpr engineStore "$0.Instances.reduce((total, engine) => total + engine.scenes.reduce((n, scene) => n + scene.getActiveMeshes().length, 0), 0)"
+
     // FS.GG.Game#751: the same kind of page-level census as the context probe, over event listeners. Every listener
     // added and not removed is kept with its target, so a listener an input host forgets is still counted when its
     // element has left the page. A mutation observer counts writes to each backend's live status.

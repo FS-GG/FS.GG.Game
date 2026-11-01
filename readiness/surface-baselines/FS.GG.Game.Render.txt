@@ -9,6 +9,8 @@ FS.GG.Game.Render.InteractionProbe
 FS.GG.Game.Render.InteractiveScene
 FS.GG.Game.Render.LateFailureTrigger
 FS.GG.Game.Render.MirrorEntry
+FS.GG.Game.Render.PixelExpectation
+FS.GG.Game.Render.PixelProbe
 FS.GG.Game.Render.RendererAdapter
 FS.GG.Game.Render.RendererAdapter`1
 FS.GG.Game.Render.RendererBackend
@@ -44,6 +46,7 @@ FS.GG.Game.Render.RendererStatus+Failed
 FS.GG.Game.Render.RendererStatus+Tags
 FS.GG.Game.Render.SceneInteraction
 FS.GG.Game.Render.SceneInteraction`1
+FS.GG.Game.Render.ScenePixels
 FS.GG.Game.Render.SceneRenderers
 FS.GG.Game.Render.SceneRenderers`1
 FS.GG.Game.Render.SceneSurface
