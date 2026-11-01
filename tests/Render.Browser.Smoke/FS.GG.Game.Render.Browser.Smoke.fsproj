@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- GAME-RENDER-ADOPT-01.1 (FS.GG.Game#745): the reference game's state and renderer declaration, compiled by
+         Fable from the very files the .NET reference game compiles, and the generator's sample output. -->
+    <Compile Include="..\..\src\ReferenceGame\State.fs" Link="ReferenceGame\State.fs" />
+    <Compile Include="..\..\src\ReferenceGame\Renderers.fs" Link="ReferenceGame\Renderers.fs" />
+    <Compile Include="GeneratedRenderers.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

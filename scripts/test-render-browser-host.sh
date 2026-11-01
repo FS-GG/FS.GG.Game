@@ -2,9 +2,9 @@
 #
 # GAME-RENDER-MULTI-01.4 (FS.GG.Game#730): browser smoke for the binding-independent renderer host.
 #
-# 1. Packs FS.GG.Game.Render and asserts its bounded Fable source view (fable/RendererSelection.*, the
-#    metadata project and the compatibility profile) is present, byte-identical to the canonical sources,
-#    and excludes the .NET-only Adapter/DefaultKeymap.
+# 1. Packs FS.GG.Game.Render and asserts its bounded Fable source view (fable/RendererSelection.*,
+#    SceneRenderers.* and RendererConformance.*, the metadata project and the compatibility profile) is present,
+#    byte-identical to the canonical sources, and excludes the .NET-only Adapter/DefaultKeymap.
 # 2. Compiles tests/Render.Browser.Smoke (which references src/Render.Browser and, through the SAME
 #    Fable/FS.GG.Game.Render.fsproj the package ships, the renderer-selection sources) with Fable.
 # 3. Loads the output in headless Chromium/Chrome and requires every smoke check to pass.
@@ -12,7 +12,9 @@
 # The smoke proves the SVG adapter renders through RendererSelection + RendererHost + the retained
 # SvgBrowser surface, that a later adapter can plug in, and that the BabylonJS adapter really renders: a WebGL
 # canvas, one engine, meshes, a pixel read back, SVG -> Babylon -> SVG with the game state preserved and every
-# resource released; the same for PixiJS; and SVG <-> Pixi <-> Babylon switching.
+# resource released; the same for PixiJS; and SVG <-> Pixi <-> Babylon switching. Then the conformance kit
+# (RendererConformance, GAME-RENDER-ADOPT-01.1) runs on the reference game's renderer declaration and on the
+# generator's sample (scripts/new-game-renderers.sh), on all three real backends.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -32,7 +34,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=187
+MIN_CHECKS=320
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -82,15 +84,21 @@ dotnet pack src/Game.Render/FS.GG.Game.Render.fsproj -c Release -p:PackageVersio
 }
 
 PACKAGE_LIST="$(unzip -Z1 "$TMP/feed/$PACKAGE")"
+FABLE_SOURCES=(RendererSelection SceneRenderers RendererConformance)
 for entry in \
   fable/FS.GG.Game.Render.fsproj \
-  fable/RendererSelection.fsi \
-  fable/RendererSelection.fs \
+  "${FABLE_SOURCES[@]/#/fable/}" \
   fable-compatibility/compatibility-profile.v1.json; do
-  grep -Fx "$entry" <<<"$PACKAGE_LIST" >/dev/null || {
-    echo "test-render-browser-host: package is missing $entry" >&2
-    exit 1
-  }
+  case $entry in
+    *.fsproj | *.json) entries=("$entry") ;;
+    *) entries=("$entry.fsi" "$entry.fs") ;;
+  esac
+  for file in "${entries[@]}"; do
+    grep -Fx "$file" <<<"$PACKAGE_LIST" >/dev/null || {
+      echo "test-render-browser-host: package is missing $file" >&2
+      exit 1
+    }
+  done
 done
 
 if grep -E '^fable/(Adapter|DefaultKeymap)\.fsi?$' <<<"$PACKAGE_LIST" >/dev/null; then
@@ -98,15 +106,17 @@ if grep -E '^fable/(Adapter|DefaultKeymap)\.fsi?$' <<<"$PACKAGE_LIST" >/dev/null
   exit 1
 fi
 
-if [[ $(grep -c '^fable/.*\.fsi\?$' <<<"$PACKAGE_LIST") -ne 2 ]]; then
-  echo "test-render-browser-host: the bounded Fable view must contain exactly RendererSelection.fsi/.fs" >&2
+if [[ $(grep -c '^fable/.*\.fsi\?$' <<<"$PACKAGE_LIST") -ne $((2 * ${#FABLE_SOURCES[@]})) ]]; then
+  echo "test-render-browser-host: the bounded Fable view must contain exactly ${FABLE_SOURCES[*]} (.fsi/.fs)" >&2
   exit 1
 fi
 
 mkdir -p "$TMP/unpacked"
 unzip -q "$TMP/feed/$PACKAGE" 'fable/*' -d "$TMP/unpacked"
-cmp "$TMP/unpacked/fable/RendererSelection.fs" src/Game.Render/RendererSelection.fs
-cmp "$TMP/unpacked/fable/RendererSelection.fsi" src/Game.Render/RendererSelection.fsi
+for source in "${FABLE_SOURCES[@]}"; do
+  cmp "$TMP/unpacked/fable/$source.fs" "src/Game.Render/$source.fs"
+  cmp "$TMP/unpacked/fable/$source.fsi" "src/Game.Render/$source.fsi"
+done
 cmp "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" src/Game.Render/Fable/FS.GG.Game.Render.fsproj
 
 # The packed layout puts the sources beside the project (the in-repo layout reaches one directory up), so
@@ -124,6 +134,14 @@ printf '%s\n' \
   '</Project>' \
   >"$TMP/unpacked/Directory.Packages.props"
 NUGET_PACKAGES="$TMP/packed-view-packages" dotnet build "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" -c Release -v quiet >/dev/null
+
+# The generator's sample is its output for the smoke's arguments, byte for byte, so the template the smoke compiles
+# and runs the conformance kit on is the template a game gets (GAME-RENDER-ADOPT-01.1, FS.GG.Game#745).
+"$SCRIPT_DIR/new-game-renderers.sh" --namespace FS.GG.Game.Render.Browser.Smoke --module GeneratedRenderers \
+  --state int --label "Generated renderers" --stdout | cmp - tests/Render.Browser.Smoke/GeneratedRenderers.fs || {
+  echo "test-render-browser-host: tests/Render.Browser.Smoke/GeneratedRenderers.fs is not the generator's output; regenerate it" >&2
+  exit 1
+}
 
 # 2. Fable compile of the host and smoke.
 dotnet restore tests/Render.Browser.Smoke/FS.GG.Game.Render.Browser.Smoke.fsproj >/dev/null

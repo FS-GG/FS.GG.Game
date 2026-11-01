@@ -265,18 +265,11 @@ module BabylonSurface =
 
                 Error(sprintf "Babylon surface could not start: %s" ex.Message)
 
+    let surface (container: HTMLElement) (options: BabylonOptions) : SceneSurface =
+        SceneSurface.create RendererBackend.Babylon (mountScene container options)
+
     let adapter (container: HTMLElement) (options: BabylonOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
-        {
-            Backend = RendererBackend.Babylon
-            Mount =
-                fun state ->
-                    mountScene container options (view state)
-                    |> Result.map (fun mount ->
-                        {
-                            Present = fun next -> mount.Present(view next)
-                            Dispose = mount.Dispose
-                        })
-        }
+        SceneSurface.adapter view (surface container options)
 
     let register
         (container: HTMLElement)

@@ -20,10 +20,18 @@
   <ItemGroup Condition="Exists('RendererSelection.fs')">
     <Compile Include="RendererSelection.fsi" />
     <Compile Include="RendererSelection.fs" />
+    <Compile Include="SceneRenderers.fsi" />
+    <Compile Include="SceneRenderers.fs" />
+    <Compile Include="RendererConformance.fsi" />
+    <Compile Include="RendererConformance.fs" />
   </ItemGroup>
   <ItemGroup Condition="!Exists('RendererSelection.fs')">
     <Compile Include="../RendererSelection.fsi" />
     <Compile Include="../RendererSelection.fs" />
+    <Compile Include="../SceneRenderers.fsi" />
+    <Compile Include="../SceneRenderers.fs" />
+    <Compile Include="../RendererConformance.fsi" />
+    <Compile Include="../RendererConformance.fs" />
   </ItemGroup>
 
   <ItemGroup>

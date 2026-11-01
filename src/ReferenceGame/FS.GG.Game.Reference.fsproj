@@ -6,9 +6,12 @@
     <AssemblyName>FS.GG.Game.Reference</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="State.fs" />
+    <Compile Include="Renderers.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Game.Harness\FS.GG.Game.Harness.fsproj" />
+    <ProjectReference Include="..\Game.Render\FS.GG.Game.Render.fsproj" />
   </ItemGroup>
 </Project>
