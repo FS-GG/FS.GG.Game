@@ -715,7 +715,10 @@ def package_content_hash(raw):
     at dotnet/dotnet e34a38d2ae1fc26406a317517196e55c68ff83ab. Remove the
     signature's physical span/CD record, relocate surviving local offsets,
     adjust EOCD counts/size/offset, and hash original compressed bytes. This
-    does not verify a signature. Support a bounded classic single-disk ZIP;
+    does not verify a signature. The same NuGet 7.9.0 algorithm ships in SDK
+    10.0.403 (dotnet/dotnet 5a2162bea6845eabc1fc721624a43568c65db3b1); its lock
+    contentHash for the signed published 0.7.0 Contracts package equals this
+    projection, so the SDK 10.0.403 move leaves it unchanged. Support a bounded classic single-disk ZIP;
     ZIP64, encryption, duplicate/path/layout ambiguity fail closed.
     """
     need(isinstance(raw, bytes) and 22 <= len(raw) <= 536870912, 'unbounded/malformed package archive')
