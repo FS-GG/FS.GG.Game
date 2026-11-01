@@ -127,6 +127,16 @@ let tests =
                 Expect.equal (GuestPolicy.timeout GuestPolicy.standard) 500 "standard deadline"
                 Expect.equal (GuestPolicy.queueLimit GuestPolicy.standard) 16 "standard queue"
                 Expect.equal (GuestPolicy.breaker GuestPolicy.standard) 3 "standard breaker"
+                Expect.equal (GuestPolicy.startTimeout GuestPolicy.standard) 10000 "standard start deadline"
+
+                Expect.equal
+                    (GuestPolicy.startTimeout (GuestPolicy.withStartTimeout 7 GuestPolicy.standard))
+                    7
+                    "start deadline set"
+
+                Expect.throws
+                    (fun () -> GuestPolicy.withStartTimeout 0 GuestPolicy.standard |> ignore)
+                    "no zero start deadline"
 
                 let policy =
                     GuestPolicy.standard

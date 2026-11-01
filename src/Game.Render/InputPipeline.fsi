@@ -65,8 +65,9 @@ type GuestReply =
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
-/// How the pipeline schedules guest calls: one call at a time, a bounded queue, a deadline armed when the guest is warm,
-/// and a breaker that halts the guest after consecutive failures. Built from `GuestPolicy.standard`.
+/// How the pipeline schedules guest calls: one call at a time, a bounded queue, a start deadline until the guest is
+/// warm, a call deadline after that, and a breaker that halts the guest after consecutive failures. Built from
+/// `GuestPolicy.standard`.
 [<NoEquality; NoComparison>]
 type GuestPolicy
 
@@ -75,8 +76,14 @@ type GuestPolicy
 module GuestPolicy =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// A 500 ms deadline per call, a queue of 16 waiting inputs and a breaker of 3 consecutive failures.
+    /// A 10,000 ms start deadline, a 500 ms call deadline, a queue of 16 waiting inputs and a breaker of 3 consecutive
+    /// failures.
     val standard: GuestPolicy
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// How long a started call may take to become warm (`PipelineMsg.GuestRunning`), in milliseconds (greater than zero).
+    /// Past it the call ends `Faulted "start timeout"`, which halts the guest stage: an `invoke` that never starts.
+    val withStartTimeout: milliseconds: int -> policy: GuestPolicy -> GuestPolicy
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The deadline of one call, in milliseconds (greater than zero), counted from `PipelineMsg.GuestRunning`.
@@ -89,6 +96,10 @@ module GuestPolicy =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// How many consecutive `TimedOut` outcomes halt the guest stage (at least one).
     val withBreaker: failures: int -> policy: GuestPolicy -> GuestPolicy
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The start deadline, in milliseconds.
+    val startTimeout: policy: GuestPolicy -> int
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The deadline of one call, in milliseconds.
@@ -145,10 +156,6 @@ module GuestRequest =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The call.
     val call: request: GuestRequest<'Input, 'Client> -> GuestCall<'Input>
-
-    /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The input.
-    val input: request: GuestRequest<'Input, 'Client> -> PipelineInput<'Input>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The client state at the call's start.
@@ -285,8 +292,10 @@ module CommandEnvelope =
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// What the authority answered for one command. Opaque so later answers are additive. An authority answers a duplicate
-/// or stale id from its answer cache (the last answers per client), and `CommandAck.expired` for an id older than the
-/// cache. Built by `CommandAck`'s values.
+/// or stale id from its answer cache (the last answers per client), `rejected "stale"` for a stale id it never
+/// admitted, and `CommandAck.expired` for an id older than the cache. The pipeline takes the FIRST final answer for an
+/// id; a later answer never reopens a final command, and answers for unknown ids are ignored. Built by `CommandAck`'s
+/// values.
 [<NoEquality; NoComparison>]
 type CommandAck
 
@@ -299,11 +308,12 @@ module CommandAck =
     val accepted: CommandAck
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Admitted and waiting behind other work (an arbiter's queue). Restarts the command's patience.
+    /// Admitted and waiting behind other work, or suspended (an arbiter's queue or pre-emption). Restarts the command's
+    /// patience.
     val queued: CommandAck
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Running. Restarts the command's patience.
+    /// Running, or resumed after a suspension. Restarts the command's patience.
     val started: CommandAck
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
@@ -347,6 +357,14 @@ module CommandSettlement =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Accepted, queued or running, with no effect seen yet.
     val isAccepted: settlement: CommandSettlement -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Queued or suspended (its latest running answer was `queued`).
+    val isQueued: settlement: CommandSettlement -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Running (its latest running answer was `started` or `progress`).
+    val isRunning: settlement: CommandSettlement -> bool
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The version from which its effect is authoritative (`applied`, `ended`, or the game's settlement test).
@@ -472,10 +490,17 @@ type PipelineFailure =
 type PipelineMsg<'Input, 'Server, 'Local, 'Command> =
     /// An input for the guest queue: from the `InputRoute` (`Scene`) or the game's own controls (`Game`).
     | Input of input: PipelineInput<'Input>
-    /// A command that skips the guest, sharing the window and the command ids.
+    /// A command that skips the guest, sharing the window and the command ids. It is an ordered queue item: it waits
+    /// behind the call in flight and earlier inputs, and is sent without a guest call when it reaches the front. It is
+    /// accepted while the guest stage is halted.
     | Submit of command: 'Command
-    /// The guest is warm and call `call` has begun; the deadline is armed now.
+    /// Start the next queued item, if the stage is idle. A runner dispatches it for `PipelineEffect.Continue`, after the
+    /// game's messages for the decision's `ApplyLocal`s, so the next call reads the client state they produced.
+    | StartNext
+    /// The guest is warm and call `call` has begun; the call deadline is armed now.
     | GuestRunning of call: uint64
+    /// Call `call`'s start deadline passed. Ignored once it is running.
+    | GuestStartDeadline of call: uint64
     /// Call `call` ended.
     | GuestEnded of call: uint64 * outcome: GuestOutcome<'Local, 'Command>
     /// Call `call`'s deadline passed.
@@ -496,16 +521,22 @@ type PipelineMsg<'Input, 'Server, 'Local, 'Command> =
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// What the pipeline asks its interpreter to do. The effects of one message come in this order: `CancelGuest`, then
-/// `ApplyLocal` and `Send` in intent order, then `Fail`, then `StartGuest` of the next call. `ArmDeadline` follows only
-/// `GuestRunning`.
+/// `ApplyLocal` and `Send` in intent order, then `Fail`, then either `Continue` (after a call ended) or `StartGuest` and
+/// `ArmStartDeadline` (when an input or `StartNext` finds the stage idle). A batch never carries both `ApplyLocal` and
+/// `StartGuest`. `ArmDeadline` follows only `GuestRunning`.
 [<RequireQualifiedAccess>]
 type PipelineEffect<'Input, 'Local, 'Command> =
     /// Start `call`: build its `GuestRequest` with the client state NOW, and run it (`InputGuest.run`).
     | StartGuest of call: GuestCall<'Input>
     /// Cancel call `call`. Its later reply is dropped.
     | CancelGuest of call: uint64
+    /// Report `GuestStartDeadline call` after `milliseconds`.
+    | ArmStartDeadline of call: uint64 * milliseconds: int
     /// Report `GuestDeadline call` after `milliseconds`.
     | ArmDeadline of call: uint64 * milliseconds: int
+    /// Dispatch `PipelineMsg.StartNext` through the game's own dispatch, after the messages already dispatched for this
+    /// batch.
+    | Continue
     /// Apply a client-only intent to the game's own state.
     | ApplyLocal of intent: 'Local
     /// Send a command to the authority.
@@ -598,7 +629,8 @@ type PipelineIo<'Client, 'Local, 'Command>
 module PipelineIo =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// `client ()` is read when each guest call starts; `applyLocal`, `send` and `fail` receive the effects of those
+    /// `client ()` is read when each guest call starts and must return the latest state the game has applied (for an
+    /// Elmish program, a reference its `update` sets); `applyLocal`, `send` and `fail` receive the effects of those
     /// names; `schedule milliseconds action` runs `action` once after the delay.
     val create:
         client: (unit -> 'Client) ->

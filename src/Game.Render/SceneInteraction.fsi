@@ -92,13 +92,15 @@ module ObjectAccess =
     val pointerOnly: ObjectAccess
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// A member of the group named `label` (not blank). The mirror nests the group's options in one `role=group`
-    /// labelled `label`; arrow keys move between its members in object order, and Page Up and Page Down between groups.
+    /// A member of the group named `label` (not blank). On a `listbox` surface the group's options are nested in a
+    /// `role=group` labelled `label`; on a `grid` surface (when any cell group exists) the group is a labelled `rowgroup`
+    /// of single-cell rows. Arrow keys move between members in object order, Page Up and Page Down between groups.
     val grouped: label: string -> ObjectAccess
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// A member of the group named `label` at (`row`, `column`), both zero or more. A group whose members all declare
-    /// cells is a grid: the mirror shows it as `role=grid` rows, and arrow keys move in two dimensions.
+    /// A member of the group named `label` at (`row`, `column`), both zero or more. When any cell group exists the
+    /// surface is one `role=grid`; each cell group is a labelled `rowgroup` of `row`s and `gridcell`s, and arrow keys
+    /// move in two dimensions inside it.
     val cell: label: string -> row: int -> column: int -> ObjectAccess
 
     /// Public contract function exposed by the FS.GG.Game.Render package.

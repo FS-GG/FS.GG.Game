@@ -11,8 +11,8 @@
   and the authority each game talks to stays the game's.
 - **Implementation:** FS.GG.Game#788. This ADR ships the typed contract only; every function with behaviour raises
   until #788 implements it.
-- **Revision:** revised after the independent review of `7ba30e53` (findings B1–B6 and N1–N9). The PR body lists the
-  change for each finding.
+- **Revision:** revised after the independent review of `7ba30e53` (findings B1–B6 and N1–N9), and again after the
+  delta review of `f0561a79` (R1–R3 and seven smaller items). The PR body lists the change for each finding.
 
 ## Context
 
@@ -98,8 +98,11 @@ as new cases in a minor version. Consumers match with a wildcard.
 
 **Game input.** Ability buttons, control groups, a submit button, and RuneScape's takeover, release and reacquire are
 not scene objects. They enter the same queue as `PipelineMsg.Input (PipelineInput.Game input)`, so the guest decides
-them with the same ordering and failure rules. `PipelineMsg.Submit command` skips the guest for a game that needs no
-decision, and shares the command window and ids.
+them with the same ordering and failure rules. `PipelineMsg.Submit command` is for a game that needs no decision.
+It is an **ordered queue item that skips the guest**: it waits behind the call in flight and the earlier queued
+inputs, never overtaking them, and is sent without a guest call when it reaches the front. It shares the command
+window and ids. A `Submit` is accepted while the guest stage is halted, because it needs no guest; a halted stage
+refuses only guest inputs.
 
 **Focus and hover are drawable state.** The input host keeps `InteractionCues`: the focused object, the hovered
 object, and whether focus is visible. Focus is visible after keyboard navigation and not after a pointer press. The
@@ -140,11 +143,25 @@ The guest stage follows these rules:
    **arriving** input is dropped, never sent, and fails as `QueueOverflow [its sequence]`. The waiting inputs stay.
 4. **Client state is read when the call starts.** `StartGuest` carries a `GuestCall` (id, sequence, input, basis). The
    interpreter builds the `GuestRequest` with `client ()` at that moment, so a queued input sees the state its call
-   starts in, not the state it was queued in.
-5. **The deadline is armed only when the guest is warm.** The default is 500 ms per call. `ofBytes`'s `invoke` calls
-   `started ()` once the module is compiled and instantiated and the call has begun. The runner then dispatches
-   `GuestRunning`, and only that emits `ArmDeadline`. `ofAsync` guests are warm at once. Before that, the runtime's
-   startup bound applies, and its expiry is a `Faulted` outcome.
+   starts in, not the state it was queued in. `client ()` must return the latest state the game has applied; for an
+   Elmish program, that is a reference its `update` sets.
+
+   **The next call starts only after the previous decision's `Local`s are applied.** When a call ends, its batch
+   carries the decision's `ApplyLocal`s and ends with `PipelineEffect.Continue`, never with `StartGuest`. A runner
+   performs `ApplyLocal` by dispatching the game's message, and `Continue` by dispatching `PipelineMsg.StartNext`
+   through the same dispatch. Elmish's FIFO queue therefore runs the game's `Local` messages before `StartNext`
+   starts the next call. A batch never carries both `ApplyLocal` and `StartGuest`. `PipelineHost` applies `Local`s
+   synchronously and follows the same rule.
+5. **Two deadlines.** `StartGuest` comes with `ArmStartDeadline`. The start deadline defaults to 10,000 ms
+   (`withStartTimeout`), which covers the Wasm Worker's 5,000 ms startup bound plus compilation. `ofBytes`'s `invoke`
+   calls `started ()` once the module is compiled and instantiated and the call has begun. The runner then dispatches
+   `GuestRunning`, which emits `ArmDeadline` with the call deadline (default 500 ms). `ofAsync` guests are warm at
+   once.
+   - An `invoke` that never starts reaches `GuestStartDeadline` first. The call ends `Faulted "start timeout"` and
+     the stage halts.
+   - A started call that never ends reaches `GuestDeadline` and ends `TimedOut`.
+   - Either way the call is cancelled and abandoned, and its late reply is dropped. A start deadline that arrives
+     after `GuestRunning` is ignored.
 6. **Recovery is separate from binding.**
    - `TimedOut` fails only that input (`GuestTimedOut`). The guest stays usable, and a WASM runtime reloads its Worker
      for the next call.
@@ -162,7 +179,8 @@ The guest stage follows these rules:
    they do not all fit, **none** of the decision's intents applies, including its `Local`s, and it fails
    `CommandWindowFull`.
 10. **Effect order.** The effects of one message come in this order: `CancelGuest`, then `ApplyLocal` and `Send` in
-    intent order, then `Fail`, then `StartGuest` of the next call.
+    intent order, then `Fail`, then either `Continue` (after a call ended) or `StartGuest` with `ArmStartDeadline`
+    (when an input or `StartNext` finds the stage idle).
 
 **WebAssembly mapping.** `GuestReply` has one case per `TerminalState`, so `GuestReply` itself loses nothing:
 
@@ -198,9 +216,19 @@ selected and active, the rule of `RendererDriver.failBackend`.
   - Admit with `NetworkAdmission.admit`.
   - Keep an **answer cache of the last W answers per client**. W is at least the client's window; 64 is recommended.
   - Answer a duplicate or stale id that is in the cache with the cached answer, never applying the command twice.
+  - Answer `rejected "stale"` for a stale id inside the cache window that it never admitted. That is truthful: the
+    command never ran.
   - Answer `CommandAck.expired` for an id older than the cache.
+  - **Transport ordering assumption.** One binding's commands arrive in sequence order, as on one WebSocket or
+    SignalR connection. If a transport reorders them, a lower id that arrives late is refused as stale
+    (`rejected "stale"`) and never runs. It is never applied out of order.
+  - Send `lastSequence` (its `NetworkAdmission.lastSequence` for the binding) on every connect and reconnect. That
+    covers a page reload that reuses the same `ClientId`.
   - Send a **version heartbeat** (`PipelineMsg.Heartbeat`) when the version advances without a new state for the
     client, so patience advances.
+  - Send a running answer (`progress`, `queued` or `started`) for a long-lived command more often than every
+    `patience` versions, so a command that is still legitimately running is never settled `Unconfirmed`. RuneScape's
+    `hold` is the case. This keeps one patience per stage rather than one per command.
   - The pipeline never resends. After a reconnect, unsettled commands settle by state, an answer or patience.
 - **Answers** (`CommandAck`) are opaque values. Running answers restart the command's patience; final answers settle
   it:
@@ -217,8 +245,12 @@ selected and active, the rule of `RendererDriver.failBackend`.
   | `rejected reason` | final | refused before it ran; nothing happened |
   | `expired` | final | settles as unconfirmed |
 
-  `CommandSettlement` is opaque, read through `isPending`, `isAccepted`, `appliedAt`, `outcome`, `cancelled`,
-  `rejected`, `isUnconfirmed` and `isFinal`.
+  `CommandSettlement` is opaque, read through `isPending`, `isAccepted` (accepted, queued or running), `isQueued`,
+  `isRunning`, `appliedAt`, `outcome`, `cancelled`, `rejected`, `isUnconfirmed` and `isFinal`.
+
+  **The first final answer wins.** Once a command is final, later answers for it are ignored and never reopen it,
+  including a reordered `started` that arrives after `applied`. Running answers move it between accepted, queued and
+  running while it is not final. Answers for unknown ids are ignored.
 - **Reconciliation.**
   - Authoritative states carry a non-decreasing version. An older state is ignored.
   - Each command's `basis` is the version of the authoritative state shown when it was decided. The basis is never
@@ -241,13 +273,23 @@ selected and active, the rule of `RendererDriver.failBackend`.
 
 ### 4. Accessibility
 
-- **One Tab stop.** The surface is the single Tab stop.
-  - It has `role=listbox`, or `role=grid` when a group declares cells, labelled by the options label.
-  - Its `aria-activedescendant` points at the active option of the hidden mirror.
-  - Options have `role=option` and `aria-selected`, with groups nested as `role=group`. Arrow keys move the active
-    option, Home and End jump to the ends, and Page Up and Page Down move between groups. Enter, Space and the
-    secondary keys act on it.
-  - The mirror stays hidden and never expands the layout. The drawn focus ring is the visible indicator.
+- **One Tab stop.** The surface (the SVG root or the canvas) is the single Tab stop, labelled by the options label.
+  Its role depends on the scene:
+  - **No cell group:** the surface is a `role=listbox`. Each keyboard-reachable object is a `role=option` with
+    `aria-selected`. A `grouped` set is nested in a labelled `role=group`.
+  - **Any cell group (a mixed scene):** the surface is ONE `role=grid`.
+    - Each cell group is a labelled `rowgroup` of `row`s and `gridcell`s, at its declared rows and columns.
+    - Every other object, or `grouped` set, is a labelled `rowgroup` whose rows each hold a single `gridcell`.
+    - `aria-selected` is on the cells.
+  - **Ownership.** The mirror's options or cells belong to the surface. For an SVG root, the surface owns them with
+    `aria-owns`. For a canvas, they are the canvas's fallback content, its DOM children. Either way, the surface's
+    `aria-activedescendant` names the active one.
+  - **Keys.** Arrow keys move the active option or cell (in two dimensions inside a cell group). Home and End jump to
+    the ends, and Page Up and Page Down move between groups. Enter, Space and the secondary keys act on the active
+    item.
+  - **Hidden mirror.** The mirror stays visually hidden and never expands the layout. The drawn focus ring is the
+    visible indicator. #788 may also place each hidden option transparently over its object's bounds, with
+    `pointer-events: none`, so that screen-reader highlight boxes line up with the drawing.
 - **Large grids (#784).** `ObjectAccess` declares how each object is reached:
   - `full` is the default.
   - `pointerOnly` objects have no option.
@@ -288,7 +330,7 @@ I16 only.
 | I6 | Arrow keys report `Focus` with the next keyboard-reachable object, skipping `pointerOnly` objects. In a cell group they move in two dimensions. |
 | I7 | A pointer move reports `Hover` once per change of hovered object, and once with no target when leaving. |
 | I8 | **Focus ring, against a hover-only frame.** With the pointer hovering object A and keyboard focus on B, the pixels just outside B's bounds differ from the frame where only A is hovered. After a pointer press on B (focus not visible) they equal the hover-only frame. Each band is at least 2 CSS px wide. This holds for `standardCues` and for a game's `withCues` layer. |
-| I9 | **Surface:** exactly one Tab stop; `role=listbox` (or `grid`), labelled; `aria-activedescendant` names the option of the focused object; the options carry `aria-selected` for the selection; `pointerOnly` objects have no option; each group is a `role=group` with its label. |
+| I9 | **Surface:** exactly one Tab stop. Without a cell group it is a labelled `role=listbox` of `role=option`s, with `grouped` sets in labelled `role=group`s. With any cell group it is one labelled `role=grid`: cell groups are labelled `rowgroup`s of `row`s and `gridcell`s, and other objects and groups are labelled `rowgroup`s of single-cell rows. `aria-selected` is on options or cells. `aria-activedescendant` names the focused object's item. The items are owned by the surface, through `aria-owns` (SVG) or as fallback content (canvas). `pointerOnly` objects have no item. |
 | I10 | The mirror's bounding box does not change when the surface gains focus. Activating an option with a screen-reader click reports `Activate`, `Mirror`. |
 | I11 | Escape on the surface reports `Cancel`, and focus does not move. Reported keys do not reach a page-level listener. |
 | I12 | A selection the game answers later (an async guest) is shown within the subject's wait, and survives a backend switch. |
@@ -304,14 +346,16 @@ runtime and a fake authority.
 |---|---|
 | P1 | Input sequences rise from 1 for the model's lifetime. Call ids never repeat. No `CommandId` is issued twice, whatever `Rebind`s occur. A `Rebind` continues above the higher of `lastSequence` and the highest sequence issued. |
 | P2 | At most one guest call is in flight. |
-| P3 | `ArmDeadline` follows only `GuestRunning`. A deadline before `GuestRunning` cannot occur. |
+| P3 | `StartGuest` comes with `ArmStartDeadline`. `ArmDeadline` follows only `GuestRunning`. A start deadline before `GuestRunning` ends the call `Faulted "start timeout"` and halts the stage; one after `GuestRunning` is ignored. A call deadline after `GuestRunning` ends it `TimedOut`. |
 | P4 | `TimedOut` fails only that input. N consecutive timeouts halt the stage with `GuestHalted N`. A decided or refused call resets the count. `Faulted` halts at once. `RearmGuest` unhalts and changes nothing else. |
 | P5 | A reply for a cancelled, timed-out or superseded call changes nothing. |
 | P6 | A `Rebind` ends the call in flight and the queue with `InputCancelled`. Unsettled commands of the earlier binding keep settling by state and patience. A blank client fails `RebindRefused` and changes nothing. |
 | P7 | The guest's `client` is read when its call starts: an input queued at state s1 and started at s2 sees s2. |
+| P7b | Under `PipelineRunner` with an Elmish FIFO dispatch, the next call's request reflects every `ApplyLocal` of the previous decision. A batch that carries `ApplyLocal` ends with `Continue`, never with `StartGuest`. |
 | P8 | A newer `Hover` or `Focus` replaces the waiting one of its kind at the tail. Activations and `Game` inputs keep arrival order. |
 | P9 | A full queue drops the arriving input, fails `QueueOverflow [its sequence]`, and keeps the waiting inputs. |
 | P10 | The effects of one message are in the declared order. |
+| P10b | `Submit` keeps queue order: it never overtakes the call in flight or an earlier queued input, and it is sent without a guest call at the front. It is accepted while the guest stage is halted; guest inputs are refused then. |
 | P11 | A decision whose submits do not fit the window applies none of its intents, `Local`s included, and fails `CommandWindowFull`. |
 | P12 | A `Cancel` input during an async call does not cancel that call. |
 | P13 | An exception in `admit`, `decide`, `encode`, `invoke` or `decode` becomes `Faulted`. An admission `Error` becomes `Refused` without a call. |
@@ -320,7 +364,8 @@ runtime and a fake authority.
 | P16 | A command is `Unconfirmed` exactly when it is not final and the highest version heard minus its basis (or its latest running answer) reaches patience. A heartbeat advances patience and never prediction. |
 | P17 | `settled` is evaluated on authoritative states only, and applies a command at the first version where it holds. |
 | P18 | A repeated answer for one id is idempotent. `expired` settles `Unconfirmed`, `cancelled` is distinct from `rejected`, and both withdraw prediction. |
-| P19 | `CommandStage.withPatience 0`, `withWindow 0`, `GuestPolicy.withBreaker 0` and a blank `init` client are refused. |
+| P18b | The first final answer wins. A later answer for a final command (including `started` after `applied`) changes nothing. An answer for an unknown id changes nothing. `queued` and `started` while not final restart patience. |
+| P19 | `CommandStage.withPatience 0`, `withWindow 0`, `GuestPolicy.withBreaker 0`, `withStartTimeout 0` and a blank `init` client are refused. |
 | P20 | Every `TerminalState` golden vector maps as the WebAssembly table says. |
 
 ### 7. How guests are built and tested
@@ -347,7 +392,8 @@ Each migration is its own Delivery after #788 publishes.
   - A sync guest decides `Activate` on a cell as `[Local (Select cell); Submit (MoveTo cell)]`, and `Cancel` as
     `Local Clear`. Re-clicking a cell moves again.
   - `InputMessage` carries the `CommandId`. The server keeps the answer cache and answers `applied tick` or
-    `rejected`.
+    `rejected`. It sends the binding's `lastSequence` on connect and on reconnect, so a page reload with the same
+    `ClientId` continues above it.
   - `PreviewPath` becomes `withPrediction`, drawn marked.
   - Cells are `cell "Arena" row column`.
   - A WebAssembly guest of the same rule, built in CI, is the guest Outcome #5218 requires.
@@ -365,8 +411,11 @@ Each migration is its own Delivery after #788 publishes.
 - **FS.GG.RuneScape.**
   - `ActivateSecondary` opens the option menu, and a repeated `Activate` walks again.
   - Tiles are cells (#784).
-  - Takeover, release, reacquire, cancel and cancel-all are `Game` inputs or `Submit`s. The arbiter's answers map onto
-    `queued`, `started`, `progress`, `ended`, `cancelled` (pre-empted) and `rejected`.
+  - Takeover, release, reacquire, cancel and cancel-all are `Game` inputs or `Submit`s.
+  - FS.GG.RuneScape decision 0002 (merged at `1a0c532b`) makes pre-emption suspend and resume. So a pre-empted
+    command is answered `queued` and its resumption `started`, and both restart patience. `ended` reports
+    completion, `cancelled` an explicit cancel, and `rejected` a refusal.
+  - The arbiter sends `progress` for a `hold` more often than patience.
   - "Proven by arrival" is `withSettlement` with patience 200.
 
 ## Consequences
@@ -390,7 +439,7 @@ Each question has a recommended default. Work proceeds on the default unless the
 | Q1 | When do #771, #772, #768 and #784 close? | Keep them open, linked to #788, and close them on #788's merge. #783 stays independent. |
 | Q2 | May a release ship these stubs before #788? | No; #788 lands first. If a release is urgent, list the stubs in the changelog as raising. |
 | Q3 | Where does the WebAssembly bridge (`invoke` over `FS.GG.Wasm.Browser.Host`, including the `started` signal) live? | In each game and the template sample. Promote it to an `FS.GG.Game.Render.Wasm` package once two products repeat it. |
-| Q4 | What are the default limits? | 500 ms per call, 16 queued inputs, a breaker of 3, 8 unsettled commands, patience of 600 versions, and an answer cache of 64. |
+| Q4 | What are the default limits? | A 10,000 ms start deadline, 500 ms per call, 16 queued inputs, a breaker of 3, 8 unsettled commands, patience of 600 versions, and an answer cache of 64. |
 | Q5 | Does focus survive a backend switch? | No. Focus is input-host state, and the selection survives. |
 | Q6 | Should this be an organization ADR? | No, unless the guest byte ABI becomes shared across repositories. |
 | Q7 | Who provides the authority's answer cache? | Each authority for now. Offer `NetworkAdmission` an additive answer cache in Game.Core as a follow-up once two authorities carry one. |

@@ -55,6 +55,7 @@ FS.GG.Game.Render.ObjectAccess
 FS.GG.Game.Render.PipelineEffect`3
 FS.GG.Game.Render.PipelineEffect`3+ApplyLocal
 FS.GG.Game.Render.PipelineEffect`3+ArmDeadline
+FS.GG.Game.Render.PipelineEffect`3+ArmStartDeadline
 FS.GG.Game.Render.PipelineEffect`3+CancelGuest
 FS.GG.Game.Render.PipelineEffect`3+Fail
 FS.GG.Game.Render.PipelineEffect`3+Send
@@ -88,6 +89,7 @@ FS.GG.Game.Render.PipelineMsg`4+Authoritative
 FS.GG.Game.Render.PipelineMsg`4+GuestDeadline
 FS.GG.Game.Render.PipelineMsg`4+GuestEnded
 FS.GG.Game.Render.PipelineMsg`4+GuestRunning
+FS.GG.Game.Render.PipelineMsg`4+GuestStartDeadline
 FS.GG.Game.Render.PipelineMsg`4+Heartbeat
 FS.GG.Game.Render.PipelineMsg`4+Input
 FS.GG.Game.Render.PipelineMsg`4+Rebind

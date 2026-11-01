@@ -39,6 +39,7 @@ type GuestReply =
 [<NoEquality; NoComparison>]
 type GuestPolicy =
     {
+        StartTimeout: int
         Timeout: int
         QueueLimit: int
         Breaker: int
@@ -49,9 +50,18 @@ module GuestPolicy =
 
     let standard =
         {
+            StartTimeout = 10000
             Timeout = 500
             QueueLimit = 16
             Breaker = 3
+        }
+
+    let withStartTimeout (milliseconds: int) (policy: GuestPolicy) =
+        if milliseconds <= 0 then
+            invalidArg (nameof milliseconds) "A start deadline must be greater than zero."
+
+        { policy with
+            StartTimeout = milliseconds
         }
 
     let withTimeout (milliseconds: int) (policy: GuestPolicy) =
@@ -71,6 +81,8 @@ module GuestPolicy =
             invalidArg (nameof failures) "A breaker trips after at least one failure."
 
         { policy with Breaker = failures }
+
+    let startTimeout (policy: GuestPolicy) = policy.StartTimeout
 
     let timeout (policy: GuestPolicy) = policy.Timeout
 
@@ -111,8 +123,6 @@ module GuestRequest =
     let create (call: GuestCall<'Input>) (client: 'Client) = { Call = call; Client = client }
 
     let call (request: GuestRequest<'Input, 'Client>) = request.Call
-
-    let input (request: GuestRequest<'Input, 'Client>) = request.Call.Input
 
     let client (request: GuestRequest<'Input, 'Client>) = request.Client
 
@@ -254,9 +264,9 @@ type CommandAck = { Kind: AckKind }
 [<RequireQualifiedAccess>]
 module CommandAck =
 
-    let accepted = { Kind = Accepted }
+    let accepted = { Kind = AckKind.Accepted }
 
-    let queued = { Kind = Queued }
+    let queued = { Kind = AckKind.Queued }
 
     let started = { Kind = Started }
 
@@ -275,6 +285,8 @@ module CommandAck =
 [<NoEquality; NoComparison>]
 type SettlementKind =
     | Pending
+    | Accepted
+    | Queued
     | Running
     | AppliedAt of version: uint64 * outcome: string option
     | CancelledAfter of reason: string
@@ -294,6 +306,18 @@ module CommandSettlement =
         | _ -> false
 
     let isAccepted (settlement: CommandSettlement) =
+        match settlement.State with
+        | SettlementKind.Accepted
+        | SettlementKind.Queued
+        | Running -> true
+        | _ -> false
+
+    let isQueued (settlement: CommandSettlement) =
+        match settlement.State with
+        | SettlementKind.Queued -> true
+        | _ -> false
+
+    let isRunning (settlement: CommandSettlement) =
         match settlement.State with
         | Running -> true
         | _ -> false
@@ -326,6 +350,8 @@ module CommandSettlement =
     let isFinal (settlement: CommandSettlement) =
         match settlement.State with
         | Pending
+        | SettlementKind.Accepted
+        | SettlementKind.Queued
         | Running -> false
         | _ -> true
 
@@ -402,7 +428,9 @@ type PipelineFailure =
 type PipelineMsg<'Input, 'Server, 'Local, 'Command> =
     | Input of input: PipelineInput<'Input>
     | Submit of command: 'Command
+    | StartNext
     | GuestRunning of call: uint64
+    | GuestStartDeadline of call: uint64
     | GuestEnded of call: uint64 * outcome: GuestOutcome<'Local, 'Command>
     | GuestDeadline of call: uint64
     | RearmGuest
@@ -415,7 +443,9 @@ type PipelineMsg<'Input, 'Server, 'Local, 'Command> =
 type PipelineEffect<'Input, 'Local, 'Command> =
     | StartGuest of call: GuestCall<'Input>
     | CancelGuest of call: uint64
+    | ArmStartDeadline of call: uint64 * milliseconds: int
     | ArmDeadline of call: uint64 * milliseconds: int
+    | Continue
     | ApplyLocal of intent: 'Local
     | Send of envelope: CommandEnvelope<'Command>
     | Fail of failure: PipelineFailure

@@ -29,6 +29,8 @@ FS.GG.Game.Render.CommandSettlement.cancelled(FS.GG.Game.Render.CommandSettlemen
 FS.GG.Game.Render.CommandSettlement.isAccepted(FS.GG.Game.Render.CommandSettlement) : System.Boolean
 FS.GG.Game.Render.CommandSettlement.isFinal(FS.GG.Game.Render.CommandSettlement) : System.Boolean
 FS.GG.Game.Render.CommandSettlement.isPending(FS.GG.Game.Render.CommandSettlement) : System.Boolean
+FS.GG.Game.Render.CommandSettlement.isQueued(FS.GG.Game.Render.CommandSettlement) : System.Boolean
+FS.GG.Game.Render.CommandSettlement.isRunning(FS.GG.Game.Render.CommandSettlement) : System.Boolean
 FS.GG.Game.Render.CommandSettlement.isUnconfirmed(FS.GG.Game.Render.CommandSettlement) : System.Boolean
 FS.GG.Game.Render.CommandSettlement.outcome(FS.GG.Game.Render.CommandSettlement) : Microsoft.FSharp.Core.FSharpOption<System.String>
 FS.GG.Game.Render.CommandSettlement.rejected(FS.GG.Game.Render.CommandSettlement) : Microsoft.FSharp.Core.FSharpOption<System.String>
@@ -69,9 +71,11 @@ FS.GG.Game.Render.GuestOutcome`2+Tags.TimedOut : System.Int32
 FS.GG.Game.Render.GuestPolicy.breaker(FS.GG.Game.Render.GuestPolicy) : System.Int32
 FS.GG.Game.Render.GuestPolicy.queueLimit(FS.GG.Game.Render.GuestPolicy) : System.Int32
 FS.GG.Game.Render.GuestPolicy.standard : FS.GG.Game.Render.GuestPolicy [get]
+FS.GG.Game.Render.GuestPolicy.startTimeout(FS.GG.Game.Render.GuestPolicy) : System.Int32
 FS.GG.Game.Render.GuestPolicy.timeout(FS.GG.Game.Render.GuestPolicy) : System.Int32
 FS.GG.Game.Render.GuestPolicy.withBreaker(System.Int32, FS.GG.Game.Render.GuestPolicy) : FS.GG.Game.Render.GuestPolicy
 FS.GG.Game.Render.GuestPolicy.withQueueLimit(System.Int32, FS.GG.Game.Render.GuestPolicy) : FS.GG.Game.Render.GuestPolicy
+FS.GG.Game.Render.GuestPolicy.withStartTimeout(System.Int32, FS.GG.Game.Render.GuestPolicy) : FS.GG.Game.Render.GuestPolicy
 FS.GG.Game.Render.GuestPolicy.withTimeout(System.Int32, FS.GG.Game.Render.GuestPolicy) : FS.GG.Game.Render.GuestPolicy
 FS.GG.Game.Render.GuestReply+Tags.Faulted : System.Int32
 FS.GG.Game.Render.GuestReply+Tags.Frozen : System.Int32
@@ -82,7 +86,6 @@ FS.GG.Game.Render.GuestReply+Tags.TimedOut : System.Int32
 FS.GG.Game.Render.GuestRequest.call<Input, Client>(GuestRequest<Input, Client>) : GuestCall<Input>
 FS.GG.Game.Render.GuestRequest.client<Input, Client>(GuestRequest<Input, Client>) : Client
 FS.GG.Game.Render.GuestRequest.create<Input, Client>(GuestCall<Input>, Client) : GuestRequest<Input, Client>
-FS.GG.Game.Render.GuestRequest.input<Input, Client>(GuestRequest<Input, Client>) : PipelineInput<Input>
 FS.GG.Game.Render.InputAction+Tags.Activate : System.Int32
 FS.GG.Game.Render.InputAction+Tags.ActivateSecondary : System.Int32
 FS.GG.Game.Render.InputAction+Tags.Cancel : System.Int32
@@ -154,7 +157,9 @@ FS.GG.Game.Render.ObjectAccess.isKeyboardReachable(FS.GG.Game.Render.ObjectAcces
 FS.GG.Game.Render.ObjectAccess.pointerOnly : FS.GG.Game.Render.ObjectAccess [get]
 FS.GG.Game.Render.PipelineEffect`3+Tags.ApplyLocal : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.ArmDeadline : System.Int32
+FS.GG.Game.Render.PipelineEffect`3+Tags.ArmStartDeadline : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.CancelGuest : System.Int32
+FS.GG.Game.Render.PipelineEffect`3+Tags.Continue : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.Fail : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.Send : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.StartGuest : System.Int32
@@ -180,10 +185,12 @@ FS.GG.Game.Render.PipelineMsg`4+Tags.Authoritative : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.GuestDeadline : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.GuestEnded : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.GuestRunning : System.Int32
+FS.GG.Game.Render.PipelineMsg`4+Tags.GuestStartDeadline : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.Heartbeat : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.Input : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.RearmGuest : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.Rebind : System.Int32
+FS.GG.Game.Render.PipelineMsg`4+Tags.StartNext : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.Submit : System.Int32
 FS.GG.Game.Render.PipelineRunner.create<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>, PipelineIo<Client, Local, Command>, FSharpFunc<PipelineMsg<Input, Server, Local, Command>, Microsoft.FSharp.Core.Unit>) : PipelineRunner<Input, Client, Server, Local, Command>
 FS.GG.Game.Render.PipelineRunner.perform<Input, Local, Command, Client, Server>(PipelineEffect<Input, Local, Command>, PipelineRunner<Input, Client, Server, Local, Command>) : System.Void
