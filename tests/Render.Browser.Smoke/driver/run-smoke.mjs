@@ -10,6 +10,7 @@
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import fs from "node:fs";
+import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright-core");
@@ -52,6 +53,15 @@ await page.exposeFunction("__fsggInput", async (request) => {
       emulation ??= await page.context().newCDPSession(page);
       await emulation.send("Emulation.setDeviceMetricsOverride", { width: 1024, height: 768, deviceScaleFactor: request.factor, mobile: false });
       return await page.evaluate(() => window.devicePixelRatio);
+    }
+    case "screenshot": {
+      // FS.GG.Game#789: an element screenshot for the PR's evidence, only when RENDER_SMOKE_SCREENSHOTS names a
+      // directory; otherwise nothing is written and the page is told so.
+      const dir = process.env.RENDER_SMOKE_SCREENSHOTS;
+      if (!dir || !/^[A-Za-z0-9._-]+\.png$/.test(request.name)) return false;
+      fs.mkdirSync(dir, { recursive: true });
+      await page.locator(request.selector).screenshot({ path: path.join(dir, request.name) });
+      return true;
     }
     default:
       throw new Error("unknown input request " + JSON.stringify(request));

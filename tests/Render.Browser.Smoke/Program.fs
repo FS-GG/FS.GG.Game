@@ -17,6 +17,7 @@ module FS.GG.Game.Render.Browser.Smoke.Program
 open Browser.Dom
 open Browser.Types
 open Fable.Core
+open Fable.Core.JsInterop
 open FS.GG.Game.Render
 open FS.GG.Game.Render.Browser
 open FS.GG.UI.Scene
@@ -2582,6 +2583,108 @@ let runOverhang () : Async<unit> =
             container.remove ()
     }
 
+/// The page's request for a screenshot of `selector` named `name`. The driver writes it when RENDER_SMOKE_SCREENSHOTS
+/// names a directory and answers whether it did; without the variable it writes nothing and answers false.
+let screenshot (selector: string) (name: string) : Async<bool> =
+    async {
+        let pending: JS.Promise<bool> =
+            emitJsExpr
+                (createObj [ "kind" ==> "screenshot"; "selector" ==> selector; "name" ==> name ])
+                "(window.__fsggInput ? window.__fsggInput($0) : Promise.resolve(false))"
+
+        return! Async.AwaitPromise pending
+    }
+
+/// FS.GG.Game#789 (GAME-RENDER-02.4) proof: six experimental glyphs (unit, structure, waypoint, selection, focus,
+/// status) in two themes, lowered to the portable primitive set, drawn on each backend at the pixels the kit's
+/// `ScenePixels` model decides. A causal control reads the same pixels against the board with its themes swapped, which
+/// must not match, so a backend that drew the theme tokens wrong (or ignored the glyphs) would be caught. Named points
+/// (one per glyph part) are reported as INFO lines for the PR's pixel table.
+let runGlyphProof () : Async<unit> =
+    async {
+        let width = Experimental.Glyphs.proofWidth
+        let height = Experimental.Glyphs.proofHeight
+        let standard = Experimental.Glyphs.Theme.standard
+        let safe = Experimental.Glyphs.Theme.colourBlindSafe
+        let scene = Experimental.Glyphs.proofScene standard safe
+        let swapped = Experimental.Glyphs.proofScene safe standard
+        let wanted = ScenePixels.expectations width height scene
+
+        let named =
+            [
+                for label, top, theme in [ "standard", 0.0, standard; "colour-blind-safe", 64.0, safe ] do
+                    yield sprintf "%s unit body" label, { X = 32.5; Y = top + 32.5 }, theme.Body
+                    yield sprintf "%s unit team-0 ring" label, { X = 42.5; Y = top + 32.5 }, Experimental.Glyphs.Theme.team theme 0
+                    yield sprintf "%s selection bracket" label, { X = 19.5; Y = top + 16.5 }, theme.Selection
+                    yield sprintf "%s status 25%% fill" label, { X = 22.5; Y = top + 9.5 }, theme.Bad
+                    yield sprintf "%s status track" label, { X = 42.5; Y = top + 9.5 }, theme.Track
+                    yield sprintf "%s structure body" label, { X = 96.5; Y = top + 30.5 }, theme.Body
+                    yield sprintf "%s structure team-1 band" label, { X = 96.5; Y = top + 42.5 }, Experimental.Glyphs.Theme.team theme 1
+                    yield sprintf "%s focus outline" label, { X = 96.5; Y = top + 16.5 }, theme.Focus
+                    yield sprintf "%s unit team-2 ring" label, { X = 170.5; Y = top + 32.5 }, Experimental.Glyphs.Theme.team theme 2
+                    yield sprintf "%s status 100%% fill" label, { X = 160.5; Y = top + 9.5 }, theme.Good
+                    yield sprintf "%s waypoint" label, { X = 219.5; Y = top + 32.5 }, theme.Marker
+                    yield sprintf "%s ground" label, { X = 128.5; Y = top + 60.5 }, theme.Ground
+            ]
+
+        info "glyph proof" (sprintf "%gx%g board, %d nodes, %d pixels decided by ScenePixels" width height scene.Nodes.Length wanted.Length)
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+            let name = sprintf "glyph proof (#789), %s" id
+            let container = document.createElement "div"
+            container.id <- sprintf "glyph-proof-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" width height)
+            document.body.appendChild container |> ignore
+
+            let mounted =
+                match backend with
+                | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+                | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+                | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+            match mounted with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container width height backend (fun () -> mount.Present scene) wanted 600
+
+                check
+                    (sprintf "%s: every pixel ScenePixels decides for the six glyphs in both themes is drawn (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 150)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+
+                let! control =
+                    drawnMismatches container width height backend (fun () -> mount.Present scene) (ScenePixels.expectations width height swapped) 0
+
+                check
+                    (sprintf "%s: control, the same pixels read against the board with its themes swapped do not match" name)
+                    (control.Length > 20)
+                    (sprintf "only %d differ" control.Length)
+
+                let! shown = BrowserConformance.drawnPixels container width height backend (named |> List.map (fun (_, p, _) -> p))
+
+                for (label, point, colour), got in List.zip named shown do
+                    let want, tolerance =
+                        match backend with
+                        | RendererBackend.Babylon -> litOf colour, 4
+                        | _ -> rgbOf colour, 2
+
+                    let verdict =
+                        match got with
+                        | Some(r, g, b) when near want [| r; g; b |] tolerance -> "ok"
+                        | _ -> "DIFF"
+
+                    info
+                        (sprintf "glyph pixel %s %s" id label)
+                        (sprintf "(%g, %g) scene %A want %A got %A %s" point.X point.Y (rgbOf colour) want got verdict)
+
+                let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "glyphs-%s.png" id)
+                info (sprintf "glyph screenshot %s" id) (if wrote then sprintf "glyphs-%s.png" id else "not requested")
+                mount.Dispose()
+
+            container.remove ()
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -2613,6 +2716,7 @@ async {
         do! measureBabylon 100 50
         do! runScaledBoard ()
         do! runOverhang ()
+        do! runGlyphProof ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1
