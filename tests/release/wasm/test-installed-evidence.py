@@ -424,14 +424,27 @@ class Evidence(unittest.TestCase):
             allowed=('scripts/wasm-release/installed-evidence.py','tests/release/wasm/test-installed-evidence.py',
                      '.github/workflows/wasm-installed-org.yml','scripts/wasm-release/promotion.py','src/Game.Render/Unrelated.fs')
             protected=tuple(prefix+'file.txt' for prefix in b.CONSUMER_INPUTS)
-            for name in (*allowed,*protected):put(root/name,b'old')
+            environment=('global.json','Directory.Build.props','docs/Directory.notes.txt','Directory.Packages.local.props',
+                         '.config/dotnet-tools.json','scripts/verify-wasm-supervisor.sh','scripts/wasm-release/qualify-supervisor-installed.sh')
+            unchanged_environment='Directory.Build.props'
+            for name in (*allowed,*protected,*environment):put(root/name,b'old')
             git('add','.');git('commit','-qm','P');p=git('rev-parse','HEAD');tree=git('rev-parse','HEAD^{tree}')
             for name in allowed:put(root/name,b'new')
+            for name in environment:
+                if name!=unchanged_environment:put(root/name,b'new environment')
             put(root/'docs/added.md',b'added')
             git('add','.');git('commit','-qm','Q');q=git('rev-parse','HEAD')
             with patch.object(b,'ROOT',root):
                 audit=b.source_audit(p,q)
-                self.assertEqual({row['path'] for row in audit['changes']},{*allowed,'docs/added.md'})
+                self.assertEqual({row['path'] for row in audit['changes']},{*allowed,'docs/added.md',*(n for n in environment if n!=unchanged_environment)})
+                # N1: the consumer environment is its own section with old and new blob ids.
+                section={row['path']:row for row in audit['consumerEnvironment']}
+                listed=set(environment)-{'docs/Directory.notes.txt'}
+                self.assertEqual(set(section),listed)
+                for name in listed:
+                    self.assertEqual(section[name]['old']['blob'],git('rev-parse',p+':'+name));self.assertEqual(section[name]['new']['blob'],git('rev-parse',q+':'+name))
+                    self.assertEqual(section[name]['changed'],name!=unchanged_environment)
+                self.assertNotIn('docs/added.md',section)
                 self.assertEqual(audit['publishedTree'],tree);self.assertEqual(audit['consumerInputs'],list(b.CONSUMER_INPUTS))
                 row=next(row for row in audit['changes'] if row['path']==allowed[0]);self.assertEqual(row['new']['sha256'],e.hashlib.sha256(b'new').hexdigest())
                 self.assertEqual(row['old']['blob'],git('rev-parse',p+':'+row['path']));self.assertEqual(row['new']['blob'],git('rev-parse',q+':'+row['path']))
@@ -454,6 +467,24 @@ class Evidence(unittest.TestCase):
                 with self.assertRaises(AssertionError):b.source_audit('a'*40,q)
                 with self.assertRaises(AssertionError):b.source_audit('main',q)
                 with self.assertRaises(AssertionError):b.source_audit(q,p)
+
+    def test_tag_resolution_binds_the_published_source_in_real_git(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root=pathlib.Path(raw)
+            def git(*args):return subprocess.check_output(['git','-C',raw,*args],text=True,stderr=subprocess.DEVNULL).strip()
+            git('init','-q');git('config','user.name','inert control');git('config','user.email','control@example.invalid')
+            put(root/'a.txt',b'one');git('add','.');git('commit','-qm','P');published=git('rev-parse','HEAD')
+            put(root/'a.txt',b'two');git('add','.');git('commit','-qm','other');other=git('rev-parse','HEAD')
+            git('tag','wasm/v'+CURRENT,published)
+            with patch.object(b,'ROOT',root):
+                self.assertEqual(b.bind_tag_source(CURRENT,published),'wasm/v'+CURRENT)
+                with self.assertRaises(AssertionError) as caught:b.bind_tag_source(CURRENT,other)
+                self.assertIn('tag does not name published source',str(caught.exception))
+                git('tag','-f','wasm/v'+CURRENT,other)
+                with self.assertRaises(AssertionError):b.bind_tag_source(CURRENT,published)
+                git('tag','-d','wasm/v'+CURRENT)
+                with self.assertRaises(AssertionError) as caught:b.bind_tag_source(CURRENT,published)
+                self.assertIn('absent',str(caught.exception))
 
     def test_actual_repository_published_source_to_qualifier_is_audited(self):
         tag='refs/tags/wasm/v'+CURRENT

@@ -150,6 +150,125 @@ for mutant in ("tag", "roster", "artifacts", "schema"):
     else: broken["schema"] = "fsgg.wasm.release-custody/v0"
     refused(lambda broken=broken: binding.bind_published_identity(broken, source, current, tree), "manifest identity refused", f"manifest {mutant} mutation")
 
+# N2: the tag-resolution assertion is a function. A tag naming a different commit (moved tag), an absent
+# tag, and the matching tag are each decided on the resolved commit alone.
+import subprocess
+assert binding.bind_tag_source(current, source, lambda *args: source) == "wasm/v" + current
+refused(lambda: binding.bind_tag_source(current, source, lambda *args: "9" * 40), "tag does not name published source", "moved tag")
+
+
+def absent(*args):
+    raise subprocess.CalledProcessError(128, "git")
+
+
+refused(lambda: binding.bind_tag_source(current, source, absent), "is absent", "absent tag")
+
+# B2: the consumer's Fable tool pin is bound to the published manifest.
+import json as _json
+import tempfile
+with tempfile.TemporaryDirectory() as scratch:
+    tools = pathlib.Path(scratch) / "dotnet-tools.json"
+    def write(value):
+        tools.write_text(_json.dumps(value))
+    fable = manifest["tools"]["fable"]
+    write({"version": 1, "tools": {"fable": {"version": fable}}})
+    assert binding.bind_tool_manifest(manifest, tools) == fable
+    write({"version": 1, "tools": {"fable": {"version": "0.0.1"}}})
+    refused(lambda: binding.bind_tool_manifest(manifest, tools), "differs from the published manifest", "fable pin mismatch")
+    write({"version": 1, "tools": {"other": {"version": fable}}})
+    refused(lambda: binding.bind_tool_manifest(manifest, tools), "lacks a fable pin", "missing fable pin")
+    tools.write_text("not json")
+    refused(lambda: binding.bind_tool_manifest(manifest, tools), "lacks a fable pin", "malformed tool manifest")
+assert binding.bind_tool_manifest(manifest) == manifest["tools"]["fable"], "tracked tool manifest must agree with the current toolchain"
+
+# B1: derive the installed-consumer input closure from what the installed run actually builds
+# and require every resolved path to be covered, so an omitted prefix fails here.
+import os
+import xml.etree.ElementTree as ET
+
+
+def project_references(project):
+    """Repo-relative paths a project compiles, references or imports (MSBuild properties are not resolved)."""
+    found = {project}
+    for element in ET.parse(root / project).iter():
+        name = element.tag.split("}")[-1]
+        if name in ("Compile", "ProjectReference", "Content", "EmbeddedResource", "None"):
+            include = element.get("Include")
+        elif name == "Import":
+            include = element.get("Project")
+        else:
+            continue
+        if include and "$(" not in include:
+            found.add(os.path.normpath(os.path.join(os.path.dirname(project), include)).replace(os.sep, "/"))
+    return found
+
+
+scripts_text = {}
+def script_closure(seeds):
+    queue, seen = list(seeds), set()
+    while queue:
+        name = queue.pop()
+        if name in seen or not (root / name).is_file():
+            continue
+        seen.add(name)
+        scripts_text[name] = (root / name).read_text()
+        queue.extend(re.findall(r"scripts/[A-Za-z0-9_./-]+\.(?:sh|py)", scripts_text[name]))
+    return seen
+
+
+workflow_text = (root / ".github/workflows/wasm-installed-org.yml").read_text()
+installed_scripts = script_closure(set(re.findall(r"scripts/[A-Za-z0-9_./-]+\.(?:sh|py)", workflow_text)))
+assert {"scripts/verify-wasm-package-consumer.sh", "scripts/wasm-release/qualify-supervisor-installed.sh", "scripts/verify-wasm-supervisor.sh"} <= installed_scripts
+
+projects = {"tests/Wasm.PackageConsumer/Consumer.fsproj", "tests/Wasm.Supervisor.Compatibility/Compatibility.fsproj",
+            "tests/Wasm.Supervisor.Compatibility/Installed/InstalledCompatibility.fsproj"}
+for name in installed_scripts:
+    projects.update(re.findall(r"tests/[A-Za-z0-9_./-]+\.fsproj", scripts_text[name]))
+derived, queue = set(), sorted(projects)
+while queue:
+    project = queue.pop()
+    for path in project_references(project):
+        if path not in derived and path.endswith("proj") and path != project:
+            queue.append(path)
+        derived.add(path)
+# Repo paths the installed drivers read (outside /usr/share/dotnet): fixtures, models, SDK helpers.
+for name in installed_scripts:
+    derived.update(re.findall(r"(?<![A-Za-z0-9_./-])((?:tests|src|sdk|eng)/[A-Za-z0-9_./-]*[A-Za-z0-9_])", scripts_text[name]))
+derived = {path for path in derived if "/bin/" not in path and "/obj/" not in path and "/test-results" not in path}
+assert len(derived) > 20 and any(path.startswith("tests/Wasm.Lifecycle.Correspondence/") for path in derived), "closure derivation found too little"
+uncovered = sorted(path for path in derived if not (path + "/").startswith(binding.CONSUMER_INPUTS) and not path.startswith(binding.CONSUMER_INPUTS))
+assert not uncovered, "installed run builds or reads paths outside CONSUMER_INPUTS: " + ", ".join(uncovered)
+# Causal control: removing the prefix that covers the Correspondence sources makes the derivation fail.
+reduced = tuple(prefix for prefix in binding.CONSUMER_INPUTS if prefix != "tests/Wasm.Lifecycle.Correspondence/")
+assert [path for path in derived if not (path + "/").startswith(reduced) and not path.startswith(reduced)], "closure derivation cannot detect an omitted prefix"
+
+# B3: no installed-path script pins a release-version literal (history roster in release_manifest.py is exempt).
+import ast
+import io
+import tokenize
+versions = set(manifest_tool.RETAINED_VERSIONS) | {current}
+literal = re.compile(r"(?<![0-9.])(?:" + "|".join(re.escape(version) for version in sorted(versions)) + r")(?![0-9.])")
+
+
+def code_text(name):
+    text = scripts_text[name]
+    if name.endswith(".py"):
+        docstrings = set()
+        for node in ast.walk(ast.parse(text)):
+            if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.body and isinstance(node.body[0], ast.Expr) and isinstance(getattr(node.body[0], "value", None), ast.Constant) and isinstance(node.body[0].value.value, str):
+                docstrings.add(node.body[0].value.lineno)
+        kept = [token.string for token in tokenize.generate_tokens(io.StringIO(text).readline) if token.type == tokenize.STRING and token.start[0] not in docstrings] + \
+               [token.string for token in tokenize.generate_tokens(io.StringIO(text).readline) if token.type in (tokenize.NAME, tokenize.NUMBER)]
+        return "\n".join(kept)
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+
+
+pinned = {name: literal.findall(code_text(name)) for name in sorted(installed_scripts - {"scripts/wasm-release/release_manifest.py"})}
+pinned = {name: found for name, found in pinned.items() if found}
+assert not pinned, "installed-path scripts pin a release version literal: " + repr(pinned)
+# Causal control: the detector flags the very pin this removed.
+assert literal.search("[[ \"$version\" == " + current + " ]]") and not literal.search("[[ \"$version\" == \"${RELEASE_VERSION:?}\" ]]")
+
 release = {"tag_name": f"wasm/v{current}", "draft": False, "prerelease": False, "published_at": "2026-10-02T00:00:00Z", "assets": []}
 for name, digest in (("release-manifest.json", "c" * 64), (f"fsgg-wasm-sdk-{current}.tar.gz", "d" * 64), ("promotion-binding.json", "e" * 64)):
     release["assets"].append({"name": name, "digest": "sha256:" + digest, "browser_download_url": f"https://github.com/FS-GG/FS.GG.Game/releases/download/wasm/v{current}/{name}"})

@@ -33,6 +33,20 @@ CONSUMER_INPUTS = (
     'sdk/wasm/',
     'tests/Wasm.PackageConsumer/',
     'tests/Wasm.Supervisor.Compatibility/',
+    'tests/Wasm.Lifecycle.Correspondence/',
+    'tests/Wasm.Compatibility/',
+)
+# The consumer environment is not byte-identical by construction (Q legitimately moves the
+# SDK and drivers), so it is listed with old and new blob ids rather than refused. Its Fable
+# tool pin is bound to the published manifest instead (bind_tool_manifest).
+TOOL_MANIFEST = '.config/dotnet-tools.json'
+CONSUMER_ENVIRONMENT = (
+    re.compile(r'(^|/)global\.json$'),
+    re.compile(r'(^|/)Directory\.Build[^/]*\.props$'),
+    re.compile(r'(^|/)Directory\.Packages[^/]*\.props$'),
+    re.compile(r'^\.config/dotnet-tools\.json$'),
+    re.compile(r'^scripts/verify-wasm-[^/]+$'),
+    re.compile(r'^scripts/wasm-release/qualify-supervisor-[^/]+$'),
 )
 
 
@@ -108,6 +122,43 @@ def bind_published_identity(manifest, source, tracked, source_tree):
     return source_tree
 
 
+def bind_tool_manifest(manifest, tools_path=None):
+    """The consumer's Fable tool must be the one the published manifest names."""
+    path = pathlib.Path(tools_path) if tools_path else ROOT / TOOL_MANIFEST
+    try:
+        declared = json.loads(path.read_text())["tools"]["fable"]["version"]
+    except (OSError, ValueError, KeyError, TypeError):
+        raise AssertionError("consumer dotnet tool manifest lacks a fable pin") from None
+    assert declared == manifest["tools"]["fable"], f"consumer fable {declared} differs from the published manifest {manifest['tools']['fable']}"
+    return declared
+
+
+def bind_tag_source(version, source, resolve=None):
+    """The immutable tag for the selected release must name exactly the published source."""
+    tag = "wasm/v" + version
+    try:
+        resolved = (resolve or git)("rev-parse", f"refs/tags/{tag}^{{commit}}")
+    except subprocess.CalledProcessError:
+        raise AssertionError(f"tag {tag} is absent") from None
+    assert resolved == source, "tag does not name published source"
+    return tag
+
+
+def consumer_environment(source, qualifier):
+    """List the consumer environment at P and Q with blob ids; a difference is recorded, not refused."""
+    def tree(revision):
+        out = subprocess.check_output(['git','-C',str(ROOT),'ls-tree','-r','-z','--full-tree',revision], timeout=60).decode().split('\0')
+        rows = {}
+        for line in out:
+            if not line: continue
+            meta, path = line.split('\t', 1)
+            mode, _kind, blob = meta.split()
+            if any(rule.search(path) for rule in CONSUMER_ENVIRONMENT): rows[path] = {'mode':mode,'blob':blob}
+        return rows
+    old, new = tree(source), tree(qualifier)
+    return [{'path':path,'old':old.get(path),'new':new.get(path),'changed':old.get(path) != new.get(path)} for path in sorted(set(old)|set(new))]
+
+
 def source_audit(source, qualifier):
     assert re.fullmatch(r'[0-9a-f]{40}', source), 'wrong immutable publication subject'
     try:
@@ -127,7 +178,7 @@ def source_audit(source, qualifier):
         assert not path.startswith(CONSUMER_INPUTS), 'installed consumer input differs from the published source: '+path
         rows.append({'path':path,'status':status,'old':fingerprint(mode_old[1:],old_blob),'new':fingerprint(mode_new,new_blob)})
     return {'schema':'fsgg.wasm.installed-inputs/v1','publishedSource':source,'publishedTree':tree,
-            'qualifierSource':qualifier,'qualifierTree':git('rev-parse',qualifier+'^{tree}'),'consumerInputs':list(CONSUMER_INPUTS),'changes':rows,
+            'qualifierSource':qualifier,'qualifierTree':git('rev-parse',qualifier+'^{tree}'),'consumerInputs':list(CONSUMER_INPUTS),'consumerEnvironment':consumer_environment(source,qualifier),'changes':rows,
             'consumerInputsNote':'every path under consumerInputs is byte-identical to P; other changed paths are qualifier tooling or unrelated development, recorded here; published packages/SDK remain P inputs, evidence collector/binder are selected Q inputs'}
 
 
@@ -182,8 +233,7 @@ def main():
     assert not git("status", "--porcelain"), "installed qualifier must be a clean accepted executor"
     assert git("rev-parse", "HEAD") == values["QUALIFIER_SOURCE"] == os.environ["GITHUB_SHA"], "wrong qualifier checkout"
     source = values["PUBLISHED_SOURCE"]
-    tag = "wasm/v" + values["RELEASE_VERSION"]
-    assert git("rev-parse", f"refs/tags/{tag}^{{commit}}") == source, "tag does not name published source"
+    tag = bind_tag_source(values["RELEASE_VERSION"], source)
     subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", source, "origin/main"], check=True)
     # Read-only qualification authenticates immutable published P separately from Q.
     spec=importlib.util.spec_from_file_location('promotion',ROOT/'scripts/wasm-release/promotion.py')
@@ -200,6 +250,7 @@ def main():
     manifest = json.loads((receipts / "release-manifest.json").read_text())
     published_tree = bind_published_identity(manifest, source, tracked, git("rev-parse", f"{source}^{{tree}}"))
     assert manifest["version"] == values["RELEASE_VERSION"]
+    bind_tool_manifest(manifest)
     sdk = next(row for row in manifest["artifacts"] if row["file"] == f"fsgg-wasm-sdk-{values['RELEASE_VERSION']}.tar.gz")
     assert sdk["sha256"] == values["SDK_SHA256"]
     release_binding = {"manifestSha256": values["MANIFEST_SHA256"], "sdkSha256": values["SDK_SHA256"],

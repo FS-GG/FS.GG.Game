@@ -96,7 +96,13 @@ with the native release-asset digests and the promotion binding. The published t
 read from Git. Between the published source and the accepted qualifier, every path under
 the installed-consumer input closure (`CONSUMER_INPUTS` in `bind-installed-release.py`:
 `eng/wasm-shared/`, `src/Wasm.Contracts/`, `src/Wasm.Browser/`, `sdk/wasm/`,
-`tests/Wasm.PackageConsumer/`, `tests/Wasm.Supervisor.Compatibility/`) must be byte-identical.
+`tests/Wasm.PackageConsumer/`, `tests/Wasm.Supervisor.Compatibility/`,
+`tests/Wasm.Lifecycle.Correspondence/`, `tests/Wasm.Compatibility/`) must be byte-identical. A test derives
+the closure from the installed projects' `Compile`/`ProjectReference` paths and the drivers' repository
+references, so an omission fails. The consumer environment (`global.json`, `Directory.Build*.props`,
+`Directory.Packages*.props`, the verify-wasm-* and qualify-supervisor-* drivers and
+`.config/dotnet-tools.json`) is listed separately with old and new blob ids; the Fable tool pin must equal
+the manifest's `tools.fable`, and installed-path scripts carry no release-version literal.
 Other changed paths are qualifier tooling or unrelated development and are recorded in
 the installed input audit rather than listed per release. On the public feed the restored
 package is compared member by member with the frozen inventories after excluding the

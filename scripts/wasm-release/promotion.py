@@ -641,7 +641,6 @@ def custody_plan():
 
 def freeze(custody,output):
     custody_plan()
-    need(VERSION=='0.7.0', 'only selected current release can freeze')
     need(os.environ['GITHUB_REPOSITORY']==REPO and os.environ['GITHUB_REF']=='refs/heads/main' and os.environ['GITHUB_SHA']==os.environ['GITHUB_WORKFLOW_SHA']==P, 'premerge/source/workflow substitution')
     event=os.environ['GITHUB_EVENT_NAME']
     need(event=='push' or (event=='workflow_dispatch' and os.environ.get('WASM_QUALIFY_EXPECTED_HEAD')==P), 'qualification dispatch needs selected protected head')
