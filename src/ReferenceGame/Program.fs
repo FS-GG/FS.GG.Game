@@ -1,6 +1,12 @@
 namespace FS.GG.Game.Reference
 
+// The state core (`Model`, `Message`, `boot`, `update`, `fixedTick`, `applyEffectResult`) is plain F# with no
+// dependency, so the Fable rendering benchmark (tests/Render.Browser.Bench, FS.GG.Game#746) compiles THIS file to
+// drive the real ReferenceGame state type through every renderer backend. Everything that needs the .NET-only
+// Game.Harness (the journey adapter, its script, the production proof) is excluded from the Fable compilation.
+#if !FABLE_COMPILER
 open FS.GG.Game.Harness
+#endif
 
 module Composition =
     type Screen =
@@ -79,6 +85,7 @@ module Composition =
         | AimAt(x, y) -> { model with Aim = x, y }
         | _ -> model
 
+#if !FABLE_COMPILER
     let mapEvent event _model =
         match event with
         | JourneyEvent.Start
@@ -91,6 +98,8 @@ module Composition =
         | JourneyEvent.Resume -> JourneyDispatch.Mapped [ ResumeGame ]
         | JourneyEvent.FixedTick
         | JourneyEvent.EffectResult _ -> JourneyDispatch.Mapped []
+
+#endif
 
     let fixedTick model =
         let next =
@@ -108,6 +117,7 @@ module Composition =
         match effect with
         | VaultEnemiesDefeated -> { model with VaultClear = true }
 
+#if !FABLE_COMPILER
     let adapter =
         {
             RouteId = "FS.GG.Game.Reference/Composition"
@@ -141,9 +151,12 @@ module Composition =
             JourneyEvent.FixedTick
         ]
 
+#endif
+
     let inputIdentity = "boot-to-vault-exit/fixed-script-v1"
     let terminalPredicateIdentity = "screen-won-v1"
 
+#if !FABLE_COMPILER
 [<Sealed>]
 type ProductionJourneyProof() =
     interface IProductionJourneyProofV1 with
@@ -172,3 +185,4 @@ type ProductionJourneyProof() =
 module Program =
     [<EntryPoint>]
     let main _ = 0
+#endif

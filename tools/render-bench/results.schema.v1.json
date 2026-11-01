@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/FS-GG/FS.GG.Game/tools/render-bench/results.schema.v1.json",
+  "title": "FS.GG.Game rendering benchmark results, version 1 (fsgg.render-bench/v1)",
+  "description": "One benchmark session: one browser mode, a matrix of game x scene x size x backend, each repeated. Written by tools/render-bench/driver.mjs. A field that could not be observed is null or carries status 'unknown' with a reason; it is never zero by default. A new version of this schema gets a new file and a new `schema` constant; v1 readers must refuse other versions.",
+  "type": "object",
+  "required": ["schema", "createdAt", "finishedAt", "harness", "config", "environment", "runs", "aggregates"],
+  "properties": {
+    "schema": { "const": "fsgg.render-bench/v1" },
+    "createdAt": { "type": "string" },
+    "finishedAt": { "type": "string" },
+    "harness": {
+      "type": "object",
+      "required": ["commit", "dirty"],
+      "properties": {
+        "commit": { "type": ["string", "null"], "description": "FS.GG.Game commit the page and driver were built from" },
+        "dirty": { "type": "boolean", "description": "the working tree had uncommitted changes" },
+        "label": { "type": ["string", "null"] }
+      }
+    },
+    "config": {
+      "type": "object",
+      "required": ["mode", "games", "scenes", "sizes", "backends", "repeats", "frames", "warmupFrames"],
+      "properties": {
+        "mode": { "enum": ["gpu-vulkan", "gpu-gl", "software", "custom"] },
+        "games": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "scenes": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "sizes": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1 },
+        "backends": { "type": "array", "items": { "enum": ["svg", "pixi", "babylon"] }, "minItems": 1 },
+        "repeats": { "type": "integer", "minimum": 1 },
+        "frames": { "type": "integer", "minimum": 1, "description": "frame intervals recorded per run, after warm-up" },
+        "warmupFrames": { "type": "integer", "minimum": 1, "description": "frames presented after the backend first draws and before recording" },
+        "capacityProbe": { "type": ["string", "null"] },
+        "capacityArgs": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": ["host"],
+      "description": "The fingerprint, taken from the first run's own browser. Absent browser/gpu/webgl/webgpu means no run got far enough to take it.",
+      "properties": {
+        "host": {
+          "type": "object",
+          "required": ["platform", "kernel", "cpuModel", "logicalCpus"],
+          "properties": {
+            "platform": { "type": "string" },
+            "arch": { "type": "string" },
+            "kernel": { "type": "string" },
+            "os": { "type": "string" },
+            "cpuModel": { "type": ["string", "null"] },
+            "logicalCpus": { "type": "integer" },
+            "memoryGiB": { "type": ["number", "null"] },
+            "gpuDevice": { "type": ["string", "null"] },
+            "ldLibraryPath": { "type": ["string", "null"] }
+          }
+        },
+        "browser": {
+          "type": "object",
+          "required": ["product", "userAgent", "executable"],
+          "properties": { "product": { "type": "string" }, "userAgent": { "type": "string" }, "executable": { "type": "string" } }
+        },
+        "flags": { "type": "array", "items": { "type": "string" } },
+        "gpu": {
+          "type": "object",
+          "required": ["featureStatus", "devices", "glRenderer"],
+          "properties": {
+            "featureStatus": { "type": ["object", "null"], "description": "chrome://gpu Graphics Feature Status (CDP SystemInfo.getInfo)" },
+            "devices": { "type": "array" },
+            "glRenderer": { "type": ["string", "null"] },
+            "glImplementationParts": { "type": ["string", "null"] }
+          }
+        },
+        "webgl": { "type": "object", "description": "UNMASKED_RENDERER/VENDOR of a probe WebGL 1 and WebGL 2 context" },
+        "webgpu": { "type": "object", "required": ["available"], "properties": { "available": { "type": "boolean" } } }
+      }
+    },
+    "runs": { "type": "array", "items": { "$ref": "#/$defs/run" } },
+    "aggregates": { "type": "array", "items": { "$ref": "#/$defs/aggregate" } }
+  },
+  "$defs": {
+    "distribution": {
+      "type": "object",
+      "required": ["count", "p50", "p95", "p99", "mean", "min", "max"],
+      "properties": {
+        "count": { "type": "integer" },
+        "p50": { "type": ["number", "null"] },
+        "p95": { "type": ["number", "null"] },
+        "p99": { "type": ["number", "null"] },
+        "mean": { "type": ["number", "null"] },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] }
+      }
+    },
+    "spread": {
+      "type": "object",
+      "description": "one statistic across the repeats of a configuration: median, mean, sample standard deviation, coefficient of variation",
+      "required": ["repeats", "median", "mean", "stddev", "cvPercent", "min", "max"],
+      "properties": {
+        "repeats": { "type": "integer" },
+        "median": { "type": ["number", "null"] },
+        "mean": { "type": ["number", "null"] },
+        "stddev": { "type": ["number", "null"] },
+        "cvPercent": { "type": ["number", "null"] },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] }
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "required": ["status", "reason"],
+      "properties": { "status": { "const": "unknown" }, "reason": { "type": ["string", "null"] } }
+    },
+    "run": {
+      "type": "object",
+      "required": ["game", "scene", "size", "backend", "repeat", "mode", "status", "error", "startedAt", "capacity"],
+      "properties": {
+        "game": { "type": "string" },
+        "scene": { "type": "string" },
+        "size": { "type": "integer", "minimum": 1 },
+        "backend": { "enum": ["svg", "pixi", "babylon"] },
+        "repeat": { "type": "integer", "minimum": 1 },
+        "mode": { "type": "string" },
+        "status": { "enum": ["ok", "error", "timeout", "held"] },
+        "error": { "type": ["string", "null"] },
+        "startedAt": { "type": "string" },
+        "capacity": {
+          "type": "object",
+          "required": ["status"],
+          "properties": { "status": { "enum": ["admit", "hold", "not-configured"] }, "verdict": { "type": "object" } }
+        },
+        "loadavgBefore": { "type": ["array", "null"] },
+        "loadavgAfter": { "type": ["array", "null"] },
+        "frameTimeMs": { "$ref": "#/$defs/distribution", "description": "requestAnimationFrame timestamp deltas with frame pacing uncapped" },
+        "presentMs": { "$ref": "#/$defs/distribution", "description": "in-page time of the state step plus RendererMsg.StateChanged dispatch (Present)" },
+        "rafScriptMs": { "$ref": "#/$defs/distribution", "description": "in-page time inside every animation-frame callback per frame, engines' render loops included" },
+        "mainThread": {
+          "type": "object",
+          "required": ["windowFrames", "cpuMsPerFrame", "taskMsPerFrame"],
+          "properties": {
+            "windowFrames": { "type": "integer" },
+            "cpuMsPerFrame": { "type": ["number", "null"], "description": "renderer main-thread CPU time (ThreadTime) per frame" },
+            "taskMsPerFrame": { "type": ["number", "null"], "description": "renderer main-thread task wall time per frame" },
+            "scriptMsPerFrame": { "type": ["number", "null"] },
+            "layoutMsPerFrame": { "type": ["number", "null"] },
+            "recalcStyleMsPerFrame": { "type": ["number", "null"] },
+            "utilisation": { "type": ["number", "null"] }
+          }
+        },
+        "processCpuMsPerFrame": {
+          "type": "object",
+          "properties": { "renderer": { "type": ["number", "null"] }, "gpu": { "type": ["number", "null"] }, "browser": { "type": ["number", "null"] } }
+        },
+        "gpuTimeMs": {
+          "anyOf": [
+            { "$ref": "#/$defs/unknown" },
+            {
+              "type": "object",
+              "required": ["status", "source", "count", "p50", "p95", "p99"],
+              "properties": { "status": { "const": "measured" }, "source": { "type": "string" }, "disjoint": { "type": "integer" } }
+            }
+          ]
+        },
+        "drawCalls": {
+          "anyOf": [
+            { "$ref": "#/$defs/unknown" },
+            { "type": "object", "required": ["status", "perFrame"], "properties": { "status": { "const": "counted" }, "perFrame": { "$ref": "#/$defs/distribution" } } }
+          ]
+        },
+        "memory": {
+          "type": "object",
+          "required": ["jsHeapUsedMB", "jsHeapUsedAfterGcMB"],
+          "properties": {
+            "jsHeapUsedMB": { "type": ["number", "null"] },
+            "jsHeapTotalMB": { "type": ["number", "null"] },
+            "jsHeapUsedAfterGcMB": { "type": ["number", "null"] },
+            "domNodes": { "type": ["number", "null"] },
+            "jsEventListeners": { "type": ["number", "null"] }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "required": ["declaredNodes", "backendNodes", "drawnNodes", "complete"],
+          "description": "the scene's drawable nodes, what the backend holds for them, and what it drew; complete=false means part of the scene was not drawn (for example culled) and the timings are for less than the declared size",
+          "properties": {
+            "declaredNodes": { "type": "integer" },
+            "backendNodes": { "type": ["integer", "null"] },
+            "drawnNodes": { "type": ["integer", "null"] },
+            "complete": { "type": ["boolean", "null"] }
+          }
+        },
+        "backendRenderer": { "type": ["object", "null"], "description": "UNMASKED_RENDERER of the backend's own live WebGL context; null for SVG" },
+        "page": { "type": "object" },
+        "durationSeconds": { "type": ["number", "null"] }
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "required": ["mode", "game", "scene", "size", "backend", "repeats", "ok", "frameTimeP50Ms", "frameTimeP95Ms", "frameTimeP99Ms", "mainThreadCpuMsPerFrame", "gpuTimeP50Ms", "drawCallsP50", "jsHeapUsedAfterGcMB", "drawnNodes", "complete"],
+      "properties": {
+        "repeats": { "type": "integer" },
+        "ok": { "type": "integer" },
+        "frameTimeP50Ms": { "$ref": "#/$defs/spread" },
+        "frameTimeP95Ms": { "$ref": "#/$defs/spread" },
+        "frameTimeP99Ms": { "$ref": "#/$defs/spread" },
+        "mainThreadCpuMsPerFrame": { "$ref": "#/$defs/spread" },
+        "gpuTimeP50Ms": { "anyOf": [{ "$ref": "#/$defs/unknown" }, { "$ref": "#/$defs/spread" }] },
+        "drawCallsP50": { "anyOf": [{ "$ref": "#/$defs/unknown" }, { "$ref": "#/$defs/spread" }] },
+        "jsHeapUsedAfterGcMB": { "$ref": "#/$defs/spread" },
+        "drawnNodes": { "$ref": "#/$defs/spread" },
+        "complete": { "type": "boolean", "description": "every successful repeat drew every declared node" }
+      }
+    }
+  }
+}
