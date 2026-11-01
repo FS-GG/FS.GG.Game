@@ -14,7 +14,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, statSync } from "node:fs";
 import { tmpdir, cpus, totalmem, release, version as osVersion, platform, arch } from "node:os";
 import { join, resolve, extname, normalize, sep, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -318,6 +318,21 @@ export function rendererClass(renderer) {
   return /swiftshader|llvmpipe|software/i.test(renderer) ? "software" : "hardware";
 }
 
+/// Other browsers' GPU processes running beside this run (any Chromium `--type=gpu-process` not launched for it).
+/// The load average does not show GPU contention; this makes a shared GPU visible in the record. Null off Linux.
+function foreignGpuProcesses(ownProfile) {
+  let entries;
+  try { entries = readdirSync("/proc"); } catch { return null; }
+  let count = 0;
+  for (const pid of entries) {
+    if (!/^\d+$/.test(pid)) continue;
+    let cmd;
+    try { cmd = readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { continue; }
+    if (cmd.includes("--type=gpu-process") && !(ownProfile && cmd.includes(ownProfile))) count++;
+  }
+  return count;
+}
+
 // ---- capacity --------------------------------------------------------------------------------------------------
 const loadavg = () => {
   try { return readFileSync("/proc/loadavg", "utf8").trim().split(/\s+/).slice(0, 3).map(Number); } catch { return null; }
@@ -386,6 +401,7 @@ async function runOne(ctx, cell) {
       throw new Error(`mode ${mode} expects a ${expected} WebGL renderer but the backend drew on '${live && live.renderer}'`);
     }
 
+    record.foreignGpuProcessesBefore = foreignGpuProcesses(browser.profile);
     const cpu0 = await processCpu(browser);
     const m0 = metricsOf(await browser.page("Performance.getMetrics"));
     const w0 = await browser.evaluate(`window.__fsggBench.arm(${frames})`);
@@ -394,6 +410,7 @@ async function runOne(ctx, cell) {
     const m1 = metricsOf(await browser.page("Performance.getMetrics"));
     const cpu1 = await processCpu(browser);
     record.loadavgAfter = loadavg();
+    record.foreignGpuProcessesAfter = foreignGpuProcesses(browser.profile);
 
     for (let i = 0; i < 40; i++) {
       const g = await browser.evaluate("window.__fsggBench.settleGpu()");
@@ -609,7 +626,7 @@ async function commandRun(args) {
         const cell = { game, scene, size, backend, repeat };
         const r = await runOne(ctx, cell);
         runs.push(r);
-        log(`${mode} ${game}/${scene} size=${size} ${backend} #${repeat}: ${r.status}${r.error ? ` (${r.error})` : ""} p50=${r.frameTimeMs?.p50 ?? "-"}ms p95=${r.frameTimeMs?.p95 ?? "-"}ms cpu=${r.mainThread?.cpuMsPerFrame ?? "-"}ms gpu=${r.gpuTimeMs?.p50 ?? r.gpuTimeMs?.status ?? "-"}ms draws=${r.drawCalls?.perFrame?.p50 ?? "-"} load1=${r.loadavgBefore?.[0] ?? "-"}`);
+        log(`${mode} ${game}/${scene} size=${size} ${backend} #${repeat}: ${r.status}${r.error ? ` (${r.error})` : ""} p50=${r.frameTimeMs?.p50 ?? "-"}ms p95=${r.frameTimeMs?.p95 ?? "-"}ms cpu=${r.mainThread?.cpuMsPerFrame ?? "-"}ms gpu=${r.gpuTimeMs?.p50 ?? r.gpuTimeMs?.status ?? "-"}ms draws=${r.drawCalls?.perFrame?.p50 ?? "-"} load1=${r.loadavgBefore?.[0] ?? "-"} otherGpu=${r.foreignGpuProcessesBefore ?? "-"}`);
         if (r.status === "held") {
           log("capacity probe held the session past --capacity-wait; stopping and writing what ran");
           break session;

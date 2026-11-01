@@ -133,6 +133,8 @@
         },
         "loadavgBefore": { "type": ["array", "null"] },
         "loadavgAfter": { "type": ["array", "null"] },
+        "foreignGpuProcessesBefore": { "type": ["integer", "null"], "description": "other Chromium GPU processes on the host when the window opened (GPU contention the load average does not show)" },
+        "foreignGpuProcessesAfter": { "type": ["integer", "null"] },
         "frameTimeMs": { "$ref": "#/$defs/distribution", "description": "requestAnimationFrame timestamp deltas with frame pacing uncapped" },
         "presentMs": { "$ref": "#/$defs/distribution", "description": "in-page time of the state step plus RendererMsg.StateChanged dispatch (Present)" },
         "rafScriptMs": { "$ref": "#/$defs/distribution", "description": "in-page time inside every animation-frame callback per frame, engines' render loops included" },
