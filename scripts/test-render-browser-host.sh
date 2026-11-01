@@ -61,6 +61,19 @@ fi
   echo "test-render-browser-host: required browser 'chromium' or 'google-chrome' was not found" >&2
   exit 2
 }
+# Playwright launches the browser from an executable PATH, never a command name, so resolve the bare name (from the
+# default list or RENDER_SMOKE_BROWSER) and any symlinks to the real file.
+RESOLVED="$(command -v "$BROWSER" || true)"
+[[ -n $RESOLVED ]] || {
+  echo "test-render-browser-host: browser '$BROWSER' was not found" >&2
+  exit 2
+}
+BROWSER="$(readlink -f "$RESOLVED")"
+[[ -x $BROWSER ]] || {
+  echo "test-render-browser-host: browser '$BROWSER' is not executable" >&2
+  exit 2
+}
+echo "test-render-browser-host: browser executable $BROWSER ($("$BROWSER" --version 2>/dev/null | head -n 1))"
 
 TMP="$(mktemp -d)"
 if [[ ${RENDER_SMOKE_KEEP:-0} == 1 ]]; then
