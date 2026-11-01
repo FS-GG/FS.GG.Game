@@ -227,8 +227,130 @@ this delivery.
 
 ## Baseline
 
-The committed baselines are for ReferenceGame on fdev, measured on 2026-11-01: one session per mode. The GPU control is
-the software mode. Medians are taken across the 3 repeats of each run's own statistic. CV is the coefficient of
+Two generations of baselines are committed, all for ReferenceGame on fdev. Medians are taken across the 3 repeats of
+each run's own statistic. CV is the coefficient of variation of the per-run p50 across repeats. "(partial)" marks a
+backend that drew fewer nodes than the scene holds (#753). The full per-run records and raw per-frame samples are in the
+JSON files. **Compare a baseline only with a baseline of the same route.**
+
+| Baseline | Route | Source revision | Status |
+|---|---|---|---|
+| `fdev-2026-11-01-gpu-angle-vulkan-0.18.0-routes.json` | plain and interactive, adjacent in one session | PR head `95d695c8ee60` (rebased on `edfa6aa5`) | measured, below |
+| `fdev-2026-11-01-gpu-angle-vulkan.json` | plain only (non-interactive) | `a111e5ab` | earlier, kept (below) |
+| `fdev-2026-11-01-software.json` | plain only (non-interactive) | `a111e5ab` | earlier, kept (below) |
+| software, plain and interactive at the rebased head | both | not measured | **owed**, see below |
+
+**The software re-measurement at the rebased head is owed.** A software session of 108 runs was started at the same
+protocol and admitted run by run, but the shared host kept the capacity probe on `hold` after almost every run (SwiftShader
+loads several cores for a long time, and other lanes' builds and browser runs held the host too), so 12 runs completed
+in 45 minutes. A full session was projected at more than 6 hours, so it was stopped and its 12 runs discarded. The
+earlier `software` baseline (plain route, `a111e5ab`) stays as the software control for the plain route. No software
+number exists for the interactive route. The follow-up is filed as [#780](https://github.com/FS-GG/FS.GG.Game/issues/780).
+
+**The rebase and 0.18.0 sources did not move the plain route.** The new plain rows agree with the earlier plain baseline
+(`a111e5ab`) within its run-to-run noise: for example SVG `room-tiles` at 5,000 nodes has a p50 of 116.3 ms against
+116.5 ms, Pixi 2.56 ms against 2.68 ms, and Babylon at 1,000 nodes 6.6 ms against 7.1 ms.
+
+### Current: plain and interactive routes on the rebased head
+
+**Reading it.** The `interactive` route is what a game on Render.Browser 0.18.0 ships (`withInteraction`: input host, hit
+regions, accessible mirror, and a selection that changes three times per 120-frame journey).
+
+- **SVG** is unchanged by the interactive mount within noise (ratio 0.98x to 1.07x of the plain p50). At 100 nodes it
+  costs about 0.1 to 0.2 ms more per frame.
+- **Pixi** is within noise from 1,000 nodes up (0.97x to 1.07x). At 100 nodes it costs about 0.07 to 0.09 ms more.
+- **Babylon** costs more with the input host: 1.56x and 1.69x at 100 nodes, 1.18x and 1.31x at 1,000, and 1.12x and 1.18x
+  at 5,000 nodes (`room-tiles` and `room-swarm`), and the extra frame time is main-thread CPU. It is also the backend that
+  renders only part of large scenes (#753), so its large-scene rows describe a smaller scene. The cause was not
+  isolated here. Reading `BabylonSurface.mountInteractive`, the hit-region meshes are rebuilt whenever the objects change,
+  and the aim marker moves every frame, which would create and dispose two meshes per `Present`. That is a hypothesis from
+  the source, not a measurement.
+- The heap after GC grows by 0.1 to 1.5 MB with the interactive route (the mirror and the hit regions).
+- **GPU time and draw calls.** Pixi's are the same in both routes (about 2 draws), and Babylon's draw calls are unchanged
+  (hit regions are invisible meshes). Babylon's GPU time p50 is higher in the interactive route at 1,000 and 5,000 nodes
+  (`room-swarm`: 6.3 to 8.4 ms and 11.8 to 13.9 ms) but not at 100 nodes (1.05 to 1.10 ms), where the extra frame time is
+  main-thread work.
+
+#### `gpu-angle-vulkan`
+
+`baselines/fdev-2026-11-01-gpu-angle-vulkan-0.18.0-routes.json`. Harness commit `95d695c8ee60` (`dirty: false`). Session 2026-11-01T17:52Z to 2026-11-01T18:42Z (UTC, including capacity holds). 108 runs (54 per route), 108 ok. 3 repeats × 300 recorded frames after 60 warm-up frames. 1-minute load at run start: 0.53 to 3.68 (the capacity probe admitted every run at `--max-load-per-core 0.25`).
+
+† **Another lane's browser GPU process ran beside 14 of 108 runs** (`foreignGpuProcessesBefore` or `After` was 1; never more than 1). The capacity probe cannot see it. 13 configurations contain at least one such run and are marked †; their medians are across 3 repeats, so one affected repeat does not move the median, but it does widen the CV. Treat a † configuration's tail and CV with care.
+
+- WebGL renderer: `ANGLE (AMD, Vulkan 1.4.354 (AMD Ryzen 9 7900 12-Core Processor (RADV RAPHAEL_MENDOCINO) (0x0000164E)), radv)`
+- chrome://gpu: webgl `enabled`, gpu_compositing `enabled`, rasterization `enabled`, vulkan `enabled_on`, webgpu `enabled`
+- WebGPU adapter: amd/rdna-2, fallback False, timestamp-query True
+- Browser: Chrome/153.0.8010.12; launched through `fdev-chromium-env` (`ldLibraryPath` /home/developer/.local/share/fdev-chromium/arch-20261012-r1/root/usr/lib)
+
+| scene | size | backend | route | drawn | frame p50 / p95 / p99 ms | p50 CV | main-thread CPU ms/frame | GPU-process CPU ms/frame | GPU time p50 ms | draw calls/frame | heap after GC MB |
+|---|---:|---|---|---:|---|---:|---:|---:|---:|---:|---:|
+| room-tiles | 100 | svg | plain | 100 | 2.405 / 3.135 / 4.995 | 2.9% | 2.449 | 0.74 | Unknown | Unknown | 6.27 |
+| room-tiles | 100 | svg | interactive | 100 | 2.57 / 3.74 / 5.4 | 7.5% | 2.638 | 0.735 | Unknown | Unknown | 6.37 |
+| room-tiles | 100 | pixi † | plain | 100 | 0.78 / 1.275 / 2.26 | 9.1% | 0.285 | 1.15 | 0.551 | 2 | 7.63 |
+| room-tiles | 100 | pixi † | interactive | 100 | 0.855 / 1.655 / 2.63 | 0.7% | 0.383 | 1.147 | 0.529 | 2 | 7.93 |
+| room-tiles | 100 | babylon † | plain | 100 | 1.435 / 2.33 / 3.29 | 15% | 1.001 | 1.086 | 1.141 | 200 | 11.59 |
+| room-tiles | 100 | babylon † | interactive | 100 | 2.24 / 3.285 / 4.095 | 6.4% | 1.811 | 1.022 | 1.822 | 200 | 12.46 |
+| room-tiles | 1000 | svg † | plain | 1000 | 22.06 / 28.055 / 29.95 | 6.2% | 22.501 | 2.079 | Unknown | Unknown | 6.46 |
+| room-tiles | 1000 | svg † | interactive | 1000 | 22.05 / 27.68 / 29.31 | 3.3% | 22.447 | 2.185 | Unknown | Unknown | 6.57 |
+| room-tiles | 1000 | pixi † | plain | 1000 | 1.14 / 1.825 / 4.29 | 5.2% | 0.714 | 1.15 | 0.544 | 2 | 10.68 |
+| room-tiles | 1000 | pixi † | interactive | 1000 | 1.115 / 2.305 / 4.345 | 2% | 0.749 | 1.182 | 0.535 | 2 | 11.01 |
+| room-tiles | 1000 | babylon † | plain | 576 (partial) | 6.615 / 9.225 / 10.74 | 17.3% | 5.381 | 3.214 | 5.598 | 1152 | 29.51 |
+| room-tiles | 1000 | babylon | interactive | 576 (partial) | 7.8 / 10.625 / 12.66 | 14.3% | 6.66 | 3.387 | 6.58 | 1152 | 30.39 |
+| room-tiles | 5000 | svg | plain | 5000 | 116.33 / 136.265 / 139.245 | 3.5% | 116.699 | 8.245 | Unknown | Unknown | 7.18 |
+| room-tiles | 5000 | svg | interactive | 5000 | 113.98 / 131.86 / 139.125 | 1.9% | 114.263 | 8.609 | Unknown | Unknown | 7.32 |
+| room-tiles | 5000 | pixi | plain | 5000 | 2.56 / 4.855 / 20.005 | 7.2% | 2.47 | 1.03 | 0.748 | 2 | 24.29 |
+| room-tiles | 5000 | pixi | interactive | 5000 | 2.495 / 5.01 / 19.765 | 2.6% | 2.454 | 0.924 | 0.719 | 2 | 24.51 |
+| room-tiles | 5000 | babylon | plain | 80 (partial) | 11.71 / 14.525 / 15.735 | 7.1% | 11.215 | 1.49 | 10.779 | 160 | 84.72 |
+| room-tiles | 5000 | babylon | interactive | 80 (partial) | 13.17 / 16.46 / 31.095 | 4.3% | 12.827 | 1.678 | 12.019 | 160 | 86.22 |
+| room-swarm | 100 | svg | plain | 100 | 2.455 / 3.915 / 7.185 | 3.4% | 2.618 | 0.719 | Unknown | Unknown | 6.25 |
+| room-swarm | 100 | svg | interactive | 100 | 2.615 / 3.765 / 6.705 | 2.5% | 2.761 | 0.757 | Unknown | Unknown | 6.36 |
+| room-swarm | 100 | pixi | plain | 100 | 0.805 / 1.28 / 2.45 | 4% | 0.32 | 1.217 | 0.523 | 2 | 7.73 |
+| room-swarm | 100 | pixi | interactive | 100 | 0.895 / 1.44 / 2.49 | 5.6% | 0.391 | 1.163 | 0.527 | 2 | 8.29 |
+| room-swarm | 100 | babylon | plain | 100 | 1.325 / 2.36 / 2.82 | 12.2% | 0.902 | 0.989 | 1.054 | 200 | 24.57 |
+| room-swarm | 100 | babylon | interactive | 100 | 2.24 / 3.25 / 4.585 | 7.5% | 1.873 | 1.046 | 1.103 | 200 | 25.45 |
+| room-swarm | 1000 | svg | plain | 1000 | 19.56 / 27.97 / 36.805 | 3.9% | 20.214 | 1.848 | Unknown | Unknown | 6.39 |
+| room-swarm | 1000 | svg † | interactive | 1000 | 19.69 / 27.575 / 34.925 | 2.9% | 20.518 | 1.722 | Unknown | Unknown | 6.52 |
+| room-swarm | 1000 | pixi | plain | 1000 | 1.335 / 2.12 / 3.01 | 2.3% | 0.922 | 1.147 | 0.53 | 2 | 11.77 |
+| room-swarm | 1000 | pixi | interactive | 1000 | 1.425 / 2.395 / 3.24 | 3.1% | 1 | 1.145 | 0.555 | 2 | 12.26 |
+| room-swarm | 1000 | babylon | plain | 556 (partial) | 7.175 / 9.035 / 11.73 | 13.6% | 6.096 | 3.191 | 6.266 | 1118 | 162.93 |
+| room-swarm | 1000 | babylon † | interactive | 556 (partial) | 9.43 / 12.775 / 14.99 | 14.1% | 8.43 | 3.861 | 8.386 | 1118 | 163.81 |
+| room-swarm | 5000 | svg † | plain | 5000 | 104.555 / 135.96 / 156.75 | 4.5% | 106.516 | 6.788 | Unknown | Unknown | 6.96 |
+| room-swarm | 5000 | svg † | interactive | 5000 | 102.34 / 137.97 / 159.48 | 17.5% | 105.699 | 7.152 | Unknown | Unknown | 7.11 |
+| room-swarm | 5000 | pixi | plain | 5000 | 4.73 / 6.585 / 8.06 | 19.7% | 4.118 | 1.214 | 0.943 | 2 | 29.76 |
+| room-swarm | 5000 | pixi | interactive | 5000 | 5.035 / 7.01 / 9.46 | 20.3% | 4.518 | 1.217 | 0.948 | 2 | 29.98 |
+| room-swarm | 5000 | babylon | plain | 64 (partial) | 12.965 / 15.595 / 16.755 | 25.6% | 12.382 | 1.48 | 11.767 | 128 | 753.11 |
+| room-swarm | 5000 | babylon | interactive | 64 (partial) | 15.25 / 30.955 / 34.085 | 24.5% | 15.056 | 1.617 | 13.921 | 128 | 754.55 |
+
+Interactive against plain, same session (the two runs of a configuration are adjacent in the session):
+
+| scene | size | backend | plain p50 ms | interactive p50 ms | interactive / plain | plain main-thread CPU | interactive main-thread CPU | heap after GC plain -> interactive MB |
+|---|---:|---|---:|---:|---:|---:|---:|---|
+| room-tiles | 100 | svg | 2.405 | 2.57 | 1.07x | 2.449 | 2.638 | 6.27 -> 6.37 |
+| room-tiles | 100 | pixi | 0.78 | 0.855 | 1.10x | 0.285 | 0.383 | 7.63 -> 7.93 |
+| room-tiles | 100 | babylon | 1.435 | 2.24 | 1.56x | 1.001 | 1.811 | 11.59 -> 12.46 |
+| room-tiles | 1000 | svg | 22.06 | 22.05 | 1.00x | 22.501 | 22.447 | 6.46 -> 6.57 |
+| room-tiles | 1000 | pixi | 1.14 | 1.115 | 0.98x | 0.714 | 0.749 | 10.68 -> 11.01 |
+| room-tiles | 1000 | babylon | 6.615 | 7.8 | 1.18x | 5.381 | 6.66 | 29.51 -> 30.39 |
+| room-tiles | 5000 | svg | 116.33 | 113.98 | 0.98x | 116.699 | 114.263 | 7.18 -> 7.32 |
+| room-tiles | 5000 | pixi | 2.56 | 2.495 | 0.97x | 2.47 | 2.454 | 24.29 -> 24.51 |
+| room-tiles | 5000 | babylon | 11.71 | 13.17 | 1.12x | 11.215 | 12.827 | 84.72 -> 86.22 |
+| room-swarm | 100 | svg | 2.455 | 2.615 | 1.07x | 2.618 | 2.761 | 6.25 -> 6.36 |
+| room-swarm | 100 | pixi | 0.805 | 0.895 | 1.11x | 0.32 | 0.391 | 7.73 -> 8.29 |
+| room-swarm | 100 | babylon | 1.325 | 2.24 | 1.69x | 0.902 | 1.873 | 24.57 -> 25.45 |
+| room-swarm | 1000 | svg | 19.56 | 19.69 | 1.01x | 20.214 | 20.518 | 6.39 -> 6.52 |
+| room-swarm | 1000 | pixi | 1.335 | 1.425 | 1.07x | 0.922 | 1 | 11.77 -> 12.26 |
+| room-swarm | 1000 | babylon | 7.175 | 9.43 | 1.31x | 6.096 | 8.43 | 162.93 -> 163.81 |
+| room-swarm | 5000 | svg | 104.555 | 102.34 | 0.98x | 106.516 | 105.699 | 6.96 -> 7.11 |
+| room-swarm | 5000 | pixi | 4.73 | 5.035 | 1.06x | 4.118 | 4.518 | 29.76 -> 29.98 |
+| room-swarm | 5000 | babylon | 12.965 | 15.25 | 1.18x | 12.382 | 15.056 | 753.11 -> 754.55 |
+
+**Run-to-run variance (`gpu-angle-vulkan`, 18 configurations per route, 3 repeats).** CV of p50 frame time: plain 2.3–25.6% (median 6.2%), interactive 0.7–24.5% (median 4.3%). CV of p95: plain 1.6–56% (median 10.6%), interactive 2.3–31% (median 8.6%). CV of p99: plain 0.3–56% (median 12.3%), interactive 0.3–38.6% (median 5.1%).
+
+## Earlier baselines: plain route only, measured at `a111e5ab`
+
+These two baselines measure the **plain (non-interactive) route only**: `mountScene` without an
+input host, at harness commit `a111e5ab`, before this branch rebased on main and before the interactive route was
+benchmarked. They are kept as history and as the only software control. They are for ReferenceGame on fdev, measured on
+2026-11-01: one session per mode. The GPU control is the software mode. Medians are taken across the 3 repeats of each run's own statistic. CV is the coefficient of
 variation of the per-run p50 across repeats. "(partial)" marks a backend that drew fewer nodes than the scene holds
 (#753). The full per-run records and raw per-frame samples are in the JSON files.
 
