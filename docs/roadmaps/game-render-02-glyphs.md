@@ -387,8 +387,8 @@ own PR, not a regression.
 
 ### D10. Focus and selection with the input pipeline (#787)
 
-This decision is reconciled with the #787 ADR (PR #793, `docs/adr/0001-standard-input-pipeline.md`, first at `7ba30e53`
-and again at `f0561a79`). That
+This decision is reconciled with the #787 ADR (PR #793, `docs/adr/0001-standard-input-pipeline.md`), at `7ba30e53`,
+`f0561a79` and `1c1e4e3f`. That
 ADR decides that **focus and hover are drawable state held by the input host**: `InteractionCues` holds the focused
 object, the hovered object and whether focus is visible. The cues are not game state and do not survive a backend
 switch. Every interactive backend draws the interaction's cue layer above the frame's Scene. The default layer is
@@ -415,22 +415,21 @@ earlier draft that returned a `Scene` is withdrawn.
 
 **A theme switch reaches the cues (review B3).** `withCues (Glyphs.cues theme)` would fix the theme when the registry is
 built, so a later switch would recolour the frame but not the cues.
-- **Now:** the cue layer takes a **theme reader**, `unit -> Theme`, and reads it each time the host draws the layer.
+- The cue layer takes a **theme reader**, `unit -> Theme`, and reads it each time the host draws the layer.
   The game updates the theme its reader returns before it dispatches the state that shows the new theme, so the frame
   and the cues of one Present use the same theme.
-- **Preferred, proposed to the #787 owner:** a state-aware form, `SceneInteraction.withCuesOf (draw: 'State ->
-  CueContext -> SceneNode list)`. The host already holds the presented state, so the cue layer would read the theme
-  from it, with no reader and no ordering rule. `Glyphs.cuesOf (fun model -> model.Theme)` would then replace the
-  reader form.
+- **Agreed with the #787 owner** (#793 at `1c1e4e3f`): `CueContext` stays as it is (cues, objects, `cssPerUnit`,
+  with no theme field), and the reader on the glyph side is the mechanism. A state-aware `withCues` was considered and
+  not adopted.
 - **Kit:** D11's A → B → A switch check includes the cue layer, with focus visible on an object.
 
 **Hover is opt-in.** The default `Glyphs.cues` draws focus and nothing for hover, as `standardCues` does. After a
 pointer press the pressed object is hovered, and focus is not visible, so the default draws the same frame as before
 the press. `Glyphs.cuesHover` adds the hover outline. A game that opts in changes its frame on hover by design, so it is
 tested against #793's restated I8, which takes a hover-only frame as the reference.
-- **Not yet settled:** #793's ADR text (its line 120, as of `f0561a79`) still says the glyph layer's `Glyphs.cues`
-  "also draws a hover outline". The #787 owner has been asked to name `cuesHover` there. This is settled when #793
-  changes that line.
+- **Settled at #793 `1c1e4e3f`:** its ADR text now says that the glyph layer's default `cues` draws focus only, and
+  that hover is opt-in through `cuesHover`. The earlier wording, that `Glyphs.cues` "also draws a hover outline", is
+  gone.
 
 **Deterministic drawing.** The layer is a pure function of the theme the reader returns and the `CueContext`. The
 focused and hovered ids are looked up in `objects`, and an id that is not there draws nothing. Every combination of
@@ -472,7 +471,8 @@ nothing is drawn in the gap just outside the frame.
 - **Below `minCssPerUnit`,** the ring keeps its 2 CSS px and may cover the brackets. Accessibility wins over layout.
   The layer reports a diagnostic, and the kit runs only at or above the theme's minimum scale.
 
-The input host supplies `cssPerUnit` in `CueContext` (#793 at `f0561a79`). #793's restated I8 asserts the 2 CSS px
+The input host supplies `cssPerUnit` in `CueContext` (#793 at `f0561a79`, unchanged at `1c1e4e3f`, where #793 also
+states that cue widths are in CSS px). #793's restated I8 asserts the 2 CSS px
 width for `standardCues` and for any `withCues` layer.
 
 **Unlit on Babylon.** The cue layer is Scene data drawn through the same fill path as the frame. Once #786 lands,
