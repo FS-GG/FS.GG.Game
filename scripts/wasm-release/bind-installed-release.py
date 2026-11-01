@@ -13,28 +13,58 @@ import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REPO = "FS-GG/FS.GG.Game"
-PUBLISHED = "8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e"
-PUBLISHED_TREE = "090906c22f0ef0cd3ca453a28ca20ce8686e0753"
-# Closed repair closure. Root selection binds the exact Q; this is not authority
-# for arbitrary descendants or semantic changes inside a broad scripts prefix.
-INSTALLED_PATHS = frozenset({
-    'scripts/wasm-release/bind-installed-release.py',
-    'scripts/wasm-release/installed-evidence.py',
-    'tests/release/wasm/test-installed-evidence.py',
-    'tests/release/wasm/test-installed-org-workflow.py',
-    'tests/release/wasm/test-release-promotion.py',
-    'docs/roadmaps/wasm-shared-01.md',
-    'docs/atlas/catalog.json',
-    'docs/atlas/records/7f62ef13b4b46b4f23cae9536c977c15c85320a253ed2bc609eb7a1f0afdcf56.json',
-    'docs/atlas/records/be492023350541da5256d6f653711b5f736d5216cf121a7e02ca43e1887215e4.json',
-    'docs/atlas/records/5466c617291eff27f59b569a2d42a18dc0c134d4935d52d802c5a71b8a594281.json',
-})
+# The route is derived from observed state, never re-pinned per release: the selected
+# version is eng/wasm-shared/version.props, the publication identity is the immutable
+# tag, the native release assets and the published manifest (verify-identity), and the
+# published tree is read from Git. Only a release that version.props currently selects
+# can be qualified; a historical release is refused (its evidence stays verifiable at
+# the revision and run that produced it).
+#
+# Installed-consumer input closure. Everything the read-only installed run restores,
+# builds or executes as a *consumer* of the published artifacts must be byte-identical
+# between the published source P and the accepted qualifier Q. Qualifier tooling
+# (binder, evidence collector, workflows, toolchain scripts, docs) may change between P
+# and Q and is recorded in the audit; unrelated product development is not a consumer
+# input and does not require a binder change.
+CONSUMER_INPUTS = (
+    'eng/wasm-shared/',
+    'src/Wasm.Contracts/',
+    'src/Wasm.Browser/',
+    'sdk/wasm/',
+    'tests/Wasm.PackageConsumer/',
+    'tests/Wasm.Supervisor.Compatibility/',
+    'tests/Wasm.Lifecycle.Correspondence/',
+    'tests/Wasm.Compatibility/',
+)
+# The consumer environment is not byte-identical by construction (Q legitimately moves the
+# SDK and drivers), so it is listed with old and new blob ids rather than refused. Its Fable
+# tool pin is bound to the published manifest instead (bind_tool_manifest).
+TOOL_MANIFEST = '.config/dotnet-tools.json'
+CONSUMER_ENVIRONMENT = (
+    re.compile(r'(^|/)global\.json$'),
+    re.compile(r'(^|/)Directory\.Build[^/]*\.props$'),
+    re.compile(r'(^|/)Directory\.Packages[^/]*\.props$'),
+    re.compile(r'^\.config/dotnet-tools\.json$'),
+    re.compile(r'^scripts/verify-wasm-[^/]+$'),
+    re.compile(r'^scripts/wasm-release/qualify-supervisor-[^/]+$'),
+)
+
+
+def tracked_version():
+    return ET.parse(ROOT / "eng/wasm-shared/version.props").findtext(".//WasmSharedVersion")
+
+
+def release_manifest_module():
+    spec = importlib.util.spec_from_file_location("release_manifest", ROOT / "scripts/wasm-release/release_manifest.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def checked_inputs(environment, tracked_version):
     values = {key: environment[key] for key in ("RELEASE_VERSION", "PUBLISHED_SOURCE", "QUALIFIER_SOURCE", "MANIFEST_SHA256", "SDK_SHA256")}
     assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", values["RELEASE_VERSION"]), "invalid stable version"
-    assert values["RELEASE_VERSION"] == tracked_version, "qualifier version differs from selected release"
+    assert values["RELEASE_VERSION"] == tracked_version, f"historical release {values['RELEASE_VERSION']} is not the current route (version.props selects {tracked_version})"
     for key in ("PUBLISHED_SOURCE", "QUALIFIER_SOURCE"):
         assert re.fullmatch(r"[0-9a-f]{40}", values[key]), "source must be an immutable commit"
     for key in ("MANIFEST_SHA256", "SDK_SHA256"):
@@ -42,15 +72,14 @@ def checked_inputs(environment, tracked_version):
     for key, length in (("ACCEPTED_EXECUTOR",40),("PROMOTION_BINDING_SHA256",64)):
         values[key] = environment[key]
         assert re.fullmatch(r"[0-9a-f]{%d}" % length, values[key]), "invalid explicit executor/transaction binding"
-    assert values["RELEASE_VERSION"] == "0.6.0", "historical release is not the selected current route"
-    assert values["PUBLISHED_SOURCE"] == PUBLISHED and values["QUALIFIER_SOURCE"] == values["ACCEPTED_EXECUTOR"], "immutable publication and selected current qualifier required"
+    assert values["QUALIFIER_SOURCE"] == values["ACCEPTED_EXECUTOR"], "selected current qualifier required"
     assert not environment.get("EXECUTION_BINDING") and not environment.get("CANONICAL_QUALIFICATION_AUDIT"), "historical overlays cannot authorize current qualification"
     return values
 
 
 def validate_release(release, values):
     version = values["RELEASE_VERSION"]
-    assert version == "0.6.0", "only selected current release can qualify"
+    assert version == tracked_version(), "only the release version.props selects can qualify"
     tag = f"wasm/v{version}"
     assert release["tag_name"] == tag and not release["draft"] and not release["prerelease"]
     assert release["published_at"], "release is unpublished"
@@ -75,29 +104,86 @@ def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args], text=True, timeout=30).strip()
 
 
+def bind_published_identity(manifest, source, tracked, source_tree):
+    """Authenticate the published manifest against the observed release state.
+
+    The manifest is the authority for the published identity: it must pass
+    release_manifest verify-identity against the tag-resolved source, be the release
+    that version.props currently selects, and name the tree Git resolves for that source.
+    """
+    module = release_manifest_module()
+    try:
+        module.verify_identity(manifest, source)
+    except SystemExit as error:
+        raise AssertionError(f"manifest identity refused: {error}") from None
+    assert manifest["version"] == tracked, f"manifest version {manifest['version']} differs from version.props {tracked}"
+    assert manifest["source"] == source, "manifest source mismatch"
+    assert re.fullmatch(r"[0-9a-f]{40}", str(manifest["tree"])) and manifest["tree"] == source_tree, "manifest tree differs from the published source tree"
+    return source_tree
+
+
+def bind_tool_manifest(manifest, tools_path=None):
+    """The consumer's Fable tool must be the one the published manifest names."""
+    path = pathlib.Path(tools_path) if tools_path else ROOT / TOOL_MANIFEST
+    try:
+        declared = json.loads(path.read_text())["tools"]["fable"]["version"]
+    except (OSError, ValueError, KeyError, TypeError):
+        raise AssertionError("consumer dotnet tool manifest lacks a fable pin") from None
+    assert declared == manifest["tools"]["fable"], f"consumer fable {declared} differs from the published manifest {manifest['tools']['fable']}"
+    return declared
+
+
+def bind_tag_source(version, source, resolve=None):
+    """The immutable tag for the selected release must name exactly the published source."""
+    tag = "wasm/v" + version
+    try:
+        resolved = (resolve or git)("rev-parse", f"refs/tags/{tag}^{{commit}}")
+    except subprocess.CalledProcessError:
+        raise AssertionError(f"tag {tag} is absent") from None
+    assert resolved == source, "tag does not name published source"
+    return tag
+
+
+def consumer_environment(source, qualifier):
+    """List the consumer environment at P and Q with blob ids; a difference is recorded, not refused."""
+    def tree(revision):
+        out = subprocess.check_output(['git','-C',str(ROOT),'ls-tree','-r','-z','--full-tree',revision], timeout=60).decode().split('\0')
+        rows = {}
+        for line in out:
+            if not line: continue
+            meta, path = line.split('\t', 1)
+            mode, _kind, blob = meta.split()
+            if any(rule.search(path) for rule in CONSUMER_ENVIRONMENT): rows[path] = {'mode':mode,'blob':blob}
+        return rows
+    old, new = tree(source), tree(qualifier)
+    return [{'path':path,'old':old.get(path),'new':new.get(path),'changed':old.get(path) != new.get(path)} for path in sorted(set(old)|set(new))]
+
+
 def source_audit(source, qualifier):
-    assert source == PUBLISHED and git('rev-parse', source+'^{tree}') == PUBLISHED_TREE, 'wrong immutable publication subject'
-    subprocess.run(['git','-C',str(ROOT),'merge-base','--is-ancestor',source,qualifier], check=True, timeout=30)
-    raw = subprocess.check_output(['git','-C',str(ROOT),'diff','--raw','--no-renames','-z',source,qualifier], timeout=30)
+    assert re.fullmatch(r'[0-9a-f]{40}', source), 'wrong immutable publication subject'
+    try:
+        tree = git('rev-parse', '--verify', source+'^{tree}')
+    except subprocess.CalledProcessError:
+        raise AssertionError('published source is not a commit of this repository') from None
+    assert subprocess.run(['git','-C',str(ROOT),'merge-base','--is-ancestor',source,qualifier], timeout=30).returncode == 0, 'qualifier does not descend from the published source'
+    raw = subprocess.check_output(['git','-C',str(ROOT),'diff','--raw','--no-abbrev','--no-renames','-z',source,qualifier], timeout=60)
     chunks = raw.decode().split('\0'); rows=[]
+    def fingerprint(mode, blob):
+        if set(blob) == {'0'}: return None
+        body = subprocess.check_output(['git','-C',str(ROOT),'cat-file','blob',blob], timeout=30) if mode != '160000' else b''
+        return {'blob':blob,'mode':mode,'sha256':hashlib.sha256(body).hexdigest(),'bytes':len(body)}
     for i in range(0,len(chunks)-1,2):
         mode_old,mode_new,old_blob,new_blob,status=chunks[i].split()
         path=chunks[i+1]
-        assert path in INSTALLED_PATHS and mode_new in ('100644','100755') and mode_old in (':'+mode_new,':000000'), 'unreviewed installed source path/type'
-        def fingerprint(revision, blob):
-            if set(blob) == {'0'}: return None
-            body=subprocess.check_output(['git','-C',str(ROOT),'show',revision+':'+path], timeout=30)
-            actual=git('rev-parse',revision+':'+path)
-            return {'blob':actual,'sha256':hashlib.sha256(body).hexdigest(),'bytes':len(body)}
-        rows.append({'path':path,'status':status,'old':fingerprint(source,old_blob),'new':fingerprint(qualifier,new_blob)})
-    assert rows, 'installed correction must be an explicit reviewed source change'
-    return {'schema':'fsgg.wasm.installed-inputs/v1','publishedSource':source,'publishedTree':PUBLISHED_TREE,
-            'qualifierSource':qualifier,'qualifierTree':git('rev-parse',qualifier+'^{tree}'),'changes':rows,
-            'consumerInputs':'all paths outside exact reviewed qualifier correction byte-identical to P; published packages/SDK remain P inputs, evidence collector/binder are selected Q inputs'}
+        assert not path.startswith(CONSUMER_INPUTS), 'installed consumer input differs from the published source: '+path
+        rows.append({'path':path,'status':status,'old':fingerprint(mode_old[1:],old_blob),'new':fingerprint(mode_new,new_blob)})
+    return {'schema':'fsgg.wasm.installed-inputs/v1','publishedSource':source,'publishedTree':tree,
+            'qualifierSource':qualifier,'qualifierTree':git('rev-parse',qualifier+'^{tree}'),'consumerInputs':list(CONSUMER_INPUTS),'consumerEnvironment':consumer_environment(source,qualifier),'changes':rows,
+            'consumerInputsNote':'every path under consumerInputs is byte-identical to P; other changed paths are qualifier tooling or unrelated development, recorded here; published packages/SDK remain P inputs, evidence collector/binder are selected Q inputs'}
 
 
 def bind_executor(source, executor, version):
-    assert version == '0.6.0' and executor == os.environ['ACCEPTED_EXECUTOR'] == os.environ['QUALIFIER_SOURCE'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA'] == git('rev-parse','HEAD'), 'wrong actual installed qualifier/executor'
+    assert version == tracked_version() and executor == os.environ['ACCEPTED_EXECUTOR'] == os.environ['QUALIFIER_SOURCE'] == os.environ['GITHUB_SHA'] == os.environ['GITHUB_WORKFLOW_SHA'] == git('rev-parse','HEAD'), 'wrong actual installed qualifier/executor'
     assert os.environ['GITHUB_REPOSITORY'] == REPO and os.environ['GITHUB_REF'] == 'refs/heads/main' and os.environ['GITHUB_EVENT_NAME'] == 'workflow_dispatch' and os.environ['GITHUB_RUN_ATTEMPT'] == '1', 'foreign/rerun installed execution'
     assert os.environ['GITHUB_WORKFLOW_REF'] == REPO+'/.github/workflows/wasm-installed-org.yml@refs/heads/main', 'foreign installed workflow'
     assert os.environ['GITHUB_JOB'] == 'installed' and re.fullmatch('[1-9][0-9]*',os.environ['GITHUB_RUN_ID']), 'wrong installed native run/job'
@@ -113,8 +199,8 @@ def bind_qualification_inputs(source, qualifier_source, version, release_binding
     return bind_executor(source,qualifier_source,version)
 
 
-def bind_promotion_execution(promotion, transaction, values, release, receipts):
-    subject=promotion.PublicationSubject(values['PUBLISHED_SOURCE'], PUBLISHED_TREE, values['RELEASE_VERSION'])
+def bind_promotion_execution(promotion, transaction, values, release, receipts, published_tree):
+    subject=promotion.PublicationSubject(values['PUBLISHED_SOURCE'], published_tree, values['RELEASE_VERSION'])
     reviewed=promotion.validate_tuple(transaction['preparation'],subject=subject)
     assert promotion.execution_input() is None
     assert reviewed['binding']['producer'] == reviewed['binding']['executor'] == values['PUBLISHED_SOURCE']
@@ -142,13 +228,12 @@ def bind_promotion_execution(promotion, transaction, values, release, receipts):
 
 
 def main():
-    tracked = ET.parse(ROOT / "eng/wasm-shared/version.props").findtext(".//WasmSharedVersion")
+    tracked = tracked_version()
     values = checked_inputs(os.environ, tracked)
     assert not git("status", "--porcelain"), "installed qualifier must be a clean accepted executor"
     assert git("rev-parse", "HEAD") == values["QUALIFIER_SOURCE"] == os.environ["GITHUB_SHA"], "wrong qualifier checkout"
     source = values["PUBLISHED_SOURCE"]
-    tag = "wasm/v" + values["RELEASE_VERSION"]
-    assert git("rev-parse", f"refs/tags/{tag}^{{commit}}") == source, "tag does not name published source"
+    tag = bind_tag_source(values["RELEASE_VERSION"], source)
     subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", source, "origin/main"], check=True)
     # Read-only qualification authenticates immutable published P separately from Q.
     spec=importlib.util.spec_from_file_location('promotion',ROOT/'scripts/wasm-release/promotion.py')
@@ -163,11 +248,9 @@ def main():
         expected = values["MANIFEST_SHA256"] if name == "release-manifest.json" else values["SDK_SHA256"] if name.endswith(".tar.gz") else values["PROMOTION_BINDING_SHA256"]
         assert hashlib.sha256(destination.read_bytes()).hexdigest() == expected, "downloaded release bytes mismatch"
     manifest = json.loads((receipts / "release-manifest.json").read_text())
-    spec = importlib.util.spec_from_file_location("release_manifest", ROOT / "scripts/wasm-release/release_manifest.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    module.verify_identity(manifest, source)
-    assert manifest["version"] == values["RELEASE_VERSION"] and manifest["tree"] == git("rev-parse", f"{source}^{{tree}}")
+    published_tree = bind_published_identity(manifest, source, tracked, git("rev-parse", f"{source}^{{tree}}"))
+    assert manifest["version"] == values["RELEASE_VERSION"]
+    bind_tool_manifest(manifest)
     sdk = next(row for row in manifest["artifacts"] if row["file"] == f"fsgg-wasm-sdk-{values['RELEASE_VERSION']}.tar.gz")
     assert sdk["sha256"] == values["SDK_SHA256"]
     release_binding = {"manifestSha256": values["MANIFEST_SHA256"], "sdkSha256": values["SDK_SHA256"],
@@ -175,10 +258,10 @@ def main():
     spec = importlib.util.spec_from_file_location("promotion", ROOT / "scripts/wasm-release/promotion.py")
     promotion = importlib.util.module_from_spec(spec); spec.loader.exec_module(promotion)
     transaction = json.loads((receipts / "promotion-binding.json").read_text())
-    reviewed = promotion.validate_tuple(transaction["preparation"], subject=promotion.PublicationSubject(source, PUBLISHED_TREE, values["RELEASE_VERSION"]))
+    reviewed = promotion.validate_tuple(transaction["preparation"], subject=promotion.PublicationSubject(source, published_tree, values["RELEASE_VERSION"]))
     bound = reviewed["binding"]
     assert transaction["schema"] == "fsgg.wasm.promotion/v1" and transaction["producer"] == source and transaction["tag"] == tag
-    bind_promotion_execution(promotion,transaction,values,release,receipts)
+    bind_promotion_execution(promotion,transaction,values,release,receipts,published_tree)
     assert bound["manifestSha256"] == values["MANIFEST_SHA256"]
     assert bound["archives"][sdk["file"]] == values["SDK_SHA256"]
     assert {row["file"]:row["sha256"] for row in manifest["artifacts"]} == bound["archives"]

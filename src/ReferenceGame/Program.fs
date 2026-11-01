@@ -9,28 +9,12 @@ open FS.GG.Game.Harness
 #endif
 
 module Composition =
-    type Screen =
-        | Menu
-        | Playing
-        | Paused
-        | Won
+    open FS.GG.Game.Reference.ReferenceState
 
-    type Room =
-        | Atrium
-        | Vault
-        | Exit
-
-    type Model =
-        {
-            Screen: Screen
-            Room: Room
-            X: int
-            DestinationActive: bool
-            CameraTransition: bool
-            VaultClear: bool
-            Aim: int * int
-            Tick: int
-        }
+    // The state types live in ReferenceState (State.fs) so the browser renderers share them; these are the same types.
+    type Screen = ReferenceState.Screen
+    type Room = ReferenceState.Room
+    type Model = ReferenceState.Model
 
     type Key = Right
     type Pointer = Aim of int * int

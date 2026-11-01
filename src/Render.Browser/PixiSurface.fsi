@@ -80,7 +80,11 @@ module PixiSurface =
     val mountScene:
         container: HTMLElement -> options: PixiOptions -> scene: Scene -> Result<RendererMount<Scene>, string>
 
-    /// The Pixi adapter for a game-state type: every state is projected through `view` first.
+    /// `mountScene container options` as the Pixi `SceneSurface` for `SceneRenderers.withSurface`.
+    val surface: container: HTMLElement -> options: PixiOptions -> SceneSurface
+
+    /// The Pixi adapter for a game-state type: every state is projected through `view` first
+    /// (`SceneSurface.adapter view (surface container options)`).
     val adapter: container: HTMLElement -> options: PixiOptions -> view: ('State -> Scene) -> RendererAdapter<'State>
 
     /// `RendererRegistry.register (adapter ...)`: makes `RendererBackend.Pixi` selectable for this state type.

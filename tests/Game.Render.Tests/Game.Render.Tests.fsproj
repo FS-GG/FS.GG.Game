@@ -14,12 +14,14 @@
     <Compile Include="DefaultKeymapTests.fs" />
     <Compile Include="PortalPresentationTests.fs" />
     <Compile Include="RendererSelectionTests.fs" />
+    <Compile Include="RendererConformanceTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Game.Render\FS.GG.Game.Render.fsproj" />
     <ProjectReference Include="..\..\examples\Box2D.Portals\Box2D.Portals.fsproj" />
+    <ProjectReference Include="..\..\src\ReferenceGame\FS.GG.Game.Reference.fsproj" />
     <PackageReference Include="Expecto" />
     <PackageReference Include="FsCheck" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

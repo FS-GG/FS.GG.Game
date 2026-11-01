@@ -63,7 +63,11 @@ module BabylonSurface =
     val mountScene:
         container: HTMLElement -> options: BabylonOptions -> scene: Scene -> Result<RendererMount<Scene>, string>
 
-    /// The Babylon adapter for a game-state type: every state is projected through `view` first.
+    /// `mountScene container options` as the Babylon `SceneSurface` for `SceneRenderers.withSurface`.
+    val surface: container: HTMLElement -> options: BabylonOptions -> SceneSurface
+
+    /// The Babylon adapter for a game-state type: every state is projected through `view` first
+    /// (`SceneSurface.adapter view (surface container options)`).
     val adapter: container: HTMLElement -> options: BabylonOptions -> view: ('State -> Scene) -> RendererAdapter<'State>
 
     /// `RendererRegistry.register (adapter ...)`: makes `RendererBackend.Babylon` selectable for this state type.
