@@ -46,6 +46,12 @@
     <Compile Include="BrowserRenderers.fs" />
   </ItemGroup>
 
+  <!-- The host's own sources, captured at evaluation, before the SDK adds generated AssemblyInfo files to Compile.
+       The package's fable/ view and the packed project's list are checked against exactly this. -->
+  <ItemGroup>
+    <_HostFableSource Include="@(Compile)" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- FS.GG.Game.Render, two ways (FS.GG.Game#745). Fable cracks a project with a design-time build
          (DesignTimeBuild=true) and compiles every referenced project's sources, so in a design-time build (Fable,
@@ -80,7 +86,8 @@
           AfterTargets="CreateFablePackageFiles">
     <ItemGroup>
       <_PackageFiles Remove="@(_PackageFiles)" />
-      <_PackageFiles Include="SvgSurface.fsi;SvgSurface.fs;CanvasSupport.fsi;CanvasSupport.fs;SceneShapes.fsi;SceneShapes.fs;BabylonSurface.fsi;BabylonSurface.fs;PixiSurface.fsi;PixiSurface.fs;RendererDriver.fsi;RendererDriver.fs;BrowserRenderers.fsi;BrowserRenderers.fs">
+      <!-- Exactly the sources this project compiles: a module added to the host is packed with no second list. -->
+      <_PackageFiles Include="@(_HostFableSource)">
         <Pack>true</Pack>
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
         <BuildAction>None</BuildAction>
@@ -101,6 +108,24 @@
         <BuildAction>None</BuildAction>
       </_PackageFiles>
     </ItemGroup>
+  </Target>
+
+  <!-- The packed project (Fable/FS.GG.Game.Render.Browser.fsproj) is the list a Fable consumer compiles. Fable does not
+       evaluate MSBuild conditions in it, so it must have none (read as XML, on any element), and it must list exactly
+       the two generated bindings followed by this project's own Compile items, in order. -->
+  <Target Name="RequirePackedFableProjectMatchesHost" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)Fable/FS.GG.Game.Render.Browser.fsproj" Query="//@*[local-name()='Condition']">
+      <Output TaskParameter="Result" ItemName="_PackedFableCondition" />
+    </XmlPeek>
+    <Error Condition="'@(_PackedFableCondition)' != ''" Text="Fable/FS.GG.Game.Render.Browser.fsproj must not use MSBuild conditions: Fable does not evaluate them in a package's project file." />
+    <XmlPeek XmlInputPath="$(MSBuildThisFileDirectory)Fable/FS.GG.Game.Render.Browser.fsproj" Query="//*[local-name()='Compile']/@Include">
+      <Output TaskParameter="Result" ItemName="_PackedFableSource" />
+    </XmlPeek>
+    <ItemGroup>
+      <_ExpectedPackedFableSource Include="generated/BabylonBindings.fs;generated/PixiBindings.fs" />
+      <_ExpectedPackedFableSource Include="@(_HostFableSource->'%(Identity)')" />
+    </ItemGroup>
+    <Error Condition="'@(_PackedFableSource)' != '@(_ExpectedPackedFableSource)'" Text="Fable/FS.GG.Game.Render.Browser.fsproj lists [@(_PackedFableSource)], but the package carries [@(_ExpectedPackedFableSource)]: the two generated bindings, then this project's Compile items in order. Add the module to the packed project." />
   </Target>
 
   <!-- Refuse to pack generated bindings that are missing or are not the pinned bytes, whatever path supplied them. -->

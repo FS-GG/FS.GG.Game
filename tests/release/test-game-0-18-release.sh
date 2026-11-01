@@ -2,6 +2,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 packages=""
 
 while (($#)); do
@@ -92,6 +93,10 @@ if 'dotnet pack' in text[recovery:pushes[0]]:
     raise SystemExit('custody recovery must not re-pack')
 PY
 
+# The packed Fable views are derived from the source tree (src/Game.Render/Fable and src/Render.Browser), never
+# restated here: an unpacked host module or any MSBuild condition in a view refuses before restore (Game#745).
+python3 -I "$here/check-fable-views.py" --root "$root"
+
 [[ -z "$packages" ]] && exit 0
 
 mapfile -t nupkgs < <(find "$packages" -maxdepth 1 -type f -name '*.nupkg' ! -name '*.symbols.nupkg' -printf '%f\n' | sort)
@@ -141,13 +146,12 @@ for entry in \
 done
 
 # Validate package APIs, Fable views and runtime dependency boundaries from actual candidate bytes.
-python3 - "$packages" "$root/eng/js-bindings/pin.env" <<'PY_PACKAGE'
+python3 - "$packages" <<'PY_PACKAGE'
 from hashlib import sha256
 from pathlib import Path
 from zipfile import ZipFile
 import re, sys, xml.etree.ElementTree as ET
 packages = Path(sys.argv[1])
-pins = dict(line.split('=', 1) for line in Path(sys.argv[2]).read_text().splitlines() if re.match(r'^[A-Z0-9_]+=', line))
 def metadata(package):
     with ZipFile(packages / (package + '.0.18.0.nupkg')) as archive:
         names = archive.namelist()
@@ -167,30 +171,17 @@ for entry in ('lib/net10.0/FS.GG.Game.Physics.Box2D.dll', 'api-surface/Types.fsi
 def entries(package):
     with ZipFile(packages / (package + '.0.18.0.nupkg')) as archive:
         return {name: archive.read(name) for name in archive.namelist()}
-# Fable reads a package's project file without evaluating MSBuild conditions: each packed Fable project must list its
-# sources unconditionally, and every listed source must be in the package beside it.
-def fable_view(package, files):
-    project = files['fable/' + package + '.fsproj'].decode()
-    assert 'Condition=' not in project, package + ': packed Fable project uses MSBuild conditions'
-    listed = re.findall(r'<Compile Include="([^"]+)"', project)
-    assert listed and all(('fable/' + name) in files for name in listed), package + ': packed Fable project lists missing sources'
-    return listed
-render = entries('FS.GG.Game.Render')
-assert fable_view('FS.GG.Game.Render', render) == [m + e for m in ('RendererSelection', 'SceneRenderers', 'RendererConformance') for e in ('.fsi', '.fs')], 'Render Fable view changed'
 browser_deps, _ = metadata('FS.GG.Game.Render.Browser')
 assert set(browser_deps) == {'FS.GG.Game.Render', 'FS.GG.UI.Scene', 'FS.GG.UI.Scene.SvgBrowser', 'FS.GG.UI.KeyboardInput', 'Fable.Browser.Dom', 'Fable.Core', 'FSharp.Core'}, 'browser host dependency boundary changed: ' + repr(sorted(browser_deps))
 assert browser_deps['FS.GG.Game.Render'].strip('[]()').split(',')[0].strip() == '0.18.0', 'browser host/Render coherent dependency mismatch'
 browser = entries('FS.GG.Game.Render.Browser')
-listed = fable_view('FS.GG.Game.Render.Browser', browser)
-assert listed[:2] == ['generated/BabylonBindings.fs', 'generated/PixiBindings.fs'] and len(listed) == 16, 'browser host Fable view changed'
-for corpus in ('Babylon', 'Pixi'):
-    digest = sha256(browser['fable/generated/' + corpus + 'Bindings.fs']).hexdigest()
-    assert digest == pins[corpus.upper() + '_BINDINGS_SHA256'], corpus + ' bindings are not the pinned bytes'
 for entry in ('lib/net10.0/FS.GG.Game.Render.Browser.dll', 'api-surface/BrowserRenderers.fsi', 'api-surface/RendererDriver.fsi',
               'fable-compatibility/compatibility-profile.v1.json', 'js-bindings/babylon/package-lock.json', 'js-bindings/pixi/package-lock.json'):
     assert entry in browser, 'browser host missing package entry: ' + entry
-print('coherent package metadata passed: adapter API, exact engine pin, Core boundary, no rendering dependency, unconditional Fable views and pinned browser bindings')
+print('coherent package metadata passed: adapter API, exact engine pin, Core boundary, no rendering dependency and browser host boundary')
 PY_PACKAGE
+python3 -I "$here/check-fable-views.py" --root "$root" \
+  --render "$packages/FS.GG.Game.Render.0.18.0.nupkg" --browser "$packages/FS.GG.Game.Render.Browser.0.18.0.nupkg"
 
 consumer="$(mktemp -d)"
 trap 'rm -rf "$consumer"' EXIT

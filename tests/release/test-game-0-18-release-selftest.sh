@@ -10,6 +10,12 @@ make_fixture() {
   mkdir -p "$fixture/.github/workflows"
   cp "$root/Directory.Build.local.props" "$fixture/Directory.Build.local.props"
   cp "$root/.github/workflows/release.yml" "$fixture/.github/workflows/release.yml"
+  # The packed Fable views are derived from these project files (tests/release/check-fable-views.py).
+  for file in src/Game.Render/Fable/FS.GG.Game.Render.fsproj src/Render.Browser/FS.GG.Game.Render.Browser.fsproj \
+    src/Render.Browser/Fable/FS.GG.Game.Render.Browser.fsproj eng/js-bindings/pin.env; do
+    mkdir -p "$(dirname "$fixture/$file")"
+    cp "$root/$file" "$fixture/$file"
+  done
 }
 
 positive="$scratch/positive"
@@ -134,3 +140,38 @@ if output=$("$root/tests/release/test-game-0-18-release.sh" --root "$browser_pub
 fi
 grep -q 'browser host public consumer' <<<"$output"
 echo "browser witness: release without the public browser host consumer rejected"
+
+# A module added to the host and not to its packed Fable project refuses, whatever the module count (the shape of a
+# rebase that compiles RetainedSvgSurface but forgets to pack it).
+unpacked="$scratch/unpacked-host-source"
+make_fixture "$unpacked"
+sed -i 's:    <Compile Include="BrowserRenderers.fs" />:    <Compile Include="BrowserRenderers.fs" />\n    <Compile Include="RetainedSvgSurface.fsi" />\n    <Compile Include="RetainedSvgSurface.fs" />:' \
+  "$unpacked/src/Render.Browser/FS.GG.Game.Render.Browser.fsproj"
+grep -q 'RetainedSvgSurface.fsi' "$unpacked/src/Render.Browser/FS.GG.Game.Render.Browser.fsproj"
+if output=$("$root/tests/release/test-game-0-18-release.sh" --root "$unpacked" --source-only 2>&1); then
+  echo "host source added but not packed unexpectedly passed" >&2; exit 1
+fi
+grep -q "does not list the browser host's sources" <<<"$output" && grep -q "RetainedSvgSurface.fsi" <<<"$output"
+echo "view witness: a host source added but not packed rejected"
+
+# Any Condition attribute in a Fable view refuses, however it is spaced.
+spaced="$scratch/spaced-condition"
+make_fixture "$spaced"
+sed -i 's:  <ItemGroup>\(\s*\)$:  <ItemGroup Condition = "true">:' "$spaced/src/Game.Render/Fable/FS.GG.Game.Render.fsproj"
+grep -q 'Condition = "true"' "$spaced/src/Game.Render/Fable/FS.GG.Game.Render.fsproj"
+if output=$("$root/tests/release/test-game-0-18-release.sh" --root "$spaced" --source-only 2>&1); then
+  echo "spaced Condition in the Render view unexpectedly passed" >&2; exit 1
+fi
+grep -q 'has a Condition attribute' <<<"$output"
+echo "view witness: a spaced Condition in the Render view rejected"
+
+conditioned="$scratch/conditioned-packed-browser"
+make_fixture "$conditioned"
+sed -i 's:<Compile Include="generated/PixiBindings.fs" />:<Compile Include="generated/PixiBindings.fs" Condition="Exists('"'"'x'"'"')" />:' \
+  "$conditioned/src/Render.Browser/Fable/FS.GG.Game.Render.Browser.fsproj"
+grep -q "Condition=\"Exists('x')\"" "$conditioned/src/Render.Browser/Fable/FS.GG.Game.Render.Browser.fsproj"
+if output=$("$root/tests/release/test-game-0-18-release.sh" --root "$conditioned" --source-only 2>&1); then
+  echo "Condition on a packed browser source unexpectedly passed" >&2; exit 1
+fi
+grep -q 'has a Condition attribute' <<<"$output"
+echo "view witness: a conditional source in the packed browser project rejected"

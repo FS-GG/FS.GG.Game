@@ -37,8 +37,10 @@ npm install @babylonjs/core@9.33.1 pixi.js@8.22.0
 The exact npm closures (`package.json` and `package-lock.json`) are in the package under `js-bindings/babylon`
 and `js-bindings/pixi`.
 
-To start a game's renderer module, generate it with `scripts/new-game-renderers.sh` from
-[FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game), then replace the placeholder `view`:
+To start a game's renderer module, generate it, then replace the placeholder `view`. The generator is a repository
+script, not part of this package: run `scripts/new-game-renderers.sh` from a checkout of
+[FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game). It renders `eng/render-kit/GameRenderers.fs.template`.
+Use the release tag of the package you reference, for example `v0.18.0`.
 
 ```sh
 scripts/new-game-renderers.sh --namespace MyGame.Client --module Renderers --state MyGame.Model \

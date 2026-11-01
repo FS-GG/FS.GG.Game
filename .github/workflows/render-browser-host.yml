@@ -30,6 +30,7 @@ on:
       - "eng/js-bindings/**"
       - "src/Game.Core/**"
       - "tests/release/test-render-browser-package-consumer.sh"
+      - "tests/release/check-fable-views.py"
       - "scripts/refresh-surface-baselines.fsx"
       - "readiness/surface-baselines/**"
   pull_request:
@@ -53,6 +54,7 @@ on:
       - "eng/js-bindings/**"
       - "src/Game.Core/**"
       - "tests/release/test-render-browser-package-consumer.sh"
+      - "tests/release/check-fable-views.py"
       - "scripts/refresh-surface-baselines.fsx"
       - "readiness/surface-baselines/**"
   workflow_dispatch:
