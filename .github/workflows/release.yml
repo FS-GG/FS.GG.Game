@@ -272,23 +272,42 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      # New identity first, on BOTH feeds (FS.GG.Game#745): FS.GG.Game.Render.Browser is the one id with no
+      # predecessor, so it is the only push that can be refused for lack of package-creation authority. Pushing it
+      # alone, before any existing id, makes such a refusal publish nothing more to that feed. The existing ids follow,
+      # one push each. The org feed is still pushed in full before nuget.org (ADR-0012 §4): a nuget.org refusal leaves
+      # the org feed complete and nuget.org empty, and the retained custody bytes resume through source_run_id.
       - name: Push coherent set to nuget.pkg.github.com/FS-GG
         if: steps.ver.outputs.push == 'true'
         shell: bash
+        env:
+          VER: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          dotnet nuget push "artifacts/packages/*.nupkg" \
+          new_identity="artifacts/packages/FS.GG.Game.Render.Browser.$VER.nupkg"
+          test -f "$new_identity"
+          dotnet nuget push "$new_identity" \
             --source https://nuget.pkg.github.com/FS-GG/index.json \
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --no-symbols \
             --skip-duplicate
-          echo "Published FS.GG.Game.* ${{ steps.ver.outputs.version }} to the org feed."
+          for existing in artifacts/packages/*.nupkg; do
+            [ "$existing" != "$new_identity" ] || continue
+            dotnet nuget push "$existing" \
+              --source https://nuget.pkg.github.com/FS-GG/index.json \
+              --api-key "${{ secrets.GITHUB_TOKEN }}" \
+              --no-symbols \
+              --skip-duplicate
+          done
+          echo "Published FS.GG.Game.* $VER to the org feed (new identity first)."
 
       # Dual-publish the BYTE-IDENTICAL set to public nuget.org (ADR-0012 §1–§5) via Trusted Publishing
       # / OIDC (ADR-0013 — no stored key). Runs AFTER the org-feed push (gated ordering, ADR-0012 §4):
-      # if that step fails the job stops before this one. NuGet/login mints a single-use key from the
+      # if that step fails the job stops before this one. NuGet/login mints a short-lived key from the
       # org's Trusted Publishing policy for THIS repo (Repository FS.GG.Game, Workflow File release.yml);
       # until that policy exists it 401s and fails the release loud. Same artifacts — no re-pack (§3).
+      # The new identity is pushed first and alone, so a policy that does not cover it refuses before
+      # any existing id reaches nuget.org.
       - name: NuGet login (OIDC → short-lived nuget.org key)
         if: steps.ver.outputs.push == 'true'
         id: nuget-login
@@ -298,14 +317,26 @@ jobs:
       - name: Push coherent set to nuget.org (public)
         if: steps.ver.outputs.push == 'true'
         shell: bash
+        env:
+          VER: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          dotnet nuget push "artifacts/packages/*.nupkg" \
+          new_identity="artifacts/packages/FS.GG.Game.Render.Browser.$VER.nupkg"
+          test -f "$new_identity"
+          dotnet nuget push "$new_identity" \
             --source https://api.nuget.org/v3/index.json \
             --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
             --no-symbols \
             --skip-duplicate
-          echo "Published FS.GG.Game.* ${{ steps.ver.outputs.version }} to nuget.org."
+          for existing in artifacts/packages/*.nupkg; do
+            [ "$existing" != "$new_identity" ] || continue
+            dotnet nuget push "$existing" \
+              --source https://api.nuget.org/v3/index.json \
+              --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+              --no-symbols \
+              --skip-duplicate
+          done
+          echo "Published FS.GG.Game.* $VER to nuget.org (new identity first)."
 
       - name: Read back and compare both feed payloads
         if: steps.ver.outputs.push == 'true'

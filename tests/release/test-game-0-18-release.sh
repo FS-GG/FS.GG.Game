@@ -61,18 +61,32 @@ if text.count(browser_pack) != 1:
     raise SystemExit("release workflow must prepare the browser host exactly once")
 if text.index("scripts/materialize-js-bindings.sh all") >= text.index(browser_pack):
     raise SystemExit("the pinned bindings must be materialized before the browser host is packed")
-push = 'dotnet nuget push "artifacts/packages/*.nupkg"'
+# Push order (FS.GG.Game#745): on each feed the NEW identity, FS.GG.Game.Render.Browser, is pushed first and alone,
+# then each existing id. The new id is the one push package-creation authority can refuse, so a refusal publishes
+# nothing more to that feed. A glob push has no pinned order and is refused. The org feed goes first in full.
+if 'dotnet nuget push "artifacts/packages/*.nupkg"' in text:
+    raise SystemExit("release workflow must not push a glob: the new identity must be pushed first and alone")
+push = "dotnet nuget push "
 pushes = [index for index in range(len(text)) if text.startswith(push, index)]
-if len(pushes) != 2:
-    raise SystemExit("release workflow must contain exactly two actual dotnet nuget push operations")
+if len(pushes) != 4:
+    raise SystemExit("release workflow must contain exactly four actual dotnet nuget push operations (new identity, then existing ids, per feed)")
+push_kinds = ('dotnet nuget push "$new_identity"', 'dotnet nuget push "$existing"')
+observed = [next((kind for kind in push_kinds if text.startswith(kind, index)), "other") for index in pushes]
+if observed != list(push_kinds) * 2:
+    raise SystemExit("on each feed the new identity must be pushed first and alone, then the existing ids")
+if text.count('new_identity="artifacts/packages/FS.GG.Game.Render.Browser.$VER.nupkg"') != 2:
+    raise SystemExit("each feed must name FS.GG.Game.Render.Browser as the new identity it pushes first")
+if text.count('[ "$existing" != "$new_identity" ] || continue') != 2:
+    raise SystemExit("each feed's existing-id loop must skip the new identity")
+org_url, public_url = "https://nuget.pkg.github.com/FS-GG/index.json", "https://api.nuget.org/v3/index.json"
+for position, url in zip(pushes, (org_url, org_url, public_url, public_url)):
+    owned = text[position:text.index("\n          ", text.index("--skip-duplicate", position))]
+    if url not in owned:
+        raise SystemExit("each dotnet nuget push must own its expected feed source")
 retained = text.index("uses: actions/upload-artifact@v7")
 if retained >= pushes[0]:
     raise SystemExit("original custody bytes must be retained before the first feed push")
-org = text.index("https://nuget.pkg.github.com/FS-GG/index.json", pushes[0])
-public = text.index("https://api.nuget.org/v3/index.json", pushes[1])
-if org > pushes[1] or public < pushes[1]:
-    raise SystemExit("each dotnet nuget push must own its expected feed source")
-if pushes[0] >= pushes[1]:
+if text.index("NuGet login", pushes[1]) > pushes[2]:
     raise SystemExit("release workflow must push the org feed before nuget.org")
 if "dotnet pack" in text[pushes[0]:]:
     raise SystemExit("release workflow must not re-pack after first publication")
@@ -86,7 +100,7 @@ for candidate_check in ('tests/release/test-box2d-package-consumer.sh --packages
 for public_check in ('tests/release/test-box2d-package-consumer.sh --public',
                      'tests/release/test-render-browser-package-consumer.sh --public'):
     installed = text.index(public_check)
-    if installed <= text.index('Read back and compare both feed payloads') or installed <= pushes[1]:
+    if installed <= text.index('Read back and compare both feed payloads') or installed <= pushes[3]:
         raise SystemExit('public installed qualification must follow both feed pushes and readback')
 recovery = text.index('Download retained release bytes')
 if 'dotnet pack' in text[recovery:pushes[0]]:
