@@ -194,7 +194,9 @@ module BrowserConformance =
             Async<unit>
 
     /// Ask the test driver to change the page's device pixel ratio to `factor` (a Chromium device-metrics override
-    /// through `window.__fsggInput`), so a scenario can run at DPR 1 and 2 in one page. Mount after it resolves.
+    /// through `window.__fsggInput`, held by a session that stays attached), so a scenario can run at DPR 1 and 2 in
+    /// one page. It raises unless the page's `devicePixelRatio` is then `factor`, and the driver agrees. Mount after it
+    /// resolves.
     val deviceScale: factor: float -> Async<unit>
 
     /// A real key press (the test driver's `page.keyboard`) to whatever has the keyboard focus.

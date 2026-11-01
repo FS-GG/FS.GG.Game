@@ -382,7 +382,19 @@ module BrowserConformance =
         }
 
     let deviceScale (factor: float) : Async<unit> =
-        realInput (createObj [ "kind" ==> "scale"; "factor" ==> factor ])
+        async {
+            let pending: JS.Promise<float> =
+                emitJsExpr
+                    (createObj [ "kind" ==> "scale"; "factor" ==> factor ])
+                    "(window.__fsggInput ? window.__fsggInput($0) : Promise.reject(new Error('BrowserConformance needs a real-input driver: expose window.__fsggInput')))"
+
+            let! reported = Async.AwaitPromise pending
+            // The override takes effect for the page, not only for the driver's answer.
+            let! _ = waitUntil 120 (fun () -> window.devicePixelRatio = factor)
+
+            if window.devicePixelRatio <> factor || reported <> factor then
+                failwithf "the page has devicePixelRatio %g (the driver says %g), not the requested %g" window.devicePixelRatio reported factor
+        }
 
     let key (name: string) : Async<unit> =
         realInput (createObj [ "kind" ==> "key"; "key" ==> name ])

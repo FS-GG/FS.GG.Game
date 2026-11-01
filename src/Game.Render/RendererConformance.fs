@@ -108,11 +108,15 @@ module ScenePixels =
     type private Drawn =
         | Box of left: float * top: float * right: float * bottom: float * colour: Color
         | Oval of cx: float * cy: float * rx: float * ry: float * colour: Color
+        /// A node of a kind the kit does not model (text, lines, paths, images, clips...): it draws somewhere the kit
+        /// cannot say, so no pixel it could overdraw is decided.
+        | Unmodelled
 
     let private colourOf drawn =
         match drawn with
         | Box(_, _, _, _, colour)
         | Oval(_, _, _, _, colour) -> colour
+        | Unmodelled -> failwith "an unmodelled node has no colour"
 
     let rec private flatten (dx: float, dy: float) (scene: Scene) (drawn: ResizeArray<Drawn>) : unit =
         for node in scene.Nodes do
@@ -134,7 +138,8 @@ module ScenePixels =
                     )
                 )
             | SceneNode.Circle(center, radius, fill) -> drawn.Add(Oval(center.X + dx, center.Y + dy, radius, radius, fill))
-            | _ -> ()
+            | SceneNode.Empty -> ()
+            | _ -> drawn.Add Unmodelled
 
     /// How a node covers the unit pixel `[col, col+1] x [row, row+1]`.
     type private Cover =
@@ -150,6 +155,7 @@ module ScenePixels =
         let epsilon = 1e-9
 
         match drawn with
+        | Unmodelled -> Partial
         | Box(l, t, r, b, _) ->
             if x1 <= l + epsilon || x0 >= r - epsilon || y1 <= t + epsilon || y0 >= b - epsilon then
                 Clear
@@ -190,13 +196,20 @@ module ScenePixels =
             match cover col row node with
             | Clear -> ()
             | Partial ->
+                // A node that covers the pixel in part, or one the kit cannot place (which may draw anywhere).
                 touched <- true
                 unsure <- true
             | Full ->
                 touched <- true
                 let colour = colourOf node
-                top <- if colour.Alpha = 255uy then Some colour else None
-                unsure <- unsure || colour.Alpha <> 255uy
+
+                if colour.Alpha = 255uy then
+                    // An opaque node that wholly covers the pixel decides it, whatever was drawn before.
+                    top <- Some colour
+                    unsure <- false
+                else
+                    top <- None
+                    unsure <- true
 
         if unsure then Open
         else
@@ -266,6 +279,7 @@ module ScenePixels =
                     sample midCol (floorInt t - 1)
                     sample midCol (floorInt b - 1)
                     sample midCol (ceilInt b)
+            | Unmodelled -> ()
             | Oval(cx, cy, rx, ry, _) ->
                 // The centre, and the pixel one clear of the extreme on each axis: a round shape's inside is shaded
                 // differently by lit backends, so its edge is read from outside, and the pixel the extreme touches

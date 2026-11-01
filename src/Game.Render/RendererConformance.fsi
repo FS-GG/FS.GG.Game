@@ -166,10 +166,15 @@ module ScenePixels =
     /// (through groups and translations): for each node its middle pixel, the first whole pixel inside and outside the
     /// middle of each edge of a rectangle (a rectangle that overhangs the canvas is read at the canvas edge), and the
     /// pixel one clear of each extreme of a round shape (the pixel its extreme touches takes antialiasing from some
-    /// rasterisers). A pixel is listed when the topmost node that wholly covers it is opaque and no node covers it in
-    /// part, or when no node touches it, in which case it must show the clear colour (black, as SVG, Pixi and Babylon
-    /// all do), so a node drawn larger than declared fails it. A backend that draws a node at another position or
-    /// size, or a later node at another layer, fails it too.
+    /// rasterisers). A pixel is listed when the last node that wholly covers it is opaque and no later node covers it
+    /// in part, or when no node touches it, in which case it must show the clear colour (black, as SVG, Pixi and
+    /// Babylon all do), so a node drawn larger than declared fails it. A backend that draws a node at another
+    /// position or size, or a later node at another layer, fails it too.
+    ///
+    /// Only those three kinds are modelled. A node of any other kind (text, lines, paths, images, clips...) draws
+    /// where the kit cannot say, so it leaves open every pixel it could overdraw: nothing is expected to be the clear
+    /// colour in a scene that has one, and a pixel is decided only by an opaque node that wholly covers it AFTER the
+    /// last unmodelled node. A scene made of unmodelled nodes alone lists no pixel.
     val expectations: width: float -> height: float -> scene: FS.GG.UI.Scene.Scene -> PixelExpectation list
 
 /// Public contract type exposed by the FS.GG.Game.Render package.

@@ -32,6 +32,8 @@ page.on("console", (message) => {
 page.on("pageerror", (error) => write("Uncaught " + error));
 
 const keys = { " ": "Space" };
+// The CDP session that holds the device-metrics override; it must outlive the request.
+let emulation = null;
 await page.exposeFunction("__fsggInput", async (request) => {
   switch (request.kind) {
     case "click":
@@ -45,11 +47,11 @@ await page.exposeFunction("__fsggInput", async (request) => {
       break;
     case "scale": {
       // The page's device pixel ratio (FS.GG.Game#753), so one page can run a scenario at DPR 1 and 2. CSS pixels, and so
-      // the mouse coordinates, are unchanged.
-      const session = await page.context().newCDPSession(page);
-      await session.send("Emulation.setDeviceMetricsOverride", { width: 1024, height: 768, deviceScaleFactor: request.factor, mobile: false });
-      await session.detach();
-      break;
+      // the mouse coordinates, are unchanged. The session stays attached: detaching it drops the override. The driver
+      // answers with the ratio the page then has, so the page can assert it.
+      emulation ??= await page.context().newCDPSession(page);
+      await emulation.send("Emulation.setDeviceMetricsOverride", { width: 1024, height: 768, deviceScaleFactor: request.factor, mobile: false });
+      return await page.evaluate(() => window.devicePixelRatio);
     }
     default:
       throw new Error("unknown input request " + JSON.stringify(request));

@@ -2387,8 +2387,8 @@ let private fixtureColor (red: byte) (green: byte) (blue: byte) : Color =
         Alpha = 255uy
     }
 
-/// FS.GG.Game#753, review B1: a board styled to another size than itself (SC2 shows its 640 x 360 map at 960 x 540, at
-/// device pixel ratio 1 and 2). Babylon's engine sizes the backing store to the CSS size, so the pixels the probe reads
+/// FS.GG.Game#753, review B1: a board styled to another size than itself (SC2 shows its 640 x 360 map at 960 x 540, and
+/// a small view at 320 x 180, at device pixel ratio 1 and 2; the page's ratio is asserted, not assumed). Babylon's engine sizes the backing store to the CSS size, so the pixels the probe reads
 /// and the point a pick takes are not board units. On each backend: the board's pixels (the nodes' edges, and the empty
 /// background) are where the scene declares them, and real presses just inside and just outside object edges, and at
 /// the far corner, select exactly what the hit test says. A press went through the page's bounds, as a player's does.
@@ -2396,8 +2396,6 @@ let runScaledBoard () : Async<unit> =
     async {
         let boardWidth = 640.0
         let boardHeight = 360.0
-        let cssWidth = 960.0
-        let cssHeight = 540.0
 
         let boxA = { X = 0.0; Y = 0.0; Width = 32.0; Height = 32.0 }
         let boxB = { X = 100.0; Y = 100.0; Width = 80.0; Height = 60.0 }
@@ -2457,10 +2455,15 @@ let runScaledBoard () : Async<unit> =
         for factor in [ 1.0; 2.0 ] do
             do! BrowserConformance.deviceScale factor
 
-            for backend in RendererBackend.all do
+            check
+                (sprintf "scaled board: the page runs at devicePixelRatio %g" factor)
+                (window.devicePixelRatio = factor)
+                (sprintf "devicePixelRatio is %g" window.devicePixelRatio)
+
+            for (cssWidth, cssHeight), backend in List.allPairs [ 960.0, 540.0; 320.0, 180.0 ] RendererBackend.all do
                 let name = sprintf "scaled board %gx%g styled %gx%g, dpr %g, %s" boardWidth boardHeight cssWidth cssHeight factor (RendererBackend.id backend)
                 let container = document.createElement "div"
-                container.id <- sprintf "stage-scaled-%s-%g" (RendererBackend.id backend) factor
+                container.id <- sprintf "stage-scaled-%s-%g-%g" (RendererBackend.id backend) factor cssWidth
                 document.body.appendChild container |> ignore
                 let style = document.createElement "style"
                 style.textContent <- sprintf "#%s canvas, #%s svg { width: %gpx; height: %gpx }" container.id container.id cssWidth cssHeight

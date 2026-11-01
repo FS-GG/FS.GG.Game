@@ -132,6 +132,43 @@ let tests =
                 Expect.equal (colourAt 10.5 40.5 found) (Some square) "inside it"
             }
 
+            test "a node of a kind the kit does not model leaves open every pixel it could overdraw, and the clear colour is expected nowhere" {
+                let text = SceneNode.Text((12.0, 30.0), "score", rgb 255uy 255uy 255uy)
+
+                let overdrawn =
+                    scene
+                        [
+                            SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
+                            SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square)
+                            text
+                        ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                Expect.isEmpty overdrawn "the text is drawn last and may cover any pixel"
+
+                let beneath =
+                    scene
+                        [
+                            text
+                            SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
+                            SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square)
+                        ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                Expect.equal (colourAt 10.5 40.5 beneath) (Some square) "an opaque node drawn after the text decides its pixels"
+                Expect.equal (colourAt 9.5 40.5 beneath) (Some background) "and so does the background"
+
+                let apart =
+                    scene
+                        [
+                            SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square)
+                            text
+                        ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                Expect.isEmpty apart "no pixel is expected to be the clear colour when an unmodelled node may draw there"
+            }
+
             test "a node that overhangs the canvas is read at the canvas edge and nowhere outside it" {
                 let found =
                     scene
