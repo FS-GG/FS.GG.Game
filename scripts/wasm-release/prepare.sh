@@ -11,7 +11,7 @@ version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' 
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "stable WASM version required" >&2; exit 2; }
 [[ "$(cat "$repo/sdk/wasm/VERSION")" == "$version" ]]
 "$repo/tests/release/wasm/test-release-wasm.sh" --source-only
-[[ "$(dotnet --version)" == 10.0.401 ]]
+[[ "$(dotnet --version)" == 10.0.403 ]]
 [[ "$(node --version)" == v26.* ]]
 [[ "$(rustc --version)" == 'rustc 1.90.0 (1159e78c4 2025-09-14)' ]]
 [[ "$(cargo --version)" == 'cargo 1.90.0 (840b83a10 2025-07-30)' ]]

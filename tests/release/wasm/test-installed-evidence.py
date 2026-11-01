@@ -80,9 +80,9 @@ def current_cli_topology(root):
         put(selected/name,b'{}' if name.endswith('.json') else b'fixture')
     put(root/'selected-NuGet.Config',b'<configuration />')
     baseline=root/'selected-baseline'
-    for name in ('receipt.json','fsharp.core.10.1.302.nupkg','fsharp.core.10.1.401.nupkg','fsharp.core.10.1.203.nupkg',
+    for name in ('receipt.json','fsharp.core.10.1.302.nupkg','fsharp.core.10.1.403.nupkg','fsharp.core.10.1.203.nupkg',
                  'FSharp.Core.10.1.302.netstandard2.0.dll','FSharp.Core.10.1.302.netstandard2.1.dll',
-                 'FSharp.Core.10.1.401.netstandard2.0.dll','FSharp.Core.10.1.401.netstandard2.1.dll','FSharp.Core.10.1.203.netstandard2.1.dll'):
+                 'FSharp.Core.10.1.403.netstandard2.0.dll','FSharp.Core.10.1.403.netstandard2.1.dll','FSharp.Core.10.1.203.netstandard2.1.dll'):
         put(baseline/'official-core'/name,b'{}' if name.endswith('.json') else b'fixture')
     put(baseline/'compiler/FSharp.Core.dll')
     put(baseline/'tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/FSharp.Core.dll')

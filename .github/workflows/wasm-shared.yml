@@ -117,7 +117,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
-          dotnet-version: "10.0.401"
+          dotnet-version: "10.0.403"
           cache: false
 
       - name: Set up Node
@@ -129,7 +129,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(dotnet --version)" = "10.0.401"
+          test "$(dotnet --version)" = "10.0.403"
           node_version="$(node --version)"
           [[ "$node_version" == v26.* ]]
           cold_packages="$RUNNER_TEMP/wasm-nuget-packages"

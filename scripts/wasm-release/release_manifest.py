@@ -29,8 +29,14 @@ def api_policy(version):
     fail("candidate has no admitted published API baseline")
 
 ROSTER = ("FS.GG.Wasm.Contracts", "FS.GG.Wasm.Browser")
+# Closed pair of admitted release toolchains. A candidate is prepared only with the
+# current TOOLS (SDK 10.0.403). RETAINED_TOOLS is the immutable identity of every
+# already-published manifest (0.1.1 through 0.7.0, prepared under SDK 10.0.401); it is
+# admitted so that published and installed readback keeps verifying those manifests
+# byte-for-byte. Nothing else is admitted, and a manifest's ApiCompat receipt label
+# must name the same SDK as the manifest's own tools.dotnet.
 TOOLS = {
-    "dotnet": "10.0.401",
+    "dotnet": "10.0.403",
     "fable": "5.18.0",
     "node": "26",
     "playwrightChromium": "1.63.0",
@@ -38,6 +44,8 @@ TOOLS = {
     "rust": "1.90.0",
     "wasiSdk": "34.0",
 }
+RETAINED_TOOLS = {**TOOLS, "dotnet": "10.0.401"}
+API_COMPARISON_TOOLS = {"SDK10.0.401.ApiCompat", "SDK10.0.403.ApiCompat"}
 
 
 def fail(message: str) -> None:
@@ -266,7 +274,7 @@ def verify_identity(data: dict[str, object], source: str | None = None) -> None:
         fail("manifest tag or two-package roster mismatch")
     if source is not None and data["source"] != source:
         fail("manifest source mismatch")
-    if data["tools"] != TOOLS or data["workflow"] != ".github/workflows/wasm-shared.yml":
+    if data["tools"] not in (TOOLS, RETAINED_TOOLS) or data["workflow"] != ".github/workflows/wasm-shared.yml":
         fail("manifest tool or source-workflow identity mismatch")
     if legacy:
         if version != "0.1.1" or data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": None}:
@@ -275,6 +283,8 @@ def verify_identity(data: dict[str, object], source: str | None = None) -> None:
         if data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": api_policy(version)["baselineVersion"]}:
             fail("release must preserve first stable identity and compare its actual admitted baseline")
         verify_api_comparison(data["publishedApiComparison"], data["artifacts"])
+        if data["publishedApiComparison"]["tool"] != f"SDK{data['tools']['dotnet']}.ApiCompat":
+            fail("published API comparison tool differs from the manifest toolchain")
     artifacts = data["artifacts"]
     if not isinstance(artifacts, list) or len(artifacts) != 3:
         fail("manifest must contain exactly three artifacts")
@@ -285,7 +295,7 @@ def verify_identity(data: dict[str, object], source: str | None = None) -> None:
 
 def verify_api_comparison(comparison, artifacts):
     keys = {"schema", "tool", "baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion", "packages"}
-    if not isinstance(comparison, dict) or set(comparison) != keys or comparison["schema"] != "fsgg.wasm.published-api-comparison/v1" or comparison["tool"] != "SDK10.0.401.ApiCompat":
+    if not isinstance(comparison, dict) or set(comparison) != keys or comparison["schema"] != "fsgg.wasm.published-api-comparison/v1" or comparison["tool"] not in API_COMPARISON_TOOLS:
         fail("published API comparison schema/tool mismatch")
     policy = api_policy(comparison["candidateVersion"])
     for key in ("baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion"):

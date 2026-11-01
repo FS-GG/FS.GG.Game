@@ -7,7 +7,7 @@ bootstrap() {
   local q=$1
   case "$q/" in "$repo/"*) echo 'supervisor bootstrap must be outside source' >&2; exit 2;; esac
   [[ ! -e "$q" ]] || { echo 'supervisor bootstrap requires a fresh root' >&2; exit 2; }
-  [[ "$(dotnet --version)" == 10.0.401 ]]
+  [[ "$(dotnet --version)" == 10.0.403 ]]
   (
     umask 077
     mkdir -p -- "$(dirname "$q")"
@@ -28,10 +28,10 @@ def download(url,path,digest):
  with urllib.request.urlopen(url) as response:body=response.read()
  assert sha(body)==digest,'official archive byte mismatch: '+path.name
  path.write_bytes(body);return body
-sdk=pathlib.Path(subprocess.check_output(['dotnet','--list-sdks'],text=True).split('10.0.401 [',1)[1].split(']',1)[0])/'10.0.401'
+sdk=pathlib.Path(subprocess.check_output(['dotnet','--list-sdks'],text=True).split('10.0.403 [',1)[1].split(']',1)[0])/'10.0.403'
 shutil.copytree(sdk/'FSharp',q/'compiler')
 for version,archiveDigest,entries in [
- ('10.1.401','cf1f4e69fc2d1351af9fa9923ac90ed466088730a00867cbe0eb1b3b2c68963e',{'netstandard2.0':'7516a966abc789eab916e95d429bf3a49e996257069d97f7f3eb5d47373fa72b','netstandard2.1':'39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a'}),
+ ('10.1.403','51827d6e1dc7c57a809cb0a9da4d456ef5a0b5a583a73d9bc9324ee82bb3cabf',{'netstandard2.0':'3324738df50d77011dcaa37e4c76fae639461deac84aa18ec7275c2d96824c02','netstandard2.1':'1af305b7625c30a54d141caf805c5b0b5a8f6166fb5cef22e3570f55d33152bd'}),
  ('10.1.302','f4eda1b2efb28b38a5526b0b678e889434aa71113a4c2fa8660b62ca75cc7dfc',{'netstandard2.0':'430a20ba7c8b7c226e6bcf9a8e854760a799f5da19000c573148144dcce75742','netstandard2.1':'517c1301e8cb5086fbe63a3c8879049933eb998b1569f754b1e653314ad51232'}),
  ('10.1.203','b8ecba5c6b8713aad28c8f3c2b98a633aeeffa877ae389ea429b99650202fcd5',{'netstandard2.1':'4a626d62bb15815b6404567aa1bd37d9f2208e8e3c99c3c346d0efcfca72af6c'})]:
  archive=q/'official-core'/f'fsharp.core.{version}.nupkg'
@@ -41,17 +41,17 @@ for version,archiveDigest,entries in [
    entry=f'lib/{tfm}/FSharp.Core.dll';body=z.read(entry);assert sha(body)==digest,'official TFM DLL byte mismatch'
    out=q/'official-core'/f'FSharp.Core.{version}.{tfm}.dll';out.write_bytes(body)
    rows.append(dict(version=version,archiveSha256=archiveDigest,archiveEntry=entry,dllSha256=digest,path=str(out)))
-   if version=='10.1.401' and tfm=='netstandard2.0':(q/'compiler/FSharp.Core.dll').write_bytes(body)
+   if version=='10.1.403' and tfm=='netstandard2.0':(q/'compiler/FSharp.Core.dll').write_bytes(body)
 (q/'official-core/receipt.json').write_text(json.dumps(rows,indent=2)+'\n')
 root=ET.Element('configuration');sources=ET.SubElement(root,'packageSources');ET.SubElement(sources,'clear');ET.SubElement(sources,'add',key='official',value='https://api.nuget.org/v3/index.json');mapping=ET.SubElement(root,'packageSourceMapping');ET.SubElement(ET.SubElement(mapping,'packageSource',key='official'),'package',pattern='*');ET.ElementTree(root).write(q/'NuGet.Config',encoding='unicode')
 (q/'environment').write_text('WASM_SUPERVISOR_BASELINE_ROOT='+str(q)+'\nDotnetFscCompilerPath='+str(q/'compiler/fsc.dll')+'\nWASM_FSC_COMPILER_PATH='+str(q/'compiler/fsc.dll')+'\nDOTNET_PROCESSOR_COUNT=1\nMSBUILDDISABLENODEREUSE=1\nUseSharedCompilation=false\n')
 PY
   NUGET_PACKAGES="$q/packages" dotnet tool install fable --version 5.18.0 --tool-path "$q/tools" --configfile "$q/NuGet.Config" > "$q/tool-install.log" 2>&1
   cmp "$q/tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/FSharp.Core.dll" "$q/official-core/FSharp.Core.10.1.203.netstandard2.1.dll"
-  cmp "$q/compiler/FSharp.Core.dll" "$q/official-core/FSharp.Core.10.1.401.netstandard2.0.dll"
+  cmp "$q/compiler/FSharp.Core.dll" "$q/official-core/FSharp.Core.10.1.403.netstandard2.0.dll"
   "$repo/sdk/wasm/toolchains/acquire-wasi-sdk.sh" "$q/wasi" > "$q/wasi-acquire.log"
   printf 'WASM_WASI_SDK_ROOT=%s\n' "$q/wasi/wasi-sdk-34.0-x86_64-linux" >> "$q/environment"
-  printf 'supervisor-bootstrap: official-only Fable5.18.0 Core401-TFM20+21 Core302-TFM20+21 Core203-TFM21 pinned; commonSDK=unchanged\n'
+  printf 'supervisor-bootstrap: official-only Fable5.18.0 Core403-TFM20+21 Core302-TFM20+21 Core203-TFM21 pinned; commonSDK=unchanged\n'
 }
 report_custody_exit() {
   local status=$1 leaf

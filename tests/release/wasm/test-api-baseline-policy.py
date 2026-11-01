@@ -100,3 +100,32 @@ try: manifest.api_policy("0.2.1")
 except SystemExit: pass
 else: raise SystemExit("unselected patch version accepted")
 print(f"wasm-api-baseline-policy: current candidate={current_policy['candidateVersion']} baseline={current_policy['baselineVersion']} unexpected-breaks/unavailable/unselected-version=refused")
+
+# Closed toolchain pair: the retained SDK 10.0.401 manifests of every published release
+# keep verifying, a candidate prepared under SDK 10.0.403 verifies, and nothing else does.
+# The ApiCompat receipt label must name the manifest's own SDK.
+def identity_manifest(dotnet, label):
+    version = current_policy["candidateVersion"]
+    names = list(manifest.expected_files(version).values())
+    rows = [{"id": identity, "baselineArchiveSha256": expected["servedArchiveSha256"],
+             "candidateArchiveSha256": "e" * 64, "baselineApiSurface": {"api-surface/test.fsi": "f" * 64},
+             "candidateApiSurface": {"api-surface/test.fsi": "f" * 64}, "nativeLogSha256": "a" * 64,
+             "status": "compatible", "diagnostics": []} for identity, expected in current_policy["packages"].items()]
+    receipt = {"schema": "fsgg.wasm.published-api-comparison/v1", "tool": label, "packages": rows,
+               **{key: current_policy[key] for key in ("baselineVersion", "baselineSource", "baselineTree", "baselineManifestSha256", "candidateVersion")}}
+    return {"schema": manifest.SCHEMA, "version": version, "tag": f"wasm/v{version}", "source": "1" * 40, "tree": "2" * 40,
+            "roster": list(manifest.ROSTER), "workflow": ".github/workflows/wasm-shared.yml",
+            "tools": {**manifest.TOOLS, "dotnet": dotnet}, "artifacts": [{"file": name, "sha256": "e" * 64} for name in names],
+            "firstStableBaseline": {"version": "0.1.1", "publishedApiCompatBaseline": current_policy["baselineVersion"]},
+            "publishedApiComparison": receipt}
+
+assert manifest.TOOLS["dotnet"] == "10.0.403" and manifest.RETAINED_TOOLS["dotnet"] == "10.0.401"
+assert {key: value for key, value in manifest.TOOLS.items() if key != "dotnet"} == {key: value for key, value in manifest.RETAINED_TOOLS.items() if key != "dotnet"}
+manifest.verify_identity(identity_manifest("10.0.401", "SDK10.0.401.ApiCompat"))
+manifest.verify_identity(identity_manifest("10.0.403", "SDK10.0.403.ApiCompat"))
+for dotnet, label in (("10.0.401", "SDK10.0.403.ApiCompat"), ("10.0.403", "SDK10.0.401.ApiCompat"),
+                      ("10.0.402", "SDK10.0.402.ApiCompat"), ("10.0.404", "SDK10.0.404.ApiCompat")):
+    try: manifest.verify_identity(identity_manifest(dotnet, label))
+    except SystemExit: pass
+    else: raise SystemExit(f"unadmitted or mismatched release toolchain accepted: {dotnet} {label}")
+print("wasm-release-toolchain: admitted={10.0.401 retained, 10.0.403 current} label-mismatch/unadmitted-sdk=refused")

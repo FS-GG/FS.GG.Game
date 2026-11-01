@@ -267,9 +267,9 @@ def selected(projection, work):
     projection.packages(work/'packages','selected/packages')
     projection.core(work/'packages','selected/core')
     baseline=pathlib.Path(str(work)+'-baseline')
-    for name in ('receipt.json','fsharp.core.10.1.302.nupkg','fsharp.core.10.1.401.nupkg','fsharp.core.10.1.203.nupkg',
+    for name in ('receipt.json','fsharp.core.10.1.302.nupkg','fsharp.core.10.1.403.nupkg','fsharp.core.10.1.203.nupkg',
                  'FSharp.Core.10.1.302.netstandard2.0.dll','FSharp.Core.10.1.302.netstandard2.1.dll',
-                 'FSharp.Core.10.1.401.netstandard2.0.dll','FSharp.Core.10.1.401.netstandard2.1.dll','FSharp.Core.10.1.203.netstandard2.1.dll'):
+                 'FSharp.Core.10.1.403.netstandard2.0.dll','FSharp.Core.10.1.403.netstandard2.1.dll','FSharp.Core.10.1.203.netstandard2.1.dll'):
         projection.add(baseline/'official-core'/name,'official-core/'+name)
     projection.add(baseline/'compiler/FSharp.Core.dll','official-core/actual-compiler-Core.dll')
     projection.add(baseline/'tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/FSharp.Core.dll','official-core/actual-fable-runtime-Core.dll')

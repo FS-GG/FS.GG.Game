@@ -15,7 +15,7 @@ text = workflow.read_text(encoding="utf-8")
 required = [
     "permissions:\n  contents: read",
     "timeout-minutes: 55",
-    'dotnet-version: "10.0.401"',
+    'dotnet-version: "10.0.403"',
     'node-version: "26"',
     "QUINT_VERSION: 0.32.0",
     "RUST_VERSION: 1.90.0",
@@ -156,8 +156,8 @@ for broken in (
         raise SystemExit("workflow preflight: a known-bad mutation was accepted")
 
 global_json = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
-if global_json["sdk"]["version"] != "10.0.401":
-    raise SystemExit("workflow preflight: global.json SDK is not 10.0.401")
+if global_json["sdk"]["version"] != "10.0.403":
+    raise SystemExit("workflow preflight: global.json SDK is not 10.0.403")
 
 tools = json.loads(pathlib.Path(sys.argv[3]).read_text(encoding="utf-8"))["tools"]
 if tools["fable"]["version"] != "5.18.0" or tools["fable"].get("rollForward") is not False:
