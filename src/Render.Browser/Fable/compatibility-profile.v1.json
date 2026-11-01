@@ -1,0 +1,25 @@
+{
+  "schema": "fsgg.fable-compatibility-profile/v1",
+  "package": "FS.GG.Game.Render.Browser",
+  "runtime": "javascript-browser",
+  "publicDependencies": [
+    "FS.GG.Game.Render",
+    "FS.GG.UI.Scene",
+    "FS.GG.UI.Scene.SvgBrowser",
+    "Fable.Browser.Dom",
+    "Fable.Core"
+  ],
+  "nativeDependencies": [],
+  "npmDependencies": [
+    "@babylonjs/core@9.33.1",
+    "pixi.js@8.22.0"
+  ],
+  "scope": [
+    "SvgSurface, PixiSurface and BabylonSurface scene surfaces and adapters over the shared FS.GG.UI.Scene",
+    "RendererDriver: the RendererSelection loop for a browser page, with queued dispatch and failBackend",
+    "BrowserRenderers: declare and start the SVG, Pixi and Babylon backends for one game-state type, with the LateFailureRoute",
+    "BrowserConformance: WebGL context and resource probes, frame waits, pixel readback and the RendererConformance subject",
+    "Generated PixiJS 8.22.0 and BabylonJS 9.33.1 bindings (modules Qualification.Pixi and Qualification.Babylon) from the pinned FS.GG.Templates commit"
+  ],
+  "dotNetOnly": []
+}

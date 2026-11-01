@@ -20,7 +20,7 @@ runtime. `RendererRegistry<'State>` holds the adapters for one game-state type; 
 (`RendererRegistry.available`) only when an adapter is registered for it. `RendererRegistry.svg`
 registers the existing Scene path as the default SVG backend. `RendererBackend.Pixi` and
 `RendererBackend.Babylon` are declared but this package ships no adapter for either (the Pixi and Babylon adapters live
-in the Fable-only `src/Render.Browser` host), so a backend nobody registered is refused with `RendererRefusal.Unavailable`.
+in the Fable-only `FS.GG.Game.Render.Browser` package), so a backend nobody registered is refused with `RendererRefusal.Unavailable`.
 
 Switching (`RendererMsg.SelectBackend`) keeps `Model.State` and emits `Unmount`/`Mount` effects.
 `RendererHost` performs those effects, owns the mounted backend's resources outside the model and
@@ -124,10 +124,16 @@ Adapter authors keep two obligations the kit checks:
 The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneRenderers` and
 `RendererConformance`, each `.fsi` and `.fs`) so a Fable-compiled browser host can register adapters
 against the same `RendererRegistry` and run the conformance kit. `Adapter` and
-`DefaultKeymap` are .NET-only and are not in that view. The repository's `src/Render.Browser` project
-(not packed) is that host: it mounts the existing SVG surface (`SvgBrowser`), hosts the BabylonJS
-and PixiJS adapters (over the Templates#809 and #808 bindings), and adds `BrowserRenderers` and `BrowserConformance` for the
-authoring path. `scripts/test-render-browser-host.sh` proves it in a headless browser.
+`DefaultKeymap` are .NET-only and are not in that view. Since 0.18.0 the packed `fable/FS.GG.Game.Render.fsproj`
+lists its sources unconditionally, because Fable does not evaluate MSBuild conditions in a package's project
+file. The 0.17.0 view compiled no sources for a package consumer.
+
+The browser host is the `FS.GG.Game.Render.Browser` package (from `src/Render.Browser`, first published in
+0.18.0). It mounts the existing SVG surface (`SvgBrowser`), hosts the BabylonJS and PixiJS adapters (over the
+Templates#809 and #808 bindings, shipped as source), and adds `BrowserRenderers` and `BrowserConformance` for the
+authoring path. A game references that one package from its Fable project. `scripts/test-render-browser-host.sh`
+proves the host in a headless browser and compiles a clean consumer of both packages
+(`tests/release/test-render-browser-package-consumer.sh`).
 
 House style: `.fsi` is the sole public surface; `net10.0`; `-preview` channel.
 See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) and [ADR-0022](https://github.com/FS-GG/.github/blob/main/docs/adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md).

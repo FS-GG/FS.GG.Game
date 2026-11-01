@@ -14,18 +14,13 @@
     <EnableDefaultItems>false</EnableDefaultItems>
   </PropertyGroup>
 
-  <!-- Packed layout: the sources sit beside this project (fable/RendererSelection.fs). In-repo layout:
-       they sit one directory up in src/Game.Render, so a repo-local Fable host can reference this very
-       project and compile exactly the files the package would ship. -->
-  <ItemGroup Condition="Exists('RendererSelection.fs')">
-    <Compile Include="RendererSelection.fsi" />
-    <Compile Include="RendererSelection.fs" />
-    <Compile Include="SceneRenderers.fsi" />
-    <Compile Include="SceneRenderers.fs" />
-    <Compile Include="RendererConformance.fsi" />
-    <Compile Include="RendererConformance.fs" />
-  </ItemGroup>
-  <ItemGroup Condition="!Exists('RendererSelection.fs')">
+  <!-- In-repo layout: the sources sit one directory up in src/Game.Render, so a repo-local Fable host (the browser
+       host) references this very project and compiles exactly the files the package ships. The packed copy,
+       fable/FS.GG.Game.Render.fsproj, is this file with each `Include="../` made `Include="` (the sources sit beside
+       it there), generated at pack by src/Game.Render/FS.GG.Game.Render.fsproj. The items stay unconditional:
+       Fable reads a package's project file without evaluating MSBuild conditions, so a conditional item group
+       compiles nothing for a package consumer (FS.GG.Game#745). -->
+  <ItemGroup>
     <Compile Include="../RendererSelection.fsi" />
     <Compile Include="../RendererSelection.fs" />
     <Compile Include="../SceneRenderers.fsi" />

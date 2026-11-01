@@ -2,17 +2,20 @@ name: release
 
 # Release-only publish for FS.GG.Game (ADR-0022 / P5). Tag-triggered; NEVER a required check and
 # NEVER on push/PR (mirrors the sibling repos' release cadence). Publishes the coherent set
-# FS.GG.Game.Core + FS.GG.Game.Render + FS.GG.Game.Harness + FS.GG.Game.Physics.Box2D to the org GitHub Packages feed
+# FS.GG.Game.Core + FS.GG.Game.Render + FS.GG.Game.Harness + FS.GG.Game.Physics.Box2D + FS.GG.Game.Render.Browser
+# to the org GitHub Packages feed
 # (nuget.pkg.github.com/FS-GG), then dual-publishes the BYTE-IDENTICAL set to public nuget.org via
 # Trusted Publishing / OIDC (ADR-0012 §1–§5 / ADR-0013 — no stored key). Gated on a full headless
 # build+test first: a set is published only after `verify` is green (publish-before-flip, FR-007).
 #
 # The set shares ONE version (the repo-wide <Version> in Directory.Build.local.props); the packages
-# move together, so every release re-publishes all four at the same version. Game.Render depends on
+# move together, so every release re-publishes all five at the same version. Game.Render depends on
 # Game.Core@same-version + FS.GG.UI.Scene (itself dual-published, ADR-0012/0013); Game.Harness
 # depends on Game.Core@same-version + the BCL only (WI-6, Game#425). FS.GG.Game.Harness joined the
 # set at 0.6.0 — it is packable and in the slnx as of #423 but landed after the v0.5.1 release, so no
-# published version predates 0.6.0 for it.
+# published version predates 0.6.0 for it. FS.GG.Game.Render.Browser (the Fable browser host, #745) joins at 0.18.0;
+# it is outside the slnx (its generated bindings need materializing first), so it is packed on its own below and
+# depends on FS.GG.Game.Render@same-version.
 on:
   release:
     types: [published]
@@ -59,11 +62,11 @@ jobs:
           dotnet-version: '10.0.403'
 
       # Cheap exact-roster/version/order checks run before restore or the full release suite.
-      - name: Preflight 0.17.0 release contract and mutation controls
+      - name: Preflight 0.18.0 release contract and mutation controls
         shell: bash
         run: |
-          tests/release/test-game-0-17-release.sh --source-only
-          tests/release/test-game-0-17-release-selftest.sh
+          tests/release/test-game-0-18-release.sh --source-only
+          tests/release/test-game-0-18-release-selftest.sh
           python3 tests/release/test-release-admission.py
 
       # COLD, via the shared action (#135 / FS-GG/.github#429) — and this is the job where a warm
@@ -167,6 +170,19 @@ jobs:
       # -p:Version set, which is how the packed nuspec gets the right dependency version. It now
       # resolves into the COLD NUGET_PACKAGES the step above exported to GITHUB_ENV, so it validates
       # against the same feed-backed folder rather than the image's.
+      # The browser host packs the Pixi and Babylon bindings as source, generated from the FS.GG.Templates commit
+      # eng/js-bindings/pin.env pins. The script refuses any output whose sha256 differs from the pin, and the pack
+      # refuses again, so the packed bindings are the pinned bytes.
+      - name: Set up Node (bindings materialization)
+        if: inputs.source_run_id == ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "26"
+      - name: Materialize the pinned JavaScript bindings
+        if: inputs.source_run_id == ''
+        shell: bash
+        run: scripts/materialize-js-bindings.sh all
+
       - name: Pack FS.GG.Game.* (coherent set @ $VER)
         if: inputs.source_run_id == ''
         shell: bash
@@ -175,6 +191,11 @@ jobs:
         run: |
           set -euo pipefail
           dotnet pack FS.GG.Game.slnx -c Release \
+            -p:Version="$VER" \
+            -p:RepositoryCommit="$GITHUB_SHA" \
+            -p:EnablePackageValidation=true \
+            -o artifacts/packages
+          dotnet pack src/Render.Browser/FS.GG.Game.Render.Browser.fsproj -c Release \
             -p:Version="$VER" \
             -p:RepositoryCommit="$GITHUB_SHA" \
             -p:EnablePackageValidation=true \
@@ -226,15 +247,19 @@ jobs:
           set -euo pipefail
           (cd artifacts/packages && sha256sum --check SHA256SUMS)
           count="$(find artifacts/packages -maxdepth 1 -type f -name '*.nupkg' ! -name '*.snupkg' | wc -l)"
-          [ "$count" = 4 ] || { echo "::error::release custody must contain exactly four primary packages; found $count"; exit 1; }
+          [ "$count" = 5 ] || { echo "::error::release custody must contain exactly five primary packages; found $count"; exit 1; }
 
       - name: Verify coherent package set, metadata, and clean Journey consumer
         shell: bash
-        run: tests/release/test-game-0-17-release.sh --packages artifacts/packages
+        run: tests/release/test-game-0-18-release.sh --packages artifacts/packages
 
       - name: Qualify package-only Box2D candidate from retained preparation
         shell: bash
         run: tests/release/test-box2d-package-consumer.sh --packages artifacts/packages
+
+      - name: Qualify a clean browser host consumer (generated three-adapter module, .NET and Fable) from the candidate
+        shell: bash
+        run: tests/release/test-render-browser-package-consumer.sh --packages artifacts/packages
 
       - name: Retain original coherent package bytes before publication
         if: inputs.source_run_id == ''
@@ -325,7 +350,7 @@ jobs:
                   if observed != expected: raise SystemExit(f'{feed} payload differs for {original.name}')
                   row['feeds'][feed]={'archiveSha256':sha256(remote.read_bytes()).hexdigest(),'payloadMembers':len(observed),'payloadMatch':True}
               rows.append(row)
-          if len(rows) != 4: raise SystemExit(f'expected four primary package readbacks, got {len(rows)}')
+          if len(rows) != 5: raise SystemExit(f'expected five primary package readbacks, got {len(rows)}')
           report.write_text(json.dumps({'schema':'fsgg.game.release-readback/v1','packages':rows},indent=2)+'\n')
           PY
 
@@ -333,6 +358,11 @@ jobs:
         if: steps.ver.outputs.push == 'true'
         shell: bash
         run: tests/release/test-box2d-package-consumer.sh --public
+
+      - name: Qualify a clean public browser host consumer (generated three-adapter module, .NET and Fable)
+        if: steps.ver.outputs.push == 'true'
+        shell: bash
+        run: tests/release/test-render-browser-package-consumer.sh --public
 
       - name: Retain dual-feed readback evidence
         if: steps.ver.outputs.push == 'true'

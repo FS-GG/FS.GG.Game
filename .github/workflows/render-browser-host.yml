@@ -5,6 +5,9 @@ name: render-browser-host
 # tests/Render.Browser.Smoke with Fable, and runs every smoke check in headless Chrome, including the BabylonJS
 # and PixiJS adapters on WebGL (software, through SwiftShader, on this runner) and switching between all three.
 # The bindings are generated from the pinned FS.GG.Templates commit by scripts/materialize-js-bindings.sh.
+# It also packs FS.GG.Game.Render.Browser, checks its Fable view, compiles a clean package consumer of the generated
+# three-adapter module (FS.GG.Game#745), and fails on drift of the browser host's surface baseline, which the
+# solution-only drift job in gate.yml cannot build.
 on:
   push:
     branches: [main]
@@ -25,6 +28,10 @@ on:
       - "scripts/test-render-browser-host.sh"
       - "scripts/materialize-js-bindings.sh"
       - "eng/js-bindings/**"
+      - "src/Game.Core/**"
+      - "tests/release/test-render-browser-package-consumer.sh"
+      - "scripts/refresh-surface-baselines.fsx"
+      - "readiness/surface-baselines/**"
   pull_request:
     branches: [main]
     paths:
@@ -44,6 +51,10 @@ on:
       - "scripts/test-render-browser-host.sh"
       - "scripts/materialize-js-bindings.sh"
       - "eng/js-bindings/**"
+      - "src/Game.Core/**"
+      - "tests/release/test-render-browser-package-consumer.sh"
+      - "scripts/refresh-surface-baselines.fsx"
+      - "readiness/surface-baselines/**"
   workflow_dispatch:
 
 concurrency:
@@ -57,7 +68,7 @@ jobs:
   browser-host:
     name: Renderer host browser smoke (SVG, Pixi and Babylon through Fable)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -75,3 +86,12 @@ jobs:
 
       - name: Pack the Fable view, compile the host and run the browser smoke
         run: scripts/test-render-browser-host.sh
+
+      - name: Browser host surface baseline drift (readiness/surface-baselines/FS.GG.Game.Render.Browser)
+        run: |
+          dotnet build src/Render.Browser/FS.GG.Game.Render.Browser.fsproj -c Debug
+          dotnet fsi scripts/refresh-surface-baselines.fsx --browser
+          if ! git diff --exit-code -- readiness/surface-baselines; then
+            echo "::error::the browser host's public surface changed but its baseline was not updated. Run scripts/materialize-js-bindings.sh all, dotnet build src/Render.Browser -c Debug, then dotnet fsi scripts/refresh-surface-baselines.fsx --browser, and commit the result."
+            exit 1
+          fi

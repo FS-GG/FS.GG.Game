@@ -17,23 +17,23 @@ spec.loader.exec_module(admission)
 
 class AdmissionTests(unittest.TestCase):
     def test_expected_registry_absence_and_authenticated_predecessor(self):
-        with patch.dict(admission.os.environ, FEED_TOKEN="offline-placeholder"), patch.object(admission, "observe", side_effect=[200] + [404] * 8):
-            report, failed = admission.collect("registries", "0.17.0")
+        with patch.dict(admission.os.environ, FEED_TOKEN="offline-placeholder"), patch.object(admission, "observe", side_effect=[200] + [404] * 10):
+            report, failed = admission.collect("registries", "0.18.0")
         self.assertFalse(failed)
-        self.assertEqual(len(report["packages"]), 8)
+        self.assertEqual(len(report["packages"]), 10)
 
     def test_registry_collision_unauthorized_and_unavailable_refuse(self):
         for status in (200, 401, 403, 0):
-            with self.subTest(status=status), patch.dict(admission.os.environ, FEED_TOKEN="offline-placeholder"), patch.object(admission, "observe", side_effect=[200, status] + [404] * 7):
-                self.assertTrue(admission.collect("registries", "0.17.0")[1])
+            with self.subTest(status=status), patch.dict(admission.os.environ, FEED_TOKEN="offline-placeholder"), patch.object(admission, "observe", side_effect=[200, status] + [404] * 9):
+                self.assertTrue(admission.collect("registries", "0.18.0")[1])
 
     def test_predecessor_404_does_not_prove_registry_authentication(self):
         with patch.dict(admission.os.environ, FEED_TOKEN="offline-placeholder"), patch.object(admission, "observe", return_value=404):
-            self.assertTrue(admission.collect("registries", "0.17.0")[1])
+            self.assertTrue(admission.collect("registries", "0.18.0")[1])
 
     def test_oidc_success_cannot_prove_adapter_creation_scope(self):
-        with patch.dict(admission.os.environ, NUGET_API_KEY="offline-placeholder"), patch.object(admission, "observe", side_effect=[200, 200, 200, 404]):
-            report, failed = admission.collect("authority", "0.17.0")
+        with patch.dict(admission.os.environ, NUGET_API_KEY="offline-placeholder"), patch.object(admission, "observe", side_effect=[200, 200, 200, 200, 404]):
+            report, failed = admission.collect("authority", "0.18.0")
         self.assertFalse(failed)
         self.assertEqual(report["newAdapterCreationScope"], "not-exposed-and-unproven")
         self.assertEqual(report["packages"][-1]["authority"], "unproven")
@@ -45,8 +45,8 @@ class AdmissionTests(unittest.TestCase):
         self.assertNotIn("X-nuget-apikey", redirected.headers)
 
     def test_existing_package_authority_failure_refuses(self):
-        with patch.dict(admission.os.environ, NUGET_API_KEY="offline-placeholder"), patch.object(admission, "observe", side_effect=[403, 200, 200, 404]):
-            self.assertTrue(admission.collect("authority", "0.17.0")[1])
+        with patch.dict(admission.os.environ, NUGET_API_KEY="offline-placeholder"), patch.object(admission, "observe", side_effect=[403, 200, 200, 200, 404]):
+            self.assertTrue(admission.collect("authority", "0.18.0")[1])
 
     def test_workflow_observation_cannot_enter_publisher(self):
         text = (ROOT / ".github/workflows/release.yml").read_text()

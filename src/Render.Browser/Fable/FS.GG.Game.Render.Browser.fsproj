@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    This project is package metadata, not a second implementation project. It is packed as
+    fable/FS.GG.Game.Render.Browser.fsproj beside the sources it lists: the browser host's own sources, copied
+    from src/Render.Browser, and the two bindings sources generated from the FS.GG.Templates commit that
+    eng/js-bindings/pin.env pins (fable/generated/). A Fable consumer compiles exactly these files.
+
+    NpmDependencies declares the exact JavaScript packages the bindings were generated against, for Femto
+    (`dotnet femto`); the exact closures ship in the package under js-bindings/.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>FS.GG.Game.Render.Browser.Fable.Metadata</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="generated/BabylonBindings.fs" />
+    <Compile Include="generated/PixiBindings.fs" />
+    <Compile Include="SvgSurface.fsi" />
+    <Compile Include="SvgSurface.fs" />
+    <Compile Include="CanvasSupport.fsi" />
+    <Compile Include="CanvasSupport.fs" />
+    <Compile Include="SceneShapes.fsi" />
+    <Compile Include="SceneShapes.fs" />
+    <Compile Include="BabylonSurface.fsi" />
+    <Compile Include="BabylonSurface.fs" />
+    <Compile Include="PixiSurface.fsi" />
+    <Compile Include="PixiSurface.fs" />
+    <Compile Include="RendererDriver.fsi" />
+    <Compile Include="RendererDriver.fs" />
+    <Compile Include="BrowserRenderers.fsi" />
+    <Compile Include="BrowserRenderers.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FS.GG.Game.Render" />
+    <PackageReference Include="FS.GG.UI.Scene" />
+    <PackageReference Include="FS.GG.UI.Scene.SvgBrowser" />
+    <PackageReference Include="Fable.Browser.Dom" />
+    <PackageReference Include="Fable.Core" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <NpmDependencies>
+      <NpmPackage Name="@babylonjs/core" Version="9.33.1" ResolutionStrategy="Max" />
+      <NpmPackage Name="pixi.js" Version="8.22.0" ResolutionStrategy="Max" />
+    </NpmDependencies>
+  </PropertyGroup>
+
+</Project>

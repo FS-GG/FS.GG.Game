@@ -1,0 +1,71 @@
+FS.GG.Game.Render.Browser.BabylonCounters.EnginesCreated : System.Int32 [get]
+FS.GG.Game.Render.Browser.BabylonCounters.EnginesDisposed : System.Int32 [get]
+FS.GG.Game.Render.Browser.BabylonCounters.LoopsStarted : System.Int32 [get]
+FS.GG.Game.Render.Browser.BabylonCounters.LoopsStopped : System.Int32 [get]
+FS.GG.Game.Render.Browser.BabylonCounters.MeshesCreated : System.Int32 [get]
+FS.GG.Game.Render.Browser.BabylonCounters.MeshesDisposed : System.Int32 [get]
+FS.GG.Game.Render.Browser.BabylonCounters.UnsupportedNodes : System.Int32 [get]
+FS.GG.Game.Render.Browser.BabylonCounters.new(System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32)
+FS.GG.Game.Render.Browser.BabylonOptions.Antialias : System.Boolean [get]
+FS.GG.Game.Render.Browser.BabylonOptions.Height : System.Double [get]
+FS.GG.Game.Render.Browser.BabylonOptions.Label : System.String [get]
+FS.GG.Game.Render.Browser.BabylonOptions.Width : System.Double [get]
+FS.GG.Game.Render.Browser.BabylonOptions.new(System.String, System.Double, System.Double, System.Boolean)
+FS.GG.Game.Render.Browser.BabylonSurface.adapter<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>) : RendererAdapter<State>
+FS.GG.Game.Render.Browser.BabylonSurface.counters() : FS.GG.Game.Render.Browser.BabylonCounters
+FS.GG.Game.Render.Browser.BabylonSurface.defaultOptions(System.String, System.Double, System.Double) : FS.GG.Game.Render.Browser.BabylonOptions
+FS.GG.Game.Render.Browser.BabylonSurface.mountScene(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>
+FS.GG.Game.Render.Browser.BabylonSurface.register<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>, RendererRegistry<State>) : RendererRegistry<State>
+FS.GG.Game.Render.Browser.BabylonSurface.surface(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions) : FS.GG.Game.Render.SceneSurface
+FS.GG.Game.Render.Browser.BrowserConformance.host<State>(RendererDriver<State>) : ConformanceHost<State>
+FS.GG.Game.Render.Browser.BrowserConformance.installContextProbe() : System.Void
+FS.GG.Game.Render.Browser.BrowserConformance.liveContexts(FS.GG.Game.Render.RendererBackend) : System.Int32
+FS.GG.Game.Render.Browser.BrowserConformance.pixiLateFailure() : FS.GG.Game.Render.LateFailureTrigger
+FS.GG.Game.Render.Browser.BrowserConformance.readPixel<State>(ConformanceHost<State>, Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, System.Int32, System.Int32, Microsoft.FSharp.Core.FSharpFunc<System.Int32[], System.Boolean>, System.Int32) : Microsoft.FSharp.Control.FSharpAsync<System.Int32[]>
+FS.GG.Game.Render.Browser.BrowserConformance.resources(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend) : System.Int32
+FS.GG.Game.Render.Browser.BrowserConformance.subject<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.LateFailureRoute, RendererRegistry<State>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>, FSharpList<State>, FSharpFunc<ConformanceHost<State>, FSharpFunc<FS.GG.Game.Render.RendererBackend, FSharpFunc<State, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>>>>) : ConformanceSubject<State>
+FS.GG.Game.Render.Browser.BrowserConformance.waitUntil(System.Int32, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, System.Boolean>) : Microsoft.FSharp.Control.FSharpAsync<System.Boolean>
+FS.GG.Game.Render.Browser.BrowserRenderOptions.Height : System.Double [get]
+FS.GG.Game.Render.Browser.BrowserRenderOptions.Label : System.String [get]
+FS.GG.Game.Render.Browser.BrowserRenderOptions.Width : System.Double [get]
+FS.GG.Game.Render.Browser.BrowserRenderOptions.new(System.String, System.Double, System.Double)
+FS.GG.Game.Render.Browser.BrowserRenderers.declare<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BrowserRenderOptions, FS.GG.Game.Render.Browser.LateFailureRoute, FSharpFunc<State, FS.GG.UI.Scene.Scene>) : SceneRenderers<State>
+FS.GG.Game.Render.Browser.BrowserRenderers.options(System.String, System.Double, System.Double) : FS.GG.Game.Render.Browser.BrowserRenderOptions
+FS.GG.Game.Render.Browser.BrowserRenderers.route() : FS.GG.Game.Render.Browser.LateFailureRoute
+FS.GG.Game.Render.Browser.BrowserRenderers.start<State>(FS.GG.Game.Render.Browser.LateFailureRoute, RendererRegistry<State>, State, FSharpFunc<RendererModel<State>, Microsoft.FSharp.Core.Unit>) : RendererDriver<State>
+FS.GG.Game.Render.Browser.BrowserRenderers.surfaces(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BrowserRenderOptions, FS.GG.Game.Render.Browser.LateFailureRoute) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SceneSurface>
+FS.GG.Game.Render.Browser.LateFailureRoute.Capture() : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.Unit>>
+FS.GG.Game.Render.Browser.LateFailureRoute.Report(FS.GG.Game.Render.RendererBackend, System.String) : System.Void
+FS.GG.Game.Render.Browser.PixiCounters.ApplicationsCreated : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiCounters.ApplicationsDestroyed : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiCounters.InitFailures : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiCounters.ShapesCreated : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiCounters.ShapesDestroyed : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiCounters.UnsupportedNodes : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiCounters.new(System.Int32, System.Int32, System.Int32, System.Int32, System.Int32, System.Int32)
+FS.GG.Game.Render.Browser.PixiLive.Applications : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiLive.DisplayObjects : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiLive.TickerListeners : System.Int32 [get]
+FS.GG.Game.Render.Browser.PixiLive.new(System.Int32, System.Int32, System.Int32)
+FS.GG.Game.Render.Browser.PixiOptions.Antialias : System.Boolean [get]
+FS.GG.Game.Render.Browser.PixiOptions.Height : System.Double [get]
+FS.GG.Game.Render.Browser.PixiOptions.Label : System.String [get]
+FS.GG.Game.Render.Browser.PixiOptions.OnFailure : Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.Unit> [get]
+FS.GG.Game.Render.Browser.PixiOptions.Width : System.Double [get]
+FS.GG.Game.Render.Browser.PixiOptions.new(System.String, System.Double, System.Double, System.Boolean, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.Unit>)
+FS.GG.Game.Render.Browser.PixiSurface.adapter<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>) : RendererAdapter<State>
+FS.GG.Game.Render.Browser.PixiSurface.counters() : FS.GG.Game.Render.Browser.PixiCounters
+FS.GG.Game.Render.Browser.PixiSurface.defaultOptions(System.String, System.Double, System.Double) : FS.GG.Game.Render.Browser.PixiOptions
+FS.GG.Game.Render.Browser.PixiSurface.live() : FS.GG.Game.Render.Browser.PixiLive
+FS.GG.Game.Render.Browser.PixiSurface.mountScene(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>
+FS.GG.Game.Render.Browser.PixiSurface.register<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>, RendererRegistry<State>) : RendererRegistry<State>
+FS.GG.Game.Render.Browser.PixiSurface.surface(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions) : FS.GG.Game.Render.SceneSurface
+FS.GG.Game.Render.Browser.RendererDriver.failBackend<State>(RendererDriver<State>, FS.GG.Game.Render.RendererBackend, System.String) : System.Void
+FS.GG.Game.Render.Browser.RendererDriver.start<State>(RendererRegistry<State>, State, FSharpFunc<RendererModel<State>, Microsoft.FSharp.Core.Unit>) : RendererDriver<State>
+FS.GG.Game.Render.Browser.RendererDriver`1.Dispatch(RendererMsg<State>) : System.Void
+FS.GG.Game.Render.Browser.RendererDriver`1.Model : RendererModel<State> [get]
+FS.GG.Game.Render.Browser.RendererDriver`1.Mounted : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.RendererBackend> [get]
+FS.GG.Game.Render.Browser.SvgSurface.defaultOptions(System.String, System.Double, System.Double) : FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions
+FS.GG.Game.Render.Browser.SvgSurface.mountScene(Browser.Types.HTMLElement, FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>
+FS.GG.Game.Render.Browser.SvgSurface.registry<State>(Browser.Types.HTMLElement, FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>) : RendererRegistry<State>
+FS.GG.Game.Render.Browser.SvgSurface.surface(Browser.Types.HTMLElement, FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions) : FS.GG.Game.Render.SceneSurface

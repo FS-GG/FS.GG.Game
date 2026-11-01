@@ -48,12 +48,29 @@
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
         <BuildAction>None</BuildAction>
       </_PackageFiles>
-      <_PackageFiles Include="Fable/FS.GG.Game.Render.fsproj">
+      <_PackageFiles Include="$(_FablePackedProject)">
         <Pack>true</Pack>
         <PackagePath>fable/FS.GG.Game.Render.fsproj</PackagePath>
         <BuildAction>None</BuildAction>
       </_PackageFiles>
     </ItemGroup>
+  </Target>
+
+  <!-- The packed project is the in-repo metadata project with its sources beside it: each `Include="../` becomes
+       `Include="`. Generated, not committed, so the package and the repo-local Fable host list one set of files in
+       one order. Its items are unconditional because Fable does not evaluate MSBuild conditions in a package's
+       project file (FS.GG.Game#745). -->
+  <Target Name="GenerateFablePackedProject" BeforeTargets="CurateFableCompatibilityView">
+    <PropertyGroup>
+      <_FablePackedProject>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)fable-package/FS.GG.Game.Render.fsproj</_FablePackedProject>
+      <_FableRepoProjectText>$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/Fable/FS.GG.Game.Render.fsproj'))</_FableRepoProjectText>
+    </PropertyGroup>
+    <Error Condition="$(_FableRepoProjectText.Contains('Condition='))" Text="Fable/FS.GG.Game.Render.fsproj must not use MSBuild conditions: Fable does not evaluate them in a package's project file." />
+    <MakeDir Directories="$(MSBuildProjectDirectory)/$(IntermediateOutputPath)fable-package" />
+    <WriteLinesToFile File="$(_FablePackedProject)"
+                      Lines="$(_FableRepoProjectText.Replace('Include=&quot;../', 'Include=&quot;').TrimEnd())"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
   </Target>
 
   <ItemGroup Label="fable-compatibility-metadata">
