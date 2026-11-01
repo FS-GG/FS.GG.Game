@@ -128,6 +128,22 @@ PY
 # restated here: an unpacked host module or any MSBuild condition in a view refuses before restore (Game#745).
 python3 -I "$here/check-fable-views.py" --root "$root"
 
+# FS.GG.Game#764: a consumer must not restore from a version list an earlier restore on the same machine cached.
+# Every consumer restore bypasses NuGet's HTTP cache, and the browser consumer also keeps its own empty cache.
+python3 - "$root/tests/release/test-render-browser-package-consumer.sh" "$root/tests/release/test-box2d-package-consumer.sh" <<'PY_CACHE'
+import re, sys
+from pathlib import Path
+for script in map(Path, sys.argv[1:]):
+    text = script.read_text(encoding="utf-8")
+    restores = [line for line in text.splitlines() if re.match(r"\s*dotnet restore\b", line)]
+    if not restores or any("--no-cache" not in line for line in restores):
+        raise SystemExit(f"{script.name}: every dotnet restore must pass --no-cache (a cached version list fails a just-published release)")
+browser = Path(sys.argv[1]).read_text(encoding="utf-8")
+isolate = 'export NUGET_HTTP_CACHE_PATH="$consumer/http-cache"'
+if isolate not in browser or browser.index(isolate) > browser.index("dotnet restore"):
+    raise SystemExit("test-render-browser-package-consumer.sh must isolate NUGET_HTTP_CACHE_PATH in the consumer before restoring")
+PY_CACHE
+
 [[ -z "$packages" ]] && exit 0
 
 mapfile -t nupkgs < <(find "$packages" -maxdepth 1 -type f -name '*.nupkg' ! -name '*.symbols.nupkg' -printf '%f\n' | sort)

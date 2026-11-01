@@ -12,7 +12,8 @@ make_fixture() {
   cp "$root/.github/workflows/release.yml" "$fixture/.github/workflows/release.yml"
   # The packed Fable views are derived from these project files (tests/release/check-fable-views.py).
   for file in src/Game.Render/Fable/FS.GG.Game.Render.fsproj src/Render.Browser/FS.GG.Game.Render.Browser.fsproj \
-    src/Render.Browser/Fable/FS.GG.Game.Render.Browser.fsproj eng/js-bindings/pin.env; do
+    src/Render.Browser/Fable/FS.GG.Game.Render.Browser.fsproj eng/js-bindings/pin.env \
+    tests/release/test-render-browser-package-consumer.sh tests/release/test-box2d-package-consumer.sh; do
     mkdir -p "$(dirname "$fixture/$file")"
     cp "$root/$file" "$fixture/$file"
   done
@@ -190,3 +191,22 @@ mutate_red "no-listing-wait" "must wait for nuget.org to list every released id"
   "text = text.replace('python3 tests/release/wait-nuget-listing.py --version', 'echo listing-wait-disabled --version')"
 mutate_red "listing-wait-after-consumer" "must wait for the nuget.org listing after readback" \
   "i = text.index('      - name: Wait for nuget.org to list'); j = text.index('      - name: Qualify fresh public'); block = text[i:j]; text = text[:i] + text[j:]; k = text.index('      - name: Qualify a clean public browser'); text = text[:k] + block + text[k:]"
+
+# FS.GG.Game#764 (corrected cause): consumers restore past NuGet's HTTP cache, the browser consumer from its own.
+cached="$scratch/consumer-http-cache"
+make_fixture "$cached"
+sed -i 's: --no-cache --force-evaluate --disable-parallel: --force-evaluate --disable-parallel:' "$cached/tests/release/test-render-browser-package-consumer.sh"
+if output=$("$root/tests/release/test-game-0-19-release.sh" --root "$cached" --source-only 2>&1); then
+  echo "browser consumer restoring through the HTTP cache unexpectedly passed" >&2; exit 1
+fi
+grep -q 'every dotnet restore must pass --no-cache' <<<"$output"
+echo "cache witness: a consumer restore through NuGet's HTTP cache rejected"
+
+shared="$scratch/consumer-shared-cache"
+make_fixture "$shared"
+sed -i '/^export NUGET_HTTP_CACHE_PATH="\$consumer\/http-cache"$/d' "$shared/tests/release/test-render-browser-package-consumer.sh"
+if output=$("$root/tests/release/test-game-0-19-release.sh" --root "$shared" --source-only 2>&1); then
+  echo "browser consumer sharing the machine HTTP cache unexpectedly passed" >&2; exit 1
+fi
+grep -q 'must isolate NUGET_HTTP_CACHE_PATH' <<<"$output"
+echo "cache witness: a browser consumer sharing the machine's HTTP cache rejected"
