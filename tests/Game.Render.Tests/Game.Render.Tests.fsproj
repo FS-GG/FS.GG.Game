@@ -18,6 +18,7 @@
     <Compile Include="RendererConformanceTests.fs" />
     <Compile Include="ScenePixelsTests.fs" />
     <Compile Include="SceneInteractionTests.fs" />
+    <Compile Include="InputPipelineContractTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

@@ -38,6 +38,10 @@ module BrowserRenderers =
 
     let route () = LateFailureRoute()
 
+    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
+    let bind (_: RendererBackend -> string -> unit) (_: LateFailureRoute) : unit =
+        failwith "BrowserRenderers.bind is a contract stub; FS.GG.Game#788 implements it."
+
     let options (label: string) (width: float) (height: float) : BrowserRenderOptions =
         {
             Label = label

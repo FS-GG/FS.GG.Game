@@ -44,6 +44,15 @@ module SceneSurface =
 
     let isInteractive (surface: SceneSurface) = surface.MountInteractive.IsSome
 
+    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
+    let withInputHost
+        (_: (InputEvent -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>)
+        (_: SceneSurface)
+        : SceneSurface =
+        failwith "SceneSurface.withInputHost is a contract stub; FS.GG.Game#788 implements it."
+
+    let hasInputHost (_: SceneSurface) = false
+
     let interactiveAdapter
         (view: 'State -> Scene)
         (interaction: SceneInteraction<'State>)
@@ -112,10 +121,18 @@ module SceneRenderers =
         RendererBackend.all
         |> List.filter (fun backend -> Map.containsKey backend renderers.Surfaces)
 
-    let withInteraction (interaction: SceneInteraction<'State>) (route: SelectionRoute) (renderers: SceneRenderers<'State>) =
+    let withInteraction
+        (interaction: SceneInteraction<'State>)
+        (route: SelectionRoute)
+        (renderers: SceneRenderers<'State>)
+        =
         { renderers with
             Interaction = Some(interaction, route)
         }
+
+    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
+    let withInput (_: SceneInteraction<'State>) (_: InputRoute) (_: SceneRenderers<'State>) : SceneRenderers<'State> =
+        failwith "SceneRenderers.withInput is a contract stub; FS.GG.Game#788 implements it."
 
     let registry (renderers: SceneRenderers<'State>) : RendererRegistry<'State> =
         let svg = renderers.Surfaces.[RendererBackend.Svg]

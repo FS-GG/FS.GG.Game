@@ -25,6 +25,10 @@
     <Compile Include="../RendererSelection.fs" />
     <Compile Include="../SceneInteraction.fsi" />
     <Compile Include="../SceneInteraction.fs" />
+    <Compile Include="../InputEvents.fsi" />
+    <Compile Include="../InputEvents.fs" />
+    <Compile Include="../InputPipeline.fsi" />
+    <Compile Include="../InputPipeline.fs" />
     <Compile Include="../SceneRenderers.fsi" />
     <Compile Include="../SceneRenderers.fs" />
     <Compile Include="../RendererConformance.fsi" />

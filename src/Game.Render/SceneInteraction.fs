@@ -35,6 +35,48 @@ type InteractionKey =
     | Activate
     | Clear
 
+[<Sealed>]
+type ObjectAccess internal (keyboard: bool, group: string option) =
+    member internal _.Keyboard = keyboard
+    member internal _.Group = group
+
+[<RequireQualifiedAccess>]
+module ObjectAccess =
+
+    let full = ObjectAccess(true, None)
+
+    let pointerOnly = ObjectAccess(false, None)
+
+    let grouped (label: string) =
+        if System.String.IsNullOrWhiteSpace label then
+            invalidArg (nameof label) "A group label must not be blank."
+
+        ObjectAccess(true, Some label)
+
+    let isKeyboardReachable (access: ObjectAccess) = access.Keyboard
+
+    let group (access: ObjectAccess) = access.Group
+
+[<Sealed>]
+type InteractionCues internal (focused: string option, hovered: string option, focusVisible: bool) =
+    member internal _.Focused = focused
+    member internal _.Hovered = hovered
+    member internal _.FocusVisible = focusVisible
+
+[<RequireQualifiedAccess>]
+module InteractionCues =
+
+    let none = InteractionCues(None, None, false)
+
+    let create focused hovered focusVisible =
+        InteractionCues(focused, hovered, focusVisible)
+
+    let focused (cues: InteractionCues) = cues.Focused
+
+    let hovered (cues: InteractionCues) = cues.Hovered
+
+    let focusVisible (cues: InteractionCues) = cues.FocusVisible
+
 /// Opaque behind the .fsi: built by `SceneInteraction.create` only, so a field added later is not a breaking change.
 [<NoEquality; NoComparison>]
 type SceneInteraction<'State> =
@@ -42,6 +84,10 @@ type SceneInteraction<'State> =
         Objects: 'State -> SelectableObject list
         Selected: 'State -> string option
         Select: SelectionRequest -> 'State -> 'State
+        /// FS.GG.Game#784: `None` is `ObjectAccess.full` for every object.
+        Access: (SelectableObject -> ObjectAccess) option
+        /// FS.GG.Game#787: `None` is `SceneInteraction.standardCues`.
+        Cues: (InteractionCues -> SelectableObject list -> Scene) option
     }
 
 [<Sealed>]
@@ -75,6 +121,8 @@ module SceneInteraction =
             Objects = objects
             Selected = selected
             Select = select
+            Access = None
+            Cues = None
         }
 
     let objects (interaction: SceneInteraction<'State>) (state: 'State) = interaction.Objects state
@@ -187,3 +235,25 @@ module SceneInteraction =
             match frame.Selected with
             | Some _ -> focused, Some SelectionRequest.Clear
             | None -> focused, None
+
+    let withAccess (access: SelectableObject -> ObjectAccess) (interaction: SceneInteraction<'State>) =
+        { interaction with
+            Access = Some access
+        }
+
+    let access (interaction: SceneInteraction<'State>) (target: SelectableObject) =
+        match interaction.Access with
+        | Some declared -> declared target
+        | None -> ObjectAccess.full
+
+    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements the drawing.
+    let standardCues (_: InteractionCues) (_: SelectableObject list) : Scene =
+        failwith "SceneInteraction.standardCues is a contract stub; FS.GG.Game#788 implements it."
+
+    let withCues (draw: InteractionCues -> SelectableObject list -> Scene) (interaction: SceneInteraction<'State>) =
+        { interaction with Cues = Some draw }
+
+    let cues (interaction: SceneInteraction<'State>) =
+        match interaction.Cues with
+        | Some draw -> draw
+        | None -> standardCues

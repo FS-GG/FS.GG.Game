@@ -49,6 +49,13 @@ module BrowserRenderers =
     /// A route with no driver bound yet.
     val route: unit -> LateFailureRoute
 
+    /// Bind `route` to `handler` for mounts created from now on, for a host that runs renderer selection itself rather
+    /// than through `RendererDriver` (an Elmish program running `RendererHost` from its own `Cmd`; FS.GG.Game#768). The
+    /// handler hears a backend's late failure with the live-mount rule of `RendererDriver.failBackend`, and dispatches
+    /// `RendererMsg.MountFailed` for its model's current attempt. `start` is this bind to a driver. Contract only:
+    /// FS.GG.Game#788 implements it, and until then it raises.
+    val bind: handler: (RendererBackend -> string -> unit) -> route: LateFailureRoute -> unit
+
     /// Options for all three backends.
     val options: label: string -> width: float -> height: float -> BrowserRenderOptions
 
