@@ -7,25 +7,35 @@ FS.GG.Game.Render.Adapter.drawPoints(FS.GG.UI.Scene.Paint, System.Collections.Ge
 FS.GG.Game.Render.Adapter.drawRect(FS.GG.UI.Scene.Color, FS.GG.Game.Core.Rect) : FS.GG.UI.Scene.Scene
 FS.GG.Game.Render.Adapter.point(FS.GG.Game.Core.Point) : FS.GG.UI.Scene.Point
 FS.GG.Game.Render.Adapter.rect(FS.GG.Game.Core.Rect) : FS.GG.UI.Scene.Rect
-FS.GG.Game.Render.CommandAck+Tags.Accepted : System.Int32
-FS.GG.Game.Render.CommandAck+Tags.Applied : System.Int32
-FS.GG.Game.Render.CommandAck+Tags.Rejected : System.Int32
-FS.GG.Game.Render.CommandEnvelope.basis<Command>(CommandEnvelope<Command>) : Microsoft.FSharp.Core.FSharpOption<System.UInt64>
+FS.GG.Game.Render.CommandAck.accepted : FS.GG.Game.Render.CommandAck [get]
+FS.GG.Game.Render.CommandAck.applied(System.UInt64) : FS.GG.Game.Render.CommandAck
+FS.GG.Game.Render.CommandAck.cancelled(System.String) : FS.GG.Game.Render.CommandAck
+FS.GG.Game.Render.CommandAck.ended(System.UInt64, System.String) : FS.GG.Game.Render.CommandAck
+FS.GG.Game.Render.CommandAck.expired : FS.GG.Game.Render.CommandAck [get]
+FS.GG.Game.Render.CommandAck.progress(System.String) : FS.GG.Game.Render.CommandAck
+FS.GG.Game.Render.CommandAck.queued : FS.GG.Game.Render.CommandAck [get]
+FS.GG.Game.Render.CommandAck.rejected(System.String) : FS.GG.Game.Render.CommandAck
+FS.GG.Game.Render.CommandAck.started : FS.GG.Game.Render.CommandAck [get]
+FS.GG.Game.Render.CommandEnvelope.basis<Command>(CommandEnvelope<Command>) : System.UInt64
 FS.GG.Game.Render.CommandEnvelope.command<Command>(CommandEnvelope<Command>) : Command
 FS.GG.Game.Render.CommandEnvelope.id<Command>(CommandEnvelope<Command>) : FS.GG.Game.Render.CommandId
-FS.GG.Game.Render.CommandEnvelope.input<Command>(CommandEnvelope<Command>) : System.UInt64
-FS.GG.Game.Render.CommandId.epoch(FS.GG.Game.Render.CommandId) : System.String
+FS.GG.Game.Render.CommandEnvelope.input<Command>(CommandEnvelope<Command>) : Microsoft.FSharp.Core.FSharpOption<System.UInt64>
+FS.GG.Game.Render.CommandId.client(FS.GG.Game.Render.CommandId) : System.String
 FS.GG.Game.Render.CommandId.sequence(FS.GG.Game.Render.CommandId) : System.UInt64
 FS.GG.Game.Render.CommandId.text(FS.GG.Game.Render.CommandId) : System.String
 FS.GG.Game.Render.CommandId.tryParse(System.String) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.CommandId>
-FS.GG.Game.Render.CommandSettlement+Tags.Accepted : System.Int32
-FS.GG.Game.Render.CommandSettlement+Tags.Applied : System.Int32
-FS.GG.Game.Render.CommandSettlement+Tags.Pending : System.Int32
-FS.GG.Game.Render.CommandSettlement+Tags.Rejected : System.Int32
-FS.GG.Game.Render.CommandSettlement+Tags.Unconfirmed : System.Int32
+FS.GG.Game.Render.CommandSettlement.appliedAt(FS.GG.Game.Render.CommandSettlement) : Microsoft.FSharp.Core.FSharpOption<System.UInt64>
+FS.GG.Game.Render.CommandSettlement.cancelled(FS.GG.Game.Render.CommandSettlement) : Microsoft.FSharp.Core.FSharpOption<System.String>
+FS.GG.Game.Render.CommandSettlement.isAccepted(FS.GG.Game.Render.CommandSettlement) : System.Boolean
+FS.GG.Game.Render.CommandSettlement.isFinal(FS.GG.Game.Render.CommandSettlement) : System.Boolean
+FS.GG.Game.Render.CommandSettlement.isPending(FS.GG.Game.Render.CommandSettlement) : System.Boolean
+FS.GG.Game.Render.CommandSettlement.isUnconfirmed(FS.GG.Game.Render.CommandSettlement) : System.Boolean
+FS.GG.Game.Render.CommandSettlement.outcome(FS.GG.Game.Render.CommandSettlement) : Microsoft.FSharp.Core.FSharpOption<System.String>
+FS.GG.Game.Render.CommandSettlement.rejected(FS.GG.Game.Render.CommandSettlement) : Microsoft.FSharp.Core.FSharpOption<System.String>
 FS.GG.Game.Render.CommandStage.create<Server, Command>(FSharpFunc<Server, System.UInt64>) : CommandStage<Server, Command>
+FS.GG.Game.Render.CommandStage.withPatience<Server, Command>(System.UInt64, CommandStage<Server, Command>) : CommandStage<Server, Command>
 FS.GG.Game.Render.CommandStage.withPrediction<Command, Server>(FSharpFunc<Command, FSharpFunc<Server, Server>>, CommandStage<Server, Command>) : CommandStage<Server, Command>
-FS.GG.Game.Render.CommandStage.withSettlement<Command, Server>(FSharpFunc<Command, FSharpFunc<Server, System.Boolean>>, System.UInt64, CommandStage<Server, Command>) : CommandStage<Server, Command>
+FS.GG.Game.Render.CommandStage.withSettlement<Command, Server>(FSharpFunc<Command, FSharpFunc<Server, System.Boolean>>, CommandStage<Server, Command>) : CommandStage<Server, Command>
 FS.GG.Game.Render.CommandStage.withWindow<Server, Command>(System.Int32, CommandStage<Server, Command>) : CommandStage<Server, Command>
 FS.GG.Game.Render.ConformanceHost`1.Dispatch(RendererMsg<State>) : System.Void
 FS.GG.Game.Render.ConformanceHost`1.Dispose() : System.Void
@@ -36,11 +46,19 @@ FS.GG.Game.Render.ConformanceResult.Check : System.String [get]
 FS.GG.Game.Render.ConformanceResult.Detail : System.String [get]
 FS.GG.Game.Render.ConformanceResult.Passed : System.Boolean [get]
 FS.GG.Game.Render.ConformanceResult.ToString() : System.String
+FS.GG.Game.Render.CueContext.create(FS.GG.Game.Render.InteractionCues, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>, System.Double) : FS.GG.Game.Render.CueContext
+FS.GG.Game.Render.CueContext.cssPerUnit(FS.GG.Game.Render.CueContext) : System.Double
+FS.GG.Game.Render.CueContext.cues(FS.GG.Game.Render.CueContext) : FS.GG.Game.Render.InteractionCues
+FS.GG.Game.Render.CueContext.objects(FS.GG.Game.Render.CueContext) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>
 FS.GG.Game.Render.DefaultKeymap.bindings : Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Core.Command, FS.GG.UI.KeyboardInput.ViewerKey>> [get]
 FS.GG.Game.Render.DefaultKeymap.value : FS.GG.UI.KeyboardInput.Keymap [get]
 FS.GG.Game.Render.Displayed.authoritative<Server>(Displayed<Server>) : Server
 FS.GG.Game.Render.Displayed.predicted<Server>(Displayed<Server>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.CommandId>
 FS.GG.Game.Render.Displayed.shown<Server>(Displayed<Server>) : Server
+FS.GG.Game.Render.GuestCall.basis<Input>(GuestCall<Input>) : System.UInt64
+FS.GG.Game.Render.GuestCall.id<Input>(GuestCall<Input>) : System.UInt64
+FS.GG.Game.Render.GuestCall.input<Input>(GuestCall<Input>) : PipelineInput<Input>
+FS.GG.Game.Render.GuestCall.sequence<Input>(GuestCall<Input>) : System.UInt64
 FS.GG.Game.Render.GuestIntent`2+Tags.Local : System.Int32
 FS.GG.Game.Render.GuestIntent`2+Tags.Submit : System.Int32
 FS.GG.Game.Render.GuestOutcome`2+Tags.Cancelled : System.Int32
@@ -48,21 +66,23 @@ FS.GG.Game.Render.GuestOutcome`2+Tags.Decided : System.Int32
 FS.GG.Game.Render.GuestOutcome`2+Tags.Faulted : System.Int32
 FS.GG.Game.Render.GuestOutcome`2+Tags.Refused : System.Int32
 FS.GG.Game.Render.GuestOutcome`2+Tags.TimedOut : System.Int32
+FS.GG.Game.Render.GuestPolicy.breaker(FS.GG.Game.Render.GuestPolicy) : System.Int32
 FS.GG.Game.Render.GuestPolicy.queueLimit(FS.GG.Game.Render.GuestPolicy) : System.Int32
 FS.GG.Game.Render.GuestPolicy.standard : FS.GG.Game.Render.GuestPolicy [get]
 FS.GG.Game.Render.GuestPolicy.timeout(FS.GG.Game.Render.GuestPolicy) : System.Int32
+FS.GG.Game.Render.GuestPolicy.withBreaker(System.Int32, FS.GG.Game.Render.GuestPolicy) : FS.GG.Game.Render.GuestPolicy
 FS.GG.Game.Render.GuestPolicy.withQueueLimit(System.Int32, FS.GG.Game.Render.GuestPolicy) : FS.GG.Game.Render.GuestPolicy
 FS.GG.Game.Render.GuestPolicy.withTimeout(System.Int32, FS.GG.Game.Render.GuestPolicy) : FS.GG.Game.Render.GuestPolicy
-FS.GG.Game.Render.GuestReply+Tags.Cancelled : System.Int32
 FS.GG.Game.Render.GuestReply+Tags.Faulted : System.Int32
+FS.GG.Game.Render.GuestReply+Tags.Frozen : System.Int32
+FS.GG.Game.Render.GuestReply+Tags.Invalidated : System.Int32
 FS.GG.Game.Render.GuestReply+Tags.Output : System.Int32
 FS.GG.Game.Render.GuestReply+Tags.Refused : System.Int32
 FS.GG.Game.Render.GuestReply+Tags.TimedOut : System.Int32
-FS.GG.Game.Render.GuestRequest.basis<Client>(GuestRequest<Client>) : Microsoft.FSharp.Core.FSharpOption<System.UInt64>
-FS.GG.Game.Render.GuestRequest.client<Client>(GuestRequest<Client>) : Client
-FS.GG.Game.Render.GuestRequest.epoch<Client>(GuestRequest<Client>) : System.String
-FS.GG.Game.Render.GuestRequest.event<Client>(GuestRequest<Client>) : FS.GG.Game.Render.InputEvent
-FS.GG.Game.Render.GuestRequest.sequence<Client>(GuestRequest<Client>) : System.UInt64
+FS.GG.Game.Render.GuestRequest.call<Input, Client>(GuestRequest<Input, Client>) : GuestCall<Input>
+FS.GG.Game.Render.GuestRequest.client<Input, Client>(GuestRequest<Input, Client>) : Client
+FS.GG.Game.Render.GuestRequest.create<Input, Client>(GuestCall<Input>, Client) : GuestRequest<Input, Client>
+FS.GG.Game.Render.GuestRequest.input<Input, Client>(GuestRequest<Input, Client>) : PipelineInput<Input>
 FS.GG.Game.Render.InputAction+Tags.Activate : System.Int32
 FS.GG.Game.Render.InputAction+Tags.ActivateSecondary : System.Int32
 FS.GG.Game.Render.InputAction+Tags.Cancel : System.Int32
@@ -76,27 +96,29 @@ FS.GG.Game.Render.InputEvent.point(FS.GG.Game.Render.InputEvent) : Microsoft.FSh
 FS.GG.Game.Render.InputEvent.source(FS.GG.Game.Render.InputEvent) : FS.GG.Game.Render.InputSource
 FS.GG.Game.Render.InputEvent.target(FS.GG.Game.Render.InputEvent) : Microsoft.FSharp.Core.FSharpOption<System.String>
 FS.GG.Game.Render.InputEvent.toSelectionRequest(FS.GG.Game.Render.InteractiveScene, FS.GG.Game.Render.InputEvent) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.SelectionRequest>
-FS.GG.Game.Render.InputGuest.async<Client, Local, Command>(FSharpFunc<GuestRequest<Client>, FSharpFunc<System.Threading.CancellationToken, FSharpAsync<GuestOutcome<Local, Command>>>>, FS.GG.Game.Render.GuestPolicy) : InputGuest<Client, Local, Command>
-FS.GG.Game.Render.InputGuest.isAsync<Client, Local, Command>(InputGuest<Client, Local, Command>) : System.Boolean
-FS.GG.Game.Render.InputGuest.ofBytes<Client, Local, Command>(FSharpFunc<GuestRequest<Client>, System.Byte[]>, Microsoft.FSharp.Core.FSharpFunc<System.Byte[], Microsoft.FSharp.Core.FSharpFunc<System.Threading.CancellationToken, Microsoft.FSharp.Control.FSharpAsync<FS.GG.Game.Render.GuestReply>>>, FSharpFunc<System.Byte[], FSharpResult<FSharpList<GuestIntent<Local, Command>>, System.String>>, FS.GG.Game.Render.GuestPolicy) : InputGuest<Client, Local, Command>
-FS.GG.Game.Render.InputGuest.policy<Client, Local, Command>(InputGuest<Client, Local, Command>) : FS.GG.Game.Render.GuestPolicy
-FS.GG.Game.Render.InputGuest.sync<Client, Local, Command>(FSharpFunc<GuestRequest<Client>, GuestOutcome<Local, Command>>) : InputGuest<Client, Local, Command>
-FS.GG.Game.Render.InputGuest.withAdmission<Client, Local, Command>(FSharpFunc<Client, Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>, InputGuest<Client, Local, Command>) : InputGuest<Client, Local, Command>
+FS.GG.Game.Render.InputGuest.isAsync<Input, Client, Local, Command>(InputGuest<Input, Client, Local, Command>) : System.Boolean
+FS.GG.Game.Render.InputGuest.ofAsync<Input, Client, Local, Command>(FSharpFunc<GuestRequest<Input, Client>, FSharpFunc<System.Threading.CancellationToken, FSharpAsync<GuestOutcome<Local, Command>>>>, FS.GG.Game.Render.GuestPolicy) : InputGuest<Input, Client, Local, Command>
+FS.GG.Game.Render.InputGuest.ofBytes<Input, Client, Local, Command>(FSharpFunc<GuestRequest<Input, Client>, System.Byte[]>, Microsoft.FSharp.Core.FSharpFunc<System.Byte[], Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<System.Threading.CancellationToken, Microsoft.FSharp.Control.FSharpAsync<FS.GG.Game.Render.GuestReply>>>>, FSharpFunc<System.Byte[], FSharpResult<FSharpList<GuestIntent<Local, Command>>, System.String>>, FS.GG.Game.Render.GuestPolicy) : InputGuest<Input, Client, Local, Command>
+FS.GG.Game.Render.InputGuest.policy<Input, Client, Local, Command>(InputGuest<Input, Client, Local, Command>) : FS.GG.Game.Render.GuestPolicy
+FS.GG.Game.Render.InputGuest.run<Input, Client, Local, Command>(InputGuest<Input, Client, Local, Command>, GuestRequest<Input, Client>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>, System.Threading.CancellationToken) : FSharpAsync<GuestOutcome<Local, Command>>
+FS.GG.Game.Render.InputGuest.sync<Input, Client, Local, Command>(FSharpFunc<GuestRequest<Input, Client>, GuestOutcome<Local, Command>>) : InputGuest<Input, Client, Local, Command>
+FS.GG.Game.Render.InputGuest.withAdmission<Client, Input, Local, Command>(FSharpFunc<Client, Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>, InputGuest<Input, Client, Local, Command>) : InputGuest<Input, Client, Local, Command>
 FS.GG.Game.Render.InputModifiers.Alt : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.Control : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.Meta : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.Shift : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.new(System.Boolean, System.Boolean, System.Boolean, System.Boolean)
 FS.GG.Game.Render.InputModifiers.none : FS.GG.Game.Render.InputModifiers [get]
-FS.GG.Game.Render.InputPipeline.commands<Client, Server, Local, Command>(InputPipeline<Client, Server, Local, Command>) : CommandStage<Server, Command>
-FS.GG.Game.Render.InputPipeline.create<Client, Local, Command, Server>(InputGuest<Client, Local, Command>, CommandStage<Server, Command>) : InputPipeline<Client, Server, Local, Command>
-FS.GG.Game.Render.InputPipeline.displayed<Client, Server, Local, Command>(PipelineModel<Client, Server, Local, Command>) : Displayed<Server>
-FS.GG.Game.Render.InputPipeline.epoch<Client, Server, Local, Command>(PipelineModel<Client, Server, Local, Command>) : System.String
-FS.GG.Game.Render.InputPipeline.guest<Client, Server, Local, Command>(InputPipeline<Client, Server, Local, Command>) : InputGuest<Client, Local, Command>
-FS.GG.Game.Render.InputPipeline.guestHalted<Client, Server, Local, Command>(PipelineModel<Client, Server, Local, Command>) : System.Boolean
-FS.GG.Game.Render.InputPipeline.init<Client, Server, Local, Command>(InputPipeline<Client, Server, Local, Command>, System.String, Server) : Tuple<PipelineModel<Client, Server, Local, Command>, FSharpList<PipelineEffect<Client, Local, Command>>>
-FS.GG.Game.Render.InputPipeline.unsettled<Client, Server, Local, Command>(PipelineModel<Client, Server, Local, Command>) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Render.CommandId, FS.GG.Game.Render.CommandSettlement>>
-FS.GG.Game.Render.InputPipeline.update<Client, Server, Local, Command>(InputPipeline<Client, Server, Local, Command>, PipelineMsg<Client, Server, Local, Command>, PipelineModel<Client, Server, Local, Command>) : Tuple<PipelineModel<Client, Server, Local, Command>, FSharpList<PipelineEffect<Client, Local, Command>>>
+FS.GG.Game.Render.InputPipeline.client<Input, Server, Local, Command>(PipelineModel<Input, Server, Local, Command>) : System.String
+FS.GG.Game.Render.InputPipeline.commands<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>) : CommandStage<Server, Command>
+FS.GG.Game.Render.InputPipeline.create<Input, Client, Local, Command, Server>(InputGuest<Input, Client, Local, Command>, CommandStage<Server, Command>) : InputPipeline<Input, Client, Server, Local, Command>
+FS.GG.Game.Render.InputPipeline.displayed<Input, Server, Local, Command>(PipelineModel<Input, Server, Local, Command>) : Displayed<Server>
+FS.GG.Game.Render.InputPipeline.guest<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>) : InputGuest<Input, Client, Local, Command>
+FS.GG.Game.Render.InputPipeline.guestHalted<Input, Server, Local, Command>(PipelineModel<Input, Server, Local, Command>) : System.Boolean
+FS.GG.Game.Render.InputPipeline.init<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>, System.String, Microsoft.FSharp.Core.FSharpOption<System.UInt64>, Server) : PipelineModel<Input, Server, Local, Command>
+FS.GG.Game.Render.InputPipeline.lastSequence<Input, Server, Local, Command>(PipelineModel<Input, Server, Local, Command>) : System.UInt64
+FS.GG.Game.Render.InputPipeline.unsettled<Input, Server, Local, Command>(PipelineModel<Input, Server, Local, Command>) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Render.CommandId, FS.GG.Game.Render.CommandSettlement>>
+FS.GG.Game.Render.InputPipeline.update<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>, PipelineMsg<Input, Server, Local, Command>, PipelineModel<Input, Server, Local, Command>) : Tuple<PipelineModel<Input, Server, Local, Command>, FSharpList<PipelineEffect<Input, Local, Command>>>
 FS.GG.Game.Render.InputRoute.bind(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InputEvent, Microsoft.FSharp.Core.Unit>, FS.GG.Game.Render.InputRoute) : System.Void
 FS.GG.Game.Render.InputRoute.create() : FS.GG.Game.Render.InputRoute
 FS.GG.Game.Render.InputRoute.report(FS.GG.Game.Render.InputEvent, FS.GG.Game.Render.InputRoute) : System.Void
@@ -123,6 +145,8 @@ FS.GG.Game.Render.MirrorEntry.Id : System.String [get]
 FS.GG.Game.Render.MirrorEntry.Label : System.String [get]
 FS.GG.Game.Render.MirrorEntry.Pressed : System.Boolean [get]
 FS.GG.Game.Render.MirrorEntry.new(System.String, System.String, System.Boolean)
+FS.GG.Game.Render.ObjectAccess.cell(System.String, System.Int32, System.Int32) : FS.GG.Game.Render.ObjectAccess
+FS.GG.Game.Render.ObjectAccess.cellOf(FS.GG.Game.Render.ObjectAccess) : Microsoft.FSharp.Core.FSharpOption<System.Tuple<System.Int32, System.Int32>>
 FS.GG.Game.Render.ObjectAccess.full : FS.GG.Game.Render.ObjectAccess [get]
 FS.GG.Game.Render.ObjectAccess.group(FS.GG.Game.Render.ObjectAccess) : Microsoft.FSharp.Core.FSharpOption<System.String>
 FS.GG.Game.Render.ObjectAccess.grouped(System.String) : FS.GG.Game.Render.ObjectAccess
@@ -134,22 +158,35 @@ FS.GG.Game.Render.PipelineEffect`3+Tags.CancelGuest : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.Fail : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.Send : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.StartGuest : System.Int32
+FS.GG.Game.Render.PipelineFailure+Tags.CommandCancelled : System.Int32
 FS.GG.Game.Render.PipelineFailure+Tags.CommandRejected : System.Int32
 FS.GG.Game.Render.PipelineFailure+Tags.CommandUnconfirmed : System.Int32
 FS.GG.Game.Render.PipelineFailure+Tags.CommandWindowFull : System.Int32
 FS.GG.Game.Render.PipelineFailure+Tags.GuestFaulted : System.Int32
+FS.GG.Game.Render.PipelineFailure+Tags.GuestHalted : System.Int32
 FS.GG.Game.Render.PipelineFailure+Tags.GuestTimedOut : System.Int32
+FS.GG.Game.Render.PipelineFailure+Tags.InputCancelled : System.Int32
 FS.GG.Game.Render.PipelineFailure+Tags.InputRefused : System.Int32
 FS.GG.Game.Render.PipelineFailure+Tags.QueueOverflow : System.Int32
-FS.GG.Game.Render.PipelineHost.start<Client, Server, Local, Command>(InputPipeline<Client, Server, Local, Command>, FS.GG.Game.Render.InputRoute, System.String, Server, FSharpFunc<Microsoft.FSharp.Core.Unit, Client>, FSharpFunc<Local, Microsoft.FSharp.Core.Unit>, FSharpFunc<CommandEnvelope<Command>, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.PipelineFailure, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<System.Int32, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.Unit>>) : PipelineHost<Client, Server, Local, Command>
-FS.GG.Game.Render.PipelineHost`4.Dispatch(PipelineMsg<Client, Server, Local, Command>) : System.Void
-FS.GG.Game.Render.PipelineHost`4.Model : PipelineModel<Client, Server, Local, Command> [get]
+FS.GG.Game.Render.PipelineFailure+Tags.RebindRefused : System.Int32
+FS.GG.Game.Render.PipelineHost.start<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>, FS.GG.Game.Render.InputRoute, PipelineIo<Client, Local, Command>, System.String, Microsoft.FSharp.Core.FSharpOption<System.UInt64>, Server) : PipelineHost<Input, Client, Server, Local, Command>
+FS.GG.Game.Render.PipelineHost`5.Dispatch(PipelineMsg<Input, Server, Local, Command>) : System.Void
+FS.GG.Game.Render.PipelineHost`5.Model : PipelineModel<Input, Server, Local, Command> [get]
+FS.GG.Game.Render.PipelineInput`1+Tags.Game : System.Int32
+FS.GG.Game.Render.PipelineInput`1+Tags.Scene : System.Int32
+FS.GG.Game.Render.PipelineIo.create<Client, Local, Command>(FSharpFunc<Microsoft.FSharp.Core.Unit, Client>, FSharpFunc<Local, Microsoft.FSharp.Core.Unit>, FSharpFunc<CommandEnvelope<Command>, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.PipelineFailure, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<System.Int32, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.Unit>>) : PipelineIo<Client, Local, Command>
 FS.GG.Game.Render.PipelineMsg`4+Tags.Acknowledged : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.Authoritative : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.GuestDeadline : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.GuestEnded : System.Int32
+FS.GG.Game.Render.PipelineMsg`4+Tags.GuestRunning : System.Int32
+FS.GG.Game.Render.PipelineMsg`4+Tags.Heartbeat : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.Input : System.Int32
-FS.GG.Game.Render.PipelineMsg`4+Tags.Reset : System.Int32
+FS.GG.Game.Render.PipelineMsg`4+Tags.RearmGuest : System.Int32
+FS.GG.Game.Render.PipelineMsg`4+Tags.Rebind : System.Int32
+FS.GG.Game.Render.PipelineMsg`4+Tags.Submit : System.Int32
+FS.GG.Game.Render.PipelineRunner.create<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>, PipelineIo<Client, Local, Command>, FSharpFunc<PipelineMsg<Input, Server, Local, Command>, Microsoft.FSharp.Core.Unit>) : PipelineRunner<Input, Client, Server, Local, Command>
+FS.GG.Game.Render.PipelineRunner.perform<Input, Local, Command, Client, Server>(PipelineEffect<Input, Local, Command>, PipelineRunner<Input, Client, Server, Local, Command>) : System.Void
 FS.GG.Game.Render.PixelExpectation.Colour : FS.GG.UI.Scene.Color [get]
 FS.GG.Game.Render.PixelExpectation.Point : FS.GG.UI.Scene.Point [get]
 FS.GG.Game.Render.PixelExpectation.create(FS.GG.UI.Scene.Point, FS.GG.UI.Scene.Color) : FS.GG.Game.Render.PixelExpectation
@@ -220,7 +257,7 @@ FS.GG.Game.Render.SceneInteraction.access<State>(SceneInteraction<State>, FS.GG.
 FS.GG.Game.Render.SceneInteraction.apply<State>(SceneInteraction<State>, FS.GG.Game.Render.SelectionRequest, State) : State
 FS.GG.Game.Render.SceneInteraction.contains(FS.GG.UI.Scene.Point, FS.GG.Game.Render.SelectableObject) : System.Boolean
 FS.GG.Game.Render.SceneInteraction.create<State>(FSharpFunc<State, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>>, FSharpFunc<State, Microsoft.FSharp.Core.FSharpOption<System.String>>, FSharpFunc<FS.GG.Game.Render.SelectionRequest, FSharpFunc<State, State>>) : SceneInteraction<State>
-FS.GG.Game.Render.SceneInteraction.cues<State>(SceneInteraction<State>) : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InteractionCues, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>, FS.GG.UI.Scene.Scene>>
+FS.GG.Game.Render.SceneInteraction.cues<State>(SceneInteraction<State>) : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>
 FS.GG.Game.Render.SceneInteraction.frame<State>(FSharpFunc<State, FS.GG.UI.Scene.Scene>, SceneInteraction<State>, State) : FS.GG.Game.Render.InteractiveScene
 FS.GG.Game.Render.SceneInteraction.hitTest(FS.GG.UI.Scene.Point, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>) : Microsoft.FSharp.Core.FSharpOption<System.String>
 FS.GG.Game.Render.SceneInteraction.key(FS.GG.Game.Render.InteractionKey, Microsoft.FSharp.Core.FSharpOption<System.String>, FS.GG.Game.Render.InteractiveScene) : System.Tuple<Microsoft.FSharp.Core.FSharpOption<System.String>, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.SelectionRequest>>
@@ -228,9 +265,9 @@ FS.GG.Game.Render.SceneInteraction.objects<State>(SceneInteraction<State>, State
 FS.GG.Game.Render.SceneInteraction.press(FS.GG.UI.Scene.Point, FS.GG.Game.Render.InteractiveScene) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.SelectionRequest>
 FS.GG.Game.Render.SceneInteraction.problems(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>) : Microsoft.FSharp.Collections.FSharpList<System.String>
 FS.GG.Game.Render.SceneInteraction.selected<State>(SceneInteraction<State>, State) : Microsoft.FSharp.Core.FSharpOption<System.String>
-FS.GG.Game.Render.SceneInteraction.standardCues(FS.GG.Game.Render.InteractionCues, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>) : FS.GG.UI.Scene.Scene
+FS.GG.Game.Render.SceneInteraction.standardCues(FS.GG.Game.Render.CueContext) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
 FS.GG.Game.Render.SceneInteraction.withAccess<State>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectableObject, FS.GG.Game.Render.ObjectAccess>, SceneInteraction<State>) : SceneInteraction<State>
-FS.GG.Game.Render.SceneInteraction.withCues<State>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InteractionCues, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>, FS.GG.UI.Scene.Scene>>, SceneInteraction<State>) : SceneInteraction<State>
+FS.GG.Game.Render.SceneInteraction.withCues<State>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>, SceneInteraction<State>) : SceneInteraction<State>
 FS.GG.Game.Render.ScenePixels.expectations(System.Double, System.Double, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.PixelExpectation>
 FS.GG.Game.Render.SceneRenderers.backends<State>(SceneRenderers<State>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>
 FS.GG.Game.Render.SceneRenderers.create<State>(FSharpFunc<State, FS.GG.UI.Scene.Scene>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Scene, Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>>) : SceneRenderers<State>

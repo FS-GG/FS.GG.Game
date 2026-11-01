@@ -121,11 +121,7 @@ module SceneRenderers =
         RendererBackend.all
         |> List.filter (fun backend -> Map.containsKey backend renderers.Surfaces)
 
-    let withInteraction
-        (interaction: SceneInteraction<'State>)
-        (route: SelectionRoute)
-        (renderers: SceneRenderers<'State>)
-        =
+    let withInteraction (interaction: SceneInteraction<'State>) (route: SelectionRoute) (renderers: SceneRenderers<'State>) =
         { renderers with
             Interaction = Some(interaction, route)
         }

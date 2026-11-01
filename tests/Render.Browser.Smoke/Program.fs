@@ -198,6 +198,20 @@ let run () =
 
     check "only svg is offered" (RendererSelection.available driver.Model = [ RendererBackend.Svg ]) "available"
 
+    // FS.GG.Game#787: `BrowserRenderers.bindTo` is a contract stub until FS.GG.Game#788 implements it (and the kit's
+    // late-failure section covers it, ADR 0001 I15). This pins that it raises naming #788 rather than doing nothing.
+    let bindToMessage =
+        try
+            BrowserRenderers.bindTo (fun () -> driver.Model) ignore (BrowserRenderers.route ())
+            None
+        with error ->
+            Some error.Message
+
+    check
+        "BrowserRenderers.bindTo is a contract stub until FS.GG.Game#788"
+        (bindToMessage |> Option.exists (fun text -> text.Contains "FS.GG.Game#788"))
+        (sprintf "%A" bindToMessage)
+
     // 2. Presenting a newer state reconciles the same SVG root and does not leak nodes.
     let nodesBefore = count container "*"
 

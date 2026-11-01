@@ -45,7 +45,7 @@ FS.GG.Game.Render.Browser.BrowserRenderOptions.Height : System.Double [get]
 FS.GG.Game.Render.Browser.BrowserRenderOptions.Label : System.String [get]
 FS.GG.Game.Render.Browser.BrowserRenderOptions.Width : System.Double [get]
 FS.GG.Game.Render.Browser.BrowserRenderOptions.new(System.String, System.Double, System.Double)
-FS.GG.Game.Render.Browser.BrowserRenderers.bind(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.Unit>>, FS.GG.Game.Render.Browser.LateFailureRoute) : System.Void
+FS.GG.Game.Render.Browser.BrowserRenderers.bindTo<State>(FSharpFunc<Microsoft.FSharp.Core.Unit, RendererModel<State>>, FSharpFunc<RendererMsg<State>, Microsoft.FSharp.Core.Unit>, FS.GG.Game.Render.Browser.LateFailureRoute) : System.Void
 FS.GG.Game.Render.Browser.BrowserRenderers.declare<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BrowserRenderOptions, FS.GG.Game.Render.Browser.LateFailureRoute, FSharpFunc<State, FS.GG.UI.Scene.Scene>) : SceneRenderers<State>
 FS.GG.Game.Render.Browser.BrowserRenderers.options(System.String, System.Double, System.Double) : FS.GG.Game.Render.Browser.BrowserRenderOptions
 FS.GG.Game.Render.Browser.BrowserRenderers.route() : FS.GG.Game.Render.Browser.LateFailureRoute

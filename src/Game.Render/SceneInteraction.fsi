@@ -92,17 +92,26 @@ module ObjectAccess =
     val pointerOnly: ObjectAccess
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// A member of the group named `label` (not blank). The mirror offers the group as ONE composite entry with a single
-    /// Tab stop, labelled `label`; arrow keys move between its members, in object order.
+    /// A member of the group named `label` (not blank). The mirror nests the group's options in one `role=group`
+    /// labelled `label`; arrow keys move between its members in object order, and Page Up and Page Down between groups.
     val grouped: label: string -> ObjectAccess
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A member of the group named `label` at (`row`, `column`), both zero or more. A group whose members all declare
+    /// cells is a grid: the mirror shows it as `role=grid` rows, and arrow keys move in two dimensions.
+    val cell: label: string -> row: int -> column: int -> ObjectAccess
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Whether the object has a keyboard focus stop and a mirror entry (its own or its group's).
     val isKeyboardReachable: access: ObjectAccess -> bool
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The group's label, when the object is grouped.
+    /// The group's label, when the object is grouped or a cell.
     val group: access: ObjectAccess -> string option
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The (row, column) of a cell.
+    val cellOf: access: ObjectAccess -> (int * int) option
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
@@ -137,6 +146,33 @@ module InteractionCues =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Whether the focus cue is drawn: true after keyboard or mirror navigation, false after a pointer press.
     val focusVisible: cues: InteractionCues -> bool
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// What a cue layer draws from: the cues, the frame's objects, and the presented scale in CSS pixels per scene unit,
+/// so a layer can keep its bands a fixed on-screen width. Built by the input host (`CueContext.create`).
+[<Sealed>]
+type CueContext
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module CueContext =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A context. `cssPerUnit` is finite and greater than zero.
+    val create: cues: InteractionCues -> objects: SelectableObject list -> cssPerUnit: float -> CueContext
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The cues.
+    val cues: context: CueContext -> InteractionCues
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The frame's objects, topmost last.
+    val objects: context: CueContext -> SelectableObject list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// CSS pixels per scene unit at the presented size.
+    val cssPerUnit: context: CueContext -> float
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
@@ -265,21 +301,20 @@ module SceneInteraction =
     val access: interaction: SceneInteraction<'State> -> target: SelectableObject -> ObjectAccess
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Draw the cues with the game's own layer instead of `SceneInteraction.standardCues`. The layer is drawn above
-    /// the frame's Scene on every backend, from the cues and the frame's objects.
+    /// Draw the cues with the game's own layer (such as the glyph layer's themed cues, FS.GG.Game#789) instead of
+    /// `SceneInteraction.standardCues`. The nodes are drawn above the frame's Scene on every backend, unlit on Babylon.
     val withCues:
-        draw: (InteractionCues -> SelectableObject list -> FS.GG.UI.Scene.Scene) ->
+        draw: (CueContext -> FS.GG.UI.Scene.SceneNode list) ->
         interaction: SceneInteraction<'State> ->
             SceneInteraction<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The cue layer in force: the game's (`withCues`) or `SceneInteraction.standardCues`.
-    val cues:
-        interaction: SceneInteraction<'State> -> (InteractionCues -> SelectableObject list -> FS.GG.UI.Scene.Scene)
+    val cues: interaction: SceneInteraction<'State> -> (CueContext -> FS.GG.UI.Scene.SceneNode list)
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The standard cue layer: when focus is visible, a two-tone ring (a dark outer and a light inner band, each at least
-    /// 2 scene units) drawn as filled rectangles just outside the focused object's bounds, so it contrasts with any
-    /// background and every backend can draw it; nothing for hover. Contract only: FS.GG.Game#788 implements it, and
-    /// until then it raises.
-    val standardCues: cues: InteractionCues -> objects: SelectableObject list -> FS.GG.UI.Scene.Scene
+    /// 2 CSS pixels at the context's scale) drawn as filled rectangles just outside the focused object's bounds, so it
+    /// contrasts with any background and every backend can draw it; nothing for hover. Contract only: FS.GG.Game#788
+    /// implements it, and until then it raises.
+    val standardCues: context: CueContext -> FS.GG.UI.Scene.SceneNode list

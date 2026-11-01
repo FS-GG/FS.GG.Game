@@ -145,9 +145,9 @@ module SceneRenderers =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Make the declared renderers report every input to `route` (FS.GG.Game#787): from now on `registry` mounts each
     /// backend's input host (`SceneSurface.withInputHost`), which presents `SceneInteraction.frame` of each state with
-    /// the interaction's cue layer above it. A game binds `route` to its `InputPipeline` (`PipelineHost.start`). It
-    /// replaces `withInteraction`, which keeps working as this route seen through `InputEvent.toSelectionRequest`.
-    /// Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// the interaction's cue layer above it. A game binds `route` to its `InputPipeline` (`PipelineHost.start`, or its
+    /// own dispatch of `PipelineMsg.Input`). It replaces `withInteraction`, which keeps working as this route seen
+    /// through `InputEvent.toSelectionRequest`. Contract only: FS.GG.Game#788 implements it, and until then it raises.
     val withInput:
         interaction: SceneInteraction<'State> ->
         route: InputRoute ->

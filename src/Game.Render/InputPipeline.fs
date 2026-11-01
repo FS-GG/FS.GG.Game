@@ -10,6 +10,11 @@ module internal PipelineStub =
         failwithf "%s is a contract stub (FS.GG.Game#787); FS.GG.Game#788 implements it." name
 
 [<RequireQualifiedAccess>]
+type PipelineInput<'Input> =
+    | Scene of event: InputEvent
+    | Game of input: 'Input
+
+[<RequireQualifiedAccess>]
 type GuestIntent<'Local, 'Command> =
     | Local of intent: 'Local
     | Submit of command: 'Command
@@ -20,7 +25,7 @@ type GuestOutcome<'Local, 'Command> =
     | Refused of reason: string
     | Faulted of reason: string
     | TimedOut
-    | Cancelled
+    | Cancelled of reason: string
 
 [<RequireQualifiedAccess>]
 type GuestReply =
@@ -28,15 +33,26 @@ type GuestReply =
     | Refused of status: int
     | Faulted of diagnostic: string
     | TimedOut
-    | Cancelled
+    | Invalidated
+    | Frozen
 
 [<NoEquality; NoComparison>]
-type GuestPolicy = { Timeout: int; QueueLimit: int }
+type GuestPolicy =
+    {
+        Timeout: int
+        QueueLimit: int
+        Breaker: int
+    }
 
 [<RequireQualifiedAccess>]
 module GuestPolicy =
 
-    let standard = { Timeout = 500; QueueLimit = 16 }
+    let standard =
+        {
+            Timeout = 500
+            QueueLimit = 16
+            Breaker = 3
+        }
 
     let withTimeout (milliseconds: int) (policy: GuestPolicy) =
         if milliseconds <= 0 then
@@ -50,42 +66,70 @@ module GuestPolicy =
 
         { policy with QueueLimit = limit }
 
+    let withBreaker (failures: int) (policy: GuestPolicy) =
+        if failures < 1 then
+            invalidArg (nameof failures) "A breaker trips after at least one failure."
+
+        { policy with Breaker = failures }
+
     let timeout (policy: GuestPolicy) = policy.Timeout
 
     let queueLimit (policy: GuestPolicy) = policy.QueueLimit
 
+    let breaker (policy: GuestPolicy) = policy.Breaker
+
 [<NoEquality; NoComparison>]
-type GuestRequest<'Client> =
+type GuestCall<'Input> =
     {
+        Id: uint64
         Sequence: uint64
-        Epoch: string
-        Event: InputEvent
+        Input: PipelineInput<'Input>
+        Basis: uint64
+    }
+
+[<RequireQualifiedAccess>]
+module GuestCall =
+
+    let id (call: GuestCall<'Input>) = call.Id
+
+    let sequence (call: GuestCall<'Input>) = call.Sequence
+
+    let input (call: GuestCall<'Input>) = call.Input
+
+    let basis (call: GuestCall<'Input>) = call.Basis
+
+[<NoEquality; NoComparison>]
+type GuestRequest<'Input, 'Client> =
+    {
+        Call: GuestCall<'Input>
         Client: 'Client
-        Basis: uint64 option
     }
 
 [<RequireQualifiedAccess>]
 module GuestRequest =
 
-    let sequence (request: GuestRequest<'Client>) = request.Sequence
+    let create (call: GuestCall<'Input>) (client: 'Client) = { Call = call; Client = client }
 
-    let epoch (request: GuestRequest<'Client>) = request.Epoch
+    let call (request: GuestRequest<'Input, 'Client>) = request.Call
 
-    let event (request: GuestRequest<'Client>) = request.Event
+    let input (request: GuestRequest<'Input, 'Client>) = request.Call.Input
 
-    let client (request: GuestRequest<'Client>) = request.Client
-
-    let basis (request: GuestRequest<'Client>) = request.Basis
+    let client (request: GuestRequest<'Input, 'Client>) = request.Client
 
 [<NoEquality; NoComparison>]
-type GuestKind<'Client, 'Local, 'Command> =
-    | Sync of (GuestRequest<'Client> -> GuestOutcome<'Local, 'Command>)
-    | Async of (GuestRequest<'Client> -> System.Threading.CancellationToken -> Async<GuestOutcome<'Local, 'Command>>)
+type GuestKind<'Input, 'Client, 'Local, 'Command> =
+    | Sync of (GuestRequest<'Input, 'Client> -> GuestOutcome<'Local, 'Command>)
+    | Async of
+        (GuestRequest<'Input, 'Client> -> System.Threading.CancellationToken -> Async<GuestOutcome<'Local, 'Command>>)
+    | Bytes of
+        encode: (GuestRequest<'Input, 'Client> -> byte array) *
+        invoke: (byte array -> (unit -> unit) -> System.Threading.CancellationToken -> Async<GuestReply>) *
+        decode: (byte array -> Result<GuestIntent<'Local, 'Command> list, string>)
 
 [<NoEquality; NoComparison>]
-type InputGuest<'Client, 'Local, 'Command> =
+type InputGuest<'Input, 'Client, 'Local, 'Command> =
     {
-        Kind: GuestKind<'Client, 'Local, 'Command>
+        Kind: GuestKind<'Input, 'Client, 'Local, 'Command>
         Policy: GuestPolicy
         Admit: ('Client -> Result<unit, string>) option
     }
@@ -93,53 +137,60 @@ type InputGuest<'Client, 'Local, 'Command> =
 [<RequireQualifiedAccess>]
 module InputGuest =
 
-    let sync (decide: GuestRequest<'Client> -> GuestOutcome<'Local, 'Command>) =
+    let sync decide =
         {
             Kind = Sync decide
             Policy = GuestPolicy.standard
             Admit = None
         }
 
-    let async decide (policy: GuestPolicy) =
+    let ofAsync decide (policy: GuestPolicy) =
         {
             Kind = Async decide
             Policy = policy
             Admit = None
         }
 
-    let ofBytes
-        (_: GuestRequest<'Client> -> byte array)
-        (_: byte array -> System.Threading.CancellationToken -> Async<GuestReply>)
-        (_: byte array -> Result<GuestIntent<'Local, 'Command> list, string>)
-        (_: GuestPolicy)
-        : InputGuest<'Client, 'Local, 'Command> =
-        PipelineStub.notYet "InputGuest.ofBytes"
+    let ofBytes encode invoke decode (policy: GuestPolicy) =
+        {
+            Kind = Bytes(encode, invoke, decode)
+            Policy = policy
+            Admit = None
+        }
 
-    let withAdmission (admit: 'Client -> Result<unit, string>) (guest: InputGuest<'Client, 'Local, 'Command>) =
-        { guest with Admit = Some admit }
+    let withAdmission admit (guest: InputGuest<'Input, 'Client, 'Local, 'Command>) = { guest with Admit = Some admit }
 
-    let isAsync (guest: InputGuest<'Client, 'Local, 'Command>) =
+    let isAsync (guest: InputGuest<'Input, 'Client, 'Local, 'Command>) =
         match guest.Kind with
         | Sync _ -> false
-        | Async _ -> true
+        | Async _
+        | Bytes _ -> true
 
-    let policy (guest: InputGuest<'Client, 'Local, 'Command>) = guest.Policy
+    let policy (guest: InputGuest<'Input, 'Client, 'Local, 'Command>) = guest.Policy
+
+    let run
+        (_: InputGuest<'Input, 'Client, 'Local, 'Command>)
+        (_: GuestRequest<'Input, 'Client>)
+        (_: unit -> unit)
+        (_: System.Threading.CancellationToken)
+        : Async<GuestOutcome<'Local, 'Command>> =
+        PipelineStub.notYet "InputGuest.run"
 
 type CommandId =
     private
         {
-            Epoch: string
+            Client: string
             Sequence: uint64
         }
 
 [<RequireQualifiedAccess>]
 module CommandId =
 
-    let epoch (id: CommandId) = id.Epoch
+    let client (id: CommandId) = id.Client
 
     let sequence (id: CommandId) = id.Sequence
 
-    let text (id: CommandId) = sprintf "%s:%d" id.Epoch id.Sequence
+    let text (id: CommandId) = sprintf "%s:%d" id.Client id.Sequence
 
     let tryParse (text: string) : CommandId option =
         if System.String.IsNullOrEmpty text then
@@ -150,26 +201,26 @@ module CommandId =
             if colon <= 0 then
                 None
             else
-                let epoch = text.Substring(0, colon)
+                let client = text.Substring(0, colon)
                 let digits = text.Substring(colon + 1)
 
                 if
-                    System.String.IsNullOrWhiteSpace epoch
+                    System.String.IsNullOrWhiteSpace client
                     || digits.Length = 0
                     || not (digits |> Seq.forall (fun c -> c >= '0' && c <= '9'))
                 then
                     None
                 else
                     match System.UInt64.TryParse digits with
-                    | true, sequence when sequence >= 1UL -> Some { Epoch = epoch; Sequence = sequence }
+                    | true, sequence when sequence >= 1UL -> Some { Client = client; Sequence = sequence }
                     | _ -> None
 
 [<NoEquality; NoComparison>]
 type CommandEnvelope<'Command> =
     {
         Id: CommandId
-        Input: uint64
-        Basis: uint64 option
+        Input: uint64 option
+        Basis: uint64
         Command: 'Command
     }
 
@@ -184,27 +235,107 @@ module CommandEnvelope =
 
     let command (envelope: CommandEnvelope<'Command>) = envelope.Command
 
-[<RequireQualifiedAccess>]
-type CommandAck =
+[<NoEquality; NoComparison>]
+type AckKind =
     | Accepted
+    | Queued
+    | Started
+    | Progress of note: string
     | Applied of version: uint64
+    | Ended of version: uint64 * outcome: string
+    | Cancelled of reason: string
     | Rejected of reason: string
+    | Expired
+
+/// Opaque behind the .fsi, so an answer added later is not a breaking change.
+[<NoEquality; NoComparison>]
+type CommandAck = { Kind: AckKind }
 
 [<RequireQualifiedAccess>]
-type CommandSettlement =
+module CommandAck =
+
+    let accepted = { Kind = Accepted }
+
+    let queued = { Kind = Queued }
+
+    let started = { Kind = Started }
+
+    let progress (note: string) = { Kind = Progress note }
+
+    let applied (version: uint64) = { Kind = Applied version }
+
+    let ended (version: uint64) (outcome: string) = { Kind = Ended(version, outcome) }
+
+    let cancelled (reason: string) = { Kind = Cancelled reason }
+
+    let rejected (reason: string) = { Kind = Rejected reason }
+
+    let expired = { Kind = Expired }
+
+[<NoEquality; NoComparison>]
+type SettlementKind =
     | Pending
-    | Accepted
-    | Applied of version: uint64
-    | Rejected of reason: string
+    | Running
+    | AppliedAt of version: uint64 * outcome: string option
+    | CancelledAfter of reason: string
+    | RejectedBefore of reason: string
     | Unconfirmed
+
+/// Opaque behind the .fsi, so a state added later is not a breaking change.
+[<NoEquality; NoComparison>]
+type CommandSettlement = { State: SettlementKind }
+
+[<RequireQualifiedAccess>]
+module CommandSettlement =
+
+    let isPending (settlement: CommandSettlement) =
+        match settlement.State with
+        | Pending -> true
+        | _ -> false
+
+    let isAccepted (settlement: CommandSettlement) =
+        match settlement.State with
+        | Running -> true
+        | _ -> false
+
+    let appliedAt (settlement: CommandSettlement) =
+        match settlement.State with
+        | AppliedAt(version, _) -> Some version
+        | _ -> None
+
+    let outcome (settlement: CommandSettlement) =
+        match settlement.State with
+        | AppliedAt(_, outcome) -> outcome
+        | _ -> None
+
+    let cancelled (settlement: CommandSettlement) =
+        match settlement.State with
+        | CancelledAfter reason -> Some reason
+        | _ -> None
+
+    let rejected (settlement: CommandSettlement) =
+        match settlement.State with
+        | RejectedBefore reason -> Some reason
+        | _ -> None
+
+    let isUnconfirmed (settlement: CommandSettlement) =
+        match settlement.State with
+        | Unconfirmed -> true
+        | _ -> false
+
+    let isFinal (settlement: CommandSettlement) =
+        match settlement.State with
+        | Pending
+        | Running -> false
+        | _ -> true
 
 [<NoEquality; NoComparison>]
 type CommandStage<'Server, 'Command> =
     {
         Version: 'Server -> uint64
         Window: int
-        Settled: ('Command -> 'Server -> bool) option
         Patience: uint64
+        Settled: ('Command -> 'Server -> bool) option
         Predict: ('Command -> 'Server -> 'Server) option
     }
 
@@ -215,8 +346,8 @@ module CommandStage =
         {
             Version = version
             Window = 8
-            Settled = None
             Patience = 600UL
+            Settled = None
             Predict = None
         }
 
@@ -226,11 +357,13 @@ module CommandStage =
 
         { stage with Window = limit }
 
-    let withSettlement settled (patience: uint64) (stage: CommandStage<'Server, 'Command>) =
-        { stage with
-            Settled = Some settled
-            Patience = patience
-        }
+    let withPatience (patience: uint64) (stage: CommandStage<'Server, 'Command>) =
+        if patience < 1UL then
+            invalidArg (nameof patience) "Patience is at least one version."
+
+        { stage with Patience = patience }
+
+    let withSettlement settled (stage: CommandStage<'Server, 'Command>) = { stage with Settled = Some settled }
 
     let withPrediction predict (stage: CommandStage<'Server, 'Command>) = { stage with Predict = Some predict }
 
@@ -255,24 +388,32 @@ module Displayed =
 type PipelineFailure =
     | GuestFaulted of sequence: uint64 * reason: string
     | GuestTimedOut of sequence: uint64
+    | GuestHalted of failures: int
     | InputRefused of sequence: uint64 * reason: string
-    | QueueOverflow of dropped: int
-    | CommandWindowFull of sequence: uint64
+    | InputCancelled of sequence: uint64 * reason: string
+    | QueueOverflow of dropped: uint64 list
+    | CommandWindowFull of sequence: uint64 option
     | CommandRejected of id: CommandId * reason: string
+    | CommandCancelled of id: CommandId * reason: string
     | CommandUnconfirmed of id: CommandId
+    | RebindRefused of reason: string
 
 [<RequireQualifiedAccess>]
-type PipelineMsg<'Client, 'Server, 'Local, 'Command> =
-    | Input of event: InputEvent * client: 'Client
+type PipelineMsg<'Input, 'Server, 'Local, 'Command> =
+    | Input of input: PipelineInput<'Input>
+    | Submit of command: 'Command
+    | GuestRunning of call: uint64
     | GuestEnded of call: uint64 * outcome: GuestOutcome<'Local, 'Command>
     | GuestDeadline of call: uint64
+    | RearmGuest
     | Acknowledged of id: CommandId * ack: CommandAck
     | Authoritative of state: 'Server
-    | Reset of epoch: string
+    | Heartbeat of version: uint64
+    | Rebind of client: string * lastSequence: uint64 option
 
 [<RequireQualifiedAccess>]
-type PipelineEffect<'Client, 'Local, 'Command> =
-    | StartGuest of call: uint64 * request: GuestRequest<'Client>
+type PipelineEffect<'Input, 'Local, 'Command> =
+    | StartGuest of call: GuestCall<'Input>
     | CancelGuest of call: uint64
     | ArmDeadline of call: uint64 * milliseconds: int
     | ApplyLocal of intent: 'Local
@@ -280,17 +421,18 @@ type PipelineEffect<'Client, 'Local, 'Command> =
     | Fail of failure: PipelineFailure
 
 [<NoEquality; NoComparison>]
-type InputPipeline<'Client, 'Server, 'Local, 'Command> =
+type InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> =
     {
-        Guest: InputGuest<'Client, 'Local, 'Command>
+        Guest: InputGuest<'Input, 'Client, 'Local, 'Command>
         Commands: CommandStage<'Server, 'Command>
     }
 
-/// The pipeline state. FS.GG.Game#788 adds the input sequence, the call in flight, the queue and the command ledger.
+/// The pipeline state. FS.GG.Game#788 adds the sequences, the call in flight, the queue, the breaker and the ledger.
 [<NoEquality; NoComparison>]
-type PipelineModel<'Client, 'Server, 'Local, 'Command> =
+type PipelineModel<'Input, 'Server, 'Local, 'Command> =
     {
-        Epoch: string
+        Client: string
+        LastSequence: uint64
         Authoritative: 'Server
         Halted: bool
     }
@@ -300,52 +442,98 @@ module InputPipeline =
 
     let create guest commands = { Guest = guest; Commands = commands }
 
-    let guest (pipeline: InputPipeline<'Client, 'Server, 'Local, 'Command>) = pipeline.Guest
+    let guest (pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>) = pipeline.Guest
 
-    let commands (pipeline: InputPipeline<'Client, 'Server, 'Local, 'Command>) = pipeline.Commands
+    let commands (pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>) = pipeline.Commands
 
     let init
-        (_: InputPipeline<'Client, 'Server, 'Local, 'Command>)
-        (epoch: string)
+        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
+        (client: string)
+        (lastSequence: uint64 option)
         (authoritative: 'Server)
-        : PipelineModel<'Client, 'Server, 'Local, 'Command> * PipelineEffect<'Client, 'Local, 'Command> list =
-        if System.String.IsNullOrWhiteSpace epoch then
-            invalidArg (nameof epoch) "A pipeline epoch must not be blank."
+        : PipelineModel<'Input, 'Server, 'Local, 'Command> =
+        if System.String.IsNullOrWhiteSpace client then
+            invalidArg (nameof client) "A client binding must not be blank."
 
         {
-            Epoch = epoch
+            Client = client
+            LastSequence = defaultArg lastSequence 0UL
             Authoritative = authoritative
             Halted = false
-        },
-        []
+        }
 
     let update
-        (_: InputPipeline<'Client, 'Server, 'Local, 'Command>)
-        (_: PipelineMsg<'Client, 'Server, 'Local, 'Command>)
-        (_: PipelineModel<'Client, 'Server, 'Local, 'Command>)
-        : PipelineModel<'Client, 'Server, 'Local, 'Command> * PipelineEffect<'Client, 'Local, 'Command> list =
+        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
+        (_: PipelineMsg<'Input, 'Server, 'Local, 'Command>)
+        (_: PipelineModel<'Input, 'Server, 'Local, 'Command>)
+        : PipelineModel<'Input, 'Server, 'Local, 'Command> * PipelineEffect<'Input, 'Local, 'Command> list =
         PipelineStub.notYet "InputPipeline.update"
 
-    let epoch (model: PipelineModel<'Client, 'Server, 'Local, 'Command>) = model.Epoch
+    let client (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) = model.Client
 
-    let displayed (model: PipelineModel<'Client, 'Server, 'Local, 'Command>) : Displayed<'Server> =
+    let lastSequence (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) = model.LastSequence
+
+    let displayed (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) : Displayed<'Server> =
         {
             Authoritative = model.Authoritative
             Shown = model.Authoritative
             Predicted = []
         }
 
-    let unsettled (_: PipelineModel<'Client, 'Server, 'Local, 'Command>) : (CommandId * CommandSettlement) list = []
+    let unsettled (_: PipelineModel<'Input, 'Server, 'Local, 'Command>) : (CommandId * CommandSettlement) list = []
 
-    let guestHalted (model: PipelineModel<'Client, 'Server, 'Local, 'Command>) = model.Halted
+    let guestHalted (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) = model.Halted
+
+[<NoEquality; NoComparison>]
+type PipelineIo<'Client, 'Local, 'Command> =
+    {
+        Client: unit -> 'Client
+        ApplyLocal: 'Local -> unit
+        Send: CommandEnvelope<'Command> -> unit
+        Fail: PipelineFailure -> unit
+        Schedule: int -> (unit -> unit) -> unit
+    }
+
+[<RequireQualifiedAccess>]
+module PipelineIo =
+
+    let create client applyLocal send fail schedule =
+        {
+            Client = client
+            ApplyLocal = applyLocal
+            Send = send
+            Fail = fail
+            Schedule = schedule
+        }
 
 [<Sealed>]
-type PipelineHost<'Client, 'Server, 'Local, 'Command> internal () =
+type PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> internal () =
+    interface System.IDisposable with
+        member _.Dispose() = ()
 
-    member _.Model: PipelineModel<'Client, 'Server, 'Local, 'Command> =
+[<RequireQualifiedAccess>]
+module PipelineRunner =
+
+    let create
+        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
+        (_: PipelineIo<'Client, 'Local, 'Command>)
+        (_: PipelineMsg<'Input, 'Server, 'Local, 'Command> -> unit)
+        : PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> =
+        PipelineStub.notYet "PipelineRunner.create"
+
+    let perform
+        (_: PipelineEffect<'Input, 'Local, 'Command>)
+        (_: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>)
+        : unit =
+        PipelineStub.notYet "PipelineRunner.perform"
+
+[<Sealed>]
+type PipelineHost<'Input, 'Client, 'Server, 'Local, 'Command> internal () =
+
+    member _.Model: PipelineModel<'Input, 'Server, 'Local, 'Command> =
         PipelineStub.notYet "PipelineHost.Model"
 
-    member _.Dispatch(_: PipelineMsg<'Client, 'Server, 'Local, 'Command>) : unit =
+    member _.Dispatch(_: PipelineMsg<'Input, 'Server, 'Local, 'Command>) : unit =
         PipelineStub.notYet "PipelineHost.Dispatch"
 
     interface System.IDisposable with
@@ -355,14 +543,11 @@ type PipelineHost<'Client, 'Server, 'Local, 'Command> internal () =
 module PipelineHost =
 
     let start
-        (_: InputPipeline<'Client, 'Server, 'Local, 'Command>)
+        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
         (_: InputRoute)
+        (_: PipelineIo<'Client, 'Local, 'Command>)
         (_: string)
+        (_: uint64 option)
         (_: 'Server)
-        (_: unit -> 'Client)
-        (_: 'Local -> unit)
-        (_: CommandEnvelope<'Command> -> unit)
-        (_: PipelineFailure -> unit)
-        (_: int -> (unit -> unit) -> unit)
-        : PipelineHost<'Client, 'Server, 'Local, 'Command> =
+        : PipelineHost<'Input, 'Client, 'Server, 'Local, 'Command> =
         PipelineStub.notYet "PipelineHost.start"

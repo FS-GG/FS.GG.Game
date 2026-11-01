@@ -38,13 +38,17 @@ module InputModifiers =
 ///
 /// What the player did. Unlike `SelectionRequest`, an action is reported whether or not it changes the selection: a
 /// second activation of the selected object is an `Activate` too (FS.GG.Game#771).
+///
+/// **Extension policy:** this union is OPEN. Continuous input (drag, wheel, press and release) arrives later as new
+/// cases in a minor version, never as a change to these. Match it with a wildcard case.
 [<RequireQualifiedAccess>]
 type InputAction =
     /// The primary activation: a primary pointer press, Enter or Space on the focused object, or a mirror button. A
     /// pointer press where no object is still activates, with no target and the press point.
     | Activate
     /// The secondary activation: a secondary pointer press (the browser's context menu is suppressed on the surface),
-    /// the ContextMenu key or Shift+F10 on the focused object.
+    /// a touch long-press (held 500 ms, moving less than 10 CSS pixels; source `Pointer`), or the ContextMenu key or
+    /// Shift+F10 on the focused object.
     | ActivateSecondary
     /// The pointer now hovers the target (no target: no object). Reported only when the hovered object changes.
     | Hover
@@ -56,9 +60,17 @@ type InputAction =
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// One input, as every backend's input host reports it: the same pointer, keyboard or mirror input yields the same
-/// event on SVG, Pixi and Babylon. Built by `InputEvent.create`.
-[<Sealed>]
-type InputEvent
+/// event on SVG, Pixi and Babylon. Equal when every field is. Built by `InputEvent.create`.
+type InputEvent =
+    private
+        {
+            Source: InputSource
+            Action: InputAction
+            Target: string option
+            Point: FS.GG.UI.Scene.Point option
+            Modifiers: InputModifiers
+            Repeat: bool
+        }
 
 /// Public contract module exposed by the FS.GG.Game.Render package.
 [<RequireQualifiedAccess>]

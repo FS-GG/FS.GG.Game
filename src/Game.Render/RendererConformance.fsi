@@ -311,8 +311,9 @@ module RendererConformance =
     /// "Kit specification"), replacing any declared before: the registry's input hosts report to `route`, `probe` plays
     /// them with real input, and `events` reads back, in order, the events the game's binding of `route` received. The
     /// section checks the events (source, modifiers, primary, secondary, repeated activation, hover, focus, Cancel), the
-    /// drawn focus cue, the mirror (one Tab stop, pointer-only and grouped objects) and disposal on every backend, and a
-    /// selection that the game answers later (through a guest) within the subject's wait. Contract only:
+    /// drawn focus ring, the single-Tab-stop listbox or grid surface (pointer-only, grouped and cell objects) and
+    /// disposal on every backend, and a selection that the game answers later (through a guest) within the subject's
+    /// wait. Contract only:
     /// FS.GG.Game#788 implements it, and until then it raises.
     val withInput:
         interaction: SceneInteraction<'State> ->

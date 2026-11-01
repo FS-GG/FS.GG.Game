@@ -35,30 +35,30 @@ type InputAction =
     | Focus
     | Cancel
 
-/// Opaque behind the .fsi, so a field added later is not a breaking change.
-[<Sealed>]
-type InputEvent
-    internal
-    (
-        source: InputSource,
-        action: InputAction,
-        target: string option,
-        point: Point option,
-        modifiers: InputModifiers,
-        repeat: bool
-    ) =
-    member internal _.Source = source
-    member internal _.Action = action
-    member internal _.Target = target
-    member internal _.Point = point
-    member internal _.Modifiers = modifiers
-    member internal _.Repeat = repeat
+/// Private representation behind the .fsi: structural equality, and a field added later is not a breaking change.
+type InputEvent =
+    private
+        {
+            Source: InputSource
+            Action: InputAction
+            Target: string option
+            Point: Point option
+            Modifiers: InputModifiers
+            Repeat: bool
+        }
 
 [<RequireQualifiedAccess>]
 module InputEvent =
 
     let create source action target point modifiers repeat =
-        InputEvent(source, action, target, point, modifiers, repeat)
+        {
+            Source = source
+            Action = action
+            Target = target
+            Point = point
+            Modifiers = modifiers
+            Repeat = repeat
+        }
 
     let source (event: InputEvent) = event.Source
 
