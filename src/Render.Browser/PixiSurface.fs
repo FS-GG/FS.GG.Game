@@ -343,10 +343,7 @@ module PixiSurface =
                 Error(sprintf "Pixi surface could not start: %s" ex.Message)
 
     let surface (container: HTMLElement) (options: PixiOptions) : SceneSurface =
-        {
-            Backend = RendererBackend.Pixi
-            MountScene = mountScene container options
-        }
+        SceneSurface.create RendererBackend.Pixi (mountScene container options)
 
     let adapter (container: HTMLElement) (options: PixiOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
         SceneSurface.adapter view (surface container options)
