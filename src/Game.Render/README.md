@@ -191,9 +191,11 @@ Adapter authors keep two obligations the kit checks:
 The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneInteraction`,
 `SceneRenderers` and `RendererConformance`, each `.fsi` and `.fs`) so a Fable-compiled browser host can register adapters
 against the same `RendererRegistry` and run the conformance kit. `Adapter` and
-`DefaultKeymap` are .NET-only and are not in that view. Since 0.18.0 the packed `fable/FS.GG.Game.Render.fsproj`
-lists its sources unconditionally, because Fable does not evaluate MSBuild conditions in a package's project
-file. The 0.17.0 view compiled no sources for a package consumer.
+`DefaultKeymap` are .NET-only and are not in that view. The view is first published in 0.18.0 (0.17.0 carries no
+Fable view). Its packed `fable/FS.GG.Game.Render.fsproj` lists its sources unconditionally, because Fable does not
+evaluate MSBuild conditions in a package's project file. An earlier unreleased form, added after `v0.17.0` by #733,
+used conditional item groups, and they would have compiled no sources for a package consumer. It was fixed before
+publication.
 
 The browser host is the `FS.GG.Game.Render.Browser` package (from `src/Render.Browser`, first published in
 0.18.0). It mounts the existing SVG surface (`SvgBrowser`), hosts the BabylonJS and PixiJS adapters (over the
