@@ -1,7 +1,7 @@
 module FS.GG.Game.Render.Bench.Program
 
 // GAME-RENDER-ADOPT-01.2 (FS.GG.Game#746): page entry. Reads one run's parameters from the URL
-// (`?game=reference-game&scene=room-tiles&size=1000&backend=pixi&warmup=60`) and starts that game's runner. A new
+// (`?game=reference-game&scene=room-tiles&size=1000&backend=pixi&warmup=60&interactive=1`) and starts that game's runner. A new
 // game plugs in by adding one line to `games` below with its own `BenchGame<'State>` (see tools/render-bench/README.md).
 
 open Fable.Core
@@ -27,6 +27,9 @@ let private positive (name: string) (fallback: int) =
 
 let start () =
     let gameId = param "game"
+    // `interactive=1` (the default) declares the game's SceneInteraction, as a game on Render.Browser 0.18.0 does;
+    // `interactive=0` is the plain mountScene route.
+    let interactive = param "interactive" <> "0"
 
     match List.tryFind (fun (id, _) -> id = gameId) games, RendererBackend.tryParse (param "backend"), positive "size" 0, positive "warmup" 60 with
     | None, _, _, _ -> refuse (sprintf "unknown game '%s' (known: %s)" gameId (games |> List.map fst |> String.concat ", "))
@@ -41,6 +44,7 @@ let start () =
                 SceneId = param "scene"
                 Size = size
                 WarmupFrames = warmup
+                Interactive = interactive
             }
 
 start ()

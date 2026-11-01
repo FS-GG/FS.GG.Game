@@ -8,6 +8,7 @@
 //   driver.mjs run      --page <dir> --browser <chrome> --mode <gpu-angle-vulkan|gpu-angle-gl-egl|software|custom> [options]
 //   driver.mjs probe    --browser <chrome> --mode <...>            feasibility: chrome://gpu status, WebGL, WebGPU
 //   driver.mjs validate <results.json> [--schema <schema.json>]   check a results file against the schema
+//   driver.mjs selftest                                        the GPU/software refusal, flag and option handling, with injected strings
 //   driver.mjs table    <results.json>...                          Markdown summary of the aggregates
 //
 // See tools/render-bench/README.md for the measurement definitions and caveats.
@@ -106,6 +107,9 @@ function parseArgs(argv) {
       args[a.slice(2, at)] = a.slice(at + 1);
     } else if (a.startsWith("--")) {
       const key = a.slice(2);
+      // `--flags "--a --b"` reaches here as ONE argument with a space; reading it as a flag named "a --b" would silently drop
+      // the flags. A value that starts with "--" is passed as --key=value.
+      if (/\s/.test(key)) throw new Error(`option '${a}' contains whitespace; pass a value that starts with "--" as --name=<value>, e.g. --flags="--a --b"`);
       const next = argv[i + 1];
       if (next === undefined || next.startsWith("--")) args[key] = true;
       else {
@@ -169,6 +173,10 @@ class Browser {
   static async launch(executable, flags) {
     const profile = mkdtempSync(join(tmpdir(), "fsgg-render-bench-"));
     const proc = spawn(executable, [...flags, `--user-data-dir=${profile}`, "--remote-debugging-port=0", "about:blank"], { stdio: ["ignore", "ignore", "pipe"], detached: true });
+    // In the kill set from the moment it exists: a launch that fails after this point (no DevTools port, version fetch,
+    // websocket) still has a live process group and a profile, and an exit or signal in that window must reap them.
+    const b = new Browser(proc, profile, null, () => stderr);
+    launched.add(b);
     let stderr = "";
     proc.stderr.on("data", (d) => {
       stderr = (stderr + d).slice(-20000);
@@ -180,16 +188,15 @@ class Browser {
       else if (proc.exitCode !== null) break;
       else await sleep(50);
     }
-    if (!port) {
-      try { process.kill(-proc.pid, "SIGKILL"); } catch {}
-      rmSync(profile, { recursive: true, force: true });
-      throw new Error(`browser did not start: ${stderr.slice(-1500)}`);
+    try {
+      if (!port) throw new Error(`browser did not start: ${stderr.slice(-1500)}`);
+      b.version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+      await b.connect(b.version.webSocketDebuggerUrl);
+      return b;
+    } catch (error) {
+      await b.close();
+      throw error;
     }
-    const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
-    const b = new Browser(proc, profile, version, () => stderr);
-    launched.add(b);
-    await b.connect(version.webSocketDebuggerUrl);
-    return b;
   }
   constructor(proc, profile, version, stderr) {
     Object.assign(this, { proc, profile, version, stderr, nextId: 0, pending: new Map(), session: null });
@@ -318,6 +325,16 @@ export function rendererClass(renderer) {
   return /swiftshader|llvmpipe|software/i.test(renderer) ? "software" : "hardware";
 }
 
+/// The refusal: a canvas backend must draw on the WebGL renderer class its mode expects (SVG has no WebGL context, so it is
+/// exempt). A GPU mode that silently fell back to software, or a software control that got hardware, would otherwise
+/// publish numbers under the wrong name. Throws with the mode, the expectation and the string seen.
+export function checkRenderer(mode, backend, renderer) {
+  const expected = MODES[mode]?.expect ?? "any";
+  if (backend === "svg" || expected === "any") return;
+  if (rendererClass(renderer) !== expected)
+    throw new Error(`mode ${mode} expects a ${expected} WebGL renderer but the backend drew on '${renderer ?? null}'`);
+}
+
 /// Other browsers' GPU processes running beside this run (any Chromium `--type=gpu-process` not launched for it).
 /// The load average does not show GPU contention; this makes a shared GPU visible in the record. Null off Linux.
 function foreignGpuProcesses(ownProfile) {
@@ -385,7 +402,7 @@ async function runOne(ctx, cell) {
     await browser.openPage();
     await browser.page("Performance.enable", { timeDomain: "timeTicks" });
     await browser.page("Runtime.enable");
-    const url = `${origin}/index.html?game=${encodeURIComponent(cell.game)}&scene=${encodeURIComponent(cell.scene)}&size=${cell.size}&backend=${cell.backend}&warmup=${warmup}`;
+    const url = `${origin}/index.html?game=${encodeURIComponent(cell.game)}&scene=${encodeURIComponent(cell.scene)}&size=${cell.size}&backend=${cell.backend}&warmup=${warmup}&interactive=${cell.interactive ? 1 : 0}`;
     await browser.page("Page.navigate", { url });
     if (ctx.fingerprintNeeded) {
       // The environment fingerprint is taken in the first run's own browser, on the bench origin.
@@ -396,10 +413,7 @@ async function runOne(ctx, cell) {
     await waitPhase(browser, ["ready"], timeoutMs);
     const live = await browser.evaluate("window.__fsggBench.liveRenderer()");
     record.backendRenderer = live;
-    const expected = MODES[mode]?.expect ?? "any";
-    if (cell.backend !== "svg" && expected !== "any" && rendererClass(live && live.renderer) !== expected) {
-      throw new Error(`mode ${mode} expects a ${expected} WebGL renderer but the backend drew on '${live && live.renderer}'`);
-    }
+    checkRenderer(mode, cell.backend, live && live.renderer);
 
     record.foreignGpuProcessesBefore = foreignGpuProcesses(browser.profile);
     const cpu0 = await processCpu(browser);
@@ -429,6 +443,8 @@ async function runOne(ctx, cell) {
     const cpuPerFrame = (type) => (cpu0[type] === undefined || cpu1[type] === undefined ? null : round(((cpu1[type] - cpu0[type]) * 1000) / windowFrames));
 
     record.page = report.info;
+    // The page must have run the route this cell asked for; a page that ignored `interactive` would label plain numbers interactive.
+    if (report.info.interactive !== cell.interactive) throw new Error(`the page ran interactive=${report.info.interactive}, the run asked for ${cell.interactive}`);
     // What the backend holds and what it actually drew. A backend that culls part of the scene draws less than it
     // was asked to, and its frame time is then the cost of a smaller scene; `complete` makes that explicit.
     const drawn = cell.backend === "babylon" ? report.info.babylonActiveMeshes ?? null : cell.backend === "pixi" || cell.backend === "svg" ? report.info.backendNodes ?? null : null;
@@ -487,7 +503,7 @@ async function runOne(ctx, cell) {
 export function aggregate(runs) {
   const groups = new Map();
   for (const r of runs) {
-    const key = [r.mode, r.game, r.scene, r.size, r.backend].join("|");
+    const key = [r.mode, r.game, r.scene, r.size, r.backend, r.interactive].join("|");
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
   }
@@ -495,7 +511,7 @@ export function aggregate(runs) {
   for (const rs of groups.values()) {
     const ok = rs.filter((r) => r.status === "ok");
     const pick = (f) => ok.map(f).filter((x) => x != null && Number.isFinite(x));
-    const { mode, game, scene, size, backend } = rs[0];
+    const { mode, game, scene, size, backend, interactive } = rs[0];
     const gpuMeasured = ok.filter((r) => r.gpuTimeMs?.status === "measured");
     out.push({
       mode,
@@ -503,6 +519,7 @@ export function aggregate(runs) {
       scene,
       size,
       backend,
+      interactive,
       repeats: rs.length,
       ok: ok.length,
       statuses: [...new Set(rs.map((r) => r.status))],
@@ -559,13 +576,13 @@ const fmt = (s) => (s && s.median != null ? `${s.median}` : "Unknown");
 const cv = (s) => (s && s.cvPercent != null ? `${s.cvPercent}%` : "n/a");
 export function table(results) {
   const lines = [
-    "| mode | scene | size | backend | drawn | ok/runs | frame p50 ms | p95 | p99 | p50 CV | main-thread CPU ms/frame | GPU-process CPU ms/frame | GPU time p50 ms | draw calls/frame | heap after GC MB |",
-    "|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    "| mode | route | scene | size | backend | drawn | ok/runs | frame p50 ms | p95 | p99 | p50 CV | main-thread CPU ms/frame | GPU-process CPU ms/frame | GPU time p50 ms | draw calls/frame | heap after GC MB |",
+    "|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
   ];
   for (const result of results)
     for (const a of result.aggregates)
       lines.push(
-        `| ${a.mode} | ${a.scene} | ${a.size} | ${a.backend} | ${fmt(a.drawnNodes)}${a.complete ? "" : " (partial)"} | ${a.ok}/${a.repeats} | ${fmt(a.frameTimeP50Ms)} | ${fmt(a.frameTimeP95Ms)} | ${fmt(a.frameTimeP99Ms)} | ${cv(a.frameTimeP50Ms)} | ${fmt(a.mainThreadCpuMsPerFrame)} | ${fmt(a.gpuProcessCpuMsPerFrame)} | ${fmt(a.gpuTimeP50Ms)} | ${fmt(a.drawCallsP50)} | ${fmt(a.jsHeapUsedAfterGcMB)} |`,
+        `| ${a.mode} | ${a.interactive === true ? "interactive" : "plain"} | ${a.scene} | ${a.size} | ${a.backend} | ${fmt(a.drawnNodes)}${a.complete ? "" : " (partial)"} | ${a.ok}/${a.repeats} | ${fmt(a.frameTimeP50Ms)} | ${fmt(a.frameTimeP95Ms)} | ${fmt(a.frameTimeP99Ms)} | ${cv(a.frameTimeP50Ms)} | ${fmt(a.mainThreadCpuMsPerFrame)} | ${fmt(a.gpuProcessCpuMsPerFrame)} | ${fmt(a.gpuTimeP50Ms)} | ${fmt(a.drawCallsP50)} | ${fmt(a.jsHeapUsedAfterGcMB)} |`,
       );
   return lines.join("\n");
 }
@@ -576,12 +593,28 @@ export function serialise(value) {
 }
 
 // ---- commands --------------------------------------------------------------------------------------------------
+/// The switch name of a Chromium flag (`--use-angle=vulkan` -> `--use-angle`).
+const switchName = (flag) => flag.split("=")[0];
+
+/// The flags Chromium will act on, in order: for a repeated switch the LAST one wins (Chromium's command line keeps the
+/// last value), so earlier ones are dropped and never recorded as applied. `--flags` extends or overrides the mode's set.
+export function effectiveFlags(flagLists) {
+  const flat = flagLists.flat();
+  const last = new Map();
+  flat.forEach((flag, i) => last.set(switchName(flag), i));
+  return flat.filter((flag, i) => last.get(switchName(flag)) === i);
+}
+
 function modeFlags(args) {
   const mode = args.mode || "gpu-angle-vulkan";
   if (!MODES[mode]) throw new Error(`unknown mode ${mode} (known: ${Object.keys(MODES).join(", ")})`);
-  const extra = args.flags && args.flags !== true ? String(args.flags).split(/\s+/).filter(Boolean) : [];
-  return { mode, flags: [...COMMON, ...MODES[mode].flags, ...extra] };
+  if (args.flags === true) throw new Error('--flags needs a value; write --flags="--switch --other=value"');
+  const extra = args.flags ? String(args.flags).split(/\s+/).filter(Boolean) : [];
+  for (const flag of extra) if (!flag.startsWith("--")) throw new Error(`--flags entry '${flag}' is not a switch (expected --name or --name=value)`);
+  return { mode, flags: effectiveFlags([COMMON, MODES[mode].flags, extra]) };
 }
+
+const INTERACTIONS = ["plain", "interactive"];
 
 async function commandRun(args) {
   const page = args.page;
@@ -612,21 +645,26 @@ async function commandRun(args) {
   const scenes = list(args.scenes, ["room-tiles", "room-swarm"]);
   const sizes = list(args.sizes, ["100", "1000", "5000"]).map((s) => int(s));
   const backends = list(args.backends, ["svg", "pixi", "babylon"]);
+  // `interactive`: the game's SceneInteraction is declared (what a game on Render.Browser 0.18.0 ships: every backend
+  // mounts its interactive mount with an input host). `plain`: only BrowserRenderers.declare (mountScene, no input host).
+  const interactions = list(args.interaction, ["interactive"]);
+  for (const i of interactions) if (!INTERACTIONS.includes(i)) throw new Error(`--interaction entries must be ${INTERACTIONS.join(" or ")}, got '${i}'`);
   const repeats = int(args.repeats, 3);
   const runs = [];
   const started = new Date().toISOString();
   const cells = [];
-  for (const game of games) for (const scene of scenes) for (const size of sizes) for (const backend of backends) cells.push({ game, scene, size, backend });
+  // Interaction is the innermost loop, so the plain and interactive run of one configuration are adjacent in the session.
+  for (const game of games) for (const scene of scenes) for (const size of sizes) for (const backend of backends) for (const interaction of interactions) cells.push({ game, scene, size, backend, interactive: interaction === "interactive" });
   try {
     // Repeat is the OUTER loop and every other repeat runs the cells in reverse order (ABBA), so drift in host state
     // over the session spreads across every cell instead of landing on whichever configuration ran last.
     session: for (let repeat = 1; repeat <= repeats; repeat++)
       for (const base of repeat % 2 === 1 ? cells : [...cells].reverse()) {
-        const { game, scene, size, backend } = base;
-        const cell = { game, scene, size, backend, repeat };
+        const { game, scene, size, backend, interactive } = base;
+        const cell = { game, scene, size, backend, interactive, repeat };
         const r = await runOne(ctx, cell);
         runs.push(r);
-        log(`${mode} ${game}/${scene} size=${size} ${backend} #${repeat}: ${r.status}${r.error ? ` (${r.error})` : ""} p50=${r.frameTimeMs?.p50 ?? "-"}ms p95=${r.frameTimeMs?.p95 ?? "-"}ms cpu=${r.mainThread?.cpuMsPerFrame ?? "-"}ms gpu=${r.gpuTimeMs?.p50 ?? r.gpuTimeMs?.status ?? "-"}ms draws=${r.drawCalls?.perFrame?.p50 ?? "-"} load1=${r.loadavgBefore?.[0] ?? "-"} otherGpu=${r.foreignGpuProcessesBefore ?? "-"}`);
+        log(`${mode} ${game}/${scene} size=${size} ${backend} ${interactive ? "interactive" : "plain"} #${repeat}: ${r.status}${r.error ? ` (${r.error})` : ""} p50=${r.frameTimeMs?.p50 ?? "-"}ms p95=${r.frameTimeMs?.p95 ?? "-"}ms cpu=${r.mainThread?.cpuMsPerFrame ?? "-"}ms gpu=${r.gpuTimeMs?.p50 ?? r.gpuTimeMs?.status ?? "-"}ms draws=${r.drawCalls?.perFrame?.p50 ?? "-"} load1=${r.loadavgBefore?.[0] ?? "-"} otherGpu=${r.foreignGpuProcessesBefore ?? "-"}`);
         if (r.status === "held") {
           log("capacity probe held the session past --capacity-wait; stopping and writing what ran");
           break session;
@@ -640,7 +678,7 @@ async function commandRun(args) {
     createdAt: started,
     finishedAt: new Date().toISOString(),
     harness: { commit: args["harness-commit"] && args["harness-commit"] !== true ? args["harness-commit"] : null, dirty: args["harness-dirty"] === "true" || args["harness-dirty"] === true, label: args.label && args.label !== true ? args.label : null },
-    config: { mode, games, scenes, sizes, backends, repeats, order: "repeat-outer, alternating forward/reverse cell order", frames: ctx.frames, warmupFrames: ctx.warmup, percentileMethod: "nearest-rank", rawSamples: ctx.keepSamples, capacityProbe: ctx.probe, capacityArgs: ctx.probeArgs },
+    config: { mode, games, scenes, sizes, backends, interactions, repeats, order: "repeat-outer, alternating forward/reverse cell order", frames: ctx.frames, warmupFrames: ctx.warmup, percentileMethod: "nearest-rank", rawSamples: ctx.keepSamples, capacityProbe: ctx.probe, capacityArgs: ctx.probeArgs },
     environment: { host: hostFingerprint(), ...(ctx.fingerprint || {}) },
     runs,
     aggregates: aggregate(runs),
@@ -693,6 +731,75 @@ function commandValidate(args) {
   return failed ? 1 : 0;
 }
 
+
+// ---- self-test: the refusal path, flag handling and option parsing, with injected strings (no browser) -----------------
+// The GPU/software refusal is the guard that keeps a silently-software "GPU" run, or a hardware "software control", out of
+// the baselines. A real browser only ever exercises the success branch on its own host, so the refusal is tested here with
+// the renderer strings real hosts report. CI runs it (render-browser-host.yml).
+const RADV = "ANGLE (AMD, Vulkan 1.4.354 (AMD Ryzen 9 7900 12-Core Processor (RADV RAPHAEL_MENDOCINO) (0x0000164E)), radv)";
+const RADEONSI = "ANGLE (AMD, AMD Ryzen 9 7900 12-Core Processor (radeonsi raphael_mendocino ACO DRM 3.64 7.2.9-arch1-1, LLVM 22.1.9), OpenGL ES 3.2)";
+const SWIFTSHADER = "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)";
+const LLVMPIPE = "ANGLE (Mesa, llvmpipe (LLVM 22.1.9, 256 bits), OpenGL 4.5)";
+
+function commandSelftest() {
+  let failed = 0;
+  let checked = 0;
+  const expect = (name, ok, detail = "") => {
+    checked++;
+    if (!ok) {
+      failed++;
+      process.stderr.write(`selftest FAIL: ${name}${detail ? ` (${detail})` : ""}\n`);
+    }
+  };
+  const refuses = (mode, backend, renderer) => {
+    try { checkRenderer(mode, backend, renderer); return false; } catch (e) { return /expects a/.test(e.message); }
+  };
+  const throws = (f, pattern) => {
+    try { f(); return false; } catch (e) { return pattern.test(e.message); }
+  };
+
+  // renderer classes
+  for (const [name, renderer, want] of [["RADV", RADV, "hardware"], ["radeonsi", RADEONSI, "hardware"], ["SwiftShader", SWIFTSHADER, "software"], ["llvmpipe", LLVMPIPE, "software"], ["null", null, "none"], ["empty", "", "none"]])
+    expect(`rendererClass(${name}) is ${want}`, rendererClass(renderer) === want, rendererClass(renderer));
+
+  // the refusal, per mode and backend
+  for (const mode of ["gpu-angle-vulkan", "gpu-angle-gl-egl"])
+    for (const backend of ["pixi", "babylon"]) {
+      expect(`${mode}/${backend} accepts RADV`, !refuses(mode, backend, RADV));
+      expect(`${mode}/${backend} accepts radeonsi`, !refuses(mode, backend, RADEONSI));
+      expect(`${mode}/${backend} refuses SwiftShader`, refuses(mode, backend, SWIFTSHADER));
+      expect(`${mode}/${backend} refuses llvmpipe`, refuses(mode, backend, LLVMPIPE));
+      expect(`${mode}/${backend} refuses a missing renderer`, refuses(mode, backend, null));
+    }
+  for (const backend of ["pixi", "babylon"]) {
+    expect(`software/${backend} accepts SwiftShader`, !refuses("software", backend, SWIFTSHADER));
+    expect(`software/${backend} refuses RADV (a hardware run must not be published as the control)`, refuses("software", backend, RADV));
+    expect(`software/${backend} refuses a missing renderer`, refuses("software", backend, null));
+    expect(`custom/${backend} accepts anything`, !refuses("custom", backend, RADV) && !refuses("custom", backend, SWIFTSHADER) && !refuses("custom", backend, null));
+  }
+  for (const mode of ["gpu-angle-vulkan", "software"]) expect(`${mode}/svg is exempt (no WebGL context)`, !refuses(mode, "svg", null) && !refuses(mode, "svg", SWIFTSHADER));
+  expect("the refusal message names the string it saw", throws(() => checkRenderer("gpu-angle-vulkan", "pixi", SWIFTSHADER), /SwiftShader Device/));
+
+  // effective flags: the last value of a switch is the one Chromium acts on
+  const mode = MODES["gpu-angle-vulkan"].flags;
+  const overridden = effectiveFlags([COMMON, mode, ["--use-angle=gl", "--extra-switch"]]);
+  expect("an overridden switch is recorded once, with its effective value", overridden.filter((f) => f.startsWith("--use-angle")).join() === "--use-angle=gl", overridden.join(" "));
+  expect("a plain extra switch is recorded", overridden.includes("--extra-switch"));
+  expect("a mode's own flags are kept when not overridden", overridden.includes("--enable-features=Vulkan"));
+  expect("no switch is recorded twice", new Set(overridden.map(switchName)).size === overridden.length);
+
+  // option parsing: --flags must never be silently dropped
+  expect("--flags=--a --b is read as the flags", parseArgs(["--flags=--a --b"]).flags === "--a --b");
+  expect("--flags \"--a --b\" is refused, not dropped", throws(() => parseArgs(["--flags", "--a --b"]), /whitespace/));
+  expect("a bare --flags is refused", throws(() => modeFlags({ mode: "software", flags: true }), /needs a value/));
+  expect("--flags entries must be switches", throws(() => modeFlags({ mode: "software", flags: "notaswitch" }), /not a switch/));
+  expect("--flags reaches the recorded list", modeFlags({ mode: "software", flags: "--use-gl=angle" }).flags.includes("--use-gl=angle"));
+  expect("an unknown mode is refused", throws(() => modeFlags({ mode: "nope" }), /unknown mode/));
+
+  process.stdout.write(`selftest: ${checked - failed} of ${checked} checks passed\n`);
+  return failed ? 1 : 0;
+}
+
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
@@ -703,11 +810,13 @@ async function main() {
       return commandProbe(args);
     case "validate":
       return commandValidate(args);
+    case "selftest":
+      return commandSelftest();
     case "table":
       process.stdout.write(table(args._.map((f) => JSON.parse(readFileSync(f, "utf8")))) + "\n");
       return 0;
     default:
-      process.stderr.write("usage: driver.mjs run|probe|validate|table ... (see tools/render-bench/README.md)\n");
+      process.stderr.write("usage: driver.mjs run|probe|validate|table|selftest ... (see tools/render-bench/README.md)\n");
       return 2;
   }
 }

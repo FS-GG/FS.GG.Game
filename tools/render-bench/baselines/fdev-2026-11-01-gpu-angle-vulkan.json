@@ -5,7 +5,7 @@
  "harness": {
   "commit": "a111e5abcf828625aade8d89d0b45fd183174baa",
   "dirty": false,
-  "label": "fdev baseline 2026-11-01 (gpu-angle-vulkan)"
+  "label": "non-interactive (plain mountScene) route, measured at a111e5ab, before the Render.Browser 0.18.0 interactive route (#751, #758) was benchmarked"
  },
  "config": {
   "mode": "gpu-angle-vulkan",
@@ -21,6 +21,9 @@
    "svg",
    "pixi",
    "babylon"
+  ],
+  "interactions": [
+   "plain"
   ],
   "repeats": 3,
   "order": "repeat-outer, alternating forward/reverse cell order",

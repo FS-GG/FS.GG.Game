@@ -5,6 +5,7 @@ module FS.GG.Game.Render.Bench.ReferenceGameBench
 // page), driven by a fixed 120-frame script that walks the reference journey (start, move, door, vault cleared, exit,
 // won) and restarts.
 
+open FS.GG.Game.Render
 open FS.GG.Game.Reference
 open FS.GG.Game.Reference.ReferenceState
 open FS.GG.Game.Reference.Composition
@@ -132,6 +133,59 @@ let swarm (size: int) (model: Model) : Scene =
 
     frame model body
 
+/// The player token and the aim marker (the two objects every scene draws on top of its body) are what the reference
+/// game lets a player select, as `ReferenceRenderers.objects` does at the reference game's own scale. The aim marker is
+/// above the player, so it is listed last. Their ids are the reference game's (`token`, `aim`), and the selection rule
+/// is the state's own `Selected` field.
+let objects (model: Model) : SelectableObject list =
+    let ax, ay = model.Aim
+
+    [
+        {
+            Id = "token"
+            Label = "Player token"
+            Bounds =
+                {
+                    X = 60.0 + 120.0 * float model.X - 24.0
+                    Y = height - 60.0 - 24.0
+                    Width = 48.0
+                    Height = 48.0
+                }
+            Shape = SelectableShape.Ellipse
+        }
+        {
+            Id = "aim"
+            Label = "Aim marker"
+            Bounds =
+                {
+                    X = float ax - 10.0
+                    Y = float ay - 6.0
+                    Width = 20.0
+                    Height = 12.0
+                }
+            Shape = SelectableShape.Ellipse
+        }
+    ]
+
+let select (request: SelectionRequest) (model: Model) : Model =
+    match request with
+    | SelectionRequest.Clear -> { model with Selected = None }
+    | SelectionRequest.Select id when objects model |> List.exists (fun target -> target.Id = id) ->
+        { model with Selected = Some id }
+    | SelectionRequest.Select _ -> model
+
+let interaction: SceneInteraction<Model> =
+    SceneInteraction.create objects (fun model -> model.Selected) select
+
+/// The requests the scripted player makes, one journey (120 frames) at a time: select the token, then the aim marker,
+/// then clear. A request that would not change the selection is not made (an input host asks only for a change).
+let selections (frame: int) : SelectionRequest option =
+    match frame % 120 with
+    | 20 -> Some(SelectionRequest.Select "token")
+    | 70 -> Some(SelectionRequest.Select "aim")
+    | 105 -> Some SelectionRequest.Clear
+    | _ -> None
+
 let game: BenchGame<Model> =
     {
         Id = "reference-game"
@@ -140,6 +194,8 @@ let game: BenchGame<Model> =
         Height = height
         Init = init
         Step = step
+        Interaction = interaction
+        Selections = selections
         Scenes =
             [
                 {

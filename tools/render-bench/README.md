@@ -16,10 +16,27 @@ control.
 
 ## What is measured
 
-The route is the production one. The runner registers the game's `view` with `SvgSurface`, `PixiSurface` and
-`BabylonSurface` through `RendererRegistry`. `RendererDriver.start` mounts SVG, and `RendererMsg.SelectBackend`
-switches to the backend under test. Every frame the scripted state goes through `RendererMsg.StateChanged`. Each run
-measures one game, scene, size, backend and repeat, in a fresh browser process.
+The route is the one games ship on `FS.GG.Game.Render.Browser` 0.18.0. The runner declares the game's `view` with
+`BrowserRenderers.declare` (the SVG, Pixi and Babylon surfaces, each from its `defaultOptions`). `BrowserRenderers.start`
+starts the `RendererDriver` on SVG and binds the late-failure route, and `RendererMsg.SelectBackend` switches to the
+backend under test. Every frame the scripted state goes through `RendererMsg.StateChanged`. Each run measures one game,
+scene, size, backend, route and repeat, in a fresh browser process.
+
+Two routes are selectable with `--interaction` (default `interactive`; `plain,interactive` runs both, adjacent in the
+session):
+
+| Route | Declaration | What each backend mounts |
+|---|---|---|
+| `interactive` | `BrowserRenderers.declare ... \|> SceneRenderers.withInteraction interaction selection` | `mountInteractive` (#751, #758): the input host (hit regions, keyboard focus, accessible mirror with one button per selectable object) and an `InteractiveScene` presented every frame |
+| `plain` | `BrowserRenderers.declare ...` only | `mountScene`, no input host (how a 0.17.0 game presented a Scene) |
+
+In the `interactive` route the game's own `SceneInteraction` is declared and the page binds its `SelectionRoute` to the
+game's selection rule. The scripted player also makes three selection requests per 120-frame journey (select the token,
+select the aim marker, clear), reported through the route as an input host would, so selection is part of what is
+measured. ReferenceGame declares two selectable objects (`token`, `aim`), so the mirror holds two buttons: the cost of an
+input host with many selectable objects (a unit-heavy game) is not covered by this scene. SVG draws the hit regions as
+transparent elements, Pixi keeps them off the stage and Babylon makes them invisible meshes; the node counts below
+exclude them, so `size` is the same drawable-node count in both routes.
 
 The page refuses the run if any of these fails:
 
@@ -27,7 +44,9 @@ The page refuses the run if any of these fails:
 - the scene has exactly `size` drawable nodes;
 - a canvas backend issues draw calls.
 
-The driver refuses a GPU-mode run whose backend context reports a software renderer.
+The driver refuses a GPU-mode run whose backend context reports a software renderer, and a `software` run whose backend
+context reports hardware (`checkRenderer`). `driver.mjs selftest` exercises that refusal with injected renderer strings,
+and the CI job runs it.
 
 Frame pacing is uncapped (`--disable-gpu-vsync --disable-frame-rate-limit`), so the frame interval measures what a
 frame costs, not the display rate. The recording window starts after the backend first draws and after the warm-up
@@ -42,7 +61,7 @@ frames.
 | `processCpuMsPerFrame` | CPU time per frame of the renderer, GPU and browser processes. For SVG, the GPU process's share covers raster and compositing. | CDP `SystemInfo.getProcessInfo` |
 | `gpuTimeMs` | `TIME_ELAPSED` queries around every animation-frame callback during the window, summed per frame. A frame with a disjoint query is dropped and counted. | `EXT_disjoint_timer_query_webgl2` |
 | `drawCalls.perFrame` | Every WebGL `draw*` call, instanced draw and multi-draw count, per frame. | page (WebGL prototype wrapper) |
-| `memory` | JS heap used at the end of the window, and again after a forced GC. DOM nodes and listeners are recorded too. | CDP `Performance.getMetrics`, `HeapProfiler.collectGarbage` |
+| `memory` | **JS heap only**: heap used at the end of the window, and again after a forced GC. DOM nodes and listeners are recorded too. GPU memory (textures, buffers) and process RSS are **not measured**, so a backend that keeps its scene on the GPU or in native memory looks smaller here than it is. | CDP `Performance.getMetrics`, `HeapProfiler.collectGarbage` |
 | `coverage` | Declared nodes, the backend's own count, and the nodes it actually drew. `complete: false` means the timings cover a smaller scene. | SVG elements, Pixi stage children, Babylon `getActiveMeshes()` |
 
 **Unknown is explicit.** A value that cannot be observed is `null`, or it has `status: "unknown"` and a reason. It is
@@ -68,7 +87,10 @@ The mode names are the profile names of the fdev functional-GPU profile in FS.GG
 | `custom` | only `--flags "..."` | any |
 
 Common flags: `--headless=new --no-sandbox --window-size=1280,800 --disable-gpu-vsync --disable-frame-rate-limit`, no
-background throttling, no extensions. Every results file records the full flag list, the `chrome://gpu` feature
+background throttling, no extensions. `--flags="--a --b=c"` adds switches (the `=` form is required, because a value
+starting with `--` is otherwise read as another option; a bare `--flags` or a value that is not a switch is refused).
+When a switch is given more than once the last one wins, as in Chromium, so the earlier occurrence is dropped. Every
+results file records the effective flag list, that is the flags the browser was launched with, the `chrome://gpu` feature
 status (CDP `SystemInfo.getInfo`), the GPU device and driver strings, and the WebGL `UNMASKED_RENDERER` strings of a
 probe context and of each backend's own context. `driver.mjs probe --browser <chrome> --mode <mode>` prints the same
 fingerprint without running a benchmark. It exits non-zero when the mode does not get the renderer it expects.
@@ -102,8 +124,10 @@ fdev-chromium-env --no-gpu -- scripts/render-bench.sh --skip-build -- --mode sof
 node tools/render-bench/driver.mjs table gpu.json software.json
 ```
 
-The committed 2026-11-01 baselines predate the wrapper. They ran the same Chrome for Testing 153.0.8010.12 with an
-equivalent private library directory on `LD_LIBRARY_PATH`. Each results file records its `ldLibraryPath`. The .NET
+The baselines of this revision ran through the wrapper, with the wrapper mode that matches `--mode`: `fdev-chromium-env
+--gpu` for `gpu-angle-vulkan` and `fdev-chromium-env --no-gpu` for `software`. Each results file records the
+`ldLibraryPath` the wrapper set. The earlier 2026-11-01 baselines (below, non-interactive) predate the wrapper: they ran
+the same Chrome for Testing 153.0.8010.12 with an equivalent private library directory on `LD_LIBRARY_PATH`. The .NET
 SDK is the one `global.json` names. Off fdev (CI or a workstation with a system Chromium), no wrapper is needed: set
 `RENDER_BENCH_BROWSER`, or let `scripts/render-bench.sh` find `chromium` or `google-chrome`.
 
@@ -115,11 +139,13 @@ Driver options:
 | `--scenes` | `room-tiles,room-swarm` |
 | `--sizes` | `100,1000,5000` |
 | `--backends` | `svg,pixi,babylon` |
+| `--interaction` | `interactive` (`plain`, `interactive` or both, comma separated) |
 | `--repeats` | 3 |
 | `--frames` | 300 |
 | `--warmup` | 60 |
 | `--run-timeout` | 180 s |
 | `--no-samples` | off (raw samples are kept) |
+| `--flags=<switches>` | none (extra Chromium switches; see Modes) |
 
 **Capacity.** Before every run, the driver runs the fdev lane-capacity probe (`--capacity-probe`). While the probe
 says `hold`, the driver waits up to `--capacity-wait` seconds (default 600), then stops and writes what has run. Each
@@ -150,38 +176,54 @@ and `foreignGpuProcessesAfter`).
 
 ## Adding a game (FourD, SC2, BAR, ...)
 
+FourD, SC2 and BAR plug in through the published `FS.GG.Game.Render.Browser` 0.18.0 (with `FS.GG.Game.Render` 0.18.0).
+That package is what the page compiles against, and it is what those games ship on: `BrowserRenderers.declare`,
+`SceneRenderers.withInteraction` and the three surfaces. The harness itself (the runner, `instrument.js` and the driver)
+is not a published package. A game either adds a plug-in to this repository's page (below) or drives its own page
+with this driver (the page contract at the end of this section).
+
 A game plugs in its own state type. It supplies a `BenchGame<'State>` (`BenchGame.fs`) with these members:
 
 - `Init`;
 - a deterministic `Step: frame -> state -> state`;
 - the canvas `Width` and `Height`;
+- its `Interaction: SceneInteraction<'State>` (the selectable objects, in canvas coordinates, and its selection rule) and
+  a deterministic `Selections: frame -> SelectionRequest option` (the requests a player would make; the interactive
+  route reports them through the game's `SelectionRoute`);
 - one or more `BenchScene`s, each with a `View: size -> state -> Scene` that returns exactly `size` drawable nodes.
 
 `BenchScene.drawableNodes` counts the drawable nodes.
+
+**The scenes are synthetic.** The state is the game's real one (ReferenceGame's `ReferenceState.Model`, with its own
+`update`, `fixedTick` and `applyEffectResult`), but a scene is not the game's own `view`. The size axis needs exactly
+`size` drawable nodes, so each scene draws a background, player and aim marker positioned from the real state and adds `size - 3`
+synthetic body nodes (`room-tiles`: a static floor; `room-swarm`: nodes that all move every frame). The numbers describe
+the renderers' cost for scenes of this shape and size driven by a real state, not the cost of any shipped game's own
+view.
 
 1. Compile the game's state into the page. The page needs the model type plus the functions `Step` uses, and Fable
    must be able to compile them. ReferenceGame links `src/ReferenceGame/State.fs`, which holds the state types, and
    `src/ReferenceGame/Program.fs`, which holds `update` and `fixedTick`. Program.fs keeps its .NET-only Harness parts
    under `#if !FABLE_COMPILER`. A game that declared its renderers with the authoring kit (#745: `SceneRenderers`,
    `BrowserRenderers`, `scripts/new-game-renderers.sh`) already has a Fable-portable state type and a
-   `view: 'State -> Scene`. A benchmark scene can wrap that view and add `size - n` body nodes, as `room-tiles` and
-   `room-swarm` do. A game whose state is not Fable-portable needs a portable projection first. That is adoption
+   `view: 'State -> Scene`. A benchmark scene can wrap that view's nodes and add `size - n` body nodes, as `room-tiles`
+   and `room-swarm` do. A game whose state is not Fable-portable needs a portable projection first. That is adoption
    work under #5179, not a benchmark-only copy.
 2. Add one line to `games` in `tests/Render.Browser.Bench/Program.fs`, for example `FourDBench.game.Id, Runner.run FourDBench.game`.
 3. Run with `--games <id> --scenes <scene ids>`.
 
-Today the plug-in lives in this repository, because `FS.GG.Game.Render.Browser` is not published. The driver itself
-is page-agnostic. A game repository can drive its own page if that page meets these conditions:
+A game repository can drive its own page with this driver if that page meets these conditions:
 
 - it loads `instrument.js` before its modules;
-- it reads `?game&scene&size&backend&warmup`;
+- it reads `?game&scene&size&backend&warmup&interactive` and reports the `interactive` value it ran in
+  `__fsggBench.info.interactive` (the driver refuses a run whose page ran the other route);
 - in its frame loop it calls `__fsggBench.frameStart(timestamp)` and `__fsggBench.frameWork(ms)`;
 - it sets `__fsggBench.phase` through `mounting`, `warmup` and `ready`, or to `error` with `__fsggBench.error`;
 - it fills `__fsggBench.info.backendNodes`, plus `babylonActiveMeshes` for Babylon;
 - it stops when `__fsggBench.stop` is true.
 
-Cross-repository use without copying waits for publication of the browser host (`FS.GG.Game.Render.Browser`). That
-publication is a separate effect under #5179.
+Using the harness from another repository without copying it waits for a package of the harness. That is not part of
+this delivery.
 
 ## Baseline
 

@@ -27,6 +27,7 @@
         "scenes": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
         "sizes": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1 },
         "backends": { "type": "array", "items": { "enum": ["svg", "pixi", "babylon"] }, "minItems": 1 },
+        "interactions": { "type": "array", "items": { "enum": ["plain", "interactive"] }, "minItems": 1, "description": "the routes measured: interactive declares the game's SceneInteraction (every backend mounts mountInteractive with an input host, as a game on Render.Browser 0.18.0 ships); plain is BrowserRenderers.declare only (mountScene). Absent in files written before the interactive route existed, which are plain." },
         "repeats": { "type": "integer", "minimum": 1 },
         "frames": { "type": "integer", "minimum": 1, "description": "frame intervals recorded per run, after warm-up" },
         "warmupFrames": { "type": "integer", "minimum": 1, "description": "frames presented after the backend first draws and before recording" },
@@ -121,6 +122,7 @@
         "scene": { "type": "string" },
         "size": { "type": "integer", "minimum": 1 },
         "backend": { "enum": ["svg", "pixi", "babylon"] },
+        "interactive": { "type": "boolean", "description": "the run declared the game's SceneInteraction (input host and interactive mount on the backend). Absent means plain." },
         "repeat": { "type": "integer", "minimum": 1 },
         "mode": { "type": "string" },
         "status": { "enum": ["ok", "error", "timeout", "held"] },
@@ -207,6 +209,7 @@
       "type": "object",
       "required": ["mode", "game", "scene", "size", "backend", "repeats", "ok", "frameTimeP50Ms", "frameTimeP95Ms", "frameTimeP99Ms", "mainThreadCpuMsPerFrame", "gpuTimeP50Ms", "drawCallsP50", "jsHeapUsedAfterGcMB", "drawnNodes", "complete"],
       "properties": {
+        "interactive": { "type": "boolean", "description": "absent means plain" },
         "repeats": { "type": "integer" },
         "ok": { "type": "integer" },
         "frameTimeP50Ms": { "$ref": "#/$defs/spread" },
