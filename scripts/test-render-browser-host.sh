@@ -4,7 +4,8 @@
 #
 # 1. Packs FS.GG.Game.Render and asserts its bounded Fable source view (fable/RendererSelection.*,
 #    SceneRenderers.* and RendererConformance.*, the metadata project and the compatibility profile) is present,
-#    byte-identical to the canonical sources, and excludes the .NET-only Adapter/DefaultKeymap.
+#    byte-identical to the canonical sources, and excludes the .NET-only Adapter/DefaultKeymap (SceneInteraction
+#    joined the view with FS.GG.Game#751).
 # 2. Compiles tests/Render.Browser.Smoke (which references src/Render.Browser and, through the SAME
 #    Fable/FS.GG.Game.Render.fsproj the package ships, the renderer-selection sources) with Fable.
 # 3. Loads the output in headless Chromium/Chrome and requires every smoke check to pass.
@@ -14,7 +15,9 @@
 # canvas, one engine, meshes, a pixel read back, SVG -> Babylon -> SVG with the game state preserved and every
 # resource released; the same for PixiJS; and SVG <-> Pixi <-> Babylon switching. Then the conformance kit
 # (RendererConformance, GAME-RENDER-ADOPT-01.1) runs on the reference game's renderer declaration and on the
-# generator's sample (scripts/new-game-renderers.sh), on all three real backends.
+# generator's sample (scripts/new-game-renderers.sh), on all three real backends; the reference game's run includes
+# the kit's interaction section (FS.GG.Game#751: hit test, keyboard, accessible mirror and input-host disposal on
+# every backend), and the reference game is then played by pointer through its renderer driver on each backend.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -34,7 +37,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=320
+MIN_CHECKS=441
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -58,6 +61,19 @@ fi
   echo "test-render-browser-host: required browser 'chromium' or 'google-chrome' was not found" >&2
   exit 2
 }
+# Playwright launches the browser from an executable PATH, never a command name, so resolve the bare name (from the
+# default list or RENDER_SMOKE_BROWSER) and any symlinks to the real file.
+RESOLVED="$(command -v "$BROWSER" || true)"
+[[ -n $RESOLVED ]] || {
+  echo "test-render-browser-host: browser '$BROWSER' was not found" >&2
+  exit 2
+}
+BROWSER="$(readlink -f "$RESOLVED")"
+[[ -x $BROWSER ]] || {
+  echo "test-render-browser-host: browser '$BROWSER' is not executable" >&2
+  exit 2
+}
+echo "test-render-browser-host: browser executable $BROWSER ($("$BROWSER" --version 2>/dev/null | head -n 1))"
 
 TMP="$(mktemp -d)"
 if [[ ${RENDER_SMOKE_KEEP:-0} == 1 ]]; then
@@ -196,43 +212,32 @@ printf '%s\n' \
 # 3. Real browser run, in REAL time. A WebGL canvas needs compositor frames (Babylon compiles shaders
 #    asynchronously and the smoke waits for the first drawn frame), and a virtual-time browser run delivers only a
 #    couple of animation frames, so the page reports through the console instead: it logs one
-#    RENDER-SMOKE-RESULT line (counts and a base64 report) when it is done and this script waits for that line,
-#    bounded, then stops the browser.
+#    RENDER-SMOKE-RESULT line (counts and a base64 report) when it is done.
+#
+#    The browser is driven by tests/Render.Browser.Smoke/driver/run-smoke.mjs (Playwright, pinned in its
+#    package-lock.json), because the interaction checks (FS.GG.Game#751) need REAL input: the driver performs the
+#    page's pointer and keyboard requests with Playwright's trusted page.mouse and page.keyboard. It writes every
+#    console line to the log this script parses and stops the browser once the result is reported, bounded.
 #
 #    The default flags give WebGL through SwiftShader (software), which is what a CI runner has;
 #    RENDER_SMOKE_BROWSER_FLAGS selects a GPU instead. The result names the WebGL renderer that ran.
 BROWSER_FLAGS="${RENDER_SMOKE_BROWSER_FLAGS:---headless=new --no-sandbox --disable-gpu --enable-unsafe-swiftshader --use-angle=swiftshader}"
-BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-120}"
-mkdir -p "$TMP/profile"
+BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-180}"
+mkdir -p "$TMP/driver"
+cp tests/Render.Browser.Smoke/driver/package.json tests/Render.Browser.Smoke/driver/package-lock.json \
+  tests/Render.Browser.Smoke/driver/run-smoke.mjs "$TMP/driver/"
+(cd "$TMP/driver" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)
 : >"$TMP/browser.stderr"
 # shellcheck disable=SC2086
-setsid "$BROWSER" \
-  $BROWSER_FLAGS \
-  --user-data-dir="$TMP/profile" \
-  --allow-file-access-from-files \
-  --enable-logging=stderr --v=0 \
-  "file://$TMP/js/index.html" \
-  >/dev/null 2>"$TMP/browser.stderr" &
-BROWSER_PID=$!
-stop_browser() { kill -- "-$BROWSER_PID" 2>/dev/null || kill "$BROWSER_PID" 2>/dev/null || true; }
-trap 'stop_browser; [[ ${RENDER_SMOKE_KEEP:-0} == 1 ]] || rm -rf "$TMP"' EXIT
-
-waited=0
-until grep -q 'RENDER-SMOKE-RESULT' "$TMP/browser.stderr" 2>/dev/null; do
-  if ! kill -0 "$BROWSER_PID" 2>/dev/null; then
-    break
-  fi
-  if [[ $waited -ge $((BROWSER_TIMEOUT * 4)) ]]; then
-    break
-  fi
-  sleep 0.25
-  waited=$((waited + 1))
-done
-stop_browser
+node "$TMP/driver/run-smoke.mjs" "$TMP/js/index.html" "$BROWSER" "$TMP/browser.stderr" "$BROWSER_TIMEOUT" $BROWSER_FLAGS || {
+  echo "test-render-browser-host: the real-input driver failed" >&2
+  grep -E 'CONSOLE|Uncaught|DRIVER' "$TMP/browser.stderr" | head -n 40 >&2 || true
+  exit 1
+}
 
 if ! grep -q 'RENDER-SMOKE-RESULT' "$TMP/browser.stderr"; then
   echo "test-render-browser-host: the page never reported a result within ${BROWSER_TIMEOUT}s (the module did not run or did not finish)" >&2
-  grep -E 'CONSOLE|Uncaught' "$TMP/browser.stderr" | head -n 40 >&2 || true
+  grep -E 'CONSOLE|Uncaught|DRIVER' "$TMP/browser.stderr" | head -n 40 >&2 || true
   exit 1
 fi
 

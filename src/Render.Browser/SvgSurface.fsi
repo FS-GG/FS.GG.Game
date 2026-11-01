@@ -25,8 +25,23 @@ module SvgSurface =
     val mountScene:
         container: HTMLElement -> options: SvgBrowserOptions -> scene: Scene -> Result<RendererMount<Scene>, string>
 
+    /// The interactive SVG mount (FS.GG.Game#751): the retained `SvgBrowser` root already has the `SceneInteraction`
+    /// contract (browser hit test, keyboard focus and selection, the HTML mirror, listener disposal); this binds it to
+    /// the game. Each selectable object becomes a selectable semantic object with a transparent hit shape over its
+    /// region, above the drawn Scene; a selection the player changes there is reported as a `SelectionRequest`, and the
+    /// game's selection in each presented frame is applied without reporting. The root and the mirror carry
+    /// `data-renderer="svg"`. Objects that `SceneInteraction.problems` rejects, or that use the reserved id
+    /// `game-render:scene`, are refused at mount and raise from `Present`.
+    val mountInteractive:
+        container: HTMLElement ->
+        options: SvgBrowserOptions ->
+        report: (SelectionRequest -> unit) ->
+        frame: InteractiveScene ->
+            Result<RendererMount<InteractiveScene>, string>
+
     /// `mountScene container options` as the SVG `SceneSurface` for `SceneRenderers` (`SceneRenderers.create view
     /// (surface ...).MountScene`, or `BrowserRenderers.declare`, which does that for all three backends).
+    /// It is interactive through `mountInteractive container options`.
     val surface: container: HTMLElement -> options: SvgBrowserOptions -> SceneSurface
 
     /// The SVG-default registry for a game-state type, mounted in `container`: `RendererRegistry.svg` with

@@ -13,6 +13,7 @@
     <Compile Include="..\..\src\ReferenceGame\State.fs" Link="ReferenceGame\State.fs" />
     <Compile Include="..\..\src\ReferenceGame\Renderers.fs" Link="ReferenceGame\Renderers.fs" />
     <Compile Include="GeneratedRenderers.fs" />
+    <Compile Include="RetainedSurface.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

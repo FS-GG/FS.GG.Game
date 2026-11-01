@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Real-input driver for scripts/test-render-browser-host.sh (FS.GG.Game#751): Playwright mouse and keyboard, exposed to the page as window.__fsggInput.",
+  "dependencies": { "playwright-core": "1.63.0" }
+}

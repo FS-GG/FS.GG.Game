@@ -9,6 +9,9 @@ The package contains:
 - `SvgSurface`, `PixiSurface` and `BabylonSurface`, the scene surfaces and adapters over the shared
   `FS.GG.UI.Scene`. The canvas surfaces draw `Rectangle`, `FilledEllipse` and `Circle`, treat `Group`,
   `Translate` and `Empty` as structure, and count other nodes as unsupported.
+- `RetainedSvgSurface`, a game's own retained SVG scene as a renderer adapter. It keeps the game's selectable
+  objects, accessible labels, camera and input host.
+- The `SceneInteraction` input contract on the Pixi and Babylon canvases, through an internal input host.
 - `RendererDriver`, which runs the `RendererSelection` Elmish loop for a page that is not already an Elmish
   program. Dispatch is queued, so adapter callbacks never reenter the host. `failBackend` reports a failure
   of an asynchronously initialising backend.

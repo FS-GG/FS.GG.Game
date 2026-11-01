@@ -23,6 +23,8 @@
   <ItemGroup>
     <Compile Include="../RendererSelection.fsi" />
     <Compile Include="../RendererSelection.fs" />
+    <Compile Include="../SceneInteraction.fsi" />
+    <Compile Include="../SceneInteraction.fs" />
     <Compile Include="../SceneRenderers.fsi" />
     <Compile Include="../SceneRenderers.fs" />
     <Compile Include="../RendererConformance.fsi" />

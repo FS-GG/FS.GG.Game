@@ -99,6 +99,14 @@ module PixiSurface =
             OnFailure = ignore
         }
 
+    /// Pixi's own hit test over a tree of interactive display objects (FS.GG.Game#751).
+    [<Import("EventBoundary", "pixi.js"); EmitConstructor>]
+    let private eventBoundary (_root: P.Container) : obj = jsNative
+
+    /// The topmost interactive display object under `(x, y)`, or null.
+    [<Emit("$0.hitTest($1, $2)")>]
+    let private boundaryHitTest (_boundary: obj) (_x: float) (_y: float) : obj = jsNative
+
     let private rgb (color: Color) =
         (int color.Red <<< 16) ||| (int color.Green <<< 8) ||| int color.Blue
 
@@ -123,11 +131,16 @@ module PixiSurface =
 
         P.fill slot.Node (rgb slot.Fill) (float slot.Fill.Alpha / 255.0)
 
-    let mountScene
+    /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
+    /// whose hit test is Pixi's own `EventBoundary` over one hit region per selectable object.
+    let private mountWith
         (container: HTMLElement)
         (options: PixiOptions)
-        (scene: Scene)
-        : Result<RendererMount<Scene>, string> =
+        (interactive: (SelectionRequest -> unit) option)
+        (first: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        let scene = first.Scene
+
         if System.String.IsNullOrWhiteSpace options.Label then
             Error "Pixi surface refused the scene: the accessible label is blank"
         elif
@@ -183,6 +196,72 @@ module PixiSurface =
                         Ready = ready
                         Failed = failedInit
                     }
+
+                // FS.GG.Game#751: the hit regions live in their own tree, never on the stage, so they are not drawn and
+                // the stage keeps one display object per drawable scene node. Drawn at their scene coordinates, which are
+                // the canvas's pixels.
+                let hitRoot = P.container ()
+                let boundary = eventBoundary hitRoot
+                let regions = ResizeArray<P.Graphics * string>()
+                let regionsOf: SelectableObject list ref = ref []
+
+                let reregion (objects: SelectableObject list) =
+                    if objects <> regionsOf.Value then
+                        for region, _ in regions do
+                            P.removeChild hitRoot region
+                            P.destroyNode region false
+
+                        regions.Clear()
+
+                        for target in objects do
+                            let region = P.graphics ()
+                            let bounds = target.Bounds
+
+                            match target.Shape with
+                            | SelectableShape.Box -> P.rect region bounds.X bounds.Y bounds.Width bounds.Height
+                            | SelectableShape.Ellipse ->
+                                P.ellipse
+                                    region
+                                    (bounds.X + bounds.Width / 2.0)
+                                    (bounds.Y + bounds.Height / 2.0)
+                                    (bounds.Width / 2.0)
+                                    (bounds.Height / 2.0)
+
+                            P.fill region 0xffffff 1.0
+                            P.setEventMode region "static"
+                            P.addChild hitRoot region
+                            regions.Add(region, target.Id)
+
+                        regionsOf.Value <- objects
+
+                acquire (fun () ->
+                    regions.Clear()
+                    P.destroyNode hitRoot true)
+
+                let hitTest (point: Point) : string option =
+                    let hit = boundaryHitTest boundary point.X point.Y
+
+                    regions
+                    |> Seq.tryFind (fun (region, _) -> obj.ReferenceEquals(box region, hit))
+                    |> Option.map snd
+
+                let input =
+                    interactive
+                    |> Option.map (fun report ->
+                        reregion first.Objects
+
+                        CanvasInput.attach
+                            container
+                            canvas
+                            RendererBackend.Pixi
+                            options.Label
+                            options.Width
+                            options.Height
+                            hitTest
+                            report
+                            first)
+
+                acquire (fun () -> input |> Option.iter (fun host -> host.Dispose()))
 
                 let slots = ResizeArray<Slot>()
                 let latest = ref scene
@@ -318,11 +397,26 @@ module PixiSurface =
                 Ok
                     {
                         Present =
-                            fun next ->
+                            fun frame ->
                                 if not disposed.Value then
                                     match failed.Value with
                                     | Some reason -> failwith reason
                                     | None ->
+                                        let next = frame.Scene
+
+                                        match input with
+                                        | Some host ->
+                                            match SceneInteraction.problems frame.Objects with
+                                            | [] -> ()
+                                            | problems ->
+                                                failwithf
+                                                    "Pixi surface refused the objects: %s"
+                                                    (String.concat "; " problems)
+
+                                            reregion frame.Objects
+                                            host.Update frame
+                                        | None -> ()
+
                                         latest.Value <- next
 
                                         if ready.Value then
@@ -342,8 +436,43 @@ module PixiSurface =
 
                 Error(sprintf "Pixi surface could not start: %s" ex.Message)
 
+    let private plain (scene: Scene) : InteractiveScene =
+        {
+            Scene = scene
+            Objects = []
+            Selected = None
+        }
+
+    let mountScene
+        (container: HTMLElement)
+        (options: PixiOptions)
+        (scene: Scene)
+        : Result<RendererMount<Scene>, string> =
+        mountWith container options None (plain scene)
+        |> Result.map (fun mount ->
+            {
+                Present = fun next -> mount.Present(plain next)
+                Dispose = mount.Dispose
+            })
+
+    let mountInteractive
+        (container: HTMLElement)
+        (options: PixiOptions)
+        (report: SelectionRequest -> unit)
+        (frame: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        if not (List.isEmpty (SceneInteraction.problems frame.Objects)) then
+            Error(
+                sprintf
+                    "Pixi surface refused the objects: %s"
+                    (String.concat "; " (SceneInteraction.problems frame.Objects))
+            )
+        else
+            mountWith container options (Some report) frame
+
     let surface (container: HTMLElement) (options: PixiOptions) : SceneSurface =
         SceneSurface.create RendererBackend.Pixi (mountScene container options)
+        |> SceneSurface.withInteraction (mountInteractive container options)
 
     let adapter (container: HTMLElement) (options: PixiOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
         SceneSurface.adapter view (surface container options)

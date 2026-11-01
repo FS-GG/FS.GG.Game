@@ -1774,7 +1774,22 @@ let runThreeBackends () : Async<unit> =
 /// `RendererConformance.run` on SVG, Pixi and Babylon through `RendererDriver`, with the page's independent resource
 /// probe (SVG roots, canvases, engines, applications, live WebGL contexts) and outputs read back from the DOM and
 /// from canvas pixels. Every kit result becomes one smoke check.
-let kitChecks = 62
+let kitChecks = 73
+
+/// The kit's interaction section on three backends (FS.GG.Game#751): one subject check and twelve per backend.
+let interactionChecks = 37
+
+/// Kit checks that fail for a known, routed reason, each with its owner. The smoke asserts that they still fail, so the
+/// gap stays visible and the fix that closes it must remove the entry. The retained SVG host of FS.GG.UI.Scene 0.31.0
+/// re-appends every mirror button and rewrites its status on each Present (focus drops to the body, the live region
+/// is written every frame); the bump that fixes it is FS.GG.Rendering#1504.
+let knownGaps =
+    [
+        "interaction svg: keyboard focus stays on the mirror entry across the Present of its selection and across unchanged Presents",
+        "FS.GG.Rendering#1504"
+        "interaction svg: an unchanged Present does not write the live status", "FS.GG.Rendering#1504"
+    ]
+    |> Map.ofList
 
 let rgbOf (color: Color) = [| int color.Red; int color.Green; int color.Blue |]
 
@@ -1830,22 +1845,31 @@ let showsPixels
                 )
     }
 
-let runKit (label: string) (subject: ConformanceSubject<'State>) : Async<unit> =
+let runKit (label: string) (expected: int) (subject: ConformanceSubject<'State>) : Async<unit> =
     async {
         let! results = RendererConformance.run subject
 
         for result in results do
-            check (label + ": " + result.Check) result.Passed result.Detail
+            match Map.tryFind result.Check knownGaps with
+            | Some owner ->
+                check
+                    (sprintf "%s: known gap (%s) still fails: %s" label owner result.Check)
+                    (not result.Passed)
+                    "the check now passes: remove it from knownGaps"
+
+                info (sprintf "%s known gap %s" label owner) result.Detail
+            | None -> check (label + ": " + result.Check) result.Passed result.Detail
 
         check
-            (sprintf "%s: the kit ran all %d checks for three backends" label kitChecks)
-            (results.Length = kitChecks)
+            (sprintf "%s: the kit ran all %d checks for three backends" label expected)
+            (results.Length = expected)
             (string results.Length)
     }
 
 let runConformance () : Async<unit> =
     async {
         BrowserConformance.installContextProbe ()
+        BrowserConformance.installInputProbe ()
 
         // The reference game.
         let container = document.createElement "div"
@@ -1856,9 +1880,14 @@ let runConformance () : Async<unit> =
         let options =
             BrowserRenderers.options "Reference game" ReferenceRenderers.width ReferenceRenderers.height
 
+        // FS.GG.Game#751: the reference game is played by selection on every backend.
+        let selection = SelectionRoute.create ()
+
         let renderers =
             match BrowserRenderers.surfaces container options route with
-            | svg :: others -> ReferenceRenderers.declare (SceneSurface.mountScene svg) others
+            | (svg :: _) as all ->
+                ReferenceRenderers.declare (SceneSurface.mountScene svg) all
+                |> SceneRenderers.withInteraction ReferenceRenderers.interaction selection
             | [] -> failwith "no surfaces"
 
         let start: ReferenceState.Model =
@@ -1871,6 +1900,7 @@ let runConformance () : Async<unit> =
                 VaultClear = false
                 Aim = 0, 0
                 Tick = 0
+                Selected = None
             }
 
         let states =
@@ -1928,13 +1958,18 @@ let runConformance () : Async<unit> =
         do!
             runKit
                 "reference kit"
+                (kitChecks + interactionChecks)
                 (BrowserConformance.subject
                     container
                     route
                     (SceneRenderers.registry renderers)
                     RendererBackend.all
                     states
-                    shows)
+                    shows
+                 |> RendererConformance.withInteraction
+                     ReferenceRenderers.interaction
+                     selection
+                     (BrowserConformance.interactionProbe container))
 
         check
             "reference kit: the stage is empty afterwards"
@@ -1957,6 +1992,98 @@ let runConformance () : Async<unit> =
                 (sprintf "own=%A other=%A" own other)
 
         controlHost.Dispose()
+        let! _ = BrowserConformance.waitUntil 600 (fun () -> (PixiSurface.live ()).Applications = 0)
+
+        // FS.GG.Game#751, the reference game played through its renderer driver: on every backend a pointer press on the
+        // token selects it in the game state, the backend draws the selection ring, the mirror's status names it, and
+        // the surface is focusable; disposing leaves no input host behind.
+        // The census is page-wide: Pixi leaves its own listeners on the canvas of an initialisation that failed (the
+        // late-failure sections above), which are not this driver's.
+        let before = RendererBackend.all |> List.map (fun backend -> backend, BrowserConformance.inputHosts backend) |> Map.ofList
+        let driver = BrowserRenderers.start route (SceneRenderers.registry renderers) start ignore
+        let demoHost = BrowserConformance.host driver
+        BrowserConformance.installInputProbe ()
+
+        selection
+        |> SelectionRoute.bind (fun request ->
+            driver.Dispatch(RendererMsg.StateChanged(SceneInteraction.apply ReferenceRenderers.interaction request driver.Model.State)))
+
+        let x, y, _, _ = ReferenceRenderers.tokenBounds start
+
+        for backend in RendererBackend.all do
+            let name = RendererBackend.id backend
+            driver.Dispatch(RendererMsg.SelectBackend backend)
+            driver.Dispatch(RendererMsg.StateChanged { driver.Model.State with Selected = None })
+            do! BrowserConformance.press container backend { X = x + 12.0; Y = y + 12.0 }
+            let selected = driver.Model.State.Selected
+
+            let status =
+                match container.querySelector (sprintf "[data-scene-controls][data-renderer=%s] [role=status]" name) with
+                | null -> "<no status>"
+                | element -> element.textContent
+
+            let surface =
+                match container.querySelector (sprintf "[data-renderer=%s]:not([data-scene-controls])" name) with
+                | null -> "<none>"
+                | element -> sprintf "%s/%s" (element.getAttribute "role") (element.getAttribute "tabindex")
+
+            let! ring =
+                match backend with
+                | RendererBackend.Svg ->
+                    async {
+                        return
+                            if has (svgFill ReferenceRenderers.selectionColor) container.innerHTML then
+                                Ok()
+                            else
+                                Error "no ring in the svg"
+                    }
+                | _ ->
+                    async {
+                        let expect =
+                            match backend with
+                            | RendererBackend.Babylon -> litOf ReferenceRenderers.selectionColor
+                            | _ -> rgbOf ReferenceRenderers.selectionColor
+
+                        let tolerance = if backend = RendererBackend.Babylon then 4 else 2
+
+                        let! pixel =
+                            BrowserConformance.readPixel
+                                demoHost
+                                container
+                                backend
+                                (int x - 2)
+                                (int y + 12)
+                                (fun p -> near expect p tolerance)
+                                600
+
+                        return if near expect pixel tolerance then Ok() else Error(sprintf "ring pixel %A, want %A" pixel expect)
+                    }
+
+            check
+                (sprintf "reference game on %s: a pointer press on the token selects it in the game state, the ring is drawn and the status names it" name)
+                (selected = Some "token" && status = "Player token" && ring = Ok())
+                (sprintf "selected=%A status=%s ring=%A" selected status ring)
+
+            check
+                (sprintf "reference game on %s: the surface is a focusable application" name)
+                (surface = "application/0")
+                surface
+
+        (driver :> System.IDisposable).Dispose()
+        SelectionRoute.unbind selection
+
+        let! released =
+            BrowserConformance.waitUntil 600 (fun () ->
+                RendererBackend.all |> List.forall (fun backend -> BrowserConformance.inputHosts backend <= before.[backend]))
+
+        check
+            "reference game: disposing the driver leaves no input host behind"
+            released
+            (RendererBackend.all
+             |> List.map (fun backend ->
+                 sprintf "%s=%d (before %d)" (RendererBackend.id backend) (BrowserConformance.inputHosts backend) before.[backend])
+             |> String.concat " ")
+
         let! _ = BrowserConformance.waitUntil 600 (fun () -> (PixiSurface.live ()).Applications = 0)
         ()
 
@@ -1982,7 +2109,7 @@ let runConformance () : Async<unit> =
                 }
             | _ -> showsPixels host generated backend (fun s -> (backgroundOf s, 160, 90), (backgroundOf s, 2, 2)) state
 
-        do! runKit "generated kit" (GeneratedRenderers.conformance generated [ 0; 1; 2 ] generatedShows)
+        do! runKit "generated kit" kitChecks (GeneratedRenderers.conformance generated [ 0; 1; 2 ] generatedShows)
 
         check
             "generated kit: the stage is empty afterwards"
@@ -2031,6 +2158,7 @@ async {
         do! runPixi ()
         do! runThreeBackends ()
         do! runConformance ()
+        do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

@@ -14,16 +14,26 @@ FS.GG.Game.Render.Browser.BabylonOptions.new(System.String, System.Double, Syste
 FS.GG.Game.Render.Browser.BabylonSurface.adapter<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>) : RendererAdapter<State>
 FS.GG.Game.Render.Browser.BabylonSurface.counters() : FS.GG.Game.Render.Browser.BabylonCounters
 FS.GG.Game.Render.Browser.BabylonSurface.defaultOptions(System.String, System.Double, System.Double) : FS.GG.Game.Render.Browser.BabylonOptions
+FS.GG.Game.Render.Browser.BabylonSurface.mountInteractive(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectionRequest, Microsoft.FSharp.Core.Unit>, FS.GG.Game.Render.InteractiveScene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.Game.Render.InteractiveScene>, System.String>
 FS.GG.Game.Render.Browser.BabylonSurface.mountScene(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>
 FS.GG.Game.Render.Browser.BabylonSurface.register<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>, RendererRegistry<State>) : RendererRegistry<State>
 FS.GG.Game.Render.Browser.BabylonSurface.surface(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions) : FS.GG.Game.Render.SceneSurface
+FS.GG.Game.Render.Browser.BrowserConformance.focused(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend) : System.String
 FS.GG.Game.Render.Browser.BrowserConformance.host<State>(RendererDriver<State>) : ConformanceHost<State>
+FS.GG.Game.Render.Browser.BrowserConformance.inputHosts(FS.GG.Game.Render.RendererBackend) : System.Int32
 FS.GG.Game.Render.Browser.BrowserConformance.installContextProbe() : System.Void
+FS.GG.Game.Render.Browser.BrowserConformance.installInputProbe() : System.Void
+FS.GG.Game.Render.Browser.BrowserConformance.interactionProbe(Browser.Types.HTMLElement) : FS.GG.Game.Render.InteractionProbe
+FS.GG.Game.Render.Browser.BrowserConformance.key(System.String) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.liveContexts(FS.GG.Game.Render.RendererBackend) : System.Int32
+FS.GG.Game.Render.Browser.BrowserConformance.liveWrites(FS.GG.Game.Render.RendererBackend) : System.Int32
+FS.GG.Game.Render.Browser.BrowserConformance.move(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.pixiLateFailure() : FS.GG.Game.Render.LateFailureTrigger
+FS.GG.Game.Render.Browser.BrowserConformance.press(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.readPixel<State>(ConformanceHost<State>, Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, System.Int32, System.Int32, Microsoft.FSharp.Core.FSharpFunc<System.Int32[], System.Boolean>, System.Int32) : Microsoft.FSharp.Control.FSharpAsync<System.Int32[]>
 FS.GG.Game.Render.Browser.BrowserConformance.resources(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend) : System.Int32
 FS.GG.Game.Render.Browser.BrowserConformance.subject<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.LateFailureRoute, RendererRegistry<State>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>, FSharpList<State>, FSharpFunc<ConformanceHost<State>, FSharpFunc<FS.GG.Game.Render.RendererBackend, FSharpFunc<State, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>>>>) : ConformanceSubject<State>
+FS.GG.Game.Render.Browser.BrowserConformance.svgViewport(Browser.Types.HTMLElement) : Microsoft.FSharp.Core.FSharpOption<System.Tuple<System.Double, System.Double>>
 FS.GG.Game.Render.Browser.BrowserConformance.waitUntil(System.Int32, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, System.Boolean>) : Microsoft.FSharp.Control.FSharpAsync<System.Boolean>
 FS.GG.Game.Render.Browser.BrowserRenderOptions.Height : System.Double [get]
 FS.GG.Game.Render.Browser.BrowserRenderOptions.Label : System.String [get]
@@ -57,6 +67,7 @@ FS.GG.Game.Render.Browser.PixiSurface.adapter<State>(Browser.Types.HTMLElement, 
 FS.GG.Game.Render.Browser.PixiSurface.counters() : FS.GG.Game.Render.Browser.PixiCounters
 FS.GG.Game.Render.Browser.PixiSurface.defaultOptions(System.String, System.Double, System.Double) : FS.GG.Game.Render.Browser.PixiOptions
 FS.GG.Game.Render.Browser.PixiSurface.live() : FS.GG.Game.Render.Browser.PixiLive
+FS.GG.Game.Render.Browser.PixiSurface.mountInteractive(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectionRequest, Microsoft.FSharp.Core.Unit>, FS.GG.Game.Render.InteractiveScene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.Game.Render.InteractiveScene>, System.String>
 FS.GG.Game.Render.Browser.PixiSurface.mountScene(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>
 FS.GG.Game.Render.Browser.PixiSurface.register<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>, RendererRegistry<State>) : RendererRegistry<State>
 FS.GG.Game.Render.Browser.PixiSurface.surface(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.PixiOptions) : FS.GG.Game.Render.SceneSurface
@@ -65,7 +76,13 @@ FS.GG.Game.Render.Browser.RendererDriver.start<State>(RendererRegistry<State>, S
 FS.GG.Game.Render.Browser.RendererDriver`1.Dispatch(RendererMsg<State>) : System.Void
 FS.GG.Game.Render.Browser.RendererDriver`1.Model : RendererModel<State> [get]
 FS.GG.Game.Render.Browser.RendererDriver`1.Mounted : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.RendererBackend> [get]
+FS.GG.Game.Render.Browser.RetainedSvgSurface.adapter<State>(RetainedSvgSurface<State>) : RendererAdapter<State>
+FS.GG.Game.Render.Browser.RetainedSvgSurface.create<State>(Browser.Types.HTMLElement, System.String, FSharpFunc<State, System.Tuple<System.Double, System.Double>>, FSharpFunc<State, FS.GG.UI.Scene.RetainedScene>) : RetainedSvgSurface<State>
+FS.GG.Game.Render.Browser.RetainedSvgSurface.registry<State>(RetainedSvgSurface<State>) : RendererRegistry<State>
+FS.GG.Game.Render.Browser.RetainedSvgSurface.withInput<State>(Microsoft.FSharp.Core.FSharpFunc<Browser.Types.HTMLElement, Microsoft.FSharp.Core.FSharpResult<System.IDisposable, System.String>>, RetainedSvgSurface<State>) : RetainedSvgSurface<State>
+FS.GG.Game.Render.Browser.RetainedSvgSurface.withSelection<State>(FSharpFunc<State, Microsoft.FSharp.Core.FSharpOption<System.String>>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpOption<System.String>, Microsoft.FSharp.Core.Unit>, RetainedSvgSurface<State>) : RetainedSvgSurface<State>
 FS.GG.Game.Render.Browser.SvgSurface.defaultOptions(System.String, System.Double, System.Double) : FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions
+FS.GG.Game.Render.Browser.SvgSurface.mountInteractive(Browser.Types.HTMLElement, FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectionRequest, Microsoft.FSharp.Core.Unit>, FS.GG.Game.Render.InteractiveScene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.Game.Render.InteractiveScene>, System.String>
 FS.GG.Game.Render.Browser.SvgSurface.mountScene(Browser.Types.HTMLElement, FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>
 FS.GG.Game.Render.Browser.SvgSurface.registry<State>(Browser.Types.HTMLElement, FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>) : RendererRegistry<State>
 FS.GG.Game.Render.Browser.SvgSurface.surface(Browser.Types.HTMLElement, FS.GG.UI.Scene.SvgBrowser.SvgBrowserOptions) : FS.GG.Game.Render.SceneSurface

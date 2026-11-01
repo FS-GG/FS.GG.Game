@@ -4,15 +4,23 @@ open FS.GG.UI.Scene
 
 /// See SceneRenderers.fsi for the contract.
 [<Sealed>]
-type SceneSurface internal (backend: RendererBackend, mountScene: Scene -> Result<RendererMount<Scene>, string>) =
+type SceneSurface
+    internal
+    (
+        backend: RendererBackend,
+        mountScene: Scene -> Result<RendererMount<Scene>, string>,
+        mountInteractive:
+            ((SelectionRequest -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>) option
+    ) =
     member internal _.Backend = backend
     member internal _.MountScene = mountScene
+    member internal _.MountInteractive = mountInteractive
 
 [<RequireQualifiedAccess>]
 module SceneSurface =
 
     let create (backend: RendererBackend) (mountScene: Scene -> Result<RendererMount<Scene>, string>) =
-        SceneSurface(backend, mountScene)
+        SceneSurface(backend, mountScene, None)
 
     let backend (surface: SceneSurface) = surface.Backend
 
@@ -31,6 +39,35 @@ module SceneSurface =
                         })
         }
 
+    let withInteraction mountInteractive (surface: SceneSurface) =
+        SceneSurface(surface.Backend, surface.MountScene, Some mountInteractive)
+
+    let isInteractive (surface: SceneSurface) = surface.MountInteractive.IsSome
+
+    let interactiveAdapter
+        (view: 'State -> Scene)
+        (interaction: SceneInteraction<'State>)
+        (route: SelectionRoute)
+        (surface: SceneSurface)
+        : RendererAdapter<'State> =
+        match surface.MountInteractive with
+        | None -> adapter view surface
+        | Some mountInteractive ->
+            let frame = SceneInteraction.frame view interaction
+            let report request = SelectionRoute.report request route
+
+            {
+                Backend = surface.Backend
+                Mount =
+                    fun state ->
+                        mountInteractive report (frame state)
+                        |> Result.map (fun mounted ->
+                            {
+                                Present = fun next -> mounted.Present(frame next)
+                                Dispose = mounted.Dispose
+                            })
+            }
+
 /// Opaque behind the .fsi: `create` is the only constructor and always declares the SVG surface.
 [<NoEquality; NoComparison>]
 type SceneRenderers<'State> =
@@ -38,6 +75,7 @@ type SceneRenderers<'State> =
         View: 'State -> Scene
         Views: Map<RendererBackend, 'State -> Scene>
         Surfaces: Map<RendererBackend, SceneSurface>
+        Interaction: (SceneInteraction<'State> * SelectionRoute) option
     }
 
 [<RequireQualifiedAccess>]
@@ -52,6 +90,7 @@ module SceneRenderers =
                     [
                         RendererBackend.Svg, SceneSurface.create RendererBackend.Svg svg
                     ]
+            Interaction = None
         }
 
     let withSurface (surface: SceneSurface) (renderers: SceneRenderers<'State>) =
@@ -73,14 +112,28 @@ module SceneRenderers =
         RendererBackend.all
         |> List.filter (fun backend -> Map.containsKey backend renderers.Surfaces)
 
+    let withInteraction (interaction: SceneInteraction<'State>) (route: SelectionRoute) (renderers: SceneRenderers<'State>) =
+        { renderers with
+            Interaction = Some(interaction, route)
+        }
+
     let registry (renderers: SceneRenderers<'State>) : RendererRegistry<'State> =
         let svg = renderers.Surfaces.[RendererBackend.Svg]
 
+        let adapterOf backend =
+            match renderers.Interaction with
+            | None -> SceneSurface.adapter (view backend renderers) renderers.Surfaces.[backend]
+            | Some(interaction, route) ->
+                SceneSurface.interactiveAdapter (view backend renderers) interaction route renderers.Surfaces.[backend]
+
+        let plain =
+            RendererRegistry.svg (view RendererBackend.Svg renderers) svg.MountScene
+
         backends renderers
         |> List.filter ((<>) RendererBackend.Svg)
-        |> List.fold
-            (fun registry backend ->
-                RendererRegistry.register
-                    (SceneSurface.adapter (view backend renderers) renderers.Surfaces.[backend])
-                    registry)
-            (RendererRegistry.svg (view RendererBackend.Svg renderers) svg.MountScene)
+        |> List.fold (fun registry backend -> RendererRegistry.register (adapterOf backend) registry) plain
+        // With an interaction, the SVG adapter is the interactive one too; the plain default only made the registry.
+        |> fun registry ->
+            match renderers.Interaction with
+            | Some _ -> RendererRegistry.register (adapterOf RendererBackend.Svg) registry
+            | None -> registry

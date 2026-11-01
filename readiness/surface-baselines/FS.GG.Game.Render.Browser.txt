@@ -11,4 +11,6 @@ FS.GG.Game.Render.Browser.PixiOptions
 FS.GG.Game.Render.Browser.PixiSurface
 FS.GG.Game.Render.Browser.RendererDriver
 FS.GG.Game.Render.Browser.RendererDriver`1
+FS.GG.Game.Render.Browser.RetainedSvgSurface
+FS.GG.Game.Render.Browser.RetainedSvgSurface`1
 FS.GG.Game.Render.Browser.SvgSurface

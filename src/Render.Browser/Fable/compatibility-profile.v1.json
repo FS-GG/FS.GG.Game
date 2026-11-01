@@ -16,6 +16,8 @@
   ],
   "scope": [
     "SvgSurface, PixiSurface and BabylonSurface scene surfaces and adapters over the shared FS.GG.UI.Scene",
+    "RetainedSvgSurface: a game's own retained SVG scene as a renderer adapter, keeping selectable objects, labels, camera and input host",
+    "CanvasInput (internal): the SceneInteraction input host the Pixi and Babylon adapters attach to an interactive mount",
     "RendererDriver: the RendererSelection loop for a browser page, with queued dispatch and failBackend",
     "BrowserRenderers: declare and start the SVG, Pixi and Babylon backends for one game-state type, with the LateFailureRoute",
     "BrowserConformance: WebGL context and resource probes, frame waits, pixel readback and the RendererConformance subject",
