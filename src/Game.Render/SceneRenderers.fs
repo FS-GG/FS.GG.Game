@@ -3,15 +3,20 @@ namespace FS.GG.Game.Render
 open FS.GG.UI.Scene
 
 /// See SceneRenderers.fsi for the contract.
-[<NoEquality; NoComparison>]
-type SceneSurface =
-    {
-        Backend: RendererBackend
-        MountScene: Scene -> Result<RendererMount<Scene>, string>
-    }
+[<Sealed>]
+type SceneSurface internal (backend: RendererBackend, mountScene: Scene -> Result<RendererMount<Scene>, string>) =
+    member internal _.Backend = backend
+    member internal _.MountScene = mountScene
 
 [<RequireQualifiedAccess>]
 module SceneSurface =
+
+    let create (backend: RendererBackend) (mountScene: Scene -> Result<RendererMount<Scene>, string>) =
+        SceneSurface(backend, mountScene)
+
+    let backend (surface: SceneSurface) = surface.Backend
+
+    let mountScene (surface: SceneSurface) (scene: Scene) = surface.MountScene scene
 
     let adapter (view: 'State -> Scene) (surface: SceneSurface) : RendererAdapter<'State> =
         {
@@ -45,11 +50,7 @@ module SceneRenderers =
             Surfaces =
                 Map.ofList
                     [
-                        RendererBackend.Svg,
-                        {
-                            Backend = RendererBackend.Svg
-                            MountScene = svg
-                        }
+                        RendererBackend.Svg, SceneSurface.create RendererBackend.Svg svg
                     ]
         }
 

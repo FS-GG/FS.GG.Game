@@ -67,10 +67,7 @@ module SvgSurface =
                 }
 
     let surface (container: HTMLElement) (options: SvgBrowserOptions) : SceneSurface =
-        {
-            Backend = RendererBackend.Svg
-            MountScene = mountScene container options
-        }
+        SceneSurface.create RendererBackend.Svg (mountScene container options)
 
     let registry (container: HTMLElement) (options: SvgBrowserOptions) (view: 'State -> Scene) =
         RendererRegistry.svg view (mountScene container options)

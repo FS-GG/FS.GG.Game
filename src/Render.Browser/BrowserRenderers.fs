@@ -18,6 +18,13 @@ type LateFailureRoute() =
         | Some report -> report backend reason
         | None -> ()
 
+    /// The report of the driver bound NOW. A mount captures it when it is created, so a mount of an earlier driver
+    /// never reaches a driver bound later.
+    member _.Capture() : RendererBackend -> string -> unit =
+        match target with
+        | Some report -> report
+        | None -> fun _ _ -> ()
+
 [<NoEquality; NoComparison>]
 type BrowserRenderOptions =
     {
@@ -39,14 +46,24 @@ module BrowserRenderers =
         }
 
     let surfaces (container: HTMLElement) (options: BrowserRenderOptions) (route: LateFailureRoute) : SceneSurface list =
-        let pixi =
-            { PixiSurface.defaultOptions options.Label options.Width options.Height with
-                OnFailure = route.Report RendererBackend.Pixi
-            }
+        let pixi = PixiSurface.defaultOptions options.Label options.Width options.Height
+
+        // Each Pixi mount reports to the driver bound when it was mounted, not to whichever driver the route is bound
+        // to when its initialisation settles.
+        let pixiSurface =
+            SceneSurface.create RendererBackend.Pixi (fun scene ->
+                let report = route.Capture()
+
+                PixiSurface.mountScene
+                    container
+                    { pixi with
+                        OnFailure = report RendererBackend.Pixi
+                    }
+                    scene)
 
         [
             SvgSurface.surface container (SvgSurface.defaultOptions options.Label options.Width options.Height)
-            PixiSurface.surface container pixi
+            pixiSurface
             BabylonSurface.surface container (BabylonSurface.defaultOptions options.Label options.Width options.Height)
         ]
 
@@ -61,7 +78,7 @@ module BrowserRenderers =
             others
             |> List.fold
                 (fun renderers surface -> SceneRenderers.withSurface surface renderers)
-                (SceneRenderers.create view svg.MountScene)
+                (SceneRenderers.create view (SceneSurface.mountScene svg))
         | [] -> failwith "BrowserRenderers.surfaces always returns the SVG surface first"
 
     let start
@@ -85,7 +102,7 @@ module BrowserConformance =
     let installContextProbe () : unit =
         emitJsStatement
             0
-            "if (!window.__glHook) { const h = { calls: 0, limit: Infinity, records: [], blocked: new Set() }; window.__glHook = h; const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function (type, ...rest) { h.calls++; if (h.calls > h.limit || h.blocked.has(this)) return null; const c = o.call(this, type, ...rest); if (c && /webgl/.test(String(type))) h.records.push(c); return c } }"
+            "if (!window.__glHook) { const h = { calls: 0, limit: Infinity, records: [], blocked: new Set(), failNext: {} }; window.__glHook = h; const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function (type, ...rest) { h.calls++; const r = this.getAttribute('data-renderer'); if (r && (h.failNext[r] || 0) > 0 && !h.blocked.has(this)) { h.failNext[r]--; h.blocked.add(this) } if (h.calls > h.limit || h.blocked.has(this)) return null; const c = o.call(this, type, ...rest); if (c && /webgl/.test(String(type))) h.records.push(c); return c } }"
 
     let liveContexts (backend: RendererBackend) : int =
         emitJsExpr
@@ -120,13 +137,27 @@ module BrowserConformance =
         }
 
     let host (driver: RendererDriver<'State>) : ConformanceHost<'State> =
-        {
-            Model = fun () -> driver.Model
-            Mounted = fun () -> driver.Mounted
-            Dispatch = driver.Dispatch
-            FailBackend = RendererDriver.failBackend driver
-            Dispose = fun () -> (driver :> System.IDisposable).Dispose()
-        }
+        RendererConformance.host
+            (fun () -> driver.Model)
+            (fun () -> driver.Mounted)
+            driver.Dispatch
+            (RendererDriver.failBackend driver)
+            (fun () -> (driver :> System.IDisposable).Dispose())
+
+    // Refuse every context of the next `count` adapter canvases of `token`, from their first context request on.
+    let private refuseNext (token: string) : unit =
+        emitJsStatement
+            token
+            "(() => { const h = window.__glHook; if (!h) throw new Error('BrowserConformance.installContextProbe was not called'); h.failNext[$0] = (h.failNext[$0] || 0) + 1 })()"
+
+    let pixiLateFailure () : LateFailureTrigger =
+        let baseline = ref 0
+
+        LateFailureTrigger.create
+            (fun () ->
+                baseline.Value <- (PixiSurface.counters ()).InitFailures
+                refuseNext "pixi")
+            (waitUntil 600 (fun () -> (PixiSurface.counters ()).InitFailures > baseline.Value))
 
     // Read through a 2D canvas in the task that rendered the WebGL frame, before the drawing buffer is presented
     // and cleared.
@@ -173,12 +204,14 @@ module BrowserConformance =
         (states: 'State list)
         (shows: ConformanceHost<'State> -> RendererBackend -> 'State -> Async<Result<unit, string>>)
         : ConformanceSubject<'State> =
-        {
-            Registry = registry
-            Expected = expected
-            States = states
-            Start = fun registry state -> host (BrowserRenderers.start route registry state ignore)
-            Resources = resources container
-            Shows = shows
-            WaitUntil = waitUntil 600
-        }
+        let subject =
+            RendererConformance.subject registry expected states (resources container) shows
+            |> RendererConformance.withStart (fun registry state ->
+                host (BrowserRenderers.start route registry state ignore))
+            |> RendererConformance.withWaitUntil (waitUntil 600)
+
+        if RendererRegistry.isAvailable RendererBackend.Pixi registry then
+            subject
+            |> RendererConformance.withLateFailure RendererBackend.Pixi (pixiLateFailure ())
+        else
+            subject

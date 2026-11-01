@@ -5,23 +5,34 @@ namespace FS.GG.Game.Render
 /// How ONE backend presents an `FS.GG.UI.Scene`: the only backend-specific half of a renderer adapter. The
 /// game-specific half is a `view: 'State -> Scene`, so a game writes its view once and every backend that can
 /// present a Scene (the retained SVG surface, the Pixi and Babylon canvases) becomes an adapter for its state
-/// type through `SceneSurface.adapter`. `MountScene` has the `RendererAdapter.Mount` contract at the Scene type:
-/// acquire, present the first Scene, return `Error reason` (or throw) when the backend cannot start.
-[<NoEquality; NoComparison>]
-type SceneSurface =
-    {
-        /// The backend this surface realises.
-        Backend: RendererBackend
-        /// Acquire the backend's resources and present the first Scene.
-        MountScene: FS.GG.UI.Scene.Scene -> Result<RendererMount<FS.GG.UI.Scene.Scene>, string>
-    }
+/// type through `SceneSurface.adapter`. Built by `SceneSurface.create`.
+[<Sealed>]
+type SceneSurface
 
 /// Public contract module exposed by the FS.GG.Game.Render package.
 [<RequireQualifiedAccess>]
 module SceneSurface =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The adapter for `surface.Backend` at a game-state type: every state, the first one and each presented one,
+    /// The surface of `backend`. `mountScene` has the `RendererAdapter.Mount` contract at the Scene type: acquire the
+    /// backend's resources, present the first Scene, and return `Error reason` (or throw) when the backend cannot
+    /// start.
+    val create:
+        backend: RendererBackend ->
+        mountScene: (FS.GG.UI.Scene.Scene -> Result<RendererMount<FS.GG.UI.Scene.Scene>, string>) ->
+            SceneSurface
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The backend the surface realises.
+    val backend: surface: SceneSurface -> RendererBackend
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Mount the surface on a first Scene.
+    val mountScene:
+        surface: SceneSurface -> scene: FS.GG.UI.Scene.Scene -> Result<RendererMount<FS.GG.UI.Scene.Scene>, string>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The adapter for the surface's backend at a game-state type: every state, the first one and each presented one,
     /// is projected through `view` before it reaches the surface. `RendererAdapter.svg view mountScene` is this
     /// function for an SVG surface.
     val adapter: view: ('State -> FS.GG.UI.Scene.Scene) -> surface: SceneSurface -> RendererAdapter<'State>
@@ -58,7 +69,7 @@ module SceneRenderers =
             SceneRenderers<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Declare `surface.Backend` through `surface`, replacing any surface already declared for that backend.
+    /// Declare the surface's backend through `surface`, replacing any surface already declared for that backend.
     val withSurface: surface: SceneSurface -> renderers: SceneRenderers<'State> -> SceneRenderers<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.

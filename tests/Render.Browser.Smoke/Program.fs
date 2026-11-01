@@ -504,9 +504,9 @@ module Probe =
     [<Emit("((cv, px, py) => { const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g2 = t.getContext('2d'); g2.drawImage(cv, 0, 0); return Array.from(g2.getImageData(px, py, 1, 1).data) })($0, $1, $2)")>]
     let pixel (canvas: HTMLCanvasElement) (x: int) (y: int) : int[] = jsNative
 
-    /// Wrap `getContext` once so the page can count the WebGL contexts it created, and refuse contexts on demand.
-    [<Emit("(() => { if (window.__glHook) return; const h = { calls: 0, limit: Infinity, records: [], blocked: new Set() }; window.__glHook = h; const p = HTMLCanvasElement.prototype; const o = p.getContext; p.getContext = function (type, ...rest) { h.calls++; if (h.calls > h.limit || h.blocked.has(this)) return null; const c = o.call(this, type, ...rest); if (c && /webgl/.test(String(type))) h.records.push(c); return c } })()")>]
-    let installGlHook () : unit = jsNative
+    /// Wrap `getContext` once so the page can count the WebGL contexts it created, and refuse contexts on demand. The
+    /// hook is the browser host's conformance probe (`window.__glHook`), so the smoke and the kit share one.
+    let installGlHook () : unit = BrowserConformance.installContextProbe ()
 
     /// WebGL contexts of adapter canvases (`data-renderer`) created since the hook was installed and not lost: the
     /// browser's own account of the GPU contexts the adapters hold, whether or not their canvases are still in the page.
@@ -1774,7 +1774,7 @@ let runThreeBackends () : Async<unit> =
 /// `RendererConformance.run` on SVG, Pixi and Babylon through `RendererDriver`, with the page's independent resource
 /// probe (SVG roots, canvases, engines, applications, live WebGL contexts) and outputs read back from the DOM and
 /// from canvas pixels. Every kit result becomes one smoke check.
-let kitChecks = 58
+let kitChecks = 62
 
 let rgbOf (color: Color) = [| int color.Red; int color.Green; int color.Blue |]
 
@@ -1785,13 +1785,16 @@ let litOf (color: Color) =
 let svgFill (color: Color) =
     sprintf "fill=\"rgb(%d %d %d)\"" color.Red color.Green color.Blue
 
-/// Read `backend`'s output for an expected token colour at (x, y) and a background colour at (bx, by).
+/// Whether `backend`'s canvas shows `state`: a token colour at one point and a background colour at another, both
+/// derived from the state by `probe`. It first waits (bounded) until the canvas shows the state the HOST presents, so
+/// asynchronous first frames are not mistaken for a mismatch, then reads the asked state's points once: a state that
+/// is not shown is rejected without waiting.
 let showsPixels
     (host: ConformanceHost<'State>)
     (container: HTMLElement)
     (backend: RendererBackend)
-    (token: Color, x: int, y: int)
-    (background: Color, bx: int, by: int)
+    (probe: 'State -> (Color * int * int) * (Color * int * int))
+    (state: 'State)
     : Async<Result<unit, string>> =
     async {
         let expect, tolerance =
@@ -1799,14 +1802,21 @@ let showsPixels
             | RendererBackend.Babylon -> litOf, 4
             | _ -> rgbOf, 2
 
-        let! tokenPixel = BrowserConformance.readPixel host container backend x y (fun p -> near (expect token) p tolerance) 600
+        let read (color: Color, x: int, y: int) (frames: int) =
+            BrowserConformance.readPixel host container backend x y (fun p -> near (expect color) p tolerance) frames
 
-        let! backgroundPixel =
-            BrowserConformance.readPixel host container backend bx by (fun p -> near (expect background) p tolerance) 60
+        let currentToken, currentBackground = probe (host.Model()).State
+        let! _ = read currentToken 600
+        let! _ = read currentBackground 60
+        let token, background = probe state
+        let! tokenPixel = read token 0
+        let! backgroundPixel = read background 0
+        let tokenColor, _, _ = token
+        let backgroundColor, _, _ = background
 
         return
-            if near (expect token) tokenPixel tolerance
-               && near (expect background) backgroundPixel tolerance then
+            if near (expect tokenColor) tokenPixel tolerance
+               && near (expect backgroundColor) backgroundPixel tolerance then
                 Ok()
             else
                 Error(
@@ -1814,9 +1824,9 @@ let showsPixels
                         "%s token %A (want %A) background %A (want %A)"
                         (RendererBackend.id backend)
                         tokenPixel
-                        (expect token)
+                        (expect tokenColor)
                         backgroundPixel
-                        (expect background)
+                        (expect backgroundColor)
                 )
     }
 
@@ -1848,7 +1858,7 @@ let runConformance () : Async<unit> =
 
         let renderers =
             match BrowserRenderers.surfaces container options route with
-            | svg :: others -> ReferenceRenderers.declare svg.MountScene others
+            | svg :: others -> ReferenceRenderers.declare (SceneSurface.mountScene svg) others
             | [] -> failwith "no surfaces"
 
         let start: ReferenceState.Model =
@@ -1903,7 +1913,17 @@ let runConformance () : Async<unit> =
                         else
                             Error(sprintf "svg does not show the token at %g with %s on %s" x (svgFill token) (svgFill room))
                 }
-            | _ -> showsPixels host container backend (token, int x + 12, int y + 12) (room, 2, 100)
+            | _ ->
+                showsPixels
+                    host
+                    container
+                    backend
+                    (fun (m: ReferenceState.Model) ->
+                        let x, y, _, _ = ReferenceRenderers.tokenBounds m
+
+                        (ReferenceRenderers.tokenColor m.Screen, int x + 12, int y + 12),
+                        (ReferenceRenderers.roomColor m.Room, 2, 100))
+                    model
 
         do!
             runKit
@@ -1945,22 +1965,22 @@ let runConformance () : Async<unit> =
         generated.id <- "stage-generated"
         document.body.appendChild generated |> ignore
 
-        let background =
-            match (GeneratedRenderers.view 0).Nodes with
+        let backgroundOf (state: int) =
+            match (GeneratedRenderers.view state).Nodes with
             | SceneNode.Rectangle(_, fill) :: _ -> fill
             | _ -> failwith "the generated view starts with its background"
 
-        let generatedShows (host: ConformanceHost<int>) backend (_: int) =
+        let generatedShows (host: ConformanceHost<int>) backend (state: int) =
             match backend with
             | RendererBackend.Svg ->
                 async {
                     return
-                        if has (svgFill background) generated.innerHTML then
+                        if has (svgFill (backgroundOf state)) generated.innerHTML then
                             Ok()
                         else
-                            Error("svg lacks the generated background " + svgFill background)
+                            Error("svg lacks the generated background " + svgFill (backgroundOf state))
                 }
-            | _ -> showsPixels host generated backend (background, 160, 90) (background, 2, 2)
+            | _ -> showsPixels host generated backend (fun s -> (backgroundOf s, 160, 90), (backgroundOf s, 2, 2)) state
 
         do! runKit "generated kit" (GeneratedRenderers.conformance generated [ 0; 1; 2 ] generatedShows)
 

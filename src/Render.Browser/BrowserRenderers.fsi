@@ -17,6 +17,11 @@ type LateFailureRoute =
     /// Report `backend`'s late failure to the bound driver. Dropped while no driver is bound.
     member Report: backend: RendererBackend -> reason: string -> unit
 
+    /// The report of the driver bound now (a no-op while none is). `BrowserRenderers.surfaces` captures it when each
+    /// Pixi mount is created, so a late failure of a mount reaches the driver that mounted it and never a driver
+    /// bound later to the same route.
+    member Capture: unit -> (RendererBackend -> string -> unit)
+
 /// One size and accessible label for all three backends of a game.
 [<NoEquality; NoComparison>]
 type BrowserRenderOptions =
@@ -48,7 +53,8 @@ module BrowserRenderers =
     val options: label: string -> width: float -> height: float -> BrowserRenderOptions
 
     /// The SVG, Pixi and Babylon surfaces in `container`, in that order, each at `options`' size with the backends'
-    /// default settings. Pixi reports a late initialisation failure to `route`.
+    /// default settings. Each Pixi mount reports a late initialisation failure to the driver `route` is bound to when
+    /// that mount is created.
     val surfaces: container: HTMLElement -> options: BrowserRenderOptions -> route: LateFailureRoute -> SceneSurface list
 
     /// Declare all three backends for a game-state type: `SceneRenderers.create view` over `surfaces`. Add
@@ -60,8 +66,8 @@ module BrowserRenderers =
         view: ('State -> Scene) ->
             SceneRenderers<'State>
 
-    /// `RendererDriver.start registry state onChange`, then bind `route` to that driver, replacing any driver it was
-    /// bound to. A late failure can only arrive from a promise callback, after `start` has returned and bound it.
+    /// `RendererDriver.start registry state onChange`, then bind `route` to that driver for mounts created from now on.
+    /// Mounts of a driver bound earlier keep reporting to that driver, which ignores reports once it is disposed.
     val start:
         route: LateFailureRoute ->
         registry: RendererRegistry<'State> ->
@@ -94,6 +100,11 @@ module BrowserConformance =
     /// The kit's view of a running driver.
     val host: driver: RendererDriver<'State> -> ConformanceHost<'State>
 
+    /// Pixi's late-failure trigger for the kit: `arm` refuses every WebGL context of the next Pixi adapter canvas, so
+    /// that mount returns `Ok`, its asynchronous initialisation fails, and the adapter reports through its own
+    /// `PixiOptions.OnFailure` (or, once disposed, does not); `settle` waits until Pixi counts the failure.
+    val pixiLateFailure: unit -> LateFailureTrigger
+
     /// The RGBA of one pixel of `backend`'s canvas in `container`, read after presenting the host's current state
     /// again, so the frame read is the one that state rendered. Repeats frame by frame until `accept` holds, at most
     /// `maxFrames`; returns the last pixel read, or an empty array when the backend has no canvas there.
@@ -107,8 +118,9 @@ module BrowserConformance =
         maxFrames: int ->
             Async<int[]>
 
-    /// A subject for real browser backends in `container`: `Start` runs `BrowserRenderers.start route`, `Resources` is
-    /// `resources container`, and `WaitUntil` waits up to 600 frames.
+    /// A subject for real browser backends in `container`: hosts are started with `BrowserRenderers.start route`,
+    /// resources are `resources container`, waits last up to 600 frames, and, when the registry offers Pixi, Pixi's
+    /// adapter late failure is `pixiLateFailure ()`.
     val subject:
         container: HTMLElement ->
         route: LateFailureRoute ->

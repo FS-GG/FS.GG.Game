@@ -3,24 +3,41 @@ namespace FS.GG.Game.Render
 open FS.GG.UI.Scene
 
 /// See RendererConformance.fsi for the contract.
-[<NoComparison>]
-type ConformanceResult =
-    {
-        Check: string
-        Passed: bool
-        Detail: string
-    }
+[<Sealed>]
+type ConformanceResult internal (check: string, passed: bool, detail: string) =
+    member _.Check = check
+    member _.Passed = passed
+    member _.Detail = detail
+    override _.ToString() = sprintf "%s %s%s" (if passed then "PASS" else "FAIL") check (if passed then "" else ": " + detail)
 
-[<NoEquality; NoComparison>]
-type ConformanceHost<'State> =
-    {
-        Model: unit -> RendererModel<'State>
-        Mounted: unit -> RendererBackend option
-        Dispatch: RendererMsg<'State> -> unit
-        FailBackend: RendererBackend -> string -> unit
-        Dispose: unit -> unit
-    }
+[<Sealed>]
+type ConformanceHost<'State>
+    internal
+    (
+        model: unit -> RendererModel<'State>,
+        mounted: unit -> RendererBackend option,
+        dispatch: RendererMsg<'State> -> unit,
+        failBackend: RendererBackend -> string -> unit,
+        dispose: unit -> unit
+    ) =
+    member _.Model() = model ()
+    member _.Mounted() = mounted ()
+    member _.Dispatch(msg: RendererMsg<'State>) = dispatch msg
+    member _.FailBackend (backend: RendererBackend) (reason: string) = failBackend backend reason
+    member _.Dispose() = dispose ()
 
+[<Sealed>]
+type LateFailureTrigger internal (arm: unit -> unit, settle: Async<bool>) =
+    member internal _.Arm() = arm ()
+    member internal _.Settle = settle
+
+[<RequireQualifiedAccess>]
+module LateFailureTrigger =
+
+    let create (arm: unit -> unit) (settle: Async<bool>) = LateFailureTrigger(arm, settle)
+
+/// Opaque behind the .fsi: built by `RendererConformance.subject` and its `with*` functions only, so a field added
+/// later is not a breaking change.
 [<NoEquality; NoComparison>]
 type ConformanceSubject<'State> =
     {
@@ -31,6 +48,7 @@ type ConformanceSubject<'State> =
         Resources: RendererBackend -> int
         Shows: ConformanceHost<'State> -> RendererBackend -> 'State -> Async<Result<unit, string>>
         WaitUntil: (unit -> bool) -> Async<bool>
+        LateFailures: Map<RendererBackend, LateFailureTrigger>
     }
 
 /// One mount the instrumented registry handed out: the states it received (newest first, the mount's own state
@@ -46,8 +64,11 @@ type internal ConformanceMount<'State> =
 [<RequireQualifiedAccess>]
 module RendererConformance =
 
+    let host model mounted dispatch failBackend dispose : ConformanceHost<'State> =
+        ConformanceHost<'State>(model, mounted, dispatch, failBackend, dispose)
+
     let inProcess (registry: RendererRegistry<'State>) (state: 'State) : ConformanceHost<'State> =
-        let host = RendererHost.create registry
+        let rendererHost = RendererHost.create registry
         let initial, initialEffects = RendererSelection.init registry state
         let model = ref initial
         let pending: RendererMsg<'State> list ref = ref []
@@ -65,7 +86,7 @@ module RendererConformance =
                     pending.Value <- pending.Value.Tail
                     let next, effects = RendererSelection.update msg model.Value
                     model.Value <- next
-                    pending.Value <- host.Run effects @ pending.Value
+                    pending.Value <- rendererHost.Run effects @ pending.Value
             finally
                 running.Value <- false
 
@@ -76,26 +97,23 @@ module RendererConformance =
                 if not running.Value then
                     drain ()
 
-        pending.Value <- host.Run initialEffects
+        pending.Value <- rendererHost.Run initialEffects
         drain ()
 
-        {
-            Model = fun () -> model.Value
-            Mounted = fun () -> host.Mounted
-            Dispatch = dispatch
-            FailBackend =
-                fun backend reason ->
-                    let current = model.Value
+        host
+            (fun () -> model.Value)
+            (fun () -> rendererHost.Mounted)
+            dispatch
+            (fun backend reason ->
+                let current = model.Value
 
-                    if current.Selected = backend && current.Status = RendererStatus.Active then
-                        dispatch (RendererMsg.MountFailed(backend, current.Attempt, reason))
-            Dispose =
-                fun () ->
-                    if not disposed.Value then
-                        disposed.Value <- true
-                        pending.Value <- []
-                        (host :> System.IDisposable).Dispose()
-        }
+                if current.Selected = backend && current.Status = RendererStatus.Active then
+                    dispatch (RendererMsg.MountFailed(backend, current.Attempt, reason)))
+            (fun () ->
+                if not disposed.Value then
+                    disposed.Value <- true
+                    pending.Value <- []
+                    (rendererHost :> System.IDisposable).Dispose())
 
     let subject registry expected states resources shows : ConformanceSubject<'State> =
         {
@@ -106,6 +124,16 @@ module RendererConformance =
             Resources = resources
             Shows = shows
             WaitUntil = fun condition -> async { return condition () }
+            LateFailures = Map.empty
+        }
+
+    let withStart start (subject: ConformanceSubject<'State>) = { subject with Start = start }
+
+    let withWaitUntil waitUntil (subject: ConformanceSubject<'State>) = { subject with WaitUntil = waitUntil }
+
+    let withLateFailure backend trigger (subject: ConformanceSubject<'State>) =
+        { subject with
+            LateFailures = Map.add backend trigger subject.LateFailures
         }
 
     let failures (results: ConformanceResult list) =
@@ -139,12 +167,7 @@ module RendererConformance =
             let results = ResizeArray<ConformanceResult>()
 
             let check (name: string) (passed: bool) (detail: string) =
-                results.Add
-                    {
-                        Check = name
-                        Passed = passed
-                        Detail = (if passed then "" else detail)
-                    }
+                results.Add(ConformanceResult(name, passed, (if passed then "" else detail)))
 
             let id = RendererBackend.id
             let mounts = ResizeArray<ConformanceMount<'State>>()
@@ -327,6 +350,22 @@ module RendererConformance =
                         (shown.Count = 0)
                         (String.concat "; " shown)
 
+                    // A view or an output probe that ignores the state would pass the check above for any state: the
+                    // probe must reject at least one other state while the last one is shown.
+                    let last = states.[states.Length - 1]
+                    let rejected = ref []
+
+                    for other in distinct |> List.filter ((<>) last) do
+                        let! verdict = subject.Shows host backend other
+
+                        if verdict <> Ok() then
+                            rejected.Value <- other :: rejected.Value
+
+                    check
+                        (sprintf "round-trip %s: the output probe tells the shown state from another" name)
+                        (not rejected.Value.IsEmpty)
+                        "the backend's output passes for every other state: the view or the probe ignores the state"
+
                     do! stop host
 
                 // switch -----------------------------------------------------------------------------------------
@@ -440,82 +479,118 @@ module RendererConformance =
                         (mounts.Count = mountsBefore && host.Mounted() = None && nothingHeld ())
                         (sprintf "mounts %d -> %d %s" mountsBefore mounts.Count (resources ()))
 
-                // late failure -----------------------------------------------------------------------------------
+                // late failure (host) -----------------------------------------------------------------------------
                 for backend in offered |> List.filter ((<>) RendererBackend.defaultBackend) do
                     mounts.Clear()
                     let name = id backend
                     let host = subject.Start registry initial
                     let kept = stateAt 1
-
-                    // The live-mount rule: an adapter reports a late failure only while its own mount is undisposed.
-                    let reportFrom (record: ConformanceMount<'State>) reason =
-                        if record.Disposals = 0 then
-                            host.FailBackend record.Backend reason
-                            true
-                        else
-                            false
-
                     select host backend
                     host.Dispatch(RendererMsg.StateChanged kept)
-                    let first = latest backend
-                    select host RendererBackend.Svg
+                    let live = latest backend
+                    let reason = "conformance: late failure of the live mount"
+                    host.FailBackend backend reason
+                    let model = host.Model()
+
+                    check
+                        (sprintf "late failure %s (host): failBackend for the live mount falls back to SVG with the game state intact" name)
+                        (live.IsSome
+                         && isOn host RendererBackend.Svg
+                         && model.State = kept
+                         && model.Refusal = Some(RendererRefusal.MountFailed(backend, reason)))
+                        (describe host)
+
+                    let! released = subject.WaitUntil(fun () -> subject.Resources backend = 0)
+
+                    check
+                        (sprintf "late failure %s (host): the failed backend's resources are released" name)
+                        (released
+                         && live |> Option.exists (fun record -> record.Disposals = 1))
+                        (resources ())
+
+                    let attempt = (host.Model()).Attempt
+                    host.FailBackend backend "conformance: report for a backend that is not selected"
+
+                    check
+                        (sprintf "late failure %s (host): a report for a backend that is not selected is ignored" name)
+                        (isOn host RendererBackend.Svg && (host.Model()).Attempt = attempt)
+                        (describe host)
+
                     select host backend
-                    let second = latest backend
+                    let! shows = subject.Shows host backend kept
 
-                    match first, second with
-                    | Some first, Some second when not (obj.ReferenceEquals(first, second)) ->
-                        let attempt = (host.Model()).Attempt
-                        let delivered = reportFrom first "conformance: late failure of a disposed mount"
+                    check
+                        (sprintf "late failure %s (host): re-selecting the backend recovers it with the state intact" name)
+                        (isOn host backend && (host.Model()).State = kept && shows = Ok())
+                        (sprintf "%s shows=%A" (describe host) shows)
 
-                        check
-                            (sprintf "late failure %s: a report from a disposed mount is dropped and the live mount stays" name)
-                            (not delivered
-                             && first.Disposals = 1
-                             && isOn host backend
-                             && (host.Model()).Attempt = attempt)
-                            (sprintf "delivered=%b %s" delivered (describe host))
+                    do! stop host
 
-                        let reason = "conformance: late failure of the live mount"
-                        let delivered = reportFrom second reason
+                // late failure (adapter) --------------------------------------------------------------------------
+                for backend in offered |> List.filter ((<>) RendererBackend.defaultBackend) do
+                    match Map.tryFind backend subject.LateFailures with
+                    | None -> ()
+                    | Some trigger ->
+                        let name = id backend
+                        let kept = stateAt 1
+
+                        // The adapter reports its live mount's failure itself.
+                        mounts.Clear()
+                        let host = subject.Start registry initial
+                        host.Dispatch(RendererMsg.StateChanged kept)
+                        trigger.Arm()
+                        select host backend
+                        let failing = latest backend
+                        let! settled = trigger.Settle
+
+                        let! fellBack =
+                            subject.WaitUntil(fun () -> isOn host RendererBackend.Svg)
+
                         let model = host.Model()
 
                         check
-                            (sprintf "late failure %s: a report from the live mount falls back to SVG with the game state intact" name)
-                            (delivered
-                             && isOn host RendererBackend.Svg
+                            (sprintf "late failure %s (adapter): the live mount's own failure report falls back to SVG with the game state intact" name)
+                            (settled
+                             && fellBack
                              && model.State = kept
-                             && model.Refusal = Some(RendererRefusal.MountFailed(backend, reason)))
-                            (sprintf "delivered=%b %s" delivered (describe host))
+                             && (match model.Refusal with
+                                 | Some(RendererRefusal.MountFailed(failed, _)) -> failed = backend
+                                 | _ -> false))
+                            (sprintf "settled=%b %s" settled (describe host))
 
                         let! released = subject.WaitUntil(fun () -> subject.Resources backend = 0)
 
                         check
-                            (sprintf "late failure %s: the failed backend's resources are released" name)
-                            (released && second.Disposals = 1)
-                            (sprintf "disposals=%d %s" second.Disposals (resources ()))
+                            (sprintf "late failure %s (adapter): the failed mount's resources are released" name)
+                            (released
+                             && failing |> Option.exists (fun record -> record.Disposals = 1))
+                            (resources ())
 
-                        let attempt = (host.Model()).Attempt
-                        host.FailBackend backend "conformance: report for a backend that is not selected"
+                        do! stop host
 
-                        check
-                            (sprintf "late failure %s: a report for a backend that is not selected is ignored" name)
-                            (isOn host RendererBackend.Svg && (host.Model()).Attempt = attempt)
-                            (describe host)
-
+                        // The live-mount rule: a mount disposed before its failure arrives must not report it, because
+                        // the host cannot tell it from the live mount of the same backend.
+                        mounts.Clear()
+                        let host = subject.Start registry initial
+                        host.Dispatch(RendererMsg.StateChanged kept)
+                        trigger.Arm()
                         select host backend
-                        let! shows = subject.Shows host backend kept
+                        select host RendererBackend.Svg
+                        select host backend
+                        let attempt = (host.Model()).Attempt
+                        let! settled = trigger.Settle
+                        let! _ = subject.WaitUntil(fun () -> subject.Resources backend >= 1)
 
                         check
-                            (sprintf "late failure %s: re-selecting the backend recovers it with the state intact" name)
-                            (isOn host backend && (host.Model()).State = kept && shows = Ok())
-                            (sprintf "%s shows=%A" (describe host) shows)
-                    | _ ->
-                        check
-                            (sprintf "late failure %s: the backend mounts twice for the live-mount rule" name)
-                            false
-                            (describe host)
+                            (sprintf "late failure %s (adapter): a failure of a disposed mount is not reported, and the live mount of the same backend stays" name)
+                            (settled
+                             && isOn host backend
+                             && (host.Model()).Attempt = attempt
+                             && (host.Model()).Refusal = None
+                             && mountsOf backend |> List.length = 2)
+                            (sprintf "settled=%b %s" settled (describe host))
 
-                    do! stop host
+                        do! stop host
 
             return List.ofSeq results
         }
