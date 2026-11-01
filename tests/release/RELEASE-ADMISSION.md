@@ -35,6 +35,20 @@ and `UsersController.TrustedPublishing`. [Current NuGet documentation](https://l
 supports new packages through policy scopes and globs. Platform capability is
 distinct from the effective account's scope.
 
+Since late October 2026, NuGet answers verify-key with HTTP 400 for every id under the trusted-publishing
+temporary key, existing and new alike. The Game 0.18.0 admission run 41323090013 saw this, and FS-GG Atlas
+`github/nuget-trusted-publishing-policy-scope` records the same answer for Rendering, whose packages still
+published. A 400 therefore marks that id **unverifiable**: it is recorded, raised as a workflow warning, and not
+treated as a refusal. Every other unexpected answer still refuses. For an existing id that means 401, 403, 404
+or no response. For the new identity it means anything but 404 (or 400).
+
+Because authority for the new identity cannot be observed, `release.yml` pushes it first and alone on each feed,
+before any existing id. A refusal for lack of package-creation authority therefore publishes nothing more to that
+feed. The org feed is still pushed in full before nuget.org (ADR-0012 §4), so a nuget.org refusal leaves the org
+feed complete and nuget.org empty. The retained custody bytes then resume through `source_run_id`, with no
+re-pack. The release contract (`test-game-0-18-release.sh`) pins this order, and its selftest refuses mutations of
+it.
+
 This source change creates no mandatory manual approval or owner-policy-export
 gate. It provides a machine route to observe what the existing interfaces expose.
 It cannot create missing trust or credentials. The ordinary stable publication

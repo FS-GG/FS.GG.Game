@@ -14,6 +14,10 @@ import xml.etree.ElementTree as ET
 PACKAGES = ("FS.GG.Game.Core", "FS.GG.Game.Render", "FS.GG.Game.Harness", "FS.GG.Game.Physics.Box2D", "FS.GG.Game.Render.Browser")
 NEW_PACKAGES = {"FS.GG.Game.Render.Browser"}
 ROOT = Path(__file__).resolve().parents[2]
+UNVERIFIABLE_STATUS = 400
+UNVERIFIABLE_WARNING = ("NuGet verify-key answered HTTP 400, so package authority is unverifiable through this route, not "
+                        "refused; see FS-GG Atlas github/nuget-trusted-publishing-policy-scope. release.yml pushes the new "
+                        "identity first and alone on each feed, so an actual refusal publishes nothing more there.")
 
 
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
@@ -60,16 +64,32 @@ def collect(mode, version):
     key = os.environ["NUGET_API_KEY"]
     headers = {"X-NuGet-ApiKey": key}
     failed = False
+    unverifiable = []
     for package in PACKAGES:
         # No version asks for the existing registration; a missing identity is 404 before scope evaluation.
         status = observe(f"https://www.nuget.org/api/v2/verifykey/{package}", headers)
         existing = package not in NEW_PACKAGES
-        rows.append({"package": package, "httpStatus": status,
-                     "authority": "existing-package-push" if status == 200 else "unproven"})
-        failed |= status != (200 if existing else 404)
-    return {"oidcExchange": "completed", "packages": rows,
-            "newAdapterCreationScope": "not-exposed-and-unproven",
-            "limits": "OIDC exchange returns no scopes. Verify-key 200 covers existing identity; missing identity 404 does not evaluate creation scope. This is not full publication authorization."}, failed
+        if status == UNVERIFIABLE_STATUS:
+            # NuGet answers verify-key with HTTP 400 for every id under the current trusted-publishing temporary key
+            # (FS-GG Atlas github/nuget-trusted-publishing-policy-scope; Game 0.18.0 admission run 41323090013).
+            # It says nothing either way about push authority, so it is recorded, warned about and not a refusal.
+            # Every other unexpected answer still refuses: 401/403/404 for an existing id, a non-404 for a new one.
+            authority = "unverifiable"
+            unverifiable.append(package)
+        elif existing:
+            authority = "existing-package-push" if status == 200 else "refused"
+            failed |= status != 200
+        else:
+            authority = "unproven" if status == 404 else "refused"
+            failed |= status != 404
+        rows.append({"package": package, "httpStatus": status, "authority": authority})
+    report = {"oidcExchange": "completed", "packages": rows,
+              "newAdapterCreationScope": "not-exposed-and-unproven",
+              "limits": "OIDC exchange returns no scopes. Verify-key 200 covers existing identity; missing identity 404 does not evaluate creation scope; HTTP 400 is unverifiable. This is not full publication authorization."}
+    if unverifiable:
+        report["unverifiable"] = unverifiable
+        report["warning"] = UNVERIFIABLE_WARNING
+    return report, failed
 
 
 def main():
@@ -84,6 +104,8 @@ def main():
     mode = "registries" if args.registries else "authority"
     output = args.registries or args.authority
     report, failed = collect(mode, version)
+    if report.get("warning"):
+        print(f"::warning title=verify-key unverifiable::{report['warning']} Unverifiable ids: {', '.join(report['unverifiable'])}.")
     report.update(version=version, observedUtc=datetime.now(timezone.utc).isoformat(),
                   sourceCommit=os.environ.get("GITHUB_SHA"), runId=os.environ.get("GITHUB_RUN_ID"))
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -21,41 +21,48 @@ make_fixture() {
 positive="$scratch/positive"
 make_fixture "$positive"
 "$root/tests/release/test-game-0-18-release.sh" --root "$positive" --source-only
-echo "positive control accepted both actual dotnet nuget push operations"
+echo "positive control accepted all four actual dotnet nuget push operations (new identity first on each feed)"
 
-expect_push_mutation_red() {
-  local label="$1" indexes="$2" output
+mutate_red() {
+  # mutate_red <label> <expected refusal> <python transform of the workflow text, given `text`>
+  local label="$1" reason="$2" transform="$3" output
   local fixture="$scratch/$label"
   make_fixture "$fixture"
-  python3 - "$fixture/.github/workflows/release.yml" "$indexes" <<'PY'
+  python3 - "$fixture/.github/workflows/release.yml" "$transform" <<'PY'
 import pathlib, sys
-
 path = pathlib.Path(sys.argv[1])
-selected = {int(value) for value in sys.argv[2].split(",")}
-needle = 'dotnet nuget push "artifacts/packages/*.nupkg"'
 text = path.read_text(encoding="utf-8")
-parts = text.split(needle)
-if len(parts) != 3:
-    raise SystemExit(f"fixture expected two push operations, observed {len(parts) - 1}")
-rebuilt = parts[0]
-for index, tail in enumerate(parts[1:]):
-    rebuilt += ("echo package-push-disabled" if index in selected else needle) + tail
-path.write_text(rebuilt, encoding="utf-8")
+scope = {"text": text}
+exec(sys.argv[2], scope)
+if scope["text"] == text:
+    raise SystemExit("fixture mutation changed nothing")
+path.write_text(scope["text"], encoding="utf-8")
 PY
   if output=$("$root/tests/release/test-game-0-18-release.sh" --root "$fixture" --source-only 2>&1); then
     echo "$label mutation unexpectedly passed" >&2
     exit 1
   fi
-  grep -q "exactly two actual dotnet nuget push operations" <<<"$output" || {
+  grep -qF "$reason" <<<"$output" || {
     echo "$label mutation failed for the wrong reason: $output" >&2
     exit 1
   }
-  echo "$label witness: substituted push operation rejected"
+  echo "$label witness: rejected ($reason)"
 }
 
-expect_push_mutation_red first-push 0
-expect_push_mutation_red second-push 1
-expect_push_mutation_red both-pushes 0,1
+# Each of the four push operations, substituted in turn (the first is the org feed's new identity).
+for n in 0 1 2 3; do
+  mutate_red "push-$n" "exactly four actual dotnet nuget push operations" \
+    "parts = text.split('dotnet nuget push '); text = 'dotnet nuget push '.join(parts[:$n + 1]) + 'echo package-push-disabled ' + 'dotnet nuget push '.join(parts[$n + 1:])"
+done
+# nuget.org: existing ids pushed before the new identity.
+mutate_red "nuget-order" "the new identity must be pushed first and alone" \
+  "head, sep, tail = text.partition('- name: Push coherent set to nuget.org (public)'); a, b = '\"\$new_identity\"', '\"\$existing\"'; text = head + sep + tail.replace(a, '@@').replace(b, a).replace('@@', b)"
+# nuget.org: one glob push of everything (no pinned order).
+mutate_red "nuget-glob" "must not push a glob" \
+  "text = text.replace('dotnet nuget push \"\$new_identity\" \\\\\n            --source https://api.nuget.org', 'dotnet nuget push \"artifacts/packages/*.nupkg\" \\\\\n            --source https://api.nuget.org')"
+# The new identity named on nuget.org is an existing id.
+mutate_red "nuget-new-identity" "must name FS.GG.Game.Render.Browser as the new identity" \
+  "i = text.index('- name: Push coherent set to nuget.org (public)'); text = text[:i] + text[i:].replace('FS.GG.Game.Render.Browser.\$VER.nupkg', 'FS.GG.Game.Core.\$VER.nupkg', 1)"
 
 version_fixture="$scratch/version"
 make_fixture "$version_fixture"
