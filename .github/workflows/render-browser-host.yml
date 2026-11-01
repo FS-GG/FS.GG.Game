@@ -5,6 +5,9 @@ name: render-browser-host
 # tests/Render.Browser.Smoke with Fable, and runs every smoke check in headless Chrome, including the BabylonJS
 # and PixiJS adapters on WebGL (software, through SwiftShader, on this runner) and switching between all three.
 # The bindings are generated from the pinned FS.GG.Templates commit by scripts/materialize-js-bindings.sh.
+# GAME-RENDER-ADOPT-01.2 (FS.GG.Game#746): the same job builds the rendering benchmark page (tests/Render.Browser.Bench)
+# and runs one short software-control session, so the harness cannot rot between fdev GPU runs, and validates that
+# session and the committed baselines against the results schema. Its numbers are never compared or gated here.
 on:
   push:
     branches: [main]
@@ -21,6 +24,10 @@ on:
       - "scripts/test-render-browser-host.sh"
       - "scripts/materialize-js-bindings.sh"
       - "eng/js-bindings/**"
+      - "src/ReferenceGame/**"
+      - "tests/Render.Browser.Bench/**"
+      - "tools/render-bench/**"
+      - "scripts/render-bench.sh"
   pull_request:
     branches: [main]
     paths:
@@ -36,6 +43,10 @@ on:
       - "scripts/test-render-browser-host.sh"
       - "scripts/materialize-js-bindings.sh"
       - "eng/js-bindings/**"
+      - "src/ReferenceGame/**"
+      - "tests/Render.Browser.Bench/**"
+      - "tools/render-bench/**"
+      - "scripts/render-bench.sh"
   workflow_dispatch:
 
 concurrency:
@@ -49,7 +60,7 @@ jobs:
   browser-host:
     name: Renderer host browser smoke (SVG, Pixi and Babylon through Fable)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -67,3 +78,10 @@ jobs:
 
       - name: Pack the Fable view, compile the host and run the browser smoke
         run: scripts/test-render-browser-host.sh
+
+      - name: Build the benchmark page, run a short software-control session and validate the results
+        run: |
+          set -euo pipefail
+          scripts/render-bench.sh -- --mode software --scenes room-tiles,room-swarm --sizes 100 \
+            --repeats 1 --frames 30 --warmup 5 --out "$RUNNER_TEMP/render-bench.json"
+          node tools/render-bench/driver.mjs validate "$RUNNER_TEMP/render-bench.json" tools/render-bench/baselines/*.json
