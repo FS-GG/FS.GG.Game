@@ -248,6 +248,48 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
         (refused :> System.IDisposable).Dispose()
         failInput.Value <- false
 
+        // The game's `selected` throws while the mount synchronises the first selection. Both hosts the mount acquired
+        // are released and the mount is an Error, so a retry cannot accumulate SVG roots or input hosts.
+        let attachedBeforeThrow = attached.Value
+        let releasedBeforeThrow = released.Value
+
+        let throwing =
+            RetainedSvgSurface.create container "Retained board" size scene
+            |> RetainedSvgSurface.withSelection
+                (fun board -> if board.Stamp = 99 then failwith "selected threw" else board.Chosen)
+                ignore
+            |> RetainedSvgSurface.withInput attach
+
+        let throwingRegistry = RetainedSvgSurface.registry throwing
+        let poisoned = { first with Stamp = 99 }
+        let broken = BrowserRenderers.start route throwingRegistry poisoned ignore
+
+        check
+            "retained svg: a throwing selection at mount fails the mount and releases both hosts"
+            (broken.Mounted = None
+             && (match broken.Model.Status with
+                 | RendererStatus.Failed [ RendererBackend.Svg, "selected threw" ] -> true
+                 | _ -> false)
+             && container.children.length = 0
+             && attached.Value = attachedBeforeThrow + 1
+             && released.Value = releasedBeforeThrow + 1
+             && not (container.hasAttribute "data-input"))
+            (sprintf "%A %s %d/%d" broken.Model.Status container.innerHTML attached.Value released.Value)
+
+        for _ in 1..5 do
+            broken.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
+
+        check
+            "retained svg: retrying a mount that keeps failing does not accumulate roots or input hosts"
+            (container.children.length = 0
+             && attached.Value = attachedBeforeThrow + 6
+             && released.Value = attached.Value - attachedBeforeThrow + releasedBeforeThrow
+             && broken.Mounted = None)
+            (sprintf "%s %d/%d" container.innerHTML attached.Value released.Value)
+
+        (broken :> System.IDisposable).Dispose()
+        check "retained svg: disposing the failed driver leaves the stage clean" (container.children.length = 0) container.innerHTML
+
         // The conformance kit holds the registry like any other.
         let states =
             [

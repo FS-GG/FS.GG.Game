@@ -104,12 +104,19 @@ module RetainedSvgSurface =
                 let revision = ref 1
                 let disposed = ref false
 
-                try
-                    synchronise host state
-                finally
-                    syncing.Value <- false
+                // `selected` is the game's code: if it throws, the mount fails, and both hosts it acquired are released
+                // (input first, then the SVG) instead of leaking until the page is closed.
+                let synchronised =
+                    try
+                        try
+                            synchronise host state
+                            Ok()
+                        with ex ->
+                            Error ex.Message
+                    finally
+                        syncing.Value <- false
 
-                Ok
+                let mounted: RendererMount<'State> =
                     {
                         Present =
                             fun next ->
@@ -141,6 +148,12 @@ module RetainedSvgSurface =
                                     finally
                                         (host :> System.IDisposable).Dispose()
                     }
+
+                match synchronised with
+                | Error reason ->
+                    mounted.Dispose()
+                    Error reason
+                | Ok() -> Ok mounted
 
     let adapter (surface: RetainedSvgSurface<'State>) : RendererAdapter<'State> =
         {

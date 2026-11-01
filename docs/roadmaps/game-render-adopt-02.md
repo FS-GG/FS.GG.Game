@@ -41,6 +41,7 @@ opaque type built by `create container label size scene` and adjusted by `withSe
 | Camera | The user's pan and zoom survive each present: the mounted host's camera replaces the projected scene's. |
 | Selection | After each scene the surface's selection follows `selected state`. An unknown or non-selectable id leaves it unchanged. A selection the user makes is reported once through `onSelect`; synchronisation from `Mount` or `Present` is never reported, so a game may dispatch from `onSelect`. |
 | Input | `withInput` attaches the game's input host at each mount and releases it with the mount, before the SVG host. A refusal fails the mount and disposes the SVG host just mounted. |
+| Throwing game code | A `selected` that throws while the mount synchronises its first selection fails the mount: the input host and then the SVG host are disposed and the mount is an `Error`, so a retry cannot accumulate roots. |
 | Viewport | The SVG host's viewport is fixed at mount. `size` is read at `Mount`; a `Present` whose size differs raises. |
 
 ## Evidence
@@ -50,11 +51,11 @@ opaque type built by `create container label size scene` and adjusted by `withSe
   top; a created registry passes the kit alone (13 checks) and with registered Pixi and Babylon adapters; two
   negative controls (an adapter that ignores `Present`, an adapter that never mounts) fail the sections that guard
   them. `Game.Render.Tests` has 74 tests.
-- `tests/Render.Browser.Smoke/RetainedSurface.fs` runs in the real browser: 32 checks (it was 320 in all, now 352).
+- `tests/Render.Browser.Smoke/RetainedSurface.fs` runs in the real browser: 35 checks (it was 320 in all, now 355).
   The retained board has four objects, three selectable with labels, a camera and an input host. It checks the
   registration, identities, labels, input attach and release, selection from the state, the camera surviving a
   present, adapter-owned revisions, a user selection reported once, silent clearing, an unknown id, refusal of an
-  undeclared backend, disposal, a refused input host, and the kit's 13 checks on the registry.
+  undeclared backend, disposal, a refused input host, a `selected` that throws at mount (both hosts released, the mount is an `Error`, and five retries leave no SVG root or input host behind), and the kit's 13 checks on the registry.
 - Mutations (see the PR body): `create` accepting any backend fails the refusal test; losing the camera on present
   and reporting synchronised selections as the user's each fail the smoke check that guards them.
 
