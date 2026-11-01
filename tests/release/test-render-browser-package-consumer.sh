@@ -97,8 +97,13 @@ let start () =
     available, subject
 EOF
 
+# Restore through this consumer's own, empty HTTP cache and bypass it (FS.GG.Game#764). NuGet otherwise reuses a
+# version list cached by an earlier restore on the same machine for up to 30 minutes: in 0.18.0 and 0.19.0 the
+# candidate consumer cached nuget.org's list before publication, and this public consumer, four seconds after
+# nuget.org listed the new version, restored from that stale list (NU1102). The Box2D consumer already isolates it.
+export NUGET_HTTP_CACHE_PATH="$consumer/http-cache"
 cd "$consumer"
-dotnet restore src/Consumer.fsproj --configfile NuGet.Config --packages "$consumer/packages" --disable-parallel
+dotnet restore src/Consumer.fsproj --configfile NuGet.Config --packages "$consumer/packages" --no-cache --force-evaluate --disable-parallel
 for id in fs.gg.game.render fs.gg.game.render.browser; do
   restored="$consumer/packages/$id/$version/$id.$version.nupkg"
   [[ -f $restored ]] || { echo "the consumer did not restore $id $version" >&2; exit 1; }
