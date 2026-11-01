@@ -148,6 +148,23 @@ function serve(root) {
 }
 
 // ---- Chrome DevTools Protocol over one browser WebSocket with a flattened page session ------------------------
+// Every launched browser runs in its own process group. A benchmark page renders uncapped, so a browser that outlives
+// its driver spins a CPU core indefinitely and loads the host for every later run: kill them on any exit or signal.
+const launched = new Set();
+const killAll = () => {
+  for (const b of launched) {
+    try { process.kill(-b.proc.pid, "SIGKILL"); } catch {}
+    try { rmSync(b.profile, { recursive: true, force: true }); } catch {}
+  }
+  launched.clear();
+};
+process.on("exit", killAll);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"])
+  process.on(signal, () => {
+    killAll();
+    process.exit(128 + (signal === "SIGINT" ? 2 : signal === "SIGTERM" ? 15 : 1));
+  });
+
 class Browser {
   static async launch(executable, flags) {
     const profile = mkdtempSync(join(tmpdir(), "fsgg-render-bench-"));
@@ -170,6 +187,7 @@ class Browser {
     }
     const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
     const b = new Browser(proc, profile, version, () => stderr);
+    launched.add(b);
     await b.connect(version.webSocketDebuggerUrl);
     return b;
   }
@@ -215,6 +233,7 @@ class Browser {
   async close() {
     try { this.ws.close(); } catch {}
     try { process.kill(-this.proc.pid, "SIGKILL"); } catch {}
+    launched.delete(this);
     await sleep(200);
     rmSync(this.profile, { recursive: true, force: true });
   }
