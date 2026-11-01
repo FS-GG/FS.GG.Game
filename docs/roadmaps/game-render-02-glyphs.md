@@ -47,60 +47,88 @@ A glyph is a value that describes what it means and where it is. It never descri
 **compositional**, in the way APP-6 / MIL-STD-2525 symbols (and milsymbol, MIT) are built. Each glyph is a fixed set
 of **slots** around one anchor, and the slot geometry comes from size tokens:
 
-| Slot | What it shows | Examples | Bertin level |
-|---|---|---|---|
-| **Frame** | identity: allegiance (own, ally, neutral, enemy, unknown) as **shape plus colour** | disc, square and wide frames in the portable profile; diamond, quatrefoil and dashed (planned) frames in the stroked profile | associative / selective |
-| **Fill** | the frame's interior: the identity colour, or the neutral body when a team mark carries the colour | `glyph.unit.body`, `glyph.allegiance.enemy` | selective |
-| **Icon** | function or class, inside the frame | an infantry, vehicle or scenery icon | associative |
-| **Team mark** | team, as a band or ring in the team colour on a neutral body (the RTS mask-region convention) | ring, foot band | selective |
-| **Inner modifiers** | flags in sector slots inside the frame | stale, carrying, disabled | selective |
-| **Amplifiers** (outside the frame, at fixed slots) | **above:** ordinal pips (rank or echelon); **below:** a fraction bar (health, progress); **corners:** badges; **from the anchor:** facing; **right:** the label (after Q6) | | ordered (pips, length) |
+| Slot | What it shows | Examples |
+|---|---|---|
+| **Frame** | identity, as **shape plus colour**, with the shape fixed by the library (below) | friend rectangle, neutral square |
+| **Fill** | the frame's interior: the identity colour, or the neutral body when a team mark carries the colour; an optional **lightness step** for an ordinal field | `glyph.unit.body`, `glyph.allegiance.enemy` |
+| **Icon** | function or class, inside the frame | infantry, vehicle, scenery |
+| **Size step** | an ordinal field, as one of a few frame sizes within the footprint | small, medium, large |
+| **Team mark** | team, as a band or ring in the team colour on a neutral body (the RTS mask-region convention) | ring, foot band |
+| **Inner modifiers** | flags, in sector slots inside the frame | stale, carrying, disabled; the ally notch |
+| **Amplifiers** (outside the frame, beyond the cue reserve) | **above:** ordinal pips (rank or echelon); **below:** a fraction bar (health, progress); **corners:** badges, including the team badge; **from the anchor:** facing; **right:** the label (after Q6) | |
 
-**Allegiance is always double-encoded.** Its frame shape and its colour change together, so identity survives in
-`monochrome` and under every colour-vision deficiency. A theme cannot map two allegiances to the same frame shape.
-The portable profile has three frame shapes: disc, square and wide. When more than three identities need telling
-apart (there are five identities), the stroked profile's diamond and quatrefoil are needed. Until then, the
-identities beyond the third reuse a frame with a **notch modifier** built from bars: one corner notch, or two.
+**The identity-to-frame mapping is fixed in the library, per APP-6.** Themes choose colours, never shapes, so a frame
+shape carries identity everywhere and nothing else. Unit and structure **families** are told apart by icon, size and
+footprint, never by frame shape.
+
+| Identity | APP-6 frame | Portable profile | Stroked profile |
+|---|---|---|---|
+| `Own` | friend: rectangle (3:2) | rectangle 3:2 | rectangle 3:2 |
+| `Ally` | friend: rectangle | rectangle 3:2 **plus a corner-notch modifier**; colour differs from `Own` | the same |
+| `Neutral` | square | square | square |
+| `Enemy` | hostile: diamond | disc (stand-in until diamonds can be drawn) | diamond |
+| `Unknown` | quatrefoil | wide ellipse 3:2 (stand-in) | quatrefoil |
+
+- **Identity is always double-encoded.** Its shape and its colour change together, so identity survives in
+  `monochrome` and under every colour-vision deficiency. `Own` and `Ally` share APP-6's friend frame, and are
+  separated by colour plus the notch.
+- **Team has a named second channel.** Team colour is the team mark. The second channel is the **identity frame**
+  (a team is own, ally, neutral or enemy relative to the viewer) plus the **accessible mirror label**, which names the
+  team. Games with at most 4 teams may also show a **team badge**, a corner amplifier of one to four bars.
+- **More than 8 teams.** The team-colour channel is capped at the theme's hue capacity (D12). Above it, or whenever the
+  player asks, the theme switches to **allegiance colouring**: team marks take the viewer-relative allegiance colours,
+  as SC2's toggle does. Team identity then rests on the frame, the badge and the label.
 
 ```fsharp
-// FS.GG.Game.Render, namespace FS.GG.Game.Render.Glyphs (proposed .fsi shape; opaque types, constructors, additive)
-type Identity = Own | Ally | Neutral | Enemy | Unknown
-type FrameShape = Disc | Square | Wide | Diamond | Quatrefoil      // the last two are stroked-profile only
-type AmplifierSlot = Above | Below | Corner of Corner | Facing | Right
-type GlyphSpec =                                                   // what #795's Symbology<'Entity> builds
-    { Family: GlyphFamily                                          // Unit | Structure | Terrain | Item | Marker | Path
-      Anchor: Point; Footprint: Size
-      Frame: FrameSlot                                              // identity -> shape + colour (both from the theme)
-      Fill: FillSlot; Icon: IconRef option; TeamMark: int option
-      Modifiers: ModifierRef list; Amplifiers: (AmplifierSlot * Amplifier) list }
-and Amplifier = Pips of level: int * outOf: int | Bar of fraction: float * StatusRole | Badge of IconRef | Facing of radians: float
-type GlyphState = { Selected: bool; Stale: bool }   // game state only; focus and hover are #787's cues (D10)
-type Glyph = Spec of GlyphSpec * GlyphState | Selection of Rect | PathGlyph of Point list * PathStyle | Custom of (Theme -> GlyphDrawing)
-type GlyphDrawing = { Nodes: SceneNode list; Bounds: Rect; Hit: SelectableShape }   // Bounds = union of all parts
+// FS.GG.Game.Render, namespace FS.GG.Game.Render.Glyphs (proposed .fsi shape; every type opaque, built by functions)
+type Identity = Own | Ally | Neutral | Enemy | Unknown            // the frame shape follows from this, in the library
+[<Sealed>] type GlyphSpec                                         // what #795's Symbology<'Entity> builds
+module GlyphSpec =
+    val create     : GlyphFamily -> anchor: Point -> footprint: Size -> GlyphSpec
+    val identity   : Identity -> GlyphSpec -> GlyphSpec
+    val icon       : IconRef -> GlyphSpec -> GlyphSpec
+    val team       : int -> GlyphSpec -> GlyphSpec
+    val sizeStep   : int -> GlyphSpec -> GlyphSpec               // ordinal, 0..n-1
+    val fillStep   : int -> GlyphSpec -> GlyphSpec               // ordinal lightness step
+    val modifier   : ModifierRef -> GlyphSpec -> GlyphSpec
+    val amplifier  : AmplifierSlot -> Amplifier -> GlyphSpec -> GlyphSpec
+type GlyphState = { Selected: bool; Stale: bool }                // game state only; focus and hover are cues (D10)
+[<Sealed>] type Glyph                                            // Spec, Selection, Path or Custom, by constructors
+[<Sealed>] type GlyphDrawing
+module GlyphDrawing =
+    val nodes  : GlyphDrawing -> SceneNode list
+    val frame  : GlyphDrawing -> Rect                             // = hit bounds: the frame only, independent of state
+    val hit    : GlyphDrawing -> SelectableShape
+    val extent : GlyphDrawing -> Rect                             // layout extent: frame, cue reserve and amplifiers
 val draw      : Theme -> Glyph -> GlyphDrawing
 val scene     : Theme -> Glyph list -> Scene
-val cues      : Theme -> CueContext -> SceneNode list   // = #793's withCues type; focus only (D10)
-val cuesHover : Theme -> CueContext -> SceneNode list   // focus plus hover, opt-in (D10)
+val cues      : (unit -> Theme) -> CueContext -> SceneNode list   // focus ring only (D10)
+val cuesHover : (unit -> Theme) -> CueContext -> SceneNode list   // plus hover, opt-in (D10)
 ```
 
-- **One function.** `draw theme glyph` is pure, total and deterministic. It returns the Scene nodes and the hit
-  geometry, the union of the frame and every drawn slot, so a game's `SelectableObject` bounds and its drawing cannot
-  drift apart. Today FourD reads its bounds back from the first node of each cell, and RuneScape computes its geometry
-  twice.
+- **Hit bounds are the frame only.** `GlyphDrawing.frame` and `hit` do not depend on state, amplifiers or brackets,
+  so a game's `SelectableObject` is the same whether or not the object is selected. A separate **layout extent**
+  covers the whole glyph: frame, cue reserve and amplifiers. Nothing is drawn within the theme gap outside the frame,
+  so the kit's box-edge check passes by construction: the pixel just inside each frame edge is the frame, and the
+  pixel just outside is the ground.
+- **One function.** `draw theme glyph` is pure, total and deterministic, so a game's selectable objects and its
+  drawing cannot drift apart. Today FourD reads its bounds back from the first node of each cell, and RuneScape
+  computes its geometry twice.
 - **The theme is an input to the Scene, never game state.** `draw` and `scene` take the `Theme` as an argument. A
   game keeps its selected theme as a model field, or as view configuration, and a switch re-renders the frame. Game
-  state and selection survive the switch unchanged (D4, *Runtime switching*).
-- **Slot contents are token references** (`IconRef`, `ModifierRef`, `StatusRole`), never raw colours or sizes. The
+  state and selection survive the switch unchanged (D4, *Runtime switching*). The cue layer reads the same theme
+  (D10).
+- **Slot contents are token references** (`IconRef`, `ModifierRef`, status roles), never raw colours or sizes. The
   theme resolves them (D4).
-- **The encoding-grammar hook (#795).** `GlyphSpec` and its slot types are public and constructible. #795's typed
-  `Symbology<'Entity>` builder (`Encode.identity`, `nominal`, `ordinal`, `fraction`, `angle`, `flag`) targets these
-  slots, and maps an entity to a `GlyphSpec`. Rules that #795 enforces at build time are recorded in D12, so a
-  `GlyphSpec` built by hand and one built by #795 obey the same constraints.
+- **The encoding-grammar hook (#795).** `GlyphSpec` is opaque and built only through `GlyphSpec` functions, so cases
+  and fields can be added later without breaking consumers. #795's typed `Symbology<'Entity>` builder
+  (`Encode.identity`, `nominal`, `ordinal`, `fraction`, `angle`, `flag`) calls those functions, and maps an entity to
+  a `GlyphSpec`. The builders enforce D12's rules, so a hand-built spec and a #795-built one obey the same constraints.
 - **Composition.** A glyph is made of Scene primitives only. It adds no node kind and no new renderer surface.
 - **Portability.** The library uses only `SceneNode` data, so it compiles for .NET and through Fable from the same
   files, and it joins the bounded Fable view of FS.GG.Game.Render.
 - **`Custom`** is the escape hatch for a game-specific glyph. It still takes its colours from the theme and still
-  returns its hit geometry.
+  returns its frame, hit shape and extent.
 
 ### D2. Two lowering profiles, with one profile for all backends
 
@@ -119,24 +147,27 @@ A glyph lowers to one of two profiles. The same profile is used on every backend
 - **Switching profiles.** A game switches by setting the theme's `Profile` field. The default changes only when #773
   and the D6 kit models have shipped.
 - **Pixel snapping.** At a cell of 16 units or more, glyph geometry snaps to whole scene units. Edges then fall on
-  pixel boundaries, so SVG antialiasing and Pixi's lack of it cannot move a decided pixel. The proof uses `Floor`,
-  never `Round`. The F# `Math.Round` and the Fable `Math.Round` might break a half-way tie differently, which would
-  make the .NET and Fable drawings differ.
+  pixel boundaries **only when the device pixels per scene unit are a whole number**: 1 or 2 at DPR 1 or 2 with the
+  board at its scene size. At other scales (SC2's 640×360 board styled to 960×540, or DPR 1.5), edges fall between
+  pixels, and those pixels are left undecided by the kit's Partial rule. Snapping then keeps geometry deterministic but
+  does not align it. The proof uses `Floor`
+  for **geometry** whose inputs are exact multiples, never `Math.Round`, whose half-way ties might break differently on
+  .NET and Fable. Colour quantisation is a different case, with its own rule (D11).
 
 ### D3. The starter glyph set
 
 | Family | Portable profile | Stroked additions |
 |---|---|---|
-| **Units** | identity frame (disc, square or wide, D1) in its allegiance colour, an icon, a team ring on a neutral body | diamond and quatrefoil frames; a dashed frame for planned; a facing amplifier |
-| **Structures** | body square with a team band along its foot; footprint of n×m cells | keyline outline |
+| **Units** | the library's identity frame (D1) in its identity colour, an icon, a team ring on a neutral body; size steps for an ordinal | the diamond and quatrefoil frames replace their stand-ins; a dashed frame for planned; a facing amplifier |
+| **Structures** | the same identity frame as units, told apart by a footprint of n×m cells and a structure icon, with a team band along its foot | keyline outline |
 | **Terrain** | a tile inset by the theme's gap, coloured from the terrain-kind tokens (open, blocked, difficult, water, void) | a hatch per kind, so terrain does not rely on colour alone |
 | **Items** | a small oval at the item anchor | — |
 | **Markers** | waypoint plus, destination ring (disc plus inner disc), target crosshair (four bars, as in SC2) | stroked rings, ping |
-| **Selection** | corner brackets outside the focus ring's width plus the theme gap, so both show on one object (D10) | — |
-| **Focus** (cue layer, D10) | #787's two-tone ring: a dark outer band and a light inner band of filled rectangles, each at least 2 units, just outside the object's bounds, in the theme's `FocusOuter`/`FocusInner` tokens. It differs from selection by shape as well as colour. | — |
-| **Hover** (cue layer, opt-in, D10) | a one-unit outline in the hover token | — |
+| **Selection** (frame, game state) | corner brackets in the cue reserve, outside the largest focus ring the theme allows, so both show on one object (D10) | — |
+| **Focus** (cue layer, D10) | #787's two-tone ring: a dark outer band and a light inner band of filled rectangles, each at least 2 CSS px, just outside the frame, in the theme's `FocusOuter`/`FocusInner` tokens. It differs from selection by shape as well as colour. | — |
+| **Hover** (cue layer, opt-in, D10) | an outline at least 1 CSS px wide in the hover token | — |
 | **Path** | dots at a theme spacing, and a step marker at the end | polyline |
-| **Status** (the *below* amplifier) | track plus a fill whose length is the fraction, coloured good, warn or bad by theme thresholds; ordinal pips in the *above* amplifier | — |
+| **Status** (the *below* amplifier) | a keyline in the body colour, a dark track inside it, and a fill whose length is the fraction, coloured good, warn or bad by theme thresholds; ordinal pips in the *above* amplifier | — |
 | **Team colour** | the team mark: a ring or band on a neutral body, from the `glyph.team.N` aliases. Identity is never shown by team colour alone (D1). | — |
 
 A stale veil (BAR) needs alpha. Babylon ignores alpha, so the portable profile draws a stale glyph with its body in the
@@ -164,8 +195,10 @@ its HSV ramp maths is not):
   every violation or the theme. A theme that fails validation cannot be built.
 - **Validation in this ADR's scope.** The WCAG 2.x non-text contrast floor (SC 1.4.11, relative luminance) is **3:1**
   for every alias drawn directly on the ground: teams, allegiances, selection, the outer focus tone, hover, marker,
-  path and body. The inner focus tone is at least 3:1 against the outer one (D10). `highContrast` raises the floor to
-  7:1. Every token is opaque until alpha is supported (Q5).
+  path and body. Contrast is also checked between the other colours that touch (the icon on the fill, the team ring
+  between fill and body, the status fill on its track, the inner focus tone on the outer one; D12). `highContrast`
+  raises the floor to **7:1**, a provisional value borrowed from WCAG's AAA criterion for text, not a non-text
+  requirement. Every token is opaque until alpha is supported (Q5).
 - **APCA is not a gate.** WCAG 2 contrast is the testable rule. APCA's polarity-aware ideas may inform presets, but
   no `apca-w3` code or constants are ported, because that package is "All Rights Reserved" (see *Licensing*).
 - **Presets** (generated by #795, named here so games can depend on the names): `classic` (the proof's `standard` theme,
@@ -187,7 +220,8 @@ its HSV ramp maths is not):
   its palette, and the CSS values equal the Scene's colours (a kit check).
 - **The stroke gap is a token.** The proof's first screenshots showed why: a white focus outline touching a
   near-white structure body merged with it.
-- **No meaning by colour alone.** Identity is frame shape plus colour (D1). A fraction reads by bar length. Ordinal
+- **Themes choose colours, never shapes.** The identity-to-frame mapping is the library's (D1).
+- **No meaning by colour alone.** Identity is frame shape plus colour (D1); team is colour plus frame, label and badge. A fraction reads by bar length. Ordinal
   values read by pips. Selection is brackets and focus is a two-tone ring. Terrain gets a hatch in the stroked profile.
 
 **What this ADR fixes and what #795 fills in.** This ADR fixes the three layers, the algorithm signature, the alias
@@ -221,6 +255,14 @@ names, the `Theme` value as a Scene input, the validation floor, DTCG and CSS ex
   - white pixels take the detail role;
   - transparent pixels take the background role.
 
+  - **Templates are exact.** Each pixel has alpha exactly 0 or 255 (binary transparency), and every opaque pixel is
+    exactly black or exactly white. A template with any other value is refused when its atlas loads, with the first
+    offending pixel named.
+  - **Anti-aliasing is not in the template.** It comes from rendering at the presented scale. Art authored with
+    anti-aliased edges is quantised once, at authoring time, by a tool. The tool makes alpha below 0.5 transparent,
+    makes luminance below 0.5 the foreground role, and makes everything else the detail role. The tool's output, not
+    the original art, is what the atlas holds.
+
   The roles resolve to alias tokens (for example `glyph.allegiance.enemy` and `glyph.team.0`). One piece of licensed
   art then follows every theme, the player's team override and `monochrome`, and the double-encoding rule (D1)
   still applies through the frame.
@@ -251,10 +293,16 @@ per-channel tolerance.
    - a **polygon**, a filled `Path` of `MoveTo`/`LineTo`/`Close`, using nonzero or even-odd winding. A pixel is Full
      when its four corners are inside and no edge crosses it.
    - **Bounded unmodelled nodes.** Today any node the kit does not model (text, an image, a curve) is `Partial` for
-     **every** pixel. One such node anywhere makes the whole scene undecided: `expectations` returns nothing, and the
-     kit's subject check ("every state declares at least one pixel") then refuses the scene. A game cannot add one
-     label or path without losing pixel coverage for the whole scene. With this change, a node whose bounds are known (`Path.bounds`, image bounds,
-     arc bounds) is `Partial` only inside them. Text and nodes without bounds stay unbounded.
+     **every** pixel. A pixel stays decided only if a later opaque node wholly covers it, so the loss depends on draw
+     order. On the proof board at `8cbd7bed` (391 decided pixels), the #794 review measured how many stay decided with one text node
+     added:
+     - drawn first: 391;
+     - drawn in the middle: 234;
+     - drawn last, the usual place for a label: 0. `expectations` is then empty, and the kit's subject check ("every
+       state declares at least one pixel") refuses the scene.
+
+     With this change, a node whose bounds are known (`Path.bounds`, image bounds, arc bounds) is `Partial` only inside
+     them. Text and nodes without bounds stay unbounded. The proof's test pins the drawn-last case.
    - **Samples** for each new model: its middle, the first whole pixel inside and outside each edge, and, for rings
      and bands, one pixel across the stroke.
 
@@ -270,16 +318,18 @@ per-channel tolerance.
 - **Why.** The constructors are pure record and union builders. What is not portable in `Scene.fs` is the text
   shaping, which depends on `TextShaping.fs` and uses `System.Security.Cryptography` for fingerprints, together with
   inspection and evidence.
-- **Where it is fixed.** **FS.GG.Rendering**, which owns the package and its compatibility profile. The pure
-  constructors (`Colors`, `Paint`, the `Path` builders and the node builders of `Scene`) move to a portable source
-  that the Fable project compiles, and the profile grades them `Portable`. Text shaping, measurement, inspection,
+- **Where it is fixed.** **FS.GG.Rendering**, which owns the package and its compatibility profile. The scope is the
+  **portable subset**, not every .NET member. The pure constructors (`Colors`, `Paint`, the `Path` builders and the
+  node builders of `Scene`) move to a portable source that the Fable project compiles, and the profile grades them
+  `Portable`. Text shaping, measurement, inspection,
   evidence and the codec stay `DotNetOnly`. Rendering chooses whether that means a separate module or a split of
   `Scene.fs`.
 - **Game's side.** Game does **not** publish a second `Scene` or `Colors` API, which would compete with Rendering's.
   Until the Rendering fix ships, the glyph library builds `SceneNode` data with private helpers, as the proof does.
   After the fix, the template, RuneScape, BAR and SC2 drop their copies of `node`, `group`, `rect` and `rgb`.
-- **Owed intake:** a FS.GG.Rendering Delivery, "Scene constructors in the Fable view". This PR does not file it, and
-  the coordinator owns that intake.
+- **Intake:** FS.GG.Rendering#1504, "Fable view of FS.GG.UI.Scene ships Scene/Colors helpers". FS.GG.Rendering#1506,
+  filed from this ADR, duplicates it and is being folded into #1504. The scope of that Delivery is the portable subset
+  above, not "the same constructors as .NET".
 
 ### D8. Relation to SVG export and SVG→Pixi import (#790)
 
@@ -344,35 +394,47 @@ object, the hovered object and whether focus is visible. The cues are not game s
 switch. Every interactive backend draws the interaction's cue layer above the frame's Scene. The default layer is
 `SceneInteraction.standardCues`, and a game replaces it with `SceneInteraction.withCues`.
 
-The glyph layer follows that split. The 2026-11-01 review of #793 raised two conflicts with this ADR (the type of the
-cue layer, and hover after a press) and added two requirements (the ring's pixel width, and unlit drawing). They are
-settled as follows.
+The glyph layer follows that split. Two reviews raised conflicts and requirements: the 2026-11-01 review of #793, and the
+review of this ADR at `8cbd7bed` (B2 and B3). They are settled as follows.
 
 - **Selection** is game state (`InteractiveScene.Selected`). It is drawn in the frame's Scene as `Selection` brackets
   through `GlyphState.Selected`.
 - **Focus and hover** are never in `GlyphState`. They are drawn only by the cue layer.
 
-**One type, with no wrapping.** The cue layer has exactly the `withCues` type that #793 settled at `f0561a79`. Its
+**One type, with no wrapping.** The cue layer has exactly the `withCues` type that #793 set at `f0561a79`. Its
 `CueContext` carries the cues, the frame's objects and the presented scale:
 
 ```fsharp
-val cues      : Theme -> CueContext -> SceneNode list   // focus only
-val cuesHover : Theme -> CueContext -> SceneNode list   // focus plus hover (opt-in)
-// use: SceneInteraction.withCues (Glyphs.cues theme) interaction
+val cues      : (unit -> Theme) -> CueContext -> SceneNode list   // focus ring only
+val cuesHover : (unit -> Theme) -> CueContext -> SceneNode list   // focus ring plus hover (opt-in)
+// use: SceneInteraction.withCues (Glyphs.cues (fun () -> currentTheme ())) interaction
 ```
 
-A `SceneNode list` composes into the surface's frame without wrapping. The earlier `Scene`-returning draft is
-withdrawn, and `standardCues` has the same type. `Glyphs.draw` keeps `GlyphDrawing.Nodes` for the same reason.
+A `SceneNode list` composes into the surface's frame without wrapping, and `standardCues` has the same type. The
+earlier draft that returned a `Scene` is withdrawn.
+
+**A theme switch reaches the cues (review B3).** `withCues (Glyphs.cues theme)` would fix the theme when the registry is
+built, so a later switch would recolour the frame but not the cues.
+- **Now:** the cue layer takes a **theme reader**, `unit -> Theme`, and reads it each time the host draws the layer.
+  The game updates the theme its reader returns before it dispatches the state that shows the new theme, so the frame
+  and the cues of one Present use the same theme.
+- **Preferred, proposed to the #787 owner:** a state-aware form, `SceneInteraction.withCuesOf (draw: 'State ->
+  CueContext -> SceneNode list)`. The host already holds the presented state, so the cue layer would read the theme
+  from it, with no reader and no ordering rule. `Glyphs.cuesOf (fun model -> model.Theme)` would then replace the
+  reader form.
+- **Kit:** D11's A → B → A switch check includes the cue layer, with focus visible on an object.
 
 **Hover is opt-in.** The default `Glyphs.cues` draws focus and nothing for hover, as `standardCues` does. After a
 pointer press the pressed object is hovered, and focus is not visible, so the default draws the same frame as before
-the press. #793's I8 ("after a pointer press the frames do not differ") then holds unchanged for any game using it.
-`Glyphs.cuesHover` adds the hover outline. A game that opts in changes its frame on hover by design, so it is tested
-against #793's restated I8 with a hover-only frame (the same frame with `hovered` set) as the reference.
+the press. `Glyphs.cuesHover` adds the hover outline. A game that opts in changes its frame on hover by design, so it is
+tested against #793's restated I8, which takes a hover-only frame as the reference.
+- **Not yet settled:** #793's ADR text (its line 120, as of `f0561a79`) still says the glyph layer's `Glyphs.cues`
+  "also draws a hover outline". The #787 owner has been asked to name `cuesHover` there. This is settled when #793
+  changes that line.
 
-**Deterministic drawing.** The layer is a pure function of `(theme, CueContext)`. The focused and hovered ids are
-looked up in `objects`, and an id that is not there draws nothing. Every combination of focus, hover and selection is
-defined:
+**Deterministic drawing.** The layer is a pure function of the theme the reader returns and the `CueContext`. The
+focused and hovered ids are looked up in `objects`, and an id that is not there draws nothing. Every combination of
+focus, hover and selection is defined:
 
 | Focus visible on X | Hovered | Selected (frame) | The cue layer draws | The frame draws |
 |---|---|---|---|---|
@@ -382,51 +444,84 @@ defined:
 | yes | Y ≠ X | — | the focus ring on X; `cuesHover` also the hover outline on Y | brackets if selected |
 | focused id but not visible (after a press) | any | — | as "no" above | brackets if selected |
 
-- **Layer order.** Frame (with selection brackets), then the hover outline, then the focus ring.
-- **Placement.** The focus ring is just outside the object's bounds, with #793's geometry: a dark outer band and a
-  light inner band. The hover outline sits inside the band the focus ring would occupy, so the two never draw on the
-  same object at once. Selection brackets are placed **outside** the focus ring's full width plus the theme gap, so an
-  object that is both selected and focused shows both cues and never overdraws one with the other. This changes the
-  proof, which predates #793: there, the brackets sit one gap outside the bounds.
+**Layer order:** the frame (with selection brackets), then the hover outline, then the focus ring.
+
+**Placement, and why it is not circular (review B2).** Hit bounds are the frame only (D1), so they do not move with
+selection, brackets or the ring.
+
+The **cue reserve** is a fixed band of scene units around the frame, sized by the theme:
+- `ring = 2 × max(theme band, 2 / Theme.minCssPerUnit)`, for both tones;
+- `reserve = gap + ring + gap + bracket stroke`;
+- `Theme.minCssPerUnit` is the smallest presented scale the theme supports. It defaults to 0.5 (a board styled to half
+  its scene size) and must be greater than 0.
+
+Within the reserve, everything has a fixed place:
+- the focus ring sits just outside the frame;
+- the hover outline sits inside the ring's band;
+- the selection brackets sit at the reserve's outer edge;
+- amplifiers sit outside the reserve.
+
+`draw` needs no scale, because the reserve is in scene units. The kit's box-edge check passes by construction, because
+nothing is drawn in the gap just outside the frame.
 
 **At least 2 CSS px after the surface transform.** Each focus band is
-`max(theme band, 2 / CueContext.cssPerUnit context)` scene units wide, rounded up to whole device pixels. Neither band
-falls below 2 CSS px when a board is styled smaller than its scene (SC2's 640×360 map shown at 320×180), and the drawn
-width stays whole on the pixel grid. The input host supplies `cssPerUnit` in `CueContext` (#793 at `f0561a79`), which
-is the mechanism proposed on #793, so no theme-declared minimum scale is needed. #793's restated I8 asserts the 2 CSS
-px width for `standardCues` and for any `withCues` layer.
+`max(theme band, 2 / CueContext.cssPerUnit context)` scene units wide, rounded up to a whole CSS px.
+- **Measured in CSS px, not device px.** `CueContext` carries no device pixel ratio, so the bands are not promised to
+  align to device pixels. A DPR field would be requested only if the kit's evidence showed a need.
+- **The hover outline** is `max(theme hover width, 1 / cssPerUnit)`, so it is at least 1 CSS px.
+- **Below `minCssPerUnit`,** the ring keeps its 2 CSS px and may cover the brackets. Accessibility wins over layout.
+  The layer reports a diagnostic, and the kit runs only at or above the theme's minimum scale.
+
+The input host supplies `cssPerUnit` in `CueContext` (#793 at `f0561a79`). #793's restated I8 asserts the 2 CSS px
+width for `standardCues` and for any `withCues` layer.
 
 **Unlit on Babylon.** The cue layer is Scene data drawn through the same fill path as the frame. Once #786 lands,
 Babylon draws it unlit at its declared colours, so the measured contrast of the two tones is the declared contrast.
 Until #786, Babylon draws it at about 0.75 of each colour. Scaling both colours by 0.75 lowers their contrast ratio (for
-example, white on (34,40,49) drops from 14.8:1 to 9.1:1), so the kit's glyph and cue checks assert the declared
-colours only after #786.
+example, white on (34,40,49) drops from 14.8:1 to 9.1:1), so the kit's glyph and cue checks assert the declared colours
+only after #786.
 
 **Contrast.** The theme validates both focus tones: the outer tone against the ground and the inner tone against the
-outer one, each at least 3:1. This is the two-tone rule #787 takes from WCAG 2.2 focus appearance.
+outer one, each at least 3:1. This is the two-tone rule #787 takes from WCAG 2.2 focus appearance. Selection and both
+focus tones are also checked against every team and allegiance colour (D12).
 
-**The proof** predates #793. It draws focus as a single-tone outline in the frame's Scene, and its brackets sit one gap
-outside the bounds. The implementation draws focus in the cue layer only, with the placement above.
+**The proof** predates #793 and this placement. It draws focus as a single-tone outline in the frame's Scene, and its
+brackets sit one gap outside the bounds.
 
-### D11. Colour derivation is deterministic: OKLCH in F#, quantised with Floor
+### D11. Colour derivation is deterministic: OKLCH in F#, rounded half up after a clamp
 
 Palettes are derived in **OKLCH** (OKLab's polar form, as defined in CSS Color 4). It is far more hue-uniform than
-CIELAB, where blue drifts towards purple. The derivation must give the same bytes on .NET and through Fable:
+CIELAB, where blue drifts towards purple. The derivation must give the same bytes on .NET and through Fable.
 
-- **One implementation, in F#.** Derivation runs from the same F# source on both targets. No JavaScript colour
-  library sits on the drawing path.
-- **Floor, not Round, when quantising to 8-bit sRGB.** This is the same argument as D2's geometry snapping. `Math.Cbrt`
-  and `Pow` can differ by an ULP between .NET and JavaScript, and an ULP can flip a half-way rounding. Floor of a value
-  already clamped to [0, 255] makes such a flip far less likely, and the kit check below catches any that remain.
-- **Gamut mapping** follows CSS Color 4: chroma is reduced at constant L and h until the colour is in sRGB, within
-  the ΔEOK just-noticeable difference.
+**Quantisation clamps `v = channel × 255` to [0, 255], then takes `Floor(v + 0.5)`. It is not `Floor(v)`.** The earlier revision of this ADR, and the
+research it took the idea from, said `Floor`. The #794 review measured that this is wrong (scripts in
+`~/.fsgg-scratch/r794/fsi/`, not committed):
+- An OKLCH round trip of an 8-bit colour lands about 1e-12 **below** the integer. `Floor` then drops one step, on
+  **94.8 %** of the 16.7 million sRGB colours, against **0** with `Floor(v + 0.5)`.
+- `cbrt` and `pow` differ by 1–3 ULP between .NET and Node. With accurate maths, .NET and Node hex differ on
+  **44.6 %** of colours under `Floor(v)`, and on **0** under `Floor(v + 0.5)`.
+- The explicit `Floor(v + 0.5)` is used, never `Math.Round`, because the two runtimes' `Math.Round` break half-way ties
+  differently.
+
+The rest of the rule:
+- **One implementation, in F#.** Derivation runs from the same F# source on both targets. No JavaScript colour library
+  sits on the drawing path.
+- **Gamut mapping** follows CSS Color 4: chroma is reduced at constant L and h until the colour is in sRGB, within the
+  ΔEOK just-noticeable difference.
+- **Contrast is validated on the 8-bit values,** the ones that are drawn, through a committed 256-entry
+  sRGB→linear table. There is no `pow` at validation time, so a ratio near 3:1 cannot pass on one runtime and fail on
+  the other.
 - **Presets are baked at build time.** Each preset's resolved hex values are generated, committed as data, and
-  compared with a fresh derivation in CI. Derivation at run time is used only for custom seeds and player overrides.
+  compared with a fresh derivation in CI. Run-time derivation is used only for custom seeds and player overrides.
+- **DTCG import prefers `hex`.** When a DTCG colour carries both `components` and `hex`, the hex is taken.
+  "Lossless" export followed by import means **equal resolved hex** for every alias, not equal floating-point
+  components.
 - **Kit checks** (in the kit's glyph section, D6), for every preset:
-  1. .NET and Fable derive identical hex for every alias;
-  2. a theme switch A → B → A gives identical `ScenePixels` expectations;
+  1. identical hex for every alias from **.NET on Linux, .NET on Windows and Node** (through Fable). The derivation is
+     also run over the full 8-bit round trip, so a regression in the quantiser is caught;
+  2. a theme switch A → B → A gives identical `ScenePixels` expectations, **including the cue layer** (D10);
   3. the theme-swap control does not match, as in the proof;
-  4. DTCG export and re-import is lossless, and the CSS variables equal the Scene's colours.
+  4. DTCG export and re-import gives equal resolved hex, and the CSS variables equal the Scene's colours.
 
 ### D12. The encoding-grammar hook, and the scope split with #795
 
@@ -450,14 +545,18 @@ channels. They are recorded here so that a hand-built `GlyphSpec` obeys them too
 check the ones a theme can break:
 
 1. **No hue-only ordered data.** An ordinal or fraction field never maps to hue alone. It maps to length (a bar),
-   pips, size steps, or lightness steps.
+   pips, or the ordinal **size step** or **lightness step** slots (D1).
 2. **Categorical hue needs a redundant channel.** A nominal field encoded by hue must also be encoded by a non-hue
    channel: frame shape, icon or a modifier. The `monochrome` render must still tell its values apart in decided
    pixels.
 3. **Channel capacity.** A field's cardinality must not exceed the capacity of its channel at the glyph's size.
-   - Hue: at most 8 distinct values.
-   - Portable frame shapes: 3, or 5 with the notch modifiers.
-   - Pips: at most 5.
+   - **Hue** capacity depends on size. On a dark ground at glyph sizes, about **6–7** hues are usable. The theme
+     declares the capacity per size step, and 8 is the ceiling at the largest step (Munzner's 6–12 bins, fewer at
+     small sizes).
+   - **Frame shapes** carry identity only (D1), never another field.
+   - **Pips:** at most 5. This is a **design default**, from subitizing (small counts are read at a glance), not a
+     measured limit.
+   - **Ordinal size or lightness steps:** at most 4 by default.
 
    Above capacity, the build fails and names the field.
 4. **Fractions are length, not area.** A fraction encoded by area is refused.
@@ -468,11 +567,21 @@ check the ones a theme can break:
 
 | #789 (this ADR, its implementation and the proof) | #795 (builds on this ADR) |
 |---|---|
-| the slot model (`GlyphSpec`, frames, slots and amplifiers) and `draw` | `Symbology<'Entity>` and the `Encode` combinators |
+| the slot model (the opaque `GlyphSpec` and its builders, the library's identity frames, slots and amplifiers) and `draw` | `Symbology<'Entity>` and the `Encode` combinators |
 | the token layers, the algorithm signature, the alias names and `Theme` as a Scene input | palette algorithms: OKLCH ramps, Leonardo-style contrast solving, gamut mapping, team hue spreading |
 | the 3:1 floor, opaque-only, DTCG and CSS export, deterministic derivation (D11) | the five presets as data, and the player-override flow |
 | the cue layer (D10) and the kit's glyph section (D6) | the kit's ΔE2000, CVD, redundancy and capacity checks |
 | sprite atlases and the recolour template (D5) | — |
+
+**Contrast against real neighbours (this ADR, D4).** Contrast is checked between the colours that actually touch:
+- the frame or a keyline against the ground;
+- the icon against the fill;
+- the team ring against both the frame fill and the body it sits between;
+- the status bar's keyline against the ground, and each status fill against the track;
+- the inner focus tone against the outer one.
+
+The proof's dark status track measured **1.33:1** on the ground. The proof now keylines the bar in the body colour, and
+its tests check the keyline against the ground and each fill against the track.
 
 **Distinctness and colour-vision checks (#795).** Teams, allegiances and status levels must differ pairwise by at
 least a ΔE2000 threshold at glyph size. The required difference grows as marks shrink (Stone, Szafir and Setlur), so
@@ -480,6 +589,11 @@ the threshold depends on size. The check runs twice:
 - with normal vision, starting at ΔE ≥ 12;
 - under Machado simulation of protanopia, deuteranopia and tritanopia at severity 1.0, simulated in linear RGB,
   starting at ΔE ≥ 8, together with a minimum OKLab lightness separation for each team pair.
+
+**Scope of distinctness.** Pairs are checked **within** a category: teams with teams, allegiances with allegiances,
+status levels with status levels. Selection and the focus tones are also checked against every team and allegiance
+colour, because they are drawn over them. Other pairs across categories are not required to differ, in every preset
+including `colourBlindSafe`, because shape and slot already separate them.
 
 **Both thresholds are starting points to be calibrated** (Q11). Simulation is validation, not a substitute for testing
 with players.
@@ -491,14 +605,16 @@ The proof does not constrain the API.
 - **Glyphs.** `src/ReferenceGame/ExperimentalGlyphs.fs`, namespace `FS.GG.Game.Reference.Experimental`, in a project
   that is not packed. It has six glyphs (unit, structure, waypoint, selection brackets, focus outline and status bar)
   and two themes (`standard` and `colourBlindSafe`), in the portable profile only.
-  The proof predates D1's slot model, D4's token layers and D11. Its themes are flat records of colours, and its
-  `standard` theme is the seed of the `classic` preset.
-- **.NET tests.** `tests/Game.Render.Tests/ExperimentalGlyphsTests.fs` checks five things:
+  The proof predates D1's slot model and frame mapping, D4's token layers, D10's placement and D11. Its themes are
+  flat records of colours, and its `standard` theme is the seed of the `classic` preset. After the review at
+  `8cbd7bed`, its status bar is keylined in the body colour: the dark track alone measured 1.33:1 on the ground.
+- **.NET tests.** `tests/Game.Render.Tests/ExperimentalGlyphsTests.fs` checks six things:
   - every glyph lowers to the portable set;
+  - each status part meets 3:1 against its real neighbour: the keyline on the ground, each fill on the track;
   - every colour a glyph draws is a pixel `ScenePixels` decides;
   - the proof board decides more than 150 pixels;
   - both themes meet the 3:1 floor;
-  - today one text node added to the board leaves no pixel decided. This pins the gap D6 closes, and the test is
+  - today a text node drawn last on the board leaves no pixel decided. This pins the gap D6 closes, and the test is
     inverted when D6 lands.
 - **Browser smoke.** `runGlyphProof` in `tests/Render.Browser.Smoke/Program.fs` draws the 256×128 proof board, one
   theme per row, on SVG, Pixi and Babylon. It requires every decided pixel to match on each backend, with a
@@ -506,13 +622,15 @@ The proof does not constrain the API.
   `RENDER_SMOKE_SCREENSHOTS` is set; the driver gained a `screenshot` request.
 - **Results** (2026-11-01, fdev, Chrome for Testing 153.0.8010.12): the smoke passed **490** browser checks, 484
   before this change and 6 added by the proof, both with SwiftShader and with the GPU (ANGLE Vulkan, RADV). On each
-  backend all **391** pixels `ScenePixels` decides for the board matched, and the theme-swap control did not.
+  backend all **403** pixels `ScenePixels` decides for the board matched (391 before the status keyline was added), and
+  the theme-swap control did not. The re-runs after the review at `8cbd7bed` gave the same check counts.
   - SVG and Pixi show the scene colours exactly.
   - Babylon shows 0.75 of them, within the kit's tolerance of 4, because it lights fills; #786 removes this.
   - Screenshots are in `game-render-02-glyphs/`, one per backend from the GPU run plus Babylon from the software run.
     The SVG screenshot also catches the SVG input host's "No object selected" status line: the smoke page has no
     visually-hidden style, so that text sits over the board. The renderer does not draw it.
-  - The named-pixel table is in the PR.
+  - The named-pixel table in the PR is **informational**: its points are read and reported, not asserted. The
+    asserted pixels are the ones `ScenePixels` decides.
 
 ## Licensing of prior art
 
@@ -562,16 +680,18 @@ Each question has a recommended default. None blocks the implementation.
 - **Q1. One lowering profile for all backends, or the best each backend can draw?**
   - *Default:* one profile for all, chosen in the theme, because identical pixels are the point.
   - *Trade-off:* until #773, SVG draws emulated outlines it could stroke natively.
-- **Q2. More than three identities in the portable profile.** D1 double-encodes all five identities, but the
-  portable profile has only three frame shapes (disc, square, wide).
-  - *Default:* the fourth and fifth identities reuse a frame with one or two corner-notch modifiers, until the stroked
-    profile adds the diamond and quatrefoil frames.
-  - *Trade-off:* a notch is a weaker shape cue than a distinct frame at small sizes.
+- **Q2. Stand-in frames until the stroked profile.** D1 fixes the identity-to-frame mapping in the library, per
+  APP-6. The portable profile cannot draw APP-6's diamond (hostile) or quatrefoil (unknown).
+  - *Default:* a disc stands in for the diamond, and a wide ellipse for the quatrefoil, until the stroked profile draws
+    the real frames. `Own` and `Ally` share the friend rectangle, separated by colour plus a notch.
+  - *Trade-off:* the stand-ins are not APP-6 shapes, so players who know APP-6 must learn them, but they remain
+    distinct from each other and from the friend and neutral frames.
 - **Q3. A closed union or an open glyph type?**
-  - *Default:* a closed union for the starter set plus `Custom`, so the kit can enumerate the set and games are not
-    blocked.
-  - *Trade-off:* adding a case to the union breaks consumers that match on it exhaustively. The union is therefore
-    opaque, with constructors and no public matching, under the additive `.fsi` rule.
+  - *Default:* `Glyph`, `GlyphSpec` and `GlyphDrawing` are all **opaque**, built only through functions. `Custom`
+    remains the escape hatch. The kit enumerates the starter set through a published list of sample specs, not by
+    matching on cases.
+  - *Trade-off:* consumers cannot pattern-match on glyphs. In return, adding a slot, an amplifier or a family later is
+    additive under the `.fsi` rule.
 - **Q4. Where `Theme` lives.**
   - *Default:* in FS.GG.Game.Render, beside the glyphs.
   - *Alternative:* `FS.GG.UI` (Rendering), so `Controls` share tokens. Deferred until a non-game consumer asks.

@@ -24,7 +24,8 @@ module Glyphs =
             Selection: Color
             Focus: Color
             Marker: Color
-            /// Status bar track and its good/warning/bad fills.
+            /// Status bar track and its good/warning/bad fills. The bar is keylined in `Body`, so the track and the fills are
+            /// validated against their real neighbours: the keyline against the ground, each fill against the track.
             Track: Color
             Good: Color
             Warn: Color
@@ -177,8 +178,11 @@ module Glyphs =
             let fill = if f > 0.6 then theme.Good elif f > 0.3 then theme.Warn else theme.Bad
             let inset = s / 2.0
 
+            // The bar's keyline (the body colour) separates it from the ground; the dark track inside separates the fill
+            // from what is empty. A dark track alone measured 1.33:1 on the ground (the #794 review).
             [
-                box bounds.X bounds.Y bounds.Width bounds.Height theme.Track
+                box bounds.X bounds.Y bounds.Width bounds.Height theme.Body
+                box (bounds.X + inset) (bounds.Y + inset) (bounds.Width - 2.0 * inset) (bounds.Height - 2.0 * inset) theme.Track
                 box (bounds.X + inset) (bounds.Y + inset) (System.Math.Floor((bounds.Width - 2.0 * inset) * f)) (bounds.Height - 2.0 * inset) fill
             ]
 

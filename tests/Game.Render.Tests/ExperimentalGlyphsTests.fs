@@ -81,7 +81,17 @@ let tests =
             }
 
 
-            test "today one unmodelled node anywhere leaves no pixel of the board decided (the gap ADR D6 closes)" {
+            test "each status part meets 3:1 against its real neighbour: the keyline on the ground, each fill on the track" {
+                for theme in themes do
+                    let keyline = Glyphs.Theme.contrast theme.Body theme.Ground
+                    Expect.isGreaterThanOrEqual keyline 3.0 (sprintf "%s keyline on ground: %.2f:1" theme.Name keyline)
+
+                    for name, fill in [ "good", theme.Good; "warn", theme.Warn; "bad", theme.Bad ] do
+                        let ratio = Glyphs.Theme.contrast fill theme.Track
+                        Expect.isGreaterThanOrEqual ratio 3.0 (sprintf "%s %s fill on track: %.2f:1" theme.Name name ratio)
+            }
+
+            test "today a text node drawn last leaves no pixel of the board decided (the gap ADR D6 closes)" {
                 let board = Glyphs.proofScene Glyphs.Theme.standard Glyphs.Theme.colourBlindSafe
                 let label = SceneNode.Text((240.0, 120.0), "x", Glyphs.Theme.standard.Focus)
                 let withLabel: Scene = { Nodes = board.Nodes @ [ label ] }

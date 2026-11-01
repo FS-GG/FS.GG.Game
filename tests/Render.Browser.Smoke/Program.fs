@@ -2599,7 +2599,8 @@ let screenshot (selector: string) (name: string) : Async<bool> =
 /// status) in two themes, lowered to the portable primitive set, drawn on each backend at the pixels the kit's
 /// `ScenePixels` model decides. A causal control reads the same pixels against the board with its themes swapped, which
 /// must not match, so a backend that drew the theme tokens wrong (or ignored the glyphs) would be caught. Named points
-/// (one per glyph part) are reported as INFO lines for the PR's pixel table.
+/// (one per glyph part) are reported as INFO lines for the PR's pixel table; they are informational, not asserted (the
+/// asserted pixels are the ones ScenePixels decides).
 let runGlyphProof () : Async<unit> =
     async {
         let width = Experimental.Glyphs.proofWidth
@@ -2618,6 +2619,7 @@ let runGlyphProof () : Async<unit> =
                     yield sprintf "%s selection bracket" label, { X = 19.5; Y = top + 16.5 }, theme.Selection
                     yield sprintf "%s status 25%% fill" label, { X = 22.5; Y = top + 9.5 }, theme.Bad
                     yield sprintf "%s status track" label, { X = 42.5; Y = top + 9.5 }, theme.Track
+                    yield sprintf "%s status keyline" label, { X = 42.5; Y = top + 6.5 }, theme.Body
                     yield sprintf "%s structure body" label, { X = 96.5; Y = top + 30.5 }, theme.Body
                     yield sprintf "%s structure team-1 band" label, { X = 96.5; Y = top + 42.5 }, Experimental.Glyphs.Theme.team theme 1
                     yield sprintf "%s focus outline" label, { X = 96.5; Y = top + 16.5 }, theme.Focus
