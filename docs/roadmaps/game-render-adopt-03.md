@@ -28,7 +28,7 @@ contains every adapter exception), so the exception is contained and the recover
 | `Present` of the default backend throws | The host releases the mount and reports `PresentFailed`. The model mounts the default again with the latest state under a new attempt; `Refusal` is `PresentFailed` with the cause. One live mount remains. |
 | That remount fails too | `Status = Failed [ the remount failure; the present failure ]`, nothing mounted or held. |
 | `StateChanged` while `Failed` | The selected backend is mounted again with that state. A failure is never final; before, the state was stored and nothing happened. A retry that fails again lists the failure it retried after its own. |
-| The released mount's `Dispose` also throws | The dispose failure never replaces the cause: it is added to the cause's reason (`...; disposing the released mount also failed: ...`). A dispose failure with no cause to protect is still `RendererRefusal.DisposeFailed`. |
+| The released mount's `Dispose` also throws | The dispose failure never replaces the cause of the same backend: it is added to that cause's reason (`...; disposing the released mount also failed: ...`). Beside a cause of another backend (for example an earlier canvas failure kept in `Refusal`) it is recorded alone as `DisposeFailed`. A dispose failure with no cause to protect is still `RendererRefusal.DisposeFailed`. |
 
 The retry is bounded to one mount attempt per state the caller dispatches, never a loop inside `update`, and there is no
 rate limit: a game whose mount fails for every state attempts it once per state, and stops by not dispatching states.
@@ -85,7 +85,7 @@ section, when declared, runs one subject check and up to four per backend.
 
 ## Evidence
 
-- `Game.Render.Tests`: 93 tests (was 74). Selection: default and canvas `PresentFailed`, a remount that also fails and
+- `Game.Render.Tests`: 94 tests (was 74). Selection: default and canvas `PresentFailed`, a remount that also fails and
   the next state recovering, stale `PresentFailed`, a state change while `Failed`, the viewport rule (same viewport
   presents in place, a change remounts, per backend, `NaN`, `register` keeps the declaration). Kit: the present
   failure section for each backend, a canvas that leaks a failed mount, a host with the pre-adoption behaviour; the

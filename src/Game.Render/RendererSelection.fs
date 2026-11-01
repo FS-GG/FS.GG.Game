@@ -224,13 +224,17 @@ module RendererSelection =
         | RendererMsg.MountFailed(backend, _, reason) ->
             mountNext RendererBackend.defaultBackend (Some(RendererRefusal.MountFailed(backend, reason))) [] model
         | RendererMsg.DisposeFailed(backend, reason) ->
-            // A dispose failure never replaces the failure that caused the release: it is added to that cause.
+            // A dispose failure never replaces the failure that caused the release: it is added to that cause's reason.
+            // Only a cause of the SAME backend is that cause (a stale cause of another backend is not what this
+            // release followed), so a dispose failure of another backend is recorded alone.
             let also = "; disposing the released mount also failed: " + reason
 
             let refusal =
                 match model.Refusal with
-                | Some(RendererRefusal.MountFailed(failed, cause)) -> RendererRefusal.MountFailed(failed, cause + also)
-                | Some(RendererRefusal.PresentFailed(failed, cause)) -> RendererRefusal.PresentFailed(failed, cause + also)
+                | Some(RendererRefusal.MountFailed(failed, cause)) when failed = backend ->
+                    RendererRefusal.MountFailed(failed, cause + also)
+                | Some(RendererRefusal.PresentFailed(failed, cause)) when failed = backend ->
+                    RendererRefusal.PresentFailed(failed, cause + also)
                 | _ -> RendererRefusal.DisposeFailed(backend, reason)
 
             { model with Refusal = Some refusal }, []

@@ -881,4 +881,46 @@ let tests =
                 | RendererStatus.Failed causes -> Expect.equal causes.Length 2 "bounded"
                 | other -> failtestf "expected Failed, got %A" other
             }
+
+            test "a dispose failure is merged only into a cause of the same backend (reviewer's probe sequence)" {
+                // A canvas mount failed earlier, so the model fell back to SVG and keeps that cause in Refusal. A later
+                // viewport change remounts SVG (keeping Refusal) and the old SVG mount's Dispose throws.
+                let registry =
+                    RendererRegistry.svg view (svgSurface (Journal()) (ResizeArray()))
+                    |> RendererRegistry.withViewport RendererBackend.Svg (fun state -> float state.Tick, 1.0)
+
+                let initial, _ = RendererSelection.init registry (arena 1 0)
+
+                let stale =
+                    { initial with
+                        Refusal = Some(RendererRefusal.MountFailed(RendererBackend.Pixi, "no webgl"))
+                    }
+
+                let remounted, effects = RendererSelection.update (RendererMsg.StateChanged(arena 2 0)) stale
+
+                Expect.equal
+                    effects
+                    [ RendererEffect.Unmount RendererBackend.Svg; RendererEffect.Mount(RendererBackend.Svg, 2, arena 2 0) ]
+                    "the viewport change remounts SVG"
+
+                Expect.equal remounted.Refusal stale.Refusal "and keeps the earlier refusal untouched"
+
+                let after, _ =
+                    RendererSelection.update (RendererMsg.DisposeFailed(RendererBackend.Svg, "svg dispose threw")) remounted
+
+                Expect.equal
+                    after.Refusal
+                    (Some(RendererRefusal.DisposeFailed(RendererBackend.Svg, "svg dispose threw")))
+                    "SVG's dispose failure is not merged into Pixi's cause"
+
+                // The same backend still merges.
+                let pixi, _ =
+                    RendererSelection.update (RendererMsg.DisposeFailed(RendererBackend.Pixi, "pixi dispose threw")) remounted
+
+                match pixi.Refusal with
+                | Some(RendererRefusal.MountFailed(RendererBackend.Pixi, reason)) ->
+                    Expect.stringContains reason "no webgl" "the cause is kept"
+                    Expect.stringContains reason "pixi dispose threw" "with its own dispose failure"
+                | other -> failtestf "expected Pixi's cause with its dispose failure, got %A" other
+            }
         ]

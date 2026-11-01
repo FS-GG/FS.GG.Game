@@ -152,7 +152,8 @@ type RendererRefusal =
     /// The backend's adapter refused or failed to mount.
     | MountFailed of backend: RendererBackend * reason: string
     /// A released mount's `Dispose` failed. Ownership was still released; the selection is unchanged. It never
-    /// replaces a `MountFailed` or `PresentFailed` cause: the dispose failure is added to that cause's reason instead.
+    /// replaces a `MountFailed` or `PresentFailed` cause of the SAME backend: the dispose failure is added to that
+    /// cause's reason instead. Beside a cause of another backend it is recorded alone.
     | DisposeFailed of backend: RendererBackend * reason: string
     /// The backend's `Present` of an accepted state threw. The host released that mount, and the default backend is
     /// mounted with the latest state.
