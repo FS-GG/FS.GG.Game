@@ -100,7 +100,11 @@ function parseArgs(argv) {
   const args = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a.startsWith("--")) {
+    if (a.startsWith("--") && a.includes("=")) {
+      // --key=value: the only way to pass a value that itself starts with "--" (e.g. --capacity-args=--max-load-per-core 0.25).
+      const at = a.indexOf("=");
+      args[a.slice(2, at)] = a.slice(at + 1);
+    } else if (a.startsWith("--")) {
       const key = a.slice(2);
       const next = argv[i + 1];
       if (next === undefined || next.startsWith("--")) args[key] = true;
@@ -549,6 +553,7 @@ async function commandRun(args) {
   if (!page || !existsSync(join(page, "index.html"))) throw new Error("--page <dir with index.html> is required (build it with scripts/render-bench.sh)");
   if (!executable) throw new Error("--browser <chrome executable> is required");
   const { mode, flags } = modeFlags(args);
+  if (args["capacity-args"] === true) throw new Error("--capacity-args needs a value; write --capacity-args=<probe arguments>");
   const log = (m) => process.stderr.write(`render-bench: ${m}\n`);
   const server = await serve(page);
   const ctx = {
@@ -579,14 +584,17 @@ async function commandRun(args) {
   try {
     // Repeat is the OUTER loop and every other repeat runs the cells in reverse order (ABBA), so drift in host state
     // over the session spreads across every cell instead of landing on whichever configuration ran last.
-    for (let repeat = 1; repeat <= repeats; repeat++)
+    session: for (let repeat = 1; repeat <= repeats; repeat++)
       for (const base of repeat % 2 === 1 ? cells : [...cells].reverse()) {
         const { game, scene, size, backend } = base;
         const cell = { game, scene, size, backend, repeat };
         const r = await runOne(ctx, cell);
         runs.push(r);
         log(`${mode} ${game}/${scene} size=${size} ${backend} #${repeat}: ${r.status}${r.error ? ` (${r.error})` : ""} p50=${r.frameTimeMs?.p50 ?? "-"}ms p95=${r.frameTimeMs?.p95 ?? "-"}ms cpu=${r.mainThread?.cpuMsPerFrame ?? "-"}ms gpu=${r.gpuTimeMs?.p50 ?? r.gpuTimeMs?.status ?? "-"}ms draws=${r.drawCalls?.perFrame?.p50 ?? "-"} load1=${r.loadavgBefore?.[0] ?? "-"}`);
-        if (r.status === "held") throw new Error("capacity probe held the session; stopping");
+        if (r.status === "held") {
+          log("capacity probe held the session past --capacity-wait; stopping and writing what ran");
+          break session;
+        }
       }
   } finally {
     server.close();

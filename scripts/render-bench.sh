@@ -9,7 +9,7 @@
 #
 #   usage: scripts/render-bench.sh [--build-only] [--skip-build] -- <driver run arguments>
 #   e.g.   scripts/render-bench.sh -- --mode gpu-angle-vulkan --out gpu.json \
-#            --capacity-probe ../.github/scripts/fdev-lane-capacity.py --capacity-args "--max-load-per-core 0.25"
+#            --capacity-probe ../.github/scripts/fdev-lane-capacity.py "--capacity-args=--max-load-per-core 0.25"
 #   env:   RENDER_BENCH_BROWSER=<chrome binary>   (default: first of chromium, google-chrome, chrome)
 #          RENDER_BENCH_PAGE=<dir>                page output (default: artifacts/render-bench/page)
 #          JS_BINDINGS_TEMPLATES_ROOT=<dir>       a FS.GG.Templates checkout at the pinned commit (offline use)
