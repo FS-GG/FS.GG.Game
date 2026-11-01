@@ -2,8 +2,7 @@ namespace FS.GG.Game.Render
 
 // The standard input pipeline (FS.GG.Game#787, `docs/adr/0001-standard-input-pipeline.md`): an input (stage 1) goes to
 // an optional guest (stage 2), whose intents are applied locally or sent to the authority as commands (stage 3). The
-// server is the only authority. Contract only: FS.GG.Game#788 implements every function below that the ADR gives
-// behaviour to, and until then those functions raise. Builders and accessors are data and work now.
+// server is the only authority. Implemented by FS.GG.Game#788; the laws are tests/Game.Render.Pipeline.Laws.
 //
 // Open unions: `PipelineInput`, `GuestOutcome`, `PipelineFailure` and `PipelineMsg` may gain cases in a minor version;
 // match the first three with a wildcard. `PipelineEffect` may too: a game that interprets effects itself instead of
@@ -221,7 +220,7 @@ module InputGuest =
     /// Run one request: admission, then the guest, calling `started ()` when it is warm. Never raises: an exception from
     /// `admit`, `decide`, `encode`, `invoke` or `decode` is `Faulted`, a `GuestReply` maps as its cases say, and a
     /// cancelled token is `Cancelled`. For an Elmish game that interprets `PipelineEffect.StartGuest` in its own `Cmd`.
-    /// Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    ///
     val run:
         guest: InputGuest<'Input, 'Client, 'Local, 'Command> ->
         request: GuestRequest<'Input, 'Client> ->
@@ -591,7 +590,7 @@ module InputPipeline =
             PipelineModel<'Input, 'Server, 'Local, 'Command>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Apply one message. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// Apply one message.
     val update:
         pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> ->
         msg: PipelineMsg<'Input, 'Server, 'Local, 'Command> ->
@@ -655,7 +654,7 @@ module PipelineRunner =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// A runner for `pipeline` that reports `GuestRunning`, `GuestEnded` and `GuestDeadline` to `dispatch`. Disposing
-    /// it cancels the call in flight. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// it cancels the call in flight.
     val create:
         pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> ->
         io: PipelineIo<'Client, 'Local, 'Command> ->
@@ -663,9 +662,19 @@ module PipelineRunner =
             PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Perform one effect. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// Perform one effect.
     val perform:
         effect: PipelineEffect<'Input, 'Local, 'Command> ->
+        runner: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> ->
+            unit
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Perform one `update`'s effects synchronously and in order. An Elmish program runs it in ONE
+    /// `Cmd.ofEffect (fun _ -> PipelineRunner.performAll effects runner)`, never split across `Cmd.batch` entries or
+    /// run through `Cmd.OfAsync` or `Cmd.OfPromise`: the order of `ApplyLocal` and `Continue` is what lets the next guest
+    /// call read the state the decision's `Local`s produced (ADR 0001, P7b).
+    val performAll:
+        effects: PipelineEffect<'Input, 'Local, 'Command> list ->
         runner: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> ->
             unit
 
@@ -693,7 +702,7 @@ module PipelineHost =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Start `pipeline` for `client` above `lastSequence` on `authoritative`, bound to `route`. Disposing it cancels the
-    /// call in flight and unbinds `route`. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// call in flight and unbinds `route`.
     val start:
         pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> ->
         route: InputRoute ->

@@ -1,13 +1,7 @@
 namespace FS.GG.Game.Render
 
-// See InputPipeline.fsi and docs/adr/0001-standard-input-pipeline.md. This file is the CONTRACT STUB of
-// FS.GG.Game#787: builders and accessors are data and work; every function the ADR gives behaviour to raises until
-// FS.GG.Game#788 implements it.
-
-module internal PipelineStub =
-
-    let notYet (name: string) : 'T =
-        failwithf "%s is a contract stub (FS.GG.Game#787); FS.GG.Game#788 implements it." name
+// See InputPipeline.fsi and docs/adr/0001-standard-input-pipeline.md (FS.GG.Game#787). Implemented by FS.GG.Game#788;
+// the laws are tests/Game.Render.Pipeline.Laws, run on .NET and Fable with identical output.
 
 [<RequireQualifiedAccess>]
 type PipelineInput<'Input> =
@@ -179,12 +173,80 @@ module InputGuest =
     let policy (guest: InputGuest<'Input, 'Client, 'Local, 'Command>) = guest.Policy
 
     let run
-        (_: InputGuest<'Input, 'Client, 'Local, 'Command>)
-        (_: GuestRequest<'Input, 'Client>)
-        (_: unit -> unit)
-        (_: System.Threading.CancellationToken)
+        (guest: InputGuest<'Input, 'Client, 'Local, 'Command>)
+        (request: GuestRequest<'Input, 'Client>)
+        (started: unit -> unit)
+        (token: System.Threading.CancellationToken)
         : Async<GuestOutcome<'Local, 'Command>> =
-        PipelineStub.notYet "InputGuest.run"
+        let faulted (error: exn) = GuestOutcome.Faulted error.Message
+
+        let ofReply decode reply =
+            match reply with
+            | GuestReply.Output bytes ->
+                match
+                    (try
+                        decode bytes
+                     with error ->
+                         Error error.Message)
+                with
+                | Ok intents -> GuestOutcome.Decided intents
+                | Error reason -> GuestOutcome.Faulted reason
+            | GuestReply.Refused status -> GuestOutcome.Refused(sprintf "status %d" status)
+            | GuestReply.Faulted diagnostic -> GuestOutcome.Faulted diagnostic
+            | GuestReply.TimedOut -> GuestOutcome.TimedOut
+            | GuestReply.Invalidated -> GuestOutcome.Cancelled "invalidated"
+            | GuestReply.Frozen -> GuestOutcome.Cancelled "frozen"
+
+        let decided () : Async<GuestOutcome<'Local, 'Command>> =
+            match guest.Kind with
+            | Sync decide ->
+                started ()
+                async { return decide request }
+            | Async decide ->
+                started ()
+                decide request token
+            | Bytes(encode, invoke, decode) ->
+                let bytes = encode request
+
+                async {
+                    let! reply = invoke bytes started token
+                    return ofReply decode reply
+                }
+
+        async {
+            let admitted =
+                match guest.Admit with
+                | None -> Choice1Of3()
+                | Some admit ->
+                    try
+                        match admit request.Client with
+                        | Ok() -> Choice1Of3()
+                        | Error reason -> Choice2Of3 reason
+                    with error ->
+                        Choice3Of3 error.Message
+
+            match admitted with
+            | Choice2Of3 reason -> return GuestOutcome.Refused reason
+            | Choice3Of3 reason -> return GuestOutcome.Faulted reason
+            | Choice1Of3() ->
+                let! outcome =
+                    async {
+                        try
+                            return! decided ()
+                        with error ->
+                            return faulted error
+                    }
+                    |> Async.Catch
+
+                return
+                    match outcome with
+                    | Choice1Of2 outcome when token.IsCancellationRequested ->
+                        match outcome with
+                        | GuestOutcome.Decided _ -> GuestOutcome.Cancelled "cancelled"
+                        | other -> other
+                    | Choice1Of2 outcome -> outcome
+                    | Choice2Of2 error -> faulted error
+        }
 
 type CommandId =
     private
@@ -457,15 +519,50 @@ type InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> =
         Commands: CommandStage<'Server, 'Command>
     }
 
-/// The pipeline state. FS.GG.Game#788 adds the sequences, the call in flight, the queue, the breaker and the ledger.
+[<NoEquality; NoComparison>]
+type internal QueueItem<'Input, 'Command> =
+    | QueuedInput of sequence: uint64 * input: PipelineInput<'Input>
+    | QueuedSubmit of command: 'Command
+
+[<NoEquality; NoComparison>]
+type internal Flight =
+    {
+        Call: uint64
+        Sequence: uint64
+        Running: bool
+    }
+
+[<NoEquality; NoComparison>]
+type internal Entry<'Command> =
+    {
+        Id: CommandId
+        Command: 'Command
+        State: SettlementKind
+        /// Patience counts from here: the basis, or the version heard at the latest running answer.
+        Origin: uint64
+    }
+
+/// The pipeline state (see InputPipeline.fsi). Every field is internal to the reducer.
 [<NoEquality; NoComparison>]
 type PipelineModel<'Input, 'Server, 'Local, 'Command> =
-    {
-        Client: string
-        LastSequence: uint64
-        Authoritative: 'Server
-        Halted: bool
-    }
+    internal
+        {
+            Client: string
+            LastSequence: uint64
+            NextInput: uint64
+            NextCall: uint64
+            Queue: QueueItem<'Input, 'Command> list
+            InFlight: Flight option
+            /// A call ended and its `Continue` has not come back as `StartNext` yet.
+            Draining: bool
+            Halted: bool
+            Timeouts: int
+            Authoritative: 'Server
+            AuthVersion: uint64
+            Heard: uint64
+            Ledger: Entry<'Command> list
+            Predict: ('Command -> 'Server -> 'Server) option
+        }
 
 [<RequireQualifiedAccess>]
 module InputPipeline =
@@ -477,7 +574,7 @@ module InputPipeline =
     let commands (pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>) = pipeline.Commands
 
     let init
-        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
+        (pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
         (client: string)
         (lastSequence: uint64 option)
         (authoritative: 'Server)
@@ -485,32 +582,502 @@ module InputPipeline =
         if System.String.IsNullOrWhiteSpace client then
             invalidArg (nameof client) "A client binding must not be blank."
 
+        let version = pipeline.Commands.Version authoritative
+
         {
             Client = client
             LastSequence = defaultArg lastSequence 0UL
-            Authoritative = authoritative
+            NextInput = 1UL
+            NextCall = 1UL
+            Queue = []
+            InFlight = None
+            Draining = false
             Halted = false
+            Timeouts = 0
+            Authoritative = authoritative
+            AuthVersion = version
+            Heard = version
+            Ledger = []
+            Predict = pipeline.Commands.Predict
         }
 
+    let private isOpen (state: SettlementKind) =
+        match state with
+        | Pending
+        | SettlementKind.Accepted
+        | SettlementKind.Queued
+        | Running -> true
+        | _ -> false
+
+    /// Kept while open, or while applied at a version the authoritative state has not reached (prediction needs it).
+    let private keep (authVersion: uint64) (entry: Entry<'Command>) =
+        match entry.State with
+        | AppliedAt(version, _) -> version > authVersion
+        | state -> isOpen state
+
+    let private prune (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) =
+        { model with
+            Ledger = model.Ledger |> List.filter (keep model.AuthVersion)
+        }
+
+    let private openCount (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) =
+        model.Ledger |> List.filter (fun entry -> isOpen entry.State) |> List.length
+
+    /// Settle open commands that have run out of patience. Fails in sequence order.
+    let private patience
+        (stage: CommandStage<'Server, 'Command>)
+        (model: PipelineModel<'Input, 'Server, 'Local, 'Command>)
+        =
+        let fails = ResizeArray<PipelineFailure>()
+
+        let ledger =
+            model.Ledger
+            |> List.map (fun entry ->
+                if
+                    isOpen entry.State
+                    && model.Heard >= entry.Origin
+                    && model.Heard - entry.Origin >= stage.Patience
+                then
+                    fails.Add(PipelineFailure.CommandUnconfirmed entry.Id)
+                    { entry with State = Unconfirmed }
+                else
+                    entry)
+
+        { model with Ledger = ledger }, List.ofSeq fails
+
+    /// Allocate the next command id of the current binding.
+    let private issue (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) (command: 'Command) =
+        let sequence = model.LastSequence + 1UL
+
+        let id =
+            {
+                Client = model.Client
+                Sequence = sequence
+            }
+
+        let entry: Entry<'Command> =
+            {
+                Id = id
+                Command = command
+                State = Pending
+                Origin = model.AuthVersion
+            }
+
+        { model with
+            LastSequence = sequence
+            Ledger = model.Ledger @ [ entry ]
+        },
+        id
+
+    let private envelope id (input: uint64 option) (basis: uint64) (command: 'Command) : CommandEnvelope<'Command> =
+        {
+            Id = id
+            Input = input
+            Basis = basis
+            Command = command
+        }
+
+    let private isGuestItem (item: QueueItem<'Input, 'Command>) =
+        match item with
+        | QueuedInput _ -> true
+        | QueuedSubmit _ -> false
+
+    /// Refuse every queued guest input (the stage halted or was rebound); queued submits stay.
+    let private dropGuestInputs
+        (fail: uint64 -> PipelineFailure)
+        (model: PipelineModel<'Input, 'Server, 'Local, 'Command>)
+        =
+        let fails =
+            model.Queue
+            |> List.choose (fun item ->
+                match item with
+                | QueuedInput(sequence, _) -> Some(fail sequence)
+                | QueuedSubmit _ -> None)
+
+        { model with
+            Queue = model.Queue |> List.filter (isGuestItem >> not)
+        },
+        fails
+
+    /// Start queued work while the stage is idle: submits are sent in order, and the first guest input starts a call.
+    let private startNext
+        (pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
+        (model: PipelineModel<'Input, 'Server, 'Local, 'Command>)
+        =
+        let sends = ResizeArray<PipelineEffect<'Input, 'Local, 'Command>>()
+        let fails = ResizeArray<PipelineEffect<'Input, 'Local, 'Command>>()
+        let mutable model = model
+        let mutable start = []
+        let mutable go = model.InFlight.IsNone && not model.Draining
+
+        while go do
+            match model.Queue with
+            | [] -> go <- false
+            | QueuedSubmit command :: rest ->
+                model <- { model with Queue = rest }
+
+                if openCount model >= pipeline.Commands.Window then
+                    fails.Add(PipelineEffect.Fail(PipelineFailure.CommandWindowFull None))
+                else
+                    let next, id = issue model command
+                    model <- next
+                    sends.Add(PipelineEffect.Send(envelope id None model.AuthVersion command))
+            | QueuedInput(sequence, input) :: rest ->
+                let call: GuestCall<'Input> =
+                    {
+                        Id = model.NextCall
+                        Sequence = sequence
+                        Input = input
+                        Basis = model.AuthVersion
+                    }
+
+                model <-
+                    { model with
+                        Queue = rest
+                        NextCall = model.NextCall + 1UL
+                        InFlight =
+                            Some
+                                {
+                                    Call = call.Id
+                                    Sequence = sequence
+                                    Running = false
+                                }
+                    }
+
+                start <-
+                    [
+                        PipelineEffect.StartGuest call
+                        PipelineEffect.ArmStartDeadline(call.Id, pipeline.Guest.Policy.StartTimeout)
+                    ]
+
+                go <- false
+
+        model, List.ofSeq sends, List.ofSeq fails, start
+
+    /// End the call in flight. The batch carries the decision's effects and ends with `Continue`, never `StartGuest`.
+    let private endCall
+        (pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
+        (cancel: bool)
+        (outcome: GuestOutcome<'Local, 'Command>)
+        (model: PipelineModel<'Input, 'Server, 'Local, 'Command>)
+        =
+        match model.InFlight with
+        | None -> model, []
+        | Some flight ->
+            let model =
+                { model with
+                    InFlight = None
+                    Draining = true
+                }
+
+            let cancels =
+                if cancel then
+                    [ PipelineEffect.CancelGuest flight.Call ]
+                else
+                    []
+
+            let halt (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) =
+                dropGuestInputs
+                    (fun sequence -> PipelineFailure.InputRefused(sequence, "guest halted"))
+                    { model with Halted = true }
+
+            let model, intents, fails =
+                match outcome with
+                | GuestOutcome.Decided intents ->
+                    let submits =
+                        intents
+                        |> List.filter (fun intent ->
+                            match intent with
+                            | GuestIntent.Submit _ -> true
+                            | GuestIntent.Local _ -> false)
+                        |> List.length
+
+                    let model = { model with Timeouts = 0 }
+
+                    if submits > 0 && openCount model + submits > pipeline.Commands.Window then
+                        model, [], [ PipelineFailure.CommandWindowFull(Some flight.Sequence) ]
+                    else
+                        let mutable model = model
+
+                        let effects =
+                            intents
+                            |> List.map (fun intent ->
+                                match intent with
+                                | GuestIntent.Local local -> PipelineEffect.ApplyLocal local
+                                | GuestIntent.Submit command ->
+                                    let next, id = issue model command
+                                    model <- next
+                                    PipelineEffect.Send(envelope id (Some flight.Sequence) model.AuthVersion command))
+
+                        model, effects, []
+                | GuestOutcome.Refused reason ->
+                    { model with Timeouts = 0 }, [], [ PipelineFailure.InputRefused(flight.Sequence, reason) ]
+                | GuestOutcome.Cancelled reason ->
+                    model, [], [ PipelineFailure.InputCancelled(flight.Sequence, reason) ]
+                | GuestOutcome.Faulted reason ->
+                    let model, refused = halt model
+                    model, [], PipelineFailure.GuestFaulted(flight.Sequence, reason) :: refused
+                | GuestOutcome.TimedOut ->
+                    let timeouts = model.Timeouts + 1
+                    let model = { model with Timeouts = timeouts }
+
+                    if timeouts >= pipeline.Guest.Policy.Breaker then
+                        let model, refused = halt model
+
+                        model,
+                        [],
+                        PipelineFailure.GuestTimedOut flight.Sequence
+                        :: PipelineFailure.GuestHalted timeouts
+                        :: refused
+                    else
+                        model, [], [ PipelineFailure.GuestTimedOut flight.Sequence ]
+
+            model,
+            cancels
+            @ intents
+            @ (fails |> List.map PipelineEffect.Fail)
+            @ [ PipelineEffect.Continue ]
+
+    let private current (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) (call: uint64) =
+        match model.InFlight with
+        | Some flight when flight.Call = call -> Some flight
+        | _ -> None
+
+    let private nextInput (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) =
+        model.NextInput,
+        { model with
+            NextInput = model.NextInput + 1UL
+        }
+
+    /// Replace a waiting input of the same coalescing kind (Hover or Focus).
+    let private coalesces (input: PipelineInput<'Input>) (item: QueueItem<'Input, 'Command>) =
+        let kind (input: PipelineInput<'Input>) =
+            match input with
+            | PipelineInput.Scene event ->
+                match InputEvent.action event with
+                | InputAction.Hover -> Some 1
+                | InputAction.Focus -> Some 2
+                | _ -> None
+            | PipelineInput.Game _ -> None
+
+        match kind input, item with
+        | Some k, QueuedInput(_, waiting) -> kind waiting = Some k
+        | _ -> false
+
+    let private andStart
+        pipeline
+        (model: PipelineModel<'Input, 'Server, 'Local, 'Command>)
+        (leading: PipelineEffect<'Input, 'Local, 'Command> list)
+        =
+        let model, sends, fails, start = startNext pipeline model
+        model, leading @ sends @ fails @ start
+
     let update
-        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
-        (_: PipelineMsg<'Input, 'Server, 'Local, 'Command>)
-        (_: PipelineModel<'Input, 'Server, 'Local, 'Command>)
+        (pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
+        (msg: PipelineMsg<'Input, 'Server, 'Local, 'Command>)
+        (model: PipelineModel<'Input, 'Server, 'Local, 'Command>)
         : PipelineModel<'Input, 'Server, 'Local, 'Command> * PipelineEffect<'Input, 'Local, 'Command> list =
-        PipelineStub.notYet "InputPipeline.update"
+        let stage = pipeline.Commands
+
+        match msg with
+        | PipelineMsg.Input input ->
+            let sequence, model = nextInput model
+
+            if model.Halted then
+                model, [ PipelineEffect.Fail(PipelineFailure.InputRefused(sequence, "guest halted")) ]
+            else
+                let queue = model.Queue |> List.filter (coalesces input >> not)
+                let guestItems = queue |> List.filter isGuestItem |> List.length
+
+                if guestItems >= pipeline.Guest.Policy.QueueLimit then
+                    { model with Queue = queue }, [ PipelineEffect.Fail(PipelineFailure.QueueOverflow [ sequence ]) ]
+                else
+                    andStart
+                        pipeline
+                        { model with
+                            Queue = queue @ [ QueuedInput(sequence, input) ]
+                        }
+                        []
+        | PipelineMsg.Submit command ->
+            andStart
+                pipeline
+                { model with
+                    Queue = model.Queue @ [ QueuedSubmit command ]
+                }
+                []
+        | PipelineMsg.StartNext -> andStart pipeline { model with Draining = false } []
+        | PipelineMsg.GuestRunning call ->
+            match current model call with
+            | Some flight when not flight.Running ->
+                { model with
+                    InFlight = Some { flight with Running = true }
+                },
+                [ PipelineEffect.ArmDeadline(call, pipeline.Guest.Policy.Timeout) ]
+            | _ -> model, []
+        | PipelineMsg.GuestStartDeadline call ->
+            match current model call with
+            | Some flight when not flight.Running -> endCall pipeline true (GuestOutcome.Faulted "start timeout") model
+            | _ -> model, []
+        | PipelineMsg.GuestDeadline call ->
+            match current model call with
+            | Some flight when flight.Running -> endCall pipeline true GuestOutcome.TimedOut model
+            | _ -> model, []
+        | PipelineMsg.GuestEnded(call, outcome) ->
+            match current model call with
+            | Some _ -> endCall pipeline false outcome model
+            | None -> model, []
+        | PipelineMsg.RearmGuest ->
+            andStart
+                pipeline
+                { model with
+                    Halted = false
+                    Timeouts = 0
+                }
+                []
+        | PipelineMsg.Rebind(client, lastSequence) ->
+            if System.String.IsNullOrWhiteSpace client then
+                model,
+                [
+                    PipelineEffect.Fail(PipelineFailure.RebindRefused "a client binding must not be blank")
+                ]
+            else
+                let cancels, cancelled =
+                    match model.InFlight with
+                    | Some flight ->
+                        [ PipelineEffect.CancelGuest flight.Call ],
+                        [ PipelineFailure.InputCancelled(flight.Sequence, "rebind") ]
+                    | None -> [], []
+
+                let model, dropped =
+                    dropGuestInputs
+                        (fun sequence -> PipelineFailure.InputCancelled(sequence, "rebind"))
+                        { model with
+                            Client = client
+                            LastSequence = max model.LastSequence (defaultArg lastSequence 0UL)
+                            InFlight = None
+                            Draining = false
+                        }
+
+                andStart pipeline model (cancels @ ((cancelled @ dropped) |> List.map PipelineEffect.Fail))
+        | PipelineMsg.Acknowledged(id, ack) ->
+            match model.Ledger |> List.tryFind (fun entry -> entry.Id = id) with
+            | Some entry when isOpen entry.State ->
+                let restart state =
+                    Some
+                        { entry with
+                            State = state
+                            Origin = model.Heard
+                        },
+                    []
+
+                let changed, fails =
+                    match ack.Kind with
+                    | AckKind.Accepted ->
+                        let state =
+                            match entry.State with
+                            | Pending -> SettlementKind.Accepted
+                            | other -> other
+
+                        restart state
+                    | AckKind.Queued -> restart SettlementKind.Queued
+                    | Started
+                    | Progress _ -> restart Running
+                    | Applied version ->
+                        Some
+                            { entry with
+                                State = AppliedAt(version, None)
+                            },
+                        []
+                    | Ended(version, outcome) ->
+                        Some
+                            { entry with
+                                State = AppliedAt(version, Some outcome)
+                            },
+                        []
+                    | Cancelled reason ->
+                        Some
+                            { entry with
+                                State = CancelledAfter reason
+                            },
+                        [ PipelineFailure.CommandCancelled(id, reason) ]
+                    | Rejected reason ->
+                        Some
+                            { entry with
+                                State = RejectedBefore reason
+                            },
+                        [ PipelineFailure.CommandRejected(id, reason) ]
+                    | Expired -> Some { entry with State = Unconfirmed }, [ PipelineFailure.CommandUnconfirmed id ]
+
+                match changed with
+                | Some updated ->
+                    prune
+                        { model with
+                            Ledger = model.Ledger |> List.map (fun e -> if e.Id = id then updated else e)
+                        },
+                    fails |> List.map PipelineEffect.Fail
+                | None -> model, []
+            | _ -> model, []
+        | PipelineMsg.Authoritative state ->
+            let version = stage.Version state
+
+            if version < model.AuthVersion then
+                model, []
+            else
+                let settle (entry: Entry<'Command>) =
+                    match stage.Settled with
+                    | Some settled when isOpen entry.State && settled entry.Command state ->
+                        { entry with
+                            State = AppliedAt(version, None)
+                        }
+                    | _ -> entry
+
+                let model =
+                    { model with
+                        Authoritative = state
+                        AuthVersion = version
+                        Heard = max model.Heard version
+                        Ledger = model.Ledger |> List.map settle
+                    }
+
+                let model, fails = patience stage model
+                prune model, fails |> List.map PipelineEffect.Fail
+        | PipelineMsg.Heartbeat version ->
+            let model, fails =
+                patience
+                    stage
+                    { model with
+                        Heard = max model.Heard version
+                    }
+
+            prune model, fails |> List.map PipelineEffect.Fail
 
     let client (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) = model.Client
 
     let lastSequence (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) = model.LastSequence
 
     let displayed (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) : Displayed<'Server> =
-        {
-            Authoritative = model.Authoritative
-            Shown = model.Authoritative
-            Predicted = []
-        }
+        match model.Predict with
+        | None ->
+            {
+                Authoritative = model.Authoritative
+                Shown = model.Authoritative
+                Predicted = []
+            }
+        | Some predict ->
+            let predicted = model.Ledger |> List.filter (keep model.AuthVersion)
 
-    let unsettled (_: PipelineModel<'Input, 'Server, 'Local, 'Command>) : (CommandId * CommandSettlement) list = []
+            {
+                Authoritative = model.Authoritative
+                Shown =
+                    predicted
+                    |> List.fold (fun state entry -> predict entry.Command state) model.Authoritative
+                Predicted = predicted |> List.map (fun entry -> entry.Id)
+            }
+
+    let unsettled (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) : (CommandId * CommandSettlement) list =
+        model.Ledger
+        |> List.filter (fun entry -> isOpen entry.State)
+        |> List.map (fun entry -> entry.Id, ({ State = entry.State }: CommandSettlement))
 
     let guestHalted (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) = model.Halted
 
@@ -537,47 +1104,146 @@ module PipelineIo =
         }
 
 [<Sealed>]
-type PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> internal () =
+type PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>
+    internal
+    (
+        pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>,
+        io: PipelineIo<'Client, 'Local, 'Command>,
+        dispatch: PipelineMsg<'Input, 'Server, 'Local, 'Command> -> unit
+    ) =
+    let mutable calls: (uint64 * System.Threading.CancellationTokenSource) list = []
+    let mutable disposed = false
+
+    let forget (id: uint64) =
+        calls <- calls |> List.filter (fun (call, _) -> call <> id)
+
+    member internal _.Perform(effect: PipelineEffect<'Input, 'Local, 'Command>) =
+        if not disposed then
+            match effect with
+            | PipelineEffect.StartGuest call ->
+                let source = new System.Threading.CancellationTokenSource()
+                calls <- (call.Id, source) :: calls
+                let request = GuestRequest.create call (io.Client())
+                let mutable running = false
+
+                let started () =
+                    if not running then
+                        running <- true
+                        dispatch (PipelineMsg.GuestRunning call.Id)
+
+                let ended outcome =
+                    forget call.Id
+                    dispatch (PipelineMsg.GuestEnded(call.Id, outcome))
+
+                Async.StartWithContinuations(
+                    InputGuest.run pipeline.Guest request started source.Token,
+                    ended,
+                    (fun error -> ended (GuestOutcome.Faulted error.Message)),
+                    (fun _ -> ended (GuestOutcome.Cancelled "cancelled")),
+                    source.Token
+                )
+            | PipelineEffect.CancelGuest id ->
+                match calls |> List.tryFind (fun (call, _) -> call = id) with
+                | Some(_, source) ->
+                    forget id
+                    source.Cancel()
+                | None -> ()
+            | PipelineEffect.ArmStartDeadline(id, milliseconds) ->
+                io.Schedule milliseconds (fun () -> dispatch (PipelineMsg.GuestStartDeadline id))
+            | PipelineEffect.ArmDeadline(id, milliseconds) ->
+                io.Schedule milliseconds (fun () -> dispatch (PipelineMsg.GuestDeadline id))
+            | PipelineEffect.Continue -> dispatch PipelineMsg.StartNext
+            | PipelineEffect.ApplyLocal local -> io.ApplyLocal local
+            | PipelineEffect.Send envelope -> io.Send envelope
+            | PipelineEffect.Fail failure -> io.Fail failure
+
+    member internal _.Dispose() =
+        if not disposed then
+            disposed <- true
+
+            for _, source in calls do
+                source.Cancel()
+
+            calls <- []
+
     interface System.IDisposable with
-        member _.Dispose() = ()
+        member this.Dispose() = this.Dispose()
 
 [<RequireQualifiedAccess>]
 module PipelineRunner =
 
-    let create
-        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
-        (_: PipelineIo<'Client, 'Local, 'Command>)
-        (_: PipelineMsg<'Input, 'Server, 'Local, 'Command> -> unit)
-        : PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> =
-        PipelineStub.notYet "PipelineRunner.create"
+    let create pipeline io dispatch =
+        new PipelineRunner<_, _, _, _, _>(pipeline, io, dispatch)
 
     let perform
-        (_: PipelineEffect<'Input, 'Local, 'Command>)
-        (_: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>)
-        : unit =
-        PipelineStub.notYet "PipelineRunner.perform"
+        (effect: PipelineEffect<'Input, 'Local, 'Command>)
+        (runner: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>)
+        =
+        runner.Perform effect
+
+    let performAll
+        (effects: PipelineEffect<'Input, 'Local, 'Command> list)
+        (runner: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>)
+        =
+        for effect in effects do
+            runner.Perform effect
 
 [<Sealed>]
-type PipelineHost<'Input, 'Client, 'Server, 'Local, 'Command> internal () =
+type PipelineHost<'Input, 'Client, 'Server, 'Local, 'Command>
+    internal
+    (
+        pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>,
+        route: InputRoute,
+        io: PipelineIo<'Client, 'Local, 'Command>,
+        initial: PipelineModel<'Input, 'Server, 'Local, 'Command>
+    ) as this =
+    let mutable model = initial
 
-    member _.Model: PipelineModel<'Input, 'Server, 'Local, 'Command> =
-        PipelineStub.notYet "PipelineHost.Model"
+    let pending =
+        System.Collections.Generic.Queue<PipelineMsg<'Input, 'Server, 'Local, 'Command>>()
 
-    member _.Dispatch(_: PipelineMsg<'Input, 'Server, 'Local, 'Command>) : unit =
-        PipelineStub.notYet "PipelineHost.Dispatch"
+    let mutable draining = false
+    let mutable disposed = false
+
+    let runner =
+        new PipelineRunner<_, _, _, _, _>(pipeline, io, (fun msg -> this.Dispatch msg))
+
+    do InputRoute.bind (fun event -> this.Dispatch(PipelineMsg.Input(PipelineInput.Scene event))) route
+
+    member _.Model = model
+
+    member _.Dispatch(msg: PipelineMsg<'Input, 'Server, 'Local, 'Command>) =
+        if not disposed then
+            pending.Enqueue msg
+
+            if not draining then
+                draining <- true
+
+                try
+                    while pending.Count > 0 && not disposed do
+                        let next, effects = InputPipeline.update pipeline (pending.Dequeue()) model
+                        model <- next
+
+                        for effect in effects do
+                            runner.Perform effect
+                finally
+                    draining <- false
 
     interface System.IDisposable with
-        member _.Dispose() = ()
+        member _.Dispose() =
+            if not disposed then
+                disposed <- true
+                pending.Clear()
+                InputRoute.unbind route
+                runner.Dispose()
 
 [<RequireQualifiedAccess>]
 module PipelineHost =
 
-    let start
-        (_: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command>)
-        (_: InputRoute)
-        (_: PipelineIo<'Client, 'Local, 'Command>)
-        (_: string)
-        (_: uint64 option)
-        (_: 'Server)
-        : PipelineHost<'Input, 'Client, 'Server, 'Local, 'Command> =
-        PipelineStub.notYet "PipelineHost.start"
+    let start pipeline route io client lastSequence authoritative =
+        new PipelineHost<_, _, _, _, _>(
+            pipeline,
+            route,
+            io,
+            InputPipeline.init pipeline client lastSequence authoritative
+        )

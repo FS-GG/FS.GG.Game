@@ -116,8 +116,7 @@ module InputEvent =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The `SelectionRequest` a game without a pipeline hears for `event` on `frame`, so the existing `SelectionRoute`
     /// keeps its meaning: an unrepeated `Activate` of an object that is not selected asks to select it, an unrepeated
-    /// `Cancel` with a selection asks to clear it, and anything else asks for nothing. Contract only: FS.GG.Game#788
-    /// implements it, and until then it raises.
+    /// `Cancel` with a selection asks to clear it, and anything else asks for nothing.
     val toSelectionRequest: frame: InteractiveScene -> event: InputEvent -> SelectionRequest option
 
 /// Public contract type exposed by the FS.GG.Game.Render package.

@@ -194,6 +194,7 @@ FS.GG.Game.Render.PipelineMsg`4+Tags.StartNext : System.Int32
 FS.GG.Game.Render.PipelineMsg`4+Tags.Submit : System.Int32
 FS.GG.Game.Render.PipelineRunner.create<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>, PipelineIo<Client, Local, Command>, FSharpFunc<PipelineMsg<Input, Server, Local, Command>, Microsoft.FSharp.Core.Unit>) : PipelineRunner<Input, Client, Server, Local, Command>
 FS.GG.Game.Render.PipelineRunner.perform<Input, Local, Command, Client, Server>(PipelineEffect<Input, Local, Command>, PipelineRunner<Input, Client, Server, Local, Command>) : System.Void
+FS.GG.Game.Render.PipelineRunner.performAll<Input, Local, Command, Client, Server>(FSharpList<PipelineEffect<Input, Local, Command>>, PipelineRunner<Input, Client, Server, Local, Command>) : System.Void
 FS.GG.Game.Render.PixelExpectation.Colour : FS.GG.UI.Scene.Color [get]
 FS.GG.Game.Render.PixelExpectation.Point : FS.GG.UI.Scene.Point [get]
 FS.GG.Game.Render.PixelExpectation.create(FS.GG.UI.Scene.Point, FS.GG.UI.Scene.Color) : FS.GG.Game.Render.PixelExpectation

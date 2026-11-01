@@ -72,9 +72,18 @@ module InputEvent =
 
     let isRepeat (event: InputEvent) = event.Repeat
 
-    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
-    let toSelectionRequest (_: InteractiveScene) (_: InputEvent) : SelectionRequest option =
-        failwith "InputEvent.toSelectionRequest is a contract stub; FS.GG.Game#788 implements it."
+    let toSelectionRequest (frame: InteractiveScene) (event: InputEvent) : SelectionRequest option =
+        if event.Repeat then
+            None
+        else
+            match event.Action, event.Target with
+            | InputAction.Activate, Some id when
+                frame.Selected <> Some id
+                && frame.Objects |> List.exists (fun target -> target.Id = id)
+                ->
+                Some(SelectionRequest.Select id)
+            | InputAction.Cancel, _ when frame.Selected.IsSome -> Some SelectionRequest.Clear
+            | _ -> None
 
 [<Sealed>]
 type InputRoute internal () =

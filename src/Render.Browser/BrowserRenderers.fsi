@@ -52,8 +52,9 @@ module BrowserRenderers =
     /// Bind `route`, for mounts created from now on, to a host that runs renderer selection itself rather than
     /// through `RendererDriver` (an Elmish program running `RendererHost` from its own `Cmd`; FS.GG.Game#768). A late
     /// failure of a live mount dispatches `RendererMsg.MountFailed (backend, attempt, reason)` for `model ()`'s current
-    /// `Attempt`, and only while that backend is selected and active: the rule of `RendererDriver.failBackend`. Contract
-    /// only: FS.GG.Game#788 implements it, and until then it raises.
+    /// `Attempt`, and only while that backend is selected and active: the rule of `RendererDriver.failBackend`. Each
+    /// mount captures the binding in force when it is created (`LateFailureRoute.Capture`), so a disposed mount of an
+    /// earlier binding never reaches this one.
     val bindTo:
         model: (unit -> RendererModel<'State>) ->
         dispatch: (RendererMsg<'State> -> unit) ->

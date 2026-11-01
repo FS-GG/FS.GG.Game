@@ -426,6 +426,24 @@ Each migration is its own Delivery after #788 publishes.
   - The arbiter sends `progress` for a `hold` more often than patience.
   - "Proven by arrival" is `withSettlement` with patience 200.
 
+## Implementation decisions (FS.GG.Game#788)
+
+These settle details the contract left open. The laws in `tests/Game.Render.Pipeline.Laws` pin them.
+
+- **Queued `Submit`s do not count toward the guest queue limit.** They never overflow; the command window bounds
+  them.
+- **A halted stage keeps its `Submit`s.** When the stage halts, queued guest inputs fail
+  `InputRefused "guest halted"`, and queued `Submit`s stay and are sent in order.
+- **`Unconfirmed` is final.** A late positive answer (`applied`, `ended`) for an `Unconfirmed` command does not
+  upgrade it (first final answer wins, P18b). The authoritative state remains the evidence of what happened, and a
+  game that needs the effect reads it there.
+- **Ledger pruning.** A final command leaves the ledger once nothing depends on it. A command applied or ended at a
+  version the authoritative state has not reached stays, for prediction. Answers for a pruned id are ignored, which is
+  the same as first-final-wins.
+- **Elmish.** `PipelineRunner.performAll effects runner` performs one `update`'s effects in order. An Elmish program
+  runs it inside one `Cmd.ofEffect`, never split across `Cmd.batch` entries or run through `Cmd.OfAsync` or
+  `Cmd.OfPromise`, so `ApplyLocal` messages are dispatched before `StartNext` (P7b).
+
 ## Consequences
 
 - One contract replaces three hand-built pipelines.

@@ -317,6 +317,5 @@ module SceneInteraction =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The standard cue layer: when focus is visible, a two-tone ring (a dark outer and a light inner band, each at least
     /// 2 CSS pixels at the context's scale) drawn as filled rectangles just outside the focused object's bounds, so it
-    /// contrasts with any background and every backend can draw it; nothing for hover. Contract only: FS.GG.Game#788
-    /// implements it, and until then it raises.
+    /// contrasts with any background and every backend can draw it; nothing for hover.
     val standardCues: context: CueContext -> FS.GG.UI.Scene.SceneNode list

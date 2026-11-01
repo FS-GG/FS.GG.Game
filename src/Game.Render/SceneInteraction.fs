@@ -283,9 +283,45 @@ module SceneInteraction =
         | Some declared -> declared target
         | None -> ObjectAccess.full
 
-    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements the drawing.
-    let standardCues (_: CueContext) : SceneNode list =
-        failwith "SceneInteraction.standardCues is a contract stub; FS.GG.Game#788 implements it."
+    let private ringOuter: Color =
+        {
+            Red = 16uy
+            Green = 16uy
+            Blue = 16uy
+            Alpha = 255uy
+        }
+
+    let private ringInner: Color =
+        {
+            Red = 255uy
+            Green = 255uy
+            Blue = 255uy
+            Alpha = 255uy
+        }
+
+    /// Four filled rectangles framing (x, y, w, h) from outside, `band` wide.
+    let private frameOf (x: float) (y: float) (w: float) (h: float) (band: float) (fill: Color) =
+        [
+            SceneNode.Rectangle((x - band, y - band, w + 2.0 * band, band), fill)
+            SceneNode.Rectangle((x - band, y + h, w + 2.0 * band, band), fill)
+            SceneNode.Rectangle((x - band, y, band, h), fill)
+            SceneNode.Rectangle((x + w, y, band, h), fill)
+        ]
+
+    /// The standard ring (ADR 0001): the light inner band hugs the bounds, the dark outer band surrounds it; each is
+    /// 2 CSS px at the context's scale.
+    let standardCues (context: CueContext) : SceneNode list =
+        match InteractionCues.focused context.Cues with
+        | Some id when InteractionCues.focusVisible context.Cues ->
+            match context.Objects |> List.tryFind (fun target -> target.Id = id) with
+            | Some target ->
+                let band = 2.0 / context.CssPerUnit
+                let b = target.Bounds
+
+                frameOf (b.X - band) (b.Y - band) (b.Width + 2.0 * band) (b.Height + 2.0 * band) band ringOuter
+                @ frameOf b.X b.Y b.Width b.Height band ringInner
+            | None -> []
+        | _ -> []
 
     let withCues (draw: CueContext -> SceneNode list) (interaction: SceneInteraction<'State>) =
         { interaction with Cues = Some draw }
