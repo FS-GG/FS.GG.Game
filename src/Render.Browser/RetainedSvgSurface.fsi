@@ -37,8 +37,9 @@ type RetainedSvgSurface<'State>
 ///   that mount, before the SVG host is disposed. An input host that refuses fails the mount, and the SVG host
 ///   just mounted is disposed, so a refused mount leaves nothing behind.
 /// - **Viewport.** The SVG host's viewport is fixed at mount: `size` is read at `Mount`, and a `Present` whose size
-///   differs raises (the renderer host contains it and recovers). `registry` therefore declares the size as the
-///   registry's viewport, so a size change remounts the surface with the latest state before it is presented.
+///   differs raises (the renderer host contains it, and the model mounts the surface again with the latest state).
+///   `registry` therefore declares the size as the registry's viewport, so a size change remounts the surface
+///   before anything is presented, without a failure.
 [<RequireQualifiedAccess>]
 module RetainedSvgSurface =
 
@@ -70,5 +71,8 @@ module RetainedSvgSurface =
     /// The `Svg` adapter at the game-state type. Prefer `registry`, which also declares the viewport.
     val adapter: surface: RetainedSvgSurface<'State> -> RendererAdapter<'State>
 
-    /// The registry whose default is `adapter surface`, built by `RendererRegistry.create`.
+    /// The registry whose default is `adapter surface`, built by `RendererRegistry.create`, with `size` declared as the
+    /// registry's viewport (`RendererRegistry.withViewport`): a state whose size differs remounts the surface with that
+    /// state, which a fixed SVG viewport requires. A remount is a fresh mount, so the camera starts from the scene's
+    /// and the input host is attached again.
     val registry: surface: RetainedSvgSurface<'State> -> RendererRegistry<'State>

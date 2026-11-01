@@ -47,6 +47,7 @@ type ConformanceSubject<'State> =
         Shows: ConformanceHost<'State> -> RendererBackend -> 'State -> Async<Result<unit, string>>
         WaitUntil: (unit -> bool) -> Async<bool>
         LateFailures: Map<RendererBackend, LateFailureTrigger>
+        Viewport: (('State -> float * float) * (ConformanceHost<'State> -> RendererBackend -> Async<(float * float) option>)) option
     }
 
 /// One mount the instrumented registry handed out: the states it received (newest first, the mount's own state
@@ -123,6 +124,7 @@ module RendererConformance =
             Shows = shows
             WaitUntil = fun condition -> async { return condition () }
             LateFailures = Map.empty
+            Viewport = None
         }
 
     let withStart start (subject: ConformanceSubject<'State>) = { subject with Start = start }
@@ -132,6 +134,11 @@ module RendererConformance =
     let withLateFailure backend trigger (subject: ConformanceSubject<'State>) =
         { subject with
             LateFailures = Map.add backend trigger subject.LateFailures
+        }
+
+    let withViewport expected actual (subject: ConformanceSubject<'State>) =
+        { subject with
+            Viewport = Some(expected, actual)
         }
 
     let failures (results: ConformanceResult list) =
@@ -169,13 +176,17 @@ module RendererConformance =
 
             let id = RendererBackend.id
             let mounts = ResizeArray<ConformanceMount<'State>>()
+            // Faults the kit injects around an adapter, each consumed by the next call it names: the adapter's own code is
+            // never edited, so what is checked is the contract between the host and any adapter.
+            let failNextPresent = ResizeArray<RendererBackend>()
+            let failNextMount = ResizeArray<RendererBackend>()
 
             let instrument (adapter: RendererAdapter<'State>) : RendererAdapter<'State> =
                 {
                     Backend = adapter.Backend
                     Mount =
                         fun state ->
-                            match adapter.Mount state with
+                            match (if failNextMount.Remove adapter.Backend then Error "conformance: injected mount failure" else adapter.Mount state) with
                             | Ok mount ->
                                 let record =
                                     {
@@ -190,6 +201,9 @@ module RendererConformance =
                                     {
                                         Present =
                                             fun next ->
+                                                if failNextPresent.Remove adapter.Backend then
+                                                    failwith "conformance: injected present failure"
+
                                                 record.Received <- next :: record.Received
                                                 mount.Present next
                                         Dispose =
@@ -214,7 +228,18 @@ module RendererConformance =
                 match adapters |> List.partition (fun adapter -> adapter.Backend = RendererBackend.defaultBackend) with
                 | [ svg ], others ->
                     match RendererRegistry.create svg with
-                    | Ok created -> others |> List.fold (fun registry adapter -> RendererRegistry.register adapter registry) created
+                    | Ok created ->
+                        others
+                        |> List.fold (fun registry adapter -> RendererRegistry.register adapter registry) created
+                        // The declared viewports are part of the registry's contract: keep them on the copy.
+                        |> fun copy ->
+                            offered
+                            |> List.fold
+                                (fun registry backend ->
+                                    match RendererRegistry.tryViewport backend subject.Registry with
+                                    | Some viewport -> RendererRegistry.withViewport backend viewport registry
+                                    | None -> registry)
+                                copy
                     | Error reason -> failwith reason
                 | _ -> failwith "a registry always offers exactly one default adapter"
 
@@ -595,6 +620,202 @@ module RendererConformance =
                              && (host.Model()).Refusal = None
                              && mountsOf backend |> List.length = 2)
                             (sprintf "settled=%b %s" settled (describe host))
+
+                        do! stop host
+
+
+                // present failure ---------------------------------------------------------------------------------
+                for backend in offered do
+                    mounts.Clear()
+                    let name = id backend
+                    let isDefault = backend = RendererBackend.defaultBackend
+                    let host = subject.Start registry initial
+
+                    if not isDefault then
+                        select host backend
+
+                    // Present `kept` once unarmed, so the armed present below is a present in place even when a
+                    // declared viewport changed between the initial state and `kept`.
+                    let kept = stateAt 1
+                    host.Dispatch(RendererMsg.StateChanged kept)
+                    let! _ = subject.WaitUntil(fun () -> subject.Resources backend >= 1)
+                    let failing = latest backend
+                    let attempt = (host.Model()).Attempt
+                    failNextPresent.Add backend
+                    host.Dispatch(RendererMsg.StateChanged kept)
+                    let consumed = failNextPresent.Count = 0
+                    failNextPresent.Clear()
+                    let model = host.Model()
+                    let recovered = latest RendererBackend.Svg
+
+                    let mountedWithKept =
+                        match recovered with
+                        | Some record when record.Disposals = 0 -> List.tryLast record.Received = Some kept
+                        | _ -> false
+
+                    let causeNamed =
+                        match model.Refusal with
+                        | Some(RendererRefusal.PresentFailed(failed, reason)) ->
+                            failed = backend && reason.Contains "injected present failure"
+                        | _ -> false
+
+                    check
+                        (sprintf
+                            "present failure %s: a throwing Present is contained and %s mounts the latest state"
+                            name
+                            (if isDefault then "the default backend" else "SVG"))
+                        (consumed
+                         && isOn host RendererBackend.Svg
+                         && model.State = kept
+                         && model.Attempt = attempt + 1
+                         && causeNamed
+                         && mountedWithKept)
+                        (sprintf "consumed=%b %s" consumed (describe host))
+
+                    let! released = subject.WaitUntil(fun () -> isDefault || subject.Resources backend = 0)
+
+                    check
+                        (sprintf "present failure %s: the failed mount is disposed once and exactly one live mount remains" name)
+                        (released
+                         && failing |> Option.exists (fun record -> record.Disposals = 1)
+                         && mounts |> Seq.filter (fun record -> record.Disposals = 0) |> Seq.length = 1
+                         && mounts |> Seq.forall (fun record -> record.Disposals <= 1))
+                        (resources ())
+
+                    let! shows = subject.Shows host RendererBackend.Svg kept
+
+                    check
+                        (sprintf "present failure %s: the recovered SVG shows the latest state" name)
+                        (shows = Ok())
+                        (match shows with
+                         | Error detail -> detail
+                         | Ok() -> "")
+
+                    if isDefault then
+                        // The remount fails too: the failure is reported, nothing is held, the next state recovers.
+                        let next = stateAt 2
+                        host.Dispatch(RendererMsg.StateChanged next)
+                        let attemptBefore = (host.Model()).Attempt
+                        failNextPresent.Add backend
+                        failNextMount.Add backend
+                        host.Dispatch(RendererMsg.StateChanged next)
+                        let consumedBoth = failNextPresent.Count = 0 && failNextMount.Count = 0
+                        failNextPresent.Clear()
+                        failNextMount.Clear()
+                        let failed = host.Model()
+                        let! nothing = subject.WaitUntil nothingHeld
+
+                        check
+                            "present failure svg: when the remount fails too, the failure is reported with nothing mounted or held"
+                            (consumedBoth
+                             && nothing
+                             && host.Mounted() = None
+                             && failed.State = next
+                             && failed.Attempt = attemptBefore + 1
+                             && (match failed.Status with
+                                 | RendererStatus.Failed((failedBackend, reason) :: _) ->
+                                     failedBackend = backend && reason.Contains "injected mount failure"
+                                 | _ -> false)
+                             && (match failed.Refusal with
+                                 | Some(RendererRefusal.MountFailed(failedBackend, reason)) ->
+                                     failedBackend = backend && reason.Contains "injected mount failure"
+                                 | _ -> false)
+                             && (match failed.Status with
+                                 | RendererStatus.Failed [ _; (causeBackend, cause) ] ->
+                                     causeBackend = backend && cause.Contains "injected present failure"
+                                 | _ -> false))
+                            (sprintf "consumed=%b %s" consumedBoth (describe host))
+
+                        let after = stateAt 3
+                        host.Dispatch(RendererMsg.StateChanged after)
+                        let! shows = subject.Shows host RendererBackend.Svg after
+
+                        check
+                            "present failure svg: the next state mounts the default again and shows it"
+                            (isOn host RendererBackend.Svg && (host.Model()).State = after && shows = Ok())
+                            (sprintf "%s shows=%A" (describe host) shows)
+
+                    do! stop host
+
+                // viewport ----------------------------------------------------------------------------------------
+                match subject.Viewport with
+                | None -> ()
+                | Some(expectedViewport, actualViewport) ->
+                    // Distinct under `RendererViewport.same`, so a NaN viewport is one viewport, not one per state.
+                    let viewports =
+                        states
+                        |> Array.map expectedViewport
+                        |> Array.fold
+                            (fun seen viewport ->
+                                if seen |> List.exists (RendererViewport.same viewport) then
+                                    seen
+                                else
+                                    viewport :: seen)
+                            []
+                        |> List.rev
+
+                    check
+                        "viewport: the subject's states include two different viewports"
+                        (viewports.Length >= 2)
+                        (sprintf "%d distinct: %A" viewports.Length viewports)
+
+                    for backend in offered do
+                        mounts.Clear()
+                        let name = id backend
+                        let host = subject.Start registry initial
+
+                        if backend <> RendererBackend.Svg then
+                            select host backend
+
+                        // Every state, then back again: a viewport that grows and one that shrinks.
+                        let sequence = List.ofArray states @ List.rev (List.ofArray states)
+                        let wrong = ResizeArray<string>()
+                        let failures = ResizeArray<string>()
+                        let refusalBefore = (host.Model()).Refusal
+
+                        for state in sequence do
+                            host.Dispatch(RendererMsg.StateChanged state)
+                            let! got = actualViewport host backend
+
+                            if not (got |> Option.exists (RendererViewport.same (expectedViewport state))) then
+                                wrong.Add(sprintf "state wants %A, backend has %A" (expectedViewport state) got)
+
+                            // A viewport change is not a failure: the model records no refusal for it.
+                            if (host.Model()).Refusal <> refusalBefore then
+                                failures.Add(sprintf "refusal became %A" (host.Model()).Refusal)
+
+                        check
+                            (sprintf "viewport %s: every state is presented at its own viewport, growing and shrinking" name)
+                            (wrong.Count = 0 && isOn host backend)
+                            (String.concat "; " wrong + " " + describe host)
+
+                        check
+                            (sprintf "viewport %s: a viewport change is not a failure, so Refusal is untouched" name)
+                            (failures.Count = 0)
+                            (String.concat "; " failures)
+
+                        let live = mountsOf backend |> List.filter (fun record -> record.Disposals = 0)
+
+                        check
+                            (sprintf "viewport %s: viewport changes leave one live mount, and every superseded mount was disposed once" name)
+                            (live.Length = 1 && mountsOf backend |> List.forall (fun record -> record.Disposals <= 1))
+                            (mountsOf backend
+                             |> List.map (fun record -> string record.Disposals)
+                             |> String.concat ",")
+
+                        match RendererRegistry.tryViewport backend subject.Registry with
+                        | None -> ()
+                        | Some declared ->
+                            let changes =
+                                (initial :: sequence)
+                                |> List.pairwise
+                                |> List.filter (fun (before, after) -> not (RendererViewport.same (declared before) (declared after)))
+                                |> List.length
+
+                            check
+                                (sprintf "viewport %s: the declared viewport replaces the mount exactly when it changes" name)
+                                ((mountsOf backend).Length = 1 + changes)
+                                (sprintf "%d mounts for %d changes" (mountsOf backend).Length changes)
 
                         do! stop host
 

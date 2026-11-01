@@ -1,5 +1,11 @@
 namespace FS.GG.Game.Render
 
+/// Two viewports are the same when each component is equal; `NaN` equals `NaN`, so an invalid viewport can never
+/// remount on every state. Shared by `RendererSelection` and `RendererConformance`.
+module internal RendererViewport =
+
+    val same: viewport: (float * float) -> other: (float * float) -> bool
+
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// A rendering backend a game can be presented through. Declaring a backend does NOT make it
@@ -108,6 +114,24 @@ module RendererRegistry =
     val register: adapter: RendererAdapter<'State> -> registry: RendererRegistry<'State> -> RendererRegistry<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare that `backend`'s mount is fixed to the viewport `viewport state`, `(width, height)` in pixels: the
+    /// remount rule. While `backend` is mounted and active, a state whose viewport differs from the previous state's is
+    /// presented by remounting `backend` with that state (`RendererSelection.update` emits `Unmount` then `Mount`
+    /// under a new attempt) instead of `Present`, so the game does not remount inside `Present`. A game whose
+    /// viewport comes from the window keeps it in its state. `viewport` must be total and cheap; a `NaN` component
+    /// equals another `NaN`, so an invalid viewport cannot remount forever. Replaces an earlier declaration for the same
+    /// backend; an adapter registered later for `backend` keeps it.
+    val withViewport:
+        backend: RendererBackend ->
+        viewport: ('State -> float * float) ->
+        registry: RendererRegistry<'State> ->
+            RendererRegistry<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The viewport `backend` declared with `withViewport`, if any.
+    val tryViewport: backend: RendererBackend -> registry: RendererRegistry<'State> -> ('State -> float * float) option
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The adapter registered for `backend`, if any.
     val tryFind: backend: RendererBackend -> registry: RendererRegistry<'State> -> RendererAdapter<'State> option
 
@@ -125,10 +149,15 @@ module RendererRegistry =
 type RendererRefusal =
     /// No adapter is registered for the backend at this state type; the selection is unchanged.
     | Unavailable of backend: RendererBackend
-    /// The backend's adapter refused or failed to mount, or failed to present an accepted state.
+    /// The backend's adapter refused or failed to mount.
     | MountFailed of backend: RendererBackend * reason: string
-    /// A released mount's `Dispose` failed. Ownership was still released; the selection is unchanged.
+    /// A released mount's `Dispose` failed. Ownership was still released; the selection is unchanged. It never
+    /// replaces a `MountFailed` or `PresentFailed` cause of the SAME backend: the dispose failure is added to that
+    /// cause's reason instead. Beside a cause of another backend it is recorded alone.
     | DisposeFailed of backend: RendererBackend * reason: string
+    /// The backend's `Present` of an accepted state threw. The host released that mount, and the default backend is
+    /// mounted with the latest state.
+    | PresentFailed of backend: RendererBackend * reason: string
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 /// Whether the selected backend's latest mount attempt is live. Tracked explicitly rather than inferred
@@ -139,7 +168,9 @@ type RendererStatus =
     | Active
     /// Nothing is mounted: the selected backend's latest mount failed. `failures` are the mount failures
     /// that led here, most recent first — a failed SVG fallback keeps the failure that caused the fallback.
-    /// Re-selecting the selected backend retries it.
+    /// Never silent and never final: `Refusal` carries the latest cause, and re-selecting the selected backend or
+    /// the next `StateChanged` retries the mount. A retry that fails again lists the failure it retried after its
+    /// own, so the earlier cause is not lost (one earlier cause is kept, which bounds the list).
     | Failed of failures: (RendererBackend * string) list
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
@@ -150,11 +181,16 @@ type RendererMsg<'State> =
     | SelectBackend of backend: RendererBackend
     /// A newer game state to present on the selected backend.
     | StateChanged of state: 'State
-    /// Host feedback: mount `attempt` of `backend` failed, or its mount threw from `Present`. A failure
-    /// whose `attempt` is not the model's current `Attempt` is stale and ignored.
+    /// Host feedback: mount `attempt` of `backend` failed. A failure whose `attempt` is not the model's current
+    /// `Attempt` is stale and ignored.
     | MountFailed of backend: RendererBackend * attempt: int * reason: string
     /// Host feedback: a released mount's `Dispose` threw. Recorded only.
     | DisposeFailed of backend: RendererBackend * reason: string
+    /// Host feedback: the mounted `backend`'s `Present` of `attempt` threw, and the host has released that mount. A
+    /// failure whose `attempt` is not the model's current `Attempt`, or whose backend is not the selected one, is
+    /// stale and ignored. A non-default backend falls back to SVG with the latest state; the default backend is
+    /// remounted with the latest state (see `RendererSelection`).
+    | PresentFailed of backend: RendererBackend * attempt: int * reason: string
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 /// Resource effects `RendererSelection.update` asks the host to perform, in order.
@@ -198,8 +234,21 @@ type RendererModel<'State> =
 /// Ordering contract: unmount-then-mount, with SVG fallback. A switch emits `Unmount` of the current
 /// backend strictly before `Mount` of the next, so two backends never own resources at once. If the
 /// next backend's mount fails (or it later throws from `Present`), selection falls back to mounting the
-/// default SVG backend with the same game state. If SVG itself fails, nothing is mounted, `Status` is
-/// `Failed` and re-selecting SVG (or selecting any available backend) retries.
+/// default SVG backend with the same game state. If SVG itself fails to mount, nothing is mounted, `Status` is
+/// `Failed` and re-selecting SVG, selecting any available backend, or the next game state retries.
+///
+/// Adapter lifecycle (GAME-RENDER-ADOPT-01.3):
+///
+/// - **Failing `Present`.** The host releases the throwing mount and reports `PresentFailed`. A non-default backend
+///   falls back to SVG with the latest state. The DEFAULT backend is remounted with the latest state (`Attempt`
+///   advances, `Refusal` records the cause), so a throwing `Present` never leaves the page without a surface while a
+///   mount can still succeed. If that remount also fails, `Status` is `Failed` with the cause, and the next
+///   `StateChanged` mounts again. Nothing is rethrown: `RendererHost.Run` contains the exception. The retry is bounded to
+///   one mount attempt per state the caller dispatches; there is no rate limit, so a game whose mount fails for every
+///   state attempts it once per state, and stops by not dispatching states.
+/// - **Viewport change.** A mount is fixed to the viewport it was created for. A backend declared with
+///   `RendererRegistry.withViewport` is remounted with the new state when the viewport of the state changes, before
+///   anything is presented; a backend with no declaration owns its viewport inside its adapter.
 [<RequireQualifiedAccess>]
 module RendererSelection =
 
@@ -212,8 +261,10 @@ module RendererSelection =
     /// with the unchanged game state under a new attempt. Selecting an unavailable backend records
     /// `Unavailable` and emits nothing; `Status` is untouched. Re-selecting the current backend is a no-op
     /// while it is `Active` and a retry while it is `Failed`. `StateChanged` replaces the state and
-    /// presents it when `Active`. A current-attempt `MountFailed` for a non-default backend falls back to
-    /// mounting the default; for the default it sets `Failed`; a stale attempt is ignored.
+    /// presents it when `Active`, remounts the selected backend with it when its declared viewport changed, and
+    /// mounts the selected backend again with it when `Failed`. A current-attempt `MountFailed` for a non-default
+    /// backend falls back to mounting the default; for the default it sets `Failed`; a stale attempt is ignored.
+    /// A current-attempt `PresentFailed` mounts the default with the latest state, whichever backend failed.
     /// `DisposeFailed` is recorded in `Refusal` only.
     val update:
         msg: RendererMsg<'State> -> model: RendererModel<'State> -> RendererModel<'State> * RendererEffect<'State> list
@@ -228,7 +279,8 @@ module RendererSelection =
 /// time: a `Mount` while another backend is mounted disposes that one first, so no resources leak even
 /// when an `Unmount` is missing. Each mount is disposed exactly once; ownership is cleared before its
 /// `Dispose` runs. No adapter exception escapes `Run`: a failing `Mount` or `Present` becomes
-/// `RendererMsg.MountFailed` (a throwing `Present` also releases that mount), and a failing `Dispose`
+/// `RendererMsg.MountFailed`, a failing `Present` releases that mount and becomes `RendererMsg.PresentFailed`, and a
+/// failing `Dispose`
 /// becomes `RendererMsg.DisposeFailed` while the remaining effects, including a pending `Mount`, still
 /// run. After `Dispose` the host is inert; a mount's failing `Dispose` during host disposal is not rethrown.
 ///
