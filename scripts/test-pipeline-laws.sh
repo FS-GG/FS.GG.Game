@@ -11,7 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT="$REPO_ROOT/tests/Game.Render.Pipeline.Laws"
-MIN_CHECKS=70
+MIN_CHECKS=94
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

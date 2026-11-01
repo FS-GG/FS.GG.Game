@@ -273,6 +273,18 @@ let tests =
                     (InputEvent.toSelectionRequest (frame None) (ev InputAction.Hover (Some "a") false))
                     None
                     "hover asks nothing"
+
+                // FS.GG.Game#788: a press on empty ground asks for nothing, with or without a selection (the SVG
+                // surface and every canvas host have never cleared on it); only Cancel clears.
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame (Some "a")) (ev InputAction.Activate None false))
+                    None
+                    "a press on empty ground with a selection asks nothing"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame None) (ev InputAction.Activate None false))
+                    None
+                    "a press on empty ground without a selection asks nothing"
             }
 
             test "standardCues draws a two-tone ring of 2 CSS px bands outside the focused object" {

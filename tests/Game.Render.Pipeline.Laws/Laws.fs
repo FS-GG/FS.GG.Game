@@ -34,21 +34,7 @@ type Pipeline = InputPipeline<string, int, Server, string, string>
 
 let idText (id: CommandId) = CommandId.text id
 
-let failureText (failure: PipelineFailure) =
-    match failure with
-    | PipelineFailure.GuestFaulted(s, r) -> sprintf "GuestFaulted(%d,%s)" s r
-    | PipelineFailure.GuestTimedOut s -> sprintf "GuestTimedOut(%d)" s
-    | PipelineFailure.GuestHalted n -> sprintf "GuestHalted(%d)" n
-    | PipelineFailure.InputRefused(s, r) -> sprintf "InputRefused(%d,%s)" s r
-    | PipelineFailure.InputCancelled(s, r) -> sprintf "InputCancelled(%d,%s)" s r
-    | PipelineFailure.QueueOverflow dropped ->
-        "QueueOverflow(" + (dropped |> List.map string |> String.concat ",") + ")"
-    | PipelineFailure.CommandWindowFull s ->
-        "CommandWindowFull(" + (s |> Option.map string |> Option.defaultValue "-") + ")"
-    | PipelineFailure.CommandRejected(id, r) -> sprintf "CommandRejected(%s,%s)" (idText id) r
-    | PipelineFailure.CommandCancelled(id, r) -> sprintf "CommandCancelled(%s,%s)" (idText id) r
-    | PipelineFailure.CommandUnconfirmed id -> sprintf "CommandUnconfirmed(%s)" (idText id)
-    | PipelineFailure.RebindRefused r -> sprintf "RebindRefused(%s)" r
+let failureText (failure: PipelineFailure) = PipelineFailure.text failure
 
 let inputText (input: PipelineInput<string>) =
     match input with
@@ -793,8 +779,17 @@ let p17 () =
     let m, _ =
         steps pipeline model ([ scene InputAction.Activate "x" ] @ round 1UL (decided [ submit "c1" ]))
 
-    check "P17" "settled never reads the predicted state" ((InputPipeline.unsettled m).Length = 1) ""
-    let m, _ = steps pipeline m [ PipelineMsg.Authoritative(server 1UL [ "c1" ]) ]
+    // The predicted state shows c1 (prediction appends it); the authoritative state at version 1 does not.
+    let m, early = steps pipeline m [ PipelineMsg.Authoritative(server 1UL []) ]
+
+    check
+        "P17"
+        "settled never reads the predicted state"
+        ((InputPipeline.unsettled m).Length = 1
+         && (Displayed.shown (InputPipeline.displayed m)).Items = [ "c1" ])
+        (render early.[0])
+
+    let m, _ = steps pipeline m [ PipelineMsg.Authoritative(server 2UL [ "c1" ]) ]
 
     check
         "P17"
@@ -864,14 +859,16 @@ let p18b () =
             pipeline
             m
             [
-                PipelineMsg.Acknowledged(ids.[0], CommandAck.rejected "no")
+                // Applied at a version the state has not reached, so the command stays in the ledger (prediction needs
+                // it); a reordered `started` and a later `rejected` must not reopen or change it.
+                PipelineMsg.Acknowledged(ids.[0], CommandAck.applied 3UL)
                 PipelineMsg.Acknowledged(ids.[0], CommandAck.started)
-                PipelineMsg.Acknowledged(ids.[0], CommandAck.applied 1UL)
+                PipelineMsg.Acknowledged(ids.[0], CommandAck.rejected "no")
             ]
 
     check
         "P18b"
-        "the first final answer wins"
+        "the first final answer wins: started and rejected after applied change nothing"
         (a.[1].IsEmpty
          && a.[2].IsEmpty
          && (InputPipeline.unsettled m |> List.map (fst >> idText)) = [ "a:2" ])
@@ -930,23 +927,468 @@ let p19 () =
         (refused (fun () -> (InputPipeline.init (standard ()) " " None (server 0UL [])) |> ignore))
         ""
 
-/// Randomized invariants: P1 (ids unique, sequences rising), P2 (one call), P10 (no batch carries both a Local and a
-/// StartGuest; Continue is last), P14 (shown is the fold of predicted).
+// ---------------------------------------------------------------------------------------------------------------
+// Laws added by the #796 review (FS.GG.Game#788): each pins a behaviour a mutant could change unnoticed.
+
+let withPrediction (s: CommandStage<Server, string>) =
+    s |> CommandStage.withPrediction (fun c state -> { state with Items = state.Items @ [ c ] })
+
+let unsettledText (m: Model) =
+    InputPipeline.unsettled m |> List.map (fst >> idText) |> String.concat ","
+
+let predictedText (m: Model) =
+    Displayed.predicted (InputPipeline.displayed m) |> List.map idText |> String.concat ","
+
+/// P11: the window is checked for ALL of a decision's submits, and counts every unsettled command, the earlier
+/// binding's included.
+let p11Window () =
+    let pipeline = pipelineOf GuestPolicy.standard (stage () |> CommandStage.withWindow 3)
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let _, effects =
+        steps
+            pipeline
+            model
+            ([ scene InputAction.Activate "x" ]
+             @ round 1UL (decided [ submit "c1"; submit "c2" ])
+             @ [ scene InputAction.Activate "y" ]
+             @ round 2UL (decided [ submit "c3"; submit "c4" ]))
+
+    let all = List.concat effects
+
+    check
+        "P11"
+        "two submits do not fit a window with room for one"
+        ((sends all |> List.map CommandEnvelope.command) = [ "c1"; "c2" ]
+         && fails all = [ "CommandWindowFull(2)" ])
+        (render all)
+
+    let single = pipelineOf GuestPolicy.standard (stage () |> CommandStage.withWindow 1)
+    let model = InputPipeline.init single "a" None (server 0UL [])
+
+    let _, effects =
+        steps
+            single
+            model
+            ([ scene InputAction.Activate "x" ]
+             @ round 1UL (decided [ submit "c1" ])
+             @ [ PipelineMsg.Rebind("b", None); scene InputAction.Activate "y" ]
+             @ round 2UL (decided [ submit "c2" ]))
+
+    let all = List.concat effects
+
+    check
+        "P11"
+        "the window counts the earlier binding's unsettled commands"
+        ((sends all |> List.map (CommandEnvelope.id >> idText)) = [ "a:1" ]
+         && fails all = [ "CommandWindowFull(2)" ])
+        (render all)
+
+/// P18 and P18b: a final command is never reopened or changed, and `Unconfirmed` is never upgraded (implementation
+/// decision "Unconfirmed is final").
+let p18Final () =
+    let pipeline = pipelineOf GuestPolicy.standard (stage () |> withPrediction)
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let m, _ =
+        steps pipeline model ([ scene InputAction.Activate "x" ] @ round 1UL (decided [ submit "c1"; submit "c2" ]))
+
+    let ids = InputPipeline.unsettled m |> List.map fst
+
+    let m, a =
+        steps
+            pipeline
+            m
+            [
+                PipelineMsg.Acknowledged(ids.[0], CommandAck.applied 5UL)
+                PipelineMsg.Acknowledged(ids.[0], CommandAck.cancelled "late")
+                PipelineMsg.Acknowledged(ids.[0], CommandAck.queued)
+            ]
+
+    check
+        "P18b"
+        "answers after applied neither fail nor reopen the command"
+        (a.[1].IsEmpty && a.[2].IsEmpty && unsettledText m = "a:2" && predictedText m = "a:1,a:2")
+        (render (List.concat a) + " | " + unsettledText m + " | " + predictedText m)
+
+    let m, b =
+        steps
+            pipeline
+            m
+            [
+                PipelineMsg.Acknowledged(ids.[1], CommandAck.expired)
+                PipelineMsg.Acknowledged(ids.[1], CommandAck.applied 7UL)
+                PipelineMsg.Acknowledged(ids.[1], CommandAck.ended 7UL "done")
+            ]
+
+    check
+        "P18"
+        "Unconfirmed is final: a late applied or ended does not upgrade or predict it"
+        (fails b.[0] = [ "CommandUnconfirmed(a:2)" ]
+         && b.[1].IsEmpty
+         && b.[2].IsEmpty
+         && unsettledText m = ""
+         && predictedText m = "a:1")
+        (render (List.concat b) + " | " + predictedText m)
+
+/// P16: where patience starts (B1 of the #796 review), what restarts it, and that it runs for earlier bindings.
+let p16Patience () =
+    let pipeline =
+        pipelineOf GuestPolicy.standard (stage () |> CommandStage.withPatience 4UL |> withPrediction)
+
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    // Heartbeats advance what is heard to 10 before the command is sent; none of that counts against it.
+    let m, _ = steps pipeline model [ PipelineMsg.Heartbeat 10UL ]
+
+    let m, a =
+        steps
+            pipeline
+            m
+            ([ scene InputAction.Activate "x" ]
+             @ round 1UL (decided [ submit "c1" ])
+             @ [ PipelineMsg.Heartbeat 10UL; PipelineMsg.Heartbeat 13UL; PipelineMsg.Heartbeat 14UL ])
+
+    check
+        "P16"
+        "patience starts at the later of the basis and the version heard when the command was sent"
+        ((a |> List.take 6 |> List.concat |> fails) = []
+         && fails a.[6] = [ "CommandUnconfirmed(a:1)" ])
+        (render (List.concat a))
+
+    let fresh = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let m, _ =
+        steps pipeline fresh ([ scene InputAction.Activate "x" ] @ round 1UL (decided [ submit "c1"; submit "c2" ]))
+
+    let ids = InputPipeline.unsettled m |> List.map fst
+
+    let m, b =
+        steps
+            pipeline
+            m
+            [
+                PipelineMsg.Heartbeat 3UL
+                PipelineMsg.Acknowledged(ids.[0], CommandAck.queued)
+                PipelineMsg.Acknowledged(ids.[1], CommandAck.accepted)
+                PipelineMsg.Heartbeat 6UL
+                PipelineMsg.Heartbeat 7UL
+            ]
+
+    check
+        "P16"
+        "queued and accepted restart patience"
+        (fails b.[3] = [] && fails b.[4] = [ "CommandUnconfirmed(a:1)"; "CommandUnconfirmed(a:2)" ])
+        (render (List.concat b))
+
+    let m, _ =
+        steps pipeline fresh ([ scene InputAction.Activate "x" ] @ round 1UL (decided [ submit "c1" ]))
+
+    let id = fst (InputPipeline.unsettled m).[0]
+
+    let m, c =
+        steps
+            pipeline
+            m
+            [
+                PipelineMsg.Acknowledged(id, CommandAck.applied 3UL)
+                PipelineMsg.Heartbeat 5UL
+            ]
+
+    check
+        "P16"
+        "a heartbeat never advances prediction"
+        (c.[1].IsEmpty && predictedText m = "a:1" && (Displayed.authoritative (InputPipeline.displayed m)).V = 0UL)
+        (render (List.concat c) + " | " + predictedText m)
+
+    let m, _ =
+        steps pipeline fresh ([ scene InputAction.Activate "x" ] @ round 1UL (decided [ submit "c1" ]))
+
+    let _, d = steps pipeline m [ PipelineMsg.Rebind("b", None); PipelineMsg.Heartbeat 4UL ]
+
+    check
+        "P16"
+        "an earlier binding's command still settles Unconfirmed by patience"
+        (fails d.[1] = [ "CommandUnconfirmed(a:1)" ])
+        (render (List.concat d))
+
+/// P10b: queue order of `Submit`s, and implementation decisions 1 and 2 (submits do not count toward the guest queue
+/// limit; a halt keeps them).
+let p10bQueue () =
+    let pipeline = standard ()
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let _, effects =
+        steps
+            pipeline
+            model
+            ([ scene InputAction.Activate "x"; scene InputAction.Activate "y"; PipelineMsg.Submit "s" ]
+             @ round 1UL (decided [])
+             @ round 2UL (decided []))
+
+    check
+        "P10b"
+        "a Submit waits behind an earlier queued input"
+        (render effects.[5] = "Start(2,2,activate:y,0) ArmStart(2,10000)"
+         && render effects.[8] = "Send(a:1,-,0,s)")
+        (render effects.[5] + " | " + render effects.[8])
+
+    let small = pipelineOf (GuestPolicy.standard |> GuestPolicy.withQueueLimit 1) (stage ())
+    let model = InputPipeline.init small "a" None (server 0UL [])
+
+    let _, effects =
+        steps
+            small
+            model
+            [
+                scene InputAction.Activate "x"
+                PipelineMsg.Submit "s1"
+                PipelineMsg.Submit "s2"
+                scene InputAction.Activate "y"
+            ]
+
+    check
+        "P10b"
+        "queued Submits do not count toward the guest queue limit"
+        ((last effects).IsEmpty)
+        (render (last effects))
+
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let m, effects =
+        steps
+            pipeline
+            model
+            ([ scene InputAction.Activate "x"; PipelineMsg.Submit "s" ]
+             @ round 1UL (GuestOutcome.Faulted "trap"))
+
+    check
+        "P10b"
+        "a halt keeps queued Submits, which are sent while the stage is halted"
+        (InputPipeline.guestHalted m && render (last effects) = "Send(a:1,-,0,s)")
+        (render (List.concat effects))
+
+/// P4: what resets the breaker, what a halt does to the queue, and a duplicate GuestRunning.
+let p4Breaker () =
+    let pipeline = pipelineOf (GuestPolicy.standard |> GuestPolicy.withBreaker 2) (stage ())
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let between outcome =
+        [ scene InputAction.Activate "x" ]
+        @ round 1UL GuestOutcome.TimedOut
+        @ [ scene InputAction.Activate "y" ]
+        @ round 2UL outcome
+        @ [ scene InputAction.Activate "z" ]
+        @ round 3UL GuestOutcome.TimedOut
+
+    let refused, _ = steps pipeline model (between (GuestOutcome.Refused "no"))
+    check "P4" "a refused call resets the breaker" (not (InputPipeline.guestHalted refused)) ""
+
+    let cancelled, _ = steps pipeline model (between (GuestOutcome.Cancelled "frozen"))
+
+    check
+        "P4"
+        "a cancelled call does not reset the breaker"
+        (InputPipeline.guestHalted cancelled)
+        ""
+
+    let m, effects =
+        steps
+            pipeline
+            model
+            [
+                scene InputAction.Activate "x"
+                scene InputAction.Activate "y"
+                game "g"
+                PipelineMsg.GuestRunning 1UL
+                PipelineMsg.GuestEnded(1UL, GuestOutcome.Faulted "trap")
+                PipelineMsg.StartNext
+                PipelineMsg.RearmGuest
+            ]
+
+    check
+        "P4"
+        "a halt refuses the queued guest inputs at once, and RearmGuest finds nothing to start"
+        (fails effects.[4] = [ "GuestFaulted(1,trap)"; "InputRefused(2,guest halted)"; "InputRefused(3,guest halted)" ]
+         && effects.[5].IsEmpty
+         && effects.[6].IsEmpty
+         && not (InputPipeline.guestHalted m))
+        (render (List.concat effects))
+
+    let _, effects =
+        steps pipeline model [ scene InputAction.Activate "x"; PipelineMsg.GuestRunning 1UL; PipelineMsg.GuestRunning 1UL ]
+
+    check "P4" "a duplicate GuestRunning arms no second deadline" (effects.[2].IsEmpty) (render effects.[2])
+
+/// P15: an authoritative state at the SAME version is taken (versions are non-decreasing), and settles commands.
+let p15Equal () =
+    let pipeline =
+        pipelineOf GuestPolicy.standard (stage () |> CommandStage.withSettlement (fun c s -> List.contains c s.Items))
+
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let m, _ =
+        steps
+            pipeline
+            model
+            ([ scene InputAction.Activate "x" ]
+             @ round 1UL (decided [ submit "c1" ])
+             @ [
+                 PipelineMsg.Authoritative(server 1UL [])
+                 PipelineMsg.Authoritative(server 1UL [ "c1" ])
+             ])
+
+    check
+        "P15"
+        "a state at the same version is taken and settles"
+        ((InputPipeline.unsettled m).IsEmpty
+         && (Displayed.authoritative (InputPipeline.displayed m)).Items = [ "c1" ])
+        (unsettledText m)
+
+/// Implementation decision "envelope basis": a decided command's basis is the authoritative version when the decision
+/// ended the call, not the call's basis.
+let envelopeBasis () =
+    let pipeline = standard ()
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let _, effects =
+        steps
+            pipeline
+            model
+            [
+                scene InputAction.Activate "x"
+                PipelineMsg.GuestRunning 1UL
+                PipelineMsg.Authoritative(server 2UL [])
+                PipelineMsg.GuestEnded(1UL, decided [ submit "c1" ])
+                PipelineMsg.StartNext
+                PipelineMsg.Submit "s"
+            ]
+
+    check
+        "P17"
+        "a command's basis is the authoritative version at its decision (the call's basis was 0)"
+        (render effects.[0] = "Start(1,1,activate:x,0) ArmStart(1,10000)"
+         && render effects.[3] = "Send(a:1,1,2,c1) Continue"
+         && render effects.[5] = "Send(a:2,-,2,s)")
+        (render (List.concat effects))
+
+/// P7b across a Rebind (B2 of the #796 review): a call that ended before the rebind still has its StartNext on the way,
+/// behind the game's Local; an input that arrives after the rebind must not start before it.
+let p7bRebind () =
+    let pipeline = standard ()
+    let mutable model = InputPipeline.init pipeline "a" None (server 0UL [])
+    let mutable gameState = 0
+    let mutable calls = 0
+    let seen = ResizeArray<string>()
+    let queue = System.Collections.Generic.Queue<Choice<Msg, string>>()
+
+    let rec drain () =
+        if queue.Count > 0 then
+            match queue.Dequeue() with
+            | Choice2Of2 _ -> gameState <- gameState + 1
+            | Choice1Of2 msg ->
+                let next, effects = InputPipeline.update pipeline msg model
+                model <- next
+
+                for effect in effects do
+                    match effect with
+                    | PipelineEffect.StartGuest call ->
+                        calls <- calls + 1
+                        seen.Add(sprintf "%d@%d" (GuestCall.sequence call) gameState)
+
+                        if calls = 1 then
+                            queue.Enqueue(Choice1Of2(PipelineMsg.GuestRunning(GuestCall.id call)))
+                            queue.Enqueue(Choice1Of2(PipelineMsg.GuestEnded(GuestCall.id call, decided [ local "bump" ])))
+                            queue.Enqueue(Choice1Of2(PipelineMsg.Rebind("a", None)))
+                            queue.Enqueue(Choice1Of2(scene InputAction.Activate "y"))
+                    | PipelineEffect.ApplyLocal l -> queue.Enqueue(Choice2Of2 l)
+                    | PipelineEffect.Continue -> queue.Enqueue(Choice1Of2 PipelineMsg.StartNext)
+                    | _ -> ()
+
+            drain ()
+
+    queue.Enqueue(Choice1Of2(scene InputAction.Activate "x"))
+    drain ()
+    let observed = String.concat "," seen
+
+    check "P7b" "a Rebind does not let the next call start before the ended call's Locals" (observed = "1@0,2@1") observed
+
+/// P10 for a Rebind, and implementation decision "queued Submits survive a Rebind": the call is cancelled, the queued
+/// Submit is sent under the new binding, then the failures.
+let p10Rebind () =
+    let pipeline = standard ()
+    let model = InputPipeline.init pipeline "a" None (server 0UL [])
+
+    let _, effects =
+        steps
+            pipeline
+            model
+            [
+                scene InputAction.Activate "x"
+                scene InputAction.Activate "y"
+                PipelineMsg.Submit "s"
+                PipelineMsg.Rebind("b", Some 7UL)
+            ]
+
+    check
+        "P10"
+        "a Rebind's batch: CancelGuest, the queued Submit under the new binding, then Fail"
+        (render (last effects) = "Cancel(1) Send(b:8,-,0,s) Fail(InputCancelled(1,rebind)) Fail(InputCancelled(2,rebind))")
+        (render (last effects))
+
+/// The rendered effects of every randomized step, in order: part of the digest the .NET and Fable runs must agree on.
+let transcript = ResizeArray<string>()
+
+/// An independent reference model of the command stage (ADR 0001 stage 3), for the randomized pass: which commands
+/// are open and in what running state, where their patience starts, which are applied at what version, and the
+/// failures each message must route.
+type private OracleState =
+    | OOpen of kind: string
+    | OApplied of version: uint64
+    | OFinal
+
+type private OracleEntry =
+    {
+        Id: string
+        Command: string
+        mutable State: OracleState
+        mutable Origin: uint64
+    }
+
+/// Randomized invariants over 200 scripts of 50 messages, every message kind generated (stale replies, RearmGuest,
+/// Faulted, start deadlines, every answer, older and non-+1 versions, rebinds above the highest sequence issued):
+/// P1 (ids unique, sequences rising), P2 (one call), P5 (a stale reply changes nothing), P10 (no batch carries both a
+/// Local and a StartGuest; Continue is last), P11 (the window is never exceeded; a decision fits whole or not at all),
+/// and, against the reference model, P14 (predicted and shown), P15, P16 (patience), P17 (settlement), P18 and P18b
+/// (answers, first final wins).
 let invariants () =
     let rng = Rng 20261102
     let mutable violations = []
-    let scripts = 150
+    let scripts = 200
+    let window = 3
+    let patienceOf = 4UL
+    let counts = System.Collections.Generic.Dictionary<string, int>()
+
+    let count (kind: string) =
+        counts.[kind] <-
+            (match counts.TryGetValue kind with
+             | true, n -> n + 1
+             | _ -> 1)
 
     for script in 1..scripts do
+        let violation (text: string) =
+            violations <- sprintf "script %d: %s" script text :: violations
+
         let pipeline =
             pipelineOf
                 (GuestPolicy.standard
                  |> GuestPolicy.withQueueLimit 3
                  |> GuestPolicy.withBreaker 2)
                 (stage ()
-                 |> CommandStage.withWindow 3
-                 |> CommandStage.withPatience 4UL
-                 |> CommandStage.withPrediction (fun c s -> { s with Items = s.Items @ [ c ] }))
+                 |> CommandStage.withWindow window
+                 |> CommandStage.withPatience patienceOf
+                 |> CommandStage.withSettlement (fun c s -> List.contains c s.Items)
+                 |> withPrediction)
 
         let mutable model = InputPipeline.init pipeline "c" None (server 0UL [])
         let mutable version = 0UL
@@ -955,17 +1397,39 @@ let invariants () =
         let seenIds = System.Collections.Generic.HashSet<string>()
         let mutable lastSeq = 0UL
         let mutable binding = 0
+        // The reference model.
+        let oracle = ResizeArray<OracleEntry>()
+        let mutable authV = 0UL
+        let mutable heard = 0UL
+        let mutable answer: (string * uint64) option = None
+        let isOpen (entry: OracleEntry) =
+            match entry.State with
+            | OOpen _ -> true
+            | _ -> false
 
-        for _ in 1..40 do
+        let openCount () = oracle |> Seq.filter isOpen |> Seq.length
+
+        let patience () =
+            [
+                for entry in oracle do
+                    if isOpen entry && heard >= entry.Origin && heard - entry.Origin >= patienceOf then
+                        entry.State <- OFinal
+                        yield "CommandUnconfirmed(" + entry.Id + ")"
+            ]
+
+        for _ in 1..50 do
+            answer <- None
+            let issued = oracle |> Seq.map (fun entry -> entry.Command) |> List.ofSeq
+
             let msg: Msg =
-                match rng.Next 12, flight with
-                | 0, _
-                | 1, _ -> scene InputAction.Activate (string (rng.Next 5))
-                | 2, _ -> scene InputAction.Hover (string (rng.Next 5))
-                | 3, _ -> PipelineMsg.Submit(sprintf "s%d" (rng.Next 9))
-                | 4, Some call -> PipelineMsg.GuestRunning(GuestCall.id call)
-                | 5, Some call ->
-                    let n = rng.Next 3
+                match rng.Next 24, flight with
+                | (0 | 1 | 2), _ -> scene InputAction.Activate (string (rng.Next 5))
+                | 3, _ -> scene InputAction.Hover (string (rng.Next 5))
+                | 4, _ -> game (string (rng.Next 3))
+                | 5, _ -> PipelineMsg.Submit(sprintf "s%d" (rng.Next 9))
+                | 6, Some call -> PipelineMsg.GuestRunning(GuestCall.id call)
+                | (7 | 8), Some call ->
+                    let n = rng.Next 4
 
                     PipelineMsg.GuestEnded(
                         GuestCall.id call,
@@ -975,36 +1439,88 @@ let invariants () =
                                     if rng.Next 2 = 0 then
                                         local "l"
                                     else
-                                        submit (sprintf "d%d" i)
+                                        submit (sprintf "d%d" (rng.Next 9))
                             ]
                     )
-                | 6, Some call -> PipelineMsg.GuestDeadline(GuestCall.id call)
-                | 7, _ ->
-                    version <- version + uint64 (rng.Next 3)
-                    PipelineMsg.Authoritative(server version [])
-                | 8, _ -> PipelineMsg.Heartbeat(version + uint64 (rng.Next 6))
-                | 9, _ ->
-                    match InputPipeline.unsettled model with
-                    | [] -> PipelineMsg.StartNext
-                    | open' ->
-                        let id = fst open'.[rng.Next open'.Length]
+                | 9, Some call ->
+                    let outcome =
+                        match rng.Next 4 with
+                        | 0 -> GuestOutcome.Faulted "trap"
+                        | 1 -> GuestOutcome.Refused "no"
+                        | 2 -> GuestOutcome.Cancelled "frozen"
+                        | _ -> GuestOutcome.TimedOut
 
-                        let ack =
-                            match rng.Next 5 with
-                            | 0 -> CommandAck.accepted
-                            | 1 -> CommandAck.started
-                            | 2 -> CommandAck.applied (version + 1UL)
-                            | 3 -> CommandAck.rejected "r"
-                            | _ -> CommandAck.cancelled "c"
+                    PipelineMsg.GuestEnded(GuestCall.id call, outcome)
+                | 10, Some call -> PipelineMsg.GuestDeadline(GuestCall.id call)
+                | 11, Some call -> PipelineMsg.GuestStartDeadline(GuestCall.id call)
+                | 12, _ when lastCall > 0UL ->
+                    // A stale reply: for a call that is not the one in flight.
+                    let stale = 1UL + uint64 (rng.Next(int lastCall))
 
-                        PipelineMsg.Acknowledged(id, ack)
-                | 10, _ ->
+                    if flight |> Option.exists (fun call -> GuestCall.id call = stale) then
+                        PipelineMsg.StartNext
+                    else
+                        PipelineMsg.GuestEnded(stale, decided [ submit "stale" ])
+                | (13 | 14), _ ->
+                    version <- version + uint64 (rng.Next 4)
+                    let items = issued |> List.filter (fun _ -> rng.Next 3 = 0)
+                    PipelineMsg.Authoritative(server version items)
+                | 15, _ when version > 0UL -> PipelineMsg.Authoritative(server (version - 1UL) issued)
+                | 16, _ -> PipelineMsg.Heartbeat(version + uint64 (rng.Next 6))
+                | (17 | 18 | 19), _ when oracle.Count > 0 ->
+                    let entry = oracle.[rng.Next oracle.Count]
+                    let at = version + uint64 (rng.Next 3)
+
+                    // The answer is opaque, so the generator tells the reference model what it is.
+                    let described, ack =
+                        match rng.Next 9 with
+                        | 0 -> "accepted", CommandAck.accepted
+                        | 1 -> "queued", CommandAck.queued
+                        | 2 -> "running", CommandAck.started
+                        | 3 -> "running", CommandAck.progress "p"
+                        | 4 -> "applied", CommandAck.applied at
+                        | 5 -> "applied", CommandAck.ended at "o"
+                        | 6 -> "rejected", CommandAck.rejected "r"
+                        | 7 -> "cancelled", CommandAck.cancelled "c"
+                        | _ -> "expired", CommandAck.expired
+
+                    answer <- Some(described, at)
+                    PipelineMsg.Acknowledged((CommandId.tryParse entry.Id).Value, ack)
+                | 20, _ -> PipelineMsg.RearmGuest
+                | 21, _ when rng.Next 2 = 0 ->
                     binding <- binding + 1
-                    PipelineMsg.Rebind(sprintf "c%d" binding, Some(uint64 (rng.Next 4)))
+
+                    let last =
+                        if rng.Next 2 = 0 then
+                            lastSeq + uint64 (rng.Next 4)
+                        else
+                            uint64 (rng.Next 3)
+
+                    PipelineMsg.Rebind(sprintf "c%d" binding, Some last)
                 | _ -> PipelineMsg.StartNext
 
+            let kind =
+                match msg with
+                | PipelineMsg.Input _ -> "input"
+                | PipelineMsg.Submit _ -> "submit"
+                | PipelineMsg.StartNext -> "startNext"
+                | PipelineMsg.GuestRunning _ -> "running"
+                | PipelineMsg.GuestStartDeadline _ -> "startDeadline"
+                | PipelineMsg.GuestEnded(_, GuestOutcome.Decided _) -> "decided"
+                | PipelineMsg.GuestEnded _ -> "ended"
+                | PipelineMsg.GuestDeadline _ -> "deadline"
+                | PipelineMsg.RearmGuest -> "rearm"
+                | PipelineMsg.Acknowledged _ -> "ack"
+                | PipelineMsg.Authoritative _ -> "authoritative"
+                | PipelineMsg.Heartbeat _ -> "heartbeat"
+                | PipelineMsg.Rebind _ -> "rebind"
+
+            count kind
+            let openBefore = openCount ()
+            let flightBefore = flight
             let next, effects = InputPipeline.update pipeline msg model
             model <- next
+            transcript.Add(render effects)
 
             let hasLocal =
                 effects
@@ -1016,9 +1532,7 @@ let invariants () =
             let startCount = (starts effects).Length
 
             if hasLocal && startCount > 0 then
-                violations <-
-                    sprintf "script %d: a batch carries ApplyLocal and StartGuest" script
-                    :: violations
+                violation "a batch carries ApplyLocal and StartGuest"
 
             let isContinue (e: Effect) =
                 match e with
@@ -1026,47 +1540,216 @@ let invariants () =
                 | _ -> false
 
             if effects |> List.exists isContinue && not (isContinue (last effects)) then
-                violations <- sprintf "script %d: Continue is not last" script :: violations
+                violation "Continue is not last"
 
             if startCount > 1 then
-                violations <- sprintf "script %d: two calls started" script :: violations
+                violation "two calls started"
+
+            // P5: a reply for a call that is not in flight changes nothing.
+            match msg with
+            | PipelineMsg.GuestEnded(call, _) when not (flightBefore |> Option.exists (fun f -> GuestCall.id f = call)) ->
+                if not effects.IsEmpty then
+                    violation ("a stale reply had effects: " + render effects)
+            | _ -> ()
 
             for call in starts effects do
                 if GuestCall.id call <= lastCall then
-                    violations <- sprintf "script %d: call id repeated" script :: violations
+                    violation "call id repeated"
 
                 if flight.IsSome then
-                    violations <- sprintf "script %d: a call started while one is in flight" script :: violations
+                    violation "a call started while one is in flight"
 
                 lastCall <- GuestCall.id call
                 flight <- Some call
+
+            let sent = ResizeArray<string>()
 
             for e in effects do
                 match e with
                 | PipelineEffect.Send envelope ->
                     let text = idText (CommandEnvelope.id envelope)
+                    sent.Add(CommandEnvelope.command envelope)
 
                     if not (seenIds.Add text) then
-                        violations <- sprintf "script %d: id %s issued twice" script text :: violations
+                        violation ("id issued twice: " + text)
 
                     if CommandId.sequence (CommandEnvelope.id envelope) <= lastSeq then
-                        violations <- sprintf "script %d: command sequence did not rise" script :: violations
+                        violation "command sequence did not rise"
 
                     lastSeq <- CommandId.sequence (CommandEnvelope.id envelope)
+
+                    if CommandEnvelope.basis envelope <> authV then
+                        violation ("a command's basis is not the authoritative version: " + text)
+
+                    oracle.Add
+                        {
+                            Id = text
+                            Command = CommandEnvelope.command envelope
+                            State = OOpen "pending"
+                            Origin = max authV heard
+                        }
                 | PipelineEffect.Continue
                 | PipelineEffect.CancelGuest _ -> flight <- None
                 | _ -> ()
 
+            // P11: a decision fits whole, or not at all.
+            match msg with
+            | PipelineMsg.GuestEnded(call, GuestOutcome.Decided intents) when
+                flightBefore |> Option.exists (fun f -> GuestCall.id f = call)
+                ->
+                let wanted =
+                    intents
+                    |> List.choose (fun intent ->
+                        match intent with
+                        | GuestIntent.Submit c -> Some c
+                        | _ -> None)
+
+                let full =
+                    fails effects
+                    |> List.exists (fun f -> f.StartsWith "CommandWindowFull(")
+
+                if not wanted.IsEmpty && openBefore + wanted.Length > window then
+                    if not full || sent.Count > 0 || hasLocal then
+                        violation ("a decision that does not fit applied something: " + render effects)
+                elif List.ofSeq sent <> wanted || full then
+                    violation ("a decision that fits was not sent whole: " + render effects)
+            | _ -> ()
+
+            // The reference model's own transition, and the command failures it says this message routes.
+            let expected =
+                match msg with
+                | PipelineMsg.Acknowledged(id, _) ->
+                    let text = idText id
+
+                    match oracle |> Seq.tryFind (fun entry -> entry.Id = text), answer with
+                    | Some entry, Some(answered, at) when isOpen entry ->
+                        let restart kind =
+                            entry.State <- OOpen kind
+                            entry.Origin <- heard
+                            []
+
+                        match answered with
+                        | "accepted" ->
+                            restart (
+                                match entry.State with
+                                | OOpen "pending" -> "accepted"
+                                | OOpen kind -> kind
+                                | _ -> "accepted"
+                            )
+                        | "queued" -> restart "queued"
+                        | "running" -> restart "running"
+                        | "applied" ->
+                            entry.State <- OApplied at
+                            []
+                        | "rejected" ->
+                            entry.State <- OFinal
+                            [ "CommandRejected(" + text + ",r)" ]
+                        | "cancelled" ->
+                            entry.State <- OFinal
+                            [ "CommandCancelled(" + text + ",c)" ]
+                        | _ ->
+                            entry.State <- OFinal
+                            [ "CommandUnconfirmed(" + text + ")" ]
+                    | _ -> []
+                | PipelineMsg.Authoritative state ->
+                    let v = state.V
+
+                    if v < authV then
+                        []
+                    else
+                        authV <- v
+                        heard <- max heard v
+
+                        for entry in oracle do
+                            if isOpen entry && List.contains entry.Command state.Items then
+                                entry.State <- OApplied v
+
+                        patience ()
+                | PipelineMsg.Heartbeat v ->
+                    heard <- max heard v
+                    patience ()
+                | _ -> []
+
+            let routed =
+                fails effects
+                |> List.filter (fun f ->
+                    f.StartsWith "CommandUnconfirmed("
+                    || f.StartsWith "CommandRejected("
+                    || f.StartsWith "CommandCancelled(")
+
+            if routed <> expected then
+                violation (
+                    "routed "
+                    + String.concat "," routed
+                    + " but the reference model routes "
+                    + String.concat "," expected
+                )
+
+            if openCount () > window then
+                violation "the window was exceeded"
+
+            let openIds =
+                oracle
+                |> Seq.choose (fun entry ->
+                    match entry.State with
+                    | OOpen kind -> Some(entry.Id + "=" + kind)
+                    | _ -> None)
+                |> String.concat ","
+
+            let unsettled =
+                InputPipeline.unsettled model
+                |> List.map (fun (id, settlement) ->
+                    idText id
+                    + "="
+                    + (if CommandSettlement.isPending settlement then "pending"
+                       elif CommandSettlement.isRunning settlement then "running"
+                       elif CommandSettlement.isQueued settlement then "queued"
+                       elif CommandSettlement.isAccepted settlement then "accepted"
+                       else "?"))
+                |> String.concat ","
+
+            if unsettled <> openIds then
+                violation ("unsettled " + unsettled + " but the reference model has " + openIds)
+
             let displayed = InputPipeline.displayed model
 
+            if (Displayed.authoritative displayed).V <> authV then
+                violation "the authoritative version is not the reference model's"
+
+            let predicted =
+                oracle
+                |> Seq.filter (fun entry ->
+                    match entry.State with
+                    | OOpen _ -> true
+                    | OApplied v -> v > authV
+                    | OFinal -> false)
+                |> List.ofSeq
+
+            if predictedText model <> (predicted |> List.map (fun entry -> entry.Id) |> String.concat ",") then
+                violation ("predicted " + predictedText model + " is not the reference model's")
+
             if
-                (Displayed.shown displayed).Items.Length
-                <> (Displayed.predicted displayed).Length
+                (Displayed.shown displayed).Items
+                <> (Displayed.authoritative displayed).Items @ (predicted |> List.map (fun entry -> entry.Command))
             then
-                violations <- sprintf "script %d: shown is not the fold of predicted" script :: violations
+                violation "shown is not predict folded over predicted"
 
     check
-        "P1,P2,P10,P14"
-        (sprintf "randomized invariants over %d scripts of 40 messages" scripts)
+        "P1,P2,P5,P10,P11,P14-P18b"
+        (sprintf "randomized invariants against a reference model over %d scripts of 50 messages" scripts)
         violations.IsEmpty
-        (violations |> List.truncate 3 |> String.concat "; ")
+        (violations |> List.rev |> List.truncate 3 |> String.concat "; ")
+
+    let generated =
+        [ "input"; "submit"; "startNext"; "running"; "startDeadline"; "decided"; "ended"; "deadline"; "rearm"; "ack"; "authoritative"; "heartbeat"; "rebind" ]
+        |> List.map (fun kind ->
+            kind,
+            (match counts.TryGetValue kind with
+             | true, n -> n
+             | _ -> 0))
+
+    check
+        "P1,P2,P5,P10,P11,P14-P18b"
+        "the randomized pass generates every message kind"
+        (generated |> List.forall (fun (_, n) -> n > 0))
+        (generated |> List.map (fun (k, n) -> sprintf "%s=%d" k n) |> String.concat " ")

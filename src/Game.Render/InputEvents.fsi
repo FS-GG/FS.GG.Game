@@ -39,8 +39,8 @@ module InputModifiers =
 /// What the player did. Unlike `SelectionRequest`, an action is reported whether or not it changes the selection: a
 /// second activation of the selected object is an `Activate` too (FS.GG.Game#771).
 ///
-/// **Extension policy:** this union is OPEN. Continuous input (drag, wheel, press and release) arrives later as new
-/// cases in a minor version, never as a change to these. Match it with a wildcard case.
+/// **Extension policy:** this union is CLOSED (FS.GG.Game#788 union policy). A new case, such as continuous input (drag,
+/// wheel, press and release), is a major version change, so a game may match it exhaustively.
 [<RequireQualifiedAccess>]
 type InputAction =
     /// The primary activation: a primary pointer press, Enter or Space on the focused object, or a mirror button. A
@@ -116,7 +116,9 @@ module InputEvent =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The `SelectionRequest` a game without a pipeline hears for `event` on `frame`, so the existing `SelectionRoute`
     /// keeps its meaning: an unrepeated `Activate` of an object that is not selected asks to select it, an unrepeated
-    /// `Cancel` with a selection asks to clear it, and anything else asks for nothing.
+    /// `Cancel` with a selection asks to clear it, and anything else asks for nothing. A press on empty ground (an
+    /// `Activate` with no target) asks for nothing, as a press where no object is always has on every backend
+    /// (`SceneInteraction.press`); only `Cancel` clears.
     val toSelectionRequest: frame: InteractiveScene -> event: InputEvent -> SelectionRequest option
 
 /// Public contract type exposed by the FS.GG.Game.Render package.

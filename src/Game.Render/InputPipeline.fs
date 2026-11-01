@@ -213,40 +213,43 @@ module InputGuest =
                     return ofReply decode reply
                 }
 
-        async {
-            let admitted =
-                match guest.Admit with
-                | None -> Choice1Of3()
-                | Some admit ->
-                    try
-                        match admit request.Client with
-                        | Ok() -> Choice1Of3()
-                        | Error reason -> Choice2Of3 reason
-                    with error ->
-                        Choice3Of3 error.Message
-
-            match admitted with
-            | Choice2Of3 reason -> return GuestOutcome.Refused reason
-            | Choice3Of3 reason -> return GuestOutcome.Faulted reason
-            | Choice1Of3() ->
-                let! outcome =
-                    async {
+        // Every ending becomes an outcome (FS.GG.Game#788): the body runs under `token`, an exception is `Faulted` (or
+        // `Cancelled` once the token is cancelled, such as an OperationCanceledException), and a cancellation is
+        // `Cancelled`. A decision that completes after the token was cancelled is `Cancelled` too: the async runtime
+        // routes it to the cancellation continuation, on .NET and on Fable (P13 pins it on both). Nothing raises.
+        let body: Async<GuestOutcome<'Local, 'Command>> =
+            async {
+                let admitted =
+                    match guest.Admit with
+                    | None -> Choice1Of3()
+                    | Some admit ->
                         try
-                            return! decided ()
+                            match admit request.Client with
+                            | Ok() -> Choice1Of3()
+                            | Error reason -> Choice2Of3 reason
                         with error ->
-                            return faulted error
-                    }
-                    |> Async.Catch
+                            Choice3Of3 error.Message
 
-                return
-                    match outcome with
-                    | Choice1Of2 outcome when token.IsCancellationRequested ->
-                        match outcome with
-                        | GuestOutcome.Decided _ -> GuestOutcome.Cancelled "cancelled"
-                        | other -> other
-                    | Choice1Of2 outcome -> outcome
-                    | Choice2Of2 error -> faulted error
-        }
+                match admitted with
+                | Choice2Of3 reason -> return GuestOutcome.Refused reason
+                | Choice3Of3 reason -> return GuestOutcome.Faulted reason
+                | Choice1Of3() -> return! decided ()
+            }
+
+        Async.FromContinuations(fun (resolve, _, _) ->
+            Async.StartWithContinuations(
+                body,
+                resolve,
+                (fun error ->
+                    resolve (
+                        if token.IsCancellationRequested then
+                            GuestOutcome.Cancelled "cancelled"
+                        else
+                            faulted error
+                    )),
+                (fun _ -> resolve (GuestOutcome.Cancelled "cancelled")),
+                token
+            ))
 
 type CommandId =
     private
@@ -472,8 +475,9 @@ module Displayed =
 
     let predicted (displayed: Displayed<'Server>) = displayed.Predicted
 
-[<RequireQualifiedAccess>]
+/// Opaque behind the .fsi (FS.GG.Game#788 union policy): new failures are additive builders and predicates.
 type PipelineFailure =
+    private
     | GuestFaulted of sequence: uint64 * reason: string
     | GuestTimedOut of sequence: uint64
     | GuestHalted of failures: int
@@ -485,6 +489,94 @@ type PipelineFailure =
     | CommandCancelled of id: CommandId * reason: string
     | CommandUnconfirmed of id: CommandId
     | RebindRefused of reason: string
+    | EffectFailed of effect: string * reason: string
+
+[<RequireQualifiedAccess>]
+module PipelineFailure =
+
+    let guestFaulted (sequence: uint64) (reason: string) = GuestFaulted(sequence, reason)
+    let guestTimedOut (sequence: uint64) = GuestTimedOut sequence
+    let guestHalted (failures: int) = GuestHalted failures
+    let inputRefused (sequence: uint64) (reason: string) = InputRefused(sequence, reason)
+    let inputCancelled (sequence: uint64) (reason: string) = InputCancelled(sequence, reason)
+    let queueOverflow (dropped: uint64 list) = QueueOverflow dropped
+    let commandWindowFull (sequence: uint64 option) = CommandWindowFull sequence
+    let commandRejected (id: CommandId) (reason: string) = CommandRejected(id, reason)
+    let commandCancelled (id: CommandId) (reason: string) = CommandCancelled(id, reason)
+    let commandUnconfirmed (id: CommandId) = CommandUnconfirmed id
+    let rebindRefused (reason: string) = RebindRefused reason
+    let effectFailed (effect: string) (reason: string) = EffectFailed(effect, reason)
+
+    let isGuestFaulted failure = match failure with GuestFaulted _ -> true | _ -> false
+    let isGuestTimedOut failure = match failure with GuestTimedOut _ -> true | _ -> false
+    let isGuestHalted failure = match failure with GuestHalted _ -> true | _ -> false
+    let isInputRefused failure = match failure with InputRefused _ -> true | _ -> false
+    let isInputCancelled failure = match failure with InputCancelled _ -> true | _ -> false
+    let isQueueOverflow failure = match failure with QueueOverflow _ -> true | _ -> false
+    let isCommandWindowFull failure = match failure with CommandWindowFull _ -> true | _ -> false
+    let isCommandRejected failure = match failure with CommandRejected _ -> true | _ -> false
+    let isCommandCancelled failure = match failure with CommandCancelled _ -> true | _ -> false
+    let isCommandUnconfirmed failure = match failure with CommandUnconfirmed _ -> true | _ -> false
+    let isRebindRefused failure = match failure with RebindRefused _ -> true | _ -> false
+    let isEffectFailed failure = match failure with EffectFailed _ -> true | _ -> false
+
+    let haltsGuest failure =
+        match failure with
+        | GuestFaulted _
+        | GuestHalted _ -> true
+        | _ -> false
+
+    let sequence failure =
+        match failure with
+        | GuestFaulted(sequence, _)
+        | GuestTimedOut sequence
+        | InputRefused(sequence, _)
+        | InputCancelled(sequence, _) -> Some sequence
+        | CommandWindowFull sequence -> sequence
+        | _ -> None
+
+    let dropped failure =
+        match failure with
+        | QueueOverflow dropped -> dropped
+        | _ -> []
+
+    let command failure =
+        match failure with
+        | CommandRejected(id, _)
+        | CommandCancelled(id, _)
+        | CommandUnconfirmed id -> Some id
+        | _ -> None
+
+    let reason failure =
+        match failure with
+        | GuestFaulted(_, reason)
+        | InputRefused(_, reason)
+        | InputCancelled(_, reason)
+        | CommandRejected(_, reason)
+        | CommandCancelled(_, reason)
+        | RebindRefused reason
+        | EffectFailed(_, reason) -> Some reason
+        | _ -> None
+
+    let failures failure =
+        match failure with
+        | GuestHalted failures -> Some failures
+        | _ -> None
+
+    let text failure =
+        match failure with
+        | GuestFaulted(s, r) -> sprintf "GuestFaulted(%d,%s)" s r
+        | GuestTimedOut s -> sprintf "GuestTimedOut(%d)" s
+        | GuestHalted n -> sprintf "GuestHalted(%d)" n
+        | InputRefused(s, r) -> sprintf "InputRefused(%d,%s)" s r
+        | InputCancelled(s, r) -> sprintf "InputCancelled(%d,%s)" s r
+        | QueueOverflow dropped -> "QueueOverflow(" + (dropped |> List.map string |> String.concat ",") + ")"
+        | CommandWindowFull s -> "CommandWindowFull(" + (s |> Option.map string |> Option.defaultValue "-") + ")"
+        | CommandRejected(id, r) -> sprintf "CommandRejected(%s,%s)" (CommandId.text id) r
+        | CommandCancelled(id, r) -> sprintf "CommandCancelled(%s,%s)" (CommandId.text id) r
+        | CommandUnconfirmed id -> sprintf "CommandUnconfirmed(%s)" (CommandId.text id)
+        | RebindRefused r -> sprintf "RebindRefused(%s)" r
+        | EffectFailed(e, r) -> sprintf "EffectFailed(%s,%s)" e r
 
 [<RequireQualifiedAccess>]
 type PipelineMsg<'Input, 'Server, 'Local, 'Command> =
@@ -638,7 +730,7 @@ module InputPipeline =
                     && model.Heard >= entry.Origin
                     && model.Heard - entry.Origin >= stage.Patience
                 then
-                    fails.Add(PipelineFailure.CommandUnconfirmed entry.Id)
+                    fails.Add(PipelineFailure.commandUnconfirmed entry.Id)
                     { entry with State = Unconfirmed }
                 else
                     entry)
@@ -660,7 +752,9 @@ module InputPipeline =
                 Id = id
                 Command = command
                 State = Pending
-                Origin = model.AuthVersion
+                // FS.GG.Game#788 (B1): patience counts from the later of the basis and the version heard at issue, so
+                // heartbeats heard before the command was sent never count against it.
+                Origin = max model.AuthVersion model.Heard
             }
 
         { model with
@@ -717,7 +811,7 @@ module InputPipeline =
                 model <- { model with Queue = rest }
 
                 if openCount model >= pipeline.Commands.Window then
-                    fails.Add(PipelineEffect.Fail(PipelineFailure.CommandWindowFull None))
+                    fails.Add(PipelineEffect.Fail(PipelineFailure.commandWindowFull None))
                 else
                     let next, id = issue model command
                     model <- next
@@ -778,7 +872,7 @@ module InputPipeline =
 
             let halt (model: PipelineModel<'Input, 'Server, 'Local, 'Command>) =
                 dropGuestInputs
-                    (fun sequence -> PipelineFailure.InputRefused(sequence, "guest halted"))
+                    (fun sequence -> PipelineFailure.inputRefused sequence "guest halted")
                     { model with Halted = true }
 
             let model, intents, fails =
@@ -795,7 +889,7 @@ module InputPipeline =
                     let model = { model with Timeouts = 0 }
 
                     if submits > 0 && openCount model + submits > pipeline.Commands.Window then
-                        model, [], [ PipelineFailure.CommandWindowFull(Some flight.Sequence) ]
+                        model, [], [ PipelineFailure.commandWindowFull (Some flight.Sequence) ]
                     else
                         let mutable model = model
 
@@ -811,12 +905,12 @@ module InputPipeline =
 
                         model, effects, []
                 | GuestOutcome.Refused reason ->
-                    { model with Timeouts = 0 }, [], [ PipelineFailure.InputRefused(flight.Sequence, reason) ]
+                    { model with Timeouts = 0 }, [], [ PipelineFailure.inputRefused flight.Sequence reason ]
                 | GuestOutcome.Cancelled reason ->
-                    model, [], [ PipelineFailure.InputCancelled(flight.Sequence, reason) ]
+                    model, [], [ PipelineFailure.inputCancelled flight.Sequence reason ]
                 | GuestOutcome.Faulted reason ->
                     let model, refused = halt model
-                    model, [], PipelineFailure.GuestFaulted(flight.Sequence, reason) :: refused
+                    model, [], PipelineFailure.guestFaulted flight.Sequence reason :: refused
                 | GuestOutcome.TimedOut ->
                     let timeouts = model.Timeouts + 1
                     let model = { model with Timeouts = timeouts }
@@ -826,11 +920,11 @@ module InputPipeline =
 
                         model,
                         [],
-                        PipelineFailure.GuestTimedOut flight.Sequence
-                        :: PipelineFailure.GuestHalted timeouts
+                        PipelineFailure.guestTimedOut flight.Sequence
+                        :: PipelineFailure.guestHalted timeouts
                         :: refused
                     else
-                        model, [], [ PipelineFailure.GuestTimedOut flight.Sequence ]
+                        model, [], [ PipelineFailure.guestTimedOut flight.Sequence ]
 
             model,
             cancels
@@ -884,13 +978,13 @@ module InputPipeline =
             let sequence, model = nextInput model
 
             if model.Halted then
-                model, [ PipelineEffect.Fail(PipelineFailure.InputRefused(sequence, "guest halted")) ]
+                model, [ PipelineEffect.Fail(PipelineFailure.inputRefused sequence "guest halted") ]
             else
                 let queue = model.Queue |> List.filter (coalesces input >> not)
                 let guestItems = queue |> List.filter isGuestItem |> List.length
 
                 if guestItems >= pipeline.Guest.Policy.QueueLimit then
-                    { model with Queue = queue }, [ PipelineEffect.Fail(PipelineFailure.QueueOverflow [ sequence ]) ]
+                    { model with Queue = queue }, [ PipelineEffect.Fail(PipelineFailure.queueOverflow [ sequence ]) ]
                 else
                     andStart
                         pipeline
@@ -938,27 +1032,30 @@ module InputPipeline =
             if System.String.IsNullOrWhiteSpace client then
                 model,
                 [
-                    PipelineEffect.Fail(PipelineFailure.RebindRefused "a client binding must not be blank")
+                    PipelineEffect.Fail(PipelineFailure.rebindRefused "a client binding must not be blank")
                 ]
             else
                 let cancels, cancelled =
                     match model.InFlight with
                     | Some flight ->
                         [ PipelineEffect.CancelGuest flight.Call ],
-                        [ PipelineFailure.InputCancelled(flight.Sequence, "rebind") ]
+                        [ PipelineFailure.inputCancelled flight.Sequence "rebind" ]
                     | None -> [], []
 
+                // `Draining` is kept (FS.GG.Game#788, B2): a call that ended before the rebind still has its `StartNext`
+                // on the way, behind the game's messages for its `Local`s, and the next call must wait for it (P7b).
+                // Queued `Submit`s stay and are sent under the new binding.
                 let model, dropped =
                     dropGuestInputs
-                        (fun sequence -> PipelineFailure.InputCancelled(sequence, "rebind"))
+                        (fun sequence -> PipelineFailure.inputCancelled sequence "rebind")
                         { model with
                             Client = client
                             LastSequence = max model.LastSequence (defaultArg lastSequence 0UL)
                             InFlight = None
-                            Draining = false
                         }
 
-                andStart pipeline model (cancels @ ((cancelled @ dropped) |> List.map PipelineEffect.Fail))
+                let model, sends, windowFails, start = startNext pipeline model
+                model, cancels @ sends @ ((cancelled @ dropped) |> List.map PipelineEffect.Fail) @ windowFails @ start
         | PipelineMsg.Acknowledged(id, ack) ->
             match model.Ledger |> List.tryFind (fun entry -> entry.Id = id) with
             | Some entry when isOpen entry.State ->
@@ -999,14 +1096,14 @@ module InputPipeline =
                             { entry with
                                 State = CancelledAfter reason
                             },
-                        [ PipelineFailure.CommandCancelled(id, reason) ]
+                        [ PipelineFailure.commandCancelled id reason ]
                     | Rejected reason ->
                         Some
                             { entry with
                                 State = RejectedBefore reason
                             },
-                        [ PipelineFailure.CommandRejected(id, reason) ]
-                    | Expired -> Some { entry with State = Unconfirmed }, [ PipelineFailure.CommandUnconfirmed id ]
+                        [ PipelineFailure.commandRejected id reason ]
+                    | Expired -> Some { entry with State = Unconfirmed }, [ PipelineFailure.commandUnconfirmed id ]
 
                 match changed with
                 | Some updated ->
@@ -1117,31 +1214,56 @@ type PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>
     let forget (id: uint64) =
         calls <- calls |> List.filter (fun (call, _) -> call <> id)
 
+    /// Nothing reaches the game after `Dispose`: a late guest reply, a deadline timer that fires later, a `Continue`.
+    let send (msg: PipelineMsg<'Input, 'Server, 'Local, 'Command>) =
+        if not disposed then
+            dispatch msg
+
+    /// An exception from one of the game's `io` callbacks never escapes a batch (FS.GG.Game#788): the rest of the
+    /// batch runs, and the exception is routed to `io.Fail` as `EffectFailed`. An exception from `io.Fail` itself is
+    /// dropped, because there is nowhere left to route it.
+    let guard (name: string) (action: unit -> unit) =
+        try
+            action ()
+        with error ->
+            try
+                io.Fail(PipelineFailure.effectFailed name error.Message)
+            with _ ->
+                ()
+
     member internal _.Perform(effect: PipelineEffect<'Input, 'Local, 'Command>) =
         if not disposed then
             match effect with
             | PipelineEffect.StartGuest call ->
                 let source = new System.Threading.CancellationTokenSource()
                 calls <- (call.Id, source) :: calls
-                let request = GuestRequest.create call (io.Client())
                 let mutable running = false
 
                 let started () =
                     if not running then
                         running <- true
-                        dispatch (PipelineMsg.GuestRunning call.Id)
+                        send (PipelineMsg.GuestRunning call.Id)
 
                 let ended outcome =
                     forget call.Id
-                    dispatch (PipelineMsg.GuestEnded(call.Id, outcome))
+                    send (PipelineMsg.GuestEnded(call.Id, outcome))
 
-                Async.StartWithContinuations(
-                    InputGuest.run pipeline.Guest request started source.Token,
-                    ended,
-                    (fun error -> ended (GuestOutcome.Faulted error.Message)),
-                    (fun _ -> ended (GuestOutcome.Cancelled "cancelled")),
-                    source.Token
-                )
+                // `client ()` is read now; an exception from it ends the call `Faulted`, like one from the guest.
+                match
+                    (try
+                        Ok(GuestRequest.create call (io.Client()))
+                     with error ->
+                         Error error.Message)
+                with
+                | Error reason -> ended (GuestOutcome.Faulted reason)
+                | Ok request ->
+                    Async.StartWithContinuations(
+                        InputGuest.run pipeline.Guest request started source.Token,
+                        ended,
+                        (fun error -> ended (GuestOutcome.Faulted error.Message)),
+                        (fun _ -> ended (GuestOutcome.Cancelled "cancelled")),
+                        source.Token
+                    )
             | PipelineEffect.CancelGuest id ->
                 match calls |> List.tryFind (fun (call, _) -> call = id) with
                 | Some(_, source) ->
@@ -1149,13 +1271,18 @@ type PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>
                     source.Cancel()
                 | None -> ()
             | PipelineEffect.ArmStartDeadline(id, milliseconds) ->
-                io.Schedule milliseconds (fun () -> dispatch (PipelineMsg.GuestStartDeadline id))
+                guard "schedule" (fun () ->
+                    io.Schedule milliseconds (fun () -> send (PipelineMsg.GuestStartDeadline id)))
             | PipelineEffect.ArmDeadline(id, milliseconds) ->
-                io.Schedule milliseconds (fun () -> dispatch (PipelineMsg.GuestDeadline id))
-            | PipelineEffect.Continue -> dispatch PipelineMsg.StartNext
-            | PipelineEffect.ApplyLocal local -> io.ApplyLocal local
-            | PipelineEffect.Send envelope -> io.Send envelope
-            | PipelineEffect.Fail failure -> io.Fail failure
+                guard "schedule" (fun () -> io.Schedule milliseconds (fun () -> send (PipelineMsg.GuestDeadline id)))
+            | PipelineEffect.Continue -> send PipelineMsg.StartNext
+            | PipelineEffect.ApplyLocal local -> guard "applyLocal" (fun () -> io.ApplyLocal local)
+            | PipelineEffect.Send envelope -> guard "send" (fun () -> io.Send envelope)
+            | PipelineEffect.Fail failure ->
+                try
+                    io.Fail failure
+                with _ ->
+                    ()
 
     member internal _.Dispose() =
         if not disposed then

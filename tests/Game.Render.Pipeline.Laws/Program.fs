@@ -123,8 +123,9 @@ let private asyncLaws =
             (syncText = "Decided(L:7)" && syncStarted = 1)
             syncText
 
-        // P20: one golden vector per FS.GG.Wasm.Contracts.TerminalState, through ofBytes and run (an F# stand-in for the
-        // module; the Rust module answers the same vectors in CI).
+        // P20: one golden vector per FS.GG.Wasm.Contracts.TerminalState, through ofBytes and run, answered by an F# stand-in
+        // for a guest module. No Rust guest module exists yet: the CI module that must answer the same vectors arrives
+        // with the ReferenceGame guest (FS.GG.Game#788 PR D).
         let vectors =
             [
                 "Succeeded", GuestReply.Output [| 1uy |], "Decided(S:one)"
@@ -180,6 +181,128 @@ let private asyncLaws =
             "the runner dispatches StartNext after performing the batch's Locals"
             (text = "local:a,send:c,local:b,StartNext")
             text
+
+        // An exception from an io callback never escapes the batch: the rest runs, and it is routed as EffectFailed.
+        let order = ResizeArray<string>()
+
+        let io =
+            PipelineIo.create
+                (fun () -> 0)
+                (fun l ->
+                    if l = "boom" then
+                        failwith "applyLocal broke"
+
+                    order.Add("local:" + l))
+                (fun e ->
+                    if CommandEnvelope.command e = "bad" then
+                        failwith "send broke"
+
+                    order.Add("send:" + CommandEnvelope.command e))
+                (fun f -> order.Add("fail:" + PipelineFailure.text f))
+                (fun _ _ -> failwith "no timers")
+
+        let runner =
+            PipelineRunner.create pipeline io (fun msg ->
+                order.Add(
+                    match msg with
+                    | PipelineMsg.StartNext -> "StartNext"
+                    | _ -> "msg"
+                ))
+
+        let _, effects =
+            steps
+                pipeline
+                model
+                ([
+                    scene InputAction.Activate "x"
+                    PipelineMsg.GuestRunning 1UL
+                    PipelineMsg.GuestEnded(1UL, decided [ local "boom"; submit "bad"; local "b" ])
+                ])
+
+        PipelineRunner.performAll (last effects @ [ PipelineEffect.ArmDeadline(9UL, 5) ]) runner
+        let text = String.concat "," order
+
+        check
+            "P13"
+            "an exception from an io callback is routed as EffectFailed and the batch goes on"
+            (text = "fail:EffectFailed(applyLocal,applyLocal broke),fail:EffectFailed(send,send broke),local:b,StartNext,fail:EffectFailed(schedule,no timers)")
+            text
+
+        // client () raising ends the call Faulted; a disposed runner dispatches nothing, even for a timer armed before.
+        let dispatched = ResizeArray<string>()
+        let timers = ResizeArray<unit -> unit>()
+
+        let io =
+            PipelineIo.create
+                (fun () -> failwith "no client")
+                ignore
+                ignore
+                ignore
+                (fun _ action -> timers.Add action)
+
+        let runner =
+            PipelineRunner.create pipeline io (fun msg ->
+                dispatched.Add(
+                    match msg with
+                    | PipelineMsg.GuestEnded(_, GuestOutcome.Faulted reason) -> "faulted:" + reason
+                    | PipelineMsg.GuestDeadline _ -> "deadline"
+                    | _ -> "other"
+                ))
+
+        let _, effects = steps pipeline model [ scene InputAction.Activate "x" ]
+        PipelineRunner.performAll (effects.[0] @ [ PipelineEffect.ArmDeadline(1UL, 5) ]) runner
+        let before = String.concat "," dispatched
+        (runner :> System.IDisposable).Dispose()
+
+        for timer in timers do
+            timer ()
+
+        PipelineRunner.perform PipelineEffect.Continue runner
+
+        check
+            "P13"
+            "client () raising ends the call Faulted"
+            (before = "faulted:no client")
+            before
+
+        check
+            "P5"
+            "a disposed runner dispatches nothing, even for timers armed before"
+            (String.concat "," dispatched = "faulted:no client")
+            (String.concat "," dispatched)
+
+        // InputGuest.run never raises when its token is cancelled: a decision after cancellation, and an exception
+        // after cancellation, are both Cancelled.
+        let source = new System.Threading.CancellationTokenSource()
+
+        let lateGuest: InputGuest<string, int, string, string> =
+            InputGuest.ofAsync
+                (fun _ _ ->
+                    async {
+                        source.Cancel()
+                        return GuestOutcome.Decided [ GuestIntent.Local "late" ]
+                    })
+                GuestPolicy.standard
+
+        let! late = InputGuest.run lateGuest (request 1) ignore source.Token
+        let source = new System.Threading.CancellationTokenSource()
+
+        let throwingGuest: InputGuest<string, int, string, string> =
+            InputGuest.ofAsync
+                (fun _ _ ->
+                    async {
+                        source.Cancel()
+                        return failwith "after cancel"
+                    })
+                GuestPolicy.standard
+
+        let! thrown = InputGuest.run throwingGuest (request 1) ignore source.Token
+
+        check
+            "P13"
+            "a cancelled token ends the call Cancelled, never raising"
+            (outcomeText late = "Cancelled(cancelled)" && outcomeText thrown = "Cancelled(cancelled)")
+            (outcomeText late + " " + outcomeText thrown)
     }
 
 let private report () =
@@ -190,7 +313,9 @@ let private report () =
 
     let mutable digest = 7L
 
-    for line in lines do
+    // The digest covers every printed line AND the rendered effects of every randomized step, so the .NET and Fable
+    // runs agree on what the reducer did, not only on the verdicts.
+    for line in Seq.append lines transcript do
         for c in line do
             digest <- (digest * 31L + int64 c) % 1000000007L
 
@@ -220,6 +345,15 @@ let private all =
         p18 ()
         p18b ()
         p19 ()
+        p11Window ()
+        p18Final ()
+        p16Patience ()
+        p10bQueue ()
+        p4Breaker ()
+        p15Equal ()
+        envelopeBasis ()
+        p7bRebind ()
+        p10Rebind ()
         invariants ()
         do! asyncLaws
         return report ()
