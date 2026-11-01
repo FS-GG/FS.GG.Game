@@ -21,12 +21,14 @@ FS.GG.Game.Render.RendererMount`1
 FS.GG.Game.Render.RendererMsg`1
 FS.GG.Game.Render.RendererMsg`1+DisposeFailed
 FS.GG.Game.Render.RendererMsg`1+MountFailed
+FS.GG.Game.Render.RendererMsg`1+PresentFailed
 FS.GG.Game.Render.RendererMsg`1+SelectBackend
 FS.GG.Game.Render.RendererMsg`1+StateChanged
 FS.GG.Game.Render.RendererMsg`1+Tags
 FS.GG.Game.Render.RendererRefusal
 FS.GG.Game.Render.RendererRefusal+DisposeFailed
 FS.GG.Game.Render.RendererRefusal+MountFailed
+FS.GG.Game.Render.RendererRefusal+PresentFailed
 FS.GG.Game.Render.RendererRefusal+Tags
 FS.GG.Game.Render.RendererRefusal+Unavailable
 FS.GG.Game.Render.RendererRegistry

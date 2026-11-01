@@ -14,6 +14,7 @@
     <Compile Include="DefaultKeymapTests.fs" />
     <Compile Include="PortalPresentationTests.fs" />
     <Compile Include="RendererSelectionTests.fs" />
+    <Compile Include="RendererRegistryTests.fs" />
     <Compile Include="RendererConformanceTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
