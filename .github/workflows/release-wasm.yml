@@ -87,7 +87,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: '10.0.403'
       - uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
         id: trust
         with:
@@ -136,7 +136,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: '10.0.403'
       - name: Create bound draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -182,7 +182,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: '10.0.403'
       - name: Execute org from exact originals
         env:
           GH_TOKEN: ${{ github.token }}
@@ -228,7 +228,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: '10.0.403'
       - uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
         id: nuget-login
         with:
@@ -278,7 +278,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: '10.0.403'
       - name: Execute assets from exact originals
         env:
           GH_TOKEN: ${{ github.token }}
@@ -323,7 +323,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: '10.0.403'
       - name: Execute complete from exact originals
         env:
           GH_TOKEN: ${{ github.token }}
@@ -362,7 +362,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.401'
+          dotnet-version: '10.0.403'
       - name: Execute readback from exact originals
         env:
           GH_TOKEN: ${{ github.token }}

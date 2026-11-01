@@ -40,6 +40,22 @@ Recovery accepts retained custody from the same source and version and never
 repacks. Availability of package ownership and the two package-specific Trusted
 Publishing policies for `release-wasm.yml` remains external readiness evidence.
 
+## Release toolchain: SDK 10.0.403 (FS-GG/.github#4947)
+
+Candidates are prepared and qualified with .NET SDK 10.0.403 (`global.json`,
+`wasm-shared.yml`, `prepare.sh`, the supervisor custody scripts and the ApiCompat
+receipt label `SDK10.0.403.ApiCompat`). `release_manifest.py` admits exactly two
+toolchains: the current `TOOLS` (10.0.403) and `RETAINED_TOOLS` (10.0.401). The
+retained one is the immutable identity of every published manifest, `0.1.1` through
+`0.7.0`; it stays admitted so published and installed readback keeps verifying them.
+A manifest's ApiCompat label must name the manifest's own SDK, and no other SDK is
+admitted. Under SDK 10.0.403 the two package archives hold byte-identical members to
+SDK 10.0.401 from the same source, the SDK archive is byte-identical, and the
+published-API verdict and API surfaces are unchanged. A candidate prepared at `0.7.0`
+on SDK 10.0.403 is a qualification candidate only: tag `wasm/v0.7.0` is already
+published from SDK 10.0.401 and is not re-cut. The next release version is a separate
+release decision.
+
 The distinct feed-only consumer mode accepts HTTPS package and release sources,
 creates a lock from remote package bytes, restores a second empty-cache root in
 locked mode, downloads and verifies the SDK archive, builds its Rust/C examples,

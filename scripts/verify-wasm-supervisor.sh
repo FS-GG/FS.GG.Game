@@ -23,8 +23,8 @@ q="${WASM_BASELINE_QUALIFICATION_ROOT:?requires official cache/tool root}"
 version="$(sed -n 's:.*<WasmSharedVersion>\([^<]*\)</WasmSharedVersion>.*:\1:p' "$repo/eng/wasm-shared/version.props")"
 source_head="$(git rev-parse HEAD)"
 source_tree="$(git rev-parse 'HEAD^{tree}')"
-export MSBuildSDKsPath=/usr/share/dotnet/sdk/10.0.401/Sdks MSBUILD_EXE_PATH=/usr/share/dotnet/sdk/10.0.401/MSBuild.dll MSBUILDDISABLENODEREUSE=1 DOTNET_PROCESSOR_COUNT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
-compiler="${WASM_FSC_COMPILER_PATH:-/usr/share/dotnet/sdk/10.0.401/FSharp/fsc.dll}"
+export MSBuildSDKsPath=/usr/share/dotnet/sdk/10.0.403/Sdks MSBUILD_EXE_PATH=/usr/share/dotnet/sdk/10.0.403/MSBuild.dll MSBUILDDISABLENODEREUSE=1 DOTNET_PROCESSOR_COUNT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
+compiler="${WASM_FSC_COMPILER_PATH:-/usr/share/dotnet/sdk/10.0.403/FSharp/fsc.dll}"
 fable="$q/tools/.store/fable/5.18.0/fable/5.18.0/tools/net10.0/any/fable.dll"
 source_assembly="$repo/tests/Wasm.Supervisor.Compatibility/bin/Debug/net10.0/Compatibility.dll"
 installed_assembly="$repo/tests/Wasm.Supervisor.Compatibility/Installed/bin/Debug/net10.0/InstalledCompatibility.dll"

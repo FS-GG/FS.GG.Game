@@ -39,7 +39,7 @@ def surfaces(path):
 
 
 def compare(custody, output):
-    assert subprocess.check_output(["dotnet", "--version"], text=True).strip() == "10.0.401"
+    assert subprocess.check_output(["dotnet", "--version"], text=True).strip() == "10.0.403"
     candidates = {identity: custody / f"{identity}.{POLICY['candidateVersion']}.nupkg" for identity in POLICY["packages"]}
     assert all(path.is_file() for path in candidates.values()), "exact coherent candidate set absent"
     packages = pathlib.Path(os.environ.get("NUGET_PACKAGES", pathlib.Path.home() / ".nuget/packages"))
@@ -56,7 +56,7 @@ def compare(custody, output):
     import io
     with zipfile.ZipFile(io.BytesIO(official_archive)) as archive:
         assert core.read_bytes() == archive.read("lib/netstandard2.0/FSharp.Core.dll"), "actual reference DLL differs from official archive"
-    sdk_root = pathlib.Path(subprocess.check_output(["dotnet", "--list-sdks"], text=True).split("10.0.401 [", 1)[1].split("]", 1)[0]) / "10.0.401"
+    sdk_root = pathlib.Path(subprocess.check_output(["dotnet", "--list-sdks"], text=True).split("10.0.403 [", 1)[1].split("]", 1)[0]) / "10.0.403"
     task = sdk_root / "Sdks/Microsoft.NET.Sdk/tools/net10.0/Microsoft.DotNet.ApiCompat.Task.dll"
     framework = sorted((sdk_root.parents[1] / "packs/Microsoft.NETCore.App.Ref").glob("10.*/ref/net10.0"), key=lambda path: tuple(map(int, path.parents[1].name.split("."))))[-1]
     rows = []
@@ -87,7 +87,7 @@ def compare(custody, output):
             result = classify(identity, run.returncode, run.stdout)
             (custody / f"{identity}.published-baseline.log").write_text(run.stdout)
             rows.append({"id": identity, "baselineArchiveSha256": sha(baseline), "candidateArchiveSha256": sha(candidate), "baselineApiSurface": surfaces(baseline), "candidateApiSurface": surfaces(candidate), "nativeLogSha256": hashlib.sha256(run.stdout.encode()).hexdigest(), **result})
-    receipt = {"schema": "fsgg.wasm.published-api-comparison/v1", "tool": "SDK10.0.401.ApiCompat", "baselineVersion": POLICY["baselineVersion"], "baselineSource": POLICY["baselineSource"], "baselineTree": POLICY["baselineTree"], "baselineManifestSha256": POLICY["baselineManifestSha256"], "candidateVersion": POLICY["candidateVersion"], "packages": rows}
+    receipt = {"schema": "fsgg.wasm.published-api-comparison/v1", "tool": "SDK10.0.403.ApiCompat", "baselineVersion": POLICY["baselineVersion"], "baselineSource": POLICY["baselineSource"], "baselineTree": POLICY["baselineTree"], "baselineManifestSha256": POLICY["baselineManifestSha256"], "candidateVersion": POLICY["candidateVersion"], "packages": rows}
     output.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
     statuses = " ".join(row["id"] + "=" + row["status"] for row in rows)
     print(f"wasm-published-api-comparison: baseline={POLICY['baselineVersion']} {statuses} candidate={POLICY['candidateVersion']} suppressions=none")
