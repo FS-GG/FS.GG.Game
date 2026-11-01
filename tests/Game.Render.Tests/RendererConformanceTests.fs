@@ -226,12 +226,13 @@ let tests =
 
                 Expect.isEmpty (failedChecks results) "every conformance check passes"
 
-                for prefix in [ "subject"; "registry"; "round-trip"; "switch"; "dispose"; "late failure" ] do
+                for prefix in [ "subject"; "registry"; "round-trip"; "switch"; "dispose"; "late failure"; "present failure" ] do
                     Expect.isNonEmpty (section prefix results) (sprintf "the %s section ran" prefix)
 
                 // 2 subject + 1 registry + 3x4 round-trip + (7x3 + 1) switch + (4 + 2x5) dispose
-                // + 2x4 late failure (host) + 2x3 late failure (adapter, both canvas fakes have a trigger).
-                Expect.equal results.Length 65 "the kit ran every check for three backends"
+                // + 2x4 late failure (host) + 2x3 late failure (adapter, both canvas fakes have a trigger)
+                // + (5 + 2x3) present failure (the default backend, then each canvas backend).
+                Expect.equal results.Length 76 "the kit ran every check for three backends"
 
                 Expect.equal
                     (results
@@ -406,4 +407,86 @@ let tests =
                 Expect.equal fakes.Pixi.Live 0 "the failed mount is released"
                 host.Dispose()
                 Expect.equal fakes.Svg.Live 0 "dispose releases SVG"
+
+            testCase "present failure: every backend recovers, SVG by remounting, and the failure is reported"
+            <| fun () ->
+                let fakes = Fakes()
+                let results = runKit fakes (SceneRenderers.registry (declareAll fakes)) RendererBackend.all
+                Expect.isEmpty (failedChecks results) "conforms"
+                let section = section "present failure" results
+                Expect.equal (section |> List.filter (fun result -> result.Check.StartsWith "present failure svg") |> List.length) 5 "svg: contained, one live mount, shown, remount failure reported, next state recovers"
+                Expect.equal (section |> List.filter (fun result -> result.Check.StartsWith "present failure pixi") |> List.length) 3 "pixi: contained, released, shown"
+                Expect.equal (fakes.Svg.Live, fakes.Pixi.Live, fakes.Babylon.Live) (0, 0, 0) "nothing is left mounted"
+
+            testCase "negative control: a backend that leaks the mount a failing Present left behind fails the release check"
+            <| fun () ->
+                let fakes = Fakes()
+                fakes.Pixi.LeakOnDispose <- true
+                let failed = runKit fakes (SceneRenderers.registry (declareAll fakes)) RendererBackend.all |> failedChecks
+
+                Expect.contains
+                    failed
+                    "present failure pixi: the failed mount is disposed once and exactly one live mount remains"
+                    "the leaked canvas is seen"
+
+            testCase "negative control: a host that leaves a throwing default Present Failed fails the SVG present-failure checks"
+            <| fun () ->
+                // The behaviour before GAME-RENDER-ADOPT-01.3: a throwing Present on the default backend reaches the
+                // model as a mount failure, and a state change while Failed only stores the state.
+                let fakes = Fakes()
+
+                let legacy (registry: RendererRegistry<Model>) (state: Model) =
+                    let rendererHost = RendererHost.create registry
+                    let initial, initialEffects = RendererSelection.init registry state
+                    let model = ref initial
+                    let pending = ref (rendererHost.Run initialEffects)
+
+                    let asLegacy msg =
+                        match msg with
+                        | RendererMsg.PresentFailed(backend, attempt, reason) -> RendererMsg.MountFailed(backend, attempt, reason)
+                        | other -> other
+
+                    let rec drain () =
+                        match pending.Value with
+                        | [] -> ()
+                        | msg :: rest ->
+                            pending.Value <- rest
+
+                            match msg, model.Value.Status with
+                            | RendererMsg.StateChanged next, RendererStatus.Failed _ -> model.Value <- { model.Value with State = next }
+                            | _ ->
+                                let next, effects = RendererSelection.update msg model.Value
+                                model.Value <- next
+                                pending.Value <- (rendererHost.Run effects |> List.map asLegacy) @ pending.Value
+
+                            drain ()
+
+                    drain ()
+
+                    let dispatch msg =
+                        pending.Value <- pending.Value @ [ msg ]
+                        drain ()
+
+                    RendererConformance.host
+                        (fun () -> model.Value)
+                        (fun () -> rendererHost.Mounted)
+                        dispatch
+                        (fun _ _ -> ())
+                        (fun () -> (rendererHost :> System.IDisposable).Dispose())
+
+                let failed =
+                    subjectOf fakes (SceneRenderers.registry (declareAll fakes)) RendererBackend.all
+                    |> RendererConformance.withStart legacy
+                    |> run
+                    |> failedChecks
+                    |> List.filter (fun check -> check.StartsWith "present failure")
+
+                Expect.contains
+                    failed
+                    "present failure svg: a throwing Present is contained and the default backend mounts the latest state"
+                    "the blank map is caught"
+
+                Expect.isFalse
+                    (failed |> List.exists (fun check -> check.StartsWith "present failure pixi" || check.StartsWith "present failure babylon"))
+                    "the canvas fallback was already correct"
         ]

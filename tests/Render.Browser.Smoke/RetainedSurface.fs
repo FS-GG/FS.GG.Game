@@ -18,6 +18,8 @@ type Board =
         Stamp: int
         /// The cell the game says is selected.
         Chosen: string option
+        /// A wider viewport, which a fixed SVG host can only present by remounting.
+        Wide: bool
     }
 
 let cellIds = [ "a"; "b"; "c" ]
@@ -31,7 +33,7 @@ let fillOf (stamp: int) : Color =
         Alpha = 255uy
     }
 
-let size (_: Board) = 320.0, 180.0
+let size (board: Board) = (if board.Wide then 480.0 else 320.0), 180.0
 
 let scene (board: Board) : RetainedScene =
     let cell index (id: string) : SemanticSceneObject =
@@ -131,7 +133,7 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
 
         let registry = RetainedSvgSurface.registry surface
         let route = BrowserRenderers.route ()
-        let first = { Stamp = 1; Chosen = Some "b" }
+        let first = { Stamp = 1; Chosen = Some "b"; Wide = false }
         let driver = BrowserRenderers.start route registry first ignore
 
         // Registered without a Scene projection or a placeholder.
@@ -169,7 +171,7 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
 
         check "retained svg: a wheel event zooms the camera" (zoomed <> "" && not (zoomed.EndsWith "scale(1)")) zoomed
 
-        driver.Dispatch(RendererMsg.StateChanged { Stamp = 2; Chosen = Some "c" })
+        driver.Dispatch(RendererMsg.StateChanged { Stamp = 2; Chosen = Some "c"; Wide = false })
 
         check
             "retained svg: the user's camera survives a presented state"
@@ -199,14 +201,14 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
             (sprintf "%A %A" (List.ofSeq chosenByUser) (selectedIds container))
 
         // The game's next state wins again, silently.
-        driver.Dispatch(RendererMsg.StateChanged { Stamp = 3; Chosen = None })
+        driver.Dispatch(RendererMsg.StateChanged { Stamp = 3; Chosen = None; Wide = false })
 
         check
             "retained svg: a state without a selection clears the surface silently"
             (selectedIds container = [] && chosenByUser.Count = 1)
             (sprintf "%A %d" (selectedIds container) chosenByUser.Count)
 
-        driver.Dispatch(RendererMsg.StateChanged { Stamp = 4; Chosen = Some "no-such-cell" })
+        driver.Dispatch(RendererMsg.StateChanged { Stamp = 4; Chosen = Some "no-such-cell"; Wide = false })
 
         check
             "retained svg: a state naming an unknown object is presented and leaves the surface unselected"
@@ -290,13 +292,92 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
         (broken :> System.IDisposable).Dispose()
         check "retained svg: disposing the failed driver leaves the stage clean" (container.children.length = 0) container.innerHTML
 
+        // GAME-RENDER-ADOPT-01.3 (#752): a viewport change. The SVG host is fixed to its size, so the registry's
+        // declared viewport makes the host remount it with the new state instead of presenting into a stale size.
+        let width () =
+            match BrowserConformance.svgViewport container with
+            | Some(width, _) -> width
+            | None -> nan
+
+        let transform () = attribute container "[data-scene-viewport]" "transform"
+        let attachedBefore = attached.Value
+        let releasedBefore = released.Value
+        let sized = BrowserRenderers.start route registry first ignore
+        let attempt0 = sized.Model.Attempt
+        check "retained svg viewport: the surface is mounted at the state's size" (width () = 320.0) (string (width ()))
+        wheel (query container "svg") |> ignore
+        let zoomedBefore = transform ()
+        sized.Dispatch(RendererMsg.StateChanged { first with Stamp = 2; Wide = true })
+
+        check
+            "retained svg viewport: a wider state remounts the surface at the new size, and it is not a failure"
+            (width () = 480.0
+             && count container "svg" = 1
+             && sized.Model.Attempt = attempt0 + 1
+             && sized.Model.Status = RendererStatus.Active
+             && sized.Model.Refusal = None)
+            (sprintf "%g attempt %d refusal %A" (width ()) sized.Model.Attempt sized.Model.Refusal)
+
+        check
+            "retained svg viewport: the remount attached the input host again and released the old one"
+            (attached.Value = attachedBefore + 2 && released.Value = releasedBefore + 1)
+            (sprintf "%d/%d" attached.Value released.Value)
+
+        check
+            "retained svg viewport: the new mount shows the state's content and selection from the scene's own camera"
+            (selectedIds container = [ "b" ]
+             && has (svgFill (fillOf 2)) container.innerHTML
+             && transform () <> zoomedBefore
+             && transform () = "translate(0 0) scale(1)")
+            (sprintf "%A %s" (selectedIds container) (transform ()))
+
+        sized.Dispatch(RendererMsg.StateChanged { Stamp = 3; Chosen = Some "a"; Wide = true })
+
+        check
+            "retained svg viewport: a state with the same size is presented in place"
+            (sized.Model.Attempt = attempt0 + 1 && attached.Value = attachedBefore + 2 && selectedIds container = [ "a" ])
+            (sprintf "attempt %d %A" sized.Model.Attempt (selectedIds container))
+
+        sized.Dispatch(RendererMsg.StateChanged { Stamp = 4; Chosen = None; Wide = false })
+
+        check
+            "retained svg viewport: a narrower state remounts at the smaller size"
+            (width () = 320.0 && sized.Model.Attempt = attempt0 + 2 && sized.Model.Status = RendererStatus.Active)
+            (sprintf "%g attempt %d" (width ()) sized.Model.Attempt)
+
+        (sized :> System.IDisposable).Dispose()
+
+        // GAME-RENDER-ADOPT-01.3 (#752): without the declaration the stale viewport reaches `Present`, which raises. The
+        // failure is contained, reported, and the default is mounted again with the latest state.
+        let bare =
+            match RendererRegistry.create (RetainedSvgSurface.adapter surface) with
+            | Ok registry -> registry
+            | Error reason -> failwith reason
+
+        let undeclared = BrowserRenderers.start route bare first ignore
+        undeclared.Dispatch(RendererMsg.StateChanged { first with Stamp = 2; Wide = true })
+
+        check
+            "retained svg viewport: an undeclared size change is a contained present failure that mounts the surface again"
+            (width () = 480.0
+             && count container "svg" = 1
+             && undeclared.Mounted = Some RendererBackend.Svg
+             && undeclared.Model.Status = RendererStatus.Active
+             && (match undeclared.Model.Refusal with
+                 | Some(RendererRefusal.MountFailed(RendererBackend.Svg, reason)) -> reason.Contains "mounted at"
+                 | _ -> false))
+            (sprintf "%g %A" (width ()) undeclared.Model.Refusal)
+
+        (undeclared :> System.IDisposable).Dispose()
+        check "retained svg viewport: nothing is left on the stage" (container.children.length = 0) container.innerHTML
+
         // The conformance kit holds the registry like any other.
         let states =
             [
                 first
-                { Stamp = 2; Chosen = Some "a" }
-                { Stamp = 3; Chosen = None }
-                { Stamp = 4; Chosen = Some "c" }
+                { Stamp = 2; Chosen = Some "a"; Wide = true }
+                { Stamp = 3; Chosen = None; Wide = true }
+                { Stamp = 4; Chosen = Some "c"; Wide = false }
             ]
 
         let shows (_: ConformanceHost<Board>) (_: RendererBackend) (board: Board) =
@@ -312,6 +393,7 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
 
         let subject =
             BrowserConformance.subject container route registry [ RendererBackend.Svg ] states shows
+            |> RendererConformance.withViewport size (fun _ _ -> async { return BrowserConformance.svgViewport container })
 
         let! results = RendererConformance.run subject
 
@@ -320,7 +402,7 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
 
         check
             "retained kit: the SVG-only subject ran all of its checks"
-            (results.Length = 13)
+            (results.Length = 22)
             (string results.Length)
 
         check "retained kit: the stage is empty afterwards" (container.children.length = 0) container.innerHTML

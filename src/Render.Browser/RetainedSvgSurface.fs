@@ -163,5 +163,5 @@ module RetainedSvgSurface =
 
     let registry (surface: RetainedSvgSurface<'State>) : RendererRegistry<'State> =
         match RendererRegistry.create (adapter surface) with
-        | Ok registry -> registry
+        | Ok registry -> registry |> RendererRegistry.withViewport RendererBackend.Svg surface.Size
         | Error reason -> invalidOp reason

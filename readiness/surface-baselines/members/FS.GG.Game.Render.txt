@@ -37,6 +37,7 @@ FS.GG.Game.Render.RendererConformance.run<State>(ConformanceSubject<State>) : Mi
 FS.GG.Game.Render.RendererConformance.subject<State>(RendererRegistry<State>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>, FSharpList<State>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, System.Int32>, FSharpFunc<ConformanceHost<State>, FSharpFunc<FS.GG.Game.Render.RendererBackend, FSharpFunc<State, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>>>>) : ConformanceSubject<State>
 FS.GG.Game.Render.RendererConformance.withLateFailure<State>(FS.GG.Game.Render.RendererBackend, FS.GG.Game.Render.LateFailureTrigger, ConformanceSubject<State>) : ConformanceSubject<State>
 FS.GG.Game.Render.RendererConformance.withStart<State>(FSharpFunc<RendererRegistry<State>, FSharpFunc<State, ConformanceHost<State>>>, ConformanceSubject<State>) : ConformanceSubject<State>
+FS.GG.Game.Render.RendererConformance.withViewport<State>(FSharpFunc<State, System.Tuple<System.Double, System.Double>>, FSharpFunc<ConformanceHost<State>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.FSharpOption<System.Tuple<System.Double, System.Double>>>>>, ConformanceSubject<State>) : ConformanceSubject<State>
 FS.GG.Game.Render.RendererConformance.withWaitUntil<State>(Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, System.Boolean>, Microsoft.FSharp.Control.FSharpAsync<System.Boolean>>, ConformanceSubject<State>) : ConformanceSubject<State>
 FS.GG.Game.Render.RendererEffect`1+Tags.Mount : System.Int32
 FS.GG.Game.Render.RendererEffect`1+Tags.Present : System.Int32
@@ -56,6 +57,7 @@ FS.GG.Game.Render.RendererMount`1.Present : FSharpFunc<State, Microsoft.FSharp.C
 FS.GG.Game.Render.RendererMount`1.new(FSharpFunc<State, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>)
 FS.GG.Game.Render.RendererMsg`1+Tags.DisposeFailed : System.Int32
 FS.GG.Game.Render.RendererMsg`1+Tags.MountFailed : System.Int32
+FS.GG.Game.Render.RendererMsg`1+Tags.PresentFailed : System.Int32
 FS.GG.Game.Render.RendererMsg`1+Tags.SelectBackend : System.Int32
 FS.GG.Game.Render.RendererMsg`1+Tags.StateChanged : System.Int32
 FS.GG.Game.Render.RendererRefusal+Tags.DisposeFailed : System.Int32
@@ -67,6 +69,8 @@ FS.GG.Game.Render.RendererRegistry.isAvailable<State>(FS.GG.Game.Render.Renderer
 FS.GG.Game.Render.RendererRegistry.register<State>(RendererAdapter<State>, RendererRegistry<State>) : RendererRegistry<State>
 FS.GG.Game.Render.RendererRegistry.svg<State>(FSharpFunc<State, FS.GG.UI.Scene.Scene>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Scene, Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>>) : RendererRegistry<State>
 FS.GG.Game.Render.RendererRegistry.tryFind<State>(FS.GG.Game.Render.RendererBackend, RendererRegistry<State>) : FSharpOption<RendererAdapter<State>>
+FS.GG.Game.Render.RendererRegistry.tryViewport<State>(FS.GG.Game.Render.RendererBackend, RendererRegistry<State>) : FSharpOption<FSharpFunc<State, System.Tuple<System.Double, System.Double>>>
+FS.GG.Game.Render.RendererRegistry.withViewport<State>(FS.GG.Game.Render.RendererBackend, FSharpFunc<State, System.Tuple<System.Double, System.Double>>, RendererRegistry<State>) : RendererRegistry<State>
 FS.GG.Game.Render.RendererSelection.available<State>(RendererModel<State>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>
 FS.GG.Game.Render.RendererSelection.init<State>(RendererRegistry<State>, State) : Tuple<RendererModel<State>, FSharpList<RendererEffect<State>>>
 FS.GG.Game.Render.RendererSelection.update<State>(RendererMsg<State>, RendererModel<State>) : Tuple<RendererModel<State>, FSharpList<RendererEffect<State>>>

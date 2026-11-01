@@ -63,19 +63,20 @@ module RendererAdapter =
 type RendererRegistry<'State> =
     {
         Adapters: Map<RendererBackend, RendererAdapter<'State>>
+        Viewports: Map<RendererBackend, 'State -> float * float>
     }
 
 [<RequireQualifiedAccess>]
 module RendererRegistry =
 
     let register (adapter: RendererAdapter<'State>) (registry: RendererRegistry<'State>) : RendererRegistry<'State> =
-        {
+        { registry with
             Adapters = Map.add adapter.Backend adapter registry.Adapters
         }
 
     let create (adapter: RendererAdapter<'State>) : Result<RendererRegistry<'State>, string> =
         match adapter.Backend with
-        | RendererBackend.Svg -> Ok(register adapter { Adapters = Map.empty })
+        | RendererBackend.Svg -> Ok(register adapter { Adapters = Map.empty; Viewports = Map.empty })
         | other ->
             Error(
                 sprintf
@@ -85,7 +86,15 @@ module RendererRegistry =
             )
 
     let svg view mountScene : RendererRegistry<'State> =
-        register (RendererAdapter.svg view mountScene) { Adapters = Map.empty }
+        register (RendererAdapter.svg view mountScene) { Adapters = Map.empty; Viewports = Map.empty }
+
+    let withViewport (backend: RendererBackend) (viewport: 'State -> float * float) (registry: RendererRegistry<'State>) =
+        { registry with
+            Viewports = Map.add backend viewport registry.Viewports
+        }
+
+    let tryViewport (backend: RendererBackend) (registry: RendererRegistry<'State>) =
+        Map.tryFind backend registry.Viewports
 
     let tryFind (backend: RendererBackend) (registry: RendererRegistry<'State>) = Map.tryFind backend registry.Adapters
 
@@ -112,6 +121,7 @@ type RendererMsg<'State> =
     | StateChanged of state: 'State
     | MountFailed of backend: RendererBackend * attempt: int * reason: string
     | DisposeFailed of backend: RendererBackend * reason: string
+    | PresentFailed of backend: RendererBackend * attempt: int * reason: string
 
 [<RequireQualifiedAccess>]
 type RendererEffect<'State> =
@@ -156,6 +166,12 @@ module RendererSelection =
         },
         prefix @ [ RendererEffect.Mount(backend, attempt, model.State) ]
 
+    /// Two viewports are the same when each component is equal; `NaN` equals `NaN`, so an invalid viewport can never
+    /// remount on every state.
+    let private sameViewport (width: float, height: float) (otherWidth: float, otherHeight: float) =
+        let same (a: float) (b: float) = a = b || (System.Double.IsNaN a && System.Double.IsNaN b)
+        same width otherWidth && same height otherHeight
+
     let update (msg: RendererMsg<'State>) (model: RendererModel<'State>) =
         match msg with
         | RendererMsg.SelectBackend backend when backend = model.Selected ->
@@ -170,8 +186,21 @@ module RendererSelection =
         | RendererMsg.SelectBackend backend -> mountNext backend None [ RendererEffect.Unmount model.Selected ] model
         | RendererMsg.StateChanged state ->
             match model.Status with
-            | RendererStatus.Active -> { model with State = state }, [ RendererEffect.Present(model.Selected, state) ]
-            | RendererStatus.Failed _ -> { model with State = state }, []
+            | RendererStatus.Active ->
+                match RendererRegistry.tryViewport model.Selected model.Registry with
+                | Some viewport when not (sameViewport (viewport model.State) (viewport state)) ->
+                    // The remount rule: the mount is fixed to its viewport, so it is replaced by one for the new state.
+                    mountNext model.Selected model.Refusal [ RendererEffect.Unmount model.Selected ] { model with State = state }
+                | _ -> { model with State = state }, [ RendererEffect.Present(model.Selected, state) ]
+            | RendererStatus.Failed _ ->
+                // Nothing is mounted: the new state is the chance to mount again, so a failure is never final.
+                mountNext model.Selected model.Refusal [] { model with State = state }
+        | RendererMsg.PresentFailed(backend, attempt, _) when attempt <> model.Attempt || backend <> model.Selected ->
+            model, []
+        | RendererMsg.PresentFailed(backend, _, reason) ->
+            // The host released the throwing mount. Whichever backend it was, the default is mounted with the latest
+            // state: a fallback for a canvas backend, a remount for the default itself.
+            mountNext RendererBackend.defaultBackend (Some(RendererRefusal.MountFailed(backend, reason))) [] model
         | RendererMsg.MountFailed(backend, attempt, _) when attempt <> model.Attempt || backend <> model.Selected ->
             model, []
         | RendererMsg.MountFailed(backend, _, reason) when backend = RendererBackend.defaultBackend ->
@@ -246,7 +275,7 @@ type RendererHost<'State>(registry: RendererRegistry<'State>) =
                     []
                 with ex ->
                     // A backend that cannot present is broken: release it and report it as failed.
-                    RendererMsg.MountFailed(backend, attempt, ex.Message) :: release ()
+                    RendererMsg.PresentFailed(backend, attempt, ex.Message) :: release ()
             | _ -> []
         | RendererEffect.Unmount backend ->
             match mounted with

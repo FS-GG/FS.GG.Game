@@ -33,10 +33,19 @@ Ordering contract: **unmount-then-mount, with SVG fallback.**
 - Each `Mount` carries a new attempt token. Failure feedback from a superseded attempt is ignored.
 - If a non-default backend fails to mount, or throws from `Present`, the selection falls back to SVG
   with the same game state.
-- If SVG itself fails, nothing is mounted and `Model.Status` is `Failed`, with every reason that led
-  there. Selecting SVG again retries it. An unrelated refusal never hides that failure.
+- If SVG itself fails to mount, nothing is mounted and `Model.Status` is `Failed`, with every reason that led
+  there. Selecting SVG again, or the next game state, retries it. An unrelated refusal never hides that failure.
 - No adapter exception escapes `RendererHost.Run`. A throwing `Dispose` becomes `DisposeFailed`, and the
   pending `Mount` still runs.
+- A `Present` that throws is contained (nothing escapes `Run`), the host releases that mount, and the model
+  mounts again with the latest state: SVG replaces a failed canvas backend, and the default SVG backend is
+  remounted itself (`RendererMsg.PresentFailed`). `Refusal` names the cause. If the remount fails too, `Status` is
+  `Failed` with the cause, and the next `StateChanged` mounts again, so a throwing `Present` is never a silent blank.
+- A mount is fixed to the viewport it was created for. `RendererRegistry.withViewport backend viewport` declares
+  how a state sizes that backend (the remount rule): when the viewport changes between states, the model
+  unmounts and mounts the backend with the new state instead of presenting, so a game never remounts inside its
+  own `Present`. A game whose viewport comes from the window keeps it in its state. A backend with no declaration
+  owns its viewport itself (it may resize in place).
 - Adapters must not dispatch messages synchronously from `Mount`, `Present` or `Dispose`, because `Run`
   is not reentrant.
 
@@ -124,6 +133,8 @@ unchanged) and drives a host through the Elmish messages:
 | `dispose` | Switching away and disposing the host release every resource, including a canvas's WebGL context. Each mount is disposed exactly once, and a disposed host stays inert. |
 | `late failure (host)` | For each non-default backend, `FailBackend` for the live mount falls back to SVG with the state intact and releases the backend. A report for an unselected backend is ignored, and re-selecting recovers. |
 | `late failure (adapter)` | For each backend with a `LateFailureTrigger` (Pixi in the browser, through `BrowserConformance.pixiLateFailure`), the trigger makes the adapter's next mount fail asynchronously. The adapter's own report (`OnFailure`, then `LateFailureRoute`, then `failBackend`) falls back to SVG with the state intact and releases the mount. A failure of a mount already disposed is not reported, so the live mount of the same backend stays: this is the live-mount rule, checked against the adapter. |
+| `present failure` | The kit makes the next `Present` of each backend throw. A canvas backend falls back to SVG with the latest state and is released. The default backend is released and mounted again with the latest state: one live mount remains and `Refusal` names the cause. If the remount fails too, `Failed` is reported with nothing mounted or held, and the next state mounts and shows. |
+| `viewport` | When the subject declares one (`RendererConformance.withViewport expected actual`): every state, then the states back again, is presented at its own viewport as the backend reports it; one live mount remains, each superseded one disposed once; and where the registry declares the viewport, the mount is replaced exactly when it changes. The subject must hold two different viewports. |
 
 `Resources` must observe the page independently of the adapter. `BrowserConformance.resources` counts SVG
 roots, canvases, Babylon engines, Pixi applications and live WebGL contexts. The kit also asserts its

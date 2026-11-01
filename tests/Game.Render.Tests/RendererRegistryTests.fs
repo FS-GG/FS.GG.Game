@@ -141,8 +141,9 @@ let tests =
                 let results = RendererConformance.run (subjectOf svg alone [ RendererBackend.Svg ]) |> Async.RunSynchronously
                 if not (List.isEmpty (RendererConformance.failures results)) then failtestf "%A" (RendererConformance.failures results |> List.map string)
 
-                // 2 subject + 1 registry + 2 refused + 4 round-trip + 4 dispose; no switch or late failure with one backend.
-                Expect.equal results.Length 13 "the kit ran every check for one backend"
+                // 2 subject + 1 registry + 2 refused + 4 round-trip + 4 dispose + 5 present failure; no switch or late
+                // failure with one backend.
+                Expect.equal results.Length 18 "the kit ran every check for one backend"
                 Expect.equal svg.Live 0 "nothing is left mounted"
 
                 // The kit's instrumented copy starts from the ready adapter: no placeholder ever mounts.
@@ -200,4 +201,146 @@ let tests =
 
                 Expect.isNonEmpty failed "a surface that never mounts does not conform"
                 Expect.contains failed "dispose svg: the resource probe sees the mounted backend" "the probe's subject is asserted"
+        ]
+
+
+// GAME-RENDER-ADOPT-01.3 (FS.GG.Game#752): a mount fixed to its viewport, and the remount rule that presents a change.
+
+/// A state with a size; the viewport is `(Width, 50)`.
+type private Sized = { Id: int; Width: float }
+
+let private sizedStates =
+    [
+        { Id = 1; Width = 100.0 }
+        { Id = 2; Width = 100.0 }
+        { Id = 3; Width = 200.0 }
+        { Id = 4; Width = 300.0 }
+    ]
+
+let private viewportOf (state: Sized) = state.Width, 50.0
+
+/// The shape of `SvgBrowser`: the viewport is fixed when the mount is created. `InPlace` is the other kind of adapter,
+/// which resizes itself when a state asks for it.
+type private SizedSurface() =
+    member val Live = 0 with get, set
+    member val Mounts = 0 with get, set
+    member val Shown: Sized option = None with get, set
+    member val Viewport: (float * float) option = None with get, set
+    member val InPlace = false with get, set
+
+    member this.Adapter: RendererAdapter<Sized> =
+        {
+            Backend = RendererBackend.Svg
+            Mount =
+                fun state ->
+                    this.Mounts <- this.Mounts + 1
+                    this.Live <- this.Live + 1
+                    this.Shown <- Some state
+                    this.Viewport <- Some(viewportOf state)
+                    let disposed = ref false
+
+                    Ok
+                        {
+                            Present =
+                                fun next ->
+                                    this.Shown <- Some next
+
+                                    if this.InPlace then
+                                        this.Viewport <- Some(viewportOf next)
+                            Dispose =
+                                fun () ->
+                                    if not disposed.Value then
+                                        disposed.Value <- true
+                                        this.Live <- this.Live - 1
+                                        this.Shown <- None
+                                        this.Viewport <- None
+                        }
+        }
+
+let private sizedKit (surface: SizedSurface) (registry: RendererRegistry<Sized>) (states: Sized list) =
+    let shows (_: ConformanceHost<Sized>) (_: RendererBackend) (state: Sized) =
+        async { return if surface.Shown = Some state then Ok() else Error(sprintf "shows %A" surface.Shown) }
+
+    RendererConformance.subject registry [ RendererBackend.Svg ] states (fun backend -> if backend = RendererBackend.Svg then surface.Live else 0) shows
+    |> RendererConformance.withViewport viewportOf (fun _ _ -> async { return surface.Viewport })
+    |> RendererConformance.run
+    |> Async.RunSynchronously
+    |> RendererConformance.failures
+    |> List.map (fun result -> result.Check)
+
+let private sizedRegistry (surface: SizedSurface) (declare: bool) =
+    let registry =
+        match RendererRegistry.create surface.Adapter with
+        | Ok registry -> registry
+        | Error reason -> failwith reason
+
+    if declare then
+        RendererRegistry.withViewport RendererBackend.Svg viewportOf registry
+    else
+        registry
+
+[<Tests>]
+let viewportTests =
+    testList
+        "viewport lifecycle"
+        [
+            testCase "a mount fixed to its viewport conforms when the registry declares the viewport (remount rule)"
+            <| fun () ->
+                let surface = SizedSurface()
+                let failed = sizedKit surface (sizedRegistry surface true) sizedStates in if not failed.IsEmpty then failtestf "%A" failed
+                Expect.equal surface.Live 0 "nothing is left mounted"
+
+            testCase "negative control: a fixed viewport that is not declared fails the viewport check"
+            <| fun () ->
+                let surface = SizedSurface()
+                let failed = sizedKit surface (sizedRegistry surface false) sizedStates
+
+                Expect.equal
+                    failed
+                    [ "viewport svg: every state is presented at its own viewport, growing and shrinking" ]
+                    "only the stale viewport fails: the surface kept the size it was mounted at"
+
+            testCase "negative control: a declared viewport that never changes leaves the stale size"
+            <| fun () ->
+                let surface = SizedSurface()
+
+                let registry =
+                    sizedRegistry surface false |> RendererRegistry.withViewport RendererBackend.Svg (fun _ -> 1.0, 1.0)
+
+                Expect.contains
+                    (sizedKit surface registry sizedStates)
+                    "viewport svg: every state is presented at its own viewport, growing and shrinking"
+                    "a wrong declaration is caught by reading the backend back"
+
+            testCase "an adapter that resizes itself conforms without a declaration"
+            <| fun () ->
+                let surface = SizedSurface()
+                surface.InPlace <- true
+                Expect.isEmpty (sizedKit surface (sizedRegistry surface false) sizedStates) "in-place resize conforms"
+
+            testCase "negative control: states with one viewport do not pass the viewport check vacuously"
+            <| fun () ->
+                let surface = SizedSurface()
+
+                let same = sizedStates |> List.map (fun state -> { state with Width = 100.0 })
+
+                Expect.contains
+                    (sizedKit surface (sizedRegistry surface true) same)
+                    "viewport: the subject's states include two different viewports"
+                    "the subject is checked"
+
+            testCase "a declared viewport remounts only when it changes: the kit counts the mounts"
+            <| fun () ->
+                let surface = SizedSurface()
+                let registry = sizedRegistry surface true
+                let host = RendererConformance.inProcess registry sizedStates.[0]
+
+                for state in sizedStates do
+                    host.Dispatch(RendererMsg.StateChanged state)
+
+                // 1 mount, +0 (same width), +1 (200), +1 (300).
+                Expect.equal surface.Mounts 3 "two viewport changes, two remounts"
+                Expect.equal surface.Viewport (Some(300.0, 50.0)) "the live mount has the latest viewport"
+                host.Dispose()
+                Expect.equal surface.Live 0 "released"
         ]
