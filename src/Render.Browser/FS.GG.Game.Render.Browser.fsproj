@@ -21,6 +21,8 @@
     <Compile Include="CanvasInput.fs" />
     <Compile Include="SvgSurface.fsi" />
     <Compile Include="SvgSurface.fs" />
+    <Compile Include="RetainedSvgSurface.fsi" />
+    <Compile Include="RetainedSvgSurface.fs" />
     <Compile Include="CanvasSupport.fsi" />
     <Compile Include="CanvasSupport.fs" />
     <Compile Include="SceneShapes.fsi" />

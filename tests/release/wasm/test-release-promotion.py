@@ -730,30 +730,37 @@ class Tests(unittest.TestCase):
         # Actual Git cleanliness/head checks remain live; the complete diff parser
         # is exercised independently against real inert Git commits by collector controls.
         with patch.dict(os.environ,env),patch.object(binder,'source_audit',return_value={'bound':True}) as audit:
-            # This read-only binder selects the exact 0.6 publication producer;
-            # neither historical versions nor arbitrary executors can replace it.
-            audit_row=binder.bind_executor(binder.PUBLISHED,head,'0.6.0')
+            # This read-only binder qualifies only the release version.props selects, derived
+            # from observed state; neither historical versions nor arbitrary executors can replace it.
+            current=binder.tracked_version();published='7'*40
+            audit_row=binder.bind_executor(published,head,current)
             self.assertTrue(audit_row['bound']);self.assertEqual(audit_row['execution']['run'],707)
-            audit.assert_called_once_with(binder.PUBLISHED,head)
+            audit.assert_called_once_with(published,head)
             for key,bad in [('GITHUB_SHA','9'*40),('GITHUB_WORKFLOW_SHA','9'*40),('QUALIFIER_SOURCE','9'*40),('GITHUB_REF','refs/heads/other'),('GITHUB_EVENT_NAME','push'),('GITHUB_RUN_ATTEMPT','2'),('GITHUB_WORKFLOW_REF',p.REPO+'/.github/workflows/other.yml@refs/heads/main'),('GITHUB_JOB','other'),('GITHUB_RUN_ID','0'),('WASM_PACKAGE_FEED','https://other.invalid/index.json')]:
-                with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,head,'0.6.0')
-            for executor,version in [('9'*40,'0.6.0'),(head,'0.3.0'),(head,'0.4.0'),(head,'0.5.0')]:
-                with self.assertRaises(AssertionError):binder.bind_executor(binder.PUBLISHED,executor,version)
+                with self.subTest(key=key),patch.dict(os.environ,{key:bad}),self.assertRaises(AssertionError):binder.bind_executor(published,head,current)
+            historical=sorted(binder.release_manifest_module().RETAINED_VERSIONS-{current})
+            self.assertTrue(historical)
+            for executor,version in [('9'*40,current)]+[(head,old) for old in historical]:
+                with self.subTest(executor=executor,version=version),self.assertRaises(AssertionError):binder.bind_executor(published,executor,version)
         with patch.dict(os.environ,{'EXECUTION_BINDING':'{"schema":"historical"}'}),self.assertRaises(p.Refusal):p.execution_input()
 
-    def test_current_installed_binder_requires_the_exact_published_subject(self):
+    def test_current_installed_binder_derives_the_published_subject_from_observed_state(self):
         spec=importlib.util.spec_from_file_location('installed_binding',ROOT/'scripts/wasm-release/bind-installed-release.py')
         binder=importlib.util.module_from_spec(spec);spec.loader.exec_module(binder)
-        # A valid current input cannot retag the old installed publication.
-        # Actual executor/workflow guards are exercised by the control above.
-        self.assertEqual(binder.PUBLISHED,'8a5e63ba50d4b3cb7b5a66bb4136990d5589ee9e')
-        values={'RELEASE_VERSION':'0.6.0','PUBLISHED_SOURCE':binder.PUBLISHED,
+        # No pinned publication constant remains: the subject is the tag-resolved source bound by
+        # the published manifest (the manifest/tag/tree controls are in test-installed-org-workflow.py).
+        for pinned in ('PUBLISHED','PUBLISHED_TREE','INSTALLED_PATHS'):self.assertFalse(hasattr(binder,pinned))
+        current=binder.tracked_version();self.assertEqual(current,p.VERSION)
+        values={'RELEASE_VERSION':current,'PUBLISHED_SOURCE':'8'*40,
                 'QUALIFIER_SOURCE':'9'*40,'ACCEPTED_EXECUTOR':'9'*40,
                 'MANIFEST_SHA256':'c'*64,'SDK_SHA256':'d'*64,
                 'PROMOTION_BINDING_SHA256':'e'*64}
-        self.assertEqual(binder.checked_inputs(values,'0.6.0'),values)
+        self.assertEqual(binder.checked_inputs(values,current),values)
         with self.assertRaises(AssertionError):
-            binder.checked_inputs(dict(values,PUBLISHED_SOURCE='80540027623d9b1a8aa7715d0591de48455403b7'),'0.6.0')
+            binder.checked_inputs(dict(values,PUBLISHED_SOURCE='not-a-commit'),current)
+        # A promotion subject of any other version than the one version.props selects is refused.
+        with self.assertRaises(p.Refusal):p.publication_identity(p.PublicationSubject('7'*40,'6'*40,'0.0.1'))
+        self.assertEqual(p.publication_identity(p.PublicationSubject('7'*40,'6'*40,p.VERSION)),('7'*40,'6'*40))
 
 
     def test_explicit_read_only_publication_subject_does_not_relax_writer(self):

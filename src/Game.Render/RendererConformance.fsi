@@ -7,7 +7,7 @@ namespace FS.GG.Game.Render
 type ConformanceResult =
 
     /// The requirement, prefixed by its section (`subject`, `registry`, `round-trip`, `switch`, `dispose`,
-    /// `late failure`, `interaction`).
+    /// `late failure`, `present failure`, `viewport`, `interaction`).
     member Check: string
 
     /// Whether the requirement held.
@@ -114,8 +114,8 @@ module InteractionProbe =
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// What the kit needs to know about one game's renderers. Built by `RendererConformance.subject`, which fills the
-/// in-process defaults, and adjusted by `RendererConformance.withStart`, `withWaitUntil`, `withLateFailure` and
-/// `withInteraction`.
+/// in-process defaults, and adjusted by `RendererConformance.withStart`, `withWaitUntil`, `withLateFailure`,
+/// `withViewport` and `withInteraction`.
 [<NoEquality; NoComparison>]
 type ConformanceSubject<'State>
 
@@ -141,6 +141,15 @@ type ConformanceSubject<'State>
 /// - **late failure (adapter)**, for each backend with a `LateFailureTrigger`: the adapter's own report of its live
 ///   mount's failure falls back to SVG with the state intact and releases the backend, and a failure of a mount
 ///   already disposed is not reported, so the live mount of the same backend stays (the live-mount rule);
+/// - **present failure**, for each backend: the kit makes the next `Present` throw (the adapter is wrapped; its own
+///   code is not edited). A canvas backend falls back to SVG with the latest state and is released. The DEFAULT
+///   backend is released and mounted again with the latest state, exactly one live mount remains, and the cause is
+///   in `Refusal`. If that remount fails too, `Status` is `Failed` with the cause, nothing is mounted or held, and
+///   the next state mounts and shows. A throwing `Present` is therefore never a silent blank;
+/// - **viewport**, when the subject declares one (`withViewport`): every state is presented at its own viewport, read
+///   back from the backend, in both directions, with one live mount at the end and every superseded one disposed once.
+///   When the registry also declares the viewport (`RendererRegistry.withViewport`), a mount is replaced exactly when
+///   the viewport changes and states with the same viewport are presented in place;
 /// - **interaction**, when `withInteraction` declared one (FS.GG.Game#751): the states declare valid selectable
 ///   objects; then on every backend, with real input, the input host is attached while mounted, the accessible
 ///   mirror lists every object with its label, a pointer move leaves the surface at tabindex 0, the keyboard
@@ -201,6 +210,18 @@ module RendererConformance =
     val withLateFailure:
         backend: RendererBackend ->
         trigger: LateFailureTrigger ->
+        subject: ConformanceSubject<'State> ->
+            ConformanceSubject<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare the viewport the game's states have: `expected state` is the `(width, height)` in pixels the backend
+    /// must present `state` at, and `actual host backend` reads the viewport `backend` has now (`None` when it has
+    /// none). The viewport checks run for every offered backend, and the subject must contain states with at least two
+    /// different viewports, or the check fails rather than pass vacuously. A backend whose mount is fixed to its
+    /// viewport conforms by declaring it with `RendererRegistry.withViewport`, or by remounting itself.
+    val withViewport:
+        expected: ('State -> float * float) ->
+        actual: (ConformanceHost<'State> -> RendererBackend -> Async<(float * float) option>) ->
         subject: ConformanceSubject<'State> ->
             ConformanceSubject<'State>
 

@@ -124,6 +124,21 @@ module BrowserConformance =
             + (PixiSurface.live ()).Applications
         | RendererBackend.Babylon -> count container "canvas[data-renderer=babylon]" + liveContexts backend + engines ()
 
+    let svgViewport (container: HTMLElement) : (float * float) option =
+        let roots = container.querySelectorAll "svg"
+
+        if int roots.length <> 1 then
+            None
+        else
+            let attribute (name: string) =
+                match System.Double.TryParse(roots.[0].getAttribute name) with
+                | true, value -> Some value
+                | _ -> None
+
+            match attribute "width", attribute "height" with
+            | Some width, Some height -> Some(width, height)
+            | _ -> None
+
     let private nextFrame: Async<unit> =
         Async.FromContinuations(fun (continuation, _, _) -> window.requestAnimationFrame (fun _ -> continuation ()) |> ignore)
 

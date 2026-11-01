@@ -334,8 +334,8 @@ let private failedChecks (results: ConformanceResult list) =
 let private interactionChecks (results: ConformanceResult list) =
     results |> List.filter (fun result -> result.Check.StartsWith "interaction")
 
-/// The kit's checks for one game on three interactive backends without late-failure triggers: 59 (the sections of
-/// FS.GG.Game#745 without the adapter late-failure checks) plus 37 interaction checks (one, then twelve per backend).
+/// The kit's checks for one game on three interactive backends without late-failure triggers or a viewport: 70 (the
+/// sections of FS.GG.Game#745 and #752 without those checks) plus 37 interaction checks (one, then twelve per backend).
 let private interactionCount = 37
 
 [<Tests>]
@@ -552,7 +552,7 @@ let tests =
                     interactionCount
                     "the interaction section ran on every backend"
 
-                Expect.equal results.Length (59 + interactionCount) "and every other section ran too"
+                Expect.equal results.Length (70 + interactionCount) "and every other section ran too"
 
                 Expect.contains
                     (results |> List.map (fun result -> result.Check))

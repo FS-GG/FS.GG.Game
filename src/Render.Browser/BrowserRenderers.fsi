@@ -96,6 +96,10 @@ module BrowserConformance =
     /// `container`, live WebGL contexts and live applications (Pixi's own report) or engines (Babylon's engine store).
     val resources: container: HTMLElement -> backend: RendererBackend -> int
 
+    /// The `(width, height)` of the SVG root in `container`, read from its attributes, when there is exactly one: the
+    /// viewport probe for `RendererConformance.withViewport` on the SVG backend.
+    val svgViewport: container: HTMLElement -> (float * float) option
+
     /// Wait animation frames until `condition` holds, at most `maxFrames`; whether it held.
     val waitUntil: maxFrames: int -> condition: (unit -> bool) -> Async<bool>
 

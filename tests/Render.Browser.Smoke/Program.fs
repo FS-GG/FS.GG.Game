@@ -1774,7 +1774,7 @@ let runThreeBackends () : Async<unit> =
 /// `RendererConformance.run` on SVG, Pixi and Babylon through `RendererDriver`, with the page's independent resource
 /// probe (SVG roots, canvases, engines, applications, live WebGL contexts) and outputs read back from the DOM and
 /// from canvas pixels. Every kit result becomes one smoke check.
-let kitChecks = 62
+let kitChecks = 73
 
 /// The kit's interaction section on three backends (FS.GG.Game#751): one subject check and twelve per backend.
 let interactionChecks = 37
@@ -2158,6 +2158,7 @@ async {
         do! runPixi ()
         do! runThreeBackends ()
         do! runConformance ()
+        do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)
