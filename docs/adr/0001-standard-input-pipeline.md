@@ -113,12 +113,20 @@ On Babylon it is drawn unlit (#786). The default is `SceneInteraction.standardCu
 rectangles just outside the focused object's bounds.
 
 - The ring has a dark outer band and a light inner band. Each band is **at least 2 CSS px at the presented scale**:
-  `CueContext.cssPerUnit` gives the scale, and the bands are `2 / cssPerUnit` scene units or more.
+  `CueContext.cssPerUnit` gives the scale, and the bands are `2 / cssPerUnit` scene units or more. Cue widths are
+  specified in CSS px. `CueContext` carries no device pixel ratio; the backend's own DPR handling maps CSS px to
+  device pixels.
 - The tones keep at least 3:1 contrast (WCAG 2.2 focus appearance).
 
-A game replaces the default with `SceneInteraction.withCues`, for example with the glyph layer's themed
-`Glyphs.cues theme` (#789), which also draws a hover outline. The node-list type and `CueContext` are agreed with the
-#789 owner.
+A game replaces the default with `SceneInteraction.withCues`, for example with the glyph layer's themed cues (#789).
+That layer's default `cues` draws focus only, like `standardCues`. A hover outline is opt-in, through its
+`cuesHover`.
+
+**Theme switches reach the cue layer through the glyph side, not through `CueContext`.** A layer registered once with
+`withCues` is fixed when the registry is built, so the glyph layer's cues take a theme reader (`unit -> Theme`) rather
+than a theme value. The cue layer reads it on every draw, and a runtime theme switch is drawn at the next present or
+cue change. `CueContext` stays as it is (cues, objects, `cssPerUnit`), and #793 adds no theme or view field. This
+split, with the node-list type and `CueContext` itself, is agreed with the #789 owner.
 
 **Compatibility.** `SelectionRequest`, `SelectionRoute` and `SceneRenderers.withInteraction` keep their meaning.
 #788 re-implements them over the input host through `InputEvent.toSelectionRequest`.
