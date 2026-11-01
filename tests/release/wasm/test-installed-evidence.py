@@ -414,36 +414,57 @@ class Evidence(unittest.TestCase):
                 result=subprocess.run(['bash','-c',script,'inert','--feed-only'],env=dict(env,**bad),capture_output=True,text=True)
                 self.assertNotEqual(result.returncode,0);self.assertNotIn('ADMITTED',result.stdout)
 
-    def test_complete_diff_binds_exact_blobs_and_refuses_semantic_change(self):
+    def test_complete_diff_binds_exact_blobs_and_refuses_consumer_input_change(self):
         with tempfile.TemporaryDirectory() as raw:
             root=pathlib.Path(raw)
             def git(*args):return subprocess.check_output(['git','-C',raw,*args],text=True,stderr=subprocess.DEVNULL).strip()
             git('init','-q');git('config','user.name','inert control');git('config','user.email','control@example.invalid')
-            allowed=('scripts/wasm-release/installed-evidence.py','tests/release/wasm/test-installed-evidence.py')
-            excluded=('eng/wasm-shared/version.props','src/Wasm.Browser/Host.fs','sdk/wasm/verify-sdk.sh',
-                      '.github/workflows/wasm-installed-org.yml','scripts/wasm-release/promotion.py','unlisted.txt')
-            for name in (*allowed,*excluded):put(root/name,b'old')
+            # Qualifier tooling and unrelated development may differ between P and Q; the
+            # installed-consumer input closure (b.CONSUMER_INPUTS) may not.
+            allowed=('scripts/wasm-release/installed-evidence.py','tests/release/wasm/test-installed-evidence.py',
+                     '.github/workflows/wasm-installed-org.yml','scripts/wasm-release/promotion.py','src/Game.Render/Unrelated.fs')
+            protected=tuple(prefix+'file.txt' for prefix in b.CONSUMER_INPUTS)
+            for name in (*allowed,*protected):put(root/name,b'old')
             git('add','.');git('commit','-qm','P');p=git('rev-parse','HEAD');tree=git('rev-parse','HEAD^{tree}')
             for name in allowed:put(root/name,b'new')
+            put(root/'docs/added.md',b'added')
             git('add','.');git('commit','-qm','Q');q=git('rev-parse','HEAD')
-            with patch.object(b,'ROOT',root),patch.object(b,'PUBLISHED',p),patch.object(b,'PUBLISHED_TREE',tree):
-                audit=b.source_audit(p,q);self.assertEqual({row['path'] for row in audit['changes']},set(allowed))
-                row=audit['changes'][0];self.assertEqual(row['new']['sha256'],e.hashlib.sha256(b'new').hexdigest())
-                self.assertEqual(row['old']['blob'],git('rev-parse',p+':'+row['path']))
-                with patch.object(b,'INSTALLED_PATHS',b.INSTALLED_PATHS-{allowed[0]}),self.assertRaises(AssertionError):b.source_audit(p,q)
-                for name in excluded:
-                    git('reset','--hard',q);put(root/name,b'forbidden change');git('add','.');git('commit','-qm','excluded leaf')
-                    with self.subTest(excluded=name),self.assertRaises(AssertionError):b.source_audit(p,git('rev-parse','HEAD'))
-                for defect in ('mode','delete','rename','symlink'):
-                    git('reset','--hard',q);path=root/allowed[0]
-                    if defect=='mode':path.chmod(0o755)
-                    elif defect=='delete':path.unlink()
-                    elif defect=='rename':path.rename(path.with_name('renamed.py'))
-                    else:path.unlink();path.symlink_to(root/allowed[1])
-                    git('add','.');git('commit','-qm',defect)
-                    with self.subTest(defect=defect),self.assertRaises(AssertionError):b.source_audit(p,git('rev-parse','HEAD'))
+            with patch.object(b,'ROOT',root):
+                audit=b.source_audit(p,q)
+                self.assertEqual({row['path'] for row in audit['changes']},{*allowed,'docs/added.md'})
+                self.assertEqual(audit['publishedTree'],tree);self.assertEqual(audit['consumerInputs'],list(b.CONSUMER_INPUTS))
+                row=next(row for row in audit['changes'] if row['path']==allowed[0]);self.assertEqual(row['new']['sha256'],e.hashlib.sha256(b'new').hexdigest())
+                self.assertEqual(row['old']['blob'],git('rev-parse',p+':'+row['path']));self.assertEqual(row['new']['blob'],git('rev-parse',q+':'+row['path']))
+                # Causal control: the identical Q with one consumer input changed is refused.
+                for name in protected:
+                    for defect in ('modify','delete','mode','symlink'):
+                        git('reset','--hard','-q',q);path=root/name
+                        if defect=='modify':put(path,b'forbidden change')
+                        elif defect=='delete':path.unlink()
+                        elif defect=='mode':path.chmod(0o755)
+                        else:path.unlink();path.symlink_to(root/allowed[0])
+                        git('add','-A');git('commit','-qm',defect)
+                        with self.subTest(protected=name,defect=defect),self.assertRaises(AssertionError) as caught:b.source_audit(p,git('rev-parse','HEAD'))
+                        self.assertIn('installed consumer input differs',str(caught.exception))
+                git('reset','--hard','-q',q)
+                put(root/'eng/wasm-shared/added-after-publication.props',b'new consumer input')
+                git('add','-A');git('commit','-qm','added consumer input')
+                with self.assertRaises(AssertionError):b.source_audit(p,git('rev-parse','HEAD'))
+                git('reset','--hard','-q',q)
                 with self.assertRaises(AssertionError):b.source_audit('a'*40,q)
-                with patch.object(b,'PUBLISHED_TREE','a'*40),self.assertRaises(AssertionError):b.source_audit(p,q)
+                with self.assertRaises(AssertionError):b.source_audit('main',q)
+                with self.assertRaises(AssertionError):b.source_audit(q,p)
 
+    def test_actual_repository_published_source_to_qualifier_is_audited(self):
+        tag='refs/tags/wasm/v'+CURRENT
+        try:
+            published=subprocess.check_output(['git','-C',str(ROOT),'rev-parse',tag+'^{commit}'],text=True,stderr=subprocess.DEVNULL).strip()
+            subprocess.run(['git','-C',str(ROOT),'merge-base','--is-ancestor',published,'HEAD'],check=True,stderr=subprocess.DEVNULL)
+            head=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()
+        except subprocess.CalledProcessError:
+            self.skipTest('current release tag is not an ancestor of this checkout (shallow or unfetched)')
+        audit=b.source_audit(published,head)
+        self.assertEqual(audit['publishedSource'],published);self.assertEqual(audit['qualifierSource'],head)
+        self.assertFalse([row for row in audit['changes'] if row['path'].startswith(b.CONSUMER_INPUTS)])
 
 if __name__=='__main__':unittest.main()

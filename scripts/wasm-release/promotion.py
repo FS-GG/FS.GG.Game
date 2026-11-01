@@ -95,7 +95,7 @@ PublicationSubject = namedtuple('PublicationSubject', 'producer tree version')
 def publication_identity(subject):
     need(type(subject) is PublicationSubject, 'explicit publication subject required')
     sha(subject.producer, 40); sha(subject.tree, 40)
-    need(subject.version == VERSION == '0.7.0', 'wrong published subject version')
+    need(subject.version == VERSION, 'wrong published subject version')
     return subject.producer, subject.tree
 
 
@@ -133,7 +133,7 @@ def validate_binding(binding, *, subject=None):
               'workflowSha','job','event','evidence'}
     need(set(binding) == fields, 'unreviewed preparation fields')
     need(binding['schema'] == SCHEMA and binding['repository'] == REPO and binding['workflow'] == '.github/workflows/wasm-shared.yml' and binding['mode'] == 'qualify', 'unrelated preparation route')
-    need(VERSION == '0.7.0' and binding['producer'] == binding['executor'] == binding['workflowSha'] == producer and binding['producerTree'] == binding['executorTree'] == tree and binding['version'] == VERSION, 'wrong selected producer/executor/tree/version')
+    need(binding['producer'] == binding['executor'] == binding['workflowSha'] == producer and binding['producerTree'] == binding['executorTree'] == tree and binding['version'] == VERSION, 'wrong selected producer/executor/tree/version')
     need(binding['job'] == 'qualify' and binding['event'] in ('push','workflow_dispatch'), 'premerge/generation-only custody refuses')
     need(binding['runAttempt'] == 1, 'rerun custody refuses')
     need(set(binding['evidence']) == OUTER_FILES - {'preparation-binding.json'} - set(FILES), 'wrong closed evidence roster')
