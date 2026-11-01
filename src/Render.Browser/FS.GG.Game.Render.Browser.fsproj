@@ -29,6 +29,8 @@
     <Compile Include="PixiSurface.fs" />
     <Compile Include="RendererDriver.fsi" />
     <Compile Include="RendererDriver.fs" />
+    <Compile Include="BrowserRenderers.fsi" />
+    <Compile Include="BrowserRenderers.fs" />
   </ItemGroup>
 
   <ItemGroup>

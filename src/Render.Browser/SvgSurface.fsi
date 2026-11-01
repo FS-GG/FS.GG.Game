@@ -25,6 +25,10 @@ module SvgSurface =
     val mountScene:
         container: HTMLElement -> options: SvgBrowserOptions -> scene: Scene -> Result<RendererMount<Scene>, string>
 
+    /// `mountScene container options` as the SVG `SceneSurface` for `SceneRenderers` (`SceneRenderers.create view
+    /// (surface ...).MountScene`, or `BrowserRenderers.declare`, which does that for all three backends).
+    val surface: container: HTMLElement -> options: SvgBrowserOptions -> SceneSurface
+
     /// The SVG-default registry for a game-state type, mounted in `container`: `RendererRegistry.svg` with
     /// `view` projecting a state onto a `Scene` and `mountScene` as the retained surface. Pixi and Babylon
     /// adapters are added later with `RendererRegistry.register` when their bindings exist.

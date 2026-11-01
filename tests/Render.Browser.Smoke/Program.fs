@@ -20,6 +20,7 @@ open Fable.Core
 open FS.GG.Game.Render
 open FS.GG.Game.Render.Browser
 open FS.GG.UI.Scene
+open FS.GG.Game.Reference
 
 type Board = { Tick: int; TokenX: float }
 
@@ -1768,6 +1769,224 @@ let runThreeBackends () : Async<unit> =
             (sprintf "%s engines=%d %A" container.innerHTML (Probe.engines ()) (PixiSurface.live ()))
     }
 
+/// GAME-RENDER-ADOPT-01.1 (FS.GG.Game#745): the conformance kit on the real backends. The reference game's own
+/// renderer declaration (src/ReferenceGame/Renderers.fs) and the generator's sample (GeneratedRenderers.fs) each run
+/// `RendererConformance.run` on SVG, Pixi and Babylon through `RendererDriver`, with the page's independent resource
+/// probe (SVG roots, canvases, engines, applications, live WebGL contexts) and outputs read back from the DOM and
+/// from canvas pixels. Every kit result becomes one smoke check.
+let kitChecks = 58
+
+let rgbOf (color: Color) = [| int color.Red; int color.Green; int color.Blue |]
+
+/// Babylon draws the flat meshes lit at 0.75 of the scene colour (the known limit in the roadmap).
+let litOf (color: Color) =
+    rgbOf color |> Array.map (fun value -> int (System.Math.Round(float value * 0.75)))
+
+let svgFill (color: Color) =
+    sprintf "fill=\"rgb(%d %d %d)\"" color.Red color.Green color.Blue
+
+/// Read `backend`'s output for an expected token colour at (x, y) and a background colour at (bx, by).
+let showsPixels
+    (host: ConformanceHost<'State>)
+    (container: HTMLElement)
+    (backend: RendererBackend)
+    (token: Color, x: int, y: int)
+    (background: Color, bx: int, by: int)
+    : Async<Result<unit, string>> =
+    async {
+        let expect, tolerance =
+            match backend with
+            | RendererBackend.Babylon -> litOf, 4
+            | _ -> rgbOf, 2
+
+        let! tokenPixel = BrowserConformance.readPixel host container backend x y (fun p -> near (expect token) p tolerance) 600
+
+        let! backgroundPixel =
+            BrowserConformance.readPixel host container backend bx by (fun p -> near (expect background) p tolerance) 60
+
+        return
+            if near (expect token) tokenPixel tolerance
+               && near (expect background) backgroundPixel tolerance then
+                Ok()
+            else
+                Error(
+                    sprintf
+                        "%s token %A (want %A) background %A (want %A)"
+                        (RendererBackend.id backend)
+                        tokenPixel
+                        (expect token)
+                        backgroundPixel
+                        (expect background)
+                )
+    }
+
+let runKit (label: string) (subject: ConformanceSubject<'State>) : Async<unit> =
+    async {
+        let! results = RendererConformance.run subject
+
+        for result in results do
+            check (label + ": " + result.Check) result.Passed result.Detail
+
+        check
+            (sprintf "%s: the kit ran all %d checks for three backends" label kitChecks)
+            (results.Length = kitChecks)
+            (string results.Length)
+    }
+
+let runConformance () : Async<unit> =
+    async {
+        BrowserConformance.installContextProbe ()
+
+        // The reference game.
+        let container = document.createElement "div"
+        container.id <- "stage-reference"
+        document.body.appendChild container |> ignore
+        let route = BrowserRenderers.route ()
+
+        let options =
+            BrowserRenderers.options "Reference game" ReferenceRenderers.width ReferenceRenderers.height
+
+        let renderers =
+            match BrowserRenderers.surfaces container options route with
+            | svg :: others -> ReferenceRenderers.declare svg.MountScene others
+            | [] -> failwith "no surfaces"
+
+        let start: ReferenceState.Model =
+            {
+                Screen = ReferenceState.Menu
+                Room = ReferenceState.Atrium
+                X = 0
+                DestinationActive = false
+                CameraTransition = false
+                VaultClear = false
+                Aim = 0, 0
+                Tick = 0
+            }
+
+        let states =
+            [
+                start
+                { start with
+                    Screen = ReferenceState.Playing
+                    X = 1
+                    Aim = 12, 7
+                }
+                { start with
+                    Screen = ReferenceState.Paused
+                    Room = ReferenceState.Vault
+                    X = 3
+                    Tick = 4
+                }
+                { start with
+                    Screen = ReferenceState.Won
+                    Room = ReferenceState.Exit
+                    X = 5
+                    Aim = 200, 90
+                }
+            ]
+
+        let shows (host: ConformanceHost<ReferenceState.Model>) backend (model: ReferenceState.Model) =
+            let x, y, _, _ = ReferenceRenderers.tokenBounds model
+            let token = ReferenceRenderers.tokenColor model.Screen
+            let room = ReferenceRenderers.roomColor model.Room
+
+            match backend with
+            | RendererBackend.Svg ->
+                async {
+                    let html = container.innerHTML
+
+                    return
+                        if has (sprintf "x=\"%g\" y=\"%g\"" x y) html
+                           && has (svgFill token) html
+                           && has (svgFill room) html then
+                            Ok()
+                        else
+                            Error(sprintf "svg does not show the token at %g with %s on %s" x (svgFill token) (svgFill room))
+                }
+            | _ -> showsPixels host container backend (token, int x + 12, int y + 12) (room, 2, 100)
+
+        do!
+            runKit
+                "reference kit"
+                (BrowserConformance.subject
+                    container
+                    route
+                    (SceneRenderers.registry renderers)
+                    RendererBackend.all
+                    states
+                    shows)
+
+        check
+            "reference kit: the stage is empty afterwards"
+            (container.children.length = 0)
+            container.innerHTML
+
+        // Causal control: the output probes tell states apart. Each backend shows the first state and is asked whether
+        // it shows the last one (another room, screen and token column); every probe must say no.
+        let controlHost =
+            BrowserConformance.host (BrowserRenderers.start route (SceneRenderers.registry renderers) states.Head ignore)
+
+        for backend in RendererBackend.all do
+            controlHost.Dispatch(RendererMsg.SelectBackend backend)
+            let! own = shows controlHost backend states.Head
+            let! other = shows controlHost backend (List.last states)
+
+            check
+                (sprintf "reference kit control: %s shows its state and does not pass for another" (RendererBackend.id backend))
+                (own = Ok() && other <> Ok())
+                (sprintf "own=%A other=%A" own other)
+
+        controlHost.Dispose()
+        let! _ = BrowserConformance.waitUntil 600 (fun () -> (PixiSurface.live ()).Applications = 0)
+        ()
+
+        // The generator's sample, unedited: its placeholder view on all three backends.
+        let generated = document.createElement "div"
+        generated.id <- "stage-generated"
+        document.body.appendChild generated |> ignore
+
+        let background =
+            match (GeneratedRenderers.view 0).Nodes with
+            | SceneNode.Rectangle(_, fill) :: _ -> fill
+            | _ -> failwith "the generated view starts with its background"
+
+        let generatedShows (host: ConformanceHost<int>) backend (_: int) =
+            match backend with
+            | RendererBackend.Svg ->
+                async {
+                    return
+                        if has (svgFill background) generated.innerHTML then
+                            Ok()
+                        else
+                            Error("svg lacks the generated background " + svgFill background)
+                }
+            | _ -> showsPixels host generated backend (background, 160, 90) (background, 2, 2)
+
+        do! runKit "generated kit" (GeneratedRenderers.conformance generated [ 0; 1; 2 ] generatedShows)
+
+        check
+            "generated kit: the stage is empty afterwards"
+            (generated.children.length = 0)
+            generated.innerHTML
+
+        // The generated start path: SVG first, then a runtime switch to each canvas backend with the state kept.
+        let driver = GeneratedRenderers.start generated 7 ignore
+        let offered = RendererSelection.available driver.Model
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Babylon)
+        let onBabylon = driver.Mounted = Some RendererBackend.Babylon && driver.Model.State = 7
+        driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Pixi)
+        let onPixi = driver.Mounted = Some RendererBackend.Pixi && driver.Model.State = 7
+
+        check
+            "generated start: offers all three backends and switches at runtime with the state kept"
+            (offered = RendererBackend.all && onBabylon && onPixi)
+            (sprintf "%A babylon=%b pixi=%b" offered onBabylon onPixi)
+
+        (driver :> System.IDisposable).Dispose()
+        let! released = BrowserConformance.waitUntil 600 (fun () -> (PixiSurface.live ()).Applications = 0)
+        check "generated start: disposing releases the pending pixi application" released (sprintf "%A" (PixiSurface.live ()))
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -1791,6 +2010,7 @@ async {
         do! runBabylon ()
         do! runPixi ()
         do! runThreeBackends ()
+        do! runConformance ()
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)
