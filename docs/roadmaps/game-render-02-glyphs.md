@@ -58,7 +58,7 @@ type Glyph =
 type GlyphDrawing = { Nodes: SceneNode list; Bounds: Rect; Hit: SelectableShape }
 val draw  : Theme -> Glyph -> GlyphDrawing
 val scene : Theme -> Glyph list -> Scene
-val cues  : Theme -> (InteractionCues -> SelectableObject list -> SceneNode list)  // for SceneInteraction.withCues (#787)
+val cues  : Theme -> InteractionCues -> SelectableObject list -> Scene  // = withCues's type (#793); D10
 ```
 
 - **One function.** `draw theme glyph` is pure, total and deterministic. It returns the Scene nodes and the hit
@@ -107,9 +107,9 @@ A glyph lowers to one of two profiles. The same profile is used on every backend
 | **Terrain** | a tile inset by the theme's gap, coloured from the terrain-kind tokens (open, blocked, difficult, water, void) | a hatch per kind, so terrain does not rely on colour alone |
 | **Items** | a small oval at the item anchor | — |
 | **Markers** | waypoint plus, destination ring (disc plus inner disc), target crosshair (four bars, as in SC2) | stroked rings, ping |
-| **Selection** | corner brackets just outside the glyph bounds | — |
+| **Selection** | corner brackets outside the focus ring's width plus the theme gap, so both show on one object (D10) | — |
 | **Focus** (cue layer, D10) | #787's two-tone ring: a dark outer band and a light inner band of filled rectangles, each at least 2 units, just outside the object's bounds, in the theme's `FocusOuter`/`FocusInner` tokens. It differs from selection by shape as well as colour. | — |
-| **Hover** (cue layer, D10) | a one-unit outline in the hover token | — |
+| **Hover** (cue layer, opt-in, D10) | a one-unit outline in the hover token | — |
 | **Path** | dots at a theme spacing, and a step marker at the end | polyline |
 | **Status** | track plus a fill whose length is the fraction, coloured good, warn or bad by theme thresholds | — |
 | **Team colour** | ring or band, from `Theme.Teams` or the allegiance tokens | — |
@@ -290,18 +290,71 @@ object, the hovered object and whether focus is visible. The cues are not game s
 switch. Every interactive backend draws the interaction's cue layer above the frame's Scene. The default layer is
 `SceneInteraction.standardCues`, and a game replaces it with `SceneInteraction.withCues`.
 
-The glyph layer follows that split:
+The glyph layer follows that split. The 2026-11-01 review of #793 raised two conflicts with this ADR (the type of the
+cue layer, and hover after a press) and added two requirements (the ring's pixel width, and unlit drawing). They are
+settled as follows.
 
 - **Selection** is game state (`InteractiveScene.Selected`). It is drawn in the frame's Scene as `Selection` brackets
   through `GlyphState.Selected`.
-- **Focus and hover** are never in `GlyphState`. The library provides `Glyphs.cues theme`, a cue layer for
-  `SceneInteraction.withCues`. It draws #787's two-tone focus ring and the hover outline in the theme's tokens, at the
-  bounds of the cued object. The cue layer and `standardCues` keep the same geometry, so the kit's focus-cue check
-  (#787 I8, the pixels just outside the focused bounds) holds for both. Only the colours come from the theme.
-- **Contrast.** The theme validates both focus tones: the outer tone against the ground and the inner tone against the
-  outer one, each at least 3:1. This is the two-tone rule #787 takes from WCAG 2.2 focus appearance.
-- **The proof** predates that ADR. It draws focus as a single-tone outline in the frame's Scene. The implementation
-  draws focus in the cue layer only.
+- **Focus and hover** are never in `GlyphState`. They are drawn only by the cue layer.
+
+**One type, with no wrapping.** The cue layer has exactly #793's `withCues` type:
+
+```fsharp
+val cues      : Theme -> InteractionCues -> SelectableObject list -> Scene   // focus only
+val cuesHover : Theme -> InteractionCues -> SelectableObject list -> Scene   // focus plus hover (opt-in)
+// use: SceneInteraction.withCues (Glyphs.cues theme) interaction
+```
+
+It returns a `Scene`, not a `SceneNode list`, so it composes into the surface as `withCues` expects. `Glyphs.draw` keeps
+`GlyphDrawing.Nodes`, because a glyph is one part of a frame's Scene, while a cue layer is a whole layer. `Glyphs.scene`
+builds the frame from the nodes.
+
+**Hover is opt-in.** The default `Glyphs.cues` draws focus and nothing for hover, as `standardCues` does. After a
+pointer press the pressed object is hovered, and focus is not visible, so the default draws the same frame as before
+the press. #793's I8 ("after a pointer press the frames do not differ") then holds unchanged for any game using it.
+`Glyphs.cuesHover` adds the hover outline. A game that opts in changes its frame on hover by design, so it is tested
+against #793's restated I8 with a hover-only frame (the same frame with `hovered` set) as the reference.
+
+**Deterministic drawing.** The layer is a pure function of `(theme, cues, objects)`. The focused and hovered ids are
+looked up in `objects`, and an id that is not there draws nothing. Every combination of focus, hover and selection is
+defined:
+
+| Focus visible on X | Hovered | Selected (frame) | The cue layer draws | The frame draws |
+|---|---|---|---|---|
+| no | none | — | nothing | brackets if selected |
+| no | X | — | `cues`: nothing; `cuesHover`: hover outline on X | brackets if selected |
+| yes | none or X | — | the focus ring on X (it covers hover on the same object; no hover outline is drawn on X) | brackets if selected |
+| yes | Y ≠ X | — | the focus ring on X; `cuesHover` also the hover outline on Y | brackets if selected |
+| focused id but not visible (after a press) | any | — | as "no" above | brackets if selected |
+
+- **Layer order.** Frame (with selection brackets), then the hover outline, then the focus ring.
+- **Placement.** The focus ring is just outside the object's bounds, with #793's geometry: a dark outer band and a
+  light inner band. The hover outline sits inside the band the focus ring would occupy, so the two never draw on the
+  same object at once. Selection brackets are placed **outside** the focus ring's full width plus the theme gap, so an
+  object that is both selected and focused shows both cues and never overdraws one with the other. This changes the
+  proof, which predates #793: there, the brackets sit one gap outside the bounds.
+
+**At least 2 CSS px after the surface transform.** Each focus band is `max(theme.FocusBand, 2 / pxPerUnit)` scene units
+wide, where `pxPerUnit` is the surface's CSS pixels per scene unit. The width is then rounded up to whole device pixels,
+so neither band falls below 2 CSS px when a board is styled smaller than its scene (SC2's 640×360 map shown at
+320×180), and the drawn width stays whole on the pixel grid.
+- *Mechanism, proposed to the #787 owner on PR #793:* the input host knows the surface's transform, so it supplies
+  `pxPerUnit` in `InteractionCues`. Both `standardCues` and `Glyphs.cues` read it there, and no new parameter is added to `withCues`.
+- *If #793 does not carry it:* the theme takes a declared minimum scale (`Theme.minPxPerUnit`, default 1.0), and a game
+  styled below its scene declares it.
+
+**Unlit on Babylon.** The cue layer is Scene data drawn through the same fill path as the frame. Once #786 lands,
+Babylon draws it unlit at its declared colours, so the measured contrast of the two tones is the declared contrast.
+Until #786, Babylon draws it at about 0.75 of each colour. Scaling both colours by 0.75 lowers their contrast ratio (for
+example, white on (34,40,49) drops from 14.8:1 to 9.1:1), so the kit's glyph and cue checks assert the declared
+colours only after #786.
+
+**Contrast.** The theme validates both focus tones: the outer tone against the ground and the inner tone against the
+outer one, each at least 3:1. This is the two-tone rule #787 takes from WCAG 2.2 focus appearance.
+
+**The proof** predates #793. It draws focus as a single-tone outline in the frame's Scene, and its brackets sit one gap
+outside the bounds. The implementation draws focus in the cue layer only, with the placement above.
 
 ## The proof (experimental)
 
