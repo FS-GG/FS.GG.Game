@@ -37,6 +37,32 @@ module SceneSurface =
     /// function for an SVG surface.
     val adapter: view: ('State -> FS.GG.UI.Scene.Scene) -> surface: SceneSurface -> RendererAdapter<'State>
 
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The surface with an interactive mount (FS.GG.Game#751): `mountInteractive report frame` has the
+    /// `RendererAdapter.Mount` contract at the `InteractiveScene` type and also attaches the surface's input host,
+    /// which implements the `SceneInteraction` contract (hit test, keyboard, accessible mirror, disposal) and sends
+    /// every request to `report`. Replaces any interactive mount the surface had; the plain `mountScene` is kept.
+    val withInteraction:
+        mountInteractive:
+            ((SelectionRequest -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>) ->
+        surface: SceneSurface ->
+            SceneSurface
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the surface has an interactive mount.
+    val isInteractive: surface: SceneSurface -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The interactive adapter for the surface's backend: every state is presented as `SceneInteraction.frame view
+    /// interaction state`, and the input host reports to `route`. A surface without an interactive mount gives the
+    /// plain `SceneSurface.adapter view surface`, which the interaction checks of the conformance kit fail.
+    val interactiveAdapter:
+        view: ('State -> FS.GG.UI.Scene.Scene) ->
+        interaction: SceneInteraction<'State> ->
+        route: SelectionRoute ->
+        surface: SceneSurface ->
+            RendererAdapter<'State>
+
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// The authoring declaration of a game's renderers for ONE game-state type: the shared Scene description of the
@@ -91,6 +117,18 @@ module SceneRenderers =
     val backends: renderers: SceneRenderers<'State> -> RendererBackend list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Make the declared renderers interactive (FS.GG.Game#751): from now on `registry` gives every backend
+    /// `SceneSurface.interactiveAdapter (view backend) interaction route surface`, so the selectable objects of each
+    /// presented state are offered on every backend and their requests go to `route`. Replaces any interaction
+    /// declared before.
+    val withInteraction:
+        interaction: SceneInteraction<'State> ->
+        route: SelectionRoute ->
+        renderers: SceneRenderers<'State> ->
+            SceneRenderers<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The registry of the declared renderers: `SceneSurface.adapter (view backend) surface` for every declared
-    /// backend, so exactly the declared backends are selectable.
+    /// backend (`SceneSurface.interactiveAdapter` once `withInteraction` declared an interaction), so exactly the
+    /// declared backends are selectable.
     val registry: renderers: SceneRenderers<'State> -> RendererRegistry<'State>

@@ -1,5 +1,7 @@
 namespace FS.GG.Game.Render
 
+open FS.GG.UI.Scene
+
 /// See RendererConformance.fsi for the contract.
 [<Sealed>]
 type ConformanceResult internal (check: string, passed: bool, detail: string) =
@@ -34,6 +36,43 @@ module LateFailureTrigger =
 
     let create (arm: unit -> unit) (settle: Async<bool>) = LateFailureTrigger(arm, settle)
 
+type MirrorEntry =
+    {
+        Id: string
+        Label: string
+        Pressed: bool
+    }
+
+[<Sealed>]
+type InteractionProbe
+    internal
+    (
+        press: RendererBackend -> Point -> Async<unit>,
+        move: RendererBackend -> Point -> Async<unit>,
+        focus: RendererBackend -> Async<unit>,
+        key: string -> Async<unit>,
+        focused: RendererBackend -> string,
+        mirror: RendererBackend -> MirrorEntry list option,
+        liveWrites: RendererBackend -> int,
+        tabIndex: RendererBackend -> string option,
+        inputHosts: RendererBackend -> int
+    ) =
+    member internal _.Press backend point = press backend point
+    member internal _.Move backend point = move backend point
+    member internal _.Focus backend = focus backend
+    member internal _.Key name = key name
+    member internal _.Focused backend = focused backend
+    member internal _.Mirror backend = mirror backend
+    member internal _.LiveWrites backend = liveWrites backend
+    member internal _.TabIndex backend = tabIndex backend
+    member internal _.InputHosts backend = inputHosts backend
+
+[<RequireQualifiedAccess>]
+module InteractionProbe =
+
+    let create press move focus key focused mirror liveWrites tabIndex inputHosts =
+        InteractionProbe(press, move, focus, key, focused, mirror, liveWrites, tabIndex, inputHosts)
+
 /// Opaque behind the .fsi: built by `RendererConformance.subject` and its `with*` functions only, so a field added
 /// later is not a breaking change.
 [<NoEquality; NoComparison>]
@@ -48,6 +87,7 @@ type ConformanceSubject<'State> =
         WaitUntil: (unit -> bool) -> Async<bool>
         LateFailures: Map<RendererBackend, LateFailureTrigger>
         Viewport: (('State -> float * float) * (ConformanceHost<'State> -> RendererBackend -> Async<(float * float) option>)) option
+        Interaction: (SceneInteraction<'State> * SelectionRoute * InteractionProbe) option
     }
 
 /// One mount the instrumented registry handed out: the states it received (newest first, the mount's own state
@@ -125,6 +165,7 @@ module RendererConformance =
             WaitUntil = fun condition -> async { return condition () }
             LateFailures = Map.empty
             Viewport = None
+            Interaction = None
         }
 
     let withStart start (subject: ConformanceSubject<'State>) = { subject with Start = start }
@@ -139,6 +180,11 @@ module RendererConformance =
     let withViewport expected actual (subject: ConformanceSubject<'State>) =
         { subject with
             Viewport = Some(expected, actual)
+        }
+
+    let withInteraction interaction route probe (subject: ConformanceSubject<'State>) =
+        { subject with
+            Interaction = Some(interaction, route, probe)
         }
 
     let failures (results: ConformanceResult list) =
@@ -166,6 +212,61 @@ module RendererConformance =
                     walk source remaining (source :: acc)
 
         walk RendererBackend.defaultBackend pairs []
+
+    /// Points inside an object's bounds, from its centre outwards, at which the kit tries a pointer press.
+    let private pressPoints (target: SelectableObject) : Point list =
+        let bounds = target.Bounds
+
+        [
+            0.5, 0.5
+            0.3, 0.3
+            0.7, 0.3
+            0.3, 0.7
+            0.7, 0.7
+            0.5, 0.2
+            0.5, 0.8
+            0.2, 0.5
+            0.8, 0.5
+        ]
+        |> List.map (fun (fx, fy) ->
+            {
+                X = bounds.X + fx * bounds.Width
+                Y = bounds.Y + fy * bounds.Height
+            })
+
+    /// A point inside the objects' joint bounds that is at least two units away from every object's bounds, so no
+    /// backend can hit an object there through antialiasing or rounding; scanned row by row.
+    let private missPoint (objects: SelectableObject list) : Point option =
+        match objects with
+        | [] -> None
+        | _ ->
+            let margin = 2.0
+            let left = objects |> List.map (fun o -> o.Bounds.X) |> List.min
+            let top = objects |> List.map (fun o -> o.Bounds.Y) |> List.min
+            let right = objects |> List.map (fun o -> o.Bounds.X + o.Bounds.Width) |> List.max
+            let bottom = objects |> List.map (fun o -> o.Bounds.Y + o.Bounds.Height) |> List.max
+
+            let clear (point: Point) =
+                objects
+                |> List.forall (fun o ->
+                    point.X < o.Bounds.X - margin
+                    || point.X > o.Bounds.X + o.Bounds.Width + margin
+                    || point.Y < o.Bounds.Y - margin
+                    || point.Y > o.Bounds.Y + o.Bounds.Height + margin)
+
+            let columns = int (System.Math.Floor(right - left))
+            let rows = int (System.Math.Floor(bottom - top))
+
+            seq {
+                for row in 1..rows - 1 do
+                    for column in 1..columns - 1 do
+                        yield
+                            {
+                                X = left + float column
+                                Y = top + float row
+                            }
+            }
+            |> Seq.tryFind clear
 
     let run (subject: ConformanceSubject<'State>) : Async<ConformanceResult list> =
         async {
@@ -818,6 +919,311 @@ module RendererConformance =
                                 (sprintf "%d mounts for %d changes" (mountsOf backend).Length changes)
 
                         do! stop host
+
+                // interaction ------------------------------------------------------------------------------------
+                match subject.Interaction with
+                | None -> ()
+                | Some(interaction, route, probe) ->
+                    let objectsOf = SceneInteraction.objects interaction
+                    let selectedOf = SceneInteraction.selected interaction
+
+                    let invalid =
+                        subject.States
+                        |> List.indexed
+                        |> List.collect (fun (index, state) ->
+                            SceneInteraction.problems (objectsOf state)
+                            |> List.map (sprintf "state %d: %s" index))
+
+                    // The state the section plays: the first with two or more objects (else one), with its selection
+                    // cleared by the game's own rule.
+                    let play =
+                        subject.States
+                        |> List.tryFind (fun state -> (objectsOf state).Length >= 2)
+                        |> Option.orElse (subject.States |> List.tryFind (fun state -> not (objectsOf state).IsEmpty))
+                        |> Option.map (SceneInteraction.apply interaction SelectionRequest.Clear)
+
+                    check
+                        "interaction: the states declare valid selectable objects, and the game's Clear leaves one with objects and nothing selected"
+                        (invalid.IsEmpty
+                         && (match play with
+                             | Some state -> not (objectsOf state).IsEmpty && selectedOf state = None
+                             | None -> false))
+                        (match play with
+                         | None -> "no state declares a selectable object " + String.concat "; " invalid
+                         | Some state ->
+                             sprintf "selected after Clear=%A %s" (selectedOf state) (String.concat "; " invalid))
+
+                    match play with
+                    | None -> ()
+                    | Some play ->
+                        let objects = objectsOf play
+
+                        let reachable =
+                            objects
+                            |> List.choose (fun target ->
+                                pressPoints target
+                                |> List.tryFind (fun point -> SceneInteraction.hitTest point objects = Some target.Id)
+                                |> Option.map (fun point -> target, point))
+
+                        let miss = missPoint objects
+
+                        let expectedMirror =
+                            objects
+                            |> List.map (fun target ->
+                                {
+                                    Id = target.Id
+                                    Label = target.Label
+                                    Pressed = false
+                                })
+
+                        for backend in offered do
+                            let name = id backend
+                            mounts.Clear()
+                            // What the backends' input hosts hold before this host starts: the census is page-wide, so
+                            // what an earlier mount left (a renderer's own listeners on a canvas whose initialisation
+                            // failed) is not this host's.
+                            let baseline = RendererBackend.all |> List.map (fun other -> other, probe.InputHosts other) |> Map.ofList
+                            let host = subject.Start registry initial
+                            let requests = ResizeArray<SelectionRequest>()
+
+                            route
+                            |> SelectionRoute.bind (fun request ->
+                                requests.Add request
+
+                                host.Dispatch(
+                                    RendererMsg.StateChanged(SceneInteraction.apply interaction request (host.Model()).State)
+                                ))
+
+                            if backend <> RendererBackend.Svg then
+                                select host backend
+
+                            host.Dispatch(RendererMsg.StateChanged play)
+
+                            let selectedNow () = selectedOf (host.Model()).State
+
+                            let pressed (target: RendererBackend) =
+                                probe.Mirror target
+                                |> Option.map (List.filter (fun entry -> entry.Pressed) >> List.map (fun entry -> entry.Id))
+
+                            let observed () =
+                                sprintf
+                                    "requests=%A selected=%A pressed=%A %s"
+                                    (List.ofSeq requests)
+                                    (selectedNow ())
+                                    (pressed backend)
+                                    (describe host)
+
+                            let! attached = subject.WaitUntil(fun () -> probe.InputHosts backend > baseline.[backend])
+
+                            check
+                                (sprintf "interaction %s: the input host is attached while the backend is mounted" name)
+                                (attached && isOn host backend)
+                                (sprintf "inputHosts=%d before=%d %s" (probe.InputHosts backend) baseline.[backend] (describe host))
+
+                            let mirror = probe.Mirror backend
+
+                            check
+                                (sprintf "interaction %s: the accessible mirror lists every selectable object in order, with its label, none pressed" name)
+                                (mirror = Some expectedMirror)
+                                (sprintf "mirror=%A expected=%A" mirror expectedMirror)
+
+                            // A real pointer moving over the surface leaves it in document tab order (tabindex 0): a
+                            // renderer that raises it puts the surface ahead of the page.
+                            match miss with
+                            | Some point -> do! probe.Move backend point
+                            | None -> ()
+
+                            do! probe.Move backend { X = 1.0; Y = 1.0 }
+                            let tabIndex = probe.TabIndex backend
+
+                            check
+                                (sprintf "interaction %s: the surface stays in document tab order (tabindex 0) after a real pointer move" name)
+                                (tabIndex = Some "0")
+                                (sprintf "tabindex=%A" tabIndex)
+
+                            // Keyboard: two steps from no focus reach the second object (the first of one), Enter
+                            // selects it, Escape clears.
+                            requests.Clear()
+                            do! probe.Focus backend
+                            do! probe.Key "ArrowRight"
+                            do! probe.Key "ArrowRight"
+                            do! probe.Key "Enter"
+                            let target = objects.[1 % objects.Length]
+
+                            check
+                                (sprintf "interaction %s: the arrows move the keyboard focus in order and Enter selects the focused object in the game state" name)
+                                (List.ofSeq requests = [ SelectionRequest.Select target.Id ]
+                                 && selectedNow () = Some target.Id
+                                 && pressed backend = Some [ target.Id ])
+                                (sprintf "want %s; %s" target.Id (observed ()))
+
+                            requests.Clear()
+                            do! probe.Key "Escape"
+
+                            check
+                                (sprintf "interaction %s: Escape clears the game's selection" name)
+                                (List.ofSeq requests = [ SelectionRequest.Clear ]
+                                 && selectedNow () = None
+                                 && pressed backend = Some [])
+                                (observed ())
+
+                            // Pointer: the backend's own hit test on a point of each reachable object.
+                            let missed = ResizeArray<string>()
+
+                            for target, point in reachable do
+                                let before = selectedNow ()
+                                requests.Clear()
+                                do! probe.Press backend point
+
+                                let expected =
+                                    if before = Some target.Id then
+                                        []
+                                    else
+                                        [ SelectionRequest.Select target.Id ]
+
+                                if
+                                    not (
+                                        List.ofSeq requests = expected
+                                        && selectedNow () = Some target.Id
+                                        && pressed backend = Some [ target.Id ]
+                                    )
+                                then
+                                    missed.Add(sprintf "%s at (%g, %g): %s" target.Id point.X point.Y (observed ()))
+
+                            check
+                                (sprintf "interaction %s: a pointer press on each object selects it in the game state (hit test)" name)
+                                (not reachable.IsEmpty && missed.Count = 0)
+                                (if reachable.IsEmpty then
+                                     "no object can be reached by a pointer: every press point is covered by another object"
+                                 else
+                                     String.concat "; " missed)
+
+                            match miss with
+                            | None ->
+                                check
+                                    (sprintf "interaction %s: a pointer press where no object is asks for nothing" name)
+                                    true
+                                    ""
+                            | Some point ->
+                                let before = selectedNow ()
+                                requests.Clear()
+                                do! probe.Press backend point
+
+                                check
+                                    (sprintf "interaction %s: a pointer press where no object is asks for nothing" name)
+                                    (requests.Count = 0 && selectedNow () = before)
+                                    (sprintf "at (%g, %g): %s" point.X point.Y (observed ()))
+
+                            // The mirror, through real focus: Tab from the surface walks the entries in order, and Space
+                            // selects the focused one (a single object is cleared first).
+                            if objects |> List.forall (fun candidate -> Some candidate.Id = selectedNow ()) then
+                                do! probe.Focus backend
+                                do! probe.Key "Escape"
+
+                            let entryIndex =
+                                objects
+                                |> List.findIndexBack (fun candidate -> Some candidate.Id <> selectedNow ())
+
+                            let entry = objects.[entryIndex]
+                            requests.Clear()
+                            do! probe.Focus backend
+                            let walked = ResizeArray<string>()
+
+                            for _ in 0..entryIndex do
+                                do! probe.Key "Tab"
+                                walked.Add(probe.Focused backend)
+
+                            let control = "control:" + entry.Id
+                            let reached = List.ofSeq walked = (objects |> List.take (entryIndex + 1) |> List.map (fun o -> "control:" + o.Id))
+                            do! probe.Key " "
+
+                            check
+                                (sprintf "interaction %s: Tab walks the mirror entries in order and Space selects the focused object in the game state" name)
+                                (reached
+                                 && List.ofSeq requests = [ SelectionRequest.Select entry.Id ]
+                                 && selectedNow () = Some entry.Id
+                                 && pressed backend = Some [ entry.Id ])
+                                (sprintf "want %s; tabbed to %A; %s" entry.Id (List.ofSeq walked) (observed ()))
+
+                            // The Present that followed the selection, then unchanged Presents (one, then ten): the
+                            // keyboard focus stays on the entry, and the live status is not written again.
+                            let afterSelect = probe.Focused backend
+                            let state = (host.Model()).State
+                            let writes = probe.LiveWrites backend
+                            host.Dispatch(RendererMsg.StateChanged state)
+                            let afterOne = probe.Focused backend
+
+                            for _ in 1..10 do
+                                host.Dispatch(RendererMsg.StateChanged state)
+
+                            let afterTen = probe.Focused backend
+                            let unchangedWrites = probe.LiveWrites backend - writes
+
+                            check
+                                (sprintf "interaction %s: keyboard focus stays on the mirror entry across the Present of its selection and across unchanged Presents" name)
+                                (reached && afterSelect = control && afterOne = control && afterTen = control)
+                                (sprintf
+                                    "want %s; after the selection %s, after one unchanged Present %s, after ten %s"
+                                    control
+                                    afterSelect
+                                    afterOne
+                                    afterTen)
+
+                            check
+                                (sprintf "interaction %s: an unchanged Present does not write the live status" name)
+                                (unchangedWrites = 0)
+                                (sprintf "%d live-status writes over eleven unchanged Presents" unchangedWrites)
+
+                            // The selection is game state: it survives a switch away and back, and the other backend
+                            // shows it.
+                            let away = offered |> List.tryFind ((<>) backend)
+
+                            match away with
+                            | None -> ()
+                            | Some away ->
+                                let kept = selectedNow ()
+                                select host away
+                                let awayPressed = pressed away
+                                select host backend
+                                let backPressed = pressed backend
+
+                                check
+                                    (sprintf "interaction %s: the selection survives a switch to %s and back, and both mirrors show it" name (id away))
+                                    (kept.IsSome
+                                     && awayPressed = Option.map List.singleton kept
+                                     && backPressed = Option.map List.singleton kept
+                                     && selectedNow () = kept
+                                     && isOn host backend)
+                                    (sprintf "kept=%A away=%A back=%A %s" kept awayPressed backPressed (describe host))
+
+                            // Disposal: the input host goes with its mount.
+                            let! releasedOnSwitch =
+                                match away with
+                                | None -> async { return true }
+                                | Some away ->
+                                    select host away
+                                    subject.WaitUntil(fun () -> probe.InputHosts backend <= baseline.[backend])
+
+                            let onSwitch = probe.InputHosts backend
+                            do! stop host
+
+                            let! released =
+                                subject.WaitUntil(fun () ->
+                                    RendererBackend.all
+                                    |> List.forall (fun other -> probe.InputHosts other <= baseline.[other]))
+
+                            check
+                                (sprintf "interaction %s: switching away and disposing the host release the input host (listeners and mirror)" name)
+                                (releasedOnSwitch && released)
+                                (sprintf
+                                    "before %s; after switching away %d; after dispose %s"
+                                    (baseline |> Map.toList |> List.map (fun (other, count) -> sprintf "%s=%d" (id other) count) |> String.concat " ")
+                                    onSwitch
+                                    (RendererBackend.all
+                                     |> List.map (fun other -> sprintf "%s=%d" (id other) (probe.InputHosts other))
+                                     |> String.concat " "))
+
+                        SelectionRoute.unbind route
 
             return List.ofSeq results
         }

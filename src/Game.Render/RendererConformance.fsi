@@ -7,7 +7,7 @@ namespace FS.GG.Game.Render
 type ConformanceResult =
 
     /// The requirement, prefixed by its section (`subject`, `registry`, `round-trip`, `switch`, `dispose`,
-    /// `late failure`, `present failure`, `viewport`).
+    /// `late failure`, `present failure`, `viewport`, `interaction`).
     member Check: string
 
     /// Whether the requirement held.
@@ -60,10 +60,62 @@ module LateFailureTrigger =
     val create: arm: (unit -> unit) -> settle: Async<bool> -> LateFailureTrigger
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
+/// One entry of a backend's accessible mirror, as read back from the backend's output.
+type MirrorEntry =
+    {
+        /// The object the entry selects (`SelectableObject.Id`).
+        Id: string
+        /// The entry's accessible text.
+        Label: string
+        /// Whether the entry says its object is selected (`aria-pressed`).
+        Pressed: bool
+    }
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// How the kit plays a backend's input host from outside (FS.GG.Game#751): REAL input (a browser's trusted pointer
+/// and keyboard events, never synthesised DOM events) delivered to the mounted backend's output, real keyboard focus,
+/// the accessible mirror read back, and an independent census of the input hosts the backend holds. Built by
+/// `InteractionProbe.create`.
+[<Sealed>]
+type InteractionProbe
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module InteractionProbe =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// - `press backend point`: a real primary pointer press and release at `point` (scene coordinates) on
+    ///   `backend`'s output;
+    /// - `move backend point`: a real pointer move to `point` over `backend`'s output;
+    /// - `focus backend`: give `backend`'s focusable output (its SVG root or canvas) the keyboard focus;
+    /// - `key name`: a real key press (a `KeyboardEvent.key` value such as `ArrowRight`, `Enter`, `Escape`, `Tab` or
+    ///   `" "`) delivered to whatever has the keyboard focus;
+    /// - `focused backend`: what has the keyboard focus, as `surface` (the backend's output), `control:<id>` (the
+    ///   backend's mirror entry of object `id`) or anything else for other elements;
+    /// - `mirror backend`: `backend`'s accessible mirror (`None` when there is none);
+    /// - `liveWrites backend`: how many times `backend`'s live status has been written so far;
+    /// - `tabIndex backend`: the `tabindex` of `backend`'s output;
+    /// - `inputHosts backend`: what `backend`'s input hosts hold now (listeners and mirrors, observed independently
+    ///   of the adapter). The kit compares it with its value before each host starts: an input host must raise it
+    ///   while mounted and bring it back when released.
+    val create:
+        press: (RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>) ->
+        move: (RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>) ->
+        focus: (RendererBackend -> Async<unit>) ->
+        key: (string -> Async<unit>) ->
+        focused: (RendererBackend -> string) ->
+        mirror: (RendererBackend -> MirrorEntry list option) ->
+        liveWrites: (RendererBackend -> int) ->
+        tabIndex: (RendererBackend -> string option) ->
+        inputHosts: (RendererBackend -> int) ->
+            InteractionProbe
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// What the kit needs to know about one game's renderers. Built by `RendererConformance.subject`, which fills the
-/// in-process defaults, and adjusted by `RendererConformance.withStart`, `withWaitUntil`, `withLateFailure` and
-/// `withViewport`.
+/// in-process defaults, and adjusted by `RendererConformance.withStart`, `withWaitUntil`, `withLateFailure`,
+/// `withViewport` and `withInteraction`.
 [<NoEquality; NoComparison>]
 type ConformanceSubject<'State>
 
@@ -97,7 +149,16 @@ type ConformanceSubject<'State>
 /// - **viewport**, when the subject declares one (`withViewport`): every state is presented at its own viewport, read
 ///   back from the backend, in both directions, with one live mount at the end and every superseded one disposed once.
 ///   When the registry also declares the viewport (`RendererRegistry.withViewport`), a mount is replaced exactly when
-///   the viewport changes and states with the same viewport are presented in place.
+///   the viewport changes and states with the same viewport are presented in place;
+/// - **interaction**, when `withInteraction` declared one (FS.GG.Game#751): the states declare valid selectable
+///   objects; then on every backend, with real input, the input host is attached while mounted, the accessible
+///   mirror lists every object with its label, a pointer move leaves the surface at tabindex 0, the keyboard
+///   focuses objects in order and selects and clears through the game's own rule, a pointer press on each object
+///   reachable by a pointer selects it (the backend's hit test agrees with `SceneInteraction.hitTest`) and a press
+///   where no object is asks for nothing, Tab walks the mirror entries in order and Space selects one, keyboard
+///   focus stays on that entry across the selection's Present and across unchanged Presents, an unchanged Present
+///   does not write the live status, the selection survives a switch away and back, and switching away and
+///   disposing the host release the input host.
 [<RequireQualifiedAccess>]
 module RendererConformance =
 
@@ -161,6 +222,18 @@ module RendererConformance =
     val withViewport:
         expected: ('State -> float * float) ->
         actual: (ConformanceHost<'State> -> RendererBackend -> Async<(float * float) option>) ->
+        subject: ConformanceSubject<'State> ->
+            ConformanceSubject<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare the game's interaction (FS.GG.Game#751), replacing any declared before: the registry's adapters report
+    /// to `route` (`SceneRenderers.withInteraction interaction route`), and `probe` plays each backend's input host.
+    /// The interaction checks run on every offered backend. The kit binds `route` to each host it starts, applying
+    /// every request with `SceneInteraction.apply` and presenting the result, and unbinds it when the section ends.
+    val withInteraction:
+        interaction: SceneInteraction<'State> ->
+        route: SelectionRoute ->
+        probe: InteractionProbe ->
         subject: ConformanceSubject<'State> ->
             ConformanceSubject<'State>
 

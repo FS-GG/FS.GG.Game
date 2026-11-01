@@ -80,7 +80,21 @@ module PixiSurface =
     val mountScene:
         container: HTMLElement -> options: PixiOptions -> scene: Scene -> Result<RendererMount<Scene>, string>
 
-    /// `mountScene container options` as the Pixi `SceneSurface` for `SceneRenderers.withSurface`.
+    /// The interactive Pixi mount (FS.GG.Game#751): `mountScene` plus an input host that implements the
+    /// `SceneInteraction` contract on the canvas. The hit test is Pixi's own `EventBoundary` over one hit region per
+    /// selectable object, kept in a tree of its own (never drawn, never on the stage); the canvas becomes focusable
+    /// (`role="application"`), and the accessible mirror is appended to `container`. It works while the renderer is
+    /// still initialising. Objects that `SceneInteraction.problems` rejects are refused at mount and raise from
+    /// `Present`. `Dispose` removes the input host's listeners and mirror with everything else.
+    val mountInteractive:
+        container: HTMLElement ->
+        options: PixiOptions ->
+        report: (SelectionRequest -> unit) ->
+        frame: InteractiveScene ->
+            Result<RendererMount<InteractiveScene>, string>
+
+    /// `mountScene container options` as the Pixi `SceneSurface` for `SceneRenderers.withSurface`, interactive through
+    /// `mountInteractive container options`.
     val surface: container: HTMLElement -> options: PixiOptions -> SceneSurface
 
     /// The Pixi adapter for a game-state type: every state is projected through `view` first
