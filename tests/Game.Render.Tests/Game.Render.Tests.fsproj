@@ -15,6 +15,7 @@
     <Compile Include="PortalPresentationTests.fs" />
     <Compile Include="RendererSelectionTests.fs" />
     <Compile Include="RendererConformanceTests.fs" />
+    <Compile Include="SceneInteractionTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

@@ -63,7 +63,21 @@ module BabylonSurface =
     val mountScene:
         container: HTMLElement -> options: BabylonOptions -> scene: Scene -> Result<RendererMount<Scene>, string>
 
-    /// `mountScene container options` as the Babylon `SceneSurface` for `SceneRenderers.withSurface`.
+    /// The interactive Babylon mount (FS.GG.Game#751): `mountScene` plus an input host that implements the
+    /// `SceneInteraction` contract on the canvas. The hit test is Babylon's own `Scene.pick` through the camera,
+    /// restricted to one invisible mesh per selectable object (counted in `BabylonCounters`); the canvas becomes
+    /// focusable (`role="application"`), and the accessible mirror is appended to `container`. Objects that
+    /// `SceneInteraction.problems` rejects are refused at mount and raise from `Present`. `Dispose` removes the input
+    /// host's listeners and mirror with everything else.
+    val mountInteractive:
+        container: HTMLElement ->
+        options: BabylonOptions ->
+        report: (SelectionRequest -> unit) ->
+        frame: InteractiveScene ->
+            Result<RendererMount<InteractiveScene>, string>
+
+    /// `mountScene container options` as the Babylon `SceneSurface` for `SceneRenderers.withSurface`, interactive
+    /// through `mountInteractive container options`.
     val surface: container: HTMLElement -> options: BabylonOptions -> SceneSurface
 
     /// The Babylon adapter for a game-state type: every state is projected through `view` first

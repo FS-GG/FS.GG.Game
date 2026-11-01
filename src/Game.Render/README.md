@@ -104,6 +104,7 @@ unchanged) and drives a host through the Elmish messages:
 | `dispose` | Switching away and disposing the host release every resource, including a canvas's WebGL context. Each mount is disposed exactly once, and a disposed host stays inert. |
 | `late failure (host)` | For each non-default backend, `FailBackend` for the live mount falls back to SVG with the state intact and releases the backend. A report for an unselected backend is ignored, and re-selecting recovers. |
 | `late failure (adapter)` | For each backend with a `LateFailureTrigger` (Pixi in the browser, through `BrowserConformance.pixiLateFailure`), the trigger makes the adapter's next mount fail asynchronously. The adapter's own report (`OnFailure`, then `LateFailureRoute`, then `failBackend`) falls back to SVG with the state intact and releases the mount. A failure of a mount already disposed is not reported, so the live mount of the same backend stays: this is the live-mount rule, checked against the adapter. |
+| `interaction` | Only when `RendererConformance.withInteraction` declares the game's interaction (FS.GG.Game#751). The states declare valid selectable objects. On every backend: the input host is attached while mounted; the accessible mirror lists every object, in order, with its label; the arrows move the focus and Enter selects through the game's own rule, and Escape clears; a pointer press on each object a pointer can reach selects it (the backend's hit test agrees with `SceneInteraction.hitTest`), and a press where no object is asks for nothing; a mirror entry selects its object; the selection survives a switch away and back; switching away and disposing the host release the input host. |
 
 `Resources` must observe the page independently of the adapter. `BrowserConformance.resources` counts SVG
 roots, canvases, Babylon engines, Pixi applications and live WebGL contexts. The kit also asserts its
@@ -111,6 +112,36 @@ subject: a probe that never sees a mounted backend fails, and so does fewer than
 In .NET, `RendererConformance.subject` uses the in-process host (`RendererConformance.inProcess`);
 `withStart`, `withWaitUntil` and `withLateFailure` adjust it. `tests/Game.Render.Tests/RendererConformanceTests.fs`
 shows the shape, with negative controls.
+
+### Interaction contract (FS.GG.Game#751)
+
+A game whose play is selection stays playable on every backend through one contract, `SceneInteraction`:
+
+```fsharp
+let selection = SelectionRoute.create ()
+let interaction = SceneInteraction.create objects selected select   // 'State -> objects; 'State -> id; request -> 'State -> 'State
+let renderers =
+    BrowserRenderers.declare container options route view
+    |> SceneRenderers.withInteraction interaction selection
+// When the game runs: send each SelectionRequest to the game's own update.
+selection |> SelectionRoute.bind (fun request -> game.Dispatch(SelectionChanged request))
+```
+
+- **Hit test.** A primary pointer press on the topmost object containing the point asks to `Select` it. SVG uses
+  the browser's own hit test over transparent hit shapes, Pixi its `EventBoundary` over hit regions kept off the
+  stage, Babylon `Scene.pick` through its camera over invisible meshes. All three agree with the reference
+  `SceneInteraction.hitTest`.
+- **Keyboard.** The surface is focusable (`role="application"`, `tabindex="0"`). Arrows move the focus, Enter or
+  Space selects and Escape clears: the retained SVG surface's keys, through `SceneInteraction.key` on canvases.
+- **Accessible mirror.** An HTML group (`data-scene-controls`, `data-renderer`) holds one button per object in
+  order, labelled, with `aria-pressed` on the selected one, and a polite status naming the selection.
+- **Input-host disposal.** The mount's `Dispose` removes the input host's listeners and the mirror.
+
+The selection is game state: a backend shows it and asks to change it (only for a change), so it survives every
+switch. `RendererConformance.withInteraction interaction route probe` adds the `interaction` section;
+`BrowserConformance.interactionProbe container` plays the real input hosts with DOM events and counts their
+listeners through a page-level census (`BrowserConformance.installInputProbe`). The reference game
+(`ReferenceRenderers.interaction`) selects its token and aim marker and draws a ring around the selection.
 
 Adapter authors keep two obligations the kit checks:
 
@@ -121,8 +152,8 @@ Adapter authors keep two obligations the kit checks:
 
 ### Fable and the browser host
 
-The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneRenderers` and
-`RendererConformance`, each `.fsi` and `.fs`) so a Fable-compiled browser host can register adapters
+The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneInteraction`,
+`SceneRenderers` and `RendererConformance`, each `.fsi` and `.fs`) so a Fable-compiled browser host can register adapters
 against the same `RendererRegistry` and run the conformance kit. `Adapter` and
 `DefaultKeymap` are .NET-only and are not in that view. The repository's `src/Render.Browser` project
 (not packed) is that host: it mounts the existing SVG surface (`SvgBrowser`), hosts the BabylonJS

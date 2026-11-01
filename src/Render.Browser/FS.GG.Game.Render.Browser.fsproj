@@ -17,6 +17,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="CanvasInput.fsi" />
+    <Compile Include="CanvasInput.fs" />
     <Compile Include="SvgSurface.fsi" />
     <Compile Include="SvgSurface.fs" />
     <Compile Include="CanvasSupport.fsi" />

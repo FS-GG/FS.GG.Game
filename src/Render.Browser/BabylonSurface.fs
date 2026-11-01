@@ -3,6 +3,7 @@ namespace FS.GG.Game.Render.Browser
 open Browser.Dom
 open Browser.Types
 open Fable.Core
+open Fable.Core.JsInterop
 open FS.GG.Game.Render
 open FS.GG.UI.Scene
 open FS.GG.Game.Render.Browser.SceneShapes
@@ -61,6 +62,18 @@ module BabylonSurface =
             Antialias = true
         }
 
+    // `Scene.pick` is registered by the ray module's side effect (FS.GG.Game#751).
+    importSideEffects "@babylonjs/core/Culling/ray.js"
+
+    /// Make `mesh` an invisible hit region of the object `id`: never drawn, picked only by `pickRegion`.
+    [<Emit("(($0.isVisible = false), ($0.fsggSelectable = $1))")>]
+    let private markRegion (_mesh: B.Mesh) (_id: string) : unit = jsNative
+
+    /// Babylon's own pick, through the camera, restricted to hit regions: the id of the nearest one under the canvas
+    /// pixel `(x, y)`.
+    [<Emit("(() => { const p = $0.pick($1, $2, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
+    let private pickRegion (_scene: B.Scene) (_x: float) (_y: float) : string option = jsNative
+
     let private channel (value: byte) = float value / 255.0
 
     /// Vertical field of view of Babylon's default camera, in radians.
@@ -79,11 +92,16 @@ module BabylonSurface =
             mutable Fill: Color
         }
 
-    let mountScene
+    /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
+    /// whose hit test is Babylon's own pick over one invisible mesh per selectable object.
+    let private mountWith
         (container: HTMLElement)
         (options: BabylonOptions)
-        (scene: Scene)
-        : Result<RendererMount<Scene>, string> =
+        (interactive: (SelectionRequest -> unit) option)
+        (first: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        let scene = first.Scene
+
         if System.String.IsNullOrWhiteSpace options.Label then
             Error "Babylon surface refused the scene: the accessible label is blank"
         elif
@@ -235,6 +253,63 @@ module BabylonSurface =
 
                 reconcile scene
 
+                // FS.GG.Game#751: one invisible region per selectable object, in the plane of the scene and stacked
+                // toward the camera in the objects' order, so the nearest pick is the topmost object.
+                let regions = ResizeArray<B.Mesh>()
+                let regionsOf: SelectableObject list ref = ref []
+
+                let clearRegions () =
+                    for region in regions do
+                        B.disposeMesh region
+                        meshesDisposed <- meshesDisposed + 1
+
+                    regions.Clear()
+
+                let reregion (objects: SelectableObject list) =
+                    if objects <> regionsOf.Value then
+                        clearRegions ()
+
+                        objects
+                        |> List.iteri (fun index target ->
+                            serial.Value <- serial.Value + 1
+                            let name = sprintf "region-%d" serial.Value
+
+                            let mesh =
+                                match target.Shape with
+                                | SelectableShape.Box -> B.box name 1.0 babylon
+                                | SelectableShape.Ellipse -> B.sphere name 1.0 24 babylon
+
+                            meshesCreated <- meshesCreated + 1
+                            markRegion mesh target.Id
+                            let bounds = target.Bounds
+                            let x = bounds.X + bounds.Width / 2.0 - options.Width / 2.0
+                            let y = options.Height / 2.0 - (bounds.Y + bounds.Height / 2.0)
+                            B.setPosition mesh (B.vector3 x y (-(float (index + 1)) * 0.01))
+                            B.setScaling mesh (B.vector3 (max bounds.Width 0.001) (max bounds.Height 0.001) 0.001)
+                            regions.Add mesh)
+
+                        regionsOf.Value <- objects
+
+                acquire clearRegions
+
+                let input =
+                    interactive
+                    |> Option.map (fun report ->
+                        reregion first.Objects
+
+                        CanvasInput.attach
+                            container
+                            canvas
+                            RendererBackend.Babylon
+                            options.Label
+                            options.Width
+                            options.Height
+                            (fun point -> pickRegion babylon point.X point.Y)
+                            report
+                            first)
+
+                acquire (fun () -> input |> Option.iter (fun host -> host.Dispose()))
+
                 B.runRenderLoop engine babylon
                 loopsStarted <- loopsStarted + 1
 
@@ -247,9 +322,22 @@ module BabylonSurface =
                 Ok
                     {
                         Present =
-                            fun next ->
+                            fun frame ->
                                 if not disposed.Value then
-                                    reconcile next
+                                    match input with
+                                    | Some host ->
+                                        match SceneInteraction.problems frame.Objects with
+                                        | [] -> ()
+                                        | problems ->
+                                            failwithf
+                                                "Babylon surface refused the objects: %s"
+                                                (String.concat "; " problems)
+
+                                        reregion frame.Objects
+                                        host.Update frame
+                                    | None -> ()
+
+                                    reconcile frame.Scene
                         Dispose =
                             fun () ->
                                 if not disposed.Value then
@@ -265,8 +353,38 @@ module BabylonSurface =
 
                 Error(sprintf "Babylon surface could not start: %s" ex.Message)
 
+    let private plain (scene: Scene) : InteractiveScene =
+        {
+            Scene = scene
+            Objects = []
+            Selected = None
+        }
+
+    let mountScene
+        (container: HTMLElement)
+        (options: BabylonOptions)
+        (scene: Scene)
+        : Result<RendererMount<Scene>, string> =
+        mountWith container options None (plain scene)
+        |> Result.map (fun mount ->
+            {
+                Present = fun next -> mount.Present(plain next)
+                Dispose = mount.Dispose
+            })
+
+    let mountInteractive
+        (container: HTMLElement)
+        (options: BabylonOptions)
+        (report: SelectionRequest -> unit)
+        (frame: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        match SceneInteraction.problems frame.Objects with
+        | [] -> mountWith container options (Some report) frame
+        | problems -> Error(sprintf "Babylon surface refused the objects: %s" (String.concat "; " problems))
+
     let surface (container: HTMLElement) (options: BabylonOptions) : SceneSurface =
         SceneSurface.create RendererBackend.Babylon (mountScene container options)
+        |> SceneSurface.withInteraction (mountInteractive container options)
 
     let adapter (container: HTMLElement) (options: BabylonOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
         SceneSurface.adapter view (surface container options)

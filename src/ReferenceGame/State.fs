@@ -24,4 +24,6 @@ module ReferenceState =
             VaultClear: bool
             Aim: int * int
             Tick: int
+            /// The selected object (`ReferenceRenderers.objects`), chosen through any backend's input host.
+            Selected: string option
         }

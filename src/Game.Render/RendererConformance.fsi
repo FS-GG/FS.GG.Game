@@ -7,7 +7,7 @@ namespace FS.GG.Game.Render
 type ConformanceResult =
 
     /// The requirement, prefixed by its section (`subject`, `registry`, `round-trip`, `switch`, `dispose`,
-    /// `late failure`).
+    /// `late failure`, `interaction`).
     member Check: string
 
     /// Whether the requirement held.
@@ -60,9 +60,50 @@ module LateFailureTrigger =
     val create: arm: (unit -> unit) -> settle: Async<bool> -> LateFailureTrigger
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
+/// One entry of a backend's accessible mirror, as read back from the backend's output.
+type MirrorEntry =
+    {
+        /// The object the entry selects (`SelectableObject.Id`).
+        Id: string
+        /// The entry's accessible text.
+        Label: string
+        /// Whether the entry says its object is selected (`aria-pressed`).
+        Pressed: bool
+    }
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// How the kit plays a backend's input host from outside (FS.GG.Game#751): real input delivered to the mounted
+/// backend's output, the accessible mirror read back from it, and an independent census of the input hosts the
+/// backend holds. Built by `InteractionProbe.create`.
+[<Sealed>]
+type InteractionProbe
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module InteractionProbe =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `press backend point` delivers a primary pointer press and release at `point` (scene coordinates) on
+    /// `backend`'s output; `key backend name` delivers a key press (a DOM `KeyboardEvent.key` value such as
+    /// `ArrowRight`, `Enter` or `Escape`) to `backend`'s focusable output; `mirror backend` reads `backend`'s
+    /// accessible mirror (`None` when there is none); `activate backend id` activates the mirror entry of object
+    /// `id`; `inputHosts backend` counts what `backend`'s input hosts hold now (listeners and mirrors, observed
+    /// independently of the adapter). The kit compares it with its value before each host starts: an input host must
+    /// raise it while mounted and bring it back when released.
+    val create:
+        press: (RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>) ->
+        key: (RendererBackend -> string -> Async<unit>) ->
+        mirror: (RendererBackend -> MirrorEntry list option) ->
+        activate: (RendererBackend -> string -> Async<unit>) ->
+        inputHosts: (RendererBackend -> int) ->
+            InteractionProbe
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// What the kit needs to know about one game's renderers. Built by `RendererConformance.subject`, which fills the
-/// in-process defaults, and adjusted by `RendererConformance.withStart`, `withWaitUntil` and `withLateFailure`.
+/// in-process defaults, and adjusted by `RendererConformance.withStart`, `withWaitUntil`, `withLateFailure` and
+/// `withInteraction`.
 [<NoEquality; NoComparison>]
 type ConformanceSubject<'State>
 
@@ -87,7 +128,14 @@ type ConformanceSubject<'State>
 ///   re-selecting recovers;
 /// - **late failure (adapter)**, for each backend with a `LateFailureTrigger`: the adapter's own report of its live
 ///   mount's failure falls back to SVG with the state intact and releases the backend, and a failure of a mount
-///   already disposed is not reported, so the live mount of the same backend stays (the live-mount rule).
+///   already disposed is not reported, so the live mount of the same backend stays (the live-mount rule);
+/// - **interaction**, when `withInteraction` declared one (FS.GG.Game#751): the states declare valid selectable
+///   objects; then on every backend the input host is attached while mounted, the accessible mirror lists every
+///   object with its label, the keyboard focuses objects in order and selects and clears through the game's own
+///   rule, a pointer press on each object reachable by a pointer selects it (the backend's hit test agrees with
+///   `SceneInteraction.hitTest`) and a press where no object is asks for nothing, a mirror entry selects its
+///   object, the selection survives a switch away and back, and switching away and disposing the host release
+///   the input host.
 [<RequireQualifiedAccess>]
 module RendererConformance =
 
@@ -139,6 +187,18 @@ module RendererConformance =
     val withLateFailure:
         backend: RendererBackend ->
         trigger: LateFailureTrigger ->
+        subject: ConformanceSubject<'State> ->
+            ConformanceSubject<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare the game's interaction (FS.GG.Game#751), replacing any declared before: the registry's adapters report
+    /// to `route` (`SceneRenderers.withInteraction interaction route`), and `probe` plays each backend's input host.
+    /// The interaction checks run on every offered backend. The kit binds `route` to each host it starts, applying
+    /// every request with `SceneInteraction.apply` and presenting the result, and unbinds it when the section ends.
+    val withInteraction:
+        interaction: SceneInteraction<'State> ->
+        route: SelectionRoute ->
+        probe: InteractionProbe ->
         subject: ConformanceSubject<'State> ->
             ConformanceSubject<'State>
 

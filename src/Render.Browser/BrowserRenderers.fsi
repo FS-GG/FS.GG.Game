@@ -53,12 +53,14 @@ module BrowserRenderers =
     val options: label: string -> width: float -> height: float -> BrowserRenderOptions
 
     /// The SVG, Pixi and Babylon surfaces in `container`, in that order, each at `options`' size with the backends'
-    /// default settings. Each Pixi mount reports a late initialisation failure to the driver `route` is bound to when
+    /// default settings, each interactive (`SvgSurface.mountInteractive`, `PixiSurface.mountInteractive`,
+    /// `BabylonSurface.mountInteractive`). Each Pixi mount reports a late initialisation failure to the driver `route` is bound to when
     /// that mount is created.
     val surfaces: container: HTMLElement -> options: BrowserRenderOptions -> route: LateFailureRoute -> SceneSurface list
 
     /// Declare all three backends for a game-state type: `SceneRenderers.create view` over `surfaces`. Add
-    /// `SceneRenderers.withView` for a backend that needs its own representation.
+    /// `SceneRenderers.withView` for a backend that needs its own representation, and
+    /// `SceneRenderers.withInteraction` to make the game playable by selection on every backend.
     val declare:
         container: HTMLElement ->
         options: BrowserRenderOptions ->
@@ -117,6 +119,27 @@ module BrowserConformance =
         accept: (int[] -> bool) ->
         maxFrames: int ->
             Async<int[]>
+
+    /// Start the page-level listener census `inputHosts` reads, by wrapping `EventTarget.prototype.addEventListener` and
+    /// `removeEventListener` once. Call it before any input host is attached; it is idempotent.
+    val installInputProbe: unit -> unit
+
+    /// What `backend`'s input hosts hold in the page now (FS.GG.Game#751): the listeners that are still registered on
+    /// elements tagged `data-renderer` with the backend's token (its canvases or SVG roots and its mirrors, whether or
+    /// not they are still in the page) plus its mirrors in the page. Raises when `installInputProbe` was not called.
+    val inputHosts: backend: RendererBackend -> int
+
+    /// A primary pointer press and release, as real DOM pointer events on `backend`'s SVG root or canvas in `container`,
+    /// at the client point of the scene point `point` (the element is scrolled into view first, because the SVG
+    /// surface's hit test asks the browser what is under the point). Nothing happens when the backend has no element
+    /// there.
+    val press: container: HTMLElement -> backend: RendererBackend -> point: Point -> Async<unit>
+
+    /// The kit's interaction probe for the backends in `container` (installs the listener census): pointer presses and
+    /// key presses are real DOM events dispatched on the backend's SVG root or canvas, at the client point of the scene
+    /// point; the mirror is read from, and activated through, the backend's `data-scene-controls` group; the census is
+    /// `inputHosts`.
+    val interactionProbe: container: HTMLElement -> InteractionProbe
 
     /// A subject for real browser backends in `container`: hosts are started with `BrowserRenderers.start route`,
     /// resources are `resources container`, waits last up to 600 frames, and, when the registry offers Pixi, Pixi's

@@ -50,16 +50,17 @@ module BrowserRenderers =
 
         // Each Pixi mount reports to the driver bound when it was mounted, not to whichever driver the route is bound
         // to when its initialisation settles.
-        let pixiSurface =
-            SceneSurface.create RendererBackend.Pixi (fun scene ->
-                let report = route.Capture()
+        let pixiOptions () =
+            let report = route.Capture()
 
-                PixiSurface.mountScene
-                    container
-                    { pixi with
-                        OnFailure = report RendererBackend.Pixi
-                    }
-                    scene)
+            { pixi with
+                OnFailure = report RendererBackend.Pixi
+            }
+
+        let pixiSurface =
+            SceneSurface.create RendererBackend.Pixi (fun scene -> PixiSurface.mountScene container (pixiOptions ()) scene)
+            |> SceneSurface.withInteraction (fun request frame ->
+                PixiSurface.mountInteractive container (pixiOptions ()) request frame)
 
         [
             SvgSurface.surface container (SvgSurface.defaultOptions options.Label options.Width options.Height)
@@ -74,8 +75,9 @@ module BrowserRenderers =
         (view: 'State -> Scene)
         : SceneRenderers<'State> =
         match surfaces container options route with
-        | svg :: others ->
-            others
+        | (svg :: _) as all ->
+            // The SVG surface is declared again so its interactive mount is kept.
+            all
             |> List.fold
                 (fun renderers surface -> SceneRenderers.withSurface surface renderers)
                 (SceneRenderers.create view (SceneSurface.mountScene svg))
@@ -195,6 +197,106 @@ module BrowserConformance =
 
             return pixel.Value
         }
+
+    // FS.GG.Game#751: the same kind of page-level census as the context probe, over event listeners. Every listener
+    // added and not removed is kept with its target, so a listener an input host forgets is still counted when its
+    // element has left the page.
+    let installInputProbe () : unit =
+        emitJsStatement
+            0
+            "if (!window.__inputHook) { const h = { live: [] }; window.__inputHook = h; const p = EventTarget.prototype; const add = p.addEventListener; const remove = p.removeEventListener; const cap = o => typeof o === 'boolean' ? o : !!(o && o.capture); p.addEventListener = function (type, listener, options) { const c = cap(options); if (listener && !h.live.some(r => r.t === this && r.y === type && r.l === listener && r.c === c)) h.live.push({ t: this, y: type, l: listener, c: c }); return add.call(this, type, listener, options) }; p.removeEventListener = function (type, listener, options) { const c = cap(options); const i = h.live.findIndex(r => r.t === this && r.y === type && r.l === listener && r.c === c); if (i >= 0) h.live.splice(i, 1); return remove.call(this, type, listener, options) } }"
+
+    let inputListeners (backend: RendererBackend) : int =
+        emitJsExpr
+            (RendererBackend.id backend)
+            "(() => { const h = window.__inputHook; if (!h) throw new Error('BrowserConformance.installInputProbe was not called'); return h.live.filter(r => r.t && typeof r.t.getAttribute === 'function' && r.t.getAttribute('data-renderer') === $0).length })()"
+
+    let inputHosts (backend: RendererBackend) : int =
+        inputListeners backend
+        + int (document.querySelectorAll (sprintf "[data-scene-controls][data-renderer=%s]" (RendererBackend.id backend))).length
+
+    /// The element a backend's input host listens on: the SVG root or the canvas, in `container`.
+    let private inputElement (container: HTMLElement) (backend: RendererBackend) : HTMLElement option =
+        let selector =
+            match backend with
+            | RendererBackend.Svg -> "svg[data-renderer=svg]"
+            | other -> sprintf "canvas[data-renderer=%s]" (RendererBackend.id other)
+
+        match container.querySelector selector with
+        | null -> None
+        | element -> Some(unbox<HTMLElement> element)
+
+    /// The element's own pixel width: a canvas's `width`, an SVG root's `width` attribute.
+    let private intrinsicWidth (element: HTMLElement) : float =
+        emitJsExpr (element, 0) "($0.tagName.toLowerCase() === 'canvas' ? $0.width : parseFloat($0.getAttribute('width')))"
+
+    let private dispatchPointer (element: HTMLElement) (name: string) (x: float) (y: float) (buttons: int) : unit =
+        emitJsStatement
+            (element, name, x, y, buttons)
+            "$0.dispatchEvent(new PointerEvent($1, { clientX: $2, clientY: $3, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons: $4, bubbles: true, cancelable: true, composed: true }))"
+
+    let private dispatchKey (element: HTMLElement) (key: string) : unit =
+        emitJsStatement
+            (element, key)
+            "$0.dispatchEvent(new KeyboardEvent('keydown', { key: $1, bubbles: true, cancelable: true, composed: true }))"
+
+    let private mirrorOf (container: HTMLElement) (backend: RendererBackend) : Element option =
+        match container.querySelector (sprintf "[data-scene-controls][data-renderer=%s]" (RendererBackend.id backend)) with
+        | null -> None
+        | element -> Some element
+
+    let press (container: HTMLElement) (backend: RendererBackend) (point: Point) : Async<unit> =
+        async {
+            match inputElement container backend with
+            | None -> ()
+            | Some element ->
+                // The SVG surface's hit test asks the browser what is under the point, so it must be on screen.
+                emitJsStatement (element, 0) "$0.scrollIntoView({ block: 'center', inline: 'center' })"
+                let bounds = element.getBoundingClientRect ()
+                let scale = bounds.width / intrinsicWidth element
+                let x = bounds.left + point.X * scale
+                let y = bounds.top + point.Y * scale
+                dispatchPointer element "pointerdown" x y 1
+                dispatchPointer element "pointerup" x y 0
+        }
+
+    let interactionProbe (container: HTMLElement) : InteractionProbe =
+        installInputProbe ()
+
+        InteractionProbe.create
+            (press container)
+            (fun backend key ->
+                async {
+                    match inputElement container backend with
+                    | None -> ()
+                    | Some element -> dispatchKey element key
+                })
+            (fun backend ->
+                mirrorOf container backend
+                |> Option.map (fun mirror ->
+                    let buttons = mirror.querySelectorAll "[data-scene-control-id]"
+
+                    [
+                        for index in 0 .. int buttons.length - 1 do
+                            let button = buttons.[index]
+
+                            yield
+                                {
+                                    Id = button.getAttribute "data-scene-control-id"
+                                    Label = button.textContent
+                                    Pressed = button.getAttribute "aria-pressed" = "true"
+                                }
+                    ]))
+            (fun backend id ->
+                async {
+                    match mirrorOf container backend with
+                    | None -> ()
+                    | Some mirror ->
+                        match mirror.querySelector (sprintf "[data-scene-control-id=\"%s\"]" id) with
+                        | null -> ()
+                        | button -> (button :?> HTMLElement).click ()
+                })
+            inputHosts
 
     let subject
         (container: HTMLElement)

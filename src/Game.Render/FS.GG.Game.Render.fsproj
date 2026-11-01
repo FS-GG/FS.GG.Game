@@ -25,6 +25,8 @@
     <Compile Include="Adapter.fs" />
     <Compile Include="RendererSelection.fsi" />
     <Compile Include="RendererSelection.fs" />
+    <Compile Include="SceneInteraction.fsi" />
+    <Compile Include="SceneInteraction.fs" />
     <Compile Include="SceneRenderers.fsi" />
     <Compile Include="SceneRenderers.fs" />
     <Compile Include="RendererConformance.fsi" />
@@ -43,7 +45,7 @@
           AfterTargets="CreateFablePackageFiles">
     <ItemGroup>
       <_PackageFiles Remove="@(_PackageFiles)" />
-      <_PackageFiles Include="RendererSelection.fsi;RendererSelection.fs;SceneRenderers.fsi;SceneRenderers.fs;RendererConformance.fsi;RendererConformance.fs">
+      <_PackageFiles Include="RendererSelection.fsi;RendererSelection.fs;SceneInteraction.fsi;SceneInteraction.fs;SceneRenderers.fsi;SceneRenderers.fs;RendererConformance.fsi;RendererConformance.fs">
         <Pack>true</Pack>
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
         <BuildAction>None</BuildAction>

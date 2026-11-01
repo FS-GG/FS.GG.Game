@@ -33,6 +33,7 @@ module Composition =
             VaultClear = false
             Aim = 0, 0
             Tick = 0
+            Selected = None
         }
 
     let traverseDoor model =

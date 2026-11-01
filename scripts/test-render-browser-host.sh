@@ -4,7 +4,8 @@
 #
 # 1. Packs FS.GG.Game.Render and asserts its bounded Fable source view (fable/RendererSelection.*,
 #    SceneRenderers.* and RendererConformance.*, the metadata project and the compatibility profile) is present,
-#    byte-identical to the canonical sources, and excludes the .NET-only Adapter/DefaultKeymap.
+#    byte-identical to the canonical sources, and excludes the .NET-only Adapter/DefaultKeymap (SceneInteraction
+#    joined the view with FS.GG.Game#751).
 # 2. Compiles tests/Render.Browser.Smoke (which references src/Render.Browser and, through the SAME
 #    Fable/FS.GG.Game.Render.fsproj the package ships, the renderer-selection sources) with Fable.
 # 3. Loads the output in headless Chromium/Chrome and requires every smoke check to pass.
@@ -14,7 +15,9 @@
 # canvas, one engine, meshes, a pixel read back, SVG -> Babylon -> SVG with the game state preserved and every
 # resource released; the same for PixiJS; and SVG <-> Pixi <-> Babylon switching. Then the conformance kit
 # (RendererConformance, GAME-RENDER-ADOPT-01.1) runs on the reference game's renderer declaration and on the
-# generator's sample (scripts/new-game-renderers.sh), on all three real backends.
+# generator's sample (scripts/new-game-renderers.sh), on all three real backends; the reference game's run includes
+# the kit's interaction section (FS.GG.Game#751: hit test, keyboard, accessible mirror and input-host disposal on
+# every backend), and the reference game is then played by pointer through its renderer driver on each backend.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -34,7 +37,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=320
+MIN_CHECKS=355
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -84,7 +87,7 @@ dotnet pack src/Game.Render/FS.GG.Game.Render.fsproj -c Release -p:PackageVersio
 }
 
 PACKAGE_LIST="$(unzip -Z1 "$TMP/feed/$PACKAGE")"
-FABLE_SOURCES=(RendererSelection SceneRenderers RendererConformance)
+FABLE_SOURCES=(RendererSelection SceneInteraction SceneRenderers RendererConformance)
 for entry in \
   fable/FS.GG.Game.Render.fsproj \
   "${FABLE_SOURCES[@]/#/fable/}" \
