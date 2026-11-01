@@ -45,13 +45,23 @@ let scriptDir = __SOURCE_DIRECTORY__
 let repoRoot = Path.GetFullPath(Path.Combine(scriptDir, ".."))
 
 // Every package → its src project folder (assembly name == package name). One row per committed baseline.
-let packages =
+let solutionPackages =
     [
         "FS.GG.Game.Core", "Game.Core"
         "FS.GG.Game.Harness", "Game.Harness"
         "FS.GG.Game.Render", "Game.Render"
         "FS.GG.Game.Physics.Box2D", "Game.Physics.Box2D"
     ]
+
+// The Fable browser host (FS.GG.Game#745) is outside the solution: building it needs the generated JavaScript
+// bindings (scripts/materialize-js-bindings.sh all), so the solution build that gate.yml's drift job runs never
+// produces it. `--browser` refreshes ONLY its baseline, from `dotnet build src/Render.Browser -c Debug`;
+// render-browser-host.yml runs that and fails on drift. The default run leaves its baseline untouched.
+let browserPackages = [ ("FS.GG.Game.Render.Browser", "Render.Browser") ]
+
+let browserMode = Environment.GetCommandLineArgs() |> Array.contains "--browser"
+
+let packages = if browserMode then browserPackages else solutionPackages
 
 let binDir proj =
     Path.Combine(repoRoot, "src", proj, "bin", "Debug", "net10.0")
@@ -60,11 +70,11 @@ let binDirs = packages |> List.map (snd >> binDir)
 
 // `scripts/generated-paths` roster contract (ADR-0044 / .github#498): one `kind<TAB>path<TAB>marker`
 // row per emitted path — TWO files per package (types + members), EMPTY marker (a whole file nobody
-// authors, the set `verify-paths` may subtract). Derived from `packages` so it cannot drift from what
+// authors, the set `verify-paths` may subtract). Derived from both package lists so it cannot drift from what
 // `write` below actually emits, and answered BEFORE `restoredAssemblies ()` runs so `--list` needs
 // nothing built or restored.
 if Environment.GetCommandLineArgs() |> Array.contains "--list" then
-    for (packageName, _) in packages do
+    for (packageName, _) in solutionPackages @ browserPackages do
         printfn "surface-baseline\treadiness/surface-baselines/%s.txt\t" packageName
         printfn "surface-baseline\treadiness/surface-baselines/members/%s.txt\t" packageName
 
@@ -343,6 +353,9 @@ for (packageName, proj) in packages do
     let dll = Path.Combine(binDir proj, packageName + ".dll")
 
     if not (File.Exists dll) then
-        failwithf "missing %s — build the solution (Debug) before refreshing baselines" dll
+        if browserMode then
+            failwithf "missing %s — materialize the bindings and build src/Render.Browser (Debug) before refreshing its baseline" dll
+        else
+            failwithf "missing %s — build the solution (Debug) before refreshing baselines" dll
 
     write packageName (Assembly.LoadFrom dll)

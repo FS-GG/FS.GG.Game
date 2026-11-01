@@ -45,17 +45,46 @@
           AfterTargets="CreateFablePackageFiles">
     <ItemGroup>
       <_PackageFiles Remove="@(_PackageFiles)" />
-      <_PackageFiles Include="RendererSelection.fsi;RendererSelection.fs;SceneInteraction.fsi;SceneInteraction.fs;SceneRenderers.fsi;SceneRenderers.fs;RendererConformance.fsi;RendererConformance.fs">
+      <!-- Exactly the sources the in-repo view project compiles (read by GenerateFablePackedProject), so the packed
+           files and the packed project's list cannot diverge. -->
+      <_PackageFiles Include="@(_FableViewSource->'Fable/%(Identity)')">
         <Pack>true</Pack>
         <PackagePath>fable/%(Filename)%(Extension)</PackagePath>
         <BuildAction>None</BuildAction>
       </_PackageFiles>
-      <_PackageFiles Include="Fable/FS.GG.Game.Render.fsproj">
+      <_PackageFiles Include="$(_FablePackedProject)">
         <Pack>true</Pack>
         <PackagePath>fable/FS.GG.Game.Render.fsproj</PackagePath>
         <BuildAction>None</BuildAction>
       </_PackageFiles>
     </ItemGroup>
+  </Target>
+
+  <!-- The packed project is the in-repo metadata project with its sources beside it: each Compile item's leading
+       `../` is dropped. Generated, not committed, so the package and the repo-local Fable host list one set of files in
+       one order. Its items are unconditional because Fable does not evaluate MSBuild conditions in a package's
+       project file (FS.GG.Game#745). -->
+  <Target Name="GenerateFablePackedProject" BeforeTargets="CurateFableCompatibilityView">
+    <PropertyGroup>
+      <_FableViewProject>$(MSBuildProjectDirectory)/Fable/FS.GG.Game.Render.fsproj</_FableViewProject>
+      <_FablePackedProject>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)fable-package/FS.GG.Game.Render.fsproj</_FablePackedProject>
+      <_FableRepoProjectText>$([System.IO.File]::ReadAllText('$(_FableViewProject)'))</_FableRepoProjectText>
+    </PropertyGroup>
+    <!-- Any Condition attribute, on any element, however it is spaced: read as XML, not as text. -->
+    <XmlPeek XmlInputPath="$(_FableViewProject)" Query="//@*[local-name()='Condition']">
+      <Output TaskParameter="Result" ItemName="_FableViewCondition" />
+    </XmlPeek>
+    <Error Condition="'@(_FableViewCondition)' != ''" Text="Fable/FS.GG.Game.Render.fsproj must not use MSBuild conditions: Fable does not evaluate them in a package's project file." />
+    <XmlPeek XmlInputPath="$(_FableViewProject)" Query="//*[local-name()='Compile']/@Include">
+      <Output TaskParameter="Result" ItemName="_FableViewSource" />
+    </XmlPeek>
+    <Error Condition="'@(_FableViewSource)' == ''" Text="Fable/FS.GG.Game.Render.fsproj lists no sources." />
+    <MakeDir Directories="$(MSBuildProjectDirectory)/$(IntermediateOutputPath)fable-package" />
+    <!-- Only the Compile items move: their sources sit beside the packed project. -->
+    <WriteLinesToFile File="$(_FablePackedProject)"
+                      Lines="$(_FableRepoProjectText.Replace('&lt;Compile Include=&quot;../', '&lt;Compile Include=&quot;').TrimEnd())"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
   </Target>
 
   <ItemGroup Label="fable-compatibility-metadata">

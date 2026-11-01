@@ -100,44 +100,20 @@ dotnet pack src/Game.Render/FS.GG.Game.Render.fsproj -c Release -p:PackageVersio
 }
 
 PACKAGE_LIST="$(unzip -Z1 "$TMP/feed/$PACKAGE")"
-FABLE_SOURCES=(RendererSelection SceneInteraction SceneRenderers RendererConformance)
-for entry in \
-  fable/FS.GG.Game.Render.fsproj \
-  "${FABLE_SOURCES[@]/#/fable/}" \
-  fable-compatibility/compatibility-profile.v1.json; do
-  case $entry in
-    *.fsproj | *.json) entries=("$entry") ;;
-    *) entries=("$entry.fsi" "$entry.fs") ;;
-  esac
-  for file in "${entries[@]}"; do
-    grep -Fx "$file" <<<"$PACKAGE_LIST" >/dev/null || {
-      echo "test-render-browser-host: package is missing $file" >&2
-      exit 1
-    }
-  done
-done
-
+grep -Fx fable-compatibility/compatibility-profile.v1.json <<<"$PACKAGE_LIST" >/dev/null || {
+  echo "test-render-browser-host: package is missing fable-compatibility/compatibility-profile.v1.json" >&2
+  exit 1
+}
 if grep -E '^fable/(Adapter|DefaultKeymap)\.fsi?$' <<<"$PACKAGE_LIST" >/dev/null; then
   echo "test-render-browser-host: the bounded Fable view contains a .NET-only source file" >&2
   exit 1
 fi
-
-if [[ $(grep -c '^fable/.*\.fsi\?$' <<<"$PACKAGE_LIST") -ne $((2 * ${#FABLE_SOURCES[@]})) ]]; then
-  echo "test-render-browser-host: the bounded Fable view must contain exactly ${FABLE_SOURCES[*]} (.fsi/.fs)" >&2
-  exit 1
-fi
-
 mkdir -p "$TMP/unpacked"
 unzip -q "$TMP/feed/$PACKAGE" 'fable/*' -d "$TMP/unpacked"
-for source in "${FABLE_SOURCES[@]}"; do
-  cmp "$TMP/unpacked/fable/$source.fs" "src/Game.Render/$source.fs"
-  cmp "$TMP/unpacked/fable/$source.fsi" "src/Game.Render/$source.fsi"
-done
-cmp "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" src/Game.Render/Fable/FS.GG.Game.Render.fsproj
 
-# The packed layout puts the sources beside the project (the in-repo layout reaches one directory up), so
-# build the unpacked view on its own to exercise that branch of the project's Exists() conditions. The
-# consumer's central package pin stands in for the one a Fable consumer's restore provides.
+# The packed layout puts the sources beside the project (the in-repo layout reaches one directory up), so build the
+# unpacked view on its own: the packed project must compile its sources where they sit. The consumer's central
+# package pin stands in for the one a Fable consumer's restore provides.
 SCENE_VERSION="$(sed -n 's/.*Include="FS.GG.UI.Scene" Version="\([^"]*\)".*/\1/p' Directory.Packages.local.props | head -n 1)"
 [[ -n $SCENE_VERSION ]] || {
   echo "test-render-browser-host: could not read the FS.GG.UI.Scene pin" >&2
@@ -150,6 +126,42 @@ printf '%s\n' \
   '</Project>' \
   >"$TMP/unpacked/Directory.Packages.props"
 NUGET_PACKAGES="$TMP/packed-view-packages" dotnet build "$TMP/unpacked/fable/FS.GG.Game.Render.fsproj" -c Release -v quiet >/dev/null
+
+# 1b. The packed browser host (FS.GG.Game.Render.Browser, #745): its Fable view is the host's sources byte for byte,
+#     the two generated bindings at the pinned sha256, and the packed project that lists exactly those files; the
+#     bindings assembly is not a dependency. Then a clean consumer restores both packages (and Game.Core) from this
+#     feed, generates its renderer module, builds it with .NET and compiles it with Fable from the packed sources.
+BROWSER_PACKAGE="FS.GG.Game.Render.Browser.${PACK_VERSION}.nupkg"
+dotnet pack src/Render.Browser/FS.GG.Game.Render.Browser.fsproj -c Release -p:PackageVersion="$PACK_VERSION" -o "$TMP/feed" >/dev/null
+dotnet pack src/Game.Core/FS.GG.Game.Core.fsproj -c Release -p:PackageVersion="$PACK_VERSION" -o "$TMP/feed" >/dev/null
+[[ -f $TMP/feed/$BROWSER_PACKAGE ]] || {
+  echo "test-render-browser-host: expected package was not produced: $BROWSER_PACKAGE" >&2
+  exit 1
+}
+# Both packed Fable views against the source tree: lists derived from src/Game.Render/Fable and src/Render.Browser
+# (bindings first), no MSBuild condition anywhere in either packed project (parsed as XML), every listed source in the
+# package and byte-identical to the tree, and the bindings at the pinned sha256 (tests/release/check-fable-views.py).
+python3 -I "$REPO_ROOT/tests/release/check-fable-views.py" --root "$REPO_ROOT" \
+  --render "$TMP/feed/$PACKAGE" --browser "$TMP/feed/$BROWSER_PACKAGE"
+mkdir -p "$TMP/unpacked-browser"
+unzip -q "$TMP/feed/$BROWSER_PACKAGE" -d "$TMP/unpacked-browser"
+cmp "$TMP/unpacked-browser/fable/FS.GG.Game.Render.Browser.fsproj" src/Render.Browser/Fable/FS.GG.Game.Render.Browser.fsproj
+cmp "$TMP/unpacked-browser/fable-compatibility/compatibility-profile.v1.json" src/Render.Browser/Fable/compatibility-profile.v1.json
+for corpus in babylon pixi; do
+  for file in package.json package-lock.json; do
+    cmp "$TMP/unpacked-browser/js-bindings/$corpus/$file" "$REPO_ROOT/artifacts/js-bindings/$corpus/npm/$file"
+  done
+done
+NUSPEC="$(unzip -p "$TMP/feed/$BROWSER_PACKAGE" FS.GG.Game.Render.Browser.nuspec)"
+grep -q "<dependency id=\"FS.GG.Game.Render\" version=\"$PACK_VERSION\"" <<<"$NUSPEC" || {
+  echo "test-render-browser-host: the browser host package does not depend on FS.GG.Game.Render $PACK_VERSION" >&2
+  exit 1
+}
+if grep -Eq 'Bindings|Fable\.Metadata|Fable\.Package\.SDK' <<<"$NUSPEC"; then
+  echo "test-render-browser-host: the browser host package depends on a repository-only project or build tool" >&2
+  exit 1
+fi
+"$REPO_ROOT/tests/release/test-render-browser-package-consumer.sh" --packages "$TMP/feed" --version "$PACK_VERSION"
 
 # The generator's sample is its output for the smoke's arguments, byte for byte, so the template the smoke compiles
 # and runs the conformance kit on is the template a game gets (GAME-RENDER-ADOPT-01.1, FS.GG.Game#745).

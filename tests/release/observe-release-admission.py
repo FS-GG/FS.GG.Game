@@ -11,7 +11,8 @@ import urllib.request
 from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
-PACKAGES = ("FS.GG.Game.Core", "FS.GG.Game.Render", "FS.GG.Game.Harness", "FS.GG.Game.Physics.Box2D")
+PACKAGES = ("FS.GG.Game.Core", "FS.GG.Game.Render", "FS.GG.Game.Harness", "FS.GG.Game.Physics.Box2D", "FS.GG.Game.Render.Browser")
+NEW_PACKAGES = {"FS.GG.Game.Render.Browser"}
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -42,7 +43,7 @@ def collect(mode, version):
         token = os.environ["FEED_TOKEN"]
         authorization = "Basic " + base64.b64encode(("fs-gg:" + token).encode()).decode()
         headers = {"Authorization": authorization}
-        sentinel = observe("https://nuget.pkg.github.com/FS-GG/download/fs.gg.game.core/0.16.0/fs.gg.game.core.0.16.0.nupkg", headers)
+        sentinel = observe("https://nuget.pkg.github.com/FS-GG/download/fs.gg.game.core/0.17.0/fs.gg.game.core.0.17.0.nupkg", headers)
         failed = sentinel != 200
         for package in PACKAGES:
             lower = package.lower()
@@ -62,7 +63,7 @@ def collect(mode, version):
     for package in PACKAGES:
         # No version asks for the existing registration; a missing identity is 404 before scope evaluation.
         status = observe(f"https://www.nuget.org/api/v2/verifykey/{package}", headers)
-        existing = package != "FS.GG.Game.Physics.Box2D"
+        existing = package not in NEW_PACKAGES
         rows.append({"package": package, "httpStatus": status,
                      "authority": "existing-package-push" if status == 200 else "unproven"})
         failed |= status != (200 if existing else 404)
@@ -78,8 +79,8 @@ def main():
     modes.add_argument("--authority", type=Path)
     args = parser.parse_args()
     version = ET.parse(ROOT / "Directory.Build.local.props").findtext(".//Version")
-    if version != "0.17.0":
-        raise SystemExit("This observation is scoped to the coherent 0.17.0 release.")
+    if version != "0.18.0":
+        raise SystemExit("This observation is scoped to the coherent 0.18.0 release.")
     mode = "registries" if args.registries else "authority"
     output = args.registries or args.authority
     report, failed = collect(mode, version)
