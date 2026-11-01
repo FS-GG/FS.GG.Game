@@ -307,6 +307,30 @@ module RendererConformance =
             ConformanceSubject<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare the game's input pipeline for the kit's `input` section (FS.GG.Game#787, `docs/adr/0001-standard-input-pipeline.md`
+    /// "Kit specification"), replacing any declared before: the registry's input hosts report to `route`, `probe` plays
+    /// them with real input, and `events` reads back, in order, the events the game's binding of `route` received. The
+    /// section checks the events (source, modifiers, primary, secondary, repeated activation, hover, focus, Cancel), the
+    /// drawn focus ring, the single-Tab-stop listbox or grid surface (pointer-only, grouped and cell objects) and
+    /// disposal on every backend, and a selection that the game answers later (through a guest) within the subject's
+    /// wait. Contract only:
+    /// FS.GG.Game#788 implements it, and until then it raises.
+    val withInput:
+        interaction: SceneInteraction<'State> ->
+        route: InputRoute ->
+        probe: InteractionProbe ->
+        events: (unit -> InputEvent list) ->
+        subject: ConformanceSubject<'State> ->
+            ConformanceSubject<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare that `backend`'s input host is the game's own (a hybrid page: SC2's own SVG map beside the canvas
+    /// backends, FS.GG.Game#772). The `interaction` and `input` sections then check that backend through `probe` and
+    /// the events it reports, not through the library's mirror markup. Contract only: FS.GG.Game#788 implements it,
+    /// and until then it raises.
+    val withOwnInputHost: backend: RendererBackend -> subject: ConformanceSubject<'State> -> ConformanceSubject<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Declare what the states must DRAW (FS.GG.Game#753), replacing any declared before: `expected state` lists the
     /// pixels the state must show (`ScenePixels.expectations` of its scene), and `probe` reads each backend's drawn
     /// pixels. The pixel checks run on every offered backend: every state's pixels are shown at their declared

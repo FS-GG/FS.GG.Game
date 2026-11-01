@@ -410,6 +410,20 @@ module RendererConformance =
             Interaction = Some(interaction, route, probe)
         }
 
+    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
+    let withInput
+        (_: SceneInteraction<'State>)
+        (_: InputRoute)
+        (_: InteractionProbe)
+        (_: unit -> InputEvent list)
+        (_: ConformanceSubject<'State>)
+        : ConformanceSubject<'State> =
+        failwith "RendererConformance.withInput is a contract stub; FS.GG.Game#788 implements it."
+
+    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
+    let withOwnInputHost (_: RendererBackend) (_: ConformanceSubject<'State>) : ConformanceSubject<'State> =
+        failwith "RendererConformance.withOwnInputHost is a contract stub; FS.GG.Game#788 implements it."
+
     let withPixels expected probe (subject: ConformanceSubject<'State>) =
         { subject with
             Pixels = Some(expected, probe)
