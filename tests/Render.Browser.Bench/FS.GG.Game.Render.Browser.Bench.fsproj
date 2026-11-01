@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- GAME-RENDER-ADOPT-01.2 (FS.GG.Game#746): the in-browser half of the rendering benchmark. Compiled with Fable by
+       scripts/render-bench.sh (never by the .NET solution, like tests/Render.Browser.Smoke) and driven over the Chrome
+       DevTools Protocol by tools/render-bench/driver.mjs. ReferenceGame's Program.fs is compiled in so the benchmark
+       presents the REAL ReferenceGame state type; its Harness-only parts are excluded under FABLE_COMPILER. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\ReferenceGame\State.fs" Link="ReferenceGame\State.fs" />
+    <Compile Include="..\..\src\ReferenceGame\Program.fs" Link="ReferenceGame\Program.fs" />
+    <Compile Include="BenchGame.fs" />
+    <Compile Include="ReferenceGameBench.fs" />
+    <Compile Include="Bench.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Render.Browser\FS.GG.Game.Render.Browser.fsproj" />
+  </ItemGroup>
+
+</Project>

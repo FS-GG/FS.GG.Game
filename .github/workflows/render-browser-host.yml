@@ -5,6 +5,10 @@ name: render-browser-host
 # tests/Render.Browser.Smoke with Fable, and runs every smoke check in headless Chrome, including the BabylonJS
 # and PixiJS adapters on WebGL (software, through SwiftShader, on this runner) and switching between all three.
 # The bindings are generated from the pinned FS.GG.Templates commit by scripts/materialize-js-bindings.sh.
+# GAME-RENDER-ADOPT-01.2 (FS.GG.Game#746): the same job builds the rendering benchmark page (tests/Render.Browser.Bench)
+# and runs one short software-control session (plain and interactive routes), so the harness cannot rot between fdev GPU
+# runs, runs the driver's self-test of its GPU/software refusal, and validates that session and the committed baselines
+# against the results schema. Its numbers are never compared or gated here.
 # It also packs FS.GG.Game.Render.Browser, checks its Fable view, compiles a clean package consumer of the generated
 # three-adapter module (FS.GG.Game#745), and fails on drift of the browser host's surface baseline, which the
 # solution-only drift job in gate.yml cannot build.
@@ -28,6 +32,10 @@ on:
       - "scripts/test-render-browser-host.sh"
       - "scripts/materialize-js-bindings.sh"
       - "eng/js-bindings/**"
+      - "src/ReferenceGame/**"
+      - "tests/Render.Browser.Bench/**"
+      - "tools/render-bench/**"
+      - "scripts/render-bench.sh"
       - "src/Game.Core/**"
       - "tests/release/test-render-browser-package-consumer.sh"
       - "tests/release/check-fable-views.py"
@@ -52,6 +60,10 @@ on:
       - "scripts/test-render-browser-host.sh"
       - "scripts/materialize-js-bindings.sh"
       - "eng/js-bindings/**"
+      - "src/ReferenceGame/**"
+      - "tests/Render.Browser.Bench/**"
+      - "tools/render-bench/**"
+      - "scripts/render-bench.sh"
       - "src/Game.Core/**"
       - "tests/release/test-render-browser-package-consumer.sh"
       - "tests/release/check-fable-views.py"
@@ -88,6 +100,16 @@ jobs:
 
       - name: Pack the Fable view, compile the host and run the browser smoke
         run: scripts/test-render-browser-host.sh
+
+      - name: Benchmark driver self-test (GPU/software refusal, flags and option handling; no browser)
+        run: node tools/render-bench/driver.mjs selftest
+
+      - name: Build the benchmark page, run a short software-control session in both routes and validate the results
+        run: |
+          set -euo pipefail
+          scripts/render-bench.sh -- --mode software --scenes room-tiles,room-swarm --sizes 100 \
+            --interaction plain,interactive --repeats 1 --frames 30 --warmup 5 --out "$RUNNER_TEMP/render-bench.json"
+          node tools/render-bench/driver.mjs validate "$RUNNER_TEMP/render-bench.json" tools/render-bench/baselines/*.json
 
       - name: Browser host surface baseline drift (readiness/surface-baselines/FS.GG.Game.Render.Browser)
         run: |
