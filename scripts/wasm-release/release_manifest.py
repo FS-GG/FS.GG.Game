@@ -45,6 +45,9 @@ TOOLS = {
     "wasiSdk": "34.0",
 }
 RETAINED_TOOLS = {**TOOLS, "dotnet": "10.0.401"}
+# The only versions ever published under RETAINED_TOOLS. A version outside this set is a
+# new candidate and is admitted under TOOLS alone; a later release cannot claim 10.0.401.
+RETAINED_VERSIONS = frozenset({"0.1.1", "0.2.0", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"})
 API_COMPARISON_TOOLS = {"SDK10.0.401.ApiCompat", "SDK10.0.403.ApiCompat"}
 
 
@@ -274,7 +277,8 @@ def verify_identity(data: dict[str, object], source: str | None = None) -> None:
         fail("manifest tag or two-package roster mismatch")
     if source is not None and data["source"] != source:
         fail("manifest source mismatch")
-    if data["tools"] not in (TOOLS, RETAINED_TOOLS) or data["workflow"] != ".github/workflows/wasm-shared.yml":
+    admitted_tools = (TOOLS, RETAINED_TOOLS) if version in RETAINED_VERSIONS else (TOOLS,)
+    if data["tools"] not in admitted_tools or data["workflow"] != ".github/workflows/wasm-shared.yml":
         fail("manifest tool or source-workflow identity mismatch")
     if legacy:
         if version != "0.1.1" or data["firstStableBaseline"] != {"version": "0.1.1", "publishedApiCompatBaseline": None}:
