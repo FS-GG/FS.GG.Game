@@ -486,7 +486,12 @@ let tests =
                     "present failure svg: a throwing Present is contained and the default backend mounts the latest state"
                     "the blank map is caught"
 
+                // The canvas fallback itself was already correct; what fails there is the cause being recorded as a
+                // present failure rather than a mount failure.
                 Expect.isFalse
-                    (failed |> List.exists (fun check -> check.StartsWith "present failure pixi" || check.StartsWith "present failure babylon"))
-                    "the canvas fallback was already correct"
+                    (failed
+                     |> List.exists (fun check ->
+                         (check.StartsWith "present failure pixi" || check.StartsWith "present failure babylon")
+                         && not (check.EndsWith "SVG mounts the latest state")))
+                    "the canvas release and display checks still pass"
         ]

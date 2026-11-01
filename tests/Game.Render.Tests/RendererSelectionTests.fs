@@ -507,8 +507,8 @@ let tests =
 
                 Expect.equal
                     model.Refusal
-                    (Some(RendererRefusal.MountFailed(RendererBackend.Pixi, "lost context")))
-                    "present failure recorded"
+                    (Some(RendererRefusal.PresentFailed(RendererBackend.Pixi, "lost context")))
+                    "present failure recorded as a present failure"
 
                 Expect.equal (journal.Count "pixi:dispose") 1 "broken Pixi mount released once"
                 Expect.equal host.Mounted (Some RendererBackend.Svg) "SVG mounted"
@@ -552,8 +552,8 @@ let tests =
 
                 Expect.equal
                     remounted.Refusal
-                    (Some(RendererRefusal.MountFailed(RendererBackend.Svg, "lost context")))
-                    "the cause is recorded"
+                    (Some(RendererRefusal.PresentFailed(RendererBackend.Svg, "lost context")))
+                    "the cause is recorded as a present failure"
 
                 let model = drive host model feedback
                 Expect.equal host.Mounted (Some RendererBackend.Svg) "SVG is mounted again"
@@ -598,8 +598,8 @@ let tests =
                 Expect.isNone host.Mounted "nothing is mounted"
 
                 match model.Status with
-                | RendererStatus.Failed [ RendererBackend.Svg, "cannot remount" ] -> ()
-                | other -> failtestf "expected the remount failure, got %A" other
+                | RendererStatus.Failed [ (RendererBackend.Svg, "cannot remount"); (RendererBackend.Svg, "lost context") ] -> ()
+                | other -> failtestf "expected the remount failure after the present failure that caused it, got %A" other
 
                 Expect.equal
                     model.Refusal
@@ -768,5 +768,117 @@ let tests =
                 match RendererRegistry.tryViewport RendererBackend.Svg replaced with
                 | Some viewport -> Expect.equal (viewport (arena 4 0)) (4.0, 2.0) "replaced"
                 | None -> failtest "declared"
+            }
+
+            test "a dispose failure of the mount a failing Present left never replaces the present cause (#752)" {
+                let journal = Journal()
+
+                // Present and Dispose both throw: the host reports the present failure first, then the dispose failure.
+                let adapter: RendererAdapter<Arena> =
+                    {
+                        Backend = RendererBackend.Svg
+                        Mount =
+                            fun _ ->
+                                journal.Events.Add "svg:mount"
+
+                                Ok
+                                    {
+                                        Present = fun _ -> failwith "lost context"
+                                        Dispose =
+                                            fun () ->
+                                                journal.Events.Add "svg:dispose"
+                                                failwith "dispose threw"
+                                    }
+                    }
+
+                let registry =
+                    match RendererRegistry.create adapter with
+                    | Ok registry -> registry
+                    | Error reason -> failtest reason
+
+                use host = RendererHost.create registry
+                let model = start host registry (arena 0 0)
+                let feedback = host.Run [ RendererEffect.Present(RendererBackend.Svg, arena 1 1) ]
+
+                Expect.equal
+                    feedback
+                    [
+                        RendererMsg.PresentFailed(RendererBackend.Svg, 1, "lost context")
+                        RendererMsg.DisposeFailed(RendererBackend.Svg, "dispose threw")
+                    ]
+                    "both are reported, the present failure first"
+
+                let model = drive host { model with State = arena 1 1 } feedback
+
+                match model.Refusal with
+                | Some(RendererRefusal.MountFailed(RendererBackend.Svg, reason)) ->
+                    // The remount succeeded (Active) so the latest cause is the present failure with the dispose failure added.
+                    failtestf "the present failure was replaced by a mount failure: %s" reason
+                | Some(RendererRefusal.PresentFailed(RendererBackend.Svg, reason)) ->
+                    Expect.stringContains reason "lost context" "the present cause survives"
+                    Expect.stringContains reason "dispose threw" "the dispose failure is kept beside it"
+                | other -> failtestf "expected the present failure, got %A" other
+
+                Expect.equal model.Status RendererStatus.Active "and the default is mounted again"
+            }
+
+            test "a dispose failure beside a mount failure keeps the mount cause too" {
+                let model, _ = RendererSelection.init (svgRegistry (Journal())) (arena 0 0)
+
+                let model, _ =
+                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Svg, 1, "no container")) model
+
+                let model, _ =
+                    RendererSelection.update (RendererMsg.DisposeFailed(RendererBackend.Svg, "dispose threw")) model
+
+                match model.Refusal with
+                | Some(RendererRefusal.MountFailed(RendererBackend.Svg, reason)) ->
+                    Expect.stringContains reason "no container" "the mount cause is kept"
+                    Expect.stringContains reason "dispose threw" "with the dispose failure"
+                | other -> failtestf "expected the mount failure, got %A" other
+
+                // With no failure to protect, a dispose failure is recorded as itself.
+                let fresh, _ = RendererSelection.init (svgRegistry (Journal())) (arena 0 0)
+
+                let fresh, _ =
+                    RendererSelection.update (RendererMsg.DisposeFailed(RendererBackend.Svg, "dispose threw")) fresh
+
+                Expect.equal fresh.Refusal (Some(RendererRefusal.DisposeFailed(RendererBackend.Svg, "dispose threw"))) "alone"
+            }
+
+            test "a retry from Failed that fails again lists the failure it retried, and the list stays bounded (#752)" {
+                let model, _ = RendererSelection.init (svgRegistry (Journal())) (arena 0 0)
+
+                let model, _ =
+                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Svg, 1, "first")) model
+
+                let retried, effects = RendererSelection.update (RendererMsg.StateChanged(arena 1 1)) model
+                Expect.equal effects [ RendererEffect.Mount(RendererBackend.Svg, 2, arena 1 1) ] "retry"
+
+                let again, _ =
+                    RendererSelection.update (RendererMsg.MountFailed(RendererBackend.Svg, 2, "second")) retried
+
+                Expect.equal
+                    again.Status
+                    (RendererStatus.Failed [ RendererBackend.Svg, "second"; RendererBackend.Svg, "first" ])
+                    "the new failure, then the one it retried"
+
+                // Many retries: one earlier cause is kept, so the list does not grow with the number of states.
+                let rec retry (model: RendererModel<Arena>) n =
+                    if n = 0 then
+                        model
+                    else
+                        let next, _ = RendererSelection.update (RendererMsg.StateChanged(arena n n)) model
+
+                        let failed, _ =
+                            RendererSelection.update
+                                (RendererMsg.MountFailed(RendererBackend.Svg, next.Attempt, sprintf "try %d" n))
+                                next
+
+                        retry failed (n - 1)
+
+                match (retry again 50).Status with
+                | RendererStatus.Failed causes -> Expect.equal causes.Length 2 "bounded"
+                | other -> failtestf "expected Failed, got %A" other
             }
         ]

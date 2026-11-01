@@ -2,6 +2,14 @@ namespace FS.GG.Game.Render
 
 /// See RendererSelection.fsi for the contract. Pure Elmish selection core plus the one impure piece,
 /// `RendererHost`, which owns mounted backend resources outside the model.
+/// Two viewports are the same when each component is equal; `NaN` equals `NaN`, so an invalid viewport can never
+/// remount on every state. Shared by `RendererSelection` and `RendererConformance`.
+module internal RendererViewport =
+
+    let same (viewport: float * float) (other: float * float) : bool =
+        let equal (a: float) (b: float) = a = b || (System.Double.IsNaN a && System.Double.IsNaN b)
+        equal (fst viewport) (fst other) && equal (snd viewport) (snd other)
+
 [<RequireQualifiedAccess>]
 type RendererBackend =
     | Svg
@@ -109,6 +117,7 @@ type RendererRefusal =
     | Unavailable of backend: RendererBackend
     | MountFailed of backend: RendererBackend * reason: string
     | DisposeFailed of backend: RendererBackend * reason: string
+    | PresentFailed of backend: RendererBackend * reason: string
 
 [<RequireQualifiedAccess>]
 type RendererStatus =
@@ -166,12 +175,6 @@ module RendererSelection =
         },
         prefix @ [ RendererEffect.Mount(backend, attempt, model.State) ]
 
-    /// Two viewports are the same when each component is equal; `NaN` equals `NaN`, so an invalid viewport can never
-    /// remount on every state.
-    let private sameViewport (width: float, height: float) (otherWidth: float, otherHeight: float) =
-        let same (a: float) (b: float) = a = b || (System.Double.IsNaN a && System.Double.IsNaN b)
-        same width otherWidth && same height otherHeight
-
     let update (msg: RendererMsg<'State>) (model: RendererModel<'State>) =
         match msg with
         | RendererMsg.SelectBackend backend when backend = model.Selected ->
@@ -188,7 +191,7 @@ module RendererSelection =
             match model.Status with
             | RendererStatus.Active ->
                 match RendererRegistry.tryViewport model.Selected model.Registry with
-                | Some viewport when not (sameViewport (viewport model.State) (viewport state)) ->
+                | Some viewport when not (RendererViewport.same (viewport model.State) (viewport state)) ->
                     // The remount rule: the mount is fixed to its viewport, so it is replaced by one for the new state.
                     mountNext model.Selected model.Refusal [ RendererEffect.Unmount model.Selected ] { model with State = state }
                 | _ -> { model with State = state }, [ RendererEffect.Present(model.Selected, state) ]
@@ -200,15 +203,17 @@ module RendererSelection =
         | RendererMsg.PresentFailed(backend, _, reason) ->
             // The host released the throwing mount. Whichever backend it was, the default is mounted with the latest
             // state: a fallback for a canvas backend, a remount for the default itself.
-            mountNext RendererBackend.defaultBackend (Some(RendererRefusal.MountFailed(backend, reason))) [] model
+            mountNext RendererBackend.defaultBackend (Some(RendererRefusal.PresentFailed(backend, reason))) [] model
         | RendererMsg.MountFailed(backend, attempt, _) when attempt <> model.Attempt || backend <> model.Selected ->
             model, []
         | RendererMsg.MountFailed(backend, _, reason) when backend = RendererBackend.defaultBackend ->
-            // Keep the failure that caused an SVG fallback, if that is what this attempt was.
+            // Keep the failure this attempt followed: the one that caused an SVG fallback, the present failure that
+            // caused a remount, or the failure that a retry from `Failed` is retrying. One earlier cause is kept, so the
+            // list stays bounded however many states retry.
             let cause =
                 match model.Refusal with
-                | Some(RendererRefusal.MountFailed(previous, previousReason)) when previous <> backend ->
-                    [ previous, previousReason ]
+                | Some(RendererRefusal.MountFailed(previous, previousReason))
+                | Some(RendererRefusal.PresentFailed(previous, previousReason)) -> [ previous, previousReason ]
                 | _ -> []
 
             { model with
@@ -219,10 +224,16 @@ module RendererSelection =
         | RendererMsg.MountFailed(backend, _, reason) ->
             mountNext RendererBackend.defaultBackend (Some(RendererRefusal.MountFailed(backend, reason))) [] model
         | RendererMsg.DisposeFailed(backend, reason) ->
-            { model with
-                Refusal = Some(RendererRefusal.DisposeFailed(backend, reason))
-            },
-            []
+            // A dispose failure never replaces the failure that caused the release: it is added to that cause.
+            let also = "; disposing the released mount also failed: " + reason
+
+            let refusal =
+                match model.Refusal with
+                | Some(RendererRefusal.MountFailed(failed, cause)) -> RendererRefusal.MountFailed(failed, cause + also)
+                | Some(RendererRefusal.PresentFailed(failed, cause)) -> RendererRefusal.PresentFailed(failed, cause + also)
+                | _ -> RendererRefusal.DisposeFailed(backend, reason)
+
+            { model with Refusal = Some refusal }, []
 
     let available (model: RendererModel<'State>) =
         RendererRegistry.available model.Registry

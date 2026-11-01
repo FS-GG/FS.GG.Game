@@ -655,7 +655,7 @@ module RendererConformance =
 
                     let causeNamed =
                         match model.Refusal with
-                        | Some(RendererRefusal.MountFailed(failed, reason)) ->
+                        | Some(RendererRefusal.PresentFailed(failed, reason)) ->
                             failed = backend && reason.Contains "injected present failure"
                         | _ -> false
 
@@ -719,6 +719,10 @@ module RendererConformance =
                              && (match failed.Refusal with
                                  | Some(RendererRefusal.MountFailed(failedBackend, reason)) ->
                                      failedBackend = backend && reason.Contains "injected mount failure"
+                                 | _ -> false)
+                             && (match failed.Status with
+                                 | RendererStatus.Failed [ _; (causeBackend, cause) ] ->
+                                     causeBackend = backend && cause.Contains "injected present failure"
                                  | _ -> false))
                             (sprintf "consumed=%b %s" consumedBoth (describe host))
 
@@ -737,7 +741,18 @@ module RendererConformance =
                 match subject.Viewport with
                 | None -> ()
                 | Some(expectedViewport, actualViewport) ->
-                    let viewports = states |> Array.map expectedViewport |> Array.distinct
+                    // Distinct under `RendererViewport.same`, so a NaN viewport is one viewport, not one per state.
+                    let viewports =
+                        states
+                        |> Array.map expectedViewport
+                        |> Array.fold
+                            (fun seen viewport ->
+                                if seen |> List.exists (RendererViewport.same viewport) then
+                                    seen
+                                else
+                                    viewport :: seen)
+                            []
+                        |> List.rev
 
                     check
                         "viewport: the subject's states include two different viewports"
@@ -755,18 +770,29 @@ module RendererConformance =
                         // Every state, then back again: a viewport that grows and one that shrinks.
                         let sequence = List.ofArray states @ List.rev (List.ofArray states)
                         let wrong = ResizeArray<string>()
+                        let failures = ResizeArray<string>()
+                        let refusalBefore = (host.Model()).Refusal
 
                         for state in sequence do
                             host.Dispatch(RendererMsg.StateChanged state)
                             let! got = actualViewport host backend
 
-                            if got <> Some(expectedViewport state) then
+                            if not (got |> Option.exists (RendererViewport.same (expectedViewport state))) then
                                 wrong.Add(sprintf "state wants %A, backend has %A" (expectedViewport state) got)
+
+                            // A viewport change is not a failure: the model records no refusal for it.
+                            if (host.Model()).Refusal <> refusalBefore then
+                                failures.Add(sprintf "refusal became %A" (host.Model()).Refusal)
 
                         check
                             (sprintf "viewport %s: every state is presented at its own viewport, growing and shrinking" name)
                             (wrong.Count = 0 && isOn host backend)
                             (String.concat "; " wrong + " " + describe host)
+
+                        check
+                            (sprintf "viewport %s: a viewport change is not a failure, so Refusal is untouched" name)
+                            (failures.Count = 0)
+                            (String.concat "; " failures)
 
                         let live = mountsOf backend |> List.filter (fun record -> record.Disposals = 0)
 
@@ -783,7 +809,7 @@ module RendererConformance =
                             let changes =
                                 (initial :: sequence)
                                 |> List.pairwise
-                                |> List.filter (fun (before, after) -> declared before <> declared after)
+                                |> List.filter (fun (before, after) -> not (RendererViewport.same (declared before) (declared after)))
                                 |> List.length
 
                             check

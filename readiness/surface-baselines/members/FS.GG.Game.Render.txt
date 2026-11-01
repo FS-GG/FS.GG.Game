@@ -62,6 +62,7 @@ FS.GG.Game.Render.RendererMsg`1+Tags.SelectBackend : System.Int32
 FS.GG.Game.Render.RendererMsg`1+Tags.StateChanged : System.Int32
 FS.GG.Game.Render.RendererRefusal+Tags.DisposeFailed : System.Int32
 FS.GG.Game.Render.RendererRefusal+Tags.MountFailed : System.Int32
+FS.GG.Game.Render.RendererRefusal+Tags.PresentFailed : System.Int32
 FS.GG.Game.Render.RendererRefusal+Tags.Unavailable : System.Int32
 FS.GG.Game.Render.RendererRegistry.available<State>(RendererRegistry<State>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>
 FS.GG.Game.Render.RendererRegistry.create<State>(RendererAdapter<State>) : FSharpResult<RendererRegistry<State>, System.String>

@@ -227,6 +227,8 @@ type private SizedSurface() =
     member val Shown: Sized option = None with get, set
     member val Viewport: (float * float) option = None with get, set
     member val InPlace = false with get, set
+    /// A stale viewport raises in `Present`, like the retained SVG surface does.
+    member val RaiseOnStale = false with get, set
 
     member this.Adapter: RendererAdapter<Sized> =
         {
@@ -243,6 +245,9 @@ type private SizedSurface() =
                         {
                             Present =
                                 fun next ->
+                                    if this.RaiseOnStale && this.Viewport <> Some(viewportOf next) then
+                                        failwith "mounted at another viewport"
+
                                     this.Shown <- Some next
 
                                     if this.InPlace then
@@ -343,4 +348,31 @@ let viewportTests =
                 Expect.equal surface.Viewport (Some(300.0, 50.0)) "the live mount has the latest viewport"
                 host.Dispose()
                 Expect.equal surface.Live 0 "released"
+
+            testCase "negative control: a viewport change that only works through a present failure is not a viewport change"
+            <| fun () ->
+                // Undeclared, the stale viewport raises in Present; the failure recovery mounts again, so every state IS
+                // presented at its own viewport, but each change is recorded as a failure.
+                let surface = SizedSurface()
+                surface.RaiseOnStale <- true
+                let failed = sizedKit surface (sizedRegistry surface false) sizedStates
+
+                Expect.equal
+                    failed
+                    [ "viewport svg: a viewport change is not a failure, so Refusal is untouched" ]
+                    "only the refusal check fails: the recovery presented every viewport"
+
+                let declared = SizedSurface()
+                declared.RaiseOnStale <- true
+                Expect.isEmpty (sizedKit declared (sizedRegistry declared true) sizedStates) "declared, the remount rule is not a failure"
+
+            testCase "negative control: NaN viewports are one viewport, not one per state"
+            <| fun () ->
+                let surface = SizedSurface()
+                let nans = sizedStates |> List.map (fun state -> { state with Width = nan })
+
+                Expect.contains
+                    (sizedKit surface (sizedRegistry surface true) nans)
+                    "viewport: the subject's states include two different viewports"
+                    "NaN equals NaN, so the subject has one viewport"
         ]

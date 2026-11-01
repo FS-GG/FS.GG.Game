@@ -24,13 +24,19 @@ contains every adapter exception), so the exception is contained and the recover
 
 | Event | Result |
 |---|---|
-| `Present` of a canvas backend throws | The host releases that mount and reports `PresentFailed`. The model mounts SVG with the latest state (as before); `Refusal` names the cause. |
-| `Present` of the default backend throws | The host releases the mount and reports `PresentFailed`. The model mounts the default again with the latest state under a new attempt; `Refusal` names the cause. One live mount remains. |
-| That remount fails too | `Status = Failed` with the cause, nothing mounted or held. |
-| `StateChanged` while `Failed` | The selected backend is mounted again with that state. A failure is never final; before, the state was stored and nothing happened. |
+| `Present` of a canvas backend throws | The host releases that mount and reports `PresentFailed`. The model mounts SVG with the latest state (as before); `Refusal` is `RendererRefusal.PresentFailed` with the cause. |
+| `Present` of the default backend throws | The host releases the mount and reports `PresentFailed`. The model mounts the default again with the latest state under a new attempt; `Refusal` is `PresentFailed` with the cause. One live mount remains. |
+| That remount fails too | `Status = Failed [ the remount failure; the present failure ]`, nothing mounted or held. |
+| `StateChanged` while `Failed` | The selected backend is mounted again with that state. A failure is never final; before, the state was stored and nothing happened. A retry that fails again lists the failure it retried after its own. |
+| The released mount's `Dispose` also throws | The dispose failure never replaces the cause: it is added to the cause's reason (`...; disposing the released mount also failed: ...`). A dispose failure with no cause to protect is still `RendererRefusal.DisposeFailed`. |
 
-The retry is bounded by the game's own state flow: one mount attempt per state, never a loop inside `update`. A game
-whose mount fails for every state attempts it once per state; it can stop by not dispatching states.
+The retry is bounded to one mount attempt per state the caller dispatches, never a loop inside `update`, and there is no
+rate limit: a game whose mount fails for every state attempts it once per state, and stops by not dispatching states.
+One earlier cause is kept in `Failed`, so the list does not grow with the number of states; the model has no other place
+to keep a history without a breaking field.
+
+`RendererRefusal.PresentFailed` is appended, so a present failure is no longer recorded as a mount failure. A consumer
+that matches `RendererRefusal` exhaustively (FourD's and BAR's `refusalText`) gets an incomplete-match warning.
 
 `RendererMsg.PresentFailed of backend * attempt * reason` is a new union case (additive). The host used to report a
 failing `Present` as `MountFailed`; the model needs to tell them apart, because a mount that failed after being
@@ -68,19 +74,23 @@ New sections in `RendererConformance`:
 - **viewport**, when the subject calls `RendererConformance.withViewport expected actual` (`BrowserConformance.svgViewport`
   reads the SVG root): at least two distinct viewports among the states; every state, then back again, is presented at
   its own viewport as read from the backend; one live mount remains and every superseded one was disposed once; and,
-  where the registry declares the viewport, the mount is replaced exactly when it changes. A fixed-viewport adapter
-  with no declaration fails the read-back, which is the check that finds the FourD stale-viewport bug.
+  where the registry declares the viewport, the mount is replaced exactly when it changes; and a viewport change leaves
+  `Refusal` untouched (it is not a failure). Comparisons use the same `NaN`-safe equality as the model, and NaN
+  viewports count as one viewport. A fixed-viewport adapter with no declaration fails the read-back, which is the check
+  that finds the FourD stale-viewport bug; one that only works through the present-failure recovery fails the refusal
+  check.
 
-The browser kit returns 73 results for three backends (it was 62), the in-process kit 76 (it was 65).
+The browser kit returns 73 results for three backends (it was 62), the in-process kit 76 (it was 65). The viewport
+section, when declared, runs one subject check and up to four per backend.
 
 ## Evidence
 
-- `Game.Render.Tests`: 88 tests (was 74). Selection: default and canvas `PresentFailed`, a remount that also fails and
+- `Game.Render.Tests`: 93 tests (was 74). Selection: default and canvas `PresentFailed`, a remount that also fails and
   the next state recovering, stale `PresentFailed`, a state change while `Failed`, the viewport rule (same viewport
   presents in place, a change remounts, per backend, `NaN`, `register` keeps the declaration). Kit: the present
   failure section for each backend, a canvas that leaks a failed mount, a host with the pre-adoption behaviour; the
   viewport lifecycle: declared and in-place conform; undeclared, wrongly declared and single-viewport subjects fail.
-- Browser smoke: 391 checks (was 352): the kit's present failure on the real SVG, Pixi and Babylon (reference game
+- Browser smoke: 397 checks (was 355 after #750): the kit's present failure on the real SVG, Pixi and Babylon (reference game
   and generated sample), and a retained board whose size changes (declared: remount at the new size without a
   failure, input host reattached, in place for the same size; undeclared: contained failure that mounts again), with
   the kit's viewport section.

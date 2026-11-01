@@ -289,6 +289,30 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
              && broken.Mounted = None)
             (sprintf "%s %d/%d" container.innerHTML attached.Value released.Value)
 
+        // A retry on the next STATE (the lifecycle rule of #752) must not accumulate roots either, and a state that
+        // mounts ends the failure.
+        for _ in 1..5 do
+            broken.Dispatch(RendererMsg.StateChanged poisoned)
+
+        check
+            "retained svg: retrying on each new state does not accumulate roots or input hosts, and the failure keeps its earlier cause"
+            (container.children.length = 0
+             && attached.Value - attachedBeforeThrow = released.Value - releasedBeforeThrow
+             && broken.Mounted = None
+             && (match broken.Model.Status with
+                 | RendererStatus.Failed [ (RendererBackend.Svg, "selected threw"); (RendererBackend.Svg, "selected threw") ] -> true
+                 | _ -> false))
+            (sprintf "%s %d/%d %A" container.innerHTML attached.Value released.Value broken.Model.Status)
+
+        broken.Dispatch(RendererMsg.StateChanged first)
+
+        check
+            "retained svg: the next state that mounts ends the failure, with one root"
+            (broken.Mounted = Some RendererBackend.Svg
+             && broken.Model.Status = RendererStatus.Active
+             && count container "svg" = 1)
+            (sprintf "%A %s" broken.Model.Status container.innerHTML)
+
         (broken :> System.IDisposable).Dispose()
         check "retained svg: disposing the failed driver leaves the stage clean" (container.children.length = 0) container.innerHTML
 
@@ -364,7 +388,7 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
              && undeclared.Mounted = Some RendererBackend.Svg
              && undeclared.Model.Status = RendererStatus.Active
              && (match undeclared.Model.Refusal with
-                 | Some(RendererRefusal.MountFailed(RendererBackend.Svg, reason)) -> reason.Contains "mounted at"
+                 | Some(RendererRefusal.PresentFailed(RendererBackend.Svg, reason)) -> reason.Contains "mounted at"
                  | _ -> false))
             (sprintf "%g %A" (width ()) undeclared.Model.Refusal)
 
@@ -402,7 +426,7 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
 
         check
             "retained kit: the SVG-only subject ran all of its checks"
-            (results.Length = 22)
+            (results.Length = 23)
             (string results.Length)
 
         check "retained kit: the stage is empty afterwards" (container.children.length = 0) container.innerHTML
