@@ -182,3 +182,11 @@ if output=$("$root/tests/release/test-game-0-18-release.sh" --root "$conditioned
 fi
 grep -q 'has a Condition attribute' <<<"$output"
 echo "view witness: a conditional source in the packed browser project rejected"
+
+# FS.GG.Game#764: evidence retention and the listing wait are pinned before the public consumers.
+mutate_red "evidence-after-consumers" "readback evidence must be retained after readback and before any public consumer" \
+  "i = text.index('      # Saved as soon as readback passes'); j = text.index('      # nuget.org serves a pushed'); block = text[i:j]; text = text[:i] + text[j:]; k = text.index('  admission:'); text = text[:k].rstrip('\\n') + '\\n\\n' + block + '\\n' + text[k:]"
+mutate_red "no-listing-wait" "must wait for nuget.org to list every released id" \
+  "text = text.replace('python3 tests/release/wait-nuget-listing.py --version', 'echo listing-wait-disabled --version')"
+mutate_red "listing-wait-after-consumer" "must wait for the nuget.org listing after readback" \
+  "i = text.index('      - name: Wait for nuget.org to list'); j = text.index('      - name: Qualify fresh public'); block = text[i:j]; text = text[:i] + text[j:]; k = text.index('      - name: Qualify a clean public browser'); text = text[:k] + block + text[k:]"

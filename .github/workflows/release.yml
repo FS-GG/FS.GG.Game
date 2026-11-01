@@ -68,6 +68,7 @@ jobs:
           tests/release/test-game-0-18-release.sh --source-only
           tests/release/test-game-0-18-release-selftest.sh
           python3 tests/release/test-release-admission.py
+          python3 tests/release/test-wait-nuget-listing.py
 
       # COLD, via the shared action (#135 / FS-GG/.github#429) — and this is the job where a warm
       # restore was worst. There is no `cache: true` here to blame: --locked-mode validates the
@@ -385,6 +386,28 @@ jobs:
           report.write_text(json.dumps({'schema':'fsgg.game.release-readback/v1','packages':rows},indent=2)+'\n')
           PY
 
+      # Saved as soon as readback passes (FS.GG.Game#764): a public consumer that fails later must not take the
+      # dual-feed evidence of an already-published release with it.
+      - name: Retain dual-feed readback evidence
+        if: steps.ver.outputs.push == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: game-release-readback-${{ steps.ver.outputs.version }}-${{ github.run_id }}
+          path: artifacts/readback.json
+          if-no-files-found: error
+          retention-days: 90
+
+      # nuget.org serves a pushed .nupkg (what readback fetched) before its flat-container version list names the
+      # version, and restore resolves versions from that list. Wait, bounded, until it lists the version for every
+      # released id, so a listing lag cannot fail the public consumers of a published release (0.18.0 NU1102,
+      # release run 41324010304; FS.GG.Game#764).
+      - name: Wait for nuget.org to list every released version
+        if: steps.ver.outputs.push == 'true'
+        shell: bash
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+        run: python3 tests/release/wait-nuget-listing.py --version "$VER" --packages artifacts/packages --attempts 60 --interval 15
+
       - name: Qualify fresh public package-only Box2D consumer
         if: steps.ver.outputs.push == 'true'
         shell: bash
@@ -395,14 +418,6 @@ jobs:
         shell: bash
         run: tests/release/test-render-browser-package-consumer.sh --public
 
-      - name: Retain dual-feed readback evidence
-        if: steps.ver.outputs.push == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: game-release-readback-${{ steps.ver.outputs.version }}-${{ github.run_id }}
-          path: artifacts/readback.json
-          if-no-files-found: error
-          retention-days: 90
 
   admission:
     name: Observe registry and OIDC admission (no publication) [org-publication-writer]

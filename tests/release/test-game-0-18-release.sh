@@ -102,6 +102,23 @@ for public_check in ('tests/release/test-box2d-package-consumer.sh --public',
     installed = text.index(public_check)
     if installed <= text.index('Read back and compare both feed payloads') or installed <= pushes[3]:
         raise SystemExit('public installed qualification must follow both feed pushes and readback')
+# FS.GG.Game#764: the dual-feed readback evidence is retained as soon as readback passes, before any public consumer
+# can fail; and the public consumers restore only after nuget.org's flat-container list names the version for every
+# released id (a served .nupkg precedes its listing; restore reads the listing).
+readback = text.index('Read back and compare both feed payloads')
+evidence = text.index('name: Retain dual-feed readback evidence')
+listing_wait = 'python3 tests/release/wait-nuget-listing.py --version "$VER" --packages artifacts/packages'
+if text.count(listing_wait) != 1:
+    raise SystemExit('release workflow must wait for nuget.org to list every released id exactly once, from the release packages')
+waited = text.index(listing_wait)
+consumers = [text.index(check) for check in ('tests/release/test-box2d-package-consumer.sh --public',
+                                             'tests/release/test-render-browser-package-consumer.sh --public')]
+if not readback < evidence < min(consumers):
+    raise SystemExit('dual-feed readback evidence must be retained after readback and before any public consumer')
+if not readback < waited < min(consumers):
+    raise SystemExit('public consumers must wait for the nuget.org listing after readback')
+if 'python3 tests/release/test-wait-nuget-listing.py' not in text[:text.index('target: FS.GG.Game.slnx')]:
+    raise SystemExit('the release preflight must run the listing-wait offline tests')
 recovery = text.index('Download retained release bytes')
 if 'dotnet pack' in text[recovery:pushes[0]]:
     raise SystemExit('custody recovery must not re-pack')
