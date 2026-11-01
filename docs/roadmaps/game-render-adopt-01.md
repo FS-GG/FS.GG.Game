@@ -118,11 +118,14 @@ route at publication.
   packed project that lists them unconditionally. The package depends on `FS.GG.Game.Render` at the same version.
   The bindings assembly is not a dependency. `js-bindings/` carries the exact npm closures, and the packed project
   declares `@babylonjs/core@9.33.1` and `pixi.js@8.22.0` for Femto.
-- Fable does not evaluate MSBuild conditions in a package's project file. The conditional item groups in
-  `FS.GG.Game.Render`'s packed `fable/FS.GG.Game.Render.fsproj` therefore compiled no sources for a package
-  consumer, and every 0.17.0 Fable consumer would have failed. A clean consumer compile showed it, while the
-  repository smoke had passed because it builds that view with MSBuild. The in-repo project is now unconditional,
-  and the packed copy is generated from it at pack. The release contract refuses a conditional packed project.
+- Fable does not evaluate MSBuild conditions in a package's project file. The view project #733 added used
+  conditional item groups, so its packed `fable/FS.GG.Game.Render.fsproj` would have compiled no sources for a
+  package consumer. That form was never published: #733 merged after `v0.17.0` (its commit `eba5ce12` is not an
+  ancestor of the tag), and the published `FS.GG.Game.Render` 0.17.0 has no `fable/` entries at all. A clean
+  consumer compile of the 0.18.0 candidate showed the failure, while the repository smoke had passed because it
+  builds that view with MSBuild. The in-repo project is now unconditional, and the packed copy is generated from it
+  at pack. The release contract refuses a conditional packed project. 0.18.0 is the first release with a
+  `FS.GG.Game.Render` Fable view.
 - `src/Render.Browser` references `FS.GG.Game.Render` two ways. Fable cracks projects with a design-time build
   and compiles every referenced project's sources, so a design-time build (Fable, editors) references the bounded
   view, `src/Game.Render/Fable`. A normal restore, build and pack references `src/Game.Render`. The packed assembly
