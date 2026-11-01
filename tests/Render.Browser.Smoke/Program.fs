@@ -2687,6 +2687,97 @@ let runGlyphProof () : Async<unit> =
             container.remove ()
     }
 
+/// FS.GG.Game#789, review R3 of #794: the five identity frames (ADR D1), monochrome so only shape counts, at the default
+/// frame size (24 units). On each backend: a strip of all five draws every pixel ScenePixels decides; and each frame, drawn
+/// alone, shows its own decided pixels while every other frame's decided pixels differ from it (20 ordered pairs), so a
+/// backend that drew one identity's frame for another's would be caught.
+let runIdentityFrames () : Async<unit> =
+    async {
+        let ink = fixtureColor 225uy 228uy 232uy
+        let ground = fixtureColor 34uy 40uy 49uy
+        let size = 24.0
+        let identities = Experimental.Glyphs.identities
+        let stripWidth = 48.0 * float identities.Length
+        let stripHeight = 48.0
+
+        let strip: Scene =
+            { Nodes =
+                SceneNode.Rectangle((0.0, 0.0, stripWidth, stripHeight), ground)
+                :: (identities
+                    |> List.mapi (fun i identity ->
+                        Experimental.Glyphs.identityFrame identity { X = 24.0 + 48.0 * float i; Y = 24.0 } size ink ground)
+                    |> List.concat) }
+
+        let single identity : Scene =
+            { Nodes =
+                SceneNode.Rectangle((0.0, 0.0, 48.0, 48.0), ground)
+                :: Experimental.Glyphs.identityFrame identity { X = 24.0; Y = 24.0 } size ink ground }
+
+        let mountOn backend (container: HTMLElement) name width height scene =
+            match backend with
+            | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+            | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+            | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+            let name = sprintf "identity frames (#789), %s" id
+            let container = document.createElement "div"
+            container.id <- sprintf "identity-frames-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" stripWidth stripHeight)
+            document.body.appendChild container |> ignore
+            let wanted = ScenePixels.expectations stripWidth stripHeight strip
+
+            match mountOn backend container name stripWidth stripHeight strip with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container stripWidth stripHeight backend (fun () -> mount.Present strip) wanted 600
+
+                check
+                    (sprintf "%s: the strip of five frames draws every pixel ScenePixels decides (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 40)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+
+                let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "frames-%s.png" id)
+                info (sprintf "identity frames screenshot %s" id) (if wrote then sprintf "frames-%s.png" id else "not requested")
+                mount.Dispose()
+
+            container.remove ()
+
+            let misses = ResizeArray<string>()
+            let pairs = ref 0
+
+            for a in identities do
+                let host = document.createElement "div"
+                document.body.appendChild host |> ignore
+
+                match mountOn backend host (sprintf "%s %A" name a) 48.0 48.0 (single a) with
+                | Error reason -> misses.Add(sprintf "%A does not mount: %s" a reason)
+                | Ok mount ->
+                    let! own = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(single a)) (ScenePixels.expectations 48.0 48.0 (single a)) 600
+
+                    if not own.IsEmpty then
+                        misses.Add(sprintf "%A does not show its own pixels: %s" a (own |> List.truncate 2 |> String.concat "; "))
+
+                    for b in identities |> List.filter ((<>) a) do
+                        pairs.Value <- pairs.Value + 1
+                        let! other = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(single a)) (ScenePixels.expectations 48.0 48.0 (single b)) 0
+
+                        if other.IsEmpty then
+                            misses.Add(sprintf "%A drawn passes %A's decided pixels" a b)
+                        else
+                            info (sprintf "identity pair %s %A drawn, %A read" id a b) (sprintf "%d differing decided pixels" other.Length)
+
+                    mount.Dispose()
+
+                host.remove ()
+
+            check
+                (sprintf "%s: each frame shows its own decided pixels and differs from every other frame's (%d ordered pairs)" name pairs.Value)
+                (misses.Count = 0 && pairs.Value = 20)
+                (String.concat "; " (Seq.truncate 4 misses))
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -2719,6 +2810,7 @@ async {
         do! runScaledBoard ()
         do! runOverhang ()
         do! runGlyphProof ()
+        do! runIdentityFrames ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1

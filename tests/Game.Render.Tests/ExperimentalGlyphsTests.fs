@@ -32,6 +32,38 @@ let private sample: Glyphs.Glyph list =
         Glyphs.Status({ X = 30.0; Y = 40.0; Width = 36.0; Height = 6.0 }, 0.5)
     ]
 
+
+/// The analytic colour of pixel (col, row) in a drawing of rectangles: Some colour when every rectangle covers it wholly
+/// or not at all, None when one covers it in part.
+let private colourAt (nodes: SceneNode list) (col: int) (row: int) =
+    let x0, y0 = float col, float row
+    let x1, y1 = x0 + 1.0, y0 + 1.0
+    let folder (top, partial) node =
+        match node with
+        | SceneNode.Rectangle((x, y, w, h), colour) ->
+            if x1 <= x || x0 >= x + w || y1 <= y || y0 >= y + h then top, partial
+            elif x0 >= x && x1 <= x + w && y0 >= y && y1 <= y + h then Some colour, false
+            else top, true
+        | _ -> top, true
+    match List.fold folder (None, false) nodes with
+    | _, true -> None
+    | top, false -> top
+
+let private frameNodes identity size =
+    let ground = Glyphs.Theme.standard.Ground
+    SceneNode.Rectangle((0.0, 0.0, 96.0, 96.0), ground)
+    :: Glyphs.identityFrame identity { X = 48.0; Y = 48.0 } size Glyphs.Theme.standard.Body ground
+
+/// How many pixels the kit decides for frame `a` that frame `b`'s drawing shows in another colour.
+let private control a b size =
+    let drawnB = frameNodes b size
+    ScenePixels.expectations 96.0 96.0 { Nodes = frameNodes a size }
+    |> List.filter (fun e ->
+        match colourAt drawnB (int (floor e.Point.X)) (int (floor e.Point.Y)) with
+        | Some other -> other <> e.Colour
+        | None -> false)
+    |> List.length
+
 [<Tests>]
 let tests =
     testList
@@ -89,6 +121,16 @@ let tests =
                     for name, fill in [ "good", theme.Good; "warn", theme.Warn; "bad", theme.Bad ] do
                         let ratio = Glyphs.Theme.contrast fill theme.Track
                         Expect.isGreaterThanOrEqual ratio 3.0 (sprintf "%s %s fill on track: %.2f:1" theme.Name name ratio)
+            }
+
+            test "the five identity frames are bars only, and the kit tells every pair apart in both directions at 12 to 32 units" {
+                for size in [ 12.0; 16.0; 24.0; 32.0 ] do
+                    for a in Glyphs.identities do
+                        let nodes = Glyphs.identityFrame a { X = 48.0; Y = 48.0 } size Glyphs.Theme.standard.Body Glyphs.Theme.standard.Ground
+                        Expect.isTrue (nodes |> List.forall (function SceneNode.Rectangle _ -> true | _ -> false)) (sprintf "%A is bars" a)
+
+                        for b in Glyphs.identities |> List.filter ((<>) a) do
+                            Expect.isGreaterThanOrEqual (control a b size) 2 (sprintf "size %g: %A's decided pixels read against %A" size a b)
             }
 
             test "today a text node drawn last leaves no pixel of the board decided (the gap ADR D6 closes)" {

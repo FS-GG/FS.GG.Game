@@ -129,6 +129,66 @@ module Glyphs =
     let private grow (bounds: Rect) (by: float) : Rect =
         { X = bounds.X - by; Y = bounds.Y - by; Width = bounds.Width + 2.0 * by; Height = bounds.Height + 2.0 * by }
 
+    /// The five identities (ADR D1). The frame shape follows from the identity in the library; a theme chooses colours only.
+    type Identity =
+        | Own
+        | Ally
+        | Neutral
+        | Enemy
+        | Unknown
+
+    /// The identity frame of `identity`, `size` units across, centred on `centre`, built only from opaque bars (filled
+    /// rectangles) so every backend draws it and `ScenePixels` decides its edges (ADR D1, review R3 of #794):
+    /// - Own: the APP-6 friend rectangle, 3:2;
+    /// - Ally: the friend rectangle with notches in the middle of its top and bottom edges, in the ground colour;
+    /// - Neutral: a square;
+    /// - Enemy: a stepped diamond of rows one step high (`max 1 (floor (size / 12))`), two steps narrower than the square
+    ///   at its middle and narrowing by two steps per row;
+    /// - Unknown: a stepped quatrefoil, a cross whose arms reach one band past the square on each side.
+    /// The band is `max 1 (floor (size / 8))`. Every coordinate is a whole unit when `centre` is.
+    let identityFrame (identity: Identity) (centre: Point) (size: float) (ink: Color) (ground: Color) : SceneNode list =
+        let w = System.Math.Floor size
+        let band = max 1.0 (System.Math.Floor(w / 8.0))
+        let half = System.Math.Floor(w / 2.0)
+        let at (dx: float) (dy: float) (bw: float) (bh: float) colour = box (centre.X + dx) (centre.Y + dy) bw bh colour
+
+        match identity with
+        | Own
+        | Ally ->
+            let h = System.Math.Floor(w * 2.0 / 3.0)
+            let hh = System.Math.Floor(h / 2.0)
+            let body = at -half -hh w h ink
+
+            match identity with
+            | Ally ->
+                let n = max 2.0 (System.Math.Floor(w / 4.0))
+                [ body; at (-System.Math.Floor(n / 2.0)) -hh n n ground; at (-System.Math.Floor(n / 2.0)) (h - hh - n) n n ground ]
+            | _ -> [ body ]
+        | Neutral -> [ at -half -half w w ink ]
+        | Enemy ->
+            // Pairs of rows from the middle out: the middle pair is two bands narrower than the square, so the square's edge
+            // samples fall outside it, and each further pair is two bands narrower again.
+            // Finer steps than the other frames' band (w / 12, not w / 8), so the outline reads as a diamond, not a blob.
+            let step = max 1.0 (System.Math.Floor(w / 12.0))
+            let steps = int (System.Math.Floor(half / step))
+
+            [
+                for i in 0 .. steps - 1 do
+                    let rowWidth = w - 2.0 * step * float (i + 1)
+                    if rowWidth > 0.0 then
+                        let x = -System.Math.Floor(rowWidth / 2.0)
+                        yield at x (-step * float (i + 1)) rowWidth step ink
+                        yield at x (step * float i) rowWidth step ink
+            ]
+        | Unknown ->
+            let reach = half + band
+            let arm = System.Math.Floor(w / 2.0)
+            let armHalf = System.Math.Floor(arm / 2.0)
+            [ at -reach -armHalf (2.0 * reach) arm ink; at -armHalf -reach arm (2.0 * reach) ink ]
+
+    /// All five identities, in order.
+    let identities = [ Own; Ally; Neutral; Enemy; Unknown ]
+
     /// The scene nodes of one glyph in `theme`, in the portable primitive set.
     let draw (theme: Theme) (glyph: Glyph) : SceneNode list =
         let cell = theme.Cell
