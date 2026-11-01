@@ -214,34 +214,44 @@ module BrowserConformance =
         }
 
     // FS.GG.Game#753: what a backend drew, read the same way on all three. A canvas is copied to a 2D canvas in the
-    // task that reads it; the SVG root is serialised and rasterised by the browser.
-    let private pixelsOfCanvas (canvas: HTMLCanvasElement) (points: float[][]) : int[][] =
+    // task that reads it; the SVG root is serialised and rasterised by the browser. Points are in board units (the
+    // scene's own size, `boardWidth` x `boardHeight`) and are mapped to the backing store, which a canvas styled to
+    // another size than the board (Babylon's engine sizes it to the CSS size) does not share.
+    let private pixelsOfCanvas (canvas: HTMLCanvasElement) (boardWidth: float) (boardHeight: float) (points: float[][]) : int[][] =
         emitJsExpr
-            (canvas, points)
-            "(() => { const cv = $0; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g2 = t.getContext('2d'); g2.drawImage(cv, 0, 0); return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0]), Math.floor(p[1]), 1, 1).data)) })()"
+            (canvas, points, boardWidth, boardHeight)
+            "(() => { const cv = $0; const sx = cv.width / $2, sy = cv.height / $3; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g2 = t.getContext('2d'); g2.drawImage(cv, 0, 0); return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0] * sx), Math.floor(p[1] * sy), 1, 1).data)) })()"
 
-    let private pixelsOfSvg (root: Element) (points: float[][]) : Async<int[][]> =
+    let private pixelsOfSvg (root: Element) (boardWidth: float) (boardHeight: float) (points: float[][]) : Async<int[][]> =
         let pending: JS.Promise<int[][]> =
             emitJsExpr
-                (root, points)
-                "(async () => { const svg = $0; const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg)); const img = new Image(); await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('the SVG could not be rasterised')); img.src = url }); const w = parseFloat(svg.getAttribute('width')); const h = parseFloat(svg.getAttribute('height')); const t = document.createElement('canvas'); t.width = w; t.height = h; const g2 = t.getContext('2d'); g2.drawImage(img, 0, 0, w, h); return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0]), Math.floor(p[1]), 1, 1).data)) })()"
+                (root, points, boardWidth, boardHeight)
+                "(async () => { const svg = $0; const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg)); const img = new Image(); await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('the SVG could not be rasterised')); img.src = url }); const w = parseFloat(svg.getAttribute('width')); const h = parseFloat(svg.getAttribute('height')); const t = document.createElement('canvas'); t.width = w; t.height = h; const g2 = t.getContext('2d'); g2.drawImage(img, 0, 0, w, h); const sx = w / $2, sy = h / $3; return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0] * sx), Math.floor(p[1] * sy), 1, 1).data)) })()"
 
         Async.AwaitPromise pending
 
-    let drawnPixels (container: HTMLElement) (backend: RendererBackend) (points: Point list) : Async<(int * int * int) option list> =
+    let drawnPixels
+        (container: HTMLElement)
+        (boardWidth: float)
+        (boardHeight: float)
+        (backend: RendererBackend)
+        (points: Point list)
+        : Async<(int * int * int) option list> =
         async {
             let coordinates = points |> List.map (fun point -> [| point.X; point.Y |]) |> Array.ofList
 
             let! rows =
                 match backend with
                 | RendererBackend.Svg ->
-                    match container.querySelector "svg[data-renderer=svg]" with
+                    // A non-interactive mount's root is not tagged with its backend.
+                    match container.querySelector "svg[data-renderer=svg], svg" with
                     | null -> async { return [||] }
-                    | root -> pixelsOfSvg root coordinates
+                    | root -> pixelsOfSvg root boardWidth boardHeight coordinates
                 | other ->
                     match container.querySelector (sprintf "canvas[data-renderer=%s]" (RendererBackend.id other)) with
                     | null -> async { return [||] }
-                    | canvas -> async { return pixelsOfCanvas (canvas :?> HTMLCanvasElement) coordinates }
+                    | canvas ->
+                        async { return pixelsOfCanvas (canvas :?> HTMLCanvasElement) boardWidth boardHeight coordinates }
 
             return
                 points
@@ -252,8 +262,8 @@ module BrowserConformance =
                         None)
         }
 
-    let pixelProbe (container: HTMLElement) : PixelProbe =
-        let read = drawnPixels container
+    let pixelProbe (container: HTMLElement) (boardWidth: float) (boardHeight: float) : PixelProbe =
+        let read = drawnPixels container boardWidth boardHeight
 
         // Babylon draws a flat shape lit, at 0.75 of its colour.
         let appearance (backend: RendererBackend) (colour: Color) =
@@ -323,36 +333,56 @@ module BrowserConformance =
 
         Async.AwaitPromise pending
 
-    /// The viewport point of the scene point `point` on `element`, after scrolling it into view.
-    let private clientPoint (element: HTMLElement) (point: Point) : float * float =
+    /// The viewport point of the scene point `point` on `element`, after scrolling it into view; `boardWidth` is the
+    /// scene's width, which the element's bounds show scaled.
+    let private clientPoint (element: HTMLElement) (boardWidth: float) (boardHeight: float) (point: Point) : float * float =
         // The SVG surface's hit test asks the browser what is under the point, so it must be on screen.
         emitJsStatement (element, 0) "$0.scrollIntoView({ block: 'center', inline: 'center' })"
         let bounds = element.getBoundingClientRect ()
-        let scale = bounds.width / intrinsicWidth element
-        bounds.left + point.X * scale, bounds.top + point.Y * scale
+        bounds.left + point.X * bounds.width / boardWidth, bounds.top + point.Y * bounds.height / boardHeight
 
     let private mirrorOf (container: HTMLElement) (backend: RendererBackend) : Element option =
         match container.querySelector (sprintf "[data-scene-controls][data-renderer=%s]" (RendererBackend.id backend)) with
         | null -> None
         | element -> Some element
 
-    let press (container: HTMLElement) (backend: RendererBackend) (point: Point) : Async<unit> =
+    let private intrinsicHeight (element: HTMLElement) : float =
+        emitJsExpr (element, 0) "($0.tagName.toLowerCase() === 'canvas' ? $0.height : parseFloat($0.getAttribute('height')))"
+
+    let pressBoard (container: HTMLElement) (boardWidth: float) (boardHeight: float) (backend: RendererBackend) (point: Point) : Async<unit> =
         async {
             match inputElement container backend with
             | None -> ()
             | Some element ->
-                let x, y = clientPoint element point
+                let x, y = clientPoint element boardWidth boardHeight point
                 do! realInput (createObj [ "kind" ==> "click"; "x" ==> x; "y" ==> y ])
+        }
+
+    let moveBoard (container: HTMLElement) (boardWidth: float) (boardHeight: float) (backend: RendererBackend) (point: Point) : Async<unit> =
+        async {
+            match inputElement container backend with
+            | None -> ()
+            | Some element ->
+                let x, y = clientPoint element boardWidth boardHeight point
+                do! realInput (createObj [ "kind" ==> "move"; "x" ==> x; "y" ==> y ])
+        }
+
+    let press (container: HTMLElement) (backend: RendererBackend) (point: Point) : Async<unit> =
+        async {
+            match inputElement container backend with
+            | None -> ()
+            | Some element -> do! pressBoard container (intrinsicWidth element) (intrinsicHeight element) backend point
         }
 
     let move (container: HTMLElement) (backend: RendererBackend) (point: Point) : Async<unit> =
         async {
             match inputElement container backend with
             | None -> ()
-            | Some element ->
-                let x, y = clientPoint element point
-                do! realInput (createObj [ "kind" ==> "move"; "x" ==> x; "y" ==> y ])
+            | Some element -> do! moveBoard container (intrinsicWidth element) (intrinsicHeight element) backend point
         }
+
+    let deviceScale (factor: float) : Async<unit> =
+        realInput (createObj [ "kind" ==> "scale"; "factor" ==> factor ])
 
     let key (name: string) : Async<unit> =
         realInput (createObj [ "kind" ==> "key"; "key" ==> name ])

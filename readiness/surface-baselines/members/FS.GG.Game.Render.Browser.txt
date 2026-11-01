@@ -19,7 +19,8 @@ FS.GG.Game.Render.Browser.BabylonSurface.mountScene(Browser.Types.HTMLElement, F
 FS.GG.Game.Render.Browser.BabylonSurface.register<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>, RendererRegistry<State>) : RendererRegistry<State>
 FS.GG.Game.Render.Browser.BabylonSurface.surface(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions) : FS.GG.Game.Render.SceneSurface
 FS.GG.Game.Render.Browser.BrowserConformance.babylonActiveMeshes() : System.Int32
-FS.GG.Game.Render.Browser.BrowserConformance.drawnPixels(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.Point>) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Core.FSharpOption<System.Tuple<System.Int32, System.Int32, System.Int32>>>>
+FS.GG.Game.Render.Browser.BrowserConformance.deviceScale(System.Double) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
+FS.GG.Game.Render.Browser.BrowserConformance.drawnPixels(Browser.Types.HTMLElement, System.Double, System.Double, FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.Point>) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Core.FSharpOption<System.Tuple<System.Int32, System.Int32, System.Int32>>>>
 FS.GG.Game.Render.Browser.BrowserConformance.focused(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend) : System.String
 FS.GG.Game.Render.Browser.BrowserConformance.host<State>(RendererDriver<State>) : ConformanceHost<State>
 FS.GG.Game.Render.Browser.BrowserConformance.inputHosts(FS.GG.Game.Render.RendererBackend) : System.Int32
@@ -30,9 +31,11 @@ FS.GG.Game.Render.Browser.BrowserConformance.key(System.String) : Microsoft.FSha
 FS.GG.Game.Render.Browser.BrowserConformance.liveContexts(FS.GG.Game.Render.RendererBackend) : System.Int32
 FS.GG.Game.Render.Browser.BrowserConformance.liveWrites(FS.GG.Game.Render.RendererBackend) : System.Int32
 FS.GG.Game.Render.Browser.BrowserConformance.move(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
-FS.GG.Game.Render.Browser.BrowserConformance.pixelProbe(Browser.Types.HTMLElement) : FS.GG.Game.Render.PixelProbe
+FS.GG.Game.Render.Browser.BrowserConformance.moveBoard(Browser.Types.HTMLElement, System.Double, System.Double, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
+FS.GG.Game.Render.Browser.BrowserConformance.pixelProbe(Browser.Types.HTMLElement, System.Double, System.Double) : FS.GG.Game.Render.PixelProbe
 FS.GG.Game.Render.Browser.BrowserConformance.pixiLateFailure() : FS.GG.Game.Render.LateFailureTrigger
 FS.GG.Game.Render.Browser.BrowserConformance.press(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
+FS.GG.Game.Render.Browser.BrowserConformance.pressBoard(Browser.Types.HTMLElement, System.Double, System.Double, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.readPixel<State>(ConformanceHost<State>, Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, System.Int32, System.Int32, Microsoft.FSharp.Core.FSharpFunc<System.Int32[], System.Boolean>, System.Int32) : Microsoft.FSharp.Control.FSharpAsync<System.Int32[]>
 FS.GG.Game.Render.Browser.BrowserConformance.resources(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend) : System.Int32
 FS.GG.Game.Render.Browser.BrowserConformance.subject<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.LateFailureRoute, RendererRegistry<State>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>, FSharpList<State>, FSharpFunc<ConformanceHost<State>, FSharpFunc<FS.GG.Game.Render.RendererBackend, FSharpFunc<State, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>>>>) : ConformanceSubject<State>

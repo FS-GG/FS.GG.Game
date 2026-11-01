@@ -74,11 +74,15 @@ module InteractionProbe =
         InteractionProbe(press, move, focus, key, focused, mirror, liveWrites, tabIndex, inputHosts)
 
 /// One pixel a backend must show: the pixel containing `Point` (scene coordinates, y down) is the scene colour `Colour`.
-type PixelExpectation =
-    {
-        Point: Point
-        Colour: Color
-    }
+[<Sealed>]
+type PixelExpectation internal (point: Point, colour: Color) =
+    member _.Point = point
+    member _.Colour = colour
+
+[<RequireQualifiedAccess>]
+module PixelExpectation =
+
+    let create (point: Point) (colour: Color) = PixelExpectation(point, colour)
 
 [<Sealed>]
 type PixelProbe
@@ -169,62 +173,99 @@ module ScenePixels =
                 let farY = max (abs uy0) (abs uy1)
                 if farX * farX + farY * farY <= 1.0 - 1e-6 then Full else Partial
 
-    /// The scene colour a pixel must show, when the scene decides it: the topmost node that wholly covers it is opaque
-    /// and no node covers it in part. `None` when nothing is drawn there or the scene leaves it open.
-    let private colourAt (drawn: ResizeArray<Drawn>) (col: int) (row: int) : Color option =
+    /// What a pixel must show, when the scene decides it.
+    type private Decided =
+        | Colour of Color
+        | Nothing
+        | Open
+
+    /// The topmost node that wholly covers the pixel decides its colour when it is opaque and no node covers the pixel
+    /// in part; a pixel no node touches is empty, which every backend shows as its clear colour (black).
+    let private decide (drawn: ResizeArray<Drawn>) (col: int) (row: int) : Decided =
         let mutable top: Color option = None
+        let mutable touched = false
         let mutable unsure = false
 
         for node in drawn do
             match cover col row node with
             | Clear -> ()
-            | Partial -> unsure <- true
+            | Partial ->
+                touched <- true
+                unsure <- true
             | Full ->
+                touched <- true
                 let colour = colourOf node
                 top <- if colour.Alpha = 255uy then Some colour else None
                 unsure <- unsure || colour.Alpha <> 255uy
 
-        if unsure then None else top
+        if unsure then Open
+        else
+            match top with
+            | Some colour -> Colour colour
+            | None -> if touched then Open else Nothing
 
     let private ceilInt (value: float) = int (System.Math.Ceiling value)
     let private floorInt (value: float) = int (System.Math.Floor value)
 
-    let expectations (scene: Scene) : PixelExpectation list =
+    /// The clear colour: what SVG (transparent), Pixi and Babylon all show where nothing is drawn.
+    let private clear: Color =
+        {
+            Red = 0uy
+            Green = 0uy
+            Blue = 0uy
+            Alpha = 255uy
+        }
+
+    let expectations (width: float) (height: float) (scene: Scene) : PixelExpectation list =
         let drawn = ResizeArray<Drawn>()
         flatten (0.0, 0.0) scene drawn
+        let columns = floorInt width
+        let rows = floorInt height
         let seen = System.Collections.Generic.HashSet<int * int>()
         let found = ResizeArray<PixelExpectation>()
 
         let sample (col: int) (row: int) =
-            if seen.Add((col, row)) then
-                match colourAt drawn col row with
+            if col >= 0 && col < columns && row >= 0 && row < rows && seen.Add((col, row)) then
+                let wanted =
+                    match decide drawn col row with
+                    | Colour colour -> Some colour
+                    | Nothing -> Some clear
+                    | Open -> None
+
+                match wanted with
                 | Some colour ->
-                    found.Add
-                        {
-                            Point =
-                                {
-                                    X = float col + 0.5
-                                    Y = float row + 0.5
-                                }
-                            Colour = colour
-                        }
+                    found.Add(
+                        PixelExpectation.create
+                            {
+                                X = float col + 0.5
+                                Y = float row + 0.5
+                            }
+                            colour
+                    )
                 | None -> ()
 
         for node in drawn do
             match node with
             | Box(l, t, r, b, _) ->
-                let midRow = floorInt ((t + b) / 2.0)
-                let midCol = floorInt ((l + r) / 2.0)
-                // The first whole pixel inside and the first whole pixel outside each edge, on the middle row or column.
-                sample midCol midRow
-                sample (ceilInt l) midRow
-                sample (floorInt l - 1) midRow
-                sample (floorInt r - 1) midRow
-                sample (ceilInt r) midRow
-                sample midCol (ceilInt t)
-                sample midCol (floorInt t - 1)
-                sample midCol (floorInt b - 1)
-                sample midCol (ceilInt b)
+                // The part inside the canvas: a node that overhangs it is read at the canvas edge.
+                let l = max l 0.0
+                let t = max t 0.0
+                let r = min r (float columns)
+                let b = min b (float rows)
+
+                if r > l && b > t then
+                    let midRow = floorInt ((t + b) / 2.0)
+                    let midCol = floorInt ((l + r) / 2.0)
+                    // The first whole pixel inside and the first whole pixel outside each edge, on the middle row or column.
+                    sample midCol midRow
+                    sample (ceilInt l) midRow
+                    sample (floorInt l - 1) midRow
+                    sample (floorInt r - 1) midRow
+                    sample (ceilInt r) midRow
+                    sample midCol (ceilInt t)
+                    sample midCol (floorInt t - 1)
+                    sample midCol (floorInt b - 1)
+                    sample midCol (ceilInt b)
             | Oval(cx, cy, rx, ry, _) ->
                 // The centre, and the pixel one clear of the extreme on each axis: a round shape's inside is shaded
                 // differently by lit backends, so its edge is read from outside, and the pixel the extreme touches

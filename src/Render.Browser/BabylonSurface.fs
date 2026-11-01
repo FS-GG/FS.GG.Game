@@ -69,10 +69,20 @@ module BabylonSurface =
     [<Emit("(($0.isVisible = false), ($0.fsggSelectable = $1))")>]
     let private markRegion (_mesh: B.Mesh) (_id: string) : unit = jsNative
 
-    /// Babylon's own pick, through the camera, restricted to hit regions: the id of the nearest one under the canvas
-    /// pixel `(x, y)`.
-    [<Emit("(() => { const p = $0.pick($1, $2, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
-    let private pickRegion (_scene: B.Scene) (_x: float) (_y: float) : string option = jsNative
+    /// Babylon's own pick, through the camera, restricted to hit regions: the id of the nearest one under the scene point
+    /// `(x, y)` (board units). `scene.pick` takes render pixels, and the engine sizes its backing store to the canvas's
+    /// CSS size, so a canvas styled to another size than the board has another render size: the point is scaled by
+    /// the live render size over the board size (FS.GG.Game#753).
+    [<Emit("(() => { const p = $0.pick($1 * $3.getRenderWidth() / $4, $2 * $3.getRenderHeight() / $5, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
+    let private pickRegion
+        (_scene: B.Scene)
+        (_x: float)
+        (_y: float)
+        (_engine: B.Engine)
+        (_boardWidth: float)
+        (_boardHeight: float)
+        : string option =
+        jsNative
 
     /// Babylon's input manager sets the canvas's tabIndex to `engine.canvasTabIndex` (1 by default) on every pointer
     /// move, which would put the canvas ahead of the page in tab order (FS.GG.Game#751 review B2). Zero keeps it in
@@ -100,15 +110,16 @@ module BabylonSurface =
     [<Emit("(($0.position.z = -($1 * $2 + $3)), ($0.minZ = 1), ($0.maxZ = $1 * $2 + $3 + 10))")>]
     let private backOffCamera (_camera: B.Camera) (_layers: float) (_step: float) (_clearance: float) : unit = jsNative
 
-    /// Render the scene now, and leave the render loop to draw again only while a material is still compiling.
-    /// Readiness is asked (it visits every mesh) only after meshes were created or while the loop is still waiting.
-    [<Emit("(($0.render()), ($0.fsggPending = ($1 || $0.fsggPending) ? !$0.isReady() : false))")>]
+    /// Render the scene now, and leave the render loop to draw again only while a material is still compiling. Readiness
+    /// (it visits every mesh) is asked BEFORE the render, so a frame that skipped a mesh still compiling is never taken
+    /// for a complete one, and only after meshes were created or while the loop is still waiting.
+    [<Emit("(() => { const ready = ($1 || $0.fsggPending) ? $0.isReady() : true; $0.render(); $0.fsggPending = !ready })()")>]
     let private renderNow (_scene: B.Scene) (_created: bool) : unit = jsNative
 
     /// A render loop that draws only what `renderNow` has not finished: the scene is drawn when the state is presented,
     /// so a loop that drew it again every frame doubled the work (FS.GG.Game#753). It also draws again after a lost
     /// WebGL context is restored.
-    [<Emit("(($1.fsggPending = true), $0.onContextRestoredObservable.add(() => { $1.fsggPending = true }), $0.runRenderLoop(() => { if ($1.fsggPending) { $1.render(); $1.fsggPending = !$1.isReady() } }))")>]
+    [<Emit("(($1.fsggPending = true), $0.onContextRestoredObservable.add(() => { $1.fsggPending = true }), $0.runRenderLoop(() => { if ($1.fsggPending) { const ready = $1.isReady(); $1.render(); $1.fsggPending = !ready } }))")>]
     let private runPendingRenderLoop (_engine: B.Engine) (_scene: B.Scene) : unit = jsNative
 
     /// A mesh sharing `source`'s geometry (and so its vertex buffers), visible and with no material of its own.
@@ -132,6 +143,8 @@ module BabylonSurface =
             Mesh: B.Mesh
             Material: B.StandardMaterial
             mutable Fill: Color
+            /// What the mesh was last placed and sized for; `None` until it is placed.
+            mutable Placed: Shape option
         }
 
     /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
@@ -261,6 +274,8 @@ module BabylonSurface =
 
                 // Whether the last reconcile created a mesh (its material may still be compiling).
                 let created = ref false
+                // How many layers the camera is backed off for.
+                let depth = ref -1
 
                 let create (index: int) (shape: Shape) : Slot =
                     created.Value <- true
@@ -290,14 +305,24 @@ module BabylonSurface =
                         Mesh = mesh
                         Material = material
                         Fill = shape.Fill
+                        Placed = None
                     }
 
+                let sameBox (a: Shape) (b: Shape) =
+                    a.X = b.X && a.Y = b.Y && a.Width = b.Width && a.Height = b.Height
+
                 let place (index: int) (slot: Slot) (shape: Shape) =
-                    // Scene space has y down and its origin at the top left; Babylon has y up and the plane centred.
-                    let x = shape.X + shape.Width / 2.0 - options.Width / 2.0
-                    let y = options.Height / 2.0 - (shape.Y + shape.Height / 2.0)
-                    B.setPosition slot.Mesh (B.vector3 x y (-(float index) * layerStep))
-                    B.setScaling slot.Mesh (B.vector3 shape.Width shape.Height thickness)
+                    // A shape that is where and what size it was needs no new vectors and does not dirty its mesh
+                    // (the same scene presented again costs a render and nothing else).
+                    match slot.Placed with
+                    | Some placed when sameBox placed shape -> ()
+                    | _ ->
+                        // Scene space has y down and its origin at the top left; Babylon has y up and the plane centred.
+                        let x = shape.X + shape.Width / 2.0 - options.Width / 2.0
+                        let y = options.Height / 2.0 - (shape.Y + shape.Height / 2.0)
+                        B.setPosition slot.Mesh (B.vector3 x y (-(float index) * layerStep))
+                        B.setScaling slot.Mesh (B.vector3 shape.Width shape.Height thickness)
+                        slot.Placed <- Some shape
 
                     if slot.Fill <> shape.Fill then
                         B.setDiffuseColor slot.Material (colour shape.Fill)
@@ -326,7 +351,10 @@ module BabylonSurface =
                         slots.RemoveAt(slots.Count - 1)
 
                     // The stack is as deep as the scene has nodes.
-                    backOffCamera camera (float (max shapes.Count 1)) layerStep clearance
+                    if shapes.Count <> depth.Value then
+                        depth.Value <- shapes.Count
+                        backOffCamera camera (float (max shapes.Count 1)) layerStep clearance
+
                     renderNow babylon created.Value
 
                 reconcile scene
@@ -382,7 +410,7 @@ module BabylonSurface =
                             options.Label
                             options.Width
                             options.Height
-                            (fun point -> pickRegion babylon point.X point.Y)
+                            (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
                             report
                             first)
 

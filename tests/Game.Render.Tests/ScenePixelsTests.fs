@@ -38,7 +38,7 @@ let tests =
                             SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
                             SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square)
                         ]
-                    |> ScenePixels.expectations
+                    |> ScenePixels.expectations 100.0 100.0
 
                 Expect.equal (colourAt 10.5 40.5 found) (Some square) "inside the left edge"
                 Expect.equal (colourAt 9.5 40.5 found) (Some background) "outside the left edge"
@@ -58,7 +58,7 @@ let tests =
                             SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
                             SceneNode.Rectangle((10.5, 20.0, 30.0, 40.0), square)
                         ]
-                    |> ScenePixels.expectations
+                    |> ScenePixels.expectations 100.0 100.0
 
                 Expect.equal (colourAt 10.5 40.5 found) None "the half-covered pixel is left open"
                 Expect.equal (colourAt 11.5 40.5 found) (Some square) "the first whole pixel inside"
@@ -73,7 +73,7 @@ let tests =
                             SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square)
                             SceneNode.Rectangle((0.0, 0.0, 25.5, 100.0), rgb 1uy 2uy 3uy)
                         ]
-                    |> ScenePixels.expectations
+                    |> ScenePixels.expectations 100.0 100.0
 
                 Expect.equal (colourAt 25.5 40.5 found) None "the later node's edge runs through the middle pixel"
                 Expect.equal (colourAt 10.5 40.5 found) (Some(rgb 1uy 2uy 3uy)) "the later node is on top"
@@ -86,7 +86,7 @@ let tests =
                             SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
                             SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), { square with Alpha = 128uy })
                         ]
-                    |> ScenePixels.expectations
+                    |> ScenePixels.expectations 100.0 100.0
 
                 Expect.equal (colourAt 25.5 40.5 found) None "inside the translucent node"
                 Expect.equal (colourAt 9.5 40.5 found) (Some background) "outside it"
@@ -99,7 +99,7 @@ let tests =
                             SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
                             SceneNode.Translate((5.0, 5.0), scene [ SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square) ])
                         ]
-                    |> ScenePixels.expectations
+                    |> ScenePixels.expectations 100.0 100.0
 
                 Expect.equal (colourAt 15.5 45.5 found) (Some square) "inside the translated left edge"
                 Expect.equal (colourAt 14.5 45.5 found) (Some background) "outside it"
@@ -112,7 +112,7 @@ let tests =
                             SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
                             SceneNode.Circle({ X = 50.0; Y = 50.0 }, 4.0, square)
                         ]
-                    |> ScenePixels.expectations
+                    |> ScenePixels.expectations 100.0 100.0
 
                 Expect.equal (colourAt 50.5 50.5 found) (Some square) "the pixel at the centre"
                 Expect.equal (colourAt 55.5 50.5 found) (Some background) "one clear of the right extreme"
@@ -123,11 +123,31 @@ let tests =
                 Expect.equal (colourAt 53.5 50.5 found) None "no pixel inside the edge of a shaded shape"
             }
 
-            test "where nothing is drawn nothing is decided" {
+            test "where nothing is drawn the clear colour is expected, so a node drawn larger than declared fails" {
                 let found =
-                    scene [ SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square) ] |> ScenePixels.expectations
+                    scene [ SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square) ] |> ScenePixels.expectations 100.0 100.0
 
-                Expect.equal (colourAt 9.5 40.5 found) None "outside the only node"
+                Expect.equal (colourAt 9.5 40.5 found) (Some(rgb 0uy 0uy 0uy)) "outside the only node"
+                Expect.equal (colourAt 40.5 40.5 found) (Some(rgb 0uy 0uy 0uy)) "outside its right edge"
                 Expect.equal (colourAt 10.5 40.5 found) (Some square) "inside it"
+            }
+
+            test "a node that overhangs the canvas is read at the canvas edge and nowhere outside it" {
+                let found =
+                    scene
+                        [
+                            SceneNode.Rectangle((80.0, 20.0, 40.0, 40.0), square)
+                            SceneNode.Rectangle((-20.0, 70.0, 40.0, 20.0), square)
+                        ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                Expect.equal (colourAt 99.5 40.5 found) (Some square) "the last pixel of the canvas, inside the overhanging node"
+                Expect.equal (colourAt 79.5 40.5 found) (Some(rgb 0uy 0uy 0uy)) "outside its left edge"
+                Expect.equal (colourAt 0.5 80.5 found) (Some square) "the first pixel of the canvas, inside the other"
+                Expect.isTrue
+                    (found
+                     |> List.forall (fun expectation ->
+                         expectation.Point.X > 0.0 && expectation.Point.X < 100.0 && expectation.Point.Y > 0.0 && expectation.Point.Y < 100.0))
+                    "no pixel outside the canvas"
             }
         ]

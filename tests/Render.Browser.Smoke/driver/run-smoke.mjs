@@ -43,6 +43,14 @@ await page.exposeFunction("__fsggInput", async (request) => {
     case "key":
       await page.keyboard.press(keys[request.key] ?? request.key);
       break;
+    case "scale": {
+      // The page's device pixel ratio (FS.GG.Game#753), so one page can run a scenario at DPR 1 and 2. CSS pixels, and so
+      // the mouse coordinates, are unchanged.
+      const session = await page.context().newCDPSession(page);
+      await session.send("Emulation.setDeviceMetricsOverride", { width: 1024, height: 768, deviceScaleFactor: request.factor, mobile: false });
+      await session.detach();
+      break;
+    }
     default:
       throw new Error("unknown input request " + JSON.stringify(request));
   }

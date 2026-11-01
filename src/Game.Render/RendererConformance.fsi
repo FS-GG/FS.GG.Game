@@ -113,14 +113,23 @@ module InteractionProbe =
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 /// One pixel a backend must show (FS.GG.Game#753): the pixel containing `Point` (scene coordinates, y down, one unit
-/// per canvas pixel) shows the scene colour `Colour`.
+/// per pixel of the scene's own size) shows the scene colour `Colour`. Built by `PixelExpectation.create`.
+[<Sealed>]
 type PixelExpectation =
-    {
-        /// Where, in scene coordinates.
-        Point: FS.GG.UI.Scene.Point
-        /// The scene colour the pixel must show (an opaque one).
-        Colour: FS.GG.UI.Scene.Color
-    }
+
+    /// Where, in scene coordinates.
+    member Point: FS.GG.UI.Scene.Point
+
+    /// The scene colour the pixel must show (an opaque one; black for a pixel nothing is drawn on).
+    member Colour: FS.GG.UI.Scene.Color
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module PixelExpectation =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The pixel containing `point` must show `colour`.
+    val create: point: FS.GG.UI.Scene.Point -> colour: FS.GG.UI.Scene.Color -> PixelExpectation
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
@@ -153,12 +162,15 @@ module PixelProbe =
 module ScenePixels =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Pixels `scene` decides, from its rectangles, ellipses and circles (through groups and translations): for each
-    /// node its middle pixel, the first whole pixel inside and outside the middle of each edge of a rectangle, and the
-    /// pixel one clear of each extreme of a round shape (the pixel its extreme touches takes antialiasing from some rasterisers). A pixel is listed only when the topmost node that
-    /// wholly covers it is opaque and no node covers it in part, so a backend that draws a node at another position
-    /// or size, or a later node at another layer, fails it.
-    val expectations: scene: FS.GG.UI.Scene.Scene -> PixelExpectation list
+    /// Pixels `scene` decides on a canvas of `width` x `height` scene units, from its rectangles, ellipses and circles
+    /// (through groups and translations): for each node its middle pixel, the first whole pixel inside and outside the
+    /// middle of each edge of a rectangle (a rectangle that overhangs the canvas is read at the canvas edge), and the
+    /// pixel one clear of each extreme of a round shape (the pixel its extreme touches takes antialiasing from some
+    /// rasterisers). A pixel is listed when the topmost node that wholly covers it is opaque and no node covers it in
+    /// part, or when no node touches it, in which case it must show the clear colour (black, as SVG, Pixi and Babylon
+    /// all do), so a node drawn larger than declared fails it. A backend that draws a node at another position or
+    /// size, or a later node at another layer, fails it too.
+    val expectations: width: float -> height: float -> scene: FS.GG.UI.Scene.Scene -> PixelExpectation list
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
