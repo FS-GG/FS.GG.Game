@@ -284,6 +284,7 @@
     gpu: { status: bench.gpu.status, reason: bench.gpu.reason, source: bench.gpu.source, ms: gpuFrameMs(), dropped: bench.lastGpuFrame - bench.firstGpuFrame + 1 - gpuFrameMs().length, disjoint: bench.gpu.disjoint, unavailable: bench.gpu.unavailable, pending: bench.gpu.pending.length },
     renderer: bench.context ? Object.assign({ kind: bench.context.kind }, rendererOf(bench.context.ctx)) : null,
     devicePixelRatio: window.devicePixelRatio,
+    crossOriginIsolated: globalThis.crossOriginIsolated === true,
     userAgent: navigator.userAgent,
   });
 

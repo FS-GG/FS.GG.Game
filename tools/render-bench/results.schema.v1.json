@@ -22,7 +22,7 @@
       "type": "object",
       "required": ["mode", "games", "scenes", "sizes", "backends", "repeats", "frames", "warmupFrames"],
       "properties": {
-        "mode": { "enum": ["gpu-vulkan", "gpu-gl", "software", "custom"] },
+        "mode": { "enum": ["gpu-angle-vulkan", "gpu-angle-gl-egl", "software", "custom"] },
         "games": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
         "scenes": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
         "sizes": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 1 },
@@ -30,6 +30,9 @@
         "repeats": { "type": "integer", "minimum": 1 },
         "frames": { "type": "integer", "minimum": 1, "description": "frame intervals recorded per run, after warm-up" },
         "warmupFrames": { "type": "integer", "minimum": 1, "description": "frames presented after the backend first draws and before recording" },
+        "order": { "type": "string" },
+        "percentileMethod": { "const": "nearest-rank" },
+        "rawSamples": { "type": "boolean", "description": "runs carry their raw per-frame samples" },
         "capacityProbe": { "type": ["string", "null"] },
         "capacityArgs": { "type": "array", "items": { "type": "string" } }
       }
@@ -190,7 +193,12 @@
         },
         "backendRenderer": { "type": ["object", "null"], "description": "UNMASKED_RENDERER of the backend's own live WebGL context; null for SVG" },
         "page": { "type": "object" },
-        "durationSeconds": { "type": ["number", "null"] }
+        "durationSeconds": { "type": ["number", "null"] },
+        "samples": {
+          "type": "object",
+          "description": "raw per-frame samples of the recording window, in order",
+          "properties": { "frameIntervalMs": { "type": "array", "items": { "type": ["number", "null"] } }, "gpuMs": { "type": "array", "items": { "type": ["number", "null"] } } }
+        }
       }
     },
     "aggregate": {

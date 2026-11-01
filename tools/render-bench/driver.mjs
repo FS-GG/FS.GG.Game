@@ -5,7 +5,7 @@
 // page built by scripts/render-bench.sh (tests/Render.Browser.Bench). Every run is one game, scene, size, backend
 // and repeat in a FRESH browser process, so no run inherits another's heap, GPU process state or shader cache.
 //
-//   driver.mjs run      --page <dir> --browser <chrome> --mode <gpu-vulkan|gpu-gl|software|custom> [options]
+//   driver.mjs run      --page <dir> --browser <chrome> --mode <gpu-angle-vulkan|gpu-angle-gl-egl|software|custom> [options]
 //   driver.mjs probe    --browser <chrome> --mode <...>            feasibility: chrome://gpu status, WebGL, WebGPU
 //   driver.mjs validate <results.json> [--schema <schema.json>]   check a results file against the schema
 //   driver.mjs table    <results.json>...                          Markdown summary of the aggregates
@@ -40,11 +40,13 @@ const COMMON = [
   "--mute-audio",
   "--hide-scrollbars",
 ];
+// The mode names are the profile names of the fdev functional-GPU profile in FS.GG.Rendering
+// (docs/reports/svg-fdev-functional-gpu-baseline-20261030.md), so results from both harnesses line up.
 export const MODES = {
   // Hardware: ANGLE on Vulkan (RADV on fdev). The primary GPU mode.
-  "gpu-vulkan": { expect: "hardware", flags: ["--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"] },
+  "gpu-angle-vulkan": { expect: "hardware", flags: ["--use-angle=vulkan", "--enable-features=Vulkan", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"] },
   // Hardware: ANGLE on desktop GL through EGL (radeonsi on fdev).
-  "gpu-gl": { expect: "hardware", flags: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"] },
+  "gpu-angle-gl-egl": { expect: "hardware", flags: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"] },
   // The software control: SwiftShader for WebGL and no GPU compositing. Same flags the CI browser smoke uses.
   software: { expect: "software", flags: ["--disable-gpu", "--enable-unsafe-swiftshader", "--use-angle=swiftshader"] },
   custom: { expect: "any", flags: [] },
@@ -132,6 +134,10 @@ function serve(root) {
     }
     res.setHeader("content-type", MIME[extname(file)] || "application/octet-stream");
     res.setHeader("cache-control", "no-store");
+    // Cross-origin isolation raises the page clock (performance.now and rAF timestamps) from 100 us to 5 us
+    // resolution in Chromium; every resource is same-origin, so require-corp costs nothing.
+    res.setHeader("cross-origin-opener-policy", "same-origin");
+    res.setHeader("cross-origin-embedder-policy", "require-corp");
     res.end(readFileSync(file));
   });
   return new Promise((r) => server.listen(0, "127.0.0.1", () => r(server)));
@@ -425,7 +431,8 @@ async function runOne(ctx, cell) {
       jsEventListeners: m2.JSEventListeners,
     };
     record.devicePixelRatio = report.devicePixelRatio;
-    if (keepSamples) record.samples = { frameIntervalMs: report.samples.interval.map((x) => round(x)), gpuMs: report.gpu.ms.map((x) => round(x)), drawCalls: report.samples.draws };
+    record.crossOriginIsolated = report.crossOriginIsolated;
+    if (keepSamples) record.samples = { frameIntervalMs: report.samples.interval.map((x) => round(x, 2)), gpuMs: report.gpu.ms.map((x) => round(x, 3)) };
   } catch (error) {
     record.status = error.timeout ? "timeout" : "error";
     record.error = String(error.message || error);
@@ -523,9 +530,14 @@ export function table(results) {
   return lines.join("\n");
 }
 
+/// Indented JSON with every array of numbers on one line, so raw samples stay compact and the rest diffable.
+export function serialise(value) {
+  return JSON.stringify(value, null, 1).replace(/\[\n[\s\d.,\-en+]*\]/g, (m) => "[" + m.slice(1, -1).split(",").map((x) => x.trim()).join(",") + "]") + "\n";
+}
+
 // ---- commands --------------------------------------------------------------------------------------------------
 function modeFlags(args) {
-  const mode = args.mode || "gpu-vulkan";
+  const mode = args.mode || "gpu-angle-vulkan";
   if (!MODES[mode]) throw new Error(`unknown mode ${mode} (known: ${Object.keys(MODES).join(", ")})`);
   const extra = args.flags && args.flags !== true ? String(args.flags).split(/\s+/).filter(Boolean) : [];
   return { mode, flags: [...COMMON, ...MODES[mode].flags, ...extra] };
@@ -547,7 +559,7 @@ async function commandRun(args) {
     frames: int(args.frames, 300),
     warmup: int(args.warmup, 60),
     timeoutMs: int(args["run-timeout"], 180) * 1000,
-    keepSamples: !!args.samples,
+    keepSamples: args["no-samples"] !== true,
     probe: args["capacity-probe"] && args["capacity-probe"] !== true ? args["capacity-probe"] : null,
     probeArgs: args["capacity-args"] && args["capacity-args"] !== true ? String(args["capacity-args"]).split(/\s+/).filter(Boolean) : [],
     capacityWait: int(args["capacity-wait"], 600),
@@ -562,20 +574,20 @@ async function commandRun(args) {
   const repeats = int(args.repeats, 3);
   const runs = [];
   const started = new Date().toISOString();
+  const cells = [];
+  for (const game of games) for (const scene of scenes) for (const size of sizes) for (const backend of backends) cells.push({ game, scene, size, backend });
   try {
-    // Repeat is the OUTER loop, so drift in host state over the session spreads across every cell instead of
-    // landing on whichever configuration happened to run last.
+    // Repeat is the OUTER loop and every other repeat runs the cells in reverse order (ABBA), so drift in host state
+    // over the session spreads across every cell instead of landing on whichever configuration ran last.
     for (let repeat = 1; repeat <= repeats; repeat++)
-      for (const game of games)
-        for (const scene of scenes)
-          for (const size of sizes)
-            for (const backend of backends) {
-              const cell = { game, scene, size, backend, repeat };
-              const r = await runOne(ctx, cell);
-              runs.push(r);
-              log(`${mode} ${game}/${scene} size=${size} ${backend} #${repeat}: ${r.status}${r.error ? ` (${r.error})` : ""} p50=${r.frameTimeMs?.p50 ?? "-"}ms p95=${r.frameTimeMs?.p95 ?? "-"}ms cpu=${r.mainThread?.cpuMsPerFrame ?? "-"}ms gpu=${r.gpuTimeMs?.p50 ?? r.gpuTimeMs?.status ?? "-"}ms draws=${r.drawCalls?.perFrame?.p50 ?? "-"} load1=${r.loadavgBefore?.[0] ?? "-"}`);
-              if (r.status === "held") throw new Error("capacity probe held the session; stopping");
-            }
+      for (const base of repeat % 2 === 1 ? cells : [...cells].reverse()) {
+        const { game, scene, size, backend } = base;
+        const cell = { game, scene, size, backend, repeat };
+        const r = await runOne(ctx, cell);
+        runs.push(r);
+        log(`${mode} ${game}/${scene} size=${size} ${backend} #${repeat}: ${r.status}${r.error ? ` (${r.error})` : ""} p50=${r.frameTimeMs?.p50 ?? "-"}ms p95=${r.frameTimeMs?.p95 ?? "-"}ms cpu=${r.mainThread?.cpuMsPerFrame ?? "-"}ms gpu=${r.gpuTimeMs?.p50 ?? r.gpuTimeMs?.status ?? "-"}ms draws=${r.drawCalls?.perFrame?.p50 ?? "-"} load1=${r.loadavgBefore?.[0] ?? "-"}`);
+        if (r.status === "held") throw new Error("capacity probe held the session; stopping");
+      }
   } finally {
     server.close();
   }
@@ -584,7 +596,7 @@ async function commandRun(args) {
     createdAt: started,
     finishedAt: new Date().toISOString(),
     harness: { commit: args["harness-commit"] && args["harness-commit"] !== true ? args["harness-commit"] : null, dirty: args["harness-dirty"] === "true" || args["harness-dirty"] === true, label: args.label && args.label !== true ? args.label : null },
-    config: { mode, games, scenes, sizes, backends, repeats, frames: ctx.frames, warmupFrames: ctx.warmup, capacityProbe: ctx.probe, capacityArgs: ctx.probeArgs },
+    config: { mode, games, scenes, sizes, backends, repeats, order: "repeat-outer, alternating forward/reverse cell order", frames: ctx.frames, warmupFrames: ctx.warmup, percentileMethod: "nearest-rank", rawSamples: ctx.keepSamples, capacityProbe: ctx.probe, capacityArgs: ctx.probeArgs },
     environment: { host: hostFingerprint(), ...(ctx.fingerprint || {}) },
     runs,
     aggregates: aggregate(runs),
@@ -592,8 +604,8 @@ async function commandRun(args) {
   const errors = validate(result, JSON.parse(readFileSync(join(HERE, "results.schema.v1.json"), "utf8")));
   if (errors.length) throw new Error(`results do not satisfy the schema:\n${errors.slice(0, 20).join("\n")}`);
   const out = args.out && args.out !== true ? args.out : null;
-  if (out) writeFileSync(out, JSON.stringify(result, null, 1) + "\n");
-  else process.stdout.write(JSON.stringify(result, null, 1) + "\n");
+  if (out) writeFileSync(out, serialise(result));
+  else process.stdout.write(serialise(result));
   process.stderr.write(table([result]) + "\n");
   const failed = runs.filter((r) => r.status !== "ok").length;
   if (failed) log(`${failed} of ${runs.length} runs did not complete`);

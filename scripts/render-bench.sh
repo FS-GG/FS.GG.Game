@@ -8,7 +8,7 @@
 # 2. Unless --build-only, runs tools/render-bench/driver.mjs with the remaining arguments and the harness commit.
 #
 #   usage: scripts/render-bench.sh [--build-only] [--skip-build] -- <driver run arguments>
-#   e.g.   scripts/render-bench.sh -- --mode gpu-vulkan --out gpu.json \
+#   e.g.   scripts/render-bench.sh -- --mode gpu-angle-vulkan --out gpu.json \
 #            --capacity-probe ../.github/scripts/fdev-lane-capacity.py --capacity-args "--max-load-per-core 0.25"
 #   env:   RENDER_BENCH_BROWSER=<chrome binary>   (default: first of chromium, google-chrome, chrome)
 #          RENDER_BENCH_PAGE=<dir>                page output (default: artifacts/render-bench/page)
