@@ -159,10 +159,14 @@ A game plugs in its own state type. It supplies a `BenchGame<'State>` (`BenchGam
 
 `BenchScene.drawableNodes` counts the drawable nodes.
 
-1. Compile the game's state core into the page. The core is the model type plus the functions `Step` uses, and
-   Fable must be able to compile it. ReferenceGame does this by linking `src/ReferenceGame/Program.fs` and excluding
-   its .NET-only Harness parts under `#if !FABLE_COMPILER`. A game whose state core is not Fable-portable needs a
-   portable projection of its state first. That is adoption work under #5179, not a benchmark-only copy.
+1. Compile the game's state into the page. The page needs the model type plus the functions `Step` uses, and Fable
+   must be able to compile them. ReferenceGame links `src/ReferenceGame/State.fs`, which holds the state types, and
+   `src/ReferenceGame/Program.fs`, which holds `update` and `fixedTick`. Program.fs keeps its .NET-only Harness parts
+   under `#if !FABLE_COMPILER`. A game that declared its renderers with the authoring kit (#745: `SceneRenderers`,
+   `BrowserRenderers`, `scripts/new-game-renderers.sh`) already has a Fable-portable state type and a
+   `view: 'State -> Scene`. A benchmark scene can wrap that view and add `size - n` body nodes, as `room-tiles` and
+   `room-swarm` do. A game whose state is not Fable-portable needs a portable projection first. That is adoption
+   work under #5179, not a benchmark-only copy.
 2. Add one line to `games` in `tests/Render.Browser.Bench/Program.fs`, for example `FourDBench.game.Id, Runner.run FourDBench.game`.
 3. Run with `--games <id> --scenes <scene ids>`.
 
@@ -176,8 +180,8 @@ is page-agnostic. A game repository can drive its own page if that page meets th
 - it fills `__fsggBench.info.backendNodes`, plus `babylonActiveMeshes` for Babylon;
 - it stops when `__fsggBench.stop` is true.
 
-Cross-repository use without copying waits for publication of the browser host. The authoring kit Delivery
-(Game#745) owns that.
+Cross-repository use without copying waits for publication of the browser host (`FS.GG.Game.Render.Browser`). That
+publication is a separate effect under #5179.
 
 ## Baseline
 
@@ -185,6 +189,11 @@ The committed baselines are for ReferenceGame on fdev, measured on 2026-11-01: o
 the software mode. Medians are taken across the 3 repeats of each run's own statistic. CV is the coefficient of
 variation of the per-run p50 across repeats. "(partial)" marks a backend that drew fewer nodes than the scene holds
 (#753). The full per-run records and raw per-frame samples are in the JSON files.
+
+Both sessions ran harness commit `a111e5ab`, which predates this branch's merge of #749. #749 moved ReferenceGame's
+state types into `State.fs`. At the PR head the page therefore compiles `State.fs` beside `Program.fs`. The state
+values, the script, the scenes and the measurement code are unchanged, and the type's name is now
+`ReferenceState.Model`. The head page was smoke-run on every backend in both scenes before review.
 
 **Reading it.**
 

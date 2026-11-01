@@ -1,10 +1,12 @@
 module FS.GG.Game.Render.Bench.ReferenceGameBench
 
-// The ReferenceGame plug-in: the REAL `FS.GG.Game.Reference.Composition.Model` state type and its own `update`,
-// `fixedTick` and `applyEffectResult` (src/ReferenceGame/Program.fs is compiled into this page), driven by a fixed
-// 120-frame script that walks the reference journey (start, move, door, vault cleared, exit, won) and restarts.
+// The ReferenceGame plug-in: the REAL `FS.GG.Game.Reference.ReferenceState.Model` state type (src/ReferenceGame/State.fs)
+// and its own `update`, `fixedTick` and `applyEffectResult` (src/ReferenceGame/Program.fs; both are compiled into this
+// page), driven by a fixed 120-frame script that walks the reference journey (start, move, door, vault cleared, exit,
+// won) and restarts.
 
 open FS.GG.Game.Reference
+open FS.GG.Game.Reference.ReferenceState
 open FS.GG.Game.Reference.Composition
 open FS.GG.UI.Scene
 
@@ -133,7 +135,7 @@ let swarm (size: int) (model: Model) : Scene =
 let game: BenchGame<Model> =
     {
         Id = "reference-game"
-        StateType = "FS.GG.Game.Reference.Composition.Model"
+        StateType = "FS.GG.Game.Reference.ReferenceState.Model"
         Width = width
         Height = height
         Init = init

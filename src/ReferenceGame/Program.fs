@@ -1,9 +1,9 @@
 namespace FS.GG.Game.Reference
 
-// The state core (`Model`, `Message`, `boot`, `update`, `fixedTick`, `applyEffectResult`) is plain F# with no
-// dependency, so the Fable rendering benchmark (tests/Render.Browser.Bench, FS.GG.Game#746) compiles THIS file to
-// drive the real ReferenceGame state type through every renderer backend. Everything that needs the .NET-only
-// Game.Harness (the journey adapter, its script, the production proof) is excluded from the Fable compilation.
+// The update core (`Message`, `boot`, `update`, `fixedTick`, `applyEffectResult`) is plain F# with no dependency, so the
+// Fable rendering benchmark (tests/Render.Browser.Bench, FS.GG.Game#746) compiles THIS file beside State.fs to drive
+// the real ReferenceGame state through every renderer backend. Everything that needs the .NET-only Game.Harness (the
+// journey adapter, its script, the production proof) is excluded from the Fable compilation.
 #if !FABLE_COMPILER
 open FS.GG.Game.Harness
 #endif

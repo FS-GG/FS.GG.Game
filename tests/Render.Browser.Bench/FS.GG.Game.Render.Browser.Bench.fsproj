@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\src\ReferenceGame\State.fs" Link="ReferenceGame\State.fs" />
     <Compile Include="..\..\src\ReferenceGame\Program.fs" Link="ReferenceGame\Program.fs" />
     <Compile Include="BenchGame.fs" />
     <Compile Include="ReferenceGameBench.fs" />
