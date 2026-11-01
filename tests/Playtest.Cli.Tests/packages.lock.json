@@ -118,22 +118,22 @@
       "fs.gg.game.harness": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Core": "[0.18.0, )",
+          "FS.GG.Game.Core": "[0.19.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
       "fs.gg.game.reference": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Harness": "[0.18.0, )",
-          "FS.GG.Game.Render": "[0.18.0, )",
+          "FS.GG.Game.Harness": "[0.19.0, )",
+          "FS.GG.Game.Render": "[0.19.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
       "fs.gg.game.render": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Core": "[0.18.0, )",
+          "FS.GG.Game.Core": "[0.19.0, )",
           "FS.GG.UI.KeyboardInput": "[0.31.0, )",
           "FS.GG.UI.Scene": "[0.31.0, )",
           "FSharp.Core": "[10.1.302, )"
@@ -142,7 +142,7 @@
       "fsgg-playtest": {
         "type": "Project",
         "dependencies": {
-          "FS.GG.Game.Harness": "[0.18.0, )",
+          "FS.GG.Game.Harness": "[0.19.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },

@@ -6,8 +6,8 @@ ref and skips both the full release verifier and the publisher. It does not need
 a release tag, pack, restore, or package upload. Leave `source_run_id` empty.
 
 The job reads both registries using the actual repository workflow token, checks
-the known Core 0.17.0 predecessor to distinguish registry authentication from an
-unqualified 404, and refuses a visible 0.18.0 collision or unavailable response.
+the known Core 0.18.0 predecessor to distinguish registry authentication from an
+unqualified 404, and refuses a visible 0.19.0 collision or unavailable response.
 Registry absence means absent to that principal; it does not prove permission
 to create a package or reveal unrelated private packages.
 
@@ -21,8 +21,8 @@ source/run, time and limitation data become artifacts.
 
 A successful observation is deliberately limited. NuGet's exchange response
 contains token type, expiry and key, with no scope readback. Its verify-key route
-looks up a package before evaluating its scope; a missing new identity (for 0.18.0,
-`FS.GG.Game.Render.Browser`)
+looks up a package before evaluating its scope; a missing new identity (0.18.0 had one,
+`FS.GG.Game.Render.Browser`; 0.19.0 has none, so every id must already exist)
 returns 404 without testing new-package creation permission. Therefore the report
 always marks new-identity creation scope **not exposed and unproven**. It must not be
 interpreted as full publication authorization. The account policy roster is a
@@ -46,7 +46,7 @@ Because authority for the new identity cannot be observed, `release.yml` pushes 
 before any existing id. A refusal for lack of package-creation authority therefore publishes nothing more to that
 feed. The org feed is still pushed in full before nuget.org (ADR-0012 §4), so a nuget.org refusal leaves the org
 feed complete and nuget.org empty. The retained custody bytes then resume through `source_run_id`, with no
-re-pack. The release contract (`test-game-0-18-release.sh`) pins this order, and its selftest refuses mutations of
+re-pack. The release contract (`test-game-0-19-release.sh`) pins this order, and its selftest refuses mutations of
 it.
 
 This source change creates no mandatory manual approval or owner-policy-export
@@ -60,8 +60,8 @@ Offline qualification:
 
 ```sh
 python3 tests/release/test-release-admission.py
-tests/release/test-game-0-18-release.sh --source-only
-tests/release/test-game-0-18-release-selftest.sh
+tests/release/test-game-0-19-release.sh --source-only
+tests/release/test-game-0-19-release-selftest.sh
 ```
 
 The offline controls cover visible collisions, unauthorized/unavailable registry

@@ -12,7 +12,8 @@ from urllib.parse import urlsplit
 import xml.etree.ElementTree as ET
 
 PACKAGES = ("FS.GG.Game.Core", "FS.GG.Game.Render", "FS.GG.Game.Harness", "FS.GG.Game.Physics.Box2D", "FS.GG.Game.Render.Browser")
-NEW_PACKAGES = {"FS.GG.Game.Render.Browser"}
+# Ids with no published predecessor in this release (0.18.0 had FS.GG.Game.Render.Browser; 0.19.0 has none).
+NEW_PACKAGES: set[str] = set()
 ROOT = Path(__file__).resolve().parents[2]
 UNVERIFIABLE_STATUS = 400
 UNVERIFIABLE_WARNING = ("NuGet verify-key answered HTTP 400, so package authority is unverifiable through this route, not "
@@ -47,7 +48,7 @@ def collect(mode, version):
         token = os.environ["FEED_TOKEN"]
         authorization = "Basic " + base64.b64encode(("fs-gg:" + token).encode()).decode()
         headers = {"Authorization": authorization}
-        sentinel = observe("https://nuget.pkg.github.com/FS-GG/download/fs.gg.game.core/0.17.0/fs.gg.game.core.0.17.0.nupkg", headers)
+        sentinel = observe("https://nuget.pkg.github.com/FS-GG/download/fs.gg.game.core/0.18.0/fs.gg.game.core.0.18.0.nupkg", headers)
         failed = sentinel != 200
         for package in PACKAGES:
             lower = package.lower()
@@ -99,8 +100,8 @@ def main():
     modes.add_argument("--authority", type=Path)
     args = parser.parse_args()
     version = ET.parse(ROOT / "Directory.Build.local.props").findtext(".//Version")
-    if version != "0.18.0":
-        raise SystemExit("This observation is scoped to the coherent 0.18.0 release.")
+    if version != "0.19.0":
+        raise SystemExit("This observation is scoped to the coherent 0.19.0 release.")
     mode = "registries" if args.registries else "authority"
     output = args.registries or args.authority
     report, failed = collect(mode, version)

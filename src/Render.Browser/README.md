@@ -26,7 +26,7 @@ It is a Fable library: reference it from a Fable project, and Fable compiles its
 assembly exists for editors and type checking only.
 
 ```xml
-<PackageReference Include="FS.GG.Game.Render.Browser" Version="0.18.0" />
+<PackageReference Include="FS.GG.Game.Render.Browser" Version="0.19.0" />
 ```
 
 This also brings `FS.GG.Game.Render`, `FS.GG.UI.Scene` and `FS.GG.UI.Scene.SvgBrowser`. Install the
@@ -43,7 +43,7 @@ and `js-bindings/pixi`.
 To start a game's renderer module, generate it, then replace the placeholder `view`. The generator is a repository
 script, not part of this package: run `scripts/new-game-renderers.sh` from a checkout of
 [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game). It renders `eng/render-kit/GameRenderers.fs.template`.
-Use the release tag of the package you reference, for example `v0.18.0`.
+Use the release tag of the package you reference, for example `v0.19.0`.
 
 ```sh
 scripts/new-game-renderers.sh --namespace MyGame.Client --module Renderers --state MyGame.Model \
