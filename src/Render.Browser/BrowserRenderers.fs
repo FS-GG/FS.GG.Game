@@ -213,6 +213,75 @@ module BrowserConformance =
             return pixel.Value
         }
 
+    // FS.GG.Game#753: what a backend drew, read the same way on all three. A canvas is copied to a 2D canvas in the
+    // task that reads it; the SVG root is serialised and rasterised by the browser. Points are in board units (the
+    // scene's own size, `boardWidth` x `boardHeight`) and are mapped to the backing store, which a canvas styled to
+    // another size than the board (Babylon's engine sizes it to the CSS size) does not share.
+    let private pixelsOfCanvas (canvas: HTMLCanvasElement) (boardWidth: float) (boardHeight: float) (points: float[][]) : int[][] =
+        emitJsExpr
+            (canvas, points, boardWidth, boardHeight)
+            "(() => { const cv = $0; const sx = cv.width / $2, sy = cv.height / $3; const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height; const g2 = t.getContext('2d'); g2.drawImage(cv, 0, 0); return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0] * sx), Math.floor(p[1] * sy), 1, 1).data)) })()"
+
+    let private pixelsOfSvg (root: Element) (boardWidth: float) (boardHeight: float) (points: float[][]) : Async<int[][]> =
+        let pending: JS.Promise<int[][]> =
+            emitJsExpr
+                (root, points, boardWidth, boardHeight)
+                "(async () => { const svg = $0; const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg)); const img = new Image(); await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('the SVG could not be rasterised')); img.src = url }); const w = parseFloat(svg.getAttribute('width')); const h = parseFloat(svg.getAttribute('height')); const t = document.createElement('canvas'); t.width = w; t.height = h; const g2 = t.getContext('2d'); g2.drawImage(img, 0, 0, w, h); const sx = w / $2, sy = h / $3; return $1.map(p => Array.from(g2.getImageData(Math.floor(p[0] * sx), Math.floor(p[1] * sy), 1, 1).data)) })()"
+
+        Async.AwaitPromise pending
+
+    let drawnPixels
+        (container: HTMLElement)
+        (boardWidth: float)
+        (boardHeight: float)
+        (backend: RendererBackend)
+        (points: Point list)
+        : Async<(int * int * int) option list> =
+        async {
+            let coordinates = points |> List.map (fun point -> [| point.X; point.Y |]) |> Array.ofList
+
+            let! rows =
+                match backend with
+                | RendererBackend.Svg ->
+                    // A non-interactive mount's root is not tagged with its backend.
+                    match container.querySelector "svg[data-renderer=svg], svg" with
+                    | null -> async { return [||] }
+                    | root -> pixelsOfSvg root boardWidth boardHeight coordinates
+                | other ->
+                    match container.querySelector (sprintf "canvas[data-renderer=%s]" (RendererBackend.id other)) with
+                    | null -> async { return [||] }
+                    | canvas ->
+                        async { return pixelsOfCanvas (canvas :?> HTMLCanvasElement) boardWidth boardHeight coordinates }
+
+            return
+                points
+                |> List.mapi (fun index _ ->
+                    if index < rows.Length && rows.[index].Length >= 3 then
+                        Some(rows.[index].[0], rows.[index].[1], rows.[index].[2])
+                    else
+                        None)
+        }
+
+    let pixelProbe (container: HTMLElement) (boardWidth: float) (boardHeight: float) : PixelProbe =
+        let read = drawnPixels container boardWidth boardHeight
+
+        // Babylon draws a flat shape lit, at 0.75 of its colour.
+        let appearance (backend: RendererBackend) (colour: Color) =
+            let channel (value: byte) =
+                match backend with
+                | RendererBackend.Babylon -> int (System.Math.Round(float value * 0.75))
+                | _ -> int value
+
+            channel colour.Red, channel colour.Green, channel colour.Blue
+
+        PixelProbe.create
+            read
+            appearance
+            (fun backend -> if backend = RendererBackend.Babylon then 4 else 2)
+
+    let babylonActiveMeshes () : int =
+        emitJsExpr engineStore "$0.Instances.reduce((total, engine) => total + engine.scenes.reduce((n, scene) => n + scene.getActiveMeshes().length, 0), 0)"
+
     // FS.GG.Game#751: the same kind of page-level census as the context probe, over event listeners. Every listener
     // added and not removed is kept with its target, so a listener an input host forgets is still counted when its
     // element has left the page. A mutation observer counts writes to each backend's live status.
@@ -264,35 +333,67 @@ module BrowserConformance =
 
         Async.AwaitPromise pending
 
-    /// The viewport point of the scene point `point` on `element`, after scrolling it into view.
-    let private clientPoint (element: HTMLElement) (point: Point) : float * float =
+    /// The viewport point of the scene point `point` on `element`, after scrolling it into view; `boardWidth` is the
+    /// scene's width, which the element's bounds show scaled.
+    let private clientPoint (element: HTMLElement) (boardWidth: float) (boardHeight: float) (point: Point) : float * float =
         // The SVG surface's hit test asks the browser what is under the point, so it must be on screen.
         emitJsStatement (element, 0) "$0.scrollIntoView({ block: 'center', inline: 'center' })"
         let bounds = element.getBoundingClientRect ()
-        let scale = bounds.width / intrinsicWidth element
-        bounds.left + point.X * scale, bounds.top + point.Y * scale
+        bounds.left + point.X * bounds.width / boardWidth, bounds.top + point.Y * bounds.height / boardHeight
 
     let private mirrorOf (container: HTMLElement) (backend: RendererBackend) : Element option =
         match container.querySelector (sprintf "[data-scene-controls][data-renderer=%s]" (RendererBackend.id backend)) with
         | null -> None
         | element -> Some element
 
-    let press (container: HTMLElement) (backend: RendererBackend) (point: Point) : Async<unit> =
+    let private intrinsicHeight (element: HTMLElement) : float =
+        emitJsExpr (element, 0) "($0.tagName.toLowerCase() === 'canvas' ? $0.height : parseFloat($0.getAttribute('height')))"
+
+    let pressBoard (container: HTMLElement) (boardWidth: float) (boardHeight: float) (backend: RendererBackend) (point: Point) : Async<unit> =
         async {
             match inputElement container backend with
             | None -> ()
             | Some element ->
-                let x, y = clientPoint element point
+                let x, y = clientPoint element boardWidth boardHeight point
                 do! realInput (createObj [ "kind" ==> "click"; "x" ==> x; "y" ==> y ])
+        }
+
+    let moveBoard (container: HTMLElement) (boardWidth: float) (boardHeight: float) (backend: RendererBackend) (point: Point) : Async<unit> =
+        async {
+            match inputElement container backend with
+            | None -> ()
+            | Some element ->
+                let x, y = clientPoint element boardWidth boardHeight point
+                do! realInput (createObj [ "kind" ==> "move"; "x" ==> x; "y" ==> y ])
+        }
+
+    let press (container: HTMLElement) (backend: RendererBackend) (point: Point) : Async<unit> =
+        async {
+            match inputElement container backend with
+            | None -> ()
+            | Some element -> do! pressBoard container (intrinsicWidth element) (intrinsicHeight element) backend point
         }
 
     let move (container: HTMLElement) (backend: RendererBackend) (point: Point) : Async<unit> =
         async {
             match inputElement container backend with
             | None -> ()
-            | Some element ->
-                let x, y = clientPoint element point
-                do! realInput (createObj [ "kind" ==> "move"; "x" ==> x; "y" ==> y ])
+            | Some element -> do! moveBoard container (intrinsicWidth element) (intrinsicHeight element) backend point
+        }
+
+    let deviceScale (factor: float) : Async<unit> =
+        async {
+            let pending: JS.Promise<float> =
+                emitJsExpr
+                    (createObj [ "kind" ==> "scale"; "factor" ==> factor ])
+                    "(window.__fsggInput ? window.__fsggInput($0) : Promise.reject(new Error('BrowserConformance needs a real-input driver: expose window.__fsggInput')))"
+
+            let! reported = Async.AwaitPromise pending
+            // The override takes effect for the page, not only for the driver's answer.
+            let! _ = waitUntil 120 (fun () -> window.devicePixelRatio = factor)
+
+            if window.devicePixelRatio <> factor || reported <> factor then
+                failwithf "the page has devicePixelRatio %g (the driver says %g), not the requested %g" window.devicePixelRatio reported factor
         }
 
     let key (name: string) : Async<unit> =

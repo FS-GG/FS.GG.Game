@@ -124,6 +124,31 @@ module BrowserConformance =
         maxFrames: int ->
             Async<int[]>
 
+    /// The RGB of the pixel of `backend`'s output in `container` containing each of `points`, as drawn. The points are
+    /// scene coordinates of a scene of `boardWidth` x `boardHeight` units, mapped to the output's own pixels (a canvas
+    /// styled to another size than the scene has more or fewer of them: Babylon sizes its backing store to its CSS
+    /// size). `None` for a point the backend has no pixel for. A canvas is read in the task that calls this, so
+    /// present the state just before.
+    val drawnPixels:
+        container: HTMLElement ->
+        boardWidth: float ->
+        boardHeight: float ->
+        backend: RendererBackend ->
+        points: Point list ->
+            Async<(int * int * int) option list>
+
+    /// The pixel probe of the kit's `pixels` section (FS.GG.Game#753) for scenes of `boardWidth` x `boardHeight`
+    /// units: what `container`'s backend DREW at scene points. A canvas is copied to a 2D canvas in the task that
+    /// reads it (the caller presents the state again just before); the SVG root is serialised and rasterised by the
+    /// browser, so SVG, Pixi and Babylon are read the same way. A lit backend (Babylon draws a flat shape at 0.75 of
+    /// its colour) declares that as its appearance; tolerance is 4 per channel for Babylon and 2 for the others, the
+    /// values the smoke has always used.
+    val pixelProbe: container: HTMLElement -> boardWidth: float -> boardHeight: float -> PixelProbe
+
+    /// The number of meshes Babylon selected for drawing in its last frame, summed over its live scenes
+    /// (`scene.getActiveMeshes()`): a scene whose nodes are culled or off screen draws fewer than it has nodes.
+    val babylonActiveMeshes: unit -> int
+
     /// Start the page-level census the interaction probe reads: listeners (by wrapping
     /// `EventTarget.prototype.addEventListener` and `removeEventListener`) and writes to every backend's live status
     /// (a mutation observer). Call it before any input host is attached; it is idempotent.
@@ -146,6 +171,33 @@ module BrowserConformance =
 
     /// A real pointer move over `backend`'s output to the scene point `point`, like `press`.
     val move: container: HTMLElement -> backend: RendererBackend -> point: Point -> Async<unit>
+
+    /// `press` for an output styled to another size than the scene (FS.GG.Game#753): the scene is `boardWidth` x
+    /// `boardHeight` units, and the point is mapped through the element's bounds. `press` takes the element's own pixel
+    /// size as the scene's, which is right until a canvas's backing store differs from the scene (Babylon sizes it to
+    /// its CSS size).
+    val pressBoard:
+        container: HTMLElement ->
+        boardWidth: float ->
+        boardHeight: float ->
+        backend: RendererBackend ->
+        point: Point ->
+            Async<unit>
+
+    /// `move` for a styled output, like `pressBoard`.
+    val moveBoard:
+        container: HTMLElement ->
+        boardWidth: float ->
+        boardHeight: float ->
+        backend: RendererBackend ->
+        point: Point ->
+            Async<unit>
+
+    /// Ask the test driver to change the page's device pixel ratio to `factor` (a Chromium device-metrics override
+    /// through `window.__fsggInput`, held by a session that stays attached), so a scenario can run at DPR 1 and 2 in
+    /// one page. It raises unless the page's `devicePixelRatio` is then `factor`, and the driver agrees. Mount after it
+    /// resolves.
+    val deviceScale: factor: float -> Async<unit>
 
     /// A real key press (the test driver's `page.keyboard`) to whatever has the keyboard focus.
     val key: name: string -> Async<unit>

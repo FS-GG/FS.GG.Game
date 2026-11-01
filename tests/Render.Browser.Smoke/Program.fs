@@ -1779,6 +1779,9 @@ let kitChecks = 73
 /// The kit's interaction section on three backends (FS.GG.Game#751): one subject check and twelve per backend.
 let interactionChecks = 37
 
+/// The kit's pixels section (FS.GG.Game#753): the subject check, one per backend, and one hit-and-edge check per backend.
+let pixelChecks = 7
+
 /// Kit checks that fail for a known, routed reason, each with its owner. The smoke asserts that they still fail, so the
 /// gap stays visible and the fix that closes it must remove the entry. The retained SVG host of FS.GG.UI.Scene 0.31.0
 /// re-appends every mirror button and rewrites its status on each Present (focus drops to the body, the live region
@@ -1958,7 +1961,7 @@ let runConformance () : Async<unit> =
         do!
             runKit
                 "reference kit"
-                (kitChecks + interactionChecks)
+                (kitChecks + interactionChecks + pixelChecks)
                 (BrowserConformance.subject
                     container
                     route
@@ -1969,7 +1972,10 @@ let runConformance () : Async<unit> =
                  |> RendererConformance.withInteraction
                      ReferenceRenderers.interaction
                      selection
-                     (BrowserConformance.interactionProbe container))
+                     (BrowserConformance.interactionProbe container)
+                 |> RendererConformance.withPixels
+                     (fun model -> ScenePixels.expectations ReferenceRenderers.width ReferenceRenderers.height (ReferenceRenderers.view model))
+                     (BrowserConformance.pixelProbe container ReferenceRenderers.width ReferenceRenderers.height))
 
         check
             "reference kit: the stage is empty afterwards"
@@ -2134,6 +2140,448 @@ let runConformance () : Async<unit> =
         check "generated start: disposing releases the pending pixi application" released (sprintf "%A" (PixiSurface.live ()))
     }
 
+/// FS.GG.Game#753: Babylon draws a 2D scene at its declared positions and sizes at any node count. A grid of
+/// `columns x rows` small squares (every fifth one round) over a background is mounted on Babylon alone. Every node
+/// must be among Babylon's active meshes, and the pixels `ScenePixels.expectations` decides for the background and
+/// every `stride`-th node (which the grid's non-overlapping nodes leave valid) must be read back. A perspective camera
+/// drew the later nodes magnified about the centre of the canvas and culled those beyond about 400.
+let runBabylonScale (columns: int) (rows: int) (stride: int) : Async<unit> =
+    async {
+        let cell = 10.0
+        let width = float columns * cell
+        let height = float rows * cell
+
+        let node (index: int) =
+            let x = float (index % columns) * cell + 2.0
+            let y = float (index / columns) * cell + 2.0
+
+            let color: Color =
+                {
+                    Red = byte (40 + (index * 7) % 200)
+                    Green = byte (60 + (index * 13) % 180)
+                    Blue = byte (80 + (index * 29) % 150)
+                    Alpha = 255uy
+                }
+
+            if index % 5 = 4 then
+                SceneNode.Circle({ X = x + 3.0; Y = y + 3.0 }, 3.0, color)
+            else
+                SceneNode.Rectangle((x, y, 6.0, 6.0), color)
+
+        let backgroundColor: Color =
+            {
+                Red = 10uy
+                Green = 20uy
+                Blue = 30uy
+                Alpha = 255uy
+            }
+
+        let background = SceneNode.Rectangle((0.0, 0.0, width, height), backgroundColor)
+        let total = columns * rows + 1
+        let scene: Scene = { Nodes = background :: [ for index in 0 .. columns * rows - 1 -> node index ] }
+
+        let sample: Scene =
+            { Nodes = background :: [ for index in 0..stride .. columns * rows - 1 -> node index ] }
+
+        let wanted = ScenePixels.expectations width height sample
+        let points = wanted |> List.map (fun expectation -> expectation.Point)
+        let container = document.createElement "div"
+        document.body.appendChild container |> ignore
+        let name = sprintf "babylon scale %d nodes" total
+
+        match BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene with
+        | Error reason -> check (name + ": mounts") false reason
+        | Ok mount ->
+            let frames = ref 0
+            let finished = ref false
+            let wrong = ref [ "not read" ]
+            let active = ref 0
+
+            // Shaders compile asynchronously: present the same scene frame by frame (each present renders in the task
+            // that reads) until every pixel is drawn and every mesh is active.
+            while not finished.Value do
+                mount.Present scene
+                let! shown = BrowserConformance.drawnPixels container width height RendererBackend.Babylon points
+                active.Value <- BrowserConformance.babylonActiveMeshes ()
+
+                wrong.Value <-
+                    List.zip wanted shown
+                    |> List.choose (fun (expectation, got) ->
+                        let lit = litOf expectation.Colour
+                        let wantR, wantG, wantB = lit.[0], lit.[1], lit.[2]
+
+                        match got with
+                        | Some(r, g, b) when abs (r - wantR) <= 4 && abs (g - wantG) <= 4 && abs (b - wantB) <= 4 -> None
+                        | _ -> Some(sprintf "(%g, %g) wants (%d,%d,%d) shows %A" expectation.Point.X expectation.Point.Y wantR wantG wantB got))
+
+                if (wrong.Value.IsEmpty && active.Value = total) || frames.Value >= 600 then
+                    finished.Value <- true
+                else
+                    frames.Value <- frames.Value + 1
+                    do! BrowserConformance.waitUntil 1 (fun () -> false) |> Async.Ignore
+
+            info (name + ": frames until drawn") (string frames.Value)
+
+            check
+                (sprintf "%s: every node is among babylon's active meshes" name)
+                (active.Value = total)
+                (sprintf "%d active of %d nodes" active.Value total)
+
+            check
+                (sprintf "%s: %d sampled pixels are drawn at their declared positions and sizes" name wanted.Length)
+                (not wanted.IsEmpty && wrong.Value.IsEmpty)
+                (sprintf "%d differ, e.g. %s" wrong.Value.Length (wrong.Value |> List.truncate 3 |> String.concat "; "))
+
+            mount.Dispose()
+
+        container.remove ()
+    }
+
+/// FS.GG.Game#753: draw calls and CPU time of Babylon's present, for the before/after record. WebGL draw calls are
+/// counted at the context, independent of Babylon's own counters.
+module DrawCalls =
+    [<Emit("(() => { if (!window.__draws) { const h = { n: 0 }; window.__draws = h; for (const C of [window.WebGLRenderingContext, window.WebGL2RenderingContext]) { if (!C) continue; for (const f of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced', 'drawRangeElements']) { const o = C.prototype[f]; if (o) C.prototype[f] = function (...a) { h.n++; return o.apply(this, a) } } } } })()")>]
+    let install () : unit = jsNative
+
+    [<Emit("window.__draws.n")>]
+    let total () : int = jsNative
+
+    [<Emit("performance.now()")>]
+    let now () : float = jsNative
+
+let measureBabylon (columns: int) (rows: int) : Async<unit> =
+    async {
+        DrawCalls.install ()
+        let cell = 10.0
+        let width = float columns * cell
+        let height = float rows * cell
+
+        let node (index: int) =
+            let x = float (index % columns) * cell + 2.0
+            let y = float (index / columns) * cell + 2.0
+
+            let color: Color =
+                {
+                    Red = byte (40 + (index * 7) % 200)
+                    Green = byte (60 + (index * 13) % 180)
+                    Blue = byte (80 + (index * 29) % 150)
+                    Alpha = 255uy
+                }
+
+            if index % 5 = 4 then
+                SceneNode.Circle({ X = x + 3.0; Y = y + 3.0 }, 3.0, color)
+            else
+                SceneNode.Rectangle((x, y, 6.0, 6.0), color)
+
+        let total = columns * rows + 1
+
+        let scene: Scene =
+            { Nodes = SceneNode.Rectangle((0.0, 0.0, width, height), { Red = 10uy; Green = 20uy; Blue = 30uy; Alpha = 255uy }) :: [ for index in 0 .. columns * rows - 1 -> node index ] }
+
+        // The same scene with its first node one unit to the right, to present a changed scene.
+        let moved: Scene =
+            { Nodes =
+                scene.Nodes
+                |> List.mapi (fun index node ->
+                    match index, node with
+                    | 1, SceneNode.Rectangle((x, y, w, h), color) -> SceneNode.Rectangle((x + 1.0, y, w, h), color)
+                    | _ -> node) }
+
+        let container = document.createElement "div"
+        document.body.appendChild container |> ignore
+        let name = sprintf "babylon measure %d nodes" total
+
+        match BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene with
+        | Error reason -> info name reason
+        | Ok mount ->
+            // Let the shaders compile and the loop settle.
+            let! _ = BrowserConformance.waitUntil 120 (fun () -> false)
+            let presents = 20
+            let before = DrawCalls.total ()
+            let started = DrawCalls.now ()
+
+            for _ in 1..presents do
+                mount.Present scene
+
+            let elapsed = DrawCalls.now () - started
+            let perPresent = float (DrawCalls.total () - before) / float presents
+            let idleBefore = DrawCalls.total ()
+            let! _ = BrowserConformance.waitUntil 60 (fun () -> false)
+            let perIdleFrame = float (DrawCalls.total () - idleBefore) / 60.0
+
+            // Presenting a scene that changed by one node.
+            let movedBefore = DrawCalls.total ()
+            let movedStarted = DrawCalls.now ()
+
+            for index in 1..presents do
+                mount.Present(if index % 2 = 1 then moved else scene)
+
+            let movedElapsed = DrawCalls.now () - movedStarted
+            let perMovedPresent = float (DrawCalls.total () - movedBefore) / float presents
+
+            info
+                (name + ": draw calls")
+                (sprintf
+                    "%.1f per present, %.1f per idle frame (60 frames), unchanged present %.2f ms CPU, one-node-moved present %.2f ms CPU (%.1f draw calls), active meshes %d of %d"
+                    perPresent
+                    perIdleFrame
+                    (elapsed / float presents)
+                    (movedElapsed / float presents)
+                    perMovedPresent
+                    (BrowserConformance.babylonActiveMeshes ())
+                    total)
+
+            mount.Dispose()
+
+        container.remove ()
+    }
+
+/// What a backend draws that differs from what `wanted` expects, polled frame by frame (`present` renders again in
+/// the task that reads): empty when every expected pixel is shown. Points are board units of a `width` x `height` scene.
+let drawnMismatches
+    (container: HTMLElement)
+    (width: float)
+    (height: float)
+    (backend: RendererBackend)
+    (present: unit -> unit)
+    (wanted: PixelExpectation list)
+    (frames: int)
+    : Async<string list> =
+    async {
+        let points = wanted |> List.map (fun expectation -> expectation.Point)
+        let remaining = ref frames
+        let finished = ref false
+        let last: string list ref = ref [ "not read" ]
+
+        while not finished.Value do
+            present ()
+            let! shown = BrowserConformance.drawnPixels container width height backend points
+
+            last.Value <-
+                List.zip wanted shown
+                |> List.choose (fun (expectation, got) ->
+                    let want, tolerance =
+                        match backend with
+                        | RendererBackend.Babylon -> litOf expectation.Colour, 4
+                        | _ -> rgbOf expectation.Colour, 2
+
+                    match got with
+                    | Some(r, g, b) when near want [| r; g; b |] tolerance -> None
+                    | _ ->
+                        Some(sprintf "(%g, %g) wants %A shows %A" expectation.Point.X expectation.Point.Y want got))
+
+            if last.Value.IsEmpty || remaining.Value <= 0 then
+                finished.Value <- true
+            else
+                remaining.Value <- remaining.Value - 1
+                do! BrowserConformance.waitUntil 1 (fun () -> false) |> Async.Ignore
+
+        return last.Value
+    }
+
+let private fixtureColor (red: byte) (green: byte) (blue: byte) : Color =
+    {
+        Red = red
+        Green = green
+        Blue = blue
+        Alpha = 255uy
+    }
+
+/// FS.GG.Game#753, review B1: a board styled to another size than itself (SC2 shows its 640 x 360 map at 960 x 540, and
+/// a small view at 320 x 180, at device pixel ratio 1 and 2; the page's ratio is asserted, not assumed). Babylon's engine sizes the backing store to the CSS size, so the pixels the probe reads
+/// and the point a pick takes are not board units. On each backend: the board's pixels (the nodes' edges, and the empty
+/// background) are where the scene declares them, and real presses just inside and just outside object edges, and at
+/// the far corner, select exactly what the hit test says. A press went through the page's bounds, as a player's does.
+let runScaledBoard () : Async<unit> =
+    async {
+        let boardWidth = 640.0
+        let boardHeight = 360.0
+
+        let boxA = { X = 0.0; Y = 0.0; Width = 32.0; Height = 32.0 }
+        let boxB = { X = 100.0; Y = 100.0; Width = 80.0; Height = 60.0 }
+        let boxC = { X = boardWidth - 32.0; Y = boardHeight - 32.0; Width = 32.0; Height = 32.0 }
+
+        let fill (box: Rect) color =
+            SceneNode.Rectangle((box.X, box.Y, box.Width, box.Height), color)
+
+        let scene: Scene =
+            {
+                Nodes =
+                    [
+                        SceneNode.Rectangle((0.0, 0.0, boardWidth, boardHeight), fixtureColor 20uy 20uy 20uy)
+                        fill boxA (fixtureColor 200uy 40uy 40uy)
+                        fill boxB (fixtureColor 40uy 200uy 40uy)
+                        fill boxC (fixtureColor 40uy 40uy 200uy)
+                    ]
+            }
+
+        let target id label bounds : SelectableObject =
+            {
+                Id = id
+                Label = label
+                Bounds = bounds
+                Shape = SelectableShape.Box
+            }
+
+        let objects = [ target "A" "A" boxA; target "B" "B" boxB; target "C" "C" boxC ]
+
+        let frame: InteractiveScene =
+            {
+                Scene = scene
+                Objects = objects
+                Selected = None
+            }
+
+        let wanted = ScenePixels.expectations boardWidth boardHeight scene
+
+        // Real presses: board point, and the object the hit test says is there.
+        let presses =
+            [
+                "A centre", 16.0, 16.0
+                "B centre", 140.0, 130.0
+                "C centre", boardWidth - 16.0, boardHeight - 16.0
+                "background", 300.0, 50.0
+                "B just inside its left edge", boxB.X + 1.0, 130.0
+                "B just outside its left edge", boxB.X - 1.0, 130.0
+                "B just inside its right edge", boxB.X + boxB.Width - 1.0, 130.0
+                "B just outside its right edge", boxB.X + boxB.Width + 1.0, 130.0
+                "B just inside its top edge", 140.0, boxB.Y + 1.0
+                "B just outside its top edge", 140.0, boxB.Y - 1.0
+                "B just inside its bottom edge", 140.0, boxB.Y + boxB.Height - 1.0
+                "B just outside its bottom edge", 140.0, boxB.Y + boxB.Height + 1.0
+                "C inside the far corner", boardWidth - 2.0, boardHeight - 2.0
+            ]
+
+        for factor in [ 1.0; 2.0 ] do
+            do! BrowserConformance.deviceScale factor
+
+            check
+                (sprintf "scaled board: the page runs at devicePixelRatio %g" factor)
+                (window.devicePixelRatio = factor)
+                (sprintf "devicePixelRatio is %g" window.devicePixelRatio)
+
+            for (cssWidth, cssHeight), backend in List.allPairs [ 960.0, 540.0; 320.0, 180.0 ] RendererBackend.all do
+                let name = sprintf "scaled board %gx%g styled %gx%g, dpr %g, %s" boardWidth boardHeight cssWidth cssHeight factor (RendererBackend.id backend)
+                let container = document.createElement "div"
+                container.id <- sprintf "stage-scaled-%s-%g-%g" (RendererBackend.id backend) factor cssWidth
+                document.body.appendChild container |> ignore
+                let style = document.createElement "style"
+                style.textContent <- sprintf "#%s canvas, #%s svg { width: %gpx; height: %gpx }" container.id container.id cssWidth cssHeight
+                document.head.appendChild style |> ignore
+                let requests = ResizeArray<SelectionRequest>()
+                let report (request: SelectionRequest) = requests.Add request
+
+                let mounted =
+                    match backend with
+                    | RendererBackend.Svg ->
+                        SvgSurface.mountInteractive container (SvgSurface.defaultOptions name boardWidth boardHeight) report frame
+                    | RendererBackend.Pixi ->
+                        PixiSurface.mountInteractive container (PixiSurface.defaultOptions name boardWidth boardHeight) report frame
+                    | RendererBackend.Babylon ->
+                        BabylonSurface.mountInteractive container (BabylonSurface.defaultOptions name boardWidth boardHeight) report frame
+
+                match mounted with
+                | Error reason -> check (name + ": mounts") false reason
+                | Ok mount ->
+                    let! wrong = drawnMismatches container boardWidth boardHeight backend (fun () -> mount.Present frame) wanted 600
+
+                    check
+                        (sprintf "%s: the nodes' edges and the empty background are drawn where the scene declares them (%d pixels)" name wanted.Length)
+                        wrong.IsEmpty
+                        (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+
+                    let misses = ResizeArray<string>()
+
+                    for label, x, y in presses do
+                        mount.Present frame
+                        requests.Clear()
+                        do! BrowserConformance.pressBoard container boardWidth boardHeight backend { X = x; Y = y }
+
+                        let expected =
+                            match SceneInteraction.hitTest { X = x; Y = y } objects with
+                            | Some id -> [ SelectionRequest.Select id ]
+                            | None -> []
+
+                        if List.ofSeq requests <> expected then
+                            misses.Add(sprintf "%s at (%g, %g): asked %A, the hit test says %A" label x y (List.ofSeq requests) expected)
+
+                    check
+                        (sprintf "%s: real presses just inside and outside object edges select what the hit test says (%d presses)" name presses.Length)
+                        (misses.Count = 0)
+                        (String.concat "; " (Seq.truncate 4 misses))
+
+                    mount.Dispose()
+
+                style.remove ()
+                container.remove ()
+
+        do! BrowserConformance.deviceScale 1.0
+    }
+
+/// FS.GG.Game#753, review N3: nodes that overhang the canvas edge (FourD's clipped cell) are read at the canvas edge,
+/// and every pixel nothing is drawn on is the clear colour, so a node drawn larger than declared is caught. On each
+/// backend: one node past the right edge, one past the left edge, one alone in the open.
+let runOverhang () : Async<unit> =
+    async {
+        let width = 200.0
+        let height = 100.0
+
+        let scene: Scene =
+            {
+                Nodes =
+                    [
+                        SceneNode.Rectangle((150.0, 20.0, 80.0, 40.0), fixtureColor 200uy 40uy 90uy)
+                        SceneNode.Rectangle((-20.0, 60.0, 60.0, 30.0), fixtureColor 40uy 200uy 90uy)
+                        SceneNode.Rectangle((80.0, 10.0, 30.0, 30.0), fixtureColor 230uy 200uy 40uy)
+                    ]
+            }
+
+        let wanted = ScenePixels.expectations width height scene
+
+        for backend in RendererBackend.all do
+            let name = sprintf "overhang %gx%g, %s" width height (RendererBackend.id backend)
+            let container = document.createElement "div"
+            document.body.appendChild container |> ignore
+
+            let mounted =
+                match backend with
+                | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+                | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+                | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+            match mounted with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container width height backend (fun () -> mount.Present scene) wanted 600
+
+                check
+                    (sprintf "%s: nodes past the canvas edge are read at the edge and the empty background is the clear colour (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 12)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+
+                // Causal control: the same pixels read against a scene whose nodes are 6 units smaller on each side must
+                // NOT match, so a backend that drew its nodes that much larger than declared would be caught.
+                let smaller: Scene =
+                    { Nodes =
+                        scene.Nodes
+                        |> List.map (fun node ->
+                            match node with
+                            | SceneNode.Rectangle((x, y, w, h), color) -> SceneNode.Rectangle((x + 6.0, y + 6.0, w - 12.0, h - 12.0), color)
+                            | other -> other) }
+
+                let! control =
+                    drawnMismatches container width height backend (fun () -> mount.Present scene) (ScenePixels.expectations width height smaller) 0
+
+                check
+                    (sprintf "%s: control, pixels drawn 6 units larger than declared do not match the declaration" name)
+                    (not control.IsEmpty)
+                    "the smaller declaration matched, so an oversized node would pass"
+
+                mount.Dispose()
+
+            container.remove ()
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -2158,6 +2606,13 @@ async {
         do! runPixi ()
         do! runThreeBackends ()
         do! runConformance ()
+        do! runBabylonScale 40 30 17
+        do! runBabylonScale 100 50 97
+        do! measureBabylon 10 10
+        do! measureBabylon 40 30
+        do! measureBabylon 100 50
+        do! runScaledBoard ()
+        do! runOverhang ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1

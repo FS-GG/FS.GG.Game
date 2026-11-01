@@ -69,10 +69,20 @@ module BabylonSurface =
     [<Emit("(($0.isVisible = false), ($0.fsggSelectable = $1))")>]
     let private markRegion (_mesh: B.Mesh) (_id: string) : unit = jsNative
 
-    /// Babylon's own pick, through the camera, restricted to hit regions: the id of the nearest one under the canvas
-    /// pixel `(x, y)`.
-    [<Emit("(() => { const p = $0.pick($1, $2, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
-    let private pickRegion (_scene: B.Scene) (_x: float) (_y: float) : string option = jsNative
+    /// Babylon's own pick, through the camera, restricted to hit regions: the id of the nearest one under the scene point
+    /// `(x, y)` (board units). `scene.pick` takes render pixels, and the engine sizes its backing store to the canvas's
+    /// CSS size, so a canvas styled to another size than the board has another render size: the point is scaled by
+    /// the live render size over the board size (FS.GG.Game#753).
+    [<Emit("(() => { const p = $0.pick($1 * $3.getRenderWidth() / $4, $2 * $3.getRenderHeight() / $5, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
+    let private pickRegion
+        (_scene: B.Scene)
+        (_x: float)
+        (_y: float)
+        (_engine: B.Engine)
+        (_boardWidth: float)
+        (_boardHeight: float)
+        : string option =
+        jsNative
 
     /// Babylon's input manager sets the canvas's tabIndex to `engine.canvasTabIndex` (1 by default) on every pointer
     /// move, which would put the canvas ahead of the page in tab order (FS.GG.Game#751 review B2). Zero keeps it in
@@ -82,12 +92,49 @@ module BabylonSurface =
 
     let private channel (value: byte) = float value / 255.0
 
-    /// Vertical field of view of Babylon's default camera, in radians.
-    let private fieldOfView = 0.8
-
     /// Thickness of a flat shape, and the spacing between consecutive layers, in scene units.
     let private thickness = 0.25
     let private layerStep = 0.5
+
+    /// Space between the camera and the frontmost layer, in scene units.
+    let private clearance = 10.0
+
+    /// FS.GG.Game#753: an orthographic camera shows the plane z = 0 as exactly the canvas (one scene unit per pixel)
+    /// and every layer at its own size, wherever it sits in depth. A perspective camera magnified later layers about
+    /// the centre of the canvas and put those beyond about 400 nodes behind it.
+    [<Emit("(($0.mode = 1), ($0.orthoLeft = -$1 / 2), ($0.orthoRight = $1 / 2), ($0.orthoTop = $2 / 2), ($0.orthoBottom = -$2 / 2))")>]
+    let private useOrthographic (_camera: B.Camera) (_width: float) (_height: float) : unit = jsNative
+
+    /// Back the camera off so that all `layers` layers (the frontmost at z = -(layers - 1) * layerStep) are in front of
+    /// it and inside its depth range: the stack can be as deep as the scene has nodes.
+    [<Emit("(($0.position.z = -($1 * $2 + $3)), ($0.minZ = 1), ($0.maxZ = $1 * $2 + $3 + 10))")>]
+    let private backOffCamera (_camera: B.Camera) (_layers: float) (_step: float) (_clearance: float) : unit = jsNative
+
+    /// Render the scene now, and leave the render loop to draw again only while a material is still compiling. Readiness
+    /// (it visits every mesh) is asked BEFORE the render, so a frame that skipped a mesh still compiling is never taken
+    /// for a complete one, and only after meshes were created or while the loop is still waiting.
+    [<Emit("(() => { const ready = ($1 || $0.fsggPending) ? $0.isReady() : true; $0.render(); $0.fsggPending = !ready })()")>]
+    let private renderNow (_scene: B.Scene) (_created: bool) : unit = jsNative
+
+    /// A render loop that draws only what `renderNow` has not finished: the scene is drawn when the state is presented,
+    /// so a loop that drew it again every frame doubled the work (FS.GG.Game#753). It also draws again after a lost
+    /// WebGL context is restored.
+    [<Emit("(($1.fsggPending = true), $0.onContextRestoredObservable.add(() => { $1.fsggPending = true }), $0.runRenderLoop(() => { if ($1.fsggPending) { const ready = $1.isReady(); $1.render(); $1.fsggPending = !ready } }))")>]
+    let private runPendingRenderLoop (_engine: B.Engine) (_scene: B.Scene) : unit = jsNative
+
+    /// A mesh sharing `source`'s geometry (and so its vertex buffers), visible and with no material of its own.
+    [<Emit("(() => { const m = $0.clone($1); m.isVisible = true; return m })()")>]
+    let private shareGeometry (_source: B.Mesh) (_name: string) : B.Mesh = jsNative
+
+    /// No specular highlight. Babylon's shader takes the view vector from the camera's POSITION even when the camera is
+    /// orthographic, so a camera as close as the layers need to be would put a highlight on every flat face (a bright
+    /// spot at the centre of the canvas). A flat 2D scene is lit diffusely only.
+    [<Emit("$0.specularColor.copyFromFloats(0, 0, 0)")>]
+    let private noSpecular (_material: B.StandardMaterial) : unit = jsNative
+
+    /// Take `mesh` out of the scene's mesh list: it is never drawn or picked, and keeps only the geometry its clones share.
+    [<Emit("$0.getScene().removeMesh($0)")>]
+    let private takeOutOfScene (_mesh: B.Mesh) : unit = jsNative
 
     /// One live mesh and the material that colours it. A slot outlives its mesh only as pooled material.
     type private Slot =
@@ -96,6 +143,8 @@ module BabylonSurface =
             Mesh: B.Mesh
             Material: B.StandardMaterial
             mutable Fill: Color
+            /// What the mesh was last placed and sized for; `None` until it is placed.
+            mutable Placed: Shape option
         }
 
     /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
@@ -168,11 +217,13 @@ module BabylonSurface =
                 acquire (fun () -> B.disposeScene babylon)
                 B.setClearColor babylon (B.color3 0.0 0.0 0.0)
 
-                // The camera looks down +z at the plane z = 0 from a distance that makes that plane exactly the
-                // canvas; the light is tilted so a face toward the camera is diffusely lit and has no highlight.
-                let distance = (options.Height / 2.0) / System.Math.Tan(fieldOfView / 2.0)
-                let camera = B.freeCamera "camera" (B.vector3 0.0 0.0 (-distance)) babylon
+                // The camera looks down +z at the plane z = 0 and is orthographic, so that plane is exactly the canvas
+                // and layer i (at z = -i * layerStep, nearer the camera) is the size and place it was given; the
+                // light is tilted so a face toward the camera is diffusely lit and has no highlight.
+                let camera = B.freeCamera "camera" (B.vector3 0.0 0.0 (-clearance)) babylon
                 B.setCameraTarget camera (B.vector3 0.0 0.0 0.0)
+                useOrthographic camera options.Width options.Height
+                backOffCamera camera 1.0 layerStep clearance
                 let light = B.hemisphericLight "light" (B.vector3 0.0 0.866 -0.5) babylon
                 B.setLightIntensity light 1.0
 
@@ -194,17 +245,47 @@ module BabylonSurface =
 
                     slots.Clear())
 
+                // One sphere's geometry shared by every round shape and round hit region (FS.GG.Game#753): a mesh per
+                // circle used to build its own 24 x 24 vertex data.
+                let sphereSource: B.Mesh option ref = ref None
+
+                acquire (fun () ->
+                    match sphereSource.Value with
+                    | Some source ->
+                        // Not counted: the source is never one of the scene's meshes.
+                        B.disposeMesh source
+                        sphereSource.Value <- None
+                    | None -> ())
+
+                let sphere (name: string) : B.Mesh =
+                    let source =
+                        match sphereSource.Value with
+                        | Some source -> source
+                        | None ->
+                            let source = B.sphere "sphere-source" 1.0 24 babylon
+                            takeOutOfScene source
+                            sphereSource.Value <- Some source
+                            source
+
+                    shareGeometry source name
+
                 let colour (fill: Color) =
                     B.color3 (channel fill.Red) (channel fill.Green) (channel fill.Blue)
 
+                // Whether the last reconcile created a mesh (its material may still be compiling).
+                let created = ref false
+                // How many layers the camera is backed off for.
+                let depth = ref -1
+
                 let create (index: int) (shape: Shape) : Slot =
+                    created.Value <- true
                     serial.Value <- serial.Value + 1
                     let name = sprintf "shape-%d" serial.Value
 
                     let mesh =
                         match shape.Kind with
                         | Flat -> B.box name 1.0 babylon
-                        | Round -> B.sphere name 1.0 24 babylon
+                        | Round -> sphere name
 
                     meshesCreated <- meshesCreated + 1
 
@@ -212,7 +293,9 @@ module BabylonSurface =
                         if pool.Count > 0 then
                             pool.Pop()
                         else
-                            B.standardMaterial (sprintf "material-%d" serial.Value) babylon
+                            let fresh = B.standardMaterial (sprintf "material-%d" serial.Value) babylon
+                            noSpecular fresh
+                            fresh
 
                     B.setDiffuseColor material (colour shape.Fill)
                     B.setMaterial mesh material
@@ -222,14 +305,24 @@ module BabylonSurface =
                         Mesh = mesh
                         Material = material
                         Fill = shape.Fill
+                        Placed = None
                     }
 
+                let sameBox (a: Shape) (b: Shape) =
+                    a.X = b.X && a.Y = b.Y && a.Width = b.Width && a.Height = b.Height
+
                 let place (index: int) (slot: Slot) (shape: Shape) =
-                    // Scene space has y down and its origin at the top left; Babylon has y up and the plane centred.
-                    let x = shape.X + shape.Width / 2.0 - options.Width / 2.0
-                    let y = options.Height / 2.0 - (shape.Y + shape.Height / 2.0)
-                    B.setPosition slot.Mesh (B.vector3 x y (-(float index) * layerStep))
-                    B.setScaling slot.Mesh (B.vector3 shape.Width shape.Height thickness)
+                    // A shape that is where and what size it was needs no new vectors and does not dirty its mesh
+                    // (the same scene presented again costs a render and nothing else).
+                    match slot.Placed with
+                    | Some placed when sameBox placed shape -> ()
+                    | _ ->
+                        // Scene space has y down and its origin at the top left; Babylon has y up and the plane centred.
+                        let x = shape.X + shape.Width / 2.0 - options.Width / 2.0
+                        let y = options.Height / 2.0 - (shape.Y + shape.Height / 2.0)
+                        B.setPosition slot.Mesh (B.vector3 x y (-(float index) * layerStep))
+                        B.setScaling slot.Mesh (B.vector3 shape.Width shape.Height thickness)
+                        slot.Placed <- Some shape
 
                     if slot.Fill <> shape.Fill then
                         B.setDiffuseColor slot.Material (colour shape.Fill)
@@ -238,6 +331,7 @@ module BabylonSurface =
                 /// Reconcile the meshes with `next`: reuse slot i for shape i, recreate it when the kind changes,
                 /// create the missing ones and dispose the surplus.
                 let reconcile (next: Scene) =
+                    created.Value <- false
                     let shapes = ResizeArray<Shape>()
                     unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) next shapes
 
@@ -256,7 +350,12 @@ module BabylonSurface =
                         release slots.[slots.Count - 1]
                         slots.RemoveAt(slots.Count - 1)
 
-                    B.render babylon
+                    // The stack is as deep as the scene has nodes.
+                    if shapes.Count <> depth.Value then
+                        depth.Value <- shapes.Count
+                        backOffCamera camera (float (max shapes.Count 1)) layerStep clearance
+
+                    renderNow babylon created.Value
 
                 reconcile scene
 
@@ -284,7 +383,7 @@ module BabylonSurface =
                             let mesh =
                                 match target.Shape with
                                 | SelectableShape.Box -> B.box name 1.0 babylon
-                                | SelectableShape.Ellipse -> B.sphere name 1.0 24 babylon
+                                | SelectableShape.Ellipse -> sphere name
 
                             meshesCreated <- meshesCreated + 1
                             markRegion mesh target.Id
@@ -311,13 +410,13 @@ module BabylonSurface =
                             options.Label
                             options.Width
                             options.Height
-                            (fun point -> pickRegion babylon point.X point.Y)
+                            (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
                             report
                             first)
 
                 acquire (fun () -> input |> Option.iter (fun host -> host.Dispose()))
 
-                B.runRenderLoop engine babylon
+                runPendingRenderLoop engine babylon
                 loopsStarted <- loopsStarted + 1
 
                 acquire (fun () ->

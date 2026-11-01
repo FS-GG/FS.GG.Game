@@ -7,7 +7,7 @@ namespace FS.GG.Game.Render
 type ConformanceResult =
 
     /// The requirement, prefixed by its section (`subject`, `registry`, `round-trip`, `switch`, `dispose`,
-    /// `late failure`, `present failure`, `viewport`, `interaction`).
+    /// `late failure`, `present failure`, `viewport`, `pixels`, `interaction`).
     member Check: string
 
     /// Whether the requirement held.
@@ -112,6 +112,72 @@ module InteractionProbe =
             InteractionProbe
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
+/// One pixel a backend must show (FS.GG.Game#753): the pixel containing `Point` (scene coordinates, y down, one unit
+/// per pixel of the scene's own size) shows the scene colour `Colour`. Built by `PixelExpectation.create`.
+[<Sealed>]
+type PixelExpectation =
+
+    /// Where, in scene coordinates.
+    member Point: FS.GG.UI.Scene.Point
+
+    /// The scene colour the pixel must show (an opaque one; black for a pixel nothing is drawn on).
+    member Colour: FS.GG.UI.Scene.Color
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module PixelExpectation =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The pixel containing `point` must show `colour`.
+    val create: point: FS.GG.UI.Scene.Point -> colour: FS.GG.UI.Scene.Color -> PixelExpectation
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// How the kit reads what a backend DREW (FS.GG.Game#753): the colour of canvas pixels (or of the rasterised SVG) at
+/// scene points, never the adapter's own state. Built by `PixelProbe.create`.
+[<Sealed>]
+type PixelProbe
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module PixelProbe =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// - `read backend points`: the RGB of the pixel containing each point, in order, as `backend` shows it now (`None`
+    ///   for a point it has no pixel for). The kit presents the state again just before each call, so a canvas that
+    ///   renders on `Present` is read in the task that rendered it;
+    /// - `appearance backend colour`: the RGB `backend` shows for the scene colour `colour` (a lit backend shows it
+    ///   scaled);
+    /// - `tolerance backend`: how far, per channel, a shown pixel may be from `appearance`.
+    val create:
+        read: (RendererBackend -> FS.GG.UI.Scene.Point list -> Async<(int * int * int) option list>) ->
+        appearance: (RendererBackend -> FS.GG.UI.Scene.Color -> int * int * int) ->
+        tolerance: (RendererBackend -> int) ->
+            PixelProbe
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+///
+/// The pixels a scene decides (FS.GG.Game#753), for `RendererConformance.withPixels`.
+[<RequireQualifiedAccess>]
+module ScenePixels =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Pixels `scene` decides on a canvas of `width` x `height` scene units, from its rectangles, ellipses and circles
+    /// (through groups and translations): for each node its middle pixel, the first whole pixel inside and outside the
+    /// middle of each edge of a rectangle (a rectangle that overhangs the canvas is read at the canvas edge), and the
+    /// pixel one clear of each extreme of a round shape (the pixel its extreme touches takes antialiasing from some
+    /// rasterisers). A pixel is listed when the last node that wholly covers it is opaque and no later node covers it
+    /// in part, or when no node touches it, in which case it must show the clear colour (black, as SVG, Pixi and
+    /// Babylon all do), so a node drawn larger than declared fails it. A backend that draws a node at another
+    /// position or size, or a later node at another layer, fails it too.
+    ///
+    /// Only those three kinds are modelled. A node of any other kind (text, lines, paths, images, clips...) draws
+    /// where the kit cannot say, so it leaves open every pixel it could overdraw: nothing is expected to be the clear
+    /// colour in a scene that has one, and a pixel is decided only by an opaque node that wholly covers it AFTER the
+    /// last unmodelled node. A scene made of unmodelled nodes alone lists no pixel.
+    val expectations: width: float -> height: float -> scene: FS.GG.UI.Scene.Scene -> PixelExpectation list
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// What the kit needs to know about one game's renderers. Built by `RendererConformance.subject`, which fills the
 /// in-process defaults, and adjusted by `RendererConformance.withStart`, `withWaitUntil`, `withLateFailure`,
@@ -150,6 +216,9 @@ type ConformanceSubject<'State>
 ///   back from the backend, in both directions, with one live mount at the end and every superseded one disposed once.
 ///   When the registry also declares the viewport (`RendererRegistry.withViewport`), a mount is replaced exactly when
 ///   the viewport changes and states with the same viewport are presented in place;
+/// - **pixels**, when `withPixels` declared one (FS.GG.Game#753): on every backend each state's drawn pixels are the
+///   scene's, at the declared positions and sizes; with `withInteraction` too, each box object's hit region and drawn
+///   edge coincide;
 /// - **interaction**, when `withInteraction` declared one (FS.GG.Game#751): the states declare valid selectable
 ///   objects; then on every backend, with real input, the input host is attached while mounted, the accessible
 ///   mirror lists every object with its label, a pointer move leaves the surface at tabindex 0, the keyboard
@@ -234,6 +303,19 @@ module RendererConformance =
         interaction: SceneInteraction<'State> ->
         route: SelectionRoute ->
         probe: InteractionProbe ->
+        subject: ConformanceSubject<'State> ->
+            ConformanceSubject<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare what the states must DRAW (FS.GG.Game#753), replacing any declared before: `expected state` lists the
+    /// pixels the state must show (`ScenePixels.expectations` of its scene), and `probe` reads each backend's drawn
+    /// pixels. The pixel checks run on every offered backend: every state's pixels are shown at their declared
+    /// positions, and, when `withInteraction` is declared too, the hit region of each box object and its drawn edge
+    /// coincide (the pixels just inside and just outside each edge differ, and a real press on each is where
+    /// `SceneInteraction.hitTest` says).
+    val withPixels:
+        expected: ('State -> PixelExpectation list) ->
+        probe: PixelProbe ->
         subject: ConformanceSubject<'State> ->
             ConformanceSubject<'State>
 
