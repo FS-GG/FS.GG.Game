@@ -8,7 +8,8 @@ selection contract in FS.GG.Game 0.19.0.
 Related work:
 - #773 adds canvas strokes.
 - #786 makes Babylon colours unlit.
-- #787 is the input-pipeline ADR. It is a separate file, and the focus decision below is coordinated with it.
+- #787 is the input-pipeline ADR (PR #793, `docs/adr/0001-standard-input-pipeline.md`). It is a separate file, and
+  D10 is reconciled with its "focus and hover are drawable state" decision.
 - #790 covers the renderer roles and SVG import and export.
 - FS.GG.Rendering owns the Fable view of `FS.GG.UI.Scene`.
 
@@ -43,7 +44,7 @@ A glyph is a value that describes what it means and where it is. It never descri
 
 ```fsharp
 // FS.GG.Game.Render, namespace FS.GG.Game.Render.Glyphs (proposed .fsi shape; opaque records, additive)
-type GlyphState = { Selected: bool; Focused: bool; Hovered: bool; Stale: bool }
+type GlyphState = { Selected: bool; Stale: bool }   // game state only; focus and hover are #787's InteractionCues
 type Glyph =
     | Unit      of UnitGlyph      // shape class, allegiance/team, anchor, footprint, facing
     | Structure of StructureGlyph // footprint in cells, allegiance/team, anchor
@@ -53,11 +54,11 @@ type Glyph =
     | PathGlyph of Point list * PathStyle
     | Status    of StatusGlyph    // bar: fraction, kind (health, progress)
     | Selection of Rect
-    | Focus     of Rect
     | Custom    of (Theme -> GlyphDrawing)
 type GlyphDrawing = { Nodes: SceneNode list; Bounds: Rect; Hit: SelectableShape }
 val draw  : Theme -> Glyph -> GlyphDrawing
 val scene : Theme -> Glyph list -> Scene
+val cues  : Theme -> (InteractionCues -> SelectableObject list -> SceneNode list)  // for SceneInteraction.withCues (#787)
 ```
 
 - **One function.** `draw theme glyph` is pure, total and deterministic. It returns the Scene nodes and the hit
@@ -68,7 +69,8 @@ val scene : Theme -> Glyph list -> Scene
   - Team colour is an index into the theme's team list.
   - Allegiance (own, ally, neutral or enemy) selects its own tokens, because SC2, BAR and RuneScape colour by
     allegiance or kind, not by team.
-  - `GlyphState` selects the decorations: selection, focus, hover and stale.
+  - `GlyphState` selects the decorations that are game state: selection and stale. Focus and hover are input-host
+    state, drawn by the cue layer (D10).
 - **Composition.** A glyph is made of Scene primitives only. It adds no node kind and no new renderer surface.
 - **Portability.** The library uses only `SceneNode` data, so it compiles for .NET and through Fable from the same
   files, and it joins the bounded Fable view of FS.GG.Game.Render.
@@ -106,8 +108,8 @@ A glyph lowers to one of two profiles. The same profile is used on every backend
 | **Items** | a small oval at the item anchor | — |
 | **Markers** | waypoint plus, destination ring (disc plus inner disc), target crosshair (four bars, as in SC2) | stroked rings, ping |
 | **Selection** | corner brackets just outside the glyph bounds | — |
-| **Focus** | a full outline. It differs from selection by shape as well as colour. | dashed outline |
-| **Hover** | a one-unit outline in the hover token | — |
+| **Focus** (cue layer, D10) | #787's two-tone ring: a dark outer band and a light inner band of filled rectangles, each at least 2 units, just outside the object's bounds, in the theme's `FocusOuter`/`FocusInner` tokens. It differs from selection by shape as well as colour. | — |
+| **Hover** (cue layer, D10) | a one-unit outline in the hover token | — |
 | **Path** | dots at a theme spacing, and a step marker at the end | polyline |
 | **Status** | track plus a fill whose length is the fraction, coloured good, warn or bad by theme thresholds | — |
 | **Team colour** | ring or band, from `Theme.Teams` or the allegiance tokens | — |
@@ -125,7 +127,7 @@ A stale veil (BAR) needs alpha. Babylon ignores alpha, so the portable profile d
   - `Body`;
   - `Teams` (a list, which wraps);
   - allegiance (`Own`, `Ally`, `Neutral`, `Enemy`);
-  - `Selection`, `Focus`, `Hover`, `Marker`, `Path`;
+  - `Selection`, `FocusOuter`, `FocusInner`, `Hover`, `Marker`, `Path`;
   - status `Track`, `Good`, `Warn`, `Bad`;
   - `Stale`.
 - **Stroke:** outline width, keyline width, and the **gap** between a glyph and its selection or focus outline. The
@@ -134,8 +136,8 @@ A stale veil (BAR) needs alpha. Babylon ignores alpha, so the portable profile d
 - **Sizes:** `Cell`, the unit, item and marker scales, status height, terrain gap and path dot spacing.
 - **Status thresholds:** `Warn` and `Bad`.
 - **Contrast** (`Theme.validate` returns every violation, and a theme that fails cannot be built):
-  - Every token drawn directly on `Ground` (teams, allegiance, selection, focus, hover, marker, path and body) is at
-    least **3:1** against it. This is the WCAG 2.x non-text contrast floor (SC 1.4.11), using relative luminance.
+  - Every token drawn directly on `Ground` (teams, allegiance, selection, outer focus, hover, marker, path and body) is
+    at least **3:1** against it. The inner focus tone is at least 3:1 against the outer one (D10). This is the WCAG 2.x non-text contrast floor (SC 1.4.11), using relative luminance.
   - Every token is opaque until alpha is supported (Q5).
 - **Shipped themes:**
   - `standard`, dark.
@@ -282,11 +284,24 @@ own PR, not a regression.
 
 ### D10. Focus and selection with the input pipeline (#787)
 
-The glyph layer **draws** selection, focus and hover. It **owns** none of them: `GlyphState` is supplied by the game.
-Selection comes from `InteractiveScene.Selected`, as in 0.19.0. Focus and hover come from wherever #787 decides
-"focus as drawable state" lives, either the game state or the input pipeline's frame. The glyph layer takes them as
-inputs either way. When the #787 ADR is up, this decision is reconciled with it. The #787 PR had not appeared when this
-ADR was written.
+This decision is reconciled with the #787 ADR (PR #793, `docs/adr/0001-standard-input-pipeline.md` at `7ba30e53`). That
+ADR decides that **focus and hover are drawable state held by the input host**: `InteractionCues` holds the focused
+object, the hovered object and whether focus is visible. The cues are not game state and do not survive a backend
+switch. Every interactive backend draws the interaction's cue layer above the frame's Scene. The default layer is
+`SceneInteraction.standardCues`, and a game replaces it with `SceneInteraction.withCues`.
+
+The glyph layer follows that split:
+
+- **Selection** is game state (`InteractiveScene.Selected`). It is drawn in the frame's Scene as `Selection` brackets
+  through `GlyphState.Selected`.
+- **Focus and hover** are never in `GlyphState`. The library provides `Glyphs.cues theme`, a cue layer for
+  `SceneInteraction.withCues`. It draws #787's two-tone focus ring and the hover outline in the theme's tokens, at the
+  bounds of the cued object. The cue layer and `standardCues` keep the same geometry, so the kit's focus-cue check
+  (#787 I8, the pixels just outside the focused bounds) holds for both. Only the colours come from the theme.
+- **Contrast.** The theme validates both focus tones: the outer tone against the ground and the inner tone against the
+  outer one, each at least 3:1. This is the two-tone rule #787 takes from WCAG 2.2 focus appearance.
+- **The proof** predates that ADR. It draws focus as a single-tone outline in the frame's Scene. The implementation
+  draws focus in the cue layer only.
 
 ## The proof (experimental)
 
