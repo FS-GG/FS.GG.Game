@@ -2031,6 +2031,7 @@ async {
         do! runPixi ()
         do! runThreeBackends ()
         do! runConformance ()
+        do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

@@ -57,7 +57,7 @@ module RendererAdapter =
                         })
         }
 
-/// Opaque behind the .fsi: the only constructor is `RendererRegistry.svg`, which is what guarantees
+/// Opaque behind the .fsi: the only constructors are `RendererRegistry.svg` and `create`, which is what guarantees
 /// the default backend always has an adapter.
 [<NoEquality; NoComparison>]
 type RendererRegistry<'State> =
@@ -72,6 +72,17 @@ module RendererRegistry =
         {
             Adapters = Map.add adapter.Backend adapter registry.Adapters
         }
+
+    let create (adapter: RendererAdapter<'State>) : Result<RendererRegistry<'State>, string> =
+        match adapter.Backend with
+        | RendererBackend.Svg -> Ok(register adapter { Adapters = Map.empty })
+        | other ->
+            Error(
+                sprintf
+                    "the default adapter must realise %s, not %s"
+                    (RendererBackend.id RendererBackend.defaultBackend)
+                    (RendererBackend.id other)
+            )
 
     let svg view mountScene : RendererRegistry<'State> =
         register (RendererAdapter.svg view mountScene) { Adapters = Map.empty }
