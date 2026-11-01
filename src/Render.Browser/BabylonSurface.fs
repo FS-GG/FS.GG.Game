@@ -74,6 +74,12 @@ module BabylonSurface =
     [<Emit("(() => { const p = $0.pick($1, $2, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
     let private pickRegion (_scene: B.Scene) (_x: float) (_y: float) : string option = jsNative
 
+    /// Babylon's input manager sets the canvas's tabIndex to `engine.canvasTabIndex` (1 by default) on every pointer
+    /// move, which would put the canvas ahead of the page in tab order (FS.GG.Game#751 review B2). Zero keeps it in
+    /// document order, like the SVG root and the Pixi canvas.
+    [<Emit("$0.canvasTabIndex = 0")>]
+    let private keepDocumentTabOrder (_engine: B.Engine) : unit = jsNative
+
     let private channel (value: byte) = float value / 255.0
 
     /// Vertical field of view of Babylon's default camera, in radians.
@@ -148,6 +154,7 @@ module BabylonSurface =
 
                 // `webGlEngine` throws when the browser has no WebGL context.
                 let engine = B.webGlEngine (unbox<B.Canvas>(box canvas)) options.Antialias
+                keepDocumentTabOrder engine
                 enginesCreated <- enginesCreated + 1
 
                 acquire (fun () ->

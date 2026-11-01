@@ -120,8 +120,9 @@ module BrowserConformance =
         maxFrames: int ->
             Async<int[]>
 
-    /// Start the page-level listener census `inputHosts` reads, by wrapping `EventTarget.prototype.addEventListener` and
-    /// `removeEventListener` once. Call it before any input host is attached; it is idempotent.
+    /// Start the page-level census the interaction probe reads: listeners (by wrapping
+    /// `EventTarget.prototype.addEventListener` and `removeEventListener`) and writes to every backend's live status
+    /// (a mutation observer). Call it before any input host is attached; it is idempotent.
     val installInputProbe: unit -> unit
 
     /// What `backend`'s input hosts hold in the page now (FS.GG.Game#751): the listeners that are still registered on
@@ -129,16 +130,28 @@ module BrowserConformance =
     /// not they are still in the page) plus its mirrors in the page. Raises when `installInputProbe` was not called.
     val inputHosts: backend: RendererBackend -> int
 
-    /// A primary pointer press and release, as real DOM pointer events on `backend`'s SVG root or canvas in `container`,
-    /// at the client point of the scene point `point` (the element is scrolled into view first, because the SVG
-    /// surface's hit test asks the browser what is under the point). Nothing happens when the backend has no element
-    /// there.
+    /// How many times `backend`'s live status (`[role=status]` in its mirror) has been written since
+    /// `installInputProbe`. Raises when it was not called.
+    val liveWrites: backend: RendererBackend -> int
+
+    /// A real primary pointer click (the test driver's `page.mouse`, through `window.__fsggInput`) on `backend`'s SVG
+    /// root or canvas in `container`, at the viewport point of the scene point `point` (the element is scrolled into
+    /// view first). Nothing happens when the backend has no element there; it fails when the page has no real-input
+    /// driver.
     val press: container: HTMLElement -> backend: RendererBackend -> point: Point -> Async<unit>
 
-    /// The kit's interaction probe for the backends in `container` (installs the listener census): pointer presses and
-    /// key presses are real DOM events dispatched on the backend's SVG root or canvas, at the client point of the scene
-    /// point; the mirror is read from, and activated through, the backend's `data-scene-controls` group; the census is
-    /// `inputHosts`.
+    /// A real pointer move over `backend`'s output to the scene point `point`, like `press`.
+    val move: container: HTMLElement -> backend: RendererBackend -> point: Point -> Async<unit>
+
+    /// A real key press (the test driver's `page.keyboard`) to whatever has the keyboard focus.
+    val key: name: string -> Async<unit>
+
+    /// What has the keyboard focus, from `backend`'s point of view: `surface`, `control:<id>` or the element's tag.
+    val focused: container: HTMLElement -> backend: RendererBackend -> string
+
+    /// The kit's interaction probe for the backends in `container` (installs the census): `press`, `move` and `key`
+    /// are real input, the surface is focused with `focus()`, and the mirror, live status, tabindex and input hosts are
+    /// read from the page.
     val interactionProbe: container: HTMLElement -> InteractionProbe
 
     /// A subject for real browser backends in `container`: hosts are started with `BrowserRenderers.start route`,

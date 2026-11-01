@@ -73,9 +73,10 @@ type MirrorEntry =
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
-/// How the kit plays a backend's input host from outside (FS.GG.Game#751): real input delivered to the mounted
-/// backend's output, the accessible mirror read back from it, and an independent census of the input hosts the
-/// backend holds. Built by `InteractionProbe.create`.
+/// How the kit plays a backend's input host from outside (FS.GG.Game#751): REAL input (a browser's trusted pointer
+/// and keyboard events, never synthesised DOM events) delivered to the mounted backend's output, real keyboard focus,
+/// the accessible mirror read back, and an independent census of the input hosts the backend holds. Built by
+/// `InteractionProbe.create`.
 [<Sealed>]
 type InteractionProbe
 
@@ -84,18 +85,29 @@ type InteractionProbe
 module InteractionProbe =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// `press backend point` delivers a primary pointer press and release at `point` (scene coordinates) on
-    /// `backend`'s output; `key backend name` delivers a key press (a DOM `KeyboardEvent.key` value such as
-    /// `ArrowRight`, `Enter` or `Escape`) to `backend`'s focusable output; `mirror backend` reads `backend`'s
-    /// accessible mirror (`None` when there is none); `activate backend id` activates the mirror entry of object
-    /// `id`; `inputHosts backend` counts what `backend`'s input hosts hold now (listeners and mirrors, observed
-    /// independently of the adapter). The kit compares it with its value before each host starts: an input host must
-    /// raise it while mounted and bring it back when released.
+    /// - `press backend point`: a real primary pointer press and release at `point` (scene coordinates) on
+    ///   `backend`'s output;
+    /// - `move backend point`: a real pointer move to `point` over `backend`'s output;
+    /// - `focus backend`: give `backend`'s focusable output (its SVG root or canvas) the keyboard focus;
+    /// - `key name`: a real key press (a `KeyboardEvent.key` value such as `ArrowRight`, `Enter`, `Escape`, `Tab` or
+    ///   `" "`) delivered to whatever has the keyboard focus;
+    /// - `focused backend`: what has the keyboard focus, as `surface` (the backend's output), `control:<id>` (the
+    ///   backend's mirror entry of object `id`) or anything else for other elements;
+    /// - `mirror backend`: `backend`'s accessible mirror (`None` when there is none);
+    /// - `liveWrites backend`: how many times `backend`'s live status has been written so far;
+    /// - `tabIndex backend`: the `tabindex` of `backend`'s output;
+    /// - `inputHosts backend`: what `backend`'s input hosts hold now (listeners and mirrors, observed independently
+    ///   of the adapter). The kit compares it with its value before each host starts: an input host must raise it
+    ///   while mounted and bring it back when released.
     val create:
         press: (RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>) ->
-        key: (RendererBackend -> string -> Async<unit>) ->
+        move: (RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>) ->
+        focus: (RendererBackend -> Async<unit>) ->
+        key: (string -> Async<unit>) ->
+        focused: (RendererBackend -> string) ->
         mirror: (RendererBackend -> MirrorEntry list option) ->
-        activate: (RendererBackend -> string -> Async<unit>) ->
+        liveWrites: (RendererBackend -> int) ->
+        tabIndex: (RendererBackend -> string option) ->
         inputHosts: (RendererBackend -> int) ->
             InteractionProbe
 
@@ -130,12 +142,14 @@ type ConformanceSubject<'State>
 ///   mount's failure falls back to SVG with the state intact and releases the backend, and a failure of a mount
 ///   already disposed is not reported, so the live mount of the same backend stays (the live-mount rule);
 /// - **interaction**, when `withInteraction` declared one (FS.GG.Game#751): the states declare valid selectable
-///   objects; then on every backend the input host is attached while mounted, the accessible mirror lists every
-///   object with its label, the keyboard focuses objects in order and selects and clears through the game's own
-///   rule, a pointer press on each object reachable by a pointer selects it (the backend's hit test agrees with
-///   `SceneInteraction.hitTest`) and a press where no object is asks for nothing, a mirror entry selects its
-///   object, the selection survives a switch away and back, and switching away and disposing the host release
-///   the input host.
+///   objects; then on every backend, with real input, the input host is attached while mounted, the accessible
+///   mirror lists every object with its label, a pointer move leaves the surface at tabindex 0, the keyboard
+///   focuses objects in order and selects and clears through the game's own rule, a pointer press on each object
+///   reachable by a pointer selects it (the backend's hit test agrees with `SceneInteraction.hitTest`) and a press
+///   where no object is asks for nothing, Tab walks the mirror entries in order and Space selects one, keyboard
+///   focus stays on that entry across the selection's Present and across unchanged Presents, an unchanged Present
+///   does not write the live status, the selection survives a switch away and back, and switching away and
+///   disposing the host release the input host.
 [<RequireQualifiedAccess>]
 module RendererConformance =
 

@@ -104,7 +104,7 @@ unchanged) and drives a host through the Elmish messages:
 | `dispose` | Switching away and disposing the host release every resource, including a canvas's WebGL context. Each mount is disposed exactly once, and a disposed host stays inert. |
 | `late failure (host)` | For each non-default backend, `FailBackend` for the live mount falls back to SVG with the state intact and releases the backend. A report for an unselected backend is ignored, and re-selecting recovers. |
 | `late failure (adapter)` | For each backend with a `LateFailureTrigger` (Pixi in the browser, through `BrowserConformance.pixiLateFailure`), the trigger makes the adapter's next mount fail asynchronously. The adapter's own report (`OnFailure`, then `LateFailureRoute`, then `failBackend`) falls back to SVG with the state intact and releases the mount. A failure of a mount already disposed is not reported, so the live mount of the same backend stays: this is the live-mount rule, checked against the adapter. |
-| `interaction` | Only when `RendererConformance.withInteraction` declares the game's interaction (FS.GG.Game#751). The states declare valid selectable objects. On every backend: the input host is attached while mounted; the accessible mirror lists every object, in order, with its label; the arrows move the focus and Enter selects through the game's own rule, and Escape clears; a pointer press on each object a pointer can reach selects it (the backend's hit test agrees with `SceneInteraction.hitTest`), and a press where no object is asks for nothing; a mirror entry selects its object; the selection survives a switch away and back; switching away and disposing the host release the input host. |
+| `interaction` | Only when `RendererConformance.withInteraction` declares the game's interaction (FS.GG.Game#751), with REAL input (trusted pointer and keyboard events and real focus). The states declare valid selectable objects. On every backend: the input host is attached while mounted; the accessible mirror lists every object, in order, with its label; a pointer move leaves the surface at `tabindex` 0; the arrows move the focus and Enter selects through the game's own rule, and Escape clears; a pointer press on each object a pointer can reach selects it (the backend's hit test agrees with `SceneInteraction.hitTest`), and a press where no object is asks for nothing; Tab walks the mirror entries and Space selects one; keyboard focus stays on that entry across the selection's Present and across unchanged Presents; an unchanged Present does not write the live status; the selection survives a switch away and back; switching away and disposing the host release the input host. |
 
 `Resources` must observe the page independently of the adapter. `BrowserConformance.resources` counts SVG
 roots, canvases, Babylon engines, Pixi applications and live WebGL contexts. The kit also asserts its
@@ -139,8 +139,13 @@ selection |> SelectionRoute.bind (fun request -> game.Dispatch(SelectionChanged 
 
 The selection is game state: a backend shows it and asks to change it (only for a change), so it survives every
 switch. `RendererConformance.withInteraction interaction route probe` adds the `interaction` section;
-`BrowserConformance.interactionProbe container` plays the real input hosts with DOM events and counts their
-listeners through a page-level census (`BrowserConformance.installInputProbe`). The reference game
+`BrowserConformance.interactionProbe container` plays the real input hosts with real input: the page asks the
+test driver (`window.__fsggInput`, Playwright `page.mouse` and `page.keyboard`;
+`tests/Render.Browser.Smoke/driver/run-smoke.mjs`) for each click, move and key, never dispatching synthetic events.
+A page-level census (`BrowserConformance.installInputProbe`) counts the input hosts' listeners and writes to their
+live status. The mirror writes only what changed, so focus and the live region stay quiet across Presents. The SVG
+surface's retained host (FS.GG.UI.Scene 0.31.0) still rewrites its mirror on each Present; the smoke asserts that
+known gap until FS.GG.Rendering#1504 lands. The reference game
 (`ReferenceRenderers.interaction`) selects its token and aim marker and draws a ring around the selection.
 
 Adapter authors keep two obligations the kit checks:

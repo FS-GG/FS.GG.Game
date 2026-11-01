@@ -47,11 +47,36 @@ type private Breakage =
     | NotInteractive
     /// The mirror never marks the selected object.
     | MirrorWithoutState
+    /// Every Present rebuilds the mirror: a focused entry loses the keyboard focus and the live status is rewritten
+    /// (the review's B1 shape).
+    | RebuildsMirror
+    /// A pointer move over the surface raises its tabindex (the review's B2 shape).
+    | RaisesTabIndex
+
+/// Where the page's keyboard focus is.
+type private Focus =
+    | Elsewhere
+    | Surface of RendererBackend
+    | Control of RendererBackend * string
 
 /// One mount's input host: the contract implemented in memory over the reference hit test and keyboard reducer,
 /// holding two "listeners" (pointer and keyboard) and a mirror while attached.
 type private FakeInputHost(report: SelectionRequest -> unit, first: InteractiveScene, breakage: Breakage) =
-    member val Frame = first with get, set
+    let mutable frame = first
+
+    member val LiveWrites = 1 with get, set
+
+    /// Called by the mount's Present. Returns whether the mirror was rebuilt (and so dropped any focus inside it).
+    member this.Present(next: InteractiveScene) =
+        let statusChanged = next.Selected <> frame.Selected
+        frame <- next
+
+        if breakage = RebuildsMirror || statusChanged then
+            this.LiveWrites <- this.LiveWrites + 1
+
+        breakage = RebuildsMirror
+
+    member _.Frame = frame
     member val Focused: string option = None with get, set
     member val Attached = true with get, set
 
@@ -103,10 +128,13 @@ type private FakeInputHost(report: SelectionRequest -> unit, first: InteractiveS
     member this.Holds = if this.Attached then 3 else 0
 
 /// One in-process backend whose mounts hold a countable resource and, when interactive, an input host.
-type private InteractiveFake(backend: RendererBackend, breakage: Breakage) =
+type private InteractiveFake(backend: RendererBackend, breakage: Breakage, focus: Focus ref) =
     let hosts = ResizeArray<FakeInputHost>()
 
     member val Live = 0 with get, set
+    member val TabIndex = "0" with get, set
+    member _.Breakage = breakage
+    member _.LiveWrites = hosts |> Seq.sumBy (fun host -> host.LiveWrites)
     member val Shown: Scene option = None with get, set
 
     member _.LiveHost: FakeInputHost option =
@@ -148,7 +176,11 @@ type private InteractiveFake(backend: RendererBackend, breakage: Breakage) =
                         Present =
                             fun next ->
                                 this.Shown <- Some next.Scene
-                                host.Frame <- next
+
+                                if host.Present next then
+                                    match focus.Value with
+                                    | Control(owner, _) when owner = backend -> focus.Value <- Elsewhere
+                                    | _ -> ()
                         Dispose =
                             fun () ->
                                 if not disposed.Value then
@@ -158,15 +190,52 @@ type private InteractiveFake(backend: RendererBackend, breakage: Breakage) =
 
                                     if breakage <> LeakInputHost then
                                         host.Attached <- false
+
+                                    match focus.Value with
+                                    | Surface owner
+                                    | Control(owner, _) when owner = backend -> focus.Value <- Elsewhere
+                                    | _ -> ()
                     })
 
 type private InteractiveFakes(breakOf: RendererBackend -> Breakage) =
+    let focus = ref Elsewhere
+
     let fakes =
         RendererBackend.all
-        |> List.map (fun backend -> backend, InteractiveFake(backend, breakOf backend))
+        |> List.map (fun backend -> backend, InteractiveFake(backend, breakOf backend, focus))
         |> Map.ofList
 
     member _.Of(backend: RendererBackend) = fakes.[backend]
+
+    /// A key goes where the focus is, like a browser's: the surface's input host, or the focused mirror entry (Tab moves
+    /// along the entries, Enter and Space activate one).
+    member this.Key(name: string) =
+        match focus.Value with
+        | Elsewhere -> ()
+        | Surface backend ->
+            match this.Of(backend).LiveHost with
+            | Some host when name = "Tab" ->
+                focus.Value <-
+                    match host.Frame.Objects with
+                    | first :: _ -> Control(backend, first.Id)
+                    | [] -> Elsewhere
+            | Some host -> host.Key name
+            | None -> ()
+        | Control(backend, id) ->
+            match this.Of(backend).LiveHost with
+            | Some host ->
+                match name with
+                | "Tab" ->
+                    let ids = host.Frame.Objects |> List.map (fun target -> target.Id)
+
+                    focus.Value <-
+                        match ids |> List.skipWhile ((<>) id) with
+                        | _ :: next :: _ -> Control(backend, next)
+                        | _ -> Elsewhere
+                | "Enter"
+                | " " -> host.Activate id
+                | _ -> ()
+            | None -> ()
 
     member this.Probe: InteractionProbe =
         let onHost backend action =
@@ -174,9 +243,25 @@ type private InteractiveFakes(breakOf: RendererBackend -> Breakage) =
 
         InteractionProbe.create
             (fun backend point -> onHost backend (fun host -> host.Press point))
-            (fun backend name -> onHost backend (fun host -> host.Key name))
+            (fun backend _ ->
+                async {
+                    if this.Of(backend).Breakage = RaisesTabIndex then
+                        this.Of(backend).TabIndex <- "1"
+                })
+            (fun backend ->
+                async {
+                    if this.Of(backend).LiveHost.IsSome then
+                        focus.Value <- Surface backend
+                })
+            (fun name -> async { this.Key name })
+            (fun backend ->
+                match focus.Value with
+                | Surface owner when owner = backend -> "surface"
+                | Control(owner, id) when owner = backend -> "control:" + id
+                | _ -> "elsewhere")
             (fun backend -> this.Of(backend).LiveHost |> Option.map (fun host -> host.Mirror))
-            (fun backend id -> onHost backend (fun host -> host.Activate id))
+            (fun backend -> this.Of(backend).LiveWrites)
+            (fun backend -> this.Of(backend).LiveHost |> Option.map (fun _ -> this.Of(backend).TabIndex))
             (fun backend -> this.Of(backend).InputHosts)
 
     member this.Shows (_: ConformanceHost<Model>) (backend: RendererBackend) (state: Model) =
@@ -250,8 +335,8 @@ let private interactionChecks (results: ConformanceResult list) =
     results |> List.filter (fun result -> result.Check.StartsWith "interaction")
 
 /// The kit's checks for one game on three interactive backends without late-failure triggers: 59 (the sections of
-/// FS.GG.Game#745 without the adapter late-failure checks) plus 28 interaction checks.
-let private interactionCount = 28
+/// FS.GG.Game#745 without the adapter late-failure checks) plus 37 interaction checks (one, then twelve per backend).
+let private interactionCount = 37
 
 [<Tests>]
 let tests =
@@ -441,7 +526,7 @@ let tests =
 
             testCase "a surface without an interactive mount gives the plain adapter"
             <| fun _ ->
-                let plain = InteractiveFake(RendererBackend.Babylon, NotInteractive)
+                let plain = InteractiveFake(RendererBackend.Babylon, NotInteractive, ref Elsewhere)
                 Expect.isFalse (SceneSurface.isInteractive plain.Surface) "not interactive"
 
                 let adapter =
@@ -569,10 +654,45 @@ let tests =
 
                 Expect.contains
                     failed
-                    "interaction svg: activating a mirror entry selects its object in the game state"
+                    "interaction svg: Tab walks the mirror entries in order and Space selects the focused object in the game state"
                     "mirror"
 
                 Expect.all failed (fun check -> check.StartsWith "interaction") "only interaction checks fail"
+
+            testCase
+                "negative control: a mirror rebuilt on every Present fails exactly the focus and live-status checks"
+            <| fun _ ->
+                let _, results =
+                    runKit
+                        (function
+                        | RendererBackend.Babylon -> RebuildsMirror
+                        | _ -> Intact)
+                        ReferenceRenderers.interaction
+
+                Expect.equal
+                    (failedChecks results)
+                    [
+                        "interaction babylon: keyboard focus stays on the mirror entry across the Present of its selection and across unchanged Presents"
+                        "interaction babylon: an unchanged Present does not write the live status"
+                    ]
+                    "the review's B1 shape is caught, and nothing else is blamed"
+
+            testCase
+                "negative control: a surface whose tabindex a pointer move raises fails exactly the tab-order check"
+            <| fun _ ->
+                let _, results =
+                    runKit
+                        (function
+                        | RendererBackend.Babylon -> RaisesTabIndex
+                        | _ -> Intact)
+                        ReferenceRenderers.interaction
+
+                Expect.equal
+                    (failedChecks results)
+                    [
+                        "interaction babylon: the surface stays in document tab order (tabindex 0) after a real pointer move"
+                    ]
+                    "the review's B2 shape is caught"
 
             testCase "negative control: a game rule that ignores requests fails every selecting check"
             <| fun _ ->
@@ -588,7 +708,7 @@ let tests =
                     Expect.contains
                         failed
                         (sprintf
-                            "interaction %s: activating a mirror entry selects its object in the game state"
+                            "interaction %s: Tab walks the mirror entries in order and Space selects the focused object in the game state"
                             (RendererBackend.id backend))
                         "the request is made but the game state never changes"
         ]

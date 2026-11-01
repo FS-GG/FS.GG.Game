@@ -47,6 +47,16 @@ module internal CanvasInput =
             target.addEventListener (name, handler)
             listeners.Add(target, name, handler)
 
+        // Writes only what changed (FS.GG.Game#751 review B1): rewriting a button's text or the live status on every
+        // Present makes a screen reader announce each frame, and re-inserting a button drops its keyboard focus.
+        let setAttribute (element: Element) (name: string) (value: string) =
+            if element.getAttribute name <> value then
+                element.setAttribute (name, value)
+
+        let setText (element: Element) (value: string) =
+            if element.textContent <> value then
+                element.textContent <- value
+
         let sync () =
             let wanted = current.Objects |> List.map (fun target -> target.Id) |> Set.ofList
 
@@ -55,7 +65,10 @@ module internal CanvasInput =
                     buttons.[id].remove()
                     buttons.Remove id |> ignore
 
-            for target in current.Objects do
+            // The status is the group's first child; button i belongs at child i + 1. A button is moved only when it is
+            // not already there, so an in-order button (and the focus it holds) is never touched.
+            current.Objects
+            |> List.iteri (fun index target ->
                 let button =
                     match buttons.TryGetValue target.Id with
                     | true, existing -> existing
@@ -66,25 +79,28 @@ module internal CanvasInput =
                         buttons.[target.Id] <- created
                         created
 
-                button.textContent <- target.Label
+                setText button target.Label
 
-                button.setAttribute (
-                    "aria-pressed",
+                setAttribute
+                    button
+                    "aria-pressed"
                     (if current.Selected = Some target.Id then
                          "true"
                      else
                          "false")
-                )
 
-                button.setAttribute ("data-focused", (if focused = Some target.Id then "true" else "false"))
-                // Appending moves an existing button, so the mirror keeps the objects' order.
-                controls.appendChild button |> ignore
+                setAttribute button "data-focused" (if focused = Some target.Id then "true" else "false")
 
-            status.textContent <-
-                current.Selected
-                |> Option.bind (fun id -> current.Objects |> List.tryFind (fun target -> target.Id = id))
-                |> Option.map (fun target -> target.Label)
-                |> Option.defaultValue "No object selected"
+                let slot = controls.children.[index + 1]
+
+                if not (obj.ReferenceEquals(slot, button)) then
+                    controls.insertBefore (button, slot) |> ignore)
+
+            current.Selected
+            |> Option.bind (fun id -> current.Objects |> List.tryFind (fun target -> target.Id = id))
+            |> Option.map (fun target -> target.Label)
+            |> Option.defaultValue "No object selected"
+            |> setText status
 
         let ask (request: SelectionRequest) =
             let change =

@@ -1776,8 +1776,20 @@ let runThreeBackends () : Async<unit> =
 /// from canvas pixels. Every kit result becomes one smoke check.
 let kitChecks = 62
 
-/// The kit's interaction section on three backends (FS.GG.Game#751): one subject check and nine per backend.
-let interactionChecks = 28
+/// The kit's interaction section on three backends (FS.GG.Game#751): one subject check and twelve per backend.
+let interactionChecks = 37
+
+/// Kit checks that fail for a known, routed reason, each with its owner. The smoke asserts that they still fail, so the
+/// gap stays visible and the fix that closes it must remove the entry. The retained SVG host of FS.GG.UI.Scene 0.31.0
+/// re-appends every mirror button and rewrites its status on each Present (focus drops to the body, the live region
+/// is written every frame); the bump that fixes it is FS.GG.Rendering#1504.
+let knownGaps =
+    [
+        "interaction svg: keyboard focus stays on the mirror entry across the Present of its selection and across unchanged Presents",
+        "FS.GG.Rendering#1504"
+        "interaction svg: an unchanged Present does not write the live status", "FS.GG.Rendering#1504"
+    ]
+    |> Map.ofList
 
 let rgbOf (color: Color) = [| int color.Red; int color.Green; int color.Blue |]
 
@@ -1838,7 +1850,15 @@ let runKit (label: string) (expected: int) (subject: ConformanceSubject<'State>)
         let! results = RendererConformance.run subject
 
         for result in results do
-            check (label + ": " + result.Check) result.Passed result.Detail
+            match Map.tryFind result.Check knownGaps with
+            | Some owner ->
+                check
+                    (sprintf "%s: known gap (%s) still fails: %s" label owner result.Check)
+                    (not result.Passed)
+                    "the check now passes: remove it from knownGaps"
+
+                info (sprintf "%s known gap %s" label owner) result.Detail
+            | None -> check (label + ": " + result.Check) result.Passed result.Detail
 
         check
             (sprintf "%s: the kit ran all %d checks for three backends" label expected)

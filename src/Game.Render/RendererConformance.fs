@@ -48,22 +48,30 @@ type InteractionProbe
     internal
     (
         press: RendererBackend -> Point -> Async<unit>,
-        key: RendererBackend -> string -> Async<unit>,
+        move: RendererBackend -> Point -> Async<unit>,
+        focus: RendererBackend -> Async<unit>,
+        key: string -> Async<unit>,
+        focused: RendererBackend -> string,
         mirror: RendererBackend -> MirrorEntry list option,
-        activate: RendererBackend -> string -> Async<unit>,
+        liveWrites: RendererBackend -> int,
+        tabIndex: RendererBackend -> string option,
         inputHosts: RendererBackend -> int
     ) =
     member internal _.Press backend point = press backend point
-    member internal _.Key backend name = key backend name
+    member internal _.Move backend point = move backend point
+    member internal _.Focus backend = focus backend
+    member internal _.Key name = key name
+    member internal _.Focused backend = focused backend
     member internal _.Mirror backend = mirror backend
-    member internal _.Activate backend id = activate backend id
+    member internal _.LiveWrites backend = liveWrites backend
+    member internal _.TabIndex backend = tabIndex backend
     member internal _.InputHosts backend = inputHosts backend
 
 [<RequireQualifiedAccess>]
 module InteractionProbe =
 
-    let create press key mirror activate inputHosts =
-        InteractionProbe(press, key, mirror, activate, inputHosts)
+    let create press move focus key focused mirror liveWrites tabIndex inputHosts =
+        InteractionProbe(press, move, focus, key, focused, mirror, liveWrites, tabIndex, inputHosts)
 
 /// Opaque behind the .fsi: built by `RendererConformance.subject` and its `with*` functions only, so a field added
 /// later is not a breaking change.
@@ -790,12 +798,27 @@ module RendererConformance =
                                 (mirror = Some expectedMirror)
                                 (sprintf "mirror=%A expected=%A" mirror expectedMirror)
 
+                            // A real pointer moving over the surface leaves it in document tab order (tabindex 0): a
+                            // renderer that raises it puts the surface ahead of the page.
+                            match miss with
+                            | Some point -> do! probe.Move backend point
+                            | None -> ()
+
+                            do! probe.Move backend { X = 1.0; Y = 1.0 }
+                            let tabIndex = probe.TabIndex backend
+
+                            check
+                                (sprintf "interaction %s: the surface stays in document tab order (tabindex 0) after a real pointer move" name)
+                                (tabIndex = Some "0")
+                                (sprintf "tabindex=%A" tabIndex)
+
                             // Keyboard: two steps from no focus reach the second object (the first of one), Enter
                             // selects it, Escape clears.
                             requests.Clear()
-                            do! probe.Key backend "ArrowRight"
-                            do! probe.Key backend "ArrowRight"
-                            do! probe.Key backend "Enter"
+                            do! probe.Focus backend
+                            do! probe.Key "ArrowRight"
+                            do! probe.Key "ArrowRight"
+                            do! probe.Key "Enter"
                             let target = objects.[1 % objects.Length]
 
                             check
@@ -806,7 +829,7 @@ module RendererConformance =
                                 (sprintf "want %s; %s" target.Id (observed ()))
 
                             requests.Clear()
-                            do! probe.Key backend "Escape"
+                            do! probe.Key "Escape"
 
                             check
                                 (sprintf "interaction %s: Escape clears the game's selection" name)
@@ -862,24 +885,65 @@ module RendererConformance =
                                     (requests.Count = 0 && selectedNow () = before)
                                     (sprintf "at (%g, %g): %s" point.X point.Y (observed ()))
 
-                            // The mirror: activating an entry selects its object (a single object is cleared first).
+                            // The mirror, through real focus: Tab from the surface walks the entries in order, and Space
+                            // selects the focused one (a single object is cleared first).
                             if objects |> List.forall (fun candidate -> Some candidate.Id = selectedNow ()) then
-                                do! probe.Key backend "Escape"
+                                do! probe.Focus backend
+                                do! probe.Key "Escape"
 
-                            let entry =
+                            let entryIndex =
                                 objects
-                                |> List.rev
-                                |> List.find (fun candidate -> Some candidate.Id <> selectedNow ())
+                                |> List.findIndexBack (fun candidate -> Some candidate.Id <> selectedNow ())
 
+                            let entry = objects.[entryIndex]
                             requests.Clear()
-                            do! probe.Activate backend entry.Id
+                            do! probe.Focus backend
+                            let walked = ResizeArray<string>()
+
+                            for _ in 0..entryIndex do
+                                do! probe.Key "Tab"
+                                walked.Add(probe.Focused backend)
+
+                            let control = "control:" + entry.Id
+                            let reached = List.ofSeq walked = (objects |> List.take (entryIndex + 1) |> List.map (fun o -> "control:" + o.Id))
+                            do! probe.Key " "
 
                             check
-                                (sprintf "interaction %s: activating a mirror entry selects its object in the game state" name)
-                                (List.ofSeq requests = [ SelectionRequest.Select entry.Id ]
+                                (sprintf "interaction %s: Tab walks the mirror entries in order and Space selects the focused object in the game state" name)
+                                (reached
+                                 && List.ofSeq requests = [ SelectionRequest.Select entry.Id ]
                                  && selectedNow () = Some entry.Id
                                  && pressed backend = Some [ entry.Id ])
-                                (sprintf "want %s; %s" entry.Id (observed ()))
+                                (sprintf "want %s; tabbed to %A; %s" entry.Id (List.ofSeq walked) (observed ()))
+
+                            // The Present that followed the selection, then unchanged Presents (one, then ten): the
+                            // keyboard focus stays on the entry, and the live status is not written again.
+                            let afterSelect = probe.Focused backend
+                            let state = (host.Model()).State
+                            let writes = probe.LiveWrites backend
+                            host.Dispatch(RendererMsg.StateChanged state)
+                            let afterOne = probe.Focused backend
+
+                            for _ in 1..10 do
+                                host.Dispatch(RendererMsg.StateChanged state)
+
+                            let afterTen = probe.Focused backend
+                            let unchangedWrites = probe.LiveWrites backend - writes
+
+                            check
+                                (sprintf "interaction %s: keyboard focus stays on the mirror entry across the Present of its selection and across unchanged Presents" name)
+                                (reached && afterSelect = control && afterOne = control && afterTen = control)
+                                (sprintf
+                                    "want %s; after the selection %s, after one unchanged Present %s, after ten %s"
+                                    control
+                                    afterSelect
+                                    afterOne
+                                    afterTen)
+
+                            check
+                                (sprintf "interaction %s: an unchanged Present does not write the live status" name)
+                                (unchangedWrites = 0)
+                                (sprintf "%d live-status writes over eleven unchanged Presents" unchangedWrites)
 
                             // The selection is game state: it survives a switch away and back, and the other backend
                             // shows it.
