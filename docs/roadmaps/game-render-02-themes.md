@@ -43,10 +43,19 @@ derivation when #795's implementation lands.
 - The independent review of #805 at `3ddb9ee7` (REQUEST_CHANGES), answered below.
 
 **Proof:** `FS.GG.Game.Reference.Experimental`, which is not packed.
-- #802 (`8f9ced1`) and #789's part 3 (#806, `a567a25`) merged to main while this revision was under way, and this branch
-  merges them.
-- The proof still keeps **stand-ins**, each marked in its source as replaced by #802 or part 3. The swap is the first
-  step of #795's implementation PR, not this design PR.
+- #802 (`8f9ced1`), #789's part 3 (#806, `a567a25`), #807 and #808 merged to main while this revision was under way, and
+  this branch merges them. #808 retired the #789 proof's `ExperimentalGlyphs`, so the proof now uses the shipped library
+  for identity, glyph specs and drawing.
+- The **drawing** is the library's. `Symbology.glyph` builds a `FS.GG.Game.Render.GlyphSpec` through its builders, and
+  `Glyphs.scene` draws it with erratum E1's layout, in a #802 `Theme`.
+- `Themes.toRenderTheme` builds that #802 `Theme` from this proof's derived colours:
+  - it starts from `ThemeSeed.classic`, sets all 35 colour aliases by `ThemeOverride.colour`, and sets `hueCapacity.N` to
+    the measured capacities;
+  - #802's built-in rules accept all five presets;
+  - until amendment A1 is decided (Q-T11), the bridge passes `contrastTarget` 3, and the proof's own `builtInRules`
+    validate `highContrast`'s 7:1.
+- The **theme-side** types remain stand-ins, each marked in its source as replaced by #802. The swap is the first step of
+  #795's implementation PR, not this design PR.
 
 | Proof stand-in | Replaced by |
 |---|---|
@@ -56,8 +65,14 @@ derivation when #795's implementation lands.
 | `Themes.Theme`, `create`, `builtInRules`, `ThemeViolation` | `Theme`, `Theme.create … \|> Result.bind (Theme.validate checks)`, #802's built-in rules, `ThemeViolation.create` |
 | `Themes.overrideTeam` | `Theme.withTeamColour` |
 | `Themes.hexes`, `cssVariables`, `toDtcg`, `ofDtcg`, `resolverDocument` | `Theme.hex`, `cssVariables`, `toDtcg`, `ofDtcg`, `dtcgResolver` |
-| `Glyphs.Identity`, `Symbology.GlyphSpec`, `Symbology.draw` | `[<RequireQualifiedAccess>] Identity`, `GlyphSpec` (`GlyphSpec.team n \|> GlyphSpec.badged`, `allegianceColouring`), part 3's `Glyphs.draw` |
-| `Symbology.minBadgeFrame`, `minIdentityFrame`, `sideBySideFrame` | `Glyphs.minBadgeFrame` (22), `minIdentityFrame` (12), `minIconAndBadgeFrame` (40); also `minTwoDigitBadgeFrame` (33) |
+| `Themes.toRenderTheme` (the bridge to the library) | nothing: #795's presets are built on #802 directly |
+
+Already the library's, not stand-ins:
+- `Identity`;
+- `GlyphSpec` (`team`, `badged`, `allegianceColouring`, `sizeStep`, `fillStep`, `modifier`, `amplifier`);
+- `Glyph.ofSpec`, `Glyphs.draw` and `Glyphs.scene`;
+- the frame constants `minBadgeFrame` (22), `minIdentityFrame` (12) and `minIconAndBadgeFrame` (40);
+- the icon set: infantry, armour, artillery, support and structure.
 
 The proof's alias set **is** #802's: the 35 colour aliases of `Theme.aliases`, from `surface.ground` to
 `terrain.void`. Its built-in rules are #802's, with one stated deviation, amendment A1 (T5, Q-T11).
@@ -86,10 +101,11 @@ Symbology.create<Player> "unit" 24.0
 |> Encode.team     "team"       (fun p -> p.Team) roster TeamMark       // ring + mandatory badge (shared Enemy)
 |> Encode.fraction "health"     (fun p -> p.Health) (Amplifier Below)   // bar length
 |> Encode.ordinal  "rank"       (fun p -> p.Rank) [ Rookie; Veteran; Elite ] (Amplifier Above)  // pips
-|> Encode.flag     "carrying"   (fun p -> p.Carrying) (Amplifier Corner)
+|> Encode.flag     "carrying"   (fun p -> p.Carrying) Modifier            // a corner notch
 |> Encode.label    "name"       (fun p -> p.Name)                       // mirror label only (Q6)
 |> Symbology.build themes                                               // Result<Symbology<Player>, SymbologyError list>
-// per entity: Symbology.spec players anchor player : Result<GlyphSpec, SymbologyError list>
+// per entity: Symbology.spec players anchor player : Result<Encoded, SymbologyError list>
+//             Symbology.glyph teamColours selected encoded : FS.GG.Game.Render.Glyph
 ```
 
 - **The combinators:** `Encode.identity`, `nominal`, `ordinal`, `fraction`, `angle`, `flag`, `label` and `team`.
@@ -112,9 +128,12 @@ Symbology.create<Player> "unit" 24.0
   What it does check is every value against its declaration at run time, and every identity against the roster.
 - **The slots** are the glyph ADR's D1 slots:
   - `Fill` is the frame interior's hue, drawn as the ring when there is no team.
-  - `FillStep` is its lightness. The design accepts it; the proof refuses it (`SlotNotInProof`) until #789's part 3
-    draws it.
-  - `SizeStep` is the frame size, an area channel.
+  - `FillStep` is its lightness, drawn by the library's `GlyphSpec.fillStep`.
+  - `SizeStep` is the frame size, an area channel. The levels map to the library's size steps with the top level at step
+    3, the default frame. At a 24-unit default, three levels draw 18, 21 and 24 units (`floor (frame / 0.75 x (0.5 +
+    step / 12))`).
+  - Flags on `Modifier` are the library's corner notches. The design also accepts `Amplifier Corner`; the proof refuses
+    it (`SlotNotInProof`), because a corner badge needs an icon per flag.
   - `Label` is the accessible mirror label, because Q6 rules out Scene text.
 - **The mirror label is generated** from the encodings, for example `own, team 1, health 90%, rank 3, carrying, Ada`.
   It names identity and team in every case, as glyph ADR D1 requires.
@@ -123,25 +142,26 @@ Symbology.create<Player> "unit" 24.0
     symbology can draw, and whether each theme carries the game's teams) against every theme the player may choose.
   - Whether a scene shows team colours, or falls back to allegiance colouring, is decided **once per scene and theme**
     (`Symbology.teamColouring`), never per glyph. A size step therefore never mixes the two.
-- **The drawing follows erratum E1.** From the edge in:
+- **The library draws erratum E1's layout.** From the edge in:
   - the identity frame, in its identity colour;
   - a keyline in the body colour;
-  - the ring in the team colour, or the categorical `Fill` hue;
+  - the ring in the team colour, or in the categorical `Fill` hue;
   - the body fill;
   - the badge or icon on top.
 
-  The badge is decided per glyph from its own frame size, after any size step.
+  The library decides the badge per glyph from its own frame size, after any size step. Below 22 units it omits the
+  badge and reports a diagnostic.
 
 **Measures and slots** (the allowed slots are what `WrongSlot` names):
 
 | Measure | Allowed slots | Refused (typed error) |
 |---|---|---|
 | identity | `Frame` | anywhere else: `IdentityNotOnFrame` |
-| nominal | `Icon` (at most 4 icons in the proof's set); `Fill` with the same field also on `Icon` | `Fill` alone: `CategoricalHueWithoutRedundancy`; more cases than a theme's hue capacity: `OverCapacity` |
+| nominal | `Icon` (at most 5, the library's icon set); `Fill` with the same field also on `Icon` | `Fill` alone: `CategoricalHueWithoutRedundancy`; more cases than a theme's hue capacity: `OverCapacity` |
 | ordinal | `Amplifier Above` (pips, at most 5), `SizeStep` and `FillStep` (at most 4) | `Fill`: `HueOnlyOrderedData` |
 | fraction | `Amplifier Below` (a bar) | `SizeStep`: `FractionAsArea`; `Fill`: `HueOnlyOrderedData` |
 | angle | `Amplifier Facing`, in the stroked profile | in the portable profile: `NeedsStrokedProfile`; `Fill`: `HueOnlyOrderedData` |
-| flag | `Modifier`, `Amplifier Corner` | anywhere else: `FlagNotSelective` |
+| flag | `Modifier` (corner notches); `Amplifier Corner` in the design, not drawn by the proof | anywhere else: `FlagNotSelective` |
 | label | `Label` | — |
 | team | `TeamMark` (at most 9 teams: one digit, never wrapped; two digits from part 3's 33 units) | more: `OverCapacity`; without identity on `Frame`: `TeamWithoutIdentity` |
 
@@ -163,14 +183,14 @@ the author makes. The rules are the glyph ADR's D12, plus the icon-slot rule fro
 | Icon slot unavailable | `IconSlotTakenByBadge (icon, team, frame, allegiance)` | frames of at least 40 units, distinct allegiances, or move the field to `SizeStep`, `Modifier` or the label |
 | One field per slot | `SlotTaken`, `DuplicateField` | move one field |
 | The slot exists | `WrongSlot (field, measure, slot, allowed)` | names the allowed slots |
-| The proof draws it | `SlotNotInProof (field, slot)` | `FillStep` waits for part 3 |
+| The proof draws it | `SlotNotInProof (field, slot)` | a corner flag needs an icon; use `Modifier` |
 | The themes carry the teams | `ThemeRefuses (theme, reason)` | the theme's own violation, explained |
 | Run time (`spec`) | `ValueOutOfRange (field, value, domain)`, `RosterMismatch (team field, team, roster allegiance, entity identity)` | add the value to the declaration, or fix the state or the roster |
 
 **The icon slot, exactly.** A mandatory badge sits at the inner centre of frames from 22 units (glyph ADR D1). If any
 size the symbology can draw falls in **22–39 units**, including through a `SizeStep`, an icon encoding is refused.
-From 40 units (part 3's `minIconAndBadgeFrame`, the glyph ADR's Q15) the icon sits left and the badge right. The
-proof's test places both wholly on frame ink, with a 1-unit margin, in all five frames at 40 units.
+From 40 units (part 3's `minIconAndBadgeFrame`, the glyph ADR's Q15) the icon sits left and the badge right. Part 3's
+`Glyphs.iconSlotAvailable` agrees, and its tests check every identity from 40 units.
 
 The worked example's first draft also put the role on the icon. The build refuses it with exactly one error:
 
@@ -437,7 +457,7 @@ table requires. **No `apca-w3` code or constants**; WCAG 2 is the gate.
 
 The proof does not constrain the API.
 
-- **.NET tests** (`tests/Game.Render.Tests/ExperimentalThemesTests.fs`): **29**, all passing.
+- **.NET tests** (`tests/Game.Render.Tests/ExperimentalThemesTests.fs`): **28**, all passing.
   - **Colour science:**
     - OKLab against published values;
     - the committed table;
@@ -460,13 +480,13 @@ The proof does not constrain the API.
       into the band refused);
     - the review's two B2 drafts: team without identity, refused; and a roster that disagrees with an entity, a typed
       `RosterMismatch`;
-    - out-of-range values, never-wrapping teams, `FillStep`, and the badge per size step;
+    - out-of-range values, never-wrapping teams, `FillStep` accepted, a corner flag refused, and the badge per size step:
+      the library omits it at 18 and 21 units and draws it at 24;
     - capacity at the smallest frame, and team colouring per scene;
     - `WrongSlot` naming the allowed slots;
-    - the 40-unit side-by-side layout;
     - the worked example and its mirror labels.
 - **Browser smoke** (`runThemeProof` in `tests/Render.Browser.Smoke/Program.fs`) adds **30 checks**, and `MIN_CHECKS`
-  goes from main's 605 to **635**.
+  goes from main's 578 to **608**.
   - **Under Fable,** in the browser:
     - the five presets derive to exactly the 175 alias hex values .NET baked;
     - all 16,777,216 colours round-trip, in a plain loop outside the async block (3.6 s in the software run);
@@ -507,7 +527,7 @@ None blocks the implementation.
     - an out-of-range value is caught at run time by `spec`.
   - *Alternative:* typed field keys from a source generator (quotations are not Fable-safe), which would let the grammar
     see the accessor.
-- **Q-T3. The team mark's geometry.** Resolved by glyph ADR erratum E1: frame, keyline, ring, body. The proof draws E1.
+- **Q-T3. The team mark's geometry.** Settled by glyph ADR erratum E1: frame, keyline, ring, body. The library draws it.
 - **Q-T4. `repair` may move only the selection, marker and hover hue.**
   - *Default:* yes, only those three, and only when the seed's hue fails at every step. In `highContrast` the yellow
     selection cannot stand 12 apart from the unknown allegiance at 7:1, so it moves to hue 0.
@@ -525,7 +545,7 @@ None blocks the implementation.
   - *Default:* `Symbology` and `Encode` in `FS.GG.Game.Render`, beside part 3's `GlyphSpec`, in the Fable view.
   - #795's `ThemeAlgorithm` and `ThemeCheck` values, and the preset seeds, live beside #802's `Theme`, in a
     `ThemePresets` module, with the baked data replacing `ThemeBaked.fs`.
-- **Q-T9. The DTCG Resolver version.** Resolved by erratum E5: `2025-10-01`.
+- **Q-T9. The DTCG Resolver version.** Settled by erratum E5: `2025-10-01`.
 - **Q-T10. More than 9 teams.**
   - *Default:* refused in the proof. On #789's part 3, two-digit badges from 33 units (`minTwoDigitBadgeFrame`); team
     numbers never wrap.
@@ -545,8 +565,9 @@ None blocks the implementation.
 
 ## Implementation plan (after acceptance)
 
-1. **#802 and #789's part 3, merged** (`8f9ced1`, `a567a25`): `Theme` and its API, the alias set, D11, `GlyphSpec`, the
-   drawing (E1) and the named frame constants. Amendment A1 and Q-T12 remain to be decided with the #789 owner.
+1. **#802 and #789's part 3, merged** (`8f9ced1`, `a567a25`; the #789 proof retired by #808): `Theme` and its API, the
+   alias set, D11, `GlyphSpec`, the drawing (E1) and the named frame constants. Amendment A1 and Q-T12 remain to be
+   decided with the #789 owner.
 2. **#795 on top of them, in FS.GG.Game.Render:**
    - `Symbology` and `Encode`, with `spec`'s run-time checks;
    - CIELAB, CIEDE2000, Machado and `solve`, beside `ThemeColour`;

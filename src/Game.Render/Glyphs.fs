@@ -133,7 +133,23 @@ module GlyphSpec =
     let amplifier (slot: AmplifierSlot) (amplifier: Amplifier) spec =
         update (fun d -> { d with Amplifiers = d.Amplifiers @ [ slot, amplifier ] }) spec
 
-type GlyphState = { Selected: bool; Stale: bool }
+[<Sealed>]
+type GlyphState internal (selected: bool, stale: bool) =
+    member internal _.Selected = selected
+    member internal _.Stale = stale
+    override _.Equals(other: obj) =
+        match other with
+        | :? GlyphState as o -> o.Selected = selected && o.Stale = stale
+        | _ -> false
+    override _.GetHashCode() = (if selected then 1 else 0) + (if stale then 2 else 0)
+
+[<RequireQualifiedAccess>]
+module GlyphState =
+    let idle = GlyphState(false, false)
+    let selected (selected: bool) (state: GlyphState) = GlyphState(selected, state.Stale)
+    let stale (stale: bool) (state: GlyphState) = GlyphState(state.Selected, stale)
+    let isSelected (state: GlyphState) = state.Selected
+    let isStale (state: GlyphState) = state.Stale
 
 [<Sealed>]
 type GlyphDrawing
@@ -842,7 +858,7 @@ module Glyphs =
     let samples (origin: Point) : Glyph list =
         let at col row = { X = origin.X + 32.0 * float col + 16.0; Y = origin.Y + 32.0 * float row + 16.0 }
         let one: Size = { Width = 1; Height = 1 }
-        let idle = { Selected = false; Stale = false }
+        let idle = GlyphState.idle
         let unit col row = GlyphSpec.create GlyphFamily.unit (at col row) one
         let identities = [ Identity.Own; Identity.Ally; Identity.Neutral; Identity.Enemy; Identity.Unknown ]
 
@@ -856,8 +872,8 @@ module Glyphs =
                 |> GlyphSpec.team 0
                 |> GlyphSpec.badged
                 |> GlyphSpec.amplifier AmplifierSlot.above (Amplifier.bar 0.5)
-                |> Glyph.ofSpec { idle with Selected = true }
-            yield unit 1 1 |> GlyphSpec.identity Identity.Enemy |> GlyphSpec.team 1 |> Glyph.ofSpec { idle with Stale = true }
+                |> Glyph.ofSpec (GlyphState.selected true idle)
+            yield unit 1 1 |> GlyphSpec.identity Identity.Enemy |> GlyphSpec.team 1 |> Glyph.ofSpec (GlyphState.stale true idle)
             yield unit 2 1 |> GlyphSpec.identity Identity.Ally |> GlyphSpec.modifier ModifierRef.carrying |> Glyph.ofSpec idle
             yield GlyphSpec.create GlyphFamily.structure (at 3 1) one |> GlyphSpec.identity Identity.Neutral |> GlyphSpec.icon (IconRef.named "structure") |> Glyph.ofSpec idle
             yield GlyphSpec.create GlyphFamily.item (at 4 1) one |> Glyph.ofSpec idle

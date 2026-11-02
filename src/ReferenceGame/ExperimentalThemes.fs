@@ -21,7 +21,11 @@ open FS.GG.Game.Reference.Experimental.Colour
 ///   `classic` included.
 module Themes =
 
-    type Identity = Glyphs.Identity
+    /// The five identities: #802's `[<RequireQualifiedAccess>] Identity`.
+    type Identity = FS.GG.Game.Render.Identity
+
+    /// All five identities, in ADR D1's order.
+    let identities: Identity list = [ Identity.Own; Identity.Ally; Identity.Neutral; Identity.Enemy; Identity.Unknown ]
 
     // =================================================================================================================
     // STAND-INS for #802 (replaced on merge)
@@ -36,7 +40,7 @@ module Themes =
             Ground: Color
             /// The key chroma of hued tokens (OKLCH C): an algorithm parameter on #802.
             Chroma: float
-            /// Allegiance hues (OKLCH h), in `Glyphs.identities` order: own, ally, neutral, enemy, unknown.
+            /// Allegiance hues (OKLCH h), in `identities` order: own, ally, neutral, enemy, unknown.
             AllegianceHues: float list
             /// Team key hues, in team order. The first two are the two-team default (never red against green).
             TeamHues: float list
@@ -110,11 +114,11 @@ module Themes =
 
     let identityName (identity: Identity) =
         match identity with
-        | Glyphs.Own -> "own"
-        | Glyphs.Ally -> "ally"
-        | Glyphs.Neutral -> "neutral"
-        | Glyphs.Enemy -> "enemy"
-        | Glyphs.Unknown -> "unknown"
+        | Identity.Own -> "own"
+        | Identity.Ally -> "ally"
+        | Identity.Neutral -> "neutral"
+        | Identity.Enemy -> "enemy"
+        | Identity.Unknown -> "unknown"
 
     /// #802's 35 colour aliases, in #802's order (`Theme.aliases`, without its five number aliases). Glyph code reads
     /// only these.
@@ -122,7 +126,7 @@ module Themes =
         [
             yield "surface.ground"
             yield "glyph.unit.body"
-            for identity in Glyphs.identities do
+            for identity in identities do
                 yield "glyph.allegiance." + identityName identity
             for team in 0 .. maxTeams - 1 do
                 yield sprintf "glyph.team.%d" team
@@ -189,7 +193,7 @@ module Themes =
     let allegiance (theme: Theme) (identity: Identity) = colour theme ("glyph.allegiance." + identityName identity)
 
     let private teamAliases n = [ for i in 0 .. n - 1 -> sprintf "glyph.team.%d" i ]
-    let private allegianceAliases = Glyphs.identities |> List.map (fun i -> "glyph.allegiance." + identityName i)
+    let private allegianceAliases = identities |> List.map (fun i -> "glyph.allegiance." + identityName i)
     let private statusAliases = [ "status.good"; "status.warn"; "status.bad" ]
 
     /// STAND-IN for #802's built-in rules (Theme.fsi at 9de9044e, `Theme.create`), applied to every team the theme
@@ -295,7 +299,7 @@ module Themes =
         let named =
             [
                 yield "grey", ramp map 0.0 (groundHue map)
-                for identity, h in List.zip Glyphs.identities map.AllegianceHues do
+                for identity, h in List.zip identities map.AllegianceHues do
                     yield identityName identity, ramp map c h
                 yield "selection", ramp map c map.SelectionHue
                 yield "marker", ramp map c map.MarkerHue
@@ -449,7 +453,7 @@ module Themes =
         [
             yield "surface.ground", map.Ground
             yield "glyph.unit.body", map.Body
-            for i, identity in List.indexed Glyphs.identities do
+            for i, identity in List.indexed identities do
                 yield "glyph.allegiance." + identityName identity, step map (identityName identity) map.AllegianceSteps.[i]
             for team in 0 .. maxTeams - 1 do
                 yield sprintf "glyph.team.%d" team, map.Teams.[team]
@@ -620,7 +624,7 @@ module Themes =
                                 let labs = List.map2 labAt names steps
                                 Some(worst [ for i in 0 .. labs.Length - 1 do for j in i + 1 .. labs.Length - 1 -> margin labs.[i] labs.[j] ])
                             else None
-                        let allegianceNames = Glyphs.identities |> List.map identityName
+                        let allegianceNames = identities |> List.map identityName
                         let allegianceSteps =
                             best (groupScore allegianceNames (fun _ c -> onGround map.Floor c && inked c)) (combos 5) map.AllegianceSteps
                         let statusNames = [ "good"; "warn"; "bad" ]
@@ -762,6 +766,33 @@ module Themes =
         |> List.map (fun a -> sprintf "  --fsgg-%s: %s;" (a.Replace(".", "-")) (hex (colour theme a)))
         |> String.concat "\n"
         |> sprintf "[data-theme=\"%s\"] {\n%s\n}" theme.Name
+
+    /// The #802 `Theme` this proof theme becomes, so the shipped glyph library (#789 part 3, `Glyphs.draw`) draws it (`toRenderTheme`):
+    /// `ThemeSeed.classic` named after the preset, with every one of the 35 colour aliases set by `ThemeOverride.colour`
+    /// and `hueCapacity.0` to `.3` set to the measured capacities (size steps 0 to 2 frame under 24 units at cell 32,
+    /// step 3 at 24). #802's built-in rules validate it. Until amendment A1 (Q-T11) is decided, the bridge passes
+    /// `contrastTarget` 3: under #802's current rule a 7:1 floor refuses every pair of `highContrast` team colours, and
+    /// the 7:1 floor is validated by this module's `builtInRules` instead. When #795's implementation lands, the presets
+    /// are built on #802 directly and this bridge goes away.
+    let toRenderTheme (theme: Theme) : Result<FS.GG.Game.Render.Theme, string list> =
+        let small, mid = hueCapacity theme 16.0, hueCapacity theme 24.0
+        let seed =
+            FS.GG.Game.Render.ThemeSeed.classic
+            |> FS.GG.Game.Render.ThemeSeed.named theme.Name
+            |> FS.GG.Game.Render.ThemeSeed.number "contrastTarget" 3.0
+            |> FS.GG.Game.Render.ThemeSeed.number "hueCapacity.0" (float (max 1 small))
+            |> FS.GG.Game.Render.ThemeSeed.number "hueCapacity.1" (float (max 1 small))
+            |> FS.GG.Game.Render.ThemeSeed.number "hueCapacity.2" (float (max 1 small))
+            |> FS.GG.Game.Render.ThemeSeed.number "hueCapacity.3" (float (max 1 mid))
+        let overrides = aliasNames |> List.map (fun alias -> FS.GG.Game.Render.ThemeOverride.colour alias (colour theme alias))
+        match FS.GG.Game.Render.Theme.create seed [ FS.GG.Game.Render.ThemeAlgorithm.standard ] overrides with
+        | Ok rendered -> Ok rendered
+        | Error violations -> Error(violations |> List.map (fun v -> v.Token + ": " + v.Reason))
+
+    let renderOrFail (theme: Theme) : FS.GG.Game.Render.Theme =
+        match toRenderTheme theme with
+        | Ok rendered -> rendered
+        | Error reasons -> failwithf "#802 refuses %s: %s" theme.Name (String.concat "; " reasons)
 
     // ---- Runtime switching (#795) -----------------------------------------------------------------------------------
 

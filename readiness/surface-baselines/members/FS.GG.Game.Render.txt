@@ -78,6 +78,7 @@ FS.GG.Game.Render.GlyphCase.Name : System.String [get]
 FS.GG.Game.Render.GlyphCase.Scenes : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.Scene> [get]
 FS.GG.Game.Render.GlyphCase.Width : System.Double [get]
 FS.GG.Game.Render.GlyphConformance.cases(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Theme>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.GlyphCase>
+FS.GG.Game.Render.GlyphConformance.drawnControlFloor(System.Int32) : System.Int32
 FS.GG.Game.Render.GlyphConformance.monochrome(FS.GG.Game.Render.Theme) : FS.GG.Game.Render.Theme
 FS.GG.Game.Render.GlyphDrawing.amplifiers(FS.GG.Game.Render.GlyphDrawing) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
 FS.GG.Game.Render.GlyphDrawing.body(FS.GG.Game.Render.GlyphDrawing) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
@@ -104,9 +105,13 @@ FS.GG.Game.Render.GlyphSpec.identity(FS.GG.Game.Render.Identity, FS.GG.Game.Rend
 FS.GG.Game.Render.GlyphSpec.modifier(FS.GG.Game.Render.ModifierRef, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
 FS.GG.Game.Render.GlyphSpec.sizeStep(System.Int32, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
 FS.GG.Game.Render.GlyphSpec.team(System.Int32, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
-FS.GG.Game.Render.GlyphState.Selected : System.Boolean [get]
-FS.GG.Game.Render.GlyphState.Stale : System.Boolean [get]
-FS.GG.Game.Render.GlyphState.new(System.Boolean, System.Boolean)
+FS.GG.Game.Render.GlyphState.Equals(System.Object) : System.Boolean
+FS.GG.Game.Render.GlyphState.GetHashCode() : System.Int32
+FS.GG.Game.Render.GlyphState.idle : FS.GG.Game.Render.GlyphState [get]
+FS.GG.Game.Render.GlyphState.isSelected(FS.GG.Game.Render.GlyphState) : System.Boolean
+FS.GG.Game.Render.GlyphState.isStale(FS.GG.Game.Render.GlyphState) : System.Boolean
+FS.GG.Game.Render.GlyphState.selected(System.Boolean, FS.GG.Game.Render.GlyphState) : FS.GG.Game.Render.GlyphState
+FS.GG.Game.Render.GlyphState.stale(System.Boolean, FS.GG.Game.Render.GlyphState) : FS.GG.Game.Render.GlyphState
 FS.GG.Game.Render.Glyphs.cues(Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, FS.GG.Game.Render.Theme>, FS.GG.Game.Render.CueContext) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
 FS.GG.Game.Render.Glyphs.cuesHover(Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, FS.GG.Game.Render.Theme>, FS.GG.Game.Render.CueContext) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
 FS.GG.Game.Render.Glyphs.draw(FS.GG.Game.Render.Theme, FS.GG.Game.Render.Glyph) : FS.GG.Game.Render.GlyphDrawing

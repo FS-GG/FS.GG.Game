@@ -31,9 +31,9 @@ let private refuses (draft: Draft<'E>) (expected: SymbologyError -> bool) (what:
 let private accepts (draft: Draft<'E>) (what: string) =
     Expect.isEmpty (errorsOf (build themes draft)) what
 
-type private Probe = { Kind: int; Level: int; Share: float; On: bool; Who: Glyphs.Identity; Side: int; Name: string }
+type private Probe = { Kind: int; Level: int; Share: float; On: bool; Who: Identity; Side: int; Name: string }
 
-let private probe = { Kind = 0; Level = 0; Share = 0.5; On = false; Who = Glyphs.Own; Side = 0; Name = "p" }
+let private probe = { Kind = 0; Level = 0; Share = 0.5; On = false; Who = Identity.Own; Side = 0; Name = "p" }
 let private base24 = Symbology.create<Probe> "unit" 24.0 |> Encode.identity "allegiance" (fun p -> p.Who) Frame
 
 /// Pixels decided in both scenes whose colours differ.
@@ -143,7 +143,7 @@ let tests =
             test "calibration evidence: the presets' smallest margins, asserted as the design's table states them" {
                 let r1 (x: float) = System.Math.Floor(x * 10.0 + 0.5) / 10.0
                 let pairs (xs: string list) = [ for i in 0 .. xs.Length - 1 do for j in i + 1 .. xs.Length - 1 -> xs.[i], xs.[j] ]
-                let allegiances = [ for i in Glyphs.identities -> "glyph.allegiance." + identityName i ]
+                let allegiances = [ for i in identities -> "glyph.allegiance." + identityName i ]
                 // Preset: capacity at 24, teams min dE normal / simulated, allegiances min dE normal / simulated, min
                 // allegiance contrast on the ground (rounded to 0.1 and 0.01). The design's T5 table.
                 let expected =
@@ -245,11 +245,13 @@ let tests =
             test "monochrome keeps identity and team apart in decided pixels" {
                 let mono = theme "monochrome"
                 let players = build themes ArenaExample.playerDraft |> function Ok s -> s | Error e -> failtestf "%A" e
+                let target = renderOrFail mono
                 let one (p: ArenaExample.Player) =
                     let spec = Symbology.spec players { X = 24.0; Y = 30.0 } p |> function Ok s -> s | Error e -> failtestf "%A" e
-                    Symbology.scene mono 48.0 64.0 [ Symbology.draw mono (teamColouring mono players) spec false ]
+                    let drawn = FS.GG.Game.Render.Glyphs.scene target [ Symbology.glyph (teamColouring mono players) false spec ]
+                    { Nodes = SceneNode.Rectangle((0.0, 0.0, 48.0, 64.0), colour mono "surface.ground") :: drawn.Nodes }
                 let a = ArenaExample.sample.Players.[1]
-                for b in [ { a with Team = 2 }; { a with Team = 3 }; { a with Allegiance = Glyphs.Own; Team = 0 } ] do
+                for b in [ { a with Team = 2 }; { a with Team = 3 }; { a with Allegiance = Identity.Own; Team = 0 } ] do
                     let n = min (differing 48.0 64.0 (one a) (one b)) (differing 48.0 64.0 (one b) (one a))
                     Expect.isGreaterThan n 0 (sprintf "team %d/%A against team %d/%A" a.Team a.Allegiance b.Team b.Allegiance)
             }
@@ -258,7 +260,7 @@ let tests =
                 Expect.isEmpty (errorsOf (build themes ArenaExample.playerDraft)) "players"
                 Expect.isEmpty (errorsOf (build themes ArenaExample.featureDraft)) "features"
                 match build themes ArenaExample.playerDraftWithRoleIcon with
-                | Error [ IconSlotTakenByBadge("role", "team", 24.0, Glyphs.Enemy) as e ] -> printfn "%s" (explain e)
+                | Error [ IconSlotTakenByBadge("role", "team", 24.0, Identity.Enemy) as e ] -> printfn "%s" (explain e)
                 | other -> failtestf "expected the icon-slot error, got %A" other
                 let notes = match build themes ArenaExample.playerDraft with Ok s -> s.Notes | Error _ -> []
                 Expect.equal notes.Length 2 "team colour falls back in colourBlindSafe (capacity 3) and monochrome"
@@ -288,9 +290,9 @@ let tests =
                     "four hues in colourBlindSafe"
                 refuses (base24 |> Encode.ordinal "level" (fun p -> p.Level) [ 0..5 ] (Amplifier Above)) (function OverCapacity("level", _, 6, 5, None) -> true | _ -> false) "six pips"
                 refuses (base24 |> Encode.ordinal "level" (fun p -> p.Level) [ 0..4 ] SizeStep) (function OverCapacity("level", SizeStep, 5, 4, None) -> true | _ -> false) "five size steps"
-                refuses (base24 |> Encode.nominal "kind" (fun p -> p.Kind) [ 0..4 ] Icon) (function OverCapacity("kind", Icon, 5, 4, None) -> true | _ -> false) "five icons"
+                refuses (base24 |> Encode.nominal "kind" (fun p -> p.Kind) [ 0..5 ] Icon) (function OverCapacity("kind", Icon, 6, 5, None) -> true | _ -> false) "six icons: the library set has five"
                 refuses
-                    (base24 |> Encode.team "side" (fun p -> p.Side) (List.replicate 10 Glyphs.Enemy) TeamMark)
+                    (base24 |> Encode.team "side" (fun p -> p.Side) (List.replicate 10 Identity.Enemy) TeamMark)
                     (function OverCapacity("side", TeamMark, 10, 9, None) -> true | _ -> false)
                     "ten teams: the badge never wraps"
             }
@@ -306,27 +308,27 @@ let tests =
                 refuses (Symbology.create<Probe> "unit" 24.0 |> Encode.identity "who" (fun p -> p.Who) Icon) (function IdentityNotOnFrame("who", Icon) -> true | _ -> false) "identity on icon"
                 refuses (Symbology.create<Probe> "unit" 10.0 |> Encode.identity "who" (fun p -> p.Who) Frame) (function IdentityBelowMinimumWithoutLabel("who", 10.0) -> true | _ -> false) "10 units"
                 accepts (Symbology.create<Probe> "unit" 10.0 |> Encode.identity "who" (fun p -> p.Who) Frame |> Encode.label "name" (fun p -> p.Name)) "10 units with a label"
-                let shared = [ Glyphs.Own; Glyphs.Enemy; Glyphs.Enemy ]
+                let shared = [ Identity.Own; Identity.Enemy; Identity.Enemy ]
                 let teamed size = Symbology.create<Probe> "unit" size |> Encode.identity "who" (fun p -> p.Who) Frame |> Encode.team "side" (fun p -> p.Side) shared TeamMark
-                refuses (teamed 16.0) (function TeamBadgeBelowMinimumWithoutLabel("side", 16.0, Glyphs.Enemy) -> true | _ -> false) "16 units, shared"
+                refuses (teamed 16.0) (function TeamBadgeBelowMinimumWithoutLabel("side", 16.0, Identity.Enemy) -> true | _ -> false) "16 units, shared"
                 accepts (teamed 16.0 |> Encode.label "name" (fun p -> p.Name)) "16 units with a label"
                 accepts (teamed 22.0) "22 units"
             }
 
             test "the icon slot is unavailable while a mandatory badge occupies a 22-39 unit frame (Root's #794 merge comment)" {
-                let roster shared = if shared then [ Glyphs.Own; Glyphs.Enemy; Glyphs.Enemy ] else [ Glyphs.Own; Glyphs.Enemy; Glyphs.Neutral ]
+                let roster shared = if shared then [ Identity.Own; Identity.Enemy; Identity.Enemy ] else [ Identity.Own; Identity.Enemy; Identity.Neutral ]
                 let draft size shared =
                     Symbology.create<Probe> "unit" size
                     |> Encode.identity "who" (fun p -> p.Who) Frame
                     |> Encode.team "side" (fun p -> p.Side) (roster shared) TeamMark
                     |> Encode.nominal "kind" (fun p -> p.Kind) [ 0; 1; 2 ] Icon
                 for size in [ 22.0; 24.0; 32.0; 39.0 ] do
-                    refuses (draft size true) (function IconSlotTakenByBadge("kind", "side", s, Glyphs.Enemy) -> s = size | _ -> false) (sprintf "%g units" size)
+                    refuses (draft size true) (function IconSlotTakenByBadge("kind", "side", s, Identity.Enemy) -> s = size | _ -> false) (sprintf "%g units" size)
                 accepts (draft 40.0 true) "40 units: side by side"
                 accepts (draft 24.0 false) "no shared allegiance: no badge"
-                // A size step that reaches into the band counts too.
+                // A size step that reaches into the band counts too: 18, 21 and 24 units.
                 refuses
-                    (Symbology.create<Probe> "unit" 18.0
+                    (Symbology.create<Probe> "unit" 24.0
                      |> Encode.identity "who" (fun p -> p.Who) Frame
                      |> Encode.label "name" (fun p -> p.Name)
                      |> Encode.team "side" (fun p -> p.Side) (roster true) TeamMark
@@ -345,42 +347,20 @@ let tests =
                 accepts (base24 |> Symbology.stroked |> Encode.angle "facing" (fun p -> float p.Side) (Amplifier Facing)) "stroked"
             }
 
-            test "at 40 units the icon and the badge sit side by side on frame ink, with a 1-unit margin, in every frame" {
-                let theme = theme "classic"
-                for identity in Glyphs.identities do
-                    let spec: GlyphSpec =
-                        { Family = "unit"; Anchor = { X = 48.0; Y = 48.0 }; Frame = 40.0; Identity = Some identity; Icon = Some 3; Team = Some 7; Badge = Some 8
-                          FillCase = None; SizeStep = 0; Pips = None; Bar = None; Modifier = false; Corner = false; Label = "" }
-                    let d = Symbology.draw theme true spec false
-                    let frame = Glyphs.identityFrame identity spec.Anchor 40.0 (rgb 1 1 1)
-                    let covered (x: float) (y: float) =
-                        frame |> List.exists (function SceneNode.Rectangle((rx, ry, rw, rh), _) -> x >= rx && x + 1.0 <= rx + rw && y >= ry && y + 1.0 <= ry + rh | _ -> false)
-                    let ink = colour theme "glyph.badge.ink"
-                    let inner = d.Body |> List.filter (function SceneNode.Rectangle(_, c) -> c = ink | _ -> false)
-                    Expect.equal inner.Length ((Symbology.iconCells 3).Length + 7) "the icon's bars and digit 8's seven segments"
-                    for node in inner do
-                        match node with
-                        | SceneNode.Rectangle((x, y, w, h), _) ->
-                            for px in [ x - 1.0 .. x + w ] do
-                                for py in [ y - 1.0 .. y + h ] do
-                                    Expect.isTrue (covered px py) (sprintf "%A: (%g, %g) is on frame ink" identity px py)
-                        | _ -> ()
-            }
-
             test "B2: a team without identity on the frame is refused, and a roster that disagrees with an entity is a typed error" {
                 // The #805 review's two drafts.
-                let teamOnly = Symbology.create<Probe> "unit" 24.0 |> Encode.team "side" (fun x -> x.Side) [ Glyphs.Own; Glyphs.Enemy ] TeamMark
+                let teamOnly = Symbology.create<Probe> "unit" 24.0 |> Encode.team "side" (fun x -> x.Side) [ Identity.Own; Identity.Enemy ] TeamMark
                 refuses teamOnly (function TeamWithoutIdentity "side" -> true | _ -> false) "team only"
                 let lie =
                     Symbology.create<Probe> "unit" 24.0
                     |> Encode.identity "who" (fun x -> x.Who) Frame
-                    |> Encode.team "side" (fun x -> x.Side) [ Glyphs.Own; Glyphs.Enemy; Glyphs.Ally ] TeamMark
+                    |> Encode.team "side" (fun x -> x.Side) [ Identity.Own; Identity.Enemy; Identity.Ally ] TeamMark
                 match build themes lie with
                 | Ok s ->
-                    match Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Glyphs.Enemy; Side = 2 } with
-                    | Error [ RosterMismatch("side", 2, Glyphs.Ally, Glyphs.Enemy) as e ] -> Expect.stringContains (explain e) "roster" "explained"
+                    match Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Identity.Enemy; Side = 2 } with
+                    | Error [ RosterMismatch("side", 2, Identity.Ally, Identity.Enemy) as e ] -> Expect.stringContains (explain e) "roster" "explained"
                     | other -> failtestf "an Enemy on the Ally team was drawn: %A" other
-                    Expect.isOk (Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Glyphs.Enemy; Side = 1 }) "a matching entity"
+                    Expect.isOk (Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Identity.Enemy; Side = 1 }) "a matching entity"
                 | Error e -> failtestf "the roster itself is valid: %A" e
             }
 
@@ -392,34 +372,39 @@ let tests =
                     | Error [ ValueOutOfRange("kind", _, _) ] -> ()
                     | other -> failtestf "case 7 of 3 drew: %A" other
                 | Error e -> failtestf "%A" e
-                let nine = base24 |> Encode.team "side" (fun x -> x.Side) (List.replicate 9 Glyphs.Own) TeamMark
+                let nine = base24 |> Encode.team "side" (fun x -> x.Side) (List.replicate 9 Identity.Own) TeamMark
                 match build themes nine with
                 | Ok s ->
                     match Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Side = 9 } with
                     | Error [ ValueOutOfRange("side", "team 9", _) ] -> ()
                     | other -> failtestf "team 9 of 9 drew (a wrap): %A" other
                     match Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Side = 8 } with
-                    | Ok spec -> Expect.equal spec.Badge (Some 9) "team 8 shows digit 9"
+                    | Ok spec -> Expect.equal (spec.Team, spec.Badged) (Some 8, true) "team 8 is badged (the library draws digit 9)"
                     | Error e -> failtestf "%A" e
                 | Error e -> failtestf "%A" e
                 let fraction = base24 |> Encode.fraction "share" (fun x -> x.Share) (Amplifier Below)
                 match build themes fraction with
                 | Ok s -> Expect.isError (Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Share = 1.5 }) "a fraction of 1.5"
                 | Error e -> failtestf "%A" e
-                refuses (base24 |> Encode.ordinal "level" (fun x -> x.Level) [ 0; 1; 2 ] FillStep) (function SlotNotInProof("level", FillStep) -> true | _ -> false) "FillStep"
+                accepts (base24 |> Encode.ordinal "level" (fun x -> x.Level) [ 0; 1; 2 ] FillStep) "FillStep: the library draws it"
+                refuses (base24 |> Encode.flag "on" (fun x -> x.On) (Amplifier Corner)) (function SlotNotInProof("on", Amplifier Corner) -> true | _ -> false) "a corner flag"
                 let stepped =
-                    Symbology.create<Probe> "unit" 18.0
+                    Symbology.create<Probe> "unit" 24.0
                     |> Encode.identity "who" (fun x -> x.Who) Frame
                     |> Encode.label "name" (fun x -> x.Name)
-                    |> Encode.team "side" (fun x -> x.Side) [ Glyphs.Own; Glyphs.Enemy; Glyphs.Enemy ] TeamMark
+                    |> Encode.team "side" (fun x -> x.Side) [ Identity.Own; Identity.Enemy; Identity.Enemy ] TeamMark
                     |> Encode.ordinal "level" (fun x -> x.Level) [ 0; 1; 2 ] SizeStep
                 match build themes stepped with
                 | Ok s ->
-                    let badgeAt level = (Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Who = Glyphs.Enemy; Side = 1; Level = level } |> function Ok g -> g.Frame, g.Badge | Error e -> failtestf "%A" e)
-                    Expect.equal (badgeAt 0) (18.0, None) "18 units: under the badge minimum, the label carries team"
-                    Expect.equal (badgeAt 1) (22.0, Some 2) "22 units: the badge"
-                    Expect.equal (badgeAt 2) (26.0, Some 2) "26 units: the badge"
-                | Error e -> failtestf "18 to 26 with a label and no icon: %A" e
+                    let target = renderOrFail (theme "classic")
+                    let at level =
+                        let e = Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Identity.Enemy; Side = 1; Level = level } |> function Ok g -> g | Error e -> failtestf "%A" e
+                        let drawing = FS.GG.Game.Render.Glyphs.draw target (Symbology.glyph true false e)
+                        e.Frame, FS.GG.Game.Render.GlyphDrawing.diagnostics drawing |> List.exists (fun d -> d.Contains "badge")
+                    Expect.equal (at 0) (18.0, true) "18 units: the library omits the badge and says so; the label carries team"
+                    Expect.equal (at 1) (21.0, true) "21 units: still under the 22-unit minimum"
+                    Expect.equal (at 2) (24.0, false) "24 units: the badge is drawn"
+                | Error e -> failtestf "18 to 24 with a label and no icon: %A" e
             }
 
             test "N6: hue capacity is checked at the smallest frame, and team colouring is decided once per scene" {
