@@ -2806,6 +2806,7 @@ async {
         do! runBoundedUnmodelled ()
         do! runGlyphSection ()
         do! RetainedSurface.run check
+        do! InputHostSmoke.run check
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

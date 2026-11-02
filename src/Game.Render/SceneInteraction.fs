@@ -115,6 +115,12 @@ module CueContext =
     let cssPerUnit (context: CueContext) = context.CssPerUnit
 
 /// Opaque behind the .fsi: built by `SceneInteraction.create` only, so a field added later is not a breaking change.
+/// See SceneInteraction.fsi: what an input host needs from the interaction besides each frame (FS.GG.Game#788).
+[<Sealed>]
+type InputHostSpec internal (access: SelectableObject -> ObjectAccess, cues: CueContext -> SceneNode list) =
+    member internal _.Access = access
+    member internal _.Cues = cues
+
 [<NoEquality; NoComparison>]
 type SceneInteraction<'State> =
     {
@@ -330,3 +336,18 @@ module SceneInteraction =
         match interaction.Cues with
         | Some draw -> draw
         | None -> standardCues
+
+    let inputHost (interaction: SceneInteraction<'State>) =
+        InputHostSpec(access interaction, cues interaction)
+
+[<RequireQualifiedAccess>]
+module InputHostSpec =
+
+    let standard = InputHostSpec((fun _ -> ObjectAccess.full), SceneInteraction.standardCues)
+
+    let create (access: SelectableObject -> ObjectAccess) (cues: CueContext -> SceneNode list) =
+        InputHostSpec(access, cues)
+
+    let access (spec: InputHostSpec) (target: SelectableObject) = spec.Access target
+
+    let cues (spec: InputHostSpec) = spec.Cues
