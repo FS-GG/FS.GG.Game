@@ -48,11 +48,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PART="${RENDER_SMOKE_PART:-all}"
-# The checks each part must run at least (main 909 + layout 246; main includes 35 theme-proof and 14 partial-mount checks).
+# The checks each part must run at least (main 909 + layout 252; main includes 35 theme-proof and 14 partial-mount checks).
+# Layout retains its 246 checks and adds two below-cap controls plus four actual-fit cap preconditions.
 case "$PART" in
-  all) MIN_CHECKS=1155 ;;
+  all) MIN_CHECKS=1161 ;;
   main) MIN_CHECKS=909 ;;
-  layout) MIN_CHECKS=246 ;;
+  layout) MIN_CHECKS=252 ;;
   *)
     echo "test-render-browser-host: RENDER_SMOKE_PART must be all, main or layout (got '$PART')" >&2
     exit 2

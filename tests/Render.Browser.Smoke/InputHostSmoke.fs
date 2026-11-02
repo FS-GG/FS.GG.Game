@@ -1147,7 +1147,8 @@ let private renderingOf (_canvas: Element) : obj[] = jsNative
 
 /// Nearest sampling only where it is exact (#797 round 6): a canvas is `pixelated` under `scale(1.5)` (its backing store
 /// is its presented device size), and NOT under a non-uniform `scale(2, 1)` (the density is the area scale, so the
-/// browser must resample) or with a backing store refused at the cap (a 5000 x 2500 frame at DPR 2).
+/// browser must resample) or with a backing store refused at the cap. At DPR 2 the 3:2 scene fits a 5000 x 2500 frame
+/// at 3750 x 2500 (7500 x 5000 backing, below the 8192 cap); a 5000 x 4000 frame requests 10000 x 6667, over the cap.
 let private playRendering
     (check: string -> bool -> string -> unit)
     (stage: HTMLElement)
@@ -1158,11 +1159,12 @@ let private playRendering
     async {
         let sheet = "stage-layout-sheet"
 
-        for css, dpr, wanted, what in
+        for css, dpr, wanted, what, refusedAtCap in
             [
-                "{S} { transform: scale(1.5); transform-origin: 0 0; }", 1.0, "pixelated", "pixelated under scale(1.5) (backing store = presented device px)"
-                "{S} { transform: scale(2, 1); transform-origin: 0 0; }", 1.0, "auto", "not pixelated under scale(2, 1) (the backing store is resampled)"
-                "{S} [data-input-frame] { width: 5000px; height: 2500px; }", 2.0, "auto", "not pixelated with a backing store refused at the cap (5000x2500 at DPR 2)"
+                "{S} { transform: scale(1.5); transform-origin: 0 0; }", 1.0, "pixelated", "pixelated under scale(1.5) (backing store = presented device px)", None
+                "{S} { transform: scale(2, 1); transform-origin: 0 0; }", 1.0, "auto", "not pixelated under scale(2, 1) (the backing store is resampled)", None
+                "{S} [data-input-frame] { width: 5000px; height: 2500px; }", 2.0, "pixelated", "pixelated with a fitted backing store below the cap (5000x2500 frame at DPR 2)", Some false
+                "{S} [data-input-frame] { width: 5000px; height: 4000px; }", 2.0, "auto", "not pixelated with a fitted backing store refused at the cap (5000x4000 frame at DPR 2)", Some true
             ] do
             addStyle sheet (css.Replace("{S}", "#" + stage.id))
 
@@ -1177,11 +1179,29 @@ let private playRendering
             let surface = surfaceOf stage backend
             let state = renderingOf surface
             let bounds = surface.getBoundingClientRect ()
+            let dimensions =
+                sprintf "image-rendering=%O backing=%Ox%O presented=%gx%g CSS px at DPR %g" state.[0] state.[1] state.[2] bounds.width bounds.height window.devicePixelRatio
+
+            match refusedAtCap with
+            | Some refused ->
+                // Test the output's actual contain-fit, not the raw frame width: letterboxing can put a large
+                // frame below the cap. The default filter must be tested with a genuinely refused backing store.
+                let width, height = unbox<float> state.[1], unbox<float> state.[2]
+                let requestedWidth = bounds.width * window.devicePixelRatio
+                let requestedHeight = bounds.height * window.devicePixelRatio
+                let exceedsCap = requestedWidth > 8192.0 || requestedHeight > 8192.0
+                let exact = abs (requestedWidth - width) < 0.5 && abs (requestedHeight - height) < 0.5
+
+                check
+                    (sprintf "input host rendering %s: actual contain-fit %s the backing-store cap" (RendererBackend.id backend) (if refused then "exceeds" else "fits within"))
+                    (exceedsCap = refused && width > 0.0 && height > 0.0 && width <= 8192.0 && height <= 8192.0 && exact <> refused)
+                    dimensions
+            | None -> ()
 
             check
                 (sprintf "input host rendering %s: %s" (RendererBackend.id backend) what)
                 (string state.[0] = wanted)
-                (sprintf "image-rendering=%O backing=%Ox%O presented=%gx%g CSS px at DPR %g" state.[0] state.[1] state.[2] bounds.width bounds.height window.devicePixelRatio)
+                dimensions
 
             (driver :> System.IDisposable).Dispose()
             removeStyle sheet
