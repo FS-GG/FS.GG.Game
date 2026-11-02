@@ -30,7 +30,7 @@
   --fsgg-status-track: #0d0d0d;
   --fsgg-status-keyline: #ffffff;
   --fsgg-terrain-open: #343434;
-  --fsgg-terrain-blocked: #444443;
+  --fsgg-terrain-blocked: #444444;
   --fsgg-terrain-difficult: #4c371d;
   --fsgg-terrain-water: #193f57;
   --fsgg-terrain-void: #191919;
@@ -77,7 +77,7 @@
 [data-theme="highContrast"] {
   --fsgg-surface-ground: #000000;
   --fsgg-glyph-unit-body: #ffffff;
-  --fsgg-glyph-allegiance-own: #3daef1;
+  --fsgg-glyph-allegiance-own: #3eaef2;
   --fsgg-glyph-allegiance-ally: #0ee2e3;
   --fsgg-glyph-allegiance-neutral: #55a95a;
   --fsgg-glyph-allegiance-enemy: #ff9d94;
@@ -144,7 +144,7 @@
   --fsgg-status-track: #0d0d0d;
   --fsgg-status-keyline: #ffffff;
   --fsgg-terrain-open: #343434;
-  --fsgg-terrain-blocked: #444443;
+  --fsgg-terrain-blocked: #444444;
   --fsgg-terrain-difficult: #4c371d;
   --fsgg-terrain-water: #193f57;
   --fsgg-terrain-void: #191919;
@@ -182,7 +182,7 @@
   --fsgg-status-track: #0d0d0d;
   --fsgg-status-keyline: #ffffff;
   --fsgg-terrain-open: #343434;
-  --fsgg-terrain-blocked: #444443;
+  --fsgg-terrain-blocked: #444444;
   --fsgg-terrain-difficult: #3b3b3b;
   --fsgg-terrain-water: #3b3b3b;
   --fsgg-terrain-void: #191919;

@@ -8,7 +8,7 @@
       "body": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 1.0000, 0.0000, 89.88 ], "alpha": 1, "hex": "#ffffff" } }
     },
     "allegiance": {
-      "own": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7170, 0.1393, 239.44 ], "alpha": 1, "hex": "#3daef1" } },
+      "own": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7178, 0.1400, 239.97 ], "alpha": 1, "hex": "#3eaef2" } },
       "ally": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8273, 0.1399, 195.36 ], "alpha": 1, "hex": "#0ee2e3" } },
       "neutral": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6627, 0.1402, 144.96 ], "alpha": 1, "hex": "#55a95a" } },
       "enemy": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7938, 0.1186, 25.71 ], "alpha": 1, "hex": "#ff9d94" } },

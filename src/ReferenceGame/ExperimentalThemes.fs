@@ -263,13 +263,13 @@ module Themes =
     let statusReads (alias: string) (c: Color) : bool =
         match statusBands |> List.tryFind (fun (a, _, _, _) -> a = alias) with
         | Some(_, _, lo, hi) ->
-            let lch = oklchOf c
+            let lch = inputOf c
             lch.C >= 0.08 && inBand lo hi lch.H
         | None -> true
 
     /// Amber reads lighter than red: warn's OKLab L is at least 0.05 above bad's (Okabe-Ito's orange is lighter than
     /// their vermillion too).
-    let statusOrdered (warn: Color) (bad: Color) : bool = (oklabOf warn).L >= (oklabOf bad).L + 0.05
+    let statusOrdered (warn: Color) (bad: Color) : bool = (inputOf warn).L >= (inputOf bad).L + 0.05
 
     let private darkRatios = [ 1.08; 1.18; 1.32; 1.5; 1.75; 2.1; 2.6; 3.2; 4.2; 5.6; 7.5; 11.0 ]
     let private highContrastRatios = [ 1.2; 1.5; 2.0; 2.6; 3.4; 4.4; 5.6; 7.2; 8.5; 10.5; 13.0; 16.0 ]
@@ -277,7 +277,7 @@ module Themes =
     /// The candidate team-band ratios against the ground that `repair` chooses from.
     let teamBandCandidates = [ 3.02; 3.1; 3.2; 3.4; 3.7; 4.0; 4.4; 4.8; 4.9; 4.95; 5.3; 5.9; 6.6 ]
 
-    let private groundHue (map: MapTokens) = (oklchOf map.Ground).H
+    let private groundHue (map: MapTokens) = (inputOf map.Ground).H
 
     let private extreme (map: MapTokens) = match map.Polarity with Lighter -> rgb 255 255 255 | Darker -> rgb 0 0 0
 
@@ -324,7 +324,7 @@ module Themes =
             Name = "base"
             Apply =
                 fun seed _ ->
-                    let polarity = if (oklchOf seed.Ground).L < 0.6 then Lighter else Darker
+                    let polarity = if (inputOf seed.Ground).L < 0.6 then Lighter else Darker
                     let body, onFill = poles polarity
                     rederive
                         {
@@ -365,7 +365,7 @@ module Themes =
             Name = "dark"
             Apply =
                 fun seed map ->
-                    let g = oklchOf seed.Ground
+                    let g = inputOf seed.Ground
                     let ground = if g.L < 0.6 then seed.Ground else ofOklch { L = 0.29; C = min g.C 0.02; H = g.H }
                     let body, onFill = poles Lighter
                     { map with Polarity = Lighter; Ground = ground; Body = body; OnFill = onFill } |> rederive |> applied "dark"
@@ -377,7 +377,7 @@ module Themes =
             Name = "light"
             Apply =
                 fun seed map ->
-                    let g = oklchOf seed.Ground
+                    let g = inputOf seed.Ground
                     let body, onFill = poles Darker
                     { map with
                         Polarity = Darker
@@ -411,7 +411,7 @@ module Themes =
             Name = "colourBlindSafe"
             Apply =
                 fun _ map ->
-                    let hue i = (oklchOf okabeIto.[i]).H
+                    let hue i = (inputOf okabeIto.[i]).H
                     let orange, sky, green, yellow, blue, vermillion, purple = hue 0, hue 1, hue 2, hue 3, hue 4, hue 5, hue 6
                     { map with
                         TeamHues = [ blue; orange; green; purple; sky; vermillion; yellow ]
@@ -448,7 +448,7 @@ module Themes =
         step map "grey" (i + 1)
 
     let private resolveAliases (map: MapTokens) : Map<string, Color> =
-        let g = oklchOf map.Ground
+        let g = inputOf map.Ground
         let void' = match map.Polarity with Lighter -> ofOklch { L = max 0.0 (g.L - 0.06); C = 0.0; H = 0.0 } | Darker -> ofOklch { L = g.L - 0.12; C = 0.0; H = 0.0 }
         [
             yield "surface.ground", map.Ground
@@ -486,7 +486,7 @@ module Themes =
         [
             for vision in visions do
                 let threshold = if vision = Normal then thresholds.Normal else thresholds.Simulated
-                let dE = deltaEUnder vision ca cb
+                let dE = gridL (deltaEUnder vision ca cb)
                 if dE < threshold then yield NotDistinct(a, b, vision, dE, threshold)
         ]
 
@@ -539,7 +539,7 @@ module Themes =
                     [
                         for over in [ "glyph.selection"; "cue.focus.outer"; "cue.hover" ] do
                             for fill in fills theme do
-                                let dE = deltaE2000 (labOf (colour theme over)) (labOf (colour theme fill))
+                                let dE = gridL (deltaE2000 (labOf (colour theme over)) (labOf (colour theme fill)))
                                 if dE < thresholds.Normal then yield NotDistinct(over, fill, Normal, dE, thresholds.Normal)
                     ]
             "lightness.firstTwoTeams",
@@ -548,7 +548,7 @@ module Themes =
                 else
                     [
                         for vision in [ Protan; Deutan; Tritan ] do
-                            let gap = lightnessGapUnder vision (colour theme "glyph.team.0") (colour theme "glyph.team.1")
+                            let gap = gridL (lightnessGapUnder vision (colour theme "glyph.team.0") (colour theme "glyph.team.1"))
                             if gap < thresholds.TeamLightnessGap then
                                 yield LightnessTooClose("glyph.team.0", "glyph.team.1", vision, gap, thresholds.TeamLightnessGap)
                     ]
@@ -559,10 +559,10 @@ module Themes =
                     [
                         for alias, band, _, _ in statusBands do
                             let c = colour theme alias
-                            if not (statusReads alias c) then yield StatusMeaningLost(alias, (oklchOf c).H, band)
+                            if not (statusReads alias c) then yield StatusMeaningLost(alias, (inputOf c).H, band)
                         let warn = colour theme "status.warn"
                         if not (statusOrdered warn (colour theme "status.bad")) then
-                            yield StatusMeaningLost("status.warn", (oklchOf warn).H, "amber, lighter than status.bad,")
+                            yield StatusMeaningLost("status.warn", (inputOf warn).H, "amber, lighter than status.bad,")
                     ]
             "cue.innerOnFills",
             fun theme ->
@@ -592,7 +592,7 @@ module Themes =
     let repair: Algorithm =
         let margin (labs: Map<Vision, Lab>) (other: Map<Vision, Lab>) =
             visions
-            |> List.map (fun v -> deltaE2000 labs.[v] other.[v] - (if v = Normal then thresholds.Normal else thresholds.Simulated))
+            |> List.map (fun v -> gridL (deltaE2000 labs.[v] other.[v]) - (if v = Normal then thresholds.Normal else thresholds.Simulated))
             |> List.min
         let labsOf (c: Color) = visions |> List.map (fun v -> v, labOfLinear (simulate v c)) |> Map.ofList
         let worst (xs: float list) = if xs.IsEmpty then infinity else List.min xs
@@ -619,22 +619,40 @@ module Themes =
                             |> snd
                         let rec combos n =
                             if n = 0 then [ [] ] else [ for c in candidates do for rest in combos (n - 1) -> c :: rest ]
-                        let groupScore (names: string list) (usable: string -> Color -> bool) (steps: int list) =
-                            if List.forall2 (fun name n -> usable name (colourAt name n)) names steps then
-                                let labs = List.map2 labAt names steps
-                                Some(worst [ for i in 0 .. labs.Length - 1 do for j in i + 1 .. labs.Length - 1 -> margin labs.[i] labs.[j] ])
-                            else None
+                        // Pairwise margins are computed once per (pair, step, step) into an array and looked up per
+                        // combination (candidate steps are 7 to 12, index n - 7).
+                        let groupScore (names: string list) (usable: string -> Color -> bool) =
+                            let arr = List.toArray names
+                            let k = arr.Length
+                            let nc = candidates.Length
+                            let pairMargin = Array.create (k * k * nc * nc) 0.0
+                            for i in 0 .. k - 1 do
+                                for j in i + 1 .. k - 1 do
+                                    for si in candidates do
+                                        for sj in candidates do
+                                            pairMargin.[((i * k + j) * nc + (si - 7)) * nc + (sj - 7)] <- margin (labAt arr.[i] si) (labAt arr.[j] sj)
+                            let usableAt = Array.init (k * nc) (fun idx -> usable arr.[idx / nc] (colourAt arr.[idx / nc] (idx % nc + 7)))
+                            fun (steps: int list) ->
+                                let st = List.toArray steps
+                                let mutable ok = true
+                                for i in 0 .. k - 1 do
+                                    if not usableAt.[i * nc + (st.[i] - 7)] then ok <- false
+                                if not ok then None
+                                else
+                                    let mutable w = infinity
+                                    for i in 0 .. k - 1 do
+                                        for j in i + 1 .. k - 1 do
+                                            let m = pairMargin.[((i * k + j) * nc + (st.[i] - 7)) * nc + (st.[j] - 7)]
+                                            if m < w then w <- m
+                                    Some w
                         let allegianceNames = identities |> List.map identityName
                         let allegianceSteps =
                             best (groupScore allegianceNames (fun _ c -> onGround map.Floor c && inked c)) (combos 5) map.AllegianceSteps
                         let statusNames = [ "good"; "warn"; "bad" ]
                         let amberOverRed (steps: int list) = statusOrdered (colourAt "warn" steps.[1]) (colourAt "bad" steps.[2])
                         let statusSteps =
-                            best
-                                (fun steps ->
-                                    if amberOverRed steps then
-                                        groupScore statusNames (fun name c -> contrast c map.OnFill >= 3.0 && statusReads ("status." + name) c) steps
-                                    else None)
+                            let statusScore = groupScore statusNames (fun name c -> contrast c map.OnFill >= 3.0 && statusReads ("status." + name) c)
+                            best (fun steps -> if amberOverRed steps then statusScore steps else None)
                                 (combos 3)
                                 map.StatusSteps
                         // Team bands: solved per candidate ratio once, then every ordered pair of distinct ratios.
@@ -642,16 +660,33 @@ module Themes =
                         let solved =
                             [ for ratio in teamBandCandidates -> ratio, [ for i in 0 .. teamCount - 1 -> teamColour map [ ratio ] i ] ] |> Map.ofList
                         let teamUsable (c: Color) = onGround 3.0 c && contrast c map.Body >= 3.0 && inked c
+                        let ratios = List.toArray teamBandCandidates
+                        let nr = ratios.Length
+                        let ratioIndex (r: float) = Array.findIndex ((=) r) ratios
+                        let solvedLabs = solved |> Map.map (fun _ colours -> colours |> List.map labsOf |> List.toArray)
+                        // Computed on first use (NaN marks "not yet"): most options stop at their first failing pair.
+                        let teamMarginCache = Array.create (teamCount * teamCount * nr * nr) nan
+                        let teamMargin (i: int) (j: int) (ri: int) (rj: int) =
+                            let idx = ((i * teamCount + j) * nr + ri) * nr + rj
+                            if System.Double.IsNaN teamMarginCache.[idx] then
+                                teamMarginCache.[idx] <- margin solvedLabs.[ratios.[ri]].[i] solvedLabs.[ratios.[rj]].[j]
+                            teamMarginCache.[idx]
                         let bandScore (bands: float list) =
                             let colourOf i = solved.[bands.[i % bands.Length]].[i]
+                            let bandIdx = bands |> List.map ratioIndex |> List.toArray
+                            let bandOf i = bandIdx.[i % bandIdx.Length]
                             if not ([ 0 .. teamCount - 1 ] |> List.forall (fun i -> teamUsable (colourOf i))) then None
                             else
-                                let labs = [ for i in 0 .. teamCount - 1 -> labsOf (colourOf i) ]
-                                let ok n = [ for i in 0 .. n - 1 do for j in i + 1 .. n - 1 -> margin labs.[i] labs.[j] ] |> List.forall (fun m -> m >= 0.0)
+                                let ok n =
+                                    let mutable all = true
+                                    for i in 0 .. n - 1 do
+                                        for j in i + 1 .. n - 1 do
+                                            if all && teamMargin i j (bandOf i) (bandOf j) < 0.0 then all <- false
+                                    all
                                 let mutable capacity = 1
                                 while capacity < teamCount && ok (capacity + 1) do
                                     capacity <- capacity + 1
-                                let gap = [ Protan; Deutan; Tritan ] |> List.map (fun v -> lightnessGapUnder v (colourOf 0) (colourOf 1)) |> List.min
+                                let gap = [ Protan; Deutan; Tritan ] |> List.map (fun v -> gridL (lightnessGapUnder v (colourOf 0) (colourOf 1))) |> List.min
                                 let gapOk = if gap >= thresholds.TeamLightnessGap then 1.0 else 0.0
                                 Some(gapOk * 100.0 + float capacity + min gap 0.5)
                         let bandOptions = [ for a in teamBandCandidates do for b in teamBandCandidates do if a <> b then yield [ a; b ] ]
@@ -668,7 +703,7 @@ module Themes =
                                 if List.contains (h, n) avoid then None
                                 else
                                     let c = solve map.Ground map.Polarity map.StepRatios.[n - 1] map.Chroma h |> Option.defaultValue map.Ground
-                                    if onGround map.Floor c then Some(worst [ for f in fills -> deltaE2000 (labOf c) f.[Normal] ]) else None
+                                    if onGround map.Floor c then Some(worst [ for f in fills -> gridL (deltaE2000 (labOf c) f.[Normal]) ]) else None
                             match options |> List.tryFind (fun o -> match score o with Some s -> s >= thresholds.Normal | None -> false) with
                             | Some o -> o
                             | None -> best score options (seedHue, 12)
@@ -767,19 +802,25 @@ module Themes =
         |> String.concat "\n"
         |> sprintf "[data-theme=\"%s\"] {\n%s\n}" theme.Name
 
-    /// The #802 `Theme` this proof theme becomes, so the shipped glyph library (#789 part 3, `Glyphs.draw`) draws it (`toRenderTheme`):
-    /// `ThemeSeed.classic` named after the preset, with every one of the 35 colour aliases set by `ThemeOverride.colour`
-    /// and `hueCapacity.0` to `.3` set to the measured capacities (size steps 0 to 2 frame under 24 units at cell 32,
-    /// step 3 at 24). #802's built-in rules validate it. Until amendment A1 (Q-T11) is decided, the bridge passes
-    /// `contrastTarget` 3: under #802's current rule a 7:1 floor refuses every pair of `highContrast` team colours, and
-    /// the 7:1 floor is validated by this module's `builtInRules` instead. When #795's implementation lands, the presets
-    /// are built on #802 directly and this bridge goes away.
+    /// The #802 `Theme` this proof theme becomes (`toRenderTheme`), so the shipped glyph library (#789 part 3,
+    /// `Glyphs.draw`) draws it. It starts from `ThemeSeed.classic` named after the preset and sets:
+    /// - every one of the 35 colour aliases, by `ThemeOverride.colour`;
+    /// - `hueCapacity.0` to `.3` to the measured capacities (size steps 0 to 2 frame under 24 units at cell 32, step 3
+    ///   at 24). #802 requires a whole number from 1 to 8, so `monochrome`'s measured 0 is declared as 1; its team
+    ///   colours are one grey, and its scenes fall back to allegiance colouring anyway (`Symbology.teamColouring` reads
+    ///   the measured 0);
+    /// - `strokeBase` and `gap` from the map (`highContrast`'s +1);
+    /// - `contrastTarget` 3 until #809 (erratum E7, amendment A1) merges. Under #802's merged rule a 7:1 floor refuses
+    ///   every pair of `highContrast` team colours; this module's `builtInRules` validate the 7:1 floor instead.
+    /// When #795's implementation lands, the presets are built on #802 directly and this bridge goes away.
     let toRenderTheme (theme: Theme) : Result<FS.GG.Game.Render.Theme, string list> =
         let small, mid = hueCapacity theme 16.0, hueCapacity theme 24.0
         let seed =
             FS.GG.Game.Render.ThemeSeed.classic
             |> FS.GG.Game.Render.ThemeSeed.named theme.Name
             |> FS.GG.Game.Render.ThemeSeed.number "contrastTarget" 3.0
+            |> FS.GG.Game.Render.ThemeSeed.number "strokeBase" theme.Map.Stroke
+            |> FS.GG.Game.Render.ThemeSeed.number "gap" theme.Map.Gap
             |> FS.GG.Game.Render.ThemeSeed.number "hueCapacity.0" (float (max 1 small))
             |> FS.GG.Game.Render.ThemeSeed.number "hueCapacity.1" (float (max 1 small))
             |> FS.GG.Game.Render.ThemeSeed.number "hueCapacity.2" (float (max 1 small))
@@ -937,35 +978,55 @@ module Themes =
                     else Error(sprintf "expected ',' or ']' at %d" k)
         value 0 |> Result.map fst
 
-    /// The colour tokens of a DTCG document as alias -> colour, taking `hex` when present (glyph ADR D11).
-    /// The colour tokens of a DTCG document as alias -> colour, each read from its `hex` (glyph ADR D11). A colour token
-    /// with alpha other than 1, without a hex, or with a malformed hex is refused, never silently dropped.
+    /// The colour tokens of a DTCG document as alias -> colour, by #802's import rule (#789 issuecomment-6570698885):
+    /// - a `hex` always wins (glyph ADR D11);
+    /// - without one, `{colorSpace: "oklch", components: [L, C, H]}` goes through `ofOklch` (gamut mapping, then half
+    ///   up), and `{colorSpace: "srgb", components: [r, g, b]}` through `quantise`;
+    /// - refused, never silently dropped: another colour space, alpha other than the number 1, a malformed or 8-digit
+    ///   hex, and a token with a `$value` but no `$type` of its own or from its nearest group.
+    /// Number tokens (`dimension`) are skipped.
     let dtcgColours (json: Json) : (string * Result<Color, string>) list =
-        let rec walk (prefix: string) (node: Json) : (string * Result<Color, string>) list =
+        let typeOf (fields: (string * Json) list) =
+            fields |> List.tryPick (function "$type", JString t -> Some t | _ -> None)
+        let components (parts: (string * Json) list) =
+            match parts |> List.tryPick (function "components", JArray xs -> Some xs | _ -> None) with
+            | Some [ JNumber a; JNumber b; JNumber c ] -> Some(a, b, c)
+            | _ -> None
+        let colourOf (parts: (string * Json) list) : Result<Color, string> =
+            let alpha = parts |> List.tryFind (fun (k, _) -> k = "alpha") |> Option.map snd
+            match alpha with
+            | Some(JNumber a) when a <> 1.0 -> Error(sprintf "alpha %g; tokens are opaque until alpha is supported (glyph ADR Q5)" a)
+            | Some(JNumber _) | None ->
+                match parts |> List.tryFind (fun (k, _) -> k = "hex") |> Option.map snd with
+                | Some(JString h) ->
+                    match ofHex h with
+                    | Some c -> Ok c
+                    | None -> Error(sprintf "malformed hex %s; write #rrggbb" h)
+                | Some _ -> Error "hex must be a string"
+                | None ->
+                    match parts |> List.tryPick (function "colorSpace", JString cs -> Some cs | _ -> None), components parts with
+                    | Some "oklch", Some(l, c, h) -> Ok(ofOklch { L = l; C = c; H = h })
+                    | Some "srgb", Some(r, g, b) -> Ok { Red = quantise r; Green = quantise g; Blue = quantise b; Alpha = 255uy }
+                    | Some cs, Some _ -> Error(sprintf "colour space %s; import reads oklch or srgb components, or a hex" cs)
+                    | _ -> Error "no hex and no oklch or srgb components"
+            | Some _ -> Error "alpha must be the number 1"
+        let rec walk (prefix: string) (groupType: string option) (node: Json) : (string * Result<Color, string>) list =
             match node with
             | JObject fields ->
+                let declared = match typeOf fields with Some t -> Some t | None -> groupType
                 match fields |> List.tryFind (fun (k, _) -> k = "$value") with
                 | Some(_, value) ->
-                    match fields |> List.tryFind (fun (k, _) -> k = "$type") with
-                    | Some(_, JString "color") ->
-                        match value with
-                        | JObject parts ->
-                            let alpha = parts |> List.tryPick (function "alpha", JNumber a -> Some a | _ -> None)
-                            match alpha, parts |> List.tryPick (function "hex", JString h -> Some h | _ -> None) with
-                            | Some a, _ when a <> 1.0 -> [ prefix, Error(sprintf "alpha %g; tokens are opaque until alpha is supported (glyph ADR Q5)" a) ]
-                            | _, None -> [ prefix, Error "no hex; import reads a colour from its hex only (glyph ADR D11)" ]
-                            | _, Some h ->
-                                match ofHex h with
-                                | Some c -> [ prefix, Ok c ]
-                                | None -> [ prefix, Error(sprintf "malformed hex %s; write #rrggbb" h) ]
-                        | _ -> [ prefix, Error "a colour token's $value must be an object" ]
-                    | _ -> []
+                    match declared, value with
+                    | Some "color", JObject parts -> [ prefix, colourOf parts ]
+                    | Some "color", _ -> [ prefix, Error "a colour token's $value must be an object" ]
+                    | Some _, _ -> []
+                    | None, _ -> [ prefix, Error "the token has no $type, of its own or from its group" ]
                 | None ->
                     fields
                     |> List.filter (fun (k, _) -> not (k.StartsWith "$"))
-                    |> List.collect (fun (k, v) -> walk (if prefix = "" then k else prefix + "." + k) v)
+                    |> List.collect (fun (k, v) -> walk (if prefix = "" then k else prefix + "." + k) declared v)
             | _ -> []
-        walk "" json
+        walk "" None json
 
     /// STAND-IN for `Theme.ofDtcg` (glyph ADR D4): import a DTCG token file onto a base theme as alias overrides, validated again.
     /// Export followed by import gives equal resolved hex for every alias.

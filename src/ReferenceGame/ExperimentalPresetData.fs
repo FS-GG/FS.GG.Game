@@ -40,7 +40,7 @@ module PresetData =
                 "status.track", "#0d0d0d"
                 "status.keyline", "#ffffff"
                 "terrain.open", "#343434"
-                "terrain.blocked", "#444443"
+                "terrain.blocked", "#444444"
                 "terrain.difficult", "#4c371d"
                 "terrain.water", "#193f57"
                 "terrain.void", "#191919"
@@ -87,7 +87,7 @@ module PresetData =
             [
                 "surface.ground", "#000000"
                 "glyph.unit.body", "#ffffff"
-                "glyph.allegiance.own", "#3daef1"
+                "glyph.allegiance.own", "#3eaef2"
                 "glyph.allegiance.ally", "#0ee2e3"
                 "glyph.allegiance.neutral", "#55a95a"
                 "glyph.allegiance.enemy", "#ff9d94"
@@ -154,7 +154,7 @@ module PresetData =
                 "status.track", "#0d0d0d"
                 "status.keyline", "#ffffff"
                 "terrain.open", "#343434"
-                "terrain.blocked", "#444443"
+                "terrain.blocked", "#444444"
                 "terrain.difficult", "#4c371d"
                 "terrain.water", "#193f57"
                 "terrain.void", "#191919"
@@ -192,7 +192,7 @@ module PresetData =
                 "status.track", "#0d0d0d"
                 "status.keyline", "#ffffff"
                 "terrain.open", "#343434"
-                "terrain.blocked", "#444443"
+                "terrain.blocked", "#444444"
                 "terrain.difficult", "#3b3b3b"
                 "terrain.water", "#3b3b3b"
                 "terrain.void", "#191919"
@@ -200,4 +200,4 @@ module PresetData =
         ]
 
     /// `Colour.gridDigest ()` as .NET computes it: the browser smoke compares Fable's with it.
-    let gridDigest = 2075741058.0
+    let gridDigest = 42126661.0

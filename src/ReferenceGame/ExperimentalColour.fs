@@ -105,16 +105,12 @@ module Colour =
             0.9734452903984125; 0.9822505503331171; 0.9911020971138298; 1.0
         |]
 
-    /// The real cube root: `Math.Cbrt` on .NET and `Math.cbrt` in JavaScript (Fable has no mapping for it). Measured by
-    /// the #805 review over the cube-root inputs of every 8-bit colour: about 58 % differ between .NET and Node by 1-3
-    /// ULP, and every output byte is still identical, because half-up quantisation absorbs them (glyph ADR D11). The
-    /// browser smoke keeps a byte-identity check over the full 8-bit domain and an OKLCH grid.
+    /// The real cube root through `Pow` on both runtimes, as #802's `ThemeColour` computes it (Fable has no `Math.Cbrt`,
+    /// and this keeps the module free of Fable.Core). Cube roots differ between .NET and Node in the last places (the
+    /// #805 review measured about 58 % of `Math.Cbrt` inputs off by 1-3 ULP); half-up quantisation absorbs that for
+    /// colours, and derivation inputs go through `inputOf`'s grid (B4 of the #805 review).
     let cbrt (x: float) : float =
-#if FABLE_COMPILER
-        Fable.Core.JsInterop.emitJsExpr x "Math.cbrt($0)"
-#else
-        System.Math.Cbrt x
-#endif
+        if x < 0.0 then -(System.Math.Pow(-x, 1.0 / 3.0)) else System.Math.Pow(x, 1.0 / 3.0)
 
     /// sRGB transfer function, linear -> encoded (0..1, unclamped).
     let private encode (c: float) =
@@ -245,23 +241,67 @@ module Colour =
         | Lighter
         | Darker
 
+    /// A value on the 1e-6 grid, half up: `Floor(x * 1e6 + 0.5) / 1e6`. Multiplication, `Floor` and division are
+    /// correctly rounded IEEE operations, identical on .NET and Fable; only a value within a few ULP of a half-grid point
+    /// could round differently on the two runtimes, and `ExperimentalThemesTests` measures that no 8-bit colour's OKLCH
+    /// L or C comes that close (B4 of the #805 review).
+    let gridL (x: float) : float = System.Math.Floor(x * 1e6 + 0.5) / 1e6
+
+    /// A hue on the 1e-4 degree grid, half up, in [0, 360).
+    let gridH (x: float) : float =
+        let h = System.Math.Floor(x * 1e4 + 0.5) / 1e4
+        if h >= 360.0 then h - 360.0 elif h < 0.0 then h + 360.0 else h
+
+    /// Below this chroma a colour's hue is not an input: h is the angle of two tiny numbers whose last-place errors
+    /// differ between runtimes (an error of 1e-15 in a and b moves h by up to 1e-15 / C radians), and at C < 0.001 the
+    /// hue is invisible anyway.
+    let hueChromaFloor = 0.001
+
+    /// A colour's OKLCH as a derivation input: L and C on the 1e-6 grid, h on the 1e-4 grid, and h = 0 when C is under
+    /// `hueChromaFloor`. Every derivation reads colours through this, never through `oklchOf` (B4).
+    let inputOf (colour: Color) : Oklch =
+        let lch = oklchOf colour
+        let c = gridL lch.C
+        { L = gridL lch.L; C = c; H = (if c < hueChromaFloor then 0.0 else gridH lch.H) }
+
+    /// Lightness steps for `solve`: L = k / 10000.
+    let lightnessSteps = 10000
+
     /// Leonardo-style contrast solving (Adobe Leonardo, Apache-2.0; the idea, not its code): the colour of hue `h` and
     /// chroma `c` whose contrast against `ground` is at least `target`, as close to the ground's lightness as that
-    /// allows, found by bisecting OKLCH lightness on the gamut-mapped, quantised colour. `None` when no lightness on that
-    /// side reaches the target.
+    /// allows. It decides on 8-bit outcomes only (B4): the inputs go on the grid, the lightness is an integer step k
+    /// (L = k / 10000), each candidate is the gamut-mapped, quantised colour at that step, and a binary search over k
+    /// keeps the nearest step whose 8-bit contrast (through the committed table) meets the target; ties go to the step
+    /// nearer the ground. `None` when no step on that side reaches the target.
     let solve (ground: Color) (polarity: Polarity) (target: float) (c: float) (h: float) : Color option =
-        let gl = (oklchOf ground).L
-        let at l = ofOklch { L = l; C = c; H = h }
-        let meets l = contrast (at l) ground >= target
-        let far = match polarity with Lighter -> 1.0 | Darker -> 0.0
-        if not (meets far) then None
-        else
-            let mutable near = gl
-            let mutable reach = far
-            for _ in 1..48 do
-                let mid = (near + reach) / 2.0
-                if meets mid then reach <- mid else near <- mid
-            Some(at reach)
+        let g = inputOf ground
+        let c, h = gridL c, gridH h
+        let at (k: int) = ofOklch { L = float k / float lightnessSteps; C = c; H = h }
+        let meets (k: int) = contrast (at k) ground >= target
+        let kg = int (System.Math.Floor(g.L * float lightnessSteps + 0.5))
+        match polarity with
+        | Lighter ->
+            if not (meets lightnessSteps) then None
+            elif meets kg then Some(at kg)
+            else
+                // meets hi, not lo: the smallest meeting step lies in (lo, hi].
+                let mutable lo = kg
+                let mutable hi = lightnessSteps
+                while hi - lo > 1 do
+                    let mid = (lo + hi) / 2
+                    if meets mid then hi <- mid else lo <- mid
+                Some(at hi)
+        | Darker ->
+            if not (meets 0) then None
+            elif meets kg then Some(at kg)
+            else
+                // meets lo, not hi: the largest meeting step lies in [lo, hi).
+                let mutable lo = 0
+                let mutable hi = kg
+                while hi - lo > 1 do
+                    let mid = (lo + hi) / 2
+                    if meets mid then lo <- mid else hi <- mid
+                Some(at lo)
 
     // CIELAB (D65) and CIEDE2000.
 
@@ -398,17 +438,50 @@ module Colour =
                     if int back.Red <> r || int back.Green <> g || int back.Blue <> b then failures <- failures + 1
         failures
 
-    /// A digest of `ofOklch` over an OKLCH grid (L 0 to 1 by 0.01, C 0 to 0.36 by 0.03, h 0 to 357 by 3: 157,560
-    /// colours), so a byte that differs between .NET and Fable anywhere in derivation's domain changes it. The hash is
-    /// `h = (h * 257 + byte) mod 2147483647` in floats, exact in IEEE doubles on both runtimes.
+    /// A digest of `ofOklch` over the OKLCH points derivation actually visits (B4 of the #805 review): every lightness step
+    /// (L = k / 10000, k = 0 to 10000), at the chromas the presets use (0, 0.012, 0.05, 0.06 and 0.14), at every 3-degree
+    /// hue and at the Okabe-Ito hues: 10001 x 5 x 127 = 6,350,635 colours. A byte that differs between .NET and Fable
+    /// anywhere on that grid changes the digest. The hash is `h = (h * 257 + byte) mod 2147483647` in floats, exact in
+    /// IEEE doubles on both runtimes.
     let gridDigest () : float =
+        let okabeIto = [ rgb 230 159 0; rgb 86 180 233; rgb 0 158 115; rgb 240 228 66; rgb 0 114 178; rgb 213 94 0; rgb 204 121 167 ]
+        let hues = [ for j in 0..119 -> float j * 3.0 ] @ (okabeIto |> List.map (fun c -> (inputOf c).H))
         let mutable h = 0.0
         let add (v: byte) = h <- (h * 257.0 + float v) % 2147483647.0
-        for i in 0..100 do
-            for k in 0..12 do
-                for j in 0..119 do
-                    let c = ofOklch { L = float i * 0.01; C = float k * 0.03; H = float j * 3.0 }
-                    add c.Red
-                    add c.Green
-                    add c.Blue
+        for hue in hues do
+            for c in [ 0.0; 0.012; 0.05; 0.06; 0.14 ] do
+                for k in 0..lightnessSteps do
+                    let colour = ofOklch { L = float k / float lightnessSteps; C = c; H = hue }
+                    add colour.Red
+                    add colour.Green
+                    add colour.Blue
         h
+
+    /// A digest of `inputOf` over all 16,777,216 8-bit colours (their gridded L, C and h, as integers of grid units), so
+    /// the derivation inputs a ground or seed colour gives are compared between .NET and Fable over the whole domain.
+    let inputDigest () : float =
+        let mutable h = 0.0
+        let add (v: float) = h <- (h * 257.0 + v) % 2147483647.0
+        for r in 0..255 do
+            for g in 0..255 do
+                for b in 0..255 do
+                    let i = inputOf (rgb r g b)
+                    add (System.Math.Floor(i.L * 1e6 + 0.5) % 1000003.0)
+                    add (System.Math.Floor(i.C * 1e6 + 0.5) % 1000003.0)
+                    add (System.Math.Floor(i.H * 1e4 + 0.5) % 1000003.0)
+        h
+
+    /// The smallest distance, in grid units, from a half-grid point over all 8-bit colours' OKLCH L and C (1e-6 grid) and
+    /// h (1e-4 grid, chroma at least `hueChromaFloor`): how much error the grid tolerates before a value could round the
+    /// other way.
+    let gridMargin () : float * float * float =
+        let mutable mL, mC, mH = 1.0, 1.0, 1.0
+        let dist (x: float) = abs (x - System.Math.Floor x - 0.5)
+        for r in 0..255 do
+            for g in 0..255 do
+                for b in 0..255 do
+                    let lch = oklchOf (rgb r g b)
+                    mL <- min mL (dist (lch.L * 1e6))
+                    mC <- min mC (dist (lch.C * 1e6))
+                    if gridL lch.C >= hueChromaFloor then mH <- min mH (dist (lch.H * 1e4))
+        mL, mC, mH

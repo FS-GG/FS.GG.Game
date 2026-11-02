@@ -29,6 +29,8 @@ on:
       - "scripts/test-pipeline-laws.sh"
       - "tests/Game.Render.Theme.Determinism/**"
       - "scripts/test-theme-determinism.sh"
+      - "tests/Game.Render.Themes.Fuzz/**"
+      - "scripts/test-theme-fuzz.sh"
       - "src/ReferenceGame/State.fs"
       - "src/ReferenceGame/Renderers.fs"
       - "eng/render-kit/**"
@@ -61,6 +63,8 @@ on:
       - "scripts/test-pipeline-laws.sh"
       - "tests/Game.Render.Theme.Determinism/**"
       - "scripts/test-theme-determinism.sh"
+      - "tests/Game.Render.Themes.Fuzz/**"
+      - "scripts/test-theme-fuzz.sh"
       - "src/ReferenceGame/State.fs"
       - "src/ReferenceGame/Renderers.fs"
       - "eng/render-kit/**"
@@ -114,6 +118,9 @@ jobs:
 
       - name: Theme colour derivation on .NET and Fable (byte-identical and equal to expected.txt, ADR GAME-RENDER-02.4 D11)
         run: scripts/test-theme-determinism.sh
+
+      - name: Theme derivation fuzz, custom seeds included, on .NET and Fable (byte-identical; FS.GG.Game#795, glyph ADR Q12)
+        run: scripts/test-theme-fuzz.sh
 
       - name: Benchmark driver self-test (GPU/software refusal, flags and option handling; no browser)
         run: node tools/render-bench/driver.mjs selftest

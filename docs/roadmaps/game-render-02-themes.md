@@ -52,7 +52,9 @@ derivation when #795's implementation lands.
   - it starts from `ThemeSeed.classic`, sets all 35 colour aliases by `ThemeOverride.colour`, and sets `hueCapacity.N` to
     the measured capacities;
   - #802's built-in rules accept all five presets;
-  - until amendment A1 is decided (Q-T11), the bridge passes `contrastTarget` 3, and the proof's own `builtInRules`
+  - it passes `strokeBase` and `gap` from the derived map (`highContrast`'s +1), and declares `monochrome`'s measured
+    capacity 0 as 1, because #802 requires a whole number from 1 to 8;
+  - until #809 (amendment A1, erratum E7) merges, it passes `contrastTarget` 3, and the proof's own `builtInRules`
     validate `highContrast`'s 7:1.
 - The **theme-side** types remain stand-ins, each marked in its source as replaced by #802. The swap is the first step of
   #795's implementation PR, not this design PR.
@@ -75,7 +77,8 @@ Already the library's, not stand-ins:
 - the icon set: infantry, armour, artillery, support and structure.
 
 The proof's alias set **is** #802's: the 35 colour aliases of `Theme.aliases`, from `surface.ground` to
-`terrain.void`. Its built-in rules are #802's, with one stated deviation, amendment A1 (T5, Q-T11).
+`terrain.void`. Its built-in rules are #802's with amendment A1, which Root adopted as erratum E7 in #809 (T5,
+Q-T11).
 
 ## Problem
 
@@ -203,6 +206,9 @@ The worked example's first draft also put the role on the icon. The build refuse
 team colour falls back to allegiance colouring in that theme, and team is read from the badge and the frame (glyph
 ADR D1). On #789's part 3 this is `GlyphSpec.allegianceColouring`. The worked example's four teams exceed
 `colourBlindSafe` (capacity 3) and `monochrome` (0), and `build` returns those two notes.
+- **In `colourBlindSafe`,** whose `repair` separates only three Okabe–Ito team hues within the thresholds, the worked
+  example therefore shows the allegiance colours. The own team is in the own allegiance's colour, and the three enemy
+  teams share the enemy colour, told apart by their badges. Its screenshots show this.
 
 ### T3. Theme derivation as `ThemeAlgorithm`s on #802's types
 
@@ -225,10 +231,14 @@ example `fsgg.leonardo.dark`.
 **Ramps.** One 12-step ramp per hue. Each step is the colour of that hue and chroma, **nearest the ground's lightness**,
 whose 8-bit contrast against the ground meets the step's target ratio. This is Leonardo's idea (Apache-2.0; no code
 ported).
-- **How a step is found.** OKLCH lightness is bisected 48 times, each candidate evaluated as it is drawn:
-  1. CSS Color 4 gamut mapping (`ThemeColour.ofOklch`);
-  2. half-up quantisation;
-  3. contrast through the committed table.
+- **How a step is found, deciding on 8-bit outcomes only** (B4 of the #805 review).
+  1. The inputs go on a fixed grid: the ground's and the seed's OKLCH L and C to 1e-6, and h to 1e-4, half up. A
+     colour under chroma 0.001 has no hue input (see *Determinism, measured*).
+  2. Lightness is an integer step k, with L = k / 10000.
+  3. Each candidate is drawn as it will be: CSS Color 4 gamut mapping (`ThemeColour.ofOklch`), then half-up
+     quantisation.
+  4. A binary search over k keeps the step nearest the ground whose **8-bit** contrast, through the committed table,
+     meets the target. A tie goes to the step nearer the ground.
 - **The step jobs** follow Radix: steps 1–2 are ground tints, 3–5 states, 6–8 borders, 9–12 solid fills and marks. The
   dark targets are 1.08 to 11:1; `highContrast` uses 1.2 to 16:1.
 
@@ -236,7 +246,8 @@ ported).
 alternating a light and a dark band (the Game Accessibility Guidelines' light/dark split for teams). Under erratum E1
 the ring sits on the body, so each team colour must lie in a window:
 - at least 3:1 against the body (#802's rule);
-- at least 3:1 against the ground (amendment A1, T5).
+- at least 3:1 against the ground (amendment A1, now erratum E7; T5). The ring touches the ground only through an
+  Ally frame's quarter-point holes, and this floor keeps it legible there.
 
 On `classic`'s ground (34, 40, 49) with its white body, that window is ground ratios 3.0 to 4.95. `repair` picks the
 two bands from candidates between 3.02 and 6.6.
@@ -295,13 +306,21 @@ The theme carries its checks, so `withTeamColour` and `withOverrides` run them a
   - the track on the keyline.
 - **Tokens:** opaque, and only known aliases.
 
-**Amendment A1, proposed to #802 (Q-T11).** #802 holds every team colour to `contrastTarget` against the ground. Under
-E1 the ring never touches the ground: it sits between a body-colour keyline and the body fill.
-- With a 7:1 floor, a black ground and a white body, a team colour would need luminance ≥ 0.30 (7:1 on the ground) and
-  ≤ 0.30 (3:1 on the body). Only 0.30 exactly satisfies both, so `highContrast` cannot have two distinct teams.
-- A1 holds team colours to **3:1** against the ground, like every other touching pair. At a 3:1 floor it is #802's rule
-  unchanged, so `classic`, `light`, `colourBlindSafe` and `monochrome` pass #802 as it stands. `highContrast` passes
-  only with A1.
+**Amendment A1: adopted by Root as glyph ADR erratum E7, in #809** (Q-T11; #789 issuecomment-6570698885).
+- **What #802 merged.** It holds every team colour to `contrastTarget` against the ground.
+- **Why that fails.** Under E1 the ring sits between a body-colour keyline and the body fill. With a 7:1 floor, a black
+  ground and a white body, a team colour would need luminance ≥ 0.30 (7:1 on the ground) and ≤ 0.30 (3:1 on the body).
+  Only exactly 0.30 satisfies both, so `highContrast` cannot have two distinct teams.
+- **What E7 holds instead.**
+  - 3:1 against the colours a team colour touches: the body, and the badge and modifier inks on it;
+  - a 3:1 legibility floor against the ground.
+  - `contrastTarget` still applies to colours drawn on the ground and to the cue tones.
+- **Where the ground floor bites.** The ring is not wholly enclosed. On an **Ally** frame the quarter-point holes expose
+  the keyline and the ring to the ground. The #805 delta review rasterised this in 15 `highContrast` configurations,
+  and the 3:1 ground floor is what keeps the ring legible there. The earlier wording, that the ring never touches the
+  ground, was wrong.
+- **Effect on the presets.** At a 3:1 floor E7 is #802's merged rule unchanged, so `classic`, `light`,
+  `colourBlindSafe` and `monochrome` pass #802 today. `highContrast` passes once #809 merges.
 
 **#795's checks** (`Themes.checks teams`, each a future `ThemeCheck`):
 
@@ -316,7 +335,7 @@ E1 the ring never touches the ground: it sits between a body-colour keyline and 
 
 `monochrome` skips the colour checks, because colour carries no category there.
 
-**Amendment to glyph ADR D12 (Root's ruling on the #805 review, B3).**
+**Amendment to glyph ADR D12 (Root's ruling B3, recorded on #795 in issuecomment-6570904451, item 3).**
 - **The first two teams.** The OKLab lightness gap (≥ 0.08 under every simulation) is required for the first two teams,
   the two-team default.
 - **Teams beyond the first two** carry identity through the **allegiance frame plus the mandatory team badge**.
@@ -332,7 +351,11 @@ The measured capacities below stand on this amendment.
 - The ceilings are 6, 7 and 8 for frames under 24 units, 24–39, and 40 and over; `highContrast` and `colourBlindSafe`
   use 4, 5 and 6.
 - On #802 the preset seeds set `hueCapacity.0` to `hueCapacity.3` to these measured values. `capacity.declared` refuses
-  a seed that declares more than it separates. #802 has four size steps and the proof three buckets (Q-T13).
+  a seed that declares more than it separates.
+- **Size steps (Q-T13, settled with the #789 owner).** #802's size step N maps to the bucket of the smallest frame it can
+  draw, computed with `Glyphs.frameSize theme (GlyphSpec.create GlyphFamily.unit anchor {Width = 1; Height = 1} |>
+  GlyphSpec.sizeStep N)`. The check then follows the theme's own `cell` and `density`. At `classic`'s 32-unit cell,
+  steps 0 to 3 are 16, 18, 21 and 24 units, so steps 0–2 fall under 24 and step 3 in 24–39.
 
 **Measured on the five presets.** These are the values `ExperimentalThemesTests.fs` asserts, row for row ("calibration
 evidence"):
@@ -341,7 +364,7 @@ evidence"):
 |---|---|---|---|---|
 | `classic` | 5 | 20.0 / 8.4 | 25.4 / 16.2 | 3.20 |
 | `light` | 5 | 20.3 / 8.4 | 25.5 / 14.1 | 3.21 |
-| `highContrast` | 5 (4 under 24 units) | 19.9 / 8.3 | 24.3 / 11.1 | 7.21 |
+| `highContrast` | 5 (4 under 24 units) | 19.9 / 8.3 | 24.5 / 11.2 | 7.21 |
 | `colourBlindSafe` | 3 | 37.8 / 8.0 | 27.9 / 17.1 | 3.22 |
 | `monochrome` | 0 | not checked (shape and badge carry identity and team) | — | 7.56 (one grey) |
 
@@ -365,7 +388,7 @@ preset's hue capacity.
 |---|---|---|
 | `classic` (default, glyph ADR Q10) | `[base; dark; repair]` | the #789 proof's ground (34, 40, 49); team hues Tableau-style, blue then orange (never red against green) |
 | `light` | `[base; light; repair]` | FourD's look |
-| `highContrast` | `[base; dark; highContrast; repair]` | 7:1 (provisional), black ground, thicker strokes and gaps; needs A1 |
+| `highContrast` | `[base; dark; highContrast; repair]` | 7:1 (provisional), black ground, thicker strokes and gaps; needs E7 (#809) |
 | `colourBlindSafe` | `[base; dark; colourBlindSafe; repair]` | Okabe–Ito hues, lightness solved for the ground |
 | `monochrome` | `[base; dark; monochrome; repair]` | no hue; identity by frame shape, team by badge |
 
@@ -386,15 +409,20 @@ preset's hue capacity.
 ### T7. DTCG, CSS and runtime switching
 
 - **DTCG and CSS belong to #802:** `Theme.toDtcg`, `ofDtcg`, `dtcgResolver` (version `2025-10-01`, erratum E5) and
-  `cssVariables`. #795 adds no second export path. The proof's stand-ins write the same shapes so the round trip can be
-  tested before #802 merges:
+  `cssVariables`. #795 adds no second export path. The proof's stand-ins, kept until #795's implementation swaps them for
+  #802's (merged at `8f9ced1`), write the same shapes:
   - colour tokens as `{"colorSpace": "oklch", "components": [L, C, h], "alpha": 1, "hex": …}`;
   - CSS properties named `--fsgg-<alias with hyphens>`.
-- **What #795 needs of an import.**
-  - A colour with alpha below 1 is refused (glyph ADR Q5).
-  - A colour is read from its hex (D11). The proof refuses a colour token without a hex, or with a malformed one,
-    rather than dropping it.
-  - #802 reads the components when there is no hex (Q-T12).
+- **The import rule is #802's** (Q-T12, settled; #789 issuecomment-6570698885), and the proof's stand-in follows it:
+  - **Read:**
+    - a `hex` always wins (D11);
+    - without one, `oklch` components go through `ThemeColour.ofOklch` (gamut mapping, then half up), and `srgb`
+      components through `ThemeColour.quantise`.
+  - **Refused, each named, never dropped:**
+    - another colour space;
+    - an alpha that is not the number 1 (glyph ADR Q5), including a non-numeric one;
+    - a malformed or 8-digit hex;
+    - a colour token with no `$type`, of its own or from its nearest group.
 - **Runtime switching is #795's.**
   - `Themes.switchOf theme` returns `{ Read: unit -> Theme; Select: Theme -> unit }`.
   - The game's view takes the reader, `view : (unit -> Theme) -> ArenaState -> Scene`, and the glyph ADR's cue layer
@@ -406,11 +434,21 @@ preset's hue capacity.
 ### T8. Kit checks for themes and symbology
 
 These go to the kit's glyph section (glyph ADR D6) when #789's types land. The proof runs each one now.
-1. **Determinism.**
-   - Fable derives every preset alias's hex exactly as .NET baked it.
-   - An OKLCH grid of 157,560 colours gives the same digest under .NET and Fable.
-   - The full 8-bit OKLCH round trip has 0 failures under both runtimes' maths.
-   - Windows .NET is #789's D11 check.
+1. **Determinism, presets and run-time custom seeds alike** (glyph ADR Q12; B4).
+   - **Presets.** Fable derives every preset alias's hex exactly as .NET baked it.
+   - **The custom-seed fuzz** (`scripts/test-theme-fuzz.sh`, `tests/Game.Render.Themes.Fuzz`, a CI step in
+     `render-browser-host`):
+     - inputs: the #805 review's 120 seeds, plus 2,000 seeds from a fixed MINSTD generator;
+     - kinds: a third random, a third near-grey (grounds within one step of grey, chroma 0 to 0.01), and a third near
+       a boundary (grounds around the 0.6 polarity threshold, hues at 0 and just under 360, chroma at the hue floor);
+     - each seed goes through all five preset algorithm lists, 10,600 derivations;
+     - .NET and Fable (node) must print byte-identical output: every derived hex, or every violated rule.
+   - **The inputs over the whole 8-bit domain.** The fuzz also digests the gridded derivation inputs of all 16,777,216
+     colours, and `ofOklch` over the grid derivation visits: every lightness step, at the presets' chromas (0, 0.012,
+     0.05, 0.06 and 0.14), every 3° hue and the Okabe–Ito hues, 6,350,635 colours. The browser smoke compares that
+     grid digest too.
+   - **The round trip.** The full 8-bit OKLCH round trip has 0 failures under both runtimes' maths.
+   - **Windows .NET** is #789's D11 check.
 2. **Theme validation**, for every preset and override: the built-in rules and #795's checks, as in T5.
 3. **The symbology rules** (T2), under .NET and Fable, which must give the same typed errors.
 4. **Pixels per preset per backend.** Every pixel `ScenePixels` decides for the worked example matches on SVG, Pixi and
@@ -446,18 +484,35 @@ table requires. **No `apca-w3` code or constants**; WCAG 2 is the gate.
     maths.
   - With `Floor`, **16,776,961** fail (100.0 %) in this implementation. The #794 review measured 94.8 % in its own;
     which colours fail depends on the direction of the last-ULP error, but `Floor` is unusable either way.
-- **Cube roots.** The #805 review measured the cube-root inputs of every 8-bit colour:
-  - about **58 %** differ between .NET's `Math.Cbrt` and Node's `Math.cbrt`, by 1–3 ULP;
-  - every output byte is still identical, because half-up quantisation absorbs the difference.
-
-  Fable has no mapping for `System.Math.Cbrt`, so the proof emits `Math.cbrt` under Fable. The smoke keeps two
-  byte-identity checks: the full 8-bit domain, and the OKLCH grid digest.
+- **Cube roots.** The #805 review measured the cube-root inputs of every 8-bit colour: about **58 %** differ between
+  .NET's `Math.Cbrt` and Node's `Math.cbrt` by 1–3 ULP. The output bytes of a single conversion are still identical,
+  because half-up quantisation absorbs the difference. The proof now takes cube roots through `Pow`, as #802's
+  `ThemeColour` does; Fable has no mapping for `Math.Cbrt`.
+- **Why a custom seed could still differ (B4).** A conversion's bytes match, but the review found one derivation that
+  did not: seed 22, ground `#281a22`, `colourBlindSafe`, gave `terrain.blocked` `#3b3c3c` on .NET and `#3c3c3c` under
+  Fable.
+  - **Cause:** the ground's L differed by 3 ULP, and a continuous bisection of lightness on a near-grey ramp landed on
+    either side of a channel step.
+  - **Fixes:**
+    - derivation reads every colour input through a grid: L and C to 1e-6, h to 1e-4, and no hue under chroma 0.001;
+    - `solve` searches integer lightness steps and decides on 8-bit outcomes (T3);
+    - `repair` and the checks compare ΔE2000, lightness gaps and margins on the 1e-6 grid too.
+- **Why that grid is coarse enough.**
+  - **Basic operations.** Gridding uses only correctly rounded IEEE operations (multiply, `Floor`, add, divide), which
+    are identical on both runtimes. A value rounds differently only if it lies within the cross-runtime error of a
+    half-grid point.
+  - **L and C, by argument.** Measured over all 16,777,216 8-bit colours, the nearest any L comes to a half-grid point
+    is 1.5e-14, and any C 7.3e-14 (`gridMargin`, asserted by a test). A few-ULP cube-root error moves L and C by about
+    1e-15, an order of magnitude less.
+  - **h, by measurement.** For hue the bound does not hold near grey: an error of 1e-15 in OKLab a and b moves h by up
+    to 1e-15 / C radians. Hence the 0.001 chroma floor, and an exhaustive check rather than an argument: the gridded
+    inputs of every 8-bit colour are digested on both runtimes and must match.
 
 ## The proof (experimental)
 
 The proof does not constrain the API.
 
-- **.NET tests** (`tests/Game.Render.Tests/ExperimentalThemesTests.fs`): **28**, all passing.
+- **.NET tests** (`tests/Game.Render.Tests/ExperimentalThemesTests.fs`): **30**, all passing.
   - **Colour science:**
     - OKLab against published values;
     - the committed table;
@@ -469,7 +524,12 @@ The proof does not constrain the API.
     - the five presets validate, with measured capacities 5/5/5/3/0 at 24 units;
     - the calibration table, asserted row for row;
     - the baked data and the grid digest are current;
-    - DTCG round trip, and the refusal of an unknown alias, alpha, a missing hex and a malformed hex;
+    - DTCG round trip, and #802's import rule: hex wins, oklch and srgb components are read, and an unknown alias,
+      alpha, a non-numeric alpha, a malformed or 8-digit hex, another colour space and a token with no `$type` are
+      refused;
+    - B4: the grid margins over every 8-bit colour, no hue input for a grey, and `solve` meeting its target on 8-bit
+      values;
+    - the bridge to #802 for every preset, with `highContrast`'s gap;
     - CSS;
     - the player override, including a team outside the game;
     - icon ink and status meaning;
@@ -549,25 +609,22 @@ None blocks the implementation.
 - **Q-T10. More than 9 teams.**
   - *Default:* refused in the proof. On #789's part 3, two-digit badges from 33 units (`minTwoDigitBadgeFrame`); team
     numbers never wrap.
-- **Q-T11. Amendment A1, the team floor against the ground** (T5).
-  - *Default:* hold team colours to 3:1 against the ground and at least 3:1 on the body, since under E1 the ring never
-    touches the ground. #802's built-in rule changes for `contrastTarget` above 3.
-  - *Alternative:* keep #802's rule, and `highContrast` has no team colours (capacity 1, allegiance colouring
-    throughout).
-  - Raised with the #789 owner on #789.
-- **Q-T12. A DTCG colour without a hex.**
-  - *Default:* #802 refuses it, as the proof does. Reading components instead runs OKLCH maths at import time, which D11
-    keeps on the derivation side.
-  - *Alternative:* #802's current behaviour, quantising the components through `ThemeColour`.
-- **Q-T13. Capacity size steps.** #802 has four `hueCapacity` size steps; the proof measures three frame buckets.
-  - *Default:* map the seed's `hueCapacity.N` to the bucket of size step N's smallest frame, and measure per step when
-    #795's implementation lands.
+- **Q-T11. Amendment A1, the team floor against the ground: decided.** Root adopted it as glyph ADR erratum E7, in #809
+  (#789 issuecomment-6570698885; Root's ruling 4 in #795 issuecomment-6570904451).
+  - **The rule:** a team colour needs 3:1 against the colours it touches (the body, and the badge and modifier inks),
+    plus a 3:1 floor against the ground.
+  - **Why the ground floor matters:** the ring reaches the ground through an Ally frame's quarter-point holes.
+- **Q-T12. A DTCG colour without a hex: settled by #802's rule** (#789 issuecomment-6570698885).
+  - `oklch` components go through `ThemeColour.ofOklch` and `srgb` components through `quantise`, deterministic under
+    D11; a hex always wins.
+  - The proof follows it (T7). #795's earlier recommendation to refuse such tokens is withdrawn.
+- **Q-T13. Capacity size steps: settled with the #789 owner.** Size step N maps to the bucket of the smallest frame it
+  draws, through `Glyphs.frameSize` (T5).
 
 ## Implementation plan (after acceptance)
 
 1. **#802 and #789's part 3, merged** (`8f9ced1`, `a567a25`; the #789 proof retired by #808): `Theme` and its API, the
-   alias set, D11, `GlyphSpec`, the drawing (E1) and the named frame constants. Amendment A1 and Q-T12 remain to be
-   decided with the #789 owner.
+   alias set, D11, `GlyphSpec`, the drawing (E1) and the named frame constants. Amendment A1 is erratum E7, in #809.
 2. **#795 on top of them, in FS.GG.Game.Render:**
    - `Symbology` and `Encode`, with `spec`'s run-time checks;
    - CIELAB, CIEDE2000, Machado and `solve`, beside `ThemeColour`;

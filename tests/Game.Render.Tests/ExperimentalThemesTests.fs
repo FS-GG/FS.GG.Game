@@ -150,7 +150,7 @@ let tests =
                     [
                         "classic", (5, 20.0, 8.4, 25.4, 16.2, 3.20)
                         "light", (5, 20.3, 8.4, 25.5, 14.1, 3.21)
-                        "highContrast", (5, 19.9, 8.3, 24.3, 11.1, 7.21)
+                        "highContrast", (5, 19.9, 8.3, 24.5, 11.2, 7.21)
                         "colourBlindSafe", (3, 37.8, 8.0, 27.9, 17.1, 3.22)
                     ]
                 for name, (capacity, teamN, teamS, allegN, allegS, floorMin) in expected do
@@ -449,17 +449,66 @@ let tests =
                     Expect.isTrue (statusOrdered (colour t "status.warn") (colour t "status.bad")) (sprintf "%s: amber is lighter than red" t.Name)
             }
 
-            test "N3: a DTCG colour with alpha, without a hex, or with a malformed hex is refused" {
+            test "N3 and #802's import rule: hex wins, components are quantised, and bad tokens are refused" {
                 let classic = theme "classic"
+                let team0 = colour classic "glyph.team.0"
                 let tok v = sprintf "{ \"glyph\": { \"team\": { \"0\": { \"$type\": \"color\", \"$value\": %s } } } }" v
+                // Accepted: hex wins over components; oklch and srgb components without a hex.
+                let lch = oklchOf team0
+                for name, value in
+                    [
+                        "hex wins", sprintf "{ \"colorSpace\": \"srgb\", \"components\": [ 0, 0, 0 ], \"alpha\": 1, \"hex\": \"%s\" }" (hex team0)
+                        "oklch components", sprintf "{ \"colorSpace\": \"oklch\", \"components\": [ %s, %s, %s ] }" (fixedText 9 lch.L) (fixedText 9 lch.C) (fixedText 6 lch.H)
+                        "srgb components", sprintf "{ \"colorSpace\": \"srgb\", \"components\": [ %s, %s, %s ] }" (fixedText 9 (float team0.Red / 255.0)) (fixedText 9 (float team0.Green / 255.0)) (fixedText 9 (float team0.Blue / 255.0))
+                    ] do
+                    match ofDtcg classic (tok value) with
+                    | Ok t -> Expect.equal (colour t "glyph.team.0") team0 name
+                    | Error reasons -> failtestf "%s refused: %A" name reasons
+                // Refused, each named.
                 for name, value, needle in
                     [
                         "alpha", "{ \"colorSpace\": \"srgb\", \"components\": [ 1, 0, 0 ], \"alpha\": 0.2, \"hex\": \"#ff0000\" }", "alpha"
-                        "no hex", "{ \"colorSpace\": \"srgb\", \"components\": [ 0.13, 0.16, 0.19 ] }", "no hex"
-                        "malformed", "{ \"colorSpace\": \"srgb\", \"components\": [ 0, 0, 0 ], \"hex\": \"#12345\" }", "malformed"
+                        "non-numeric alpha", "{ \"colorSpace\": \"srgb\", \"components\": [ 1, 0, 0 ], \"alpha\": \"1\", \"hex\": \"#ff0000\" }", "alpha"
+                        "malformed hex", "{ \"colorSpace\": \"srgb\", \"components\": [ 0, 0, 0 ], \"hex\": \"#12345\" }", "malformed"
+                        "8-digit hex", "{ \"colorSpace\": \"srgb\", \"components\": [ 0, 0, 0 ], \"hex\": \"#11223344\" }", "malformed"
+                        "another colour space", "{ \"colorSpace\": \"hsl\", \"components\": [ 200, 0.5, 0.5 ] }", "colour space"
+                        "nothing to read", "{ \"colorSpace\": \"srgb\" }", "no hex"
                     ] do
                     match ofDtcg classic (tok value) with
                     | Error reasons -> Expect.isTrue (reasons |> List.exists (fun r -> r.Contains "glyph.team.0" && r.Contains needle)) (sprintf "%s: %A" name reasons)
                     | Ok _ -> failtestf "%s was accepted" name
+                let untyped = sprintf "{ \"glyph\": { \"team\": { \"0\": { \"$value\": { \"hex\": \"%s\" } } } } }" (hex team0)
+                match ofDtcg classic untyped with
+                | Error reasons -> Expect.isTrue (reasons |> List.exists (fun r -> r.Contains "$type")) "a token without $type"
+                | Ok _ -> failtest "a token without $type was accepted"
+                let groupTyped = sprintf "{ \"glyph\": { \"$type\": \"color\", \"team\": { \"0\": { \"$value\": { \"hex\": \"%s\" } } } } }" (hex team0)
+                Expect.isOk (ofDtcg classic groupTyped) "the nearest group's $type counts"
+            }
+
+            test "B4: derivation inputs are gridded, solve decides on 8-bit outcomes, and the grid margins are measured" {
+                let mL, mC, mH = gridMargin ()
+                printfn "grid margins over all 8-bit colours, in grid units: L %g, C %g, h %g" mL mC mH
+                // L and C: a few-ULP cube-root error (about 1e-15) stays far from every half-grid point (1e-6 grid).
+                Expect.isGreaterThan (mL * 1e-6) 1e-14 "L margin above 1e-14"
+                Expect.isGreaterThan (mC * 1e-6) 1e-14 "C margin above 1e-14"
+                Expect.equal (inputOf (rgb 128 128 128)).H 0.0 "a grey has no hue input"
+                Expect.equal (inputOf (rgb 40 26 34)).L (gridL (oklchOf (rgb 40 26 34)).L) "L on the grid"
+                let ground = rgb 40 26 34
+                for target in [ 1.5; 3.0; 4.5; 7.0 ] do
+                    for h in [ 0.0; 90.0; 200.0; 300.0 ] do
+                        match solve ground Lighter target 0.012 h with
+                        | Some c -> Expect.isGreaterThanOrEqual (contrast c ground) target "meets the target on its 8-bit value"
+                        | None -> failtestf "unreachable %g" target
+                // The review's counterexample seed now derives on the grid (the cross-runtime check is scripts/test-theme-fuzz.sh).
+                Expect.isTrue (derive { Name = "review22"; Seed = { classicSeed with Ground = rgb 40 26 34 }; Algorithms = [ baseAlgorithm; dark; colourBlindSafe; repair ] } |> fun r -> true) "derives"
+            }
+
+            test "the bridge builds a #802 Theme for every preset, with highContrast's stroke and gap" {
+                for t in themes do
+                    match toRenderTheme t with
+                    | Ok r ->
+                        Expect.equal (FS.GG.Game.Render.Theme.tryColour "glyph.team.1" r) (Some(colour t "glyph.team.1")) (t.Name + " team 1")
+                        Expect.equal (FS.GG.Game.Render.Theme.tryNumber "stroke.gap" r) (Some t.Map.Gap) (t.Name + " gap")
+                    | Error reasons -> failtestf "%s refused by #802: %A" t.Name reasons
             }
         ]
