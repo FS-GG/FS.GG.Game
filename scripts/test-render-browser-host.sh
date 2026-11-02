@@ -68,6 +68,9 @@ for command in dotnet node npm git python3 unzip cmp grep sed; do
   }
 done
 
+# Exercise CDP session ownership before package materialisation or a browser is started.
+node --test tests/Render.Browser.Smoke/driver/run-smoke.test.mjs
+
 BROWSER="${RENDER_SMOKE_BROWSER:-}"
 if [[ -z $BROWSER ]]; then
   for candidate in chromium google-chrome chrome; do

@@ -34,12 +34,12 @@ page.on("console", (message) => {
 page.on("pageerror", (error) => write("Uncaught " + error));
 
 const keys = { " ": "Space" };
-// The CDP session that holds the device-metrics override; it must outlive the request.
+// Metrics and clipped screenshots must share one CDP session: Chromium restores the screenshot
+// session's own emulation state after capture. A separate screenshot session can restore DPR 1
+// over another session's DPR 2, whose next unchanged override is then a no-op.
 let emulation = null;
 // The CDP session that dispatches touch input (FS.GG.Game#788).
 let touch = null;
-// The CDP session that captures presented pixels (FS.GG.Game#788).
-let shots = null;
 await page.exposeFunction("__fsggInput", async (request) => {
   switch (request.kind) {
     case "click":
@@ -90,8 +90,8 @@ await page.exposeFunction("__fsggInput", async (request) => {
       // a base64 PNG the page decodes; unlike reading a canvas's backing store, it sees a scaled or blurred image.
       // Through CDP, so the device-metrics override the "scale" request sets (DPR 2) is honoured: Playwright's own
       // screenshot scale follows the context's device scale factor, not the override.
-      shots ??= emulation ?? (await page.context().newCDPSession(page));
-      const shot = await shots.send("Page.captureScreenshot", { format: "png", clip: { x: request.x, y: request.y, width: request.width, height: request.height, scale: 1 } });
+      emulation ??= await page.context().newCDPSession(page);
+      const shot = await emulation.send("Page.captureScreenshot", { format: "png", clip: { x: request.x, y: request.y, width: request.width, height: request.height, scale: 1 } });
       return shot.data;
     }
     case "scale": {
