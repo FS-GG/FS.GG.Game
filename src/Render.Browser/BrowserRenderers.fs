@@ -272,8 +272,13 @@ module BrowserConformance =
         }
 
     /// Measured (FS.GG.Game#786): every decided pixel of the smoke read exactly its declared colour on SVG, Pixi and
-    /// Babylon, on GPU (ANGLE over Vulkan) and on SwiftShader; 1 leaves one 8-bit step for a driver's rounding.
-    let pixelTolerance = 1
+    /// Babylon, on GPU (ANGLE over Vulkan) and on SwiftShader. SVG and Pixi are held exact (0), so the two are
+    /// interchangeable for docs (FS-GG/.github#5218); Babylon keeps 1, one 8-bit step for a driver's rounding, which never
+    /// loosens the SVG and Pixi comparison.
+    let pixelTolerance (backend: RendererBackend) =
+        match backend with
+        | RendererBackend.Babylon -> 1
+        | _ -> 0
 
     let pixelProbe (container: HTMLElement) (boardWidth: float) (boardHeight: float) : PixelProbe =
         let read = drawnPixels container boardWidth boardHeight
@@ -282,7 +287,7 @@ module BrowserConformance =
         // appearance is the colour itself and the tolerance is one value for all three.
         let appearance (_: RendererBackend) (colour: Color) = int colour.Red, int colour.Green, int colour.Blue
 
-        PixelProbe.create read appearance (fun _ -> pixelTolerance)
+        PixelProbe.create read appearance pixelTolerance
 
     let babylonActiveMeshes () : int =
         emitJsExpr engineStore "$0.Instances.reduce((total, engine) => total + engine.scenes.reduce((n, scene) => n + scene.getActiveMeshes().length, 0), 0)"

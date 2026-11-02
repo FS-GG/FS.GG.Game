@@ -34,7 +34,7 @@ FS.GG.Game.Render.Browser.BrowserConformance.liveWrites(FS.GG.Game.Render.Render
 FS.GG.Game.Render.Browser.BrowserConformance.move(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.moveBoard(Browser.Types.HTMLElement, System.Double, System.Double, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.pixelProbe(Browser.Types.HTMLElement, System.Double, System.Double) : FS.GG.Game.Render.PixelProbe
-FS.GG.Game.Render.Browser.BrowserConformance.pixelTolerance : System.Int32 [get]
+FS.GG.Game.Render.Browser.BrowserConformance.pixelTolerance(FS.GG.Game.Render.RendererBackend) : System.Int32
 FS.GG.Game.Render.Browser.BrowserConformance.pixiLateFailure() : FS.GG.Game.Render.LateFailureTrigger
 FS.GG.Game.Render.Browser.BrowserConformance.press(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.pressBoard(Browser.Types.HTMLElement, System.Double, System.Double, FS.GG.Game.Render.RendererBackend, FS.GG.UI.Scene.Point) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>

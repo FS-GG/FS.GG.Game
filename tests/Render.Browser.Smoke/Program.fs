@@ -558,8 +558,8 @@ let near (expected: int[]) (actual: int[]) (tolerance: int) =
     actual.Length >= 3
     && Array.forall2 (fun e a -> abs (e - a) <= tolerance) expected.[0..2] actual.[0..2]
 
-/// FS.GG.Game#786: every backend shows a fill at its declared colour, within one tolerance.
-let pixelTolerance = BrowserConformance.pixelTolerance
+/// FS.GG.Game#786: every backend shows a fill at its declared colour, SVG and Pixi exactly, Babylon within one step.
+let pixelTolerance (backend: RendererBackend) = BrowserConformance.pixelTolerance backend
 
 /// The largest per-channel difference read on each backend between a decided pixel's declared colour and what the
 /// backend drew, over every read whose pixels all matched: the measurement behind `pixelTolerance`.
@@ -706,12 +706,12 @@ let runBabylon () : Async<unit> =
         // FS.GG.Game#786: the materials are unlit, so a face shows its declared colour.
         check
             "the token pixel is the token colour, unlit (200,40,90)"
-            (near [| 200; 40; 90 |] tokenPixel pixelTolerance)
+            (near [| 200; 40; 90 |] tokenPixel (pixelTolerance RendererBackend.Babylon))
             (sprintf "%A" tokenPixel)
 
         check
             "the background pixel is the background colour, unlit (10,20,30)"
-            (near [| 10; 20; 30 |] backgroundPixel pixelTolerance)
+            (near [| 10; 20; 30 |] backgroundPixel (pixelTolerance RendererBackend.Babylon))
             (sprintf "%A" backgroundPixel)
 
         // 4. Presenting 100 newer states moves the token in place: nothing is created, nothing leaks.
@@ -754,8 +754,8 @@ let runBabylon () : Async<unit> =
         let vacated = Probe.pixel (babylonCanvas ()) 80 50
         info "pixel moved token (160,50)" (sprintf "%A" moved)
 
-        check "the token pixel followed the state" (near [| 200; 40; 90 |] moved pixelTolerance) (sprintf "%A" moved)
-        check "the vacated pixel is background again" (near [| 10; 20; 30 |] vacated pixelTolerance) (sprintf "%A" vacated)
+        check "the token pixel followed the state" (near [| 200; 40; 90 |] moved (pixelTolerance RendererBackend.Babylon)) (sprintf "%A" moved)
+        check "the vacated pixel is background again" (near [| 10; 20; 30 |] vacated (pixelTolerance RendererBackend.Babylon)) (sprintf "%A" vacated)
 
         // 5. Babylon -> SVG: everything is released, the latest state is shown.
         driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
@@ -1727,12 +1727,12 @@ let runThreeBackends () : Async<unit> =
                         (fun p -> p.[0] > 40)
                         600
 
-                if near [| 200; 40; 90 |] pixel pixelTolerance then
+                if near [| 200; 40; 90 |] pixel (pixelTolerance RendererBackend.Babylon) then
                     renderedRight.Value <- renderedRight.Value + 1
 
                 check
                     (name + ": the babylon token pixel is the declared colour, unlit (200,40,90)")
-                    (near [| 200; 40; 90 |] pixel pixelTolerance)
+                    (near [| 200; 40; 90 |] pixel (pixelTolerance RendererBackend.Babylon))
                     (sprintf "%A" pixel)
 
             let canvases = count container "canvas"
@@ -1847,7 +1847,7 @@ let showsPixels
     async {
         let expect, tolerance =
             match backend with
-            | _ -> rgbOf, pixelTolerance
+            | _ -> rgbOf, pixelTolerance backend
 
         let read (color: Color, x: int, y: int) (frames: int) =
             BrowserConformance.readPixel host container backend x y (fun p -> near (expect color) p tolerance) frames
@@ -2075,7 +2075,7 @@ let runConformance () : Async<unit> =
                 | _ ->
                     async {
                         let expect = rgbOf ReferenceRenderers.selectionColor
-                        let tolerance = pixelTolerance
+                        let tolerance = pixelTolerance backend
 
                         let! pixel =
                             BrowserConformance.readPixel
@@ -2239,7 +2239,8 @@ let runBabylonScale (columns: int) (rows: int) (stride: int) : Async<unit> =
 
                         match got with
                         | Some(r, g, b) when
-                            abs (r - wantR) <= pixelTolerance && abs (g - wantG) <= pixelTolerance && abs (b - wantB) <= pixelTolerance
+                            let t = pixelTolerance RendererBackend.Babylon
+                            abs (r - wantR) <= t && abs (g - wantG) <= t && abs (b - wantB) <= t
                             ->
                             matched.Add((want, (r, g, b)))
                             None
@@ -2397,7 +2398,7 @@ let drawnMismatches
             last.Value <-
                 List.zip wanted shown
                 |> List.choose (fun (expectation, got) ->
-                    let want, tolerance = rgbOf expectation.Colour, pixelTolerance
+                    let want, tolerance = rgbOf expectation.Colour, pixelTolerance backend
 
                     match got with
                     | Some(r, g, b) when near want [| r; g; b |] tolerance ->
@@ -2706,7 +2707,7 @@ let runGlyphProof () : Async<unit> =
                 let! shown = BrowserConformance.drawnPixels container width height backend (named |> List.map (fun (_, p, _) -> p))
 
                 for (label, point, colour), got in List.zip named shown do
-                    let want, tolerance = rgbOf colour, pixelTolerance
+                    let want, tolerance = rgbOf colour, pixelTolerance backend
 
                     let verdict =
                         match got with
@@ -3130,9 +3131,10 @@ async {
         do! RetainedSurface.run check
         do! InputHostSmoke.run check
 
-        // FS.GG.Game#786: the measured deviation behind the one pixel tolerance.
+        // FS.GG.Game#786: the measured deviation behind each backend's pixel tolerance.
         for entry in deviation do
-            info (sprintf "pixel deviation %s" entry.Key) (sprintf "%d (tolerance %d)" entry.Value pixelTolerance)
+            let tolerance = RendererBackend.all |> List.find (fun b -> RendererBackend.id b = entry.Key) |> pixelTolerance
+            info (sprintf "pixel deviation %s" entry.Key) (sprintf "%d (tolerance %d)" entry.Value tolerance)
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

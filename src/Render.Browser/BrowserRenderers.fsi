@@ -156,14 +156,15 @@ module BrowserConformance =
     /// reads it (the caller presents the state again just before); the SVG root is serialised and rasterised by the
     /// browser, so SVG, Pixi and Babylon are read the same way. Every backend draws a fill at its declared colour
     /// (FS.GG.Game#786: Babylon's materials are unlit), so the appearance is the colour itself on all three, within
-    /// `BrowserConformance.pixelTolerance` per channel.
+    /// `BrowserConformance.pixelTolerance backend` per channel.
     val pixelProbe: container: HTMLElement -> boardWidth: float -> boardHeight: float -> PixelProbe
 
-    /// The one per-channel tolerance of the pixel probe on SVG, Pixi and Babylon (FS.GG.Game#786), measured on GPU
-    /// (ANGLE over Vulkan) and SwiftShader: 1. Every decided pixel the browser smoke reads showed exactly its declared
-    /// colour on all three backends, on both renderers (a largest deviation of 0); 1 leaves one 8-bit step for a
-    /// driver's rounding.
-    val pixelTolerance: int
+    /// The per-channel tolerance of the pixel probe for `backend` (FS.GG.Game#786), measured on GPU (ANGLE over Vulkan)
+    /// and SwiftShader, where every decided pixel the browser smoke reads showed exactly its declared colour on all three
+    /// backends (a largest deviation of 0). SVG and Pixi are exact (0), so they are interchangeable for docs and the SVG
+    /// and Pixi comparison is never loosened (FS-GG/.github#5218); Babylon is 1, one 8-bit step for a driver's
+    /// rounding.
+    val pixelTolerance: backend: RendererBackend -> int
 
     /// The number of meshes Babylon selected for drawing in its last frame, summed over its live scenes
     /// (`scene.getActiveMeshes()`): a scene whose nodes are culled or off screen draws fewer than it has nodes.

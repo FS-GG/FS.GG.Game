@@ -174,5 +174,6 @@ Template adoption is blocked on publishing the browser host (`FS.GG.Game.Render.
    enforce it in the type.
 5. **Babylon colour fidelity.** *Resolved by FS.GG.Game#786.* Babylon drew lit, at about 0.75 of the scene colour, so
    output probes needed a backend-specific expectation. Its materials are now unlit: the colour is in `emissiveColor`,
-   with `disableLighting` and a black diffuse. The kit checks one colour at one tolerance (1) on all three backends.
+   with `disableLighting` and a black diffuse. The kit checks one colour on all three backends: SVG and Pixi exactly
+   (tolerance 0, so they are interchangeable for docs, FS-GG/.github#5218), Babylon within 1.
    Babylon still ignores alpha.
