@@ -16,8 +16,10 @@ open Browser.Types
 ///   read that one placement, so they cannot disagree;
 /// - the placed fit is snapped to whole device px (its width, height and offset, at the device pixel ratio x the
 ///   presented scale), so a canvas's backing store maps 1:1 onto it;
-/// - a canvas is presented with `image-rendering: pixelated` while no transform rotates or skews it (its backing store
-///   maps 1:1 onto the presented device px, so nearest sampling is exact where the default filter blends a band edge);
+/// - a canvas is presented with `image-rendering: pixelated` only while its backing store equals its presented device
+///   size on both axes and no transform rotates or skews it (nearest sampling is then exact, where the default filter
+///   blends a band edge); otherwise (a non-uniform `scale(2, 1)`, a backing store refused at the cap) it keeps the
+///   default filter;
 /// - a canvas's backing store is derived from the fit only: fitted CSS size x device pixel ratio (x the scale at which a
 ///   page transform or zoom presents the frame), rounded, never over `maxSide` device pixels a side (refused with a
 ///   console diagnostic);

@@ -35,13 +35,29 @@
 #                                                 "--headless=new --no-sandbox --use-angle=vulkan
 #                                                 --enable-features=Vulkan --ignore-gpu-blocklist"
 #          RENDER_SMOKE_KEEP=1                    keep the temp directory for inspection
+#          RENDER_SMOKE_PART=all|main|layout      the page's part (default all). CI runs `main` and `layout` as two
+#                                                 jobs: `layout` is the input host's page-layout matrix (FS.GG.Game#788),
+#                                                 `main` is every other section
+#          RENDER_SMOKE_TIMEOUT_SECONDS=<s>       the page's timeout (default 300). Every run prints each section's
+#                                                 duration and the page's time against this timeout, and warns below 2x
+#                                                 headroom
 #          JS_BINDINGS_TEMPLATES_ROOT=<dir>       a FS.GG.Templates checkout at the pinned commit (offline use)
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=1100
+PART="${RENDER_SMOKE_PART:-all}"
+# The checks each part must run at least (main 860 + layout 246).
+case "$PART" in
+  all) MIN_CHECKS=1106 ;;
+  main) MIN_CHECKS=860 ;;
+  layout) MIN_CHECKS=246 ;;
+  *)
+    echo "test-render-browser-host: RENDER_SMOKE_PART must be all, main or layout (got '$PART')" >&2
+    exit 2
+    ;;
+esac
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -233,7 +249,7 @@ cp tests/Render.Browser.Smoke/driver/package.json tests/Render.Browser.Smoke/dri
 (cd "$TMP/driver" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)
 : >"$TMP/browser.stderr"
 # shellcheck disable=SC2086
-node "$TMP/driver/run-smoke.mjs" "$TMP/js/index.html" "$BROWSER" "$TMP/browser.stderr" "$BROWSER_TIMEOUT" $BROWSER_FLAGS || {
+RENDER_SMOKE_PART="$PART" node "$TMP/driver/run-smoke.mjs" "$TMP/js/index.html" "$BROWSER" "$TMP/browser.stderr" "$BROWSER_TIMEOUT" $BROWSER_FLAGS || {
   echo "test-render-browser-host: the real-input driver failed" >&2
   grep -E 'CONSOLE|Uncaught|DRIVER' "$TMP/browser.stderr" | head -n 40 >&2 || true
   exit 1
@@ -264,6 +280,17 @@ PY
 read -r CHECKS FAILURES <"$TMP/result.counts"
 grep -E '^(PASS|FAIL|INFO) ' "$TMP/result.txt" || true
 
+# The margin, on every run: each section's duration, and the page's time against its timeout.
+sed -n 's/^CONSOLE RENDER-SMOKE-SECTION \(.*\) \([0-9.]*\)$/test-render-browser-host: section \1: \2 s/p' "$TMP/browser.stderr"
+PAGE_SECONDS="$(sed -n 's/^DRIVER page-seconds \([0-9.]*\) of .*/\1/p' "$TMP/browser.stderr" | tail -n 1)"
+if [[ -n $PAGE_SECONDS ]]; then
+  HEADROOM="$(python3 -I -c "import sys; print(f'{float(sys.argv[2]) / max(float(sys.argv[1]), 0.1):.1f}')" "$PAGE_SECONDS" "$BROWSER_TIMEOUT")"
+  echo "test-render-browser-host: part $PART page took ${PAGE_SECONDS} s of its ${BROWSER_TIMEOUT} s timeout (${HEADROOM}x headroom)"
+  if python3 -I -c "import sys; sys.exit(0 if float(sys.argv[1]) * 2 > float(sys.argv[2]) else 1)" "$PAGE_SECONDS" "$BROWSER_TIMEOUT"; then
+    echo "::warning::test-render-browser-host: part $PART page took ${PAGE_SECONDS} s of its ${BROWSER_TIMEOUT} s timeout, under 2x headroom; shard or speed up the page rather than raising the timeout"
+  fi
+fi
+
 if [[ -z $CHECKS || -z $FAILURES ]]; then
   echo "test-render-browser-host: could not read the smoke result" >&2
   exit 1
@@ -281,4 +308,4 @@ if [[ $FAILURES -ne 0 ]] || grep -q '^FAIL ' "$TMP/result.txt"; then
 fi
 
 WEBGL="$(grep -E '^INFO webgl: ' "$TMP/result.txt" | head -n 1 | sed 's/^INFO webgl: //')"
-echo "test-render-browser-host: OK — $CHECKS browser checks passed; package=$PACKAGE browser=$("$BROWSER" --version 2>/dev/null | head -n 1) flags=[$BROWSER_FLAGS] webgl=[$WEBGL]"
+echo "test-render-browser-host: OK — part $PART: $CHECKS browser checks passed; package=$PACKAGE browser=$("$BROWSER" --version 2>/dev/null | head -n 1) flags=[$BROWSER_FLAGS] webgl=[$WEBGL]"

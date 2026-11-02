@@ -53,6 +53,10 @@ module internal CanvasSizing =
     [<Emit("(() => { for (let e = $0; e; e = e.parentElement) { const t = getComputedStyle(e).transform; if (t && t !== 'none') { const m = new DOMMatrixReadOnly(t); if (Math.abs(m.b) > 1e-9 || Math.abs(m.c) > 1e-9) return false } } return true })()")>]
     let private axisAligned (_element: Element) : bool = jsNative
 
+    /// Whether `canvas`'s backing store is exactly its presented device size on both axes (within half a device px).
+    [<Emit("(() => { const r = $0.getBoundingClientRect(); const d = window.devicePixelRatio || 1; return $0.width > 0 && $0.height > 0 && Math.abs(r.width * d - $0.width) < 0.5 && Math.abs(r.height * d - $0.height) < 0.5 })()")>]
+    let private backingIsPresented (_canvas: Element) : bool = jsNative
+
     [<Emit("($0.style.imageRendering = $1)")>]
     let private setImageRendering (_element: Element) (_value: string) : unit = jsNative
 
@@ -140,15 +144,6 @@ module internal CanvasSizing =
                 match apply with
                 | None -> ()
                 | Some apply ->
-                    // The backing store maps 1:1 onto the presented device px, so sampling it nearest is exact; the
-                    // browser's default filter would blend a solid 2 px band across a pixel boundary under a page
-                    // transform. A rotated or skewed presentation is resampled anyway, so it keeps the default filter.
-                    let wanted = if axisAligned frame then "pixelated" else ""
-
-                    if wanted <> rendering then
-                        rendering <- wanted
-                        setImageRendering output wanted
-
                     let key = (next.Width, next.Height, dpr)
 
                     if applied <> Some key then
@@ -169,6 +164,17 @@ module internal CanvasSizing =
                                 )
                         elif apply backingWidth backingHeight next then
                             applied <- Some key
+
+                    // Nearest sampling only where it is exact: the backing store IS the presented device size on both
+                    // axes (no rotation or skew), so each backing px is one device px and the default filter would only
+                    // blend a solid band edge (as under `scale(1.5)`). Anywhere else the browser must resample (a
+                    // non-uniform `scale(2, 1)`, whose density is the area scale; a backing store refused at the cap;
+                    // a renderer not yet started), and the default filter keeps that smooth instead of stepped.
+                    let wanted = if axisAligned frame && backingIsPresented output then "pixelated" else ""
+
+                    if wanted <> rendering then
+                        rendering <- wanted
+                        setImageRendering output wanted
 
         let stops =
             [

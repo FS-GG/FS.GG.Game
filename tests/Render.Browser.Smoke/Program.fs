@@ -2788,25 +2788,57 @@ let report () =
     document.body.setAttribute ("data-smoke", (if failures = 0 then "pass" else "fail"))
     announce results.Count failures text
 
+/// Which part of the page runs (`?part=` on the page URL, from RENDER_SMOKE_PART): `main` (every section but the input
+/// host's layout matrix), `layout` (that matrix only, its own CI job), or `all` (the default).
+[<Emit("(new URLSearchParams(location.search).get('part') || 'all')")>]
+let part () : string = jsNative
+
+[<Emit("performance.now()")>]
+let now () : float = jsNative
+
+/// Run one section and record its duration (`INFO section <name>: <s> s`, and a `RENDER-SMOKE-SECTION` console line the
+/// script prints on every run), so the page's margin against its timeout is visible.
+let section (name: string) (body: Async<unit>) : Async<unit> =
+    async {
+        let started = now ()
+        do! body
+        let seconds = (now () - started) / 1000.0
+        info ("section " + name) (sprintf "%.1f s" seconds)
+        Browser.Dom.console.log (sprintf "RENDER-SMOKE-SECTION %s %.1f" name seconds)
+    }
+
 async {
     try
-        Probe.installGlHook ()
-        run ()
-        do! runBabylon ()
-        do! runPixi ()
-        do! runThreeBackends ()
-        do! runConformance ()
-        do! runBabylonScale 40 30 17
-        do! runBabylonScale 100 50 97
-        do! measureBabylon 10 10
-        do! measureBabylon 40 30
-        do! measureBabylon 100 50
-        do! runScaledBoard ()
-        do! runOverhang ()
-        do! runBoundedUnmodelled ()
-        do! runGlyphSection ()
-        do! RetainedSurface.run check
-        do! InputHostSmoke.run check
+        let part = part ()
+        let main = part = "all" || part = "main"
+        let layout = part = "all" || part = "layout"
+
+        if main then
+            Probe.installGlHook ()
+            do! section "svg registry" (async { run () })
+            do! section "babylon" (runBabylon ())
+            do! section "pixi" (runPixi ())
+            do! section "three backends" (runThreeBackends ())
+            do! section "conformance kit" (runConformance ())
+            do! section "babylon scale 40x30" (runBabylonScale 40 30 17)
+            do! section "babylon scale 100x50" (runBabylonScale 100 50 97)
+            do! section "babylon measure" (async {
+                do! measureBabylon 10 10
+                do! measureBabylon 40 30
+                do! measureBabylon 100 50
+            })
+            do! section "scaled board" (runScaledBoard ())
+            do! section "overhang" (runOverhang ())
+            do! section "bounded unmodelled" (runBoundedUnmodelled ())
+            do! section "glyphs" (runGlyphSection ())
+            do! section "retained surface" (RetainedSurface.run check)
+            do! section "input host" (InputHostSmoke.run check)
+
+        if layout then
+            do! section "input host layouts" (InputHostSmoke.runLayout check)
+
+        if not main && not layout then
+            check (sprintf "the page part %s is known (all, main or layout)" part) false part
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

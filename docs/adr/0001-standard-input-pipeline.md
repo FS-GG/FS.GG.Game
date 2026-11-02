@@ -538,9 +538,11 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
     sceneWidth, boxHeight / sceneHeight)` and the centred rectangle of `scene × scale`. The tracker places the output
     there (`position: absolute` at that left, top, width and height, out of layout) and nowhere else, snapped to whole
     device px (its size and its offset in the frame, at the DPR × the presented scale) so a backing store maps 1:1
-    onto it. A canvas is presented with `image-rendering: pixelated` while no page transform rotates or skews it: the
-    1:1 backing store makes nearest sampling exact, where the default filter blended a solid band edge under a
-    `scale()` transform (#797 round 5, found by the layout smoke). Outside the fit is letterbox: page background, no
+    onto it. A canvas is presented with `image-rendering: pixelated` only while its backing store equals its presented
+    device size on both axes and no page transform rotates or skews it. There nearest sampling is exact, where the
+    default filter blended a solid band edge under a `scale()` transform (#797 round 5, found by the layout smoke).
+    Anywhere else the browser must resample (a non-uniform `scale(2, 1)`, whose density is the area scale; a backing
+    store refused at the cap), and the default filter keeps art smooth instead of stepped (#797 round 6). Outside the fit is letterbox: page background, no
     scene and no press.
     - Drawing: the output's box is the fit, and a canvas's backing store is the fit × DPR (× the scale at which a page
       transform or zoom presents the frame), rounded. Pixi sets its renderer resolution to backing width / scene

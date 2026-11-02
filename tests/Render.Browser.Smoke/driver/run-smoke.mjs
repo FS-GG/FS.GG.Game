@@ -7,6 +7,7 @@
 // RENDER-SMOKE-RESULT or the timeout passes.
 //
 //   node run-smoke.mjs <index.html> <chromium binary> <log file> <timeout seconds> [chromium flags...]
+//   (RENDER_SMOKE_PART=all|main|layout selects the page's part.)
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import fs from "node:fs";
@@ -116,8 +117,13 @@ await page.exposeFunction("__fsggInput", async (request) => {
   }
 });
 
-await page.goto(pathToFileURL(pagePath).href);
+// FS.GG.Game#788: RENDER_SMOKE_PART selects the page's part (`all`, `main` or `layout`; see Program.fs).
+const pageUrl = pathToFileURL(pagePath);
+if (process.env.RENDER_SMOKE_PART) pageUrl.searchParams.set("part", process.env.RENDER_SMOKE_PART);
+const started = Date.now();
+await page.goto(pageUrl.href);
 const reported = await Promise.race([done, new Promise((resolve) => setTimeout(() => resolve(false), Number(timeoutSeconds) * 1000))]);
 if (!reported) write("DRIVER timeout after " + timeoutSeconds + "s");
+else write("DRIVER page-seconds " + ((Date.now() - started) / 1000).toFixed(1) + " of " + timeoutSeconds);
 await browser.close();
 await new Promise((resolve) => log.end(resolve));
