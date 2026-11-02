@@ -994,7 +994,17 @@ module Theme =
             skip ()
             if i < n && text.[i] = c then i <- i + 1 else error (sprintf "expected '%c'" c)
 
+        let mutable depth = 0
+
+        // Nesting is bounded, so a hostile document cannot exhaust the stack (FS.GG.Game#789 review).
         let rec value () : Json =
+            depth <- depth + 1
+            if depth > 128 then error "nesting deeper than 128 levels"
+            let parsed = valueAt ()
+            depth <- depth - 1
+            parsed
+
+        and valueAt () : Json =
             skip ()
             if i >= n then error "unexpected end"
 
@@ -1184,7 +1194,9 @@ module Theme =
                                 ]
                         ]
                     "seed", group seedEntries
-                    "alias", group theme.Aliases
+                    // Colour aliases only: sizes derive from the seed (and `numberOverrides`), so a resolver context such
+                    // as `compact`, which edits the seed, is never contradicted by a stale size in this group.
+                    "alias", group (theme.Aliases |> List.filter (fun (_, v) -> match v with ColourToken _ -> true | NumberToken _ -> false))
                 ])
         + "\n"
 
@@ -1258,52 +1270,82 @@ module Theme =
 
     /// The value of the token at `path`, following DTCG references (`"{seed.team.0}"`, a whole-value alias) through
     /// the document, refusing a missing target or a cycle.
-    let rec private resolveToken
-        (all: Map<string, string option * Json>)
-        (seen: string list)
-        (path: string)
-        : Result<TokenValue, string> =
-        match all |> Map.tryFind path with
-        | None -> Error(sprintf "reference {%s} names no token" path)
-        | Some _ when seen |> List.contains path -> Error(sprintf "reference cycle: %s" (String.concat " -> " (List.rev (path :: seen))))
-        | Some(kind, value) ->
-            match value with
-            | JString text when text.StartsWith "{" && text.EndsWith "}" ->
-                let target = text.Substring(1, text.Length - 2)
+    /// How many references a chain may follow before it is refused (`{a}` to `{b}` to ... ): deep enough for any
+    /// authored theme, and iterative, so a hostile chain cannot exhaust the stack on .NET or Fable.
+    let internal maxReferenceDepth = 64
 
-                match resolveToken all (path :: seen) target, kind, all |> Map.tryFind target with
-                | Error e, _, _ -> Error e
-                | Ok v, Some declared, Some(Some targetKind, _) when declared <> targetKind ->
-                    Error(sprintf "%s: a %s token refers to the %s token {%s}" path declared targetKind target)
-                | Ok v, _, _ -> Ok v
-            | _ ->
-                match kind, value with
-                | Some "number", JNumber v -> Ok(NumberToken v)
-                | Some "color", JObject colour ->
-                    let field name = colour |> List.tryPick (fun (k, v) -> if k = name then Some v else None)
+    /// The value of one token, read without following references.
+    let private literal (path: string) (kind: string option) (value: Json) : Result<TokenValue, string> =
+        match kind, value with
+        | _, JObject members when members |> List.exists (fun (k, _) -> k = "$ref") ->
+            Error(sprintf "%s: a JSON-pointer $ref is not supported; use a whole-value reference such as \"{seed.team.0}\"" path)
+        | Some "number", JNumber v -> Ok(NumberToken v)
+        | Some "color", JObject colour ->
+            let field name = colour |> List.tryPick (fun (k, v) -> if k = name then Some v else None)
 
-                    match field "hex" with
-                    | Some(JString h) ->
-                        match ThemeColour.ofHex h with
-                        | Some c -> Ok(ColourToken c)
-                        | None -> Error(sprintf "%s: hex %s is not #rrggbb" path h)
-                    | _ ->
-                        match field "colorSpace", field "components" with
-                        | Some(JString "oklch"), Some(JArray [ JNumber l; JNumber c; JNumber h ]) ->
-                            Ok(ColourToken(ThemeColour.ofOklch { L = l; C = c; H = h }))
-                        | Some(JString "srgb"), Some(JArray [ JNumber r; JNumber g; JNumber b ]) ->
-                            Ok(
-                                ColourToken
-                                    {
-                                        Red = ThemeColour.quantise r
-                                        Green = ThemeColour.quantise g
-                                        Blue = ThemeColour.quantise b
-                                        Alpha = 255uy
-                                    }
-                            )
-                        | _ -> Error(sprintf "%s: a colour needs a hex, or oklch or srgb components" path)
-                | None, _ -> Error(sprintf "%s: no $type on the token or its groups" path)
-                | Some kind, _ -> Error(sprintf "%s: only color and number tokens are read, not %s" path kind)
+            match field "alpha" with
+            | Some(JNumber a) when a <> 1.0 ->
+                Error(sprintf "%s: alpha %g is refused; every token is opaque until alpha is supported (Q5)" path a)
+            | Some(JNumber _)
+            | None ->
+                match field "hex" with
+                | Some(JString h) ->
+                    match ThemeColour.ofHex h with
+                    | Some c -> Ok(ColourToken c)
+                    | None -> Error(sprintf "%s: hex %s is not #rrggbb (an 8-digit hex carries alpha, refused until it is supported, Q5)" path h)
+                | _ ->
+                    match field "colorSpace", field "components" with
+                    | Some(JString "oklch"), Some(JArray [ JNumber l; JNumber c; JNumber h ]) ->
+                        Ok(ColourToken(ThemeColour.ofOklch { L = l; C = c; H = h }))
+                    | Some(JString "srgb"), Some(JArray [ JNumber r; JNumber g; JNumber b ]) ->
+                        Ok(
+                            ColourToken
+                                {
+                                    Red = ThemeColour.quantise r
+                                    Green = ThemeColour.quantise g
+                                    Blue = ThemeColour.quantise b
+                                    Alpha = 255uy
+                                }
+                        )
+                    | _ -> Error(sprintf "%s: a colour needs a hex, or oklch or srgb components" path)
+            | Some _ -> Error(sprintf "%s: alpha must be a number" path)
+        | None, _ -> Error(sprintf "%s: no $type on the token or its groups" path)
+        | Some kind, _ -> Error(sprintf "%s: only color and number tokens are read, not %s" path kind)
+
+    /// The value of the token at `path`, following DTCG whole-value references (`"{seed.team.0}"`) through the document
+    /// iteratively. A missing target, a cycle, a type mismatch or a chain longer than `maxReferenceDepth` is refused.
+    let private resolveToken (all: Map<string, string option * Json>) (path: string) : Result<TokenValue, string> =
+        let mutable current = path
+        let mutable declared: string option = None
+        let mutable seen = Set.empty
+        let mutable links = 0
+        let mutable result: Result<TokenValue, string> option = None
+
+        while result.IsNone do
+            match all |> Map.tryFind current with
+            | None -> result <- Some(Error(sprintf "%s: reference {%s} names no token" path current))
+            | Some(kind, value) ->
+                match declared, kind with
+                | Some d, Some k when d <> k ->
+                    result <- Some(Error(sprintf "%s: a %s token refers to the %s token {%s}" path d k current))
+                | _ ->
+                    if declared.IsNone then declared <- kind
+
+                    match value with
+                    | JString text when text.StartsWith "{" && text.EndsWith "}" ->
+                        let target = text.Substring(1, text.Length - 2)
+
+                        if seen.Contains current then
+                            result <- Some(Error(sprintf "%s: reference cycle through {%s}" path current))
+                        elif links >= maxReferenceDepth then
+                            result <- Some(Error(sprintf "%s: a reference chain longer than %d links is refused" path maxReferenceDepth))
+                        else
+                            seen <- seen.Add current
+                            links <- links + 1
+                            current <- target
+                    | _ -> result <- Some(literal path (match kind with Some k -> Some k | None -> declared) value)
+
+        result.Value
 
     let ofDtcg (algorithms: ThemeAlgorithm list) (json: string) =
         let refuse reason = Error [ ThemeViolation("dtcg", reason) ]
@@ -1346,7 +1388,7 @@ module Theme =
                     all
                     |> Map.toList
                     |> List.filter (fun (path, _) -> path.StartsWith(group + "."))
-                    |> List.map (fun (path, _) -> path.Substring(group.Length + 1), resolveToken all [] path)
+                    |> List.map (fun (path, _) -> path.Substring(group.Length + 1), resolveToken all path)
 
                 let failures = (read "seed" @ read "alias") |> List.choose (fun (_, r) -> match r with Error e -> Some e | Ok _ -> None)
 
@@ -1359,12 +1401,24 @@ module Theme =
                     // Colour aliases come back as overrides (hex preferred). Size aliases are derived again from the seed
                     // (`cell` x `density`, `strokeBase`, `gap`), so a resolver's `compact` context, which sets the seed's
                     // `density`, changes them; a size the theme had overridden travels in `numberOverrides`.
-                    let colourOverrides =
-                        ok (read "alias")
-                        |> List.choose (fun (k, v) -> match v with ColourToken _ -> Some(ThemeOverride(k, v)) | NumberToken _ -> None)
+                    let aliasTokens = ok (read "alias")
 
-                    let sizeOverrides = numberOverrides |> List.map (fun (k, v) -> ThemeOverride(k, NumberToken v))
-                    create seed (found |> List.map (snd >> Option.get)) (colourOverrides @ sizeOverrides)
+                    let numbers =
+                        aliasTokens |> List.choose (fun (k, v) -> match v with NumberToken _ -> Some k | ColourToken _ -> None)
+
+                    if not numbers.IsEmpty then
+                        Error(
+                            numbers
+                            |> List.map (fun k ->
+                                ThemeViolation(
+                                    "alias." + k,
+                                    "a number in the alias group is refused: sizes derive from the seed, and a size the theme overrides goes in $extensions gg.fs.theme numberOverrides"
+                                ))
+                        )
+                    else
+                        let colourOverrides = aliasTokens |> List.map (fun (k, v) -> ThemeOverride(k, v))
+                        let sizeOverrides = numberOverrides |> List.map (fun (k, v) -> ThemeOverride(k, NumberToken v))
+                        create seed (found |> List.map (snd >> Option.get)) (colourOverrides @ sizeOverrides)
         | Ok _ -> refuse "a DTCG file is an object"
 
     let classic =

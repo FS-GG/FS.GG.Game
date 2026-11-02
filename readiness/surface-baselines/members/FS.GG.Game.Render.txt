@@ -7,6 +7,15 @@ FS.GG.Game.Render.Adapter.drawPoints(FS.GG.UI.Scene.Paint, System.Collections.Ge
 FS.GG.Game.Render.Adapter.drawRect(FS.GG.UI.Scene.Color, FS.GG.Game.Core.Rect) : FS.GG.UI.Scene.Scene
 FS.GG.Game.Render.Adapter.point(FS.GG.Game.Core.Point) : FS.GG.UI.Scene.Point
 FS.GG.Game.Render.Adapter.rect(FS.GG.Game.Core.Rect) : FS.GG.UI.Scene.Rect
+FS.GG.Game.Render.Amplifier.badge(FS.GG.Game.Render.IconRef) : FS.GG.Game.Render.Amplifier
+FS.GG.Game.Render.Amplifier.bar(System.Double) : FS.GG.Game.Render.Amplifier
+FS.GG.Game.Render.Amplifier.facing(System.Double) : FS.GG.Game.Render.Amplifier
+FS.GG.Game.Render.Amplifier.pips(System.Int32, System.Int32) : FS.GG.Game.Render.Amplifier
+FS.GG.Game.Render.AmplifierSlot.above : FS.GG.Game.Render.AmplifierSlot [get]
+FS.GG.Game.Render.AmplifierSlot.below : FS.GG.Game.Render.AmplifierSlot [get]
+FS.GG.Game.Render.AmplifierSlot.corner(System.Int32) : FS.GG.Game.Render.AmplifierSlot
+FS.GG.Game.Render.AmplifierSlot.facing : FS.GG.Game.Render.AmplifierSlot [get]
+FS.GG.Game.Render.AmplifierSlot.right : FS.GG.Game.Render.AmplifierSlot [get]
 FS.GG.Game.Render.CommandAck.accepted : FS.GG.Game.Render.CommandAck [get]
 FS.GG.Game.Render.CommandAck.applied(System.UInt64) : FS.GG.Game.Render.CommandAck
 FS.GG.Game.Render.CommandAck.cancelled(System.String) : FS.GG.Game.Render.CommandAck
@@ -57,6 +66,59 @@ FS.GG.Game.Render.DefaultKeymap.value : FS.GG.UI.KeyboardInput.Keymap [get]
 FS.GG.Game.Render.Displayed.authoritative<Server>(Displayed<Server>) : Server
 FS.GG.Game.Render.Displayed.predicted<Server>(Displayed<Server>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.CommandId>
 FS.GG.Game.Render.Displayed.shown<Server>(Displayed<Server>) : Server
+FS.GG.Game.Render.Glyph.custom(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.Theme, FS.GG.Game.Render.GlyphDrawing>) : FS.GG.Game.Render.Glyph
+FS.GG.Game.Render.Glyph.ofSpec(FS.GG.Game.Render.GlyphState, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.Glyph
+FS.GG.Game.Render.Glyph.path(Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.Point>) : FS.GG.Game.Render.Glyph
+FS.GG.Game.Render.Glyph.selection(FS.GG.UI.Scene.Rect) : FS.GG.Game.Render.Glyph
+FS.GG.Game.Render.GlyphCase.Controls : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.PixelExpectation>>> [get]
+FS.GG.Game.Render.GlyphCase.DrawnControls : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, FS.GG.UI.Scene.Scene, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.PixelExpectation>, System.Int32>> [get]
+FS.GG.Game.Render.GlyphCase.Expected : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.PixelExpectation> [get]
+FS.GG.Game.Render.GlyphCase.Height : System.Double [get]
+FS.GG.Game.Render.GlyphCase.Name : System.String [get]
+FS.GG.Game.Render.GlyphCase.Scenes : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.Scene> [get]
+FS.GG.Game.Render.GlyphCase.Width : System.Double [get]
+FS.GG.Game.Render.GlyphConformance.cases(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Theme>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.GlyphCase>
+FS.GG.Game.Render.GlyphConformance.monochrome(FS.GG.Game.Render.Theme) : FS.GG.Game.Render.Theme
+FS.GG.Game.Render.GlyphDrawing.amplifiers(FS.GG.Game.Render.GlyphDrawing) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
+FS.GG.Game.Render.GlyphDrawing.body(FS.GG.Game.Render.GlyphDrawing) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
+FS.GG.Game.Render.GlyphDrawing.brackets(FS.GG.Game.Render.GlyphDrawing) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
+FS.GG.Game.Render.GlyphDrawing.create(Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>, FS.GG.UI.Scene.Rect, FS.GG.Game.Render.SelectableShape, FS.GG.UI.Scene.Rect) : FS.GG.Game.Render.GlyphDrawing
+FS.GG.Game.Render.GlyphDrawing.diagnostics(FS.GG.Game.Render.GlyphDrawing) : Microsoft.FSharp.Collections.FSharpList<System.String>
+FS.GG.Game.Render.GlyphDrawing.extent(FS.GG.Game.Render.GlyphDrawing) : FS.GG.UI.Scene.Rect
+FS.GG.Game.Render.GlyphDrawing.frame(FS.GG.Game.Render.GlyphDrawing) : FS.GG.UI.Scene.Rect
+FS.GG.Game.Render.GlyphDrawing.hit(FS.GG.Game.Render.GlyphDrawing) : FS.GG.Game.Render.SelectableShape
+FS.GG.Game.Render.GlyphDrawing.nodes(FS.GG.Game.Render.GlyphDrawing) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
+FS.GG.Game.Render.GlyphFamily.item : FS.GG.Game.Render.GlyphFamily [get]
+FS.GG.Game.Render.GlyphFamily.marker : FS.GG.Game.Render.GlyphFamily [get]
+FS.GG.Game.Render.GlyphFamily.name(FS.GG.Game.Render.GlyphFamily) : System.String
+FS.GG.Game.Render.GlyphFamily.structure : FS.GG.Game.Render.GlyphFamily [get]
+FS.GG.Game.Render.GlyphFamily.terrain : FS.GG.Game.Render.GlyphFamily [get]
+FS.GG.Game.Render.GlyphFamily.unit : FS.GG.Game.Render.GlyphFamily [get]
+FS.GG.Game.Render.GlyphSpec.allegianceColouring(FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.amplifier(FS.GG.Game.Render.AmplifierSlot, FS.GG.Game.Render.Amplifier, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.badged(FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.create(FS.GG.Game.Render.GlyphFamily, FS.GG.UI.Scene.Point, FS.GG.UI.Scene.Size) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.fillStep(System.Int32, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.icon(FS.GG.Game.Render.IconRef, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.identity(FS.GG.Game.Render.Identity, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.modifier(FS.GG.Game.Render.ModifierRef, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.sizeStep(System.Int32, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphSpec.team(System.Int32, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphState.Selected : System.Boolean [get]
+FS.GG.Game.Render.GlyphState.Stale : System.Boolean [get]
+FS.GG.Game.Render.GlyphState.new(System.Boolean, System.Boolean)
+FS.GG.Game.Render.Glyphs.cues(Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, FS.GG.Game.Render.Theme>, FS.GG.Game.Render.CueContext) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
+FS.GG.Game.Render.Glyphs.cuesHover(Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, FS.GG.Game.Render.Theme>, FS.GG.Game.Render.CueContext) : Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>
+FS.GG.Game.Render.Glyphs.draw(FS.GG.Game.Render.Theme, FS.GG.Game.Render.Glyph) : FS.GG.Game.Render.GlyphDrawing
+FS.GG.Game.Render.Glyphs.frameSize(FS.GG.Game.Render.Theme, FS.GG.Game.Render.GlyphSpec) : System.Double
+FS.GG.Game.Render.Glyphs.iconSlotAvailable(FS.GG.Game.Render.Theme, FS.GG.Game.Render.GlyphSpec) : System.Boolean
+FS.GG.Game.Render.Glyphs.minBadgeFrame : System.Double [get]
+FS.GG.Game.Render.Glyphs.minIconAndBadgeFrame : System.Double [get]
+FS.GG.Game.Render.Glyphs.minIdentityFrame : System.Double [get]
+FS.GG.Game.Render.Glyphs.minTwoDigitBadgeFrame : System.Double [get]
+FS.GG.Game.Render.Glyphs.reserve(FS.GG.Game.Render.Theme) : System.Double
+FS.GG.Game.Render.Glyphs.samples(FS.GG.UI.Scene.Point) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Glyph>
+FS.GG.Game.Render.Glyphs.scene(FS.GG.Game.Render.Theme, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Glyph>) : FS.GG.UI.Scene.Scene
 FS.GG.Game.Render.GuestCall.basis<Input>(GuestCall<Input>) : System.UInt64
 FS.GG.Game.Render.GuestCall.id<Input>(GuestCall<Input>) : System.UInt64
 FS.GG.Game.Render.GuestCall.input<Input>(GuestCall<Input>) : PipelineInput<Input>
@@ -86,6 +148,8 @@ FS.GG.Game.Render.GuestReply+Tags.TimedOut : System.Int32
 FS.GG.Game.Render.GuestRequest.call<Input, Client>(GuestRequest<Input, Client>) : GuestCall<Input>
 FS.GG.Game.Render.GuestRequest.client<Input, Client>(GuestRequest<Input, Client>) : Client
 FS.GG.Game.Render.GuestRequest.create<Input, Client>(GuestCall<Input>, Client) : GuestRequest<Input, Client>
+FS.GG.Game.Render.IconRef.name(FS.GG.Game.Render.IconRef) : System.String
+FS.GG.Game.Render.IconRef.named(System.String) : FS.GG.Game.Render.IconRef
 FS.GG.Game.Render.Identity+Tags.Ally : System.Int32
 FS.GG.Game.Render.Identity+Tags.Enemy : System.Int32
 FS.GG.Game.Render.Identity+Tags.Neutral : System.Int32
@@ -153,6 +217,11 @@ FS.GG.Game.Render.MirrorEntry.Id : System.String [get]
 FS.GG.Game.Render.MirrorEntry.Label : System.String [get]
 FS.GG.Game.Render.MirrorEntry.Pressed : System.Boolean [get]
 FS.GG.Game.Render.MirrorEntry.new(System.String, System.String, System.Boolean)
+FS.GG.Game.Render.ModifierRef.carrying : FS.GG.Game.Render.ModifierRef [get]
+FS.GG.Game.Render.ModifierRef.disabled : FS.GG.Game.Render.ModifierRef [get]
+FS.GG.Game.Render.ModifierRef.name(FS.GG.Game.Render.ModifierRef) : System.String
+FS.GG.Game.Render.ModifierRef.named(System.String) : FS.GG.Game.Render.ModifierRef
+FS.GG.Game.Render.ModifierRef.stale : FS.GG.Game.Render.ModifierRef [get]
 FS.GG.Game.Render.ObjectAccess.cell(System.String, System.Int32, System.Int32) : FS.GG.Game.Render.ObjectAccess
 FS.GG.Game.Render.ObjectAccess.cellOf(FS.GG.Game.Render.ObjectAccess) : Microsoft.FSharp.Core.FSharpOption<System.Tuple<System.Int32, System.Int32>>
 FS.GG.Game.Render.ObjectAccess.full : FS.GG.Game.Render.ObjectAccess [get]

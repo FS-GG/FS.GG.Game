@@ -394,6 +394,44 @@ let tests =
                 Expect.equal (Theme.cssVariables gappedBack) (Theme.cssVariables gapped) "and everything else"
             }
 
+            test "DTCG import refuses what it cannot represent: long reference chains, alpha, alias numbers, $ref and deep nesting" {
+                let text = Theme.toDtcg Theme.classic
+                Expect.isFalse (text.Contains "\"size\"") "size aliases are not exported"
+                let cut = text.LastIndexOf "\n}"
+
+                // A chain of `links` references from glyph.team.0 through group `chain` to a colour.
+                let chained (links: int) =
+                    let entries =
+                        [ for i in 0 .. links - 1 ->
+                              let value = if i = links - 1 then "{ \"hex\": \"#c039b9\" }" else sprintf "\"{chain.t%d}\"" (i + 1)
+                              sprintf "\"t%d\": { \"$type\": \"color\", \"$value\": %s }" i value ]
+                    let withChain = text.Substring(0, cut) + ",\n  \"chain\": { " + String.concat ", " entries + " }" + text.Substring cut
+                    let aliasStart = withChain.IndexOf "\"alias\""
+                    let open0 = withChain.IndexOf("\"0\": {", withChain.IndexOf("\"team\": {", aliasStart))
+                    let close0 = withChain.IndexOf("\n        }", open0)
+                    withChain.Substring(0, open0) + "\"0\": { \"$type\": \"color\", \"$value\": \"{chain.t0}\" }" + withChain.Substring(close0 + "\n        }".Length)
+
+                Expect.equal (colourOf "glyph.team.0" (ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] (chained 64)))) (rgb 0xc0 0x39 0xb9) "64 links are followed"
+                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] (chained 66))) (fun v -> v.Reason.Contains "longer than 64") "a longer chain is refused"
+                let watch = System.Diagnostics.Stopwatch.StartNew()
+                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] (chained 20000))) (fun v -> v.Reason.Contains "longer than 64") "20,000 links: refused, no stack overflow"
+                Expect.isLessThan watch.Elapsed.TotalSeconds 10.0 "quickly"
+
+                let alpha = text.Replace("\"hex\": \"#db2478\"", "\"hex\": \"#db2478\", \"alpha\": 0.5")
+                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] alpha)) (fun v -> v.Reason.Contains "alpha 0.5") "alpha is refused, not made opaque"
+                let eightDigit = text.Replace("\"hex\": \"#db2478\"", "\"hex\": \"#db247880\"")
+                Expect.isNonEmpty (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] eightDigit)) "an 8-digit hex is refused"
+
+                let aliasNumber = text.Replace("\"alias\": {", "\"alias\": {\n    \"size\": { \"cell\": { \"$type\": \"number\", \"$value\": 40 } },")
+                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] aliasNumber)) (fun v -> v.Token = "alias.size.cell") "a number in the alias group is refused"
+
+                let pointer = text.Replace("\"alias\": {", "\"alias\": {\n    \"marker\": { \"$type\": \"color\", \"$value\": { \"$ref\": \"#/seed/team/0/$value\" } },")
+                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] pointer)) (fun v -> v.Reason.Contains "$ref is not supported") "a JSON-pointer $ref is refused"
+
+                let deep = String.replicate 200 "[" + String.replicate 200 "]"
+                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] ("{ \"x\": " + deep + " }"))) (fun v -> v.Reason.Contains "nesting deeper than 128") "deep nesting is refused"
+            }
+
             test "players change only a team colour, and nothing lowers a floor" {
                 let teal = rgb 0 150 136
                 Expect.equal (colourOf "glyph.team.2" (ok (Theme.withTeamColour 2 teal Theme.classic))) teal "an existing team"

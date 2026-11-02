@@ -36,6 +36,10 @@
     <Compile Include="../ThemeBaked.fs" />
     <Compile Include="../Theme.fsi" />
     <Compile Include="../Theme.fs" />
+    <Compile Include="../Glyphs.fsi" />
+    <Compile Include="../Glyphs.fs" />
+    <Compile Include="../GlyphConformance.fsi" />
+    <Compile Include="../GlyphConformance.fs" />
   </ItemGroup>
 
   <ItemGroup>

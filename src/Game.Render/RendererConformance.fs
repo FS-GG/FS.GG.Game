@@ -406,6 +406,17 @@ module ScenePixels =
 
     let expectations (width: float) (height: float) (scene: Scene) : PixelExpectation list = collect false width height scene
 
+    let internal decidedAt (scene: Scene) (points: Point list) : Color option list =
+        let drawn = ResizeArray<Drawn>()
+        flatten (0.0, 0.0) scene drawn
+
+        points
+        |> List.map (fun p ->
+            match decide drawn (floorInt p.X) (floorInt p.Y) with
+            | Colour colour -> Some colour
+            | Nothing -> Some clear
+            | Open -> None)
+
     let identityExpectations (width: float) (height: float) (scene: Scene) : PixelExpectation list =
         collect true width height scene
 

@@ -45,6 +45,27 @@ These corrections were ruled by Root during the implementation review. Each one 
   `2025-10-01`, and section 4.1.2 says `2025-11-01`. The resolver document uses **`2025-10-01`**, matching #805's
   Q-T9. A single theme is a set, because a modifier should have two or more contexts. Sizes are derived again from the
   seed on import, so the `compact` density context changes them.
+- **E6. A structure's team mark (D3).** From 22 to 39 units the badge takes the inner centre and the icon is not drawn,
+  so a unit and a structure with the same identity, size and badge looked identical. A structure's team mark is
+  therefore an **inner foot band built from bars**: the nested ring's lower rows in the team colour, with the body above
+  them. It is drawn inside every stepped frame, and every team mark is clipped to the frame's own bars, so it never
+  fills Ally's holes.
+  - **The band's height follows its area.** It grows until its team-colour area reaches three quarters of Own's (the
+    inner width times the band), up to 0.6 of the inner frame's height. A fixed height left the stepped diamond only
+    its narrow bottom tip: 21–33 % of Own's band at 22, 24 and 32 units.
+  - **Measured team-colour pixels** at 22, 24 and 32 units:
+
+    | Identity | 22 | 24 | 32 |
+    |---|---|---|---|
+    | Own | 28 | 36 | 64 |
+    | Ally | 29 | 28 | 56 |
+    | Neutral | 28 | 36 | 64 |
+    | Enemy | 30 | 30 | 56 |
+    | Unknown | 21 | 38 | 48 |
+
+  - **Kit minimums.** A test requires at least half of Own's area for every identity from 22 to 39 units. A kit case
+    requires a hostile structure's band to show its team colour on every backend. The kit checks that a unit and a structure with the same identity, size and badge, monochrome and
+  with no icon, differ in decided pixels.
 
 ## Problem
 
@@ -85,7 +106,7 @@ of **slots** around one anchor, and the slot geometry comes from size tokens:
 | **Size step** | an ordinal field, as one of a few frame sizes within the footprint | small, medium, large |
 | **Team mark** | team, as a band or ring in the team colour on a neutral body (the RTS mask-region convention), separated from the frame by a body-colour keyline (E1) | ring, foot band |
 | **Inner modifiers** | flags, in sector slots inside the frame | stale, carrying, disabled |
-| **Team badge** | the team's index, at the frame's inner centre, in the body pass (from 22 units) | a seven-segment digit |
+| **Team badge** | the team's number, at the frame's inner centre, **last** in the body pass (from 22 units; two digits from 33) | a seven-segment numeral |
 | **Amplifiers** (outside the frame, beyond the cue reserve) | **above:** ordinal pips (rank or echelon); **below:** a fraction bar (health, progress); **corners:** badges (never the team badge, which is drawn inside the frame); **from the anchor:** facing; **right:** the label (after Q6) | |
 
 **The identity-to-frame mapping is fixed in the library, per APP-6.** Themes choose colours, never shapes, so a frame
@@ -172,8 +193,9 @@ relies on colour plus the accessible mirror label, and D12's redundancy rule is 
   - **Team colour** is the team mark.
   - **The index badge is mandatory whenever two or more of the game's teams share an allegiance.** Presence depends on
     the game's teams, not on which teams are visible, so a badge never appears or disappears as units come into view.
-  - **The badge is drawn inside its own frame (review M1).** It sits at the frame's **inner centre**, in the body pass,
-    right after its own frame, so it moves with the frame and no neighbour can cover it.
+  - **The badge is drawn inside its own frame (review M1).** It sits at the frame's **inner centre**, **last** in the
+    body pass: after its own frame, fill, icon, team mark and inner modifiers, and before the next glyph's body. So it
+    moves with the frame, nothing of its own glyph covers it, and no neighbour can cover it.
     - As an amplifier it was drawn first, and neighbouring frames covered it. The review measured 0 of 6 interior
       badges intact on the dense board, with 22–92 % of each surviving.
     - The top-right inner corner was considered. It does not fit Ally, whose quarter-point holes take the corners'
@@ -189,6 +211,9 @@ relies on colour plus the accessible mirror label, and D12's redundancy rule is 
     - **The badge and the icon share the inner centre.** When a badge is drawn, it takes the centre and the icon is not
       drawn; the icon's class or function then rests on size, footprint and the mirror label. Side by side needs a
       larger frame (Q15).
+      - **The icon slot is unavailable** whenever a mandatory badge occupies a frame of 22 to 39 units (one digit; 33 to
+        39 for two). `Glyphs.iconSlotAvailable theme spec` reports it, so #795's builder refuses an icon encoding at
+        build time instead of losing it when drawn; `draw` also reports a diagnostic when it drops an icon.
     - **Contrast is checked against the badge's real neighbour,** the frame fill. The `glyph.badge.ink` token is at
       least 3:1 against the body and every team and allegiance colour it can sit on, in every preset. The proof's
       dark badge ink passes on the body and on every team colour of both themes.
@@ -200,6 +225,10 @@ relies on colour plus the accessible mirror label, and D12's redundancy rule is 
     - It sits on a 3 × 5 grid of whole-unit cells, with the unit at least 2, so the digit is at least 10 units tall:
       the 7-unit floor, rounded up to whole cells.
     - One digit covers 9 teams, above the largest hue capacity (8); two digits cover the rest.
+    - **Team numbers never wrap.** Team 10 shows "10", never "1". A two-digit badge is two digits with a one-cell gap,
+      14 × 10, needing 16 × 12 of frame ink with its margin. Measured, the smallest size from which it always fits is
+      Own 18, Neutral 16, Unknown 24, Enemy 28 and Ally 33, so the **two-digit minimum is 33 units**. Below it the
+      badge is omitted with a diagnostic naming the team and the size, as for one digit below 22.
     - The kit check covers **all 36 pairs of digits** at the minimum size, with D6's samples. Today's samples cannot
       tell 11 pairs apart in at least one direction, for example 1 against 7 and 7 against 9. D6's samples separate all 36 (smallest difference
       1 pixel each way).
@@ -301,7 +330,7 @@ A glyph lowers to one of two profiles. The same profile is used on every backend
 | Family | Portable profile | Stroked additions |
 |---|---|---|
 | **Units** | the library's identity frame (D1, bars only) in its identity colour, an icon, a team ring on a neutral body, and the index badge when teams share an allegiance; size steps for an ordinal | a dashed frame for planned; a facing amplifier |
-| **Structures** | the same identity frame as units, told apart by a footprint of n×m cells and a structure icon, with a team band along its foot | keyline outline |
+| **Structures** | the same identity frame as units, told apart by a footprint of n×m cells and a structure icon, with a team band along its foot: the inner frame's lower rows in team colour, body above, inside every stepped frame (E6) | keyline outline |
 | **Terrain** | a tile inset by the theme's gap, coloured from the terrain-kind tokens (open, blocked, difficult, water, void) | a hatch per kind, so terrain does not rely on colour alone |
 | **Items** | a small oval at the item anchor, at most half the identity frame size. Ovals are never identity frames. | — |
 | **Markers** | waypoint plus, destination ring (disc plus inner disc), target crosshair (four bars, as in SC2). Markers are thin (arms one band wide) and at most half the identity frame size, so the waypoint plus is not the filled `Unknown` cross, and discs and rings are not identity frames. | stroked rings, ping |
