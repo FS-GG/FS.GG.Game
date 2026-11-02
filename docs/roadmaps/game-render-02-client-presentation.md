@@ -239,6 +239,8 @@ scene point.**
 - **Until then:** the game's own listener feeds `PipelineInput.Game (DragTo p | Release (p, dragged))`, coalesced to one
   move per animation frame, because rule 2 never coalesces `Game` inputs. The proof does exactly this, marked
   experimental.
+  A matching release is observed on the window even outside the container. Pointer cancellation and disposal disarm
+  the gesture without submitting or replacing its current draft, and retire its queued animation-frame callback.
 
 ### CP5. Wire format, with golden vectors
 
@@ -281,6 +283,9 @@ identity 0 own 1 ally 2 neutral 3 enemy 4 unknown
   Every encoding it accepts re-encodes to the same bytes (the fuzz test pins this). ADR 0001 maps a decode `Error` to
   `Faulted`, which halts the stage. A guest that writes an effect its host cannot read is broken, not degraded, and the
   version byte lets a host refuse a newer guest at once.
+- **Circle radii must remain positive after quantisation.** A positive source radius below half a Q24.8 quantum
+  would encode as zero and is refused by the encoder. At half a quantum (`1/512`), half-up rounding produces the
+  minimum positive wire radius (`1/256`). Encoder success never creates a zero-radius circle that the decoder rejects.
 - **The ghost on the wire** is a subset of `GlyphSpec`: family, identity, icon, team, anchor and footprint in cells.
   `GlyphSpec` is opaque with no read accessors, so the library codec needs `GlyphSpec.family`, `anchor`, `footprint`,
   `identity`, `icon` and `team` readers. These are additive, and are proposed to #789 (Q6). The default if #789
@@ -476,6 +481,10 @@ FS.GG.Game#810.
   - an authority that admits with Game.Core's `NetworkAdmission` and refuses a move into column 0, the wall;
   - the renderers: ReferenceGame's Scene, then the plan pass;
   - a `Session` wiring `PipelineHost` to the authority.
+
+The proof's reducer stores highlight roles, but its experimental `planPass` currently draws plans only.
+Highlight drawing remains part of the proposed glyph-owner integration in step 2 below; the proof and its
+equivalence check do not establish highlight rendering.
 
 **What it does:**
 

@@ -35,10 +35,13 @@ let private cancelFrame (_handle: float) : unit = jsNative
 let private scrollIntoView (_element: Element) : unit = jsNative
 
 [<Emit("$0.addEventListener($1, $2, true)")>]
-let private listenCapture (_element: HTMLElement) (_name: string) (_listener: Event -> unit) : unit = jsNative
+let private listenCapture (_element: EventTarget) (_name: string) (_listener: Event -> unit) : unit = jsNative
 
 [<Emit("$0.removeEventListener($1, $2, true)")>]
-let private unlistenCapture (_element: HTMLElement) (_name: string) (_listener: Event -> unit) : unit = jsNative
+let private unlistenCapture (_element: EventTarget) (_name: string) (_listener: Event -> unit) : unit = jsNative
+
+[<Emit("$0.dispatchEvent(new PointerEvent($1, {bubbles:true,pointerId:7,button:0,clientX:$2,clientY:$3}))")>]
+let private pointerEvent (_target: EventTarget) (_name: string) (_x: float) (_y: float) : unit = jsNative
 
 [<Emit("(window.__fsggInput ? window.__fsggInput($0) : Promise.reject(new Error('the smoke needs the real-input driver')))")>]
 let private realInput (_request: obj) : JS.Promise<unit> = jsNative
@@ -89,6 +92,18 @@ let private attachDrag (container: HTMLElement) (surface: unit -> HTMLElement op
     let mutable latest: Point option = None
     let mutable frame: float option = None
 
+    let retire () =
+        frame |> Option.iter cancelFrame
+        frame <- None
+        latest <- None
+        down <- None
+        dragged <- false
+
+    let cancel () =
+        let active = down.IsSome
+        retire ()
+        if active then feed (Release({ X = 0.0; Y = 0.0 }, false))
+
     let within (raw: Event) =
         match surface () with
         | Some element -> element.contains (unbox<Node> raw.target)
@@ -97,7 +112,7 @@ let private attachDrag (container: HTMLElement) (surface: unit -> HTMLElement op
     let onDown (raw: Event) =
         let pointer = raw :?> PointerEvent
 
-        if pointer.button = 0.0 && within raw then
+        if down.IsNone && pointer.button = 0.0 && within raw then
             down <- Some(pointer.pointerId, pointer.clientX, pointer.clientY)
             dragged <- false
 
@@ -129,20 +144,31 @@ let private attachDrag (container: HTMLElement) (surface: unit -> HTMLElement op
 
         match down, surface () with
         | Some(id, _, _), Some element when id = pointer.pointerId ->
-            frame |> Option.iter cancelFrame
-            frame <- None
-            down <- None
-            feed (Release(scenePoint element pointer.clientX pointer.clientY, dragged))
-        | _ -> down <- None
+            let wasDragged = dragged
+            retire ()
+            feed (Release(scenePoint element pointer.clientX pointer.clientY, wasDragged))
+        | Some(id, _, _), None when id = pointer.pointerId -> cancel ()
+        | _ -> ()
+
+    let onCancel (raw: Event) =
+        let pointer = raw :?> PointerEvent
+        match down with
+        | Some(id, _, _) when id = pointer.pointerId -> cancel ()
+        | _ -> ()
 
     listenCapture container "pointerdown" onDown
     listenCapture container "pointermove" onMove
-    listenCapture container "pointerup" onUp
+    // A release or cancellation belongs to the gesture even after the pointer leaves the surface.
+    listenCapture window "pointerup" onUp
+    listenCapture window "pointercancel" onCancel
 
     fun () ->
         unlistenCapture container "pointerdown" onDown
         unlistenCapture container "pointermove" onMove
-        unlistenCapture container "pointerup" onUp
+        unlistenCapture window "pointerup" onUp
+        unlistenCapture window "pointercancel" onCancel
+        // Retire listener ownership before notifying the guest, even if its callback raises.
+        cancel ()
 
 /// A real press-drag-release (Playwright's mouse) on `backend`'s surface between two scene points.
 let private dragOn (container: HTMLElement) (backend: RendererBackend) (from: Point) (target: Point) : Async<unit> =
@@ -174,6 +200,52 @@ type private Ink =
     | MoveInk
     | InvalidInk
     | Ground
+
+/// Synthetic DOM events isolate gesture lifetime; the main proof separately uses trusted Playwright input.
+let runDragLifetime (check: string -> bool -> string -> unit) : Async<unit> =
+    async {
+        let container = document.createElement "div"
+        container.setAttribute ("style", "width:240px;height:120px")
+        document.body.appendChild container |> ignore
+        let events = ResizeArray<PlanInput>()
+        let detach = attachDrag container (fun () -> Some container) events.Add
+        let beginMove () =
+            pointerEvent container "pointerdown" 10.0 10.0
+            pointerEvent container "pointermove" 30.0 30.0
+        let ended dragged =
+            match List.ofSeq events with
+            | [ Release(_, actual) ] -> actual = dragged
+            | _ -> false
+
+        beginMove ()
+        pointerEvent window "pointerup" 400.0 400.0
+        do! nextFrame
+        pointerEvent container "pointermove" 35.0 35.0
+        do! nextFrame
+        check "client presentation drag lifetime: outside release ends the gesture without resurrection or a late frame"
+            (ended true) (sprintf "%A" (List.ofSeq events))
+
+        events.Clear()
+        beginMove ()
+        pointerEvent window "pointercancel" 30.0 30.0
+        do! nextFrame
+        pointerEvent container "pointermove" 35.0 35.0
+        do! nextFrame
+        check "client presentation drag lifetime: pointercancel disarms and retires the queued frame"
+            (ended false) (sprintf "%A" (List.ofSeq events))
+
+        events.Clear()
+        beginMove ()
+        detach ()
+        let atDispose = events.Count
+        do! nextFrame
+        pointerEvent container "pointermove" 35.0 35.0
+        pointerEvent window "pointerup" 400.0 400.0
+        do! nextFrame
+        check "client presentation drag lifetime: disposal disarms once and no callback survives it"
+            (ended false && events.Count = atDispose) (sprintf "%A" (List.ofSeq events))
+        container.remove ()
+    }
 
 /// What a pixel shows, robust to Babylon's lit 0.75 factor: the move ink is green, the invalid ink red, the Atrium blue.
 let private inkOf (r: int, g: int, b: int) =

@@ -685,9 +685,11 @@ module ExperimentalClientPresentation =
                 match shape with
                 | Circle(centre, radius) ->
                     if not (radius > 0.0) then fail "a circle needs a positive radius"
+                    let wireRadius = quantise radius
+                    if wireRadius <= 0 then fail "a circle needs a positive radius after quantisation"
                     w.U8 0
                     writePoint w centre
-                    writeCoordinate w radius
+                    w.I32 wireRadius
                 | Box rect ->
                     if rect.Width < 0.0 || rect.Height < 0.0 then fail "a box needs a non-negative size"
                     w.U8 1

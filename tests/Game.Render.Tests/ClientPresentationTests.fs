@@ -541,6 +541,27 @@ let tests =
                         Expect.equal (decode (encoded intents)) (Ok expected) "Floor(v x 256 + 0.5) / 256"
                     }
 
+                    test "a positive circle radius that rounds to zero is refused before writing" {
+                        for radius in [ System.Double.Epsilon; 0.001; 1.0 / 512.0 - 1e-12 ] do
+                            let intents = [ GuestIntent.Local(Plan(PlanId "r", [ Area(Circle(point 0.0 0.0, radius), Move) ])) ]
+                            Expect.isError (encode intents) (sprintf "radius %.17g has no positive Q24.8 representation" radius)
+                    }
+
+                    test "non-grid circle radii round to a positive canonical wire radius" {
+                        for radius, expectedRadius in [ 1.0 / 512.0, 1.0 / 256.0; 1.0 / 256.0, 1.0 / 256.0; 0.005, 1.0 / 256.0 ] do
+                            let circle r = [ GuestIntent.Local(Plan(PlanId "r", [ Area(Circle(point 0.0 0.0, r), Move) ])) ]
+                            let bytes = encoded (circle radius)
+                            Expect.equal (decode bytes) (Ok(circle expectedRadius)) "half-up radius remains positive"
+                            Expect.equal (encode (circle expectedRadius)) (Ok bytes) "accepted bytes are canonical"
+                    }
+
+                    test "nonfinite and nonpositive circle radii fail closed" {
+                        for radius in [ nan; infinity; -infinity; 0.0; -0.001 ] do
+                            Expect.isError
+                                (encode [ GuestIntent.Local(Plan(PlanId "r", [ Area(Circle(point 0.0 0.0, radius), Move) ])) ])
+                                (sprintf "radius %g is invalid" radius)
+                    }
+
                     test "the limits are accepted exactly at their bound and refused one past it" {
                         let id = String.replicate Codec.maxString "a"
                         Expect.isOk (encode [ GuestIntent.Local(Select(Group, [ id ])) ]) "a 1024-byte id"
