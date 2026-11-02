@@ -63,12 +63,17 @@ footprint, never by frame shape.
 
 Every identity frame is built from **opaque bars** (filled rectangles) in both profiles. Every backend draws bars, and
 `ScenePixels` decides their edges, so the kit can tell the frames apart (review R3). Discs and ovals are never identity
-frames; they are reserved for items and markers (D3). With `w` the frame size and `band = max 1 (floor (w / 8))`:
+frames; they are reserved for items and markers (D3).
+
+**Frames are always on whole units.** Whenever an identity frame is drawn, its centre is snapped with
+`Floor(v + 0.5)` (half up, as D11 does for colours, never `Math.Round`), and its size is floored. This holds at every
+cell size, not only at 16 and above (D2), because the matrix below depends on it. The review measured off-grid centres
+giving 0-pixel pairs at 12 and 16 units. With `w` the frame size and `band = max 1 (floor (w / 8))`:
 
 | Identity | APP-6 frame | Frame (both profiles) |
 |---|---|---|
 | `Own` | friend: rectangle | rectangle `w × 2w/3` |
-| `Ally` | friend: rectangle | the friend rectangle with **notches in the middle of its top and bottom edges**, in the ground colour; its colour also differs from `Own` |
+| `Ally` | friend: rectangle | the friend rectangle with **true holes** (`max 2 (floor (w / 6))` square) at the **quarter points** of its top and bottom edges, built from seven bars, so nothing is painted and the terrain shows through. A hole is never at an edge midpoint, where the box-edge probes sit (review N1). Its colour also differs from `Own`. |
 | `Neutral` | square | square `w × w` |
 | `Enemy` | hostile: diamond | **stepped diamond**: pairs of rows one *step* high (`step = max 1 (floor (w / 12))`, finer than the band so it reads as a diamond, not a blob), the middle pair two steps narrower than the square, each further pair two steps narrower again |
 | `Unknown` | quatrefoil | **stepped quatrefoil**: a cross of two bars `w/2` thick, reaching one band past the square on every side |
@@ -80,25 +85,50 @@ Each cell below is the smaller of two counts:
 
 A cell of 0 would mean the kit cannot tell the pair apart in one direction: a backend drawing one frame for the other
 would pass. The script is `game-render-02-glyphs/frames.fsx` (run after building `tests/Game.Render.Tests`), and the
-proof's .NET test reproduces it from 12 to 32 units.
+proof's .NET tests reproduce it from 12 to 32 units.
+
+With today's `ScenePixels` samples (middles of edges only):
 
 | size | Own/Ally | Own/Neutral | Own/Enemy | Own/Unknown | Ally/Neutral | Ally/Enemy | Ally/Unknown | Neutral/Enemy | Neutral/Unknown | Enemy/Unknown |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 6 | 3 | 2 | 2 | 4 | 3 | 10 | 10 | 4 | 4 | 6 |
-| 8 | 2 | 2 | 3 | 4 | 2 | 11 | 8 | 4 | 4 | 4 |
-| 12 | 2 | 2 | 4 | 4 | 2 | 14 | 8 | 4 | 4 | 4 |
-| 16 | 2 | 2 | 4 | 4 | 2 | 14 | 8 | 4 | 4 | 4 |
-| 24 | 2 | 2 | 4 | 4 | 2 | 14 | 8 | 4 | 4 | 4 |
-| 32 | 2 | 2 | 4 | 4 | 2 | 14 | 8 | 4 | 4 | 4 |
+| 6 | 4 | 2 | 2 | 4 | 4 | 9 | 11 | 4 | 4 | 6 |
+| 8 | 0 | 2 | 3 | 4 | 2 | 12 | 5 | 4 | 4 | 4 |
+| 12 | 0 | 2 | 4 | 4 | 2 | 16 | 4 | 4 | 4 | 4 |
+| 16 | 0 | 2 | 4 | 4 | 2 | 26 | 4 | 4 | 4 | 4 |
+| 24 | 0 | 2 | 4 | 4 | 2 | 20 | 4 | 4 | 4 | 4 |
+| 32 | 0 | 2 | 4 | 4 | 2 | 31 | 4 | 4 | 4 | 4 |
 
-These counts use today's `ScenePixels` samples. With the corner and quarter-edge samples that D6 adds for identity
-frames, Own/Ally stays at 2 or 3, because its difference is in the notches, which today's samples already reach. Every
-other pair rises to 6 or more (16 for Neutral/Enemy at every size, up to 54 for Ally/Enemy). The earlier forms, for comparison:
-- Own (rectangle) against Unknown (ellipse): 0 at every size;
-- Neutral (square) against Enemy (disc): 0 at every size;
-- they differed only at corners, which the kit did not sample.
+With D6's corner and quarter-edge samples for identity frames (the proof prototypes them as `Glyphs.identitySamples`):
 
-The browser smoke repeats the check on every backend at 24 units: 20 ordered pairs (*The proof*).
+| size | Own/Ally | Own/Neutral | Own/Enemy | Own/Unknown | Ally/Neutral | Ally/Enemy | Ally/Unknown | Neutral/Enemy | Neutral/Unknown | Enemy/Unknown |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 6 | 11 | 6 | 12 | 13 | 14 | 12 | 25 | 16 | 16 | 15 |
+| 8 | 4 | 6 | 14 | 13 | 10 | 18 | 25 | 16 | 16 | 24 |
+| 12 | 4 | 6 | 16 | 16 | 10 | 24 | 28 | 16 | 16 | 28 |
+| 16 | 4 | 6 | 16 | 16 | 10 | 40 | 28 | 16 | 16 | 28 |
+| 24 | 4 | 6 | 16 | 16 | 10 | 54 | 28 | 16 | 16 | 28 |
+| 32 | 4 | 6 | 16 | 16 | 10 | 93 | 28 | 16 | 16 | 28 |
+
+- **Own/Ally needs D6's samples.** Ally's holes sit at quarter points, deliberately away from the midpoints, so
+  today's middle-of-edge samples see no difference from Own (0 from 8 units). This is the trade the box-edge rule
+  forces. With D6's samples, the pair differs by 4 in both directions at every size from 8.
+- **Every other pair** differs by at least 2 with today's samples and at least 6 with D6's.
+- **The earlier forms, for comparison:**
+  - Own (rectangle) against Unknown (ellipse): 0 at every size;
+  - Neutral (square) against Enemy (disc): 0 at every size;
+  - they differed only at corners, which the kit did not sample.
+- **The kit's identity check uses D6's samples.** The browser smoke repeats it on every backend at 24 units, for 20
+  ordered pairs (*The proof*).
+- **Box edges.** Every frame passes the box-edge check on its drawn bounding box, at 12, 16, 24 and 32 units: the
+  first whole pixel inside each edge midpoint is the frame, and the first outside is not. A .NET test checks this.
+
+**`GlyphDrawing.frame` is the drawn bounding box**, not the nominal size. At a nominal 24 units:
+- Own and Ally are 24 × 16;
+- Neutral is 24 × 24;
+- Enemy is **20 × 20**;
+- Unknown is **30 × 30**.
+
+Hit bounds, the box-edge check and the cue reserve all use this box.
 
 **Minimum identity frame size: 12 units.** The kit tells the frames apart from 6 units, but below 12 the stepped forms
 have one-unit bands and are not reliably legible. Below 12 units (or 12 CSS px at the presented scale), identity
@@ -109,10 +139,17 @@ relies on colour plus the accessible mirror label, and D12's redundancy rule is 
   separated by colour plus the notches.
 - **Team is double-encoded too (review R2).**
   - **Team colour** is the team mark.
-  - **The index badge is mandatory whenever two or more visible teams share an allegiance.** It is drawn from bars in
-    the corner amplifier slot, as a **seven-segment numeral** (the team's index, from 1). One digit covers 9 teams,
-    above the largest hue capacity (8); two digits cover the rest.
-  - When every visible team has its own allegiance, the identity frame is the second channel, and the badge is
+  - **The index badge is mandatory whenever two or more of the game's teams share an allegiance.** Presence depends on
+    the game's teams, not on which teams are visible, so a badge never appears or disappears as units come into view.
+  - **Badge geometry.** The badge is drawn from bars in the corner amplifier slot, as a **seven-segment numeral** (the
+    team's index, from 1).
+    - It sits on a 3 × 5 grid of whole-unit cells, with the unit at least 2, so the digit is at least 10 units tall:
+      the 7-unit floor, rounded up to whole cells.
+    - One digit covers 9 teams, above the largest hue capacity (8); two digits cover the rest.
+    - The kit check covers **all 36 pairs of digits** at the minimum size, with D6's samples. Today's samples cannot
+      tell 11 pairs apart in at least one direction, for example 1 against 7 and 7 against 9. D6's samples separate all 36 (smallest difference
+      1 pixel each way).
+  - When each of the game's teams has its own allegiance, the identity frame is the second channel, and the badge is
     optional.
   - The **accessible mirror label** names the team in every case.
 - **Above the hue capacity** (D12's per-size value), or whenever the player asks, team colour falls back to
@@ -365,7 +402,9 @@ per-channel tolerance.
    - draws the starter set in each shipped theme and checks every decided pixel, with a theme-swap control that must
      not match;
    - draws each identity frame alone and checks that every other frame's decided pixels differ from it (20 ordered
-     pairs), as the proof's smoke does;
+     pairs, with the identity-frame samples), as the proof's smoke does;
+   - draws each index badge alone against the other eight digits (all 36 pairs, both directions);
+   - draws D10's dense-board case;
    - runs D12's team-badge check.
 
 ### D7. The Fable `Scene` constructor gap: fixed in FS.GG.Rendering
@@ -436,7 +475,8 @@ The glyph layer is **additive**. No game has to adopt it in the same release.
      amplifiers and brackets (D1). The kit's hit probes at 0.2 and 0.8 of an object's bounds (RuneScape's gap 2)
      therefore fall inside the frame, never in an inset or a reserve.
    - **Layout.** A 32-unit tile holds a 24-unit frame. Its cue reserve and amplifiers overlap neighbouring tiles, which
-     `Glyphs.scene`'s passes allow (D10).
+     `Glyphs.scene`'s passes allow: amplifiers first, so a neighbour's status bar never covers a frame (D10). The
+     dense-board kit case is this layout.
 
    RuneScape's no-assets rule is unchanged: it adopts only vector glyphs. Its byte-identical .NET/Fable digests and
    its creature-colour probe are regenerated in the adoption PR.
@@ -530,17 +570,29 @@ Within the reserve, everything has a fixed place, from the frame outwards:
 Amplifiers sit outside the reserve.
 
 **Layout extents may overlap neighbours.** A dense board, such as RuneScape's 32-unit tiles or FourD's 40-unit cells,
-cannot give every glyph its own reserve and amplifier ring. `Glyphs.scene` therefore draws in **passes**:
-1. all bodies (frame, fill, icon, team mark, inner modifiers);
-2. all amplifiers;
+cannot give every glyph its own reserve and amplifier ring. `Glyphs.scene` therefore draws in **passes** (review N2):
+1. all amplifiers (status bars, pips, badges, facing);
+2. all bodies (frame, fill, icon, team mark, inner modifiers);
 3. all selection brackets.
 
-The cue layer then draws over all of them. A neighbour's amplifier may cover a glyph's reserve, but never another
-glyph's frame, and the brackets and cues are always on top.
+The cue layer then draws over all of them.
 
-`draw` needs no scale, because the reserve is in scene units. The kit's box-edge check runs with no cue showing, and
-then passes by construction: nothing is drawn within the gap outside a frame, so the pixel just outside each edge is
-the ground.
+**Guarantee.** No amplifier ever covers a frame, its own or a neighbour's, because amplifiers draw first. An amplifier
+may be covered where a neighbour's body overlaps it. A status bar that reaches into the tile above is cut by that tile's
+frame, and stays readable where it lies over ground. Brackets and cues are always on top.
+
+**Dense-board kit case.** The kit's glyph section draws D9's board: 32-unit tiles, each with a 24-unit identity frame
+and a status bar in its *above* amplifier slot, beyond the 8-unit reserve, so bars reach into the tiles above. The case
+requires two things:
+- every frame's decided pixels and box edges hold;
+- a control drawn with bodies first does not match.
+
+The proof runs this case (*The proof*).
+
+`draw` needs no scale, because the reserve is in scene units. The kit's box-edge check runs with no cue showing. On an
+isolated glyph it then passes by construction: nothing is drawn within the gap outside a frame, so the pixel just
+outside each edge is the ground. On a dense board, that pixel may be a neighbour's amplifier, which still differs from
+the frame, and the frame's own edge pixel still holds because bodies draw after amplifiers.
 
 **At least 2 CSS px after the surface transform.** Each focus band is
 `max(theme band, 2 / CueContext.cssPerUnit context)` scene units wide, rounded up to a whole CSS px.
@@ -645,8 +697,8 @@ check the ones a theme can break:
 5. **Flags are modifiers or badges**, the channels Bertin calls selective.
 6. **Identity and team are always double-encoded** (D1).
    - **Identity:** frame shape plus colour.
-   - **Team:** team colour plus the index badge, whenever two or more visible teams share an allegiance. Otherwise the
-     allegiance frame is the second channel.
+   - **Team:** team colour plus the index badge, whenever two or more of the **game's** teams share an allegiance.
+     Which teams are visible does not matter. Otherwise the allegiance frame is the second channel.
    - **Above the hue capacity:** the badge plus the allegiance frame, with colour falling back to allegiance.
    - **Kit check:** a monochrome scene of two teams that share an allegiance must decide pixels that differ between
      the two teams' glyphs (the badges), on every backend. The same check runs with the five identity frames (D1).
@@ -696,37 +748,52 @@ The proof does not constrain the API.
   The proof predates D1's slot model and frame mapping, D4's token layers, D10's placement and D11. Its themes are
   flat records of colours, and its `standard` theme is the seed of the `classic` preset. After the review at
   `8cbd7bed`, its status bar is keylined in the body colour: the dark track alone measured 1.33:1 on the ground.
-- **.NET tests.** `tests/Game.Render.Tests/ExperimentalGlyphsTests.fs` checks seven things:
+- **.NET tests.** `tests/Game.Render.Tests/ExperimentalGlyphsTests.fs` checks eleven things:
   - every glyph lowers to the portable set;
-  - the five identity frames are bars only, and every pair differs both ways (below);
+  - the identity frames, the badges and the dense board (five tests, below);
   - each status part meets 3:1 against its real neighbour: the keyline on the ground, each fill on the track;
   - every colour a glyph draws is a pixel `ScenePixels` decides;
   - the proof board decides more than 150 pixels;
   - both themes meet the 3:1 floor;
   - today a text node drawn last on the board leaves no pixel decided. This pins the gap D6 closes, and the test is
     inverted when D6 lands.
-- **Identity frames (review R3).** `Glyphs.identityFrame` builds D1's five bar-only frames. A .NET test requires
-  every ordered pair to differ in at least 2 decided pixels at 12, 16, 24 and 32 units. `runIdentityFrames` in the
-  smoke repeats this on SVG, Pixi and Babylon at 24 units:
-  - a strip of the five frames draws every decided pixel;
-  - each frame drawn alone differs from every other frame's decided pixels (20 ordered pairs).
+- **Identity frames, badges and the dense board (reviews R3, N1 and N2).**
+  - `Glyphs.identityFrame` builds D1's five bar-only frames, snapped to whole units. `Glyphs.badge` builds the
+    seven-segment index badges. `Glyphs.denseBoard` builds D10's dense board in either pass order.
+  - `Glyphs.identitySamples` prototypes D6's corner and quarter-edge samples.
+  - Their .NET tests check:
+    - every ordered frame pair differs by at least 2 with D6's samples, and every pair but Own/Ally with today's, at 12,
+      16, 24 and 32 units;
+    - every frame passes the box-edge check on its drawn bounding box, and off-grid centres snap to the same frame;
+    - Enemy's and Unknown's boxes are 20 × 20 and 30 × 30 at 24;
+    - all 36 badge pairs differ both ways, and the dense board keeps every frame's pixels, while its control does not.
+  - The smoke repeats these on SVG, Pixi and Babylon:
+    - the identity strip, and the 20 frame pairs at 24 units (`runIdentityFrames`);
+    - the badge strip, the 72 ordered digit pairs, the dense board, and its bodies-first control
+      (`runBadgesAndDenseBoard`).
 - **Browser smoke.** `runGlyphProof` in `tests/Render.Browser.Smoke/Program.fs` draws the 256×128 proof board, one
   theme per row, on SVG, Pixi and Babylon. It requires every decided pixel to match on each backend, with a
   theme-swap control that must not match. It reports a named pixel per glyph part and takes a screenshot when
   `RENDER_SMOKE_SCREENSHOTS` is set; the driver gained a `screenshot` request.
 - **Results** (fdev, Chrome for Testing 153.0.8010.12, both with SwiftShader and with the GPU (ANGLE Vulkan, RADV)):
-  the smoke passed **496** browser checks. 484 come from before this change: 6 are the glyph proof's, added on
-  2026-11-01, and 6 are the identity frames', added after the review at `0df23231`. On each backend:
+  the smoke passed **508** browser checks. 484 come from before this change; the rest were added in three rounds:
+  - 6 glyph-proof checks, on 2026-11-01;
+  - 6 identity-frame checks, after the review at `0df23231`;
+  - 12 badge and dense-board checks, after the review at `fe8f4ad2`.
+
+  On each backend:
   - all **403** pixels `ScenePixels` decides for the board matched (391 before the status keyline), and the theme-swap
     control did not;
-  - the identity strip drew all **124** decided pixels;
-  - every one of the 20 ordered frame pairs differed. Each pair's smaller count matched D1's 24-unit row exactly, on
-    SVG, Pixi and Babylon in both runs: Own/Ally 2, Own/Neutral 2, Ally/Neutral 2, Ally/Enemy 14, Ally/Unknown 8, and
-    4 for every other pair.
+  - the identity strip drew all **160** decided pixels, and every one of the 20 ordered frame pairs differed. Each
+    pair's smaller count matched D1's D6-sample row for 24 units exactly, on SVG, Pixi and Babylon in both runs:
+    Own/Ally 4, Own/Neutral 6, Ally/Neutral 10, Ally/Enemy 54, Ally/Unknown and Enemy/Unknown 28, and 16 for the
+    rest;
+  - the badge strip drew all **684** samples, and all 72 ordered digit pairs differed;
+  - the dense board drew all **746** decided pixels, and its bodies-first control did not match.
   - SVG and Pixi show the scene colours exactly.
   - Babylon shows 0.75 of them, within the kit's tolerance of 4, because it lights fills; #786 removes this.
-  - Screenshots are in `game-render-02-glyphs/`, for the board (`glyphs-*`) and the identity strip (`frames-*`): one
-    per backend from the GPU run, plus Babylon from the software run.
+  - Screenshots are in `game-render-02-glyphs/`, for the board (`glyphs-*`), the identity strip (`frames-*`), the badges
+    (`badges-*`) and the dense board (`dense-*`): one per backend from the GPU run, plus Babylon from the software run.
     The SVG screenshot also catches the SVG input host's "No object selected" status line: the smoke page has no
     visually-hidden style, so that text sits over the board. The renderer does not draw it.
   - The named-pixel table in the PR is **informational**: its points are read and reported, not asserted. The

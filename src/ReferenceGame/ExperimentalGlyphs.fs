@@ -137,37 +137,53 @@ module Glyphs =
         | Enemy
         | Unknown
 
+    /// All five identities, in order.
+    let identities = [ Own; Ally; Neutral; Enemy; Unknown ]
+
+    /// Snap a coordinate to a whole unit, half up (`Floor(v + 0.5)`, never `Math.Round`, as for colours in ADR D11).
+    let snap (v: float) = System.Math.Floor(v + 0.5)
+
     /// The identity frame of `identity`, `size` units across, centred on `centre`, built only from opaque bars (filled
-    /// rectangles) so every backend draws it and `ScenePixels` decides its edges (ADR D1, review R3 of #794):
+    /// rectangles), so every backend draws it and `ScenePixels` decides its edges (ADR D1, reviews R3 and N1 of #794):
     /// - Own: the APP-6 friend rectangle, 3:2;
-    /// - Ally: the friend rectangle with notches in the middle of its top and bottom edges, in the ground colour;
+    /// - Ally: the friend rectangle with true holes (no paint) at the quarter points of its top and bottom edges, never
+    ///   at an edge midpoint, so the box-edge probes at the midpoints still land on the frame;
     /// - Neutral: a square;
     /// - Enemy: a stepped diamond of rows one step high (`max 1 (floor (size / 12))`), two steps narrower than the square
     ///   at its middle and narrowing by two steps per row;
     /// - Unknown: a stepped quatrefoil, a cross whose arms reach one band past the square on each side.
-    /// The band is `max 1 (floor (size / 8))`. Every coordinate is a whole unit when `centre` is.
-    let identityFrame (identity: Identity) (centre: Point) (size: float) (ink: Color) (ground: Color) : SceneNode list =
+    /// The band is `max 1 (floor (size / 8))`. The centre is snapped to whole units and the size floored, always: the
+    /// distinguishability matrix holds only for whole-unit frames (off-grid centres gave 0-pixel pairs).
+    let identityFrame (identity: Identity) (centre: Point) (size: float) (ink: Color) : SceneNode list =
+        let cx = snap centre.X
+        let cy = snap centre.Y
         let w = System.Math.Floor size
         let band = max 1.0 (System.Math.Floor(w / 8.0))
         let half = System.Math.Floor(w / 2.0)
-        let at (dx: float) (dy: float) (bw: float) (bh: float) colour = box (centre.X + dx) (centre.Y + dy) bw bh colour
+        let at (dx: float) (dy: float) (bw: float) (bh: float) = box (cx + dx) (cy + dy) bw bh ink
 
         match identity with
-        | Own
-        | Ally ->
+        | Own ->
             let h = System.Math.Floor(w * 2.0 / 3.0)
-            let hh = System.Math.Floor(h / 2.0)
-            let body = at -half -hh w h ink
-
-            match identity with
-            | Ally ->
-                let n = max 2.0 (System.Math.Floor(w / 4.0))
-                [ body; at (-System.Math.Floor(n / 2.0)) -hh n n ground; at (-System.Math.Floor(n / 2.0)) (h - hh - n) n n ground ]
-            | _ -> [ body ]
-        | Neutral -> [ at -half -half w w ink ]
+            [ at -half -(System.Math.Floor(h / 2.0)) w h ]
+        | Ally ->
+            // Holes of n x n at the quarter points of the top and bottom edges: the top and bottom strips are three bars
+            // each (left, middle, right), and the band between them is one full-width bar.
+            let h = System.Math.Floor(w * 2.0 / 3.0)
+            let top = -(System.Math.Floor(h / 2.0))
+            let n = max 2.0 (System.Math.Floor(w / 6.0))
+            let left = -half
+            let q1 = left + System.Math.Floor(w / 4.0) - System.Math.Floor(n / 2.0)
+            let q3 = left + System.Math.Floor(3.0 * w / 4.0) - System.Math.Floor(n / 2.0)
+            let strip y =
+                [
+                    at left y (q1 - left) n
+                    at (q1 + n) y (q3 - q1 - n) n
+                    at (q3 + n) y (left + w - q3 - n) n
+                ]
+            [ yield! strip top; at left (top + n) w (h - 2.0 * n); yield! strip (top + h - n) ]
+        | Neutral -> [ at -half -half w w ]
         | Enemy ->
-            // Pairs of rows from the middle out: the middle pair is two bands narrower than the square, so the square's edge
-            // samples fall outside it, and each further pair is two bands narrower again.
             // Finer steps than the other frames' band (w / 12, not w / 8), so the outline reads as a diamond, not a blob.
             let step = max 1.0 (System.Math.Floor(w / 12.0))
             let steps = int (System.Math.Floor(half / step))
@@ -177,17 +193,55 @@ module Glyphs =
                     let rowWidth = w - 2.0 * step * float (i + 1)
                     if rowWidth > 0.0 then
                         let x = -System.Math.Floor(rowWidth / 2.0)
-                        yield at x (-step * float (i + 1)) rowWidth step ink
-                        yield at x (step * float i) rowWidth step ink
+                        yield at x (-step * float (i + 1)) rowWidth step
+                        yield at x (step * float i) rowWidth step
             ]
         | Unknown ->
             let reach = half + band
             let arm = System.Math.Floor(w / 2.0)
             let armHalf = System.Math.Floor(arm / 2.0)
-            [ at -reach -armHalf (2.0 * reach) arm ink; at -armHalf -reach arm (2.0 * reach) ink ]
+            [ at -reach -armHalf (2.0 * reach) arm; at -armHalf -reach arm (2.0 * reach) ]
 
-    /// All five identities, in order.
-    let identities = [ Own; Ally; Neutral; Enemy; Unknown ]
+    /// The drawn bounding box of a list of rectangles: what `GlyphDrawing.frame` returns (ADR D1). At a nominal 24 units,
+    /// Enemy's is 20 x 20 and Unknown's 30 x 30.
+    let boundsOf (nodes: SceneNode list) : Rect =
+        let rs = nodes |> List.choose (function SceneNode.Rectangle((x, y, w, h), _) -> Some(x, y, x + w, y + h) | _ -> None)
+        let l = rs |> List.map (fun (l, _, _, _) -> l) |> List.min
+        let t = rs |> List.map (fun (_, t, _, _) -> t) |> List.min
+        let r = rs |> List.map (fun (_, _, r, _) -> r) |> List.max
+        let b = rs |> List.map (fun (_, _, _, b) -> b) |> List.max
+        { X = l; Y = t; Width = r - l; Height = b - t }
+
+    /// The index badge (ADR D1, review N2 of #794): a seven-segment numeral 1-9 on a 3 x 5 grid of `unit`-sized cells
+    /// whose top left is `topLeft`, so the digit is `5 * unit` tall. The unit is whole and at least 2, so the digit is at
+    /// least 10 units tall (the 7-unit floor rounded up to whole cells).
+    let badge (digit: int) (topLeft: Point) (unit: float) (ink: Color) : SceneNode list =
+        let u = max 2.0 (System.Math.Floor unit)
+        let x0 = snap topLeft.X
+        let y0 = snap topLeft.Y
+        let cell (c: float) (r: float) (cw: float) (rh: float) = box (x0 + c * u) (y0 + r * u) (cw * u) (rh * u) ink
+        // Segments: a top, b upper right, c lower right, d bottom, e lower left, f upper left, g middle.
+        let segment s =
+            match s with
+            | 'a' -> cell 0.0 0.0 3.0 1.0
+            | 'b' -> cell 2.0 0.0 1.0 3.0
+            | 'c' -> cell 2.0 2.0 1.0 3.0
+            | 'd' -> cell 0.0 4.0 3.0 1.0
+            | 'e' -> cell 0.0 2.0 1.0 3.0
+            | 'f' -> cell 0.0 0.0 1.0 3.0
+            | _ -> cell 0.0 2.0 3.0 1.0
+        let segments =
+            match digit with
+            | 1 -> "bc"
+            | 2 -> "abged"
+            | 3 -> "abgcd"
+            | 4 -> "fgbc"
+            | 5 -> "afgcd"
+            | 6 -> "afgedc"
+            | 7 -> "abc"
+            | 8 -> "abcdefg"
+            | _ -> "abcdfg"
+        [ for ch in segments -> segment ch ]
 
     /// The scene nodes of one glyph in `theme`, in the portable primitive set.
     let draw (theme: Theme) (glyph: Glyph) : SceneNode list =
@@ -282,3 +336,74 @@ module Glyphs =
                 yield! row top 0.0 |> List.collect (draw top)
                 yield! row bottom (proofHeight / 2.0) |> List.collect (draw bottom)
             ] }
+
+    /// D9's dense board (review N2 of #794): a `columns` x `rows` grid of 32-unit tiles, each holding a 24-unit identity
+    /// frame with a status bar above it in the amplifier slot, outside the 8-unit cue reserve, so each bar reaches into
+    /// the tile above. With `amplifiersFirst` the amplifier pass draws before the bodies, so frames win over neighbours'
+    /// amplifiers (the ruled order); without it, bodies draw first and the bars cover the frames above (the control).
+    let denseBoard (theme: Theme) (columns: int) (rows: int) (amplifiersFirst: bool) : Scene =
+        let tile = 32.0
+        let frames =
+            [
+                for r in 0 .. rows - 1 do
+                    for c in 0 .. columns - 1 do
+                        let identity = identities.[(r * columns + c) % identities.Length]
+                        let centre = { X = tile * float c + tile / 2.0; Y = tile * float r + tile / 2.0 + 8.0 }
+                        let ink = if (r + c) % 2 = 0 then theme.Body else Theme.team theme (r + c)
+                        let nodes = identityFrame identity centre 24.0 ink
+                        let frame = boundsOf nodes
+                        let bar = { X = frame.X; Y = frame.Y - 8.0 - 6.0; Width = 24.0; Height = 6.0 }
+                        yield nodes, draw theme (Status(bar, 0.25 + 0.25 * float ((r + c) % 3)))
+            ]
+        let bodies = frames |> List.collect fst
+        let amplifiers = frames |> List.collect snd
+        let ground = SceneNode.Rectangle((0.0, 0.0, tile * float columns, tile * float rows + 8.0), theme.Ground)
+        { Nodes = ground :: (if amplifiersFirst then amplifiers @ bodies else bodies @ amplifiers) }
+
+    /// EXPERIMENTAL prototype of ADR D6's corner and quarter-edge samples for identity frames and badges (review R3 of
+    /// #794), for scenes of opaque rectangles only: `ScenePixels.expectations` plus, for every rectangle, the pixels
+    /// just inside and just outside each corner, and just inside and outside each edge at a quarter and three quarters
+    /// of its length. A sample is kept when every rectangle covers its pixel wholly or not at all (the kit's Full/Clear
+    /// rule), with the colour of the last rectangle covering it, or the clear colour (black) when none does.
+    let identitySamples (width: float) (height: float) (scene: Scene) : FS.GG.Game.Render.PixelExpectation list =
+        let rects =
+            scene.Nodes
+            |> List.choose (function SceneNode.Rectangle((x, y, w, h), colour) -> Some(x, y, x + w, y + h, colour) | _ -> None)
+        let columns = int (System.Math.Floor width)
+        let rows = int (System.Math.Floor height)
+        let colourAt (col: int) (row: int) =
+            let x0, y0 = float col, float row
+            let x1, y1 = x0 + 1.0, y0 + 1.0
+            let folder (top, partial) (l, t, r, b, colour) =
+                if x1 <= l || x0 >= r || y1 <= t || y0 >= b then top, partial
+                elif x0 >= l && x1 <= r && y0 >= t && y1 <= b then Some colour, false
+                else top, true
+            match List.fold folder (None, false) rects with
+            | _, true -> None
+            | Some colour, false -> Some colour
+            | None, false -> Some { Red = 0uy; Green = 0uy; Blue = 0uy; Alpha = 255uy }
+        let extra =
+            [
+                for (l, t, r, b, _) in rects do
+                    let li, ti = int (System.Math.Ceiling l), int (System.Math.Ceiling t)
+                    let ri, bi = int (System.Math.Floor r) - 1, int (System.Math.Floor b) - 1
+                    let lo, tout = int (System.Math.Floor l) - 1, int (System.Math.Floor t) - 1
+                    let ro, bout = int (System.Math.Ceiling r), int (System.Math.Ceiling b)
+                    yield! [ li, ti; ri, ti; li, bi; ri, bi; lo, tout; ro, tout; lo, bout; ro, bout ]
+                    for f in [ 0.25; 0.75 ] do
+                        let x = int (System.Math.Floor(l + (r - l) * f))
+                        let y = int (System.Math.Floor(t + (b - t) * f))
+                        yield! [ x, ti; x, tout; x, bi; x, bout; li, y; lo, y; ri, y; ro, y ]
+            ]
+        let fromKit = FS.GG.Game.Render.ScenePixels.expectations width height scene
+        let seen = System.Collections.Generic.HashSet<int * int>()
+        for e in fromKit do
+            seen.Add((int (System.Math.Floor e.Point.X), int (System.Math.Floor e.Point.Y))) |> ignore
+        fromKit
+        @ [
+            for col, row in extra do
+                if col >= 0 && col < columns && row >= 0 && row < rows && seen.Add((col, row)) then
+                    match colourAt col row with
+                    | Some colour -> yield FS.GG.Game.Render.PixelExpectation.create { X = float col + 0.5; Y = float row + 0.5 } colour
+                    | None -> ()
+        ]
