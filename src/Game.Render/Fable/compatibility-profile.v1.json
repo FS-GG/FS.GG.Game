@@ -13,7 +13,8 @@
     "RendererHost effect interpreter with contained Mount, Present and Dispose failures",
     "SceneSurface and SceneRenderers three-adapter authoring declaration over one shared Scene view",
     "SceneInteraction contract: selectable objects, reference hit test, keyboard reducer and SelectionRoute",
-    "RendererConformance kit: registry, round-trip, switch, dispose, late-failure and interaction checks with an in-process host"
+    "RendererConformance kit: registry, round-trip, switch, dispose, late-failure and interaction checks with an in-process host",
+    "Theme tokens: seed, map and alias layers, validation, deterministic OKLCH derivation, CSS variables and DTCG export and import (FS.GG.Game#789)"
   ],
   "dotNetOnly": [
     "Adapter (Game.Core Grids projection)",

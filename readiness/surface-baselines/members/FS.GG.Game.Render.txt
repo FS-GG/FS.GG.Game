@@ -86,6 +86,11 @@ FS.GG.Game.Render.GuestReply+Tags.TimedOut : System.Int32
 FS.GG.Game.Render.GuestRequest.call<Input, Client>(GuestRequest<Input, Client>) : GuestCall<Input>
 FS.GG.Game.Render.GuestRequest.client<Input, Client>(GuestRequest<Input, Client>) : Client
 FS.GG.Game.Render.GuestRequest.create<Input, Client>(GuestCall<Input>, Client) : GuestRequest<Input, Client>
+FS.GG.Game.Render.Identity+Tags.Ally : System.Int32
+FS.GG.Game.Render.Identity+Tags.Enemy : System.Int32
+FS.GG.Game.Render.Identity+Tags.Neutral : System.Int32
+FS.GG.Game.Render.Identity+Tags.Own : System.Int32
+FS.GG.Game.Render.Identity+Tags.Unknown : System.Int32
 FS.GG.Game.Render.InputAction+Tags.Activate : System.Int32
 FS.GG.Game.Render.InputAction+Tags.ActivateSecondary : System.Int32
 FS.GG.Game.Render.InputAction+Tags.Cancel : System.Int32
@@ -155,6 +160,10 @@ FS.GG.Game.Render.ObjectAccess.group(FS.GG.Game.Render.ObjectAccess) : Microsoft
 FS.GG.Game.Render.ObjectAccess.grouped(System.String) : FS.GG.Game.Render.ObjectAccess
 FS.GG.Game.Render.ObjectAccess.isKeyboardReachable(FS.GG.Game.Render.ObjectAccess) : System.Boolean
 FS.GG.Game.Render.ObjectAccess.pointerOnly : FS.GG.Game.Render.ObjectAccess [get]
+FS.GG.Game.Render.Oklch.C : System.Double [get]
+FS.GG.Game.Render.Oklch.H : System.Double [get]
+FS.GG.Game.Render.Oklch.L : System.Double [get]
+FS.GG.Game.Render.Oklch.new(System.Double, System.Double, System.Double)
 FS.GG.Game.Render.PipelineEffect`3+Tags.ApplyLocal : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.ArmDeadline : System.Int32
 FS.GG.Game.Render.PipelineEffect`3+Tags.ArmStartDeadline : System.Int32
@@ -328,3 +337,57 @@ FS.GG.Game.Render.SelectionRoute.bind(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Gam
 FS.GG.Game.Render.SelectionRoute.create() : FS.GG.Game.Render.SelectionRoute
 FS.GG.Game.Render.SelectionRoute.report(FS.GG.Game.Render.SelectionRequest, FS.GG.Game.Render.SelectionRoute) : System.Void
 FS.GG.Game.Render.SelectionRoute.unbind(FS.GG.Game.Render.SelectionRoute) : System.Void
+FS.GG.Game.Render.Theme.algorithms(FS.GG.Game.Render.Theme) : Microsoft.FSharp.Collections.FSharpList<System.String>
+FS.GG.Game.Render.Theme.aliases(FS.GG.Game.Render.Theme) : Microsoft.FSharp.Collections.FSharpList<System.String>
+FS.GG.Game.Render.Theme.allegiance(FS.GG.Game.Render.Identity, FS.GG.Game.Render.Theme) : FS.GG.UI.Scene.Color
+FS.GG.Game.Render.Theme.classic : FS.GG.Game.Render.Theme [get]
+FS.GG.Game.Render.Theme.create(FS.GG.Game.Render.ThemeSeed, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeAlgorithm>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeOverride>) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.Theme, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeViolation>>
+FS.GG.Game.Render.Theme.cssVariables(FS.GG.Game.Render.Theme) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, System.String>>
+FS.GG.Game.Render.Theme.dtcgResolver(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Theme>) : System.String
+FS.GG.Game.Render.Theme.hex(FS.GG.Game.Render.Theme) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, System.String>>
+FS.GG.Game.Render.Theme.hueCapacity(FS.GG.Game.Render.Theme, System.Int32) : System.Int32
+FS.GG.Game.Render.Theme.minCssPerUnit(FS.GG.Game.Render.Theme) : System.Double
+FS.GG.Game.Render.Theme.name(FS.GG.Game.Render.Theme) : System.String
+FS.GG.Game.Render.Theme.ofDtcg(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeAlgorithm>, System.String) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.Theme, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeViolation>>
+FS.GG.Game.Render.Theme.presets : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Theme> [get]
+FS.GG.Game.Render.Theme.seed(FS.GG.Game.Render.Theme) : FS.GG.Game.Render.ThemeSeed
+FS.GG.Game.Render.Theme.teamCount(FS.GG.Game.Render.Theme) : System.Int32
+FS.GG.Game.Render.Theme.toDtcg(FS.GG.Game.Render.Theme) : System.String
+FS.GG.Game.Render.Theme.tokens(FS.GG.Game.Render.Theme) : FS.GG.Game.Render.ThemeTokens
+FS.GG.Game.Render.Theme.tryColour(System.String, FS.GG.Game.Render.Theme) : Microsoft.FSharp.Core.FSharpOption<FS.GG.UI.Scene.Color>
+FS.GG.Game.Render.Theme.tryNumber(System.String, FS.GG.Game.Render.Theme) : Microsoft.FSharp.Core.FSharpOption<System.Double>
+FS.GG.Game.Render.Theme.withOverrides(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeOverride>, FS.GG.Game.Render.Theme) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.Theme, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeViolation>>
+FS.GG.Game.Render.ThemeAlgorithm.create(System.String, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.ThemeSeed, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.ThemeTokens, FS.GG.Game.Render.ThemeTokens>>) : FS.GG.Game.Render.ThemeAlgorithm
+FS.GG.Game.Render.ThemeAlgorithm.name(FS.GG.Game.Render.ThemeAlgorithm) : System.String
+FS.GG.Game.Render.ThemeAlgorithm.standard : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemeColour.contrast(FS.GG.UI.Scene.Color, FS.GG.UI.Scene.Color) : System.Double
+FS.GG.Game.Render.ThemeColour.hex(FS.GG.UI.Scene.Color) : System.String
+FS.GG.Game.Render.ThemeColour.linear(System.Byte) : System.Double
+FS.GG.Game.Render.ThemeColour.luminance(FS.GG.UI.Scene.Color) : System.Double
+FS.GG.Game.Render.ThemeColour.ofHex(System.String) : Microsoft.FSharp.Core.FSharpOption<FS.GG.UI.Scene.Color>
+FS.GG.Game.Render.ThemeColour.ofOklch(FS.GG.Game.Render.Oklch) : FS.GG.UI.Scene.Color
+FS.GG.Game.Render.ThemeColour.quantise(System.Double) : System.Byte
+FS.GG.Game.Render.ThemeColour.toOklch(FS.GG.UI.Scene.Color) : FS.GG.Game.Render.Oklch
+FS.GG.Game.Render.ThemeOverride.colour(System.String, FS.GG.UI.Scene.Color) : FS.GG.Game.Render.ThemeOverride
+FS.GG.Game.Render.ThemeOverride.number(System.String, System.Double) : FS.GG.Game.Render.ThemeOverride
+FS.GG.Game.Render.ThemeSeed.classic : FS.GG.Game.Render.ThemeSeed [get]
+FS.GG.Game.Render.ThemeSeed.colour(System.String, FS.GG.UI.Scene.Color, FS.GG.Game.Render.ThemeSeed) : FS.GG.Game.Render.ThemeSeed
+FS.GG.Game.Render.ThemeSeed.colourNames : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Render.ThemeSeed.colours(FS.GG.Game.Render.ThemeSeed) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, FS.GG.UI.Scene.Color>>
+FS.GG.Game.Render.ThemeSeed.name(FS.GG.Game.Render.ThemeSeed) : System.String
+FS.GG.Game.Render.ThemeSeed.named(System.String, FS.GG.Game.Render.ThemeSeed) : FS.GG.Game.Render.ThemeSeed
+FS.GG.Game.Render.ThemeSeed.number(System.String, System.Double, FS.GG.Game.Render.ThemeSeed) : FS.GG.Game.Render.ThemeSeed
+FS.GG.Game.Render.ThemeSeed.numberNames : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Render.ThemeSeed.numbers(FS.GG.Game.Render.ThemeSeed) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, System.Double>>
+FS.GG.Game.Render.ThemeSeed.tryColour(System.String, FS.GG.Game.Render.ThemeSeed) : Microsoft.FSharp.Core.FSharpOption<FS.GG.UI.Scene.Color>
+FS.GG.Game.Render.ThemeSeed.tryNumber(System.String, FS.GG.Game.Render.ThemeSeed) : Microsoft.FSharp.Core.FSharpOption<System.Double>
+FS.GG.Game.Render.ThemeSeed.without(System.String, FS.GG.Game.Render.ThemeSeed) : FS.GG.Game.Render.ThemeSeed
+FS.GG.Game.Render.ThemeTokens.empty : FS.GG.Game.Render.ThemeTokens [get]
+FS.GG.Game.Render.ThemeTokens.names(FS.GG.Game.Render.ThemeTokens) : Microsoft.FSharp.Collections.FSharpList<System.String>
+FS.GG.Game.Render.ThemeTokens.tryColour(System.String, FS.GG.Game.Render.ThemeTokens) : Microsoft.FSharp.Core.FSharpOption<FS.GG.UI.Scene.Color>
+FS.GG.Game.Render.ThemeTokens.tryNumber(System.String, FS.GG.Game.Render.ThemeTokens) : Microsoft.FSharp.Core.FSharpOption<System.Double>
+FS.GG.Game.Render.ThemeTokens.withColour(System.String, FS.GG.UI.Scene.Color, FS.GG.Game.Render.ThemeTokens) : FS.GG.Game.Render.ThemeTokens
+FS.GG.Game.Render.ThemeTokens.withNumber(System.String, System.Double, FS.GG.Game.Render.ThemeTokens) : FS.GG.Game.Render.ThemeTokens
+FS.GG.Game.Render.ThemeViolation.Reason : System.String [get]
+FS.GG.Game.Render.ThemeViolation.ToString() : System.String
+FS.GG.Game.Render.ThemeViolation.Token : System.String [get]

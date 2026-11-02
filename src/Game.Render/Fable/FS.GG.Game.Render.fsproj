@@ -33,6 +33,9 @@
     <Compile Include="../SceneRenderers.fs" />
     <Compile Include="../RendererConformance.fsi" />
     <Compile Include="../RendererConformance.fs" />
+    <Compile Include="../ThemeBaked.fs" />
+    <Compile Include="../Theme.fsi" />
+    <Compile Include="../Theme.fs" />
   </ItemGroup>
 
   <ItemGroup>

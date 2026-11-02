@@ -187,10 +187,34 @@ Adapter authors keep two obligations the kit checks:
 - An adapter that initialises asynchronously reports a late failure only while its own mount is undisposed.
   The driver cannot tell two mounts of the same backend apart.
 
+### Theme tokens (FS.GG.Game#789)
+
+A `Theme` is the view input every glyph colour, stroke and size comes from (ADR
+`docs/roadmaps/game-render-02-glyphs.md`, D4 and D11). It has three layers:
+
+- the **seed** (`ThemeSeed`): a small closed set of named colours and numbers, such as `ground`, `ink`, the allegiance
+  and team hues, `contrastTarget`, `cell` and `minCssPerUnit`;
+- the **map** (`ThemeTokens`): what the algorithms derive, in order (`ThemeAlgorithm.standard` first);
+- the **alias** layer: the closed set of names glyph code reads, such as `glyph.team.0`, `cue.focus.outer` and
+  `size.cell`.
+
+`Theme.create seed algorithms overrides` returns the theme or every violation: opaque colours only, a 3:1 WCAG 2 floor
+against the ground (`contrastTarget` raises it), and 3:1 between colours that touch. `Theme.withOverrides` re-validates a
+player's team-colour override. `Theme.classic` is the baked default preset. FS.GG.Game#795 adds the other presets.
+
+Colours are derived in OKLCH and quantised with a clamp then `Floor(v + 0.5)`. Contrast is computed on the 8-bit values
+through a committed table, so .NET on Linux and Windows and node (through Fable) give the same bytes.
+`scripts/test-theme-determinism.sh` checks this against `tests/Game.Render.Theme.Determinism/expected.txt`, including the
+full 8-bit round trip. `Theme.cssVariables` and `Theme.hex` export the aliases for the parts of a game the Scene does not
+draw. `Theme.toDtcg`, `Theme.ofDtcg` and `Theme.dtcgResolver` read and write DTCG 2025.10 token files, preferring `hex` on
+import. To regenerate the baked preset after an algorithm change, run
+`dotnet run --project tests/Game.Render.Theme.Determinism -- --bake src/Game.Render/ThemeBaked.fs`, then regenerate
+`expected.txt`.
+
 ### Fable and the browser host
 
 The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneInteraction`,
-`SceneRenderers` and `RendererConformance`, each `.fsi` and `.fs`) so a Fable-compiled browser host can register adapters
+`SceneRenderers`, `RendererConformance` and `Theme`, each `.fsi` and `.fs`, with the baked `ThemeBaked.fs`) so a Fable-compiled browser host can register adapters
 against the same `RendererRegistry` and run the conformance kit. `Adapter` and
 `DefaultKeymap` are .NET-only and are not in that view. The view is first published in 0.18.0 (0.17.0 carries no
 Fable view). Its packed `fable/FS.GG.Game.Render.fsproj` lists its sources unconditionally, because Fable does not
