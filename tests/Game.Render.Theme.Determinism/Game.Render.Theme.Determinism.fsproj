@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ADR GAME-RENDER-02.4 D11 (FS.GG.Game#789): theme colour derivation gives the same bytes on .NET (Linux and
+       Windows) and through Fable (node). Dependency-free, so the same sources run with `dotnet run` and with
+       `dotnet fable` then node; scripts/test-theme-determinism.sh compares both outputs with each other and with the
+       committed expected.txt, and the Windows job compares its .NET output with expected.txt. It references the bounded
+       Fable view of FS.GG.Game.Render, the sources a Fable consumer compiles. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Game.Render\Fable\FS.GG.Game.Render.fsproj" />
+  </ItemGroup>
+
+</Project>
