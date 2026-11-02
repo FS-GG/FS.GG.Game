@@ -277,7 +277,9 @@ module Theme =
     ///   `cue.focus.outer` and `cue.hover`;
     /// - 3:1 between colours that touch: `cue.focus.inner` on `cue.focus.outer`; `glyph.badge.ink` on the body and on
     ///   every team and allegiance colour; `glyph.icon.ink` on the body and every allegiance colour; every team colour
-    ///   on the body (the team mark sits between fill and body); every status fill on `status.track`; `status.track`
+    ///   on the body (the team ring's layout, ADR D1 erratum: from the edge in, the frame in its identity colour, a
+    ///   keyline in the body colour, the ring in the team colour, then the body fill, so the ring touches the body on
+    ///   both sides and never the identity colour); every status fill on `status.track`; `status.track`
     ///   on `status.keyline`; `glyph.modifier` on the body and on every team and allegiance colour. `status.keyline` is
     ///   also held to the ground floor.
     val create:
@@ -285,8 +287,16 @@ module Theme =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The theme with `overrides` applied after its own, validated again by the built-in rules and every check the
-    /// theme carries (a player's team-colour override: an override that fails is refused with its reasons).
+    /// theme carries; an override that fails is refused with its reasons. For a game's own adjustments: a player's
+    /// colour goes through `withTeamColour`. The floors (`contrastTarget`, `minCssPerUnit`, `hueCapacity.*`) are the
+    /// seed's, and an override of one is refused here and in `create`, so no override can lower a floor.
     val withOverrides: overrides: ThemeOverride list -> theme: Theme -> Result<Theme, ThemeViolation list>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A player's team colour (XAG 103): `glyph.team.<team>` set to `colour` and the theme validated again by the
+    /// built-in rules and every carried check, or refused with the reasons. Only an existing team's colour can be set;
+    /// a player has no path to any other token, and none to a floor.
+    val withTeamColour: team: int -> colour: FS.GG.UI.Scene.Color -> theme: Theme -> Result<Theme, ThemeViolation list>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The theme validated again with `checks` added after the checks it already carries (ADR D12: the validation
@@ -369,19 +379,26 @@ module Theme =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The theme as a DTCG 2025.10 token file: the seed (group `seed`) and every resolved alias (group `alias`), each
-    /// colour as `{colorSpace: "oklch", components, hex}`, each number as a number, with the theme's name and algorithm
-    /// names under the `$extensions` key `gg.fs.theme`. The text is the same bytes on .NET and through Fable.
+    /// colour as `{colorSpace: "oklch", components, hex}`, each number as a number, with the theme's name, algorithm
+    /// names and number overrides under the `$extensions` key `gg.fs.theme`. The text is the same bytes on .NET and
+    /// through Fable.
     val toDtcg: theme: Theme -> string
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// A DTCG 2025.10 resolver document over `themes`: a `theme` modifier with one context per theme file
-    /// (`<name>.tokens.json`, the first by default) and a `density` modifier (`regular`, the default, and `compact`,
-    /// which sets the seed's `density` to 0.75), resolved in that order.
+    /// A DTCG resolver document over `themes`, version `2025-10-01` (the Resolver Module gives 2025-10-01 in its
+    /// property table and 2025-11-01 in section 4.1.2; FS.GG.Game#789 and #805 use 2025-10-01). Two or more themes are a
+    /// `theme` modifier with one context per theme file (`<name>.tokens.json`, the first by default); one theme is a
+    /// set, since a modifier should have two or more contexts. A `density` modifier follows (`regular`, the default,
+    /// and `compact`, which sets the seed's `density` to 0.75; `ofDtcg` derives the sizes again from the seed, so the
+    /// context changes them).
     val dtcgResolver: themes: Theme list -> string
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Read a DTCG token file written by `toDtcg` (or edited from one): group `seed` becomes the seed and group `alias`
-    /// becomes alias overrides, so deleting the alias group derives every alias again from the edited seed. A colour
-    /// with a `hex` is read from the hex, never from its components. The algorithms are looked up by name in
-    /// `algorithms`. Export then import gives equal resolved hex for every alias.
+    /// Read a DTCG token file written by `toDtcg` (or edited from one): group `seed` becomes the seed, and the colours
+    /// of group `alias` become alias overrides, so deleting them derives every colour again from the edited seed. Size
+    /// aliases are always derived again from the seed (a size the theme overrode travels in the extension's
+    /// `numberOverrides`). A token's `$type` may be its own or its nearest group's, and a `$value` may be a reference such
+    /// as `"{seed.team.0}"`, followed through the document (a missing target or a cycle is refused). A colour with a
+    /// `hex` is read from the hex, never from its components. The algorithms are looked up by name in `algorithms`.
+    /// Export then import gives equal resolved hex for every alias.
     val ofDtcg: algorithms: ThemeAlgorithm list -> json: string -> Result<Theme, ThemeViolation list>

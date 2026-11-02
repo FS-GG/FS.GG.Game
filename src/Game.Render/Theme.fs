@@ -672,8 +672,13 @@ module Theme =
         let mutable mapValues = mapped.Values
         let aliasOverrides = System.Collections.Generic.Dictionary<string, TokenValue>()
 
+        // The floors (contrast, presented scale, hue capacity) are the seed's: an override could only lower them.
+        let isFloor (token: string) =
+            token = "contrastTarget" || token = "minCssPerUnit" || token.StartsWith "hueCapacity"
+
         for o in overrides do
             match table |> List.tryFind (fun (alias, _) -> alias = o.Token) with
+            | _ when isFloor o.Token -> fail o.Token "is a floor: it is set in the seed, never by an override"
             | Some _ -> aliasOverrides.[o.Token] <- o.Value
             | None when mapValues.ContainsKey o.Token -> mapValues <- mapValues |> Map.add o.Token o.Value
             | None -> fail o.Token "is neither an alias nor a map token of this theme"
@@ -848,6 +853,15 @@ module Theme =
 
     let withOverrides (overrides: ThemeOverride list) (theme: Theme) =
         resolve theme.Seed theme.Algorithms (theme.Overrides @ overrides) theme.Checks
+
+    let withTeamColour (team: int) (colour: Color) (theme: Theme) =
+        let alias = sprintf "glyph.team.%d" team
+        let teams = theme.Palette.Teams.Length
+
+        if team < 0 || team >= teams then
+            Error [ ThemeViolation(alias, sprintf "theme %s colours teams 0 to %d" theme.Seed.Name (teams - 1)) ]
+        else
+            withOverrides [ ThemeOverride(alias, ColourToken colour) ] theme
 
     let name (theme: Theme) = theme.Seed.Name
     let seed (theme: Theme) = theme.Seed
@@ -1159,6 +1173,11 @@ module Theme =
                                 [
                                     "name", JString theme.Seed.Name
                                     "algorithms", JArray(theme.Algorithms |> List.map (fun a -> JString a.Name))
+                                    "numberOverrides",
+                                    JObject(
+                                        theme.Overrides
+                                        |> List.choose (fun o -> match o.Value with NumberToken v -> Some(o.Token, JNumber v) | ColourToken _ -> None)
+                                    )
                                 ]
                         ]
                     "seed", group seedEntries
@@ -1168,66 +1187,109 @@ module Theme =
 
     let dtcgResolver (themes: Theme list) =
         let names = themes |> List.map (fun t -> t.Seed.Name)
+        let file n = JArray [ JObject [ "$ref", JString(n + ".tokens.json") ] ]
 
-        // DTCG Resolver Module 2025.10: `version` and `resolutionOrder` are required; each modifier's `contexts` map a
-        // context name to its sources (file references or inline tokens), and `default` names one of them.
+        // DTCG Resolver Module: `version` and `resolutionOrder` are required. The module contradicts itself on the version
+        // date (2025-10-01 in its property table, 2025-11-01 in section 4.1.2); Root's ruling (FS.GG.Game#789, #805 Q-T9)
+        // is 2025-10-01. A modifier should have two or more contexts, so a single theme is a set, not a modifier.
+        let single = List.length names = 1
+
+        let sets =
+            if single then [ "sets", JObject [ names.Head, JObject [ "sources", file names.Head ] ] ] else []
+
+        let themeModifier =
+            if single then
+                []
+            else
+                [
+                    "theme",
+                    JObject
+                        [
+                            "contexts", JObject [ for n in names -> n, file n ]
+                            "default", JString(List.tryHead names |> Option.defaultValue "")
+                        ]
+                ]
+
+        let themeRef = if single then "#/sets/" + names.Head else "#/modifiers/theme"
+
+        let density =
+            "density",
+            JObject
+                [
+                    "contexts",
+                    JObject [ "regular", JArray []; "compact", JArray [ JObject [ "seed", JObject [ "density", numberToken 0.75 ] ] ] ]
+                    "default", JString "regular"
+                ]
+
         write
             ""
-            (JObject
+            (JObject(
                 [
                     "name", JString "fsgg-glyph-themes"
                     "description", JString "FS.GG.Game.Render glyph themes (ADR GAME-RENDER-02.4 D4)"
-                    "version", JString "2025.10"
-                    "modifiers",
-                    JObject
-                        [
-                            "theme",
-                            JObject
-                                [
-                                    "contexts", JObject [ for n in names -> n, JArray [ JObject [ "$ref", JString(n + ".tokens.json") ] ] ]
-                                    "default", JString(List.tryHead names |> Option.defaultValue "")
-                                ]
-                            "density",
-                            JObject
-                                [
-                                    "contexts",
-                                    JObject
-                                        [
-                                            "regular", JArray []
-                                            "compact", JArray [ JObject [ "seed", JObject [ "density", numberToken 0.75 ] ] ]
-                                        ]
-                                    "default", JString "regular"
-                                ]
-                        ]
-                    "resolutionOrder", JArray [ JObject [ "$ref", JString "#/modifiers/theme" ]; JObject [ "$ref", JString "#/modifiers/density" ] ]
-                ])
+                    "version", JString "2025-10-01"
+                ]
+                @ sets
+                @ [
+                    "modifiers", JObject(themeModifier @ [ density ])
+                    "resolutionOrder", JArray [ JObject [ "$ref", JString themeRef ]; JObject [ "$ref", JString "#/modifiers/density" ] ]
+                ]
+            ))
         + "\n"
 
-    /// The tokens of a DTCG group, flattened to dotted names.
-    let rec private tokensOf (prefix: string) (json: Json) : Result<(string * TokenValue) list, string> =
+    /// Every token of a DTCG document, flattened to dotted paths from its root, with the `$type` it declares or
+    /// inherits from its nearest group (DTCG 2025.10: a group's `$type` applies to the tokens inside it).
+    let rec private collect (prefix: string) (inherited: string option) (json: Json) : (string * string option * Json) list =
         match json with
-        | JObject members when members |> List.exists (fun (k, _) -> k = "$value") ->
-            let kind = members |> List.tryPick (fun (k, v) -> if k = "$type" then Some v else None)
-            let value = members |> List.pick (fun (k, v) -> if k = "$value" then Some v else None)
+        | JObject members ->
+            let own = members |> List.tryPick (fun (k, v) -> match k, v with | "$type", JString t -> Some t | _ -> None)
+            let kind = match own with Some t -> Some t | None -> inherited
 
-            match kind, value with
-            | Some(JString "number"), JNumber v -> Ok [ prefix, NumberToken v ]
-            | Some(JString "color"), JObject colour ->
-                let field name = colour |> List.tryPick (fun (k, v) -> if k = name then Some v else None)
+            match members |> List.tryPick (fun (k, v) -> if k = "$value" then Some v else None) with
+            | Some value -> [ prefix, kind, value ]
+            | None ->
+                members
+                |> List.filter (fun (k, _) -> not (k.StartsWith "$"))
+                |> List.collect (fun (k, v) -> collect (if prefix = "" then k else prefix + "." + k) kind v)
+        | _ -> []
 
-                match field "hex" with
-                | Some(JString h) ->
-                    match ThemeColour.ofHex h with
-                    | Some c -> Ok [ prefix, ColourToken c ]
-                    | None -> Error(sprintf "%s: hex %s is not #rrggbb" prefix h)
-                | _ ->
-                    match field "colorSpace", field "components" with
-                    | Some(JString "oklch"), Some(JArray [ JNumber l; JNumber c; JNumber h ]) ->
-                        Ok [ prefix, ColourToken(ThemeColour.ofOklch { L = l; C = c; H = h }) ]
-                    | Some(JString "srgb"), Some(JArray [ JNumber r; JNumber g; JNumber b ]) ->
-                        Ok
-                            [
-                                prefix,
+    /// The value of the token at `path`, following DTCG references (`"{seed.team.0}"`, a whole-value alias) through
+    /// the document, refusing a missing target or a cycle.
+    let rec private resolveToken
+        (all: Map<string, string option * Json>)
+        (seen: string list)
+        (path: string)
+        : Result<TokenValue, string> =
+        match all |> Map.tryFind path with
+        | None -> Error(sprintf "reference {%s} names no token" path)
+        | Some _ when seen |> List.contains path -> Error(sprintf "reference cycle: %s" (String.concat " -> " (List.rev (path :: seen))))
+        | Some(kind, value) ->
+            match value with
+            | JString text when text.StartsWith "{" && text.EndsWith "}" ->
+                let target = text.Substring(1, text.Length - 2)
+
+                match resolveToken all (path :: seen) target, kind, all |> Map.tryFind target with
+                | Error e, _, _ -> Error e
+                | Ok v, Some declared, Some(Some targetKind, _) when declared <> targetKind ->
+                    Error(sprintf "%s: a %s token refers to the %s token {%s}" path declared targetKind target)
+                | Ok v, _, _ -> Ok v
+            | _ ->
+                match kind, value with
+                | Some "number", JNumber v -> Ok(NumberToken v)
+                | Some "color", JObject colour ->
+                    let field name = colour |> List.tryPick (fun (k, v) -> if k = name then Some v else None)
+
+                    match field "hex" with
+                    | Some(JString h) ->
+                        match ThemeColour.ofHex h with
+                        | Some c -> Ok(ColourToken c)
+                        | None -> Error(sprintf "%s: hex %s is not #rrggbb" path h)
+                    | _ ->
+                        match field "colorSpace", field "components" with
+                        | Some(JString "oklch"), Some(JArray [ JNumber l; JNumber c; JNumber h ]) ->
+                            Ok(ColourToken(ThemeColour.ofOklch { L = l; C = c; H = h }))
+                        | Some(JString "srgb"), Some(JArray [ JNumber r; JNumber g; JNumber b ]) ->
+                            Ok(
                                 ColourToken
                                     {
                                         Red = ThemeColour.quantise r
@@ -1235,27 +1297,17 @@ module Theme =
                                         Blue = ThemeColour.quantise b
                                         Alpha = 255uy
                                     }
-                            ]
-                    | _ -> Error(sprintf "%s: a colour needs a hex, or oklch or srgb components" prefix)
-            | _ -> Error(sprintf "%s: only color and number tokens are read" prefix)
-        | JObject members ->
-            members
-            |> List.filter (fun (k, _) -> not (k.StartsWith "$"))
-            |> List.fold
-                (fun acc (k, v) ->
-                    match acc, tokensOf (if prefix = "" then k else prefix + "." + k) v with
-                    | Ok a, Ok b -> Ok(a @ b)
-                    | Error e, _
-                    | _, Error e -> Error e)
-                (Ok [])
-        | _ -> Error(sprintf "%s: expected a group or a token" prefix)
+                            )
+                        | _ -> Error(sprintf "%s: a colour needs a hex, or oklch or srgb components" path)
+                | None, _ -> Error(sprintf "%s: no $type on the token or its groups" path)
+                | Some kind, _ -> Error(sprintf "%s: only color and number tokens are read, not %s" path kind)
 
     let ofDtcg (algorithms: ThemeAlgorithm list) (json: string) =
         let refuse reason = Error [ ThemeViolation("dtcg", reason) ]
 
         match parse json with
         | Error e -> refuse e
-        | Ok(JObject members) ->
+        | Ok(JObject members as document) ->
             let member' name = members |> List.tryPick (fun (k, v) -> if k = name then Some v else None)
 
             let extension =
@@ -1263,36 +1315,53 @@ module Theme =
                 | Some(JObject ext) -> ext |> List.tryPick (fun (k, v) -> if k = "gg.fs.theme" then Some v else None)
                 | _ -> None
 
-            let name, wanted =
+            let field name =
                 match extension with
-                | Some(JObject ext) ->
-                    let name = ext |> List.tryPick (fun (k, v) -> match k, v with | "name", JString s -> Some s | _ -> None)
-                    let algos =
-                        ext
-                        |> List.tryPick (fun (k, v) ->
-                            match k, v with
-                            | "algorithms", JArray items -> Some(items |> List.choose (function JString s -> Some s | _ -> None))
-                            | _ -> None)
-                    defaultArg name "imported", defaultArg algos [ "standard" ]
-                | _ -> "imported", [ "standard" ]
+                | Some(JObject ext) -> ext |> List.tryPick (fun (k, v) -> if k = name then Some v else None)
+                | _ -> None
+
+            let name = match field "name" with Some(JString s) -> s | _ -> "imported"
+
+            let wanted =
+                match field "algorithms" with
+                | Some(JArray items) -> items |> List.choose (function JString s -> Some s | _ -> None)
+                | _ -> [ "standard" ]
+
+            let numberOverrides =
+                match field "numberOverrides" with
+                | Some(JObject entries) -> entries |> List.choose (fun (k, v) -> match v with JNumber n -> Some(k, n) | _ -> None)
+                | _ -> []
 
             let found = wanted |> List.map (fun n -> n, algorithms |> List.tryFind (fun a -> a.Name = n))
 
             match found |> List.tryFind (fun (_, a) -> a.IsNone) with
             | Some(n, _) -> refuse (sprintf "algorithm %s is not among those given" n)
             | None ->
-                let read groupName =
-                    match member' groupName with
-                    | Some group -> tokensOf "" group
-                    | None -> Ok []
+                let all = collect "" None document |> List.map (fun (path, kind, value) -> path, (kind, value)) |> Map.ofList
 
-                match read "seed", read "alias" with
-                | Error e, _
-                | _, Error e -> refuse e
-                | Ok seedTokens, Ok aliasTokens ->
-                    let seed = ThemeSeed(name, Map.ofList seedTokens)
-                    let overrides = aliasTokens |> List.map (fun (k, v) -> ThemeOverride(k, v))
-                    create seed (found |> List.map (snd >> Option.get)) overrides
+                let read (group: string) =
+                    all
+                    |> Map.toList
+                    |> List.filter (fun (path, _) -> path.StartsWith(group + "."))
+                    |> List.map (fun (path, _) -> path.Substring(group.Length + 1), resolveToken all [] path)
+
+                let failures = (read "seed" @ read "alias") |> List.choose (fun (_, r) -> match r with Error e -> Some e | Ok _ -> None)
+
+                if not failures.IsEmpty then
+                    Error(failures |> List.map (fun e -> ThemeViolation("dtcg", e)))
+                else
+                    let ok entries = entries |> List.choose (fun (k, r) -> match r with Ok v -> Some(k, v) | Error _ -> None)
+                    let seed = ThemeSeed(name, Map.ofList (ok (read "seed")))
+
+                    // Colour aliases come back as overrides (hex preferred). Size aliases are derived again from the seed
+                    // (`cell` x `density`, `strokeBase`, `gap`), so a resolver's `compact` context, which sets the seed's
+                    // `density`, changes them; a size the theme had overridden travels in `numberOverrides`.
+                    let colourOverrides =
+                        ok (read "alias")
+                        |> List.choose (fun (k, v) -> match v with ColourToken _ -> Some(ThemeOverride(k, v)) | NumberToken _ -> None)
+
+                    let sizeOverrides = numberOverrides |> List.map (fun (k, v) -> ThemeOverride(k, NumberToken v))
+                    create seed (found |> List.map (snd >> Option.get)) (colourOverrides @ sizeOverrides)
         | Ok _ -> refuse "a DTCG file is an object"
 
     let classic =

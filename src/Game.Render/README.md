@@ -199,9 +199,10 @@ A `Theme` is the view input every glyph colour, stroke and size comes from (ADR
   `size.cell`.
 
 `Theme.create seed algorithms overrides` returns the theme or every violation: opaque colours only, a 3:1 WCAG 2 floor
-against the ground (`contrastTarget` raises it), and 3:1 between colours that touch. `Theme.withOverrides` re-validates a
-player's team-colour override. `Theme.validate checks theme` adds named `ThemeCheck`s, such as FS.GG.Game#795's
-distinctness and colour-vision checks; the theme carries them, so `Theme.withOverrides` runs them again.
+against the ground (`contrastTarget` raises it), and 3:1 between colours that touch. `Theme.withTeamColour` re-validates a
+player's team colour, the only token a player sets; no override can lower the seed's floors (`contrastTarget`,
+`minCssPerUnit`, `hueCapacity.*`). `Theme.validate checks theme` adds named `ThemeCheck`s, such as FS.GG.Game#795's
+distinctness and colour-vision checks; the theme carries them, so `Theme.withTeamColour` and `Theme.withOverrides` run them again.
 `Theme.classic` is the baked default preset. FS.GG.Game#795 adds the other presets.
 
 Colours are derived in OKLCH and quantised with a clamp then `Floor(v + 0.5)`. Contrast is computed on the 8-bit values

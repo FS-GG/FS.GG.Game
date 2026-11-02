@@ -318,12 +318,74 @@ let tests =
                 Expect.isNonEmpty (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] "{ \"seed\": ")) "malformed JSON is refused"
             }
 
-            test "the DTCG resolver document has a theme context per theme file and the density modifier" {
-                let text = Theme.dtcgResolver Theme.presets
-                Expect.stringContains text "\"version\": \"2025.10\"" "the format version"
-                Expect.stringContains text "classic.tokens.json" "the classic file"
-                Expect.stringContains text "\"resolutionOrder\"" "the resolution order"
-                Expect.stringContains text "\"theme\"" "the theme modifier"
-                Expect.stringContains text "\"density\"" "the density modifier"
+            test "the DTCG resolver document: version 2025-10-01, a set for one theme, a theme modifier for two or more, and the density modifier" {
+                let one = Theme.dtcgResolver Theme.presets
+                Expect.stringContains one "\"version\": \"2025-10-01\"" "the version is a date"
+                Expect.stringContains one "\"sets\"" "one theme is a set"
+                Expect.isFalse (one.Contains "\"theme\":") "no single-context theme modifier"
+                Expect.stringContains one "#/sets/classic" "resolved first"
+                Expect.stringContains one "\"density\"" "the density modifier"
+                let other = ok (derive (ThemeSeed.classic |> ThemeSeed.named "other"))
+                let two = Theme.dtcgResolver [ Theme.classic; other ]
+                Expect.stringContains two "\"theme\":" "two themes are a modifier"
+                Expect.stringContains two "other.tokens.json" "with a context per file"
+                Expect.stringContains two "#/modifiers/theme" "resolved first"
+            }
+
+            test "DTCG import: references, group-level $type, the compact density re-derives sizes, and number overrides travel" {
+                let text = Theme.toDtcg Theme.classic
+                // A whole-value reference: alias glyph.team.0 refers to the seed's team.1.
+                let teamZero = text.IndexOf "\"team\": {\n      \"0\""
+                let aliasStart = text.IndexOf "\"alias\""
+                let aliasTeam = text.IndexOf("\"team\": {", aliasStart)
+                let open0 = text.IndexOf("\"0\": {", aliasTeam)
+                let close0 = text.IndexOf("\n        }", open0)
+                let referenced = text.Substring(0, open0) + "\"0\": { \"$type\": \"color\", \"$value\": \"{seed.team.1}\" }" + text.Substring(close0 + "\n        }".Length)
+                ignore teamZero
+                let back = ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] referenced)
+                Expect.equal (colourOf "glyph.team.0" back) (colourOf "glyph.team.1" Theme.classic) "the reference is followed"
+
+                let missing = referenced.Replace("{seed.team.1}", "{seed.team.9}")
+                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] missing)) (fun v -> v.Reason.Contains "names no token") "a missing target"
+
+                // Group-level $type: the seed's colour tokens drop their own $type, and the group declares it.
+                let cut = text.IndexOf "\"alias\""
+                let seedPart, aliasPart = text.Substring(0, cut), text.Substring cut
+                let grouped =
+                    seedPart.Replace("\"seed\": {", "\"seed\": {\n    \"$type\": \"color\",")
+                        .Replace("{\n        \"$type\": \"color\",", "{")
+                    + aliasPart
+                let own (t: string) = (t.Length - t.Replace("\"$type\": \"color\"", "").Length) / "\"$type\": \"color\"".Length
+                // Ground and ink sit directly under the seed group and keep theirs; the 18 one level deeper lose theirs.
+                Expect.equal (own seedPart - own (grouped.Substring(0, grouped.IndexOf "\"alias\""))) 17 "18 token types dropped, one group type added"
+                Expect.equal (Theme.hex (ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] grouped))) (Theme.hex Theme.classic) "types inherited from the group"
+
+                // The resolver's compact context sets the seed's density; the sizes follow it.
+                let compact = text.Replace("\"density\": {\n      \"$type\": \"number\",\n      \"$value\": 1\n", "\"density\": {\n      \"$type\": \"number\",\n      \"$value\": 0.75\n")
+                Expect.notEqual compact text "the density was edited"
+                Expect.equal (Theme.tryNumber "size.cell" (ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] compact))) (Some 24.0) "sizes derived again from the seed"
+
+                // A size the theme overrode travels in the extension.
+                let gapped = ok (Theme.withOverrides [ ThemeOverride.number "stroke.gap" 3.0 ] Theme.classic)
+                let gappedBack = ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] (Theme.toDtcg gapped))
+                Expect.equal (Theme.tryNumber "stroke.gap" gappedBack) (Some 3.0) "the number override survives"
+                Expect.equal (Theme.cssVariables gappedBack) (Theme.cssVariables gapped) "and everything else"
+            }
+
+            test "players change only a team colour, and nothing lowers a floor" {
+                let teal = rgb 0 150 136
+                Expect.equal (colourOf "glyph.team.2" (ok (Theme.withTeamColour 2 teal Theme.classic))) teal "an existing team"
+                Expect.exists (refused (Theme.withTeamColour 8 teal Theme.classic)) (fun v -> v.Token = "glyph.team.8") "no ninth team"
+                Expect.exists (refused (Theme.withTeamColour 0 (rgb 40 44 52) Theme.classic)) (fun v -> v.Token = "glyph.team.0") "a failing colour is refused"
+
+                // The reviewer's case: a stricter floor in the seed cannot be lowered by an override.
+                let strict = ok (derive (ThemeSeed.classic |> ThemeSeed.named "strict" |> ThemeSeed.number "contrastTarget" 4.0))
+                let weak = rgb 150 60 60
+                Expect.isError (Theme.withTeamColour 0 weak strict) "below the strict floor"
+                let lowered = refused (Theme.withOverrides [ ThemeOverride.number "contrastTarget" 3.0; ThemeOverride.colour "glyph.team.0" weak ] strict)
+                Expect.exists lowered (fun v -> v.Token = "contrastTarget") "the floor is not an override"
+
+                for floor in [ "minCssPerUnit"; "hueCapacity.0" ] do
+                    Expect.exists (refused (Theme.withOverrides [ ThemeOverride.number floor 4.0 ] Theme.classic)) (fun v -> v.Token = floor) floor
             }
         ]

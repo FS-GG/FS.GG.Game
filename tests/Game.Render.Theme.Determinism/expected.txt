@@ -36,8 +36,8 @@ terrain.water #0a3452
 terrain.void #15171b
 PASS classic: the baked aliases equal a fresh derivation from ThemeSeed.classic
 PASS classic: every alias resolves
-dtcg classic bytes=12702 digest=41901
-dtcg resolver bytes=757 digest=291099
+dtcg classic bytes=12731 digest=639286
+dtcg resolver bytes=709 digest=593761
 PASS dtcg: export then import gives equal resolved hex for every alias
 css classic variables=40 digest=259813
 PASS css: every colour variable is the alias's #rrggbb
@@ -94,4 +94,4 @@ gamut grid points=38556 digest=427031
 round trip colours=16777216 failures=0
 PASS round trip: every 8-bit colour survives toOklch then ofOklch
 grey contrast digest=851937
-theme-determinism checks=5 failed=0 digest=884561
+theme-determinism checks=5 failed=0 digest=409258

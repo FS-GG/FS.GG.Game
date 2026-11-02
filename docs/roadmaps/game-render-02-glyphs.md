@@ -1,7 +1,8 @@
 # GAME-RENDER-02.4 — Shared glyph and symbology layer with theme tokens (ADR)
 
-Status: **proposed**. This is the design PR for FS.GG.Game#789. It adds an experimental proof and no shipped API.
-An implementation PR follows once the ADR is accepted.
+Status: **accepted** (PR #794, merged at `a4c75efa`). The implementation of FS.GG.Game#789 follows in separate PRs: the
+kit's identity samples and bounded unmodelled nodes, the theme tokens, then the glyph library and the kit's glyph section.
+The implementation's errata are listed under *Errata* below and marked where they apply.
 Route: routine. Parent Outcome: FS-GG/.github#5218 (GAME-RENDER-02).
 Builds on `game-render-adopt-01.md`, which covers the kit and `ScenePixels` (#745, #753), and on the renderer
 selection contract in FS.GG.Game 0.19.0.
@@ -15,6 +16,32 @@ Related work:
   this ADR. Its prior-art research (issuecomment-6564559497) is folded in here as D1's slots, D4's token layers, D11
   and D12, and the licensing table.
 - FS.GG.Rendering owns the Fable view of `FS.GG.UI.Scene`.
+
+## Errata (from the implementation, FS.GG.Game#789)
+
+These corrections were ruled by Root during the implementation review. Each one is marked in place.
+
+- **E1. The team ring's layout (D1, D3, D12).** From the edge inwards, a team-marked glyph is drawn as:
+  - the frame, in its identity colour;
+  - a **keyline in the body colour**;
+  - the **ring** in the team colour;
+  - the body fill.
+
+  The ring therefore touches the body on both sides and never touches the identity colour, so validating each team
+  colour against the body alone is correct. Without the keyline, `classic`'s team 0 against the own allegiance measured
+  1.00:1 (the same colour). The kit checks that team 0 next to the own allegiance shows a visible ring.
+- **E2. The outer focus tone (D3, D10).** The focus ring's outer tone is **whichever tone contrasts with the ground**
+  (3:1), and the inner tone contrasts with the outer one. On a dark ground the outer tone is light and the inner tone
+  dark. "A dark outer band and a light inner band" holds only on a light ground.
+- **E3. No `Amplifier.teamIndex` (D1).** The team badge is drawn inside the frame (review M1), never as an amplifier.
+  Team is set with `GlyphSpec.team`, and the badge is required by `GlyphSpec.badged`.
+- **E4. Player overrides (D4).** A player changes only a team colour (`Theme.withTeamColour`). The floors
+  (`contrastTarget`, `minCssPerUnit` and `hueCapacity.*`) belong to the seed, and an override of one is refused, so no
+  override can lower a floor.
+- **E5. The DTCG Resolver version (D4).** The Resolver Module contradicts itself on the date: its property table says
+  `2025-10-01`, and section 4.1.2 says `2025-11-01`. The resolver document uses **`2025-10-01`**, matching #805's
+  Q-T9. A single theme is a set, because a modifier should have two or more contexts. Sizes are derived again from the
+  seed on import, so the `compact` density context changes them.
 
 ## Problem
 
@@ -53,7 +80,7 @@ of **slots** around one anchor, and the slot geometry comes from size tokens:
 | **Fill** | the frame's interior: the identity colour, or the neutral body when a team mark carries the colour; an optional **lightness step** for an ordinal field | `glyph.unit.body`, `glyph.allegiance.enemy` |
 | **Icon** | function or class, inside the frame | infantry, vehicle, scenery |
 | **Size step** | an ordinal field, as one of a few frame sizes within the footprint | small, medium, large |
-| **Team mark** | team, as a band or ring in the team colour on a neutral body (the RTS mask-region convention) | ring, foot band |
+| **Team mark** | team, as a band or ring in the team colour on a neutral body (the RTS mask-region convention), separated from the frame by a body-colour keyline (E1) | ring, foot band |
 | **Inner modifiers** | flags, in sector slots inside the frame | stale, carrying, disabled |
 | **Team badge** | the team's index, at the frame's inner centre, in the body pass (from 22 units) | a seven-segment digit |
 | **Amplifiers** (outside the frame, beyond the cue reserve) | **above:** ordinal pips (rank or echelon); **below:** a fraction bar (health, progress); **corners:** badges (never the team badge, which is drawn inside the frame); **from the anchor:** facing; **right:** the label (after Q6) | |
@@ -191,7 +218,7 @@ type Identity = Own | Ally | Neutral | Enemy | Unknown            // the frame s
 [<Sealed>] type IconRef          // IconRef.named "infantry", resolved by the theme's icon set
 [<Sealed>] type ModifierRef      // ModifierRef.stale, ModifierRef.named ...
 [<Sealed>] type AmplifierSlot    // AmplifierSlot.above, below, corner c, facing, right
-[<Sealed>] type Amplifier        // Amplifier.pips (level, outOf), bar (fraction, role), badge icon, teamIndex n, facing radians
+[<Sealed>] type Amplifier        // Amplifier.pips (level, outOf), bar (fraction, role), badge icon, facing radians (no teamIndex: E3)
 [<Sealed>] type GlyphSpec                                         // what #795's Symbology<'Entity> builds
 module GlyphSpec =
     val create     : GlyphFamily -> anchor: Point -> footprint: Size -> GlyphSpec
@@ -276,7 +303,7 @@ A glyph lowers to one of two profiles. The same profile is used on every backend
 | **Items** | a small oval at the item anchor, at most half the identity frame size. Ovals are never identity frames. | — |
 | **Markers** | waypoint plus, destination ring (disc plus inner disc), target crosshair (four bars, as in SC2). Markers are thin (arms one band wide) and at most half the identity frame size, so the waypoint plus is not the filled `Unknown` cross, and discs and rings are not identity frames. | stroked rings, ping |
 | **Selection** (frame, game state) | corner brackets in the cue reserve, outside the largest focus ring the theme allows, so both show on one object (D10) | — |
-| **Focus** (cue layer, D10) | #787's two-tone ring: a dark outer band and a light inner band of filled rectangles, each at least 2 CSS px, just outside the frame, in the theme's `FocusOuter`/`FocusInner` tokens. It differs from selection by shape as well as colour. | — |
+| **Focus** (cue layer, D10) | #787's two-tone ring: an outer band in the tone that contrasts with the ground and an inner band contrasting with it (E2; dark outer and light inner on a light ground), of filled rectangles, each at least 2 CSS px, just outside the frame, in the theme's `FocusOuter`/`FocusInner` tokens. It differs from selection by shape as well as colour. | — |
 | **Hover** (cue layer, opt-in, D10) | an outline at least 1 CSS px wide in the hover token | — |
 | **Path** | dots at a theme spacing, and a step marker at the end | polyline |
 | **Status** (the *below* amplifier) | a keyline in the body colour, a dark track inside it, and a fill whose length is the fraction, coloured good, warn or bad by theme thresholds; ordinal pips in the *above* amplifier | — |
@@ -745,7 +772,7 @@ check the ones a theme can break:
 **Contrast against real neighbours (this ADR, D4).** Contrast is checked between the colours that actually touch:
 - the frame or a keyline against the ground;
 - the icon against the fill;
-- the team ring against both the frame fill and the body it sits between;
+- the team ring against the body it sits between, a body-colour keyline outside it and the body fill inside it (E1);
 - the status bar's keyline against the ground, and each status fill against the track;
 - the inner focus tone against the outer one.
 

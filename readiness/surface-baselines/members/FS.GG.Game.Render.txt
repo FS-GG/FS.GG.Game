@@ -359,6 +359,7 @@ FS.GG.Game.Render.Theme.tryColour(System.String, FS.GG.Game.Render.Theme) : Micr
 FS.GG.Game.Render.Theme.tryNumber(System.String, FS.GG.Game.Render.Theme) : Microsoft.FSharp.Core.FSharpOption<System.Double>
 FS.GG.Game.Render.Theme.validate(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeCheck>, FS.GG.Game.Render.Theme) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.Theme, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeViolation>>
 FS.GG.Game.Render.Theme.withOverrides(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeOverride>, FS.GG.Game.Render.Theme) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.Theme, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeViolation>>
+FS.GG.Game.Render.Theme.withTeamColour(System.Int32, FS.GG.UI.Scene.Color, FS.GG.Game.Render.Theme) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.Theme, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeViolation>>
 FS.GG.Game.Render.ThemeAlgorithm.create(System.String, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.ThemeSeed, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.ThemeTokens, FS.GG.Game.Render.ThemeTokens>>) : FS.GG.Game.Render.ThemeAlgorithm
 FS.GG.Game.Render.ThemeAlgorithm.name(FS.GG.Game.Render.ThemeAlgorithm) : System.String
 FS.GG.Game.Render.ThemeAlgorithm.standard : FS.GG.Game.Render.ThemeAlgorithm [get]
