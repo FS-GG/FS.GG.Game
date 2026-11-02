@@ -124,8 +124,9 @@ let private asyncLaws =
             syncText
 
         // P20: one golden vector per FS.GG.Wasm.Contracts.TerminalState, through ofBytes and run, answered by an F# stand-in
-        // for a guest module. No Rust guest module exists yet: the CI module that must answer the same vectors arrives
-        // with the ReferenceGame guest (FS.GG.Game#788 PR D).
+        // for a guest module. The ReferenceGame guest of FS.GG.Game#788 (PR D) is an F# guest, so no Rust guest module
+        // exists yet; the CI module that must answer the same vectors comes with the first WebAssembly guest, the
+        // template migration's (ADR 0001 §8).
         let vectors =
             [
                 "Succeeded", GuestReply.Output [| 1uy |], "Decided(S:one)"

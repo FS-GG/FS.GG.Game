@@ -23,6 +23,7 @@
     <Compile Include="..\..\src\Render.Browser\InputLayout.fsi" Link="InputLayout.fsi" />
     <Compile Include="..\..\src\Render.Browser\InputLayout.fs" Link="InputLayout.fs" />
     <Compile Include="InputLayoutTests.fs" />
+    <Compile Include="ReferencePipelineTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

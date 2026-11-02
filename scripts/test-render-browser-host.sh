@@ -23,6 +23,9 @@
 # Then the kit's `input` section (I1-I16) runs on the reference game (a listbox), on a hybrid page whose SVG input host is
 # declared the game's own, and on a grid board answered by an asynchronous F# guest through the input pipeline, followed
 # by a negative control whose broken probe and silent game must fail exactly the checks that guard them.
+# Last, ReferenceGame is played end to end through the input pipeline on every backend (FS.GG.Game#788 PR D): real
+# presses on the token go to the F# guest, its commands to an authority that admits them with NetworkAdmission, and the
+# authoritative snapshot back to the backend; the page reports input-to-command and input-to-snapshot latency as INFO.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -42,7 +45,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=879
+MIN_CHECKS=885
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 

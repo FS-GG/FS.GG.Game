@@ -12,10 +12,19 @@
          Fable from the very files the .NET reference game compiles, and the generator's sample output. -->
     <Compile Include="..\..\src\ReferenceGame\State.fs" Link="ReferenceGame\State.fs" />
     <Compile Include="..\..\src\ReferenceGame\Renderers.fs" Link="ReferenceGame\Renderers.fs" />
+    <!-- FS.GG.Game#788 PR D: the reference game's input pipeline and authority, whose admission is Game.Core's
+         NetworkAdmission; its two Fable-view sources are compiled here, since the browser host's Fable view does not
+         reference Game.Core. -->
+    <Compile Include="..\..\src\Game.Core\SessionContract.fsi" Link="GameCore\SessionContract.fsi" />
+    <Compile Include="..\..\src\Game.Core\SessionContract.fs" Link="GameCore\SessionContract.fs" />
+    <Compile Include="..\..\src\Game.Core\NetworkSession.fsi" Link="GameCore\NetworkSession.fsi" />
+    <Compile Include="..\..\src\Game.Core\NetworkSession.fs" Link="GameCore\NetworkSession.fs" />
+    <Compile Include="..\..\src\ReferenceGame\Pipeline.fs" Link="ReferenceGame\Pipeline.fs" />
     <Compile Include="GeneratedRenderers.fs" />
     <Compile Include="RetainedSurface.fs" />
     <Compile Include="InputHostSmoke.fs" />
     <Compile Include="InputFixture.fs" />
+    <Compile Include="ReferencePipelineSmoke.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

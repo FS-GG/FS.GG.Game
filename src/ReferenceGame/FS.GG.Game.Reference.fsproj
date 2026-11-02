@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="State.fs" />
     <Compile Include="Renderers.fs" />
+    <Compile Include="Pipeline.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

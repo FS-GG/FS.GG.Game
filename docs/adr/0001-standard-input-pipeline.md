@@ -531,6 +531,32 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
   directions (at the presented scale, `InputProbe.CssPerUnit`). I8 edge samples skip objects under 2 units.
 - **I15** reruns the adapter late-failure checks on a host that runs selection itself with `BrowserRenderers.bindTo`.
 
+## ReferenceGame end to end (FS.GG.Game#788 PR D)
+
+`src/ReferenceGame/Pipeline.fs` (`ReferencePipeline`) is the reference demonstration of the whole contract, in plain F#
+that .NET and the Fable browser smoke both compile:
+
+- **Guest:** an F# `InputGuest.sync`.
+  - Activating the token selects it (`Local`) and submits `Step`. Every activation is decided, a repeated one too.
+  - Activating another object selects it.
+  - A press on empty ground submits `AimAt` the press point.
+  - `Cancel` clears the selection.
+- **Command stage:** snapshot versions. The step is predicted (marked) until the snapshot reaches it.
+- **Authority:** it admits each command with Game.Core's `NetworkAdmission.admit` under one binding, using
+  `CommandId.sequence` as the `SessionInput.Sequence`. It applies the command, and answers `applied` at the new snapshot
+  version. A duplicate or stale id is answered from a cache of the last 64 answers (`rejected "stale"` inside it,
+  `expired` beyond), never applied twice. `lastSequence` comes from `NetworkAdmission.lastSequence`.
+- **`Session`** wires a `PipelineHost` to the authority through a `deliver` function: the network, which runs at once
+  in a test, or in a later task (`setTimeout 0`) in the browser.
+
+The browser smoke plays it on SVG, Pixi and Babylon with real presses on the token, and measures two latencies:
+
+- **input-to-command:** `io.send` time minus the `pointerdown` event's `timeStamp`;
+- **input-to-snapshot:** the time the backend has presented the authoritative snapshot that applied the command (its
+  `Present` returned) minus the same `timeStamp`.
+
+Each is reported as p50, p95 and max over 20 presses, on SwiftShader and on the GPU.
+
 ## Consequences
 
 - One contract replaces three hand-built pipelines.
