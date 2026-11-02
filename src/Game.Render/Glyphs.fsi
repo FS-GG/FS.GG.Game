@@ -12,13 +12,13 @@ type GlyphFamily
 module GlyphFamily =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Units: the identity frame, a team ring (inside a body-colour keyline, on the body), an icon or the index
-    /// badge, inner modifiers and amplifiers.
+    /// Units: the identity frame, a team ring (inside a body-colour keyline that also lines Ally's holes, on the body),
+    /// an icon or the index badge, inner modifiers and amplifiers.
     val unit: GlyphFamily
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Structures: drawn as units, on a footprint of n x m cells, with the team mark as a foot band (the inner
-    /// frame's lower rows in the team colour, the body above) instead of a ring.
+    /// Structures: drawn as units, on a footprint of n x m cells, with the team mark as a foot band (the ring
+    /// layer's lower rows in the team colour, the body above) instead of a ring.
     val structure: GlyphFamily
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
@@ -343,6 +343,14 @@ module Glyphs =
     /// ADR D1's identity frame, from bars, centred on whole units.
     val internal identityFrame:
         identity: Identity -> cx: float -> cy: float -> size: float -> ink: FS.GG.UI.Scene.Color -> FS.GG.UI.Scene.SceneNode list
+
+    /// The team-mark layers of a frame (keyline, ring, body), as rectangles relative to its centre.
+    val internal teamLayers:
+        identity: Identity ->
+        w: float ->
+        band: int ->
+        keyline: int ->
+            (float * float * float * float) list * (float * float * float * float) list * (float * float * float * float) list
 
     /// One seven-segment digit (6 x 10) whose top left is (x, y).
     val internal digit: d: int -> x: float -> y: float -> ink: FS.GG.UI.Scene.Color -> FS.GG.UI.Scene.SceneNode list

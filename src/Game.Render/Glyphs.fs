@@ -295,6 +295,164 @@ module Glyphs =
                 let armHalf = floor (arm / 2.0)
                 [ at -reach -armHalf (2.0 * reach) arm; at -armHalf -reach arm (2.0 * reach) ]
 
+    /// The team-mark layers by shape, so `draw` erodes each frame shape once. The key space is bounded: five identities
+    /// times the whole-unit frame sizes a game's themes produce (the band and keyline follow from the size), so a few
+    /// hundred entries at most; past `layerCacheLimit` entries a shape is computed and not kept. `draw` may run on many
+    /// threads (.NET), so every read and write of the cache holds its lock (`lock` compiles to a plain call under Fable,
+    /// which has one thread). The layers are a pure function of the key, so a shape computed twice by two threads gives
+    /// the same value, and either may be kept.
+    let private layerCache =
+        System.Collections.Generic.Dictionary<string, (float * float * float * float) list * (float * float * float * float) list * (float * float * float * float) list>()
+
+    let private layerCacheLimit = 4096
+
+    /// The team-mark layers of `identity`'s frame at size `w`, with a frame band of `band` units and a keyline of
+    /// `keyline` units, as rectangles relative to the frame's centre (ADR erratum E1, as corrected in #809):
+    /// - the ring: cells at least `band + keyline` inside the outline along their row and column (a plus, which shrinks
+    ///   a stepped diamond as a nested diamond does) and at least `keyline + 1` from any cell that is not frame ink, so
+    ///   Ally's quarter-point holes are lined too. Ally's outline is the friend rectangle without its holes; every other
+    ///   frame's outline is its own ink;
+    /// - the keyline: the ring grown by `keyline` units in every direction, on frame ink, so every cell next to a ring
+    ///   cell is keyline or ring, never ground, a hole or the frame colour;
+    /// - the body: cells at least `2 band + keyline` inside the outline, within the ring.
+    /// Rows with the same runs are merged into one rectangle. Cached per shape, under a lock (`layerCache`).
+    let internal teamLayers (identity: Identity) (w: float) (band: int) (keyline: int) =
+        let shape =
+            match identity with
+            | Identity.Own -> "o"
+            | Identity.Ally -> "a"
+            | Identity.Neutral -> "n"
+            | Identity.Enemy -> "e"
+            | Identity.Unknown -> "u"
+
+        let key = shape + "|" + string w + "|" + string band + "|" + string keyline
+
+        let cached =
+            lock layerCache (fun () ->
+                match layerCache.TryGetValue key with
+                | true, value -> Some value
+                | _ -> None)
+
+        match cached with
+        | Some value -> value
+        | None ->
+            let barsOf (shape: Identity) =
+                identityFrame shape 0.0 0.0 w { Red = 0uy; Green = 0uy; Blue = 0uy; Alpha = 255uy }
+                |> List.choose (function
+                    | SceneNode.Rectangle((x, y, rw, rh), _) -> Some(int x, int y, int (x + rw), int (y + rh))
+                    | _ -> None)
+
+            let bars = barsOf identity
+            let outline = if identity = Identity.Ally then barsOf Identity.Own else bars
+
+            let result =
+                match bars with
+                | [] -> [], [], []
+                | _ ->
+                    let all = bars @ outline
+                    let left = all |> List.map (fun (l, _, _, _) -> l) |> List.min
+                    let top = all |> List.map (fun (_, t, _, _) -> t) |> List.min
+                    let right = all |> List.map (fun (_, _, r, _) -> r) |> List.max
+                    let bottom = all |> List.map (fun (_, _, _, b) -> b) |> List.max
+                    let cols, rows = right - left, bottom - top
+                    let at x y = y * cols + x
+
+                    let grid (rects: (int * int * int * int) list) =
+                        let cells = Array.init (cols * rows) (fun _ -> false)
+
+                        for l, t, r, b in rects do
+                            for y in t .. b - 1 do
+                                for x in l .. r - 1 do
+                                    cells.[at (x - left) (y - top)] <- true
+
+                        cells
+
+                    // Erosion by a plus of radius n: every cell within n along the row and along the column is set (a
+                    // cell outside the box is not).
+                    let erode (cells: bool[]) (n: int) =
+                        Array.init (cols * rows) (fun i ->
+                            let x, y = i % cols, i / cols
+
+                            if x - n < 0 || x + n >= cols || y - n < 0 || y + n >= rows then
+                                false
+                            else
+                                let mutable ok = true
+                                let mutable d = -n
+
+                                while ok && d <= n do
+                                    ok <- cells.[at (x + d) y] && cells.[at x (y + d)]
+                                    d <- d + 1
+
+                                ok)
+
+                    // Dilation by a square of radius n.
+                    let dilate (cells: bool[]) (n: int) =
+                        Array.init (cols * rows) (fun i ->
+                            let x, y = i % cols, i / cols
+                            let mutable found = false
+                            let mutable dy = -n
+
+                            while not found && dy <= n do
+                                let mutable dx = -n
+
+                                while not found && dx <= n do
+                                    let cx, cy = x + dx, y + dy
+                                    found <- cx >= 0 && cx < cols && cy >= 0 && cy < rows && cells.[at cx cy]
+                                    dx <- dx + 1
+
+                                dy <- dy + 1
+
+                            found)
+
+                    let ink = grid bars
+                    let shape = grid outline
+                    let both (a: bool[]) (b: bool[]) = Array.map2 (&&) a b
+                    let ring = both (erode shape (band + keyline)) (erode ink (keyline + 1))
+                    let keyed = both (dilate ring keyline) ink
+                    let body = both (erode shape (2 * band + keyline)) ring
+
+                    let rectsOf (kept: bool[]) =
+                        let runsOf (y: int) =
+                            [
+                                let mutable x = 0
+
+                                while x < cols do
+                                    if kept.[at x y] then
+                                        let start = x
+
+                                        while x < cols && kept.[at x y] do
+                                            x <- x + 1
+
+                                        yield start, x - start
+                                    else
+                                        x <- x + 1
+                            ]
+
+                        let rects = ResizeArray<float * float * float * float>()
+                        let mutable y = 0
+
+                        while y < rows do
+                            let runs = runsOf y
+                            let mutable next = y + 1
+
+                            while next < rows && runsOf next = runs do
+                                next <- next + 1
+
+                            for start, width in runs do
+                                rects.Add((float (left + start), float (top + y), float width, float (next - y)))
+
+                            y <- next
+
+                        List.ofSeq rects
+
+                    rectsOf keyed, rectsOf ring, rectsOf body
+
+            lock layerCache (fun () ->
+                if layerCache.Count < layerCacheLimit && not (layerCache.ContainsKey key) then
+                    layerCache.[key] <- result)
+
+            result
+
     /// One seven-segment digit, 0 to 9, on a 3 x 5 grid of 2-unit cells (6 x 10) whose top left is (x, y).
     let internal digit (d: int) (x: float) (y: float) (ink: Color) : SceneNode list =
         let u = 2.0
@@ -540,7 +698,7 @@ module Glyphs =
         let outer = identityFrame identity cx cy w ink
         let frame = boundsOf outer
 
-        // The team mark: a ring in the team colour on the neutral body, as nested frames of the same identity.
+        // The team mark: a ring in the team colour on the neutral body, inside a body-colour keyline (ADR E1).
         let teamMark =
             match data.Team with
             | None -> []
@@ -554,29 +712,26 @@ module Glyphs =
                     else
                         p.Teams.[team]
 
-                // ADR erratum E1: from the edge in, the frame, a body-colour keyline, the team colour, then the body, so the
-                // team colour touches only the body and never the identity colour (equal in classic for team 0 and Own).
-                // Nested marks are clipped to the frame's own bars, so they never paint into Ally's holes or past a
-                // stepped frame's ink: the frame's shape, and so identity, is unchanged by a team mark.
-                let onFrame (nodes: SceneNode list) =
-                    nodes
-                    |> List.collect (function
-                        | SceneNode.Rectangle((x, y, rw, rh), c) ->
-                            outer
-                            |> List.choose (function
-                                | SceneNode.Rectangle((ox, oy, ow, oh), _) ->
-                                    let l, t = max x ox, max y oy
-                                    let r, b = min (x + rw) (ox + ow), min (y + rh) (oy + oh)
-                                    if r > l && b > t then Some(SceneNode.Rectangle((l, t, r - l, b - t), c)) else None
-                                | _ -> None)
-                        | other -> [ other ])
+                // ADR erratum E1, corrected in #809: from the edge in, the frame, a body-colour keyline, the team colour,
+                // then the body. The layers come from the frame's own cells (`teamLayers`): the ring keeps the keyline
+                // plus one unit from any cell that is not frame ink, and the keyline is the ring grown by its width, so no
+                // team-colour pixel shares an edge with the ground, Ally's quarter-point holes or the identity colour, on
+                // every frame and at every size. Nested frames of the same shape did, on Ally and at 12 units.
+                // Widths: the frame keeps `band`, the keyline is half a band (at least one unit), the ring is a band.
+                let bands = int band
+                let keylineWidth = max 1 (bands / 2)
+                let ringAt = bands + keylineWidth
 
-                let keyline = onFrame (identityFrame identity cx cy (w - 2.0 * band) p.Body)
-                let inner = onFrame (identityFrame identity cx cy (w - 4.0 * band) colour)
+                let place (rects: (float * float * float * float) list) (colour: Color) =
+                    rects |> List.map (fun (dx, dy, rw, rh) -> box (cx + dx) (cy + dy) rw rh colour)
+
+                let keyedCells, ringCells, bodyCells = teamLayers identity w bands keylineWidth
+                let keyline = place keyedCells p.Body
+                let inner = place ringCells colour
 
                 match data.Family.Kind with
                 | StructureKind ->
-                    // D3 and erratum E6: a structure's team mark is a foot band, the inner frame's lower rows in the team
+                    // D3 and erratum E6: a structure's team mark is a foot band, the ring layer's lower rows in the team
                     // colour with the body above, inside every stepped frame, so a structure and a unit of the same
                     // identity, size and badge still differ.
                     // The band is as tall as it must be for its team-colour area to reach three quarters of Own's (the
@@ -585,7 +740,7 @@ module Glyphs =
                     // team colour (#789 review).
                     let box = boundsOf inner
                     let bottom = box.Y + box.Height
-                    let wanted = 0.75 * (w - 4.0 * band) * band
+                    let wanted = 0.75 * (w - 2.0 * float ringAt) * band
 
                     // The ink area of the inner frame's bottom `h` rows, row by row as a union of spans: the clipped
                     // pieces, like a quatrefoil's two bars, overlap.
@@ -614,14 +769,14 @@ module Glyphs =
                     // The body above the band is drawn as the inner frame in the body colour, so the kit samples it where a
                     // unit's ring would be: the two families differ in decided pixels both ways.
                     keyline
-                    @ onFrame (identityFrame identity cx cy (w - 4.0 * band) p.Body)
+                    @ place ringCells p.Body
                     @ (inner
                        |> List.choose (function
                            | SceneNode.Rectangle((x, y, rw, rh), c) when y + rh > foot ->
                                let top = max y foot
                                Some(SceneNode.Rectangle((x, top, rw, y + rh - top), c))
                            | _ -> None))
-                | _ -> keyline @ inner @ (if w - 6.0 * band >= 4.0 then onFrame (identityFrame identity cx cy (w - 6.0 * band) p.Body) else [])
+                | _ -> keyline @ inner @ place bodyCells p.Body
 
         let badge = badgeOf data w
 
