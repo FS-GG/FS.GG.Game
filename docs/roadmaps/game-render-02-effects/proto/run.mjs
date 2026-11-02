@@ -1,0 +1,13 @@
+import { chromium } from "playwright-core";
+import { pathToFileURL } from "node:url";
+import path from "node:path";
+const flags = JSON.parse(process.env.FDEV_CHROMIUM_ARGS_JSON || "[]");
+const browser = await chromium.launch({ executablePath: process.env.RENDER_SMOKE_BROWSER, headless: true, args: [...flags, "--allow-file-access-from-files"] });
+const page = await browser.newPage();
+page.on("console", m => console.error("console:", m.text()));
+page.on("pageerror", e => console.error("pageerror:", e.message));
+await page.goto(pathToFileURL(path.resolve("proto.html")).href);
+await page.waitForFunction(() => window.runProto, null, { timeout: 30000 });
+const r = await page.evaluate(() => window.runProto());
+console.log(JSON.stringify(r, null, 1));
+await browser.close();
