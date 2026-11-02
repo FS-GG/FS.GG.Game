@@ -522,9 +522,11 @@ let private metrics (factor: float) (viewportWidth: float) : Async<unit> =
         let pending: JS.Promise<float> =
             emitJsExpr (createObj [ "kind" ==> "scale"; "factor" ==> factor; "width" ==> viewportWidth ]) "window.__fsggInput($0)"
 
-        let! _ = Async.AwaitPromise pending
-        let! _ = BrowserConformance.waitUntil 120 (fun () -> window.devicePixelRatio = factor && window.innerWidth = viewportWidth)
-        return ()
+        let! reported = Async.AwaitPromise pending
+        let! settled = BrowserConformance.waitUntil 120 (fun () -> window.devicePixelRatio = factor && window.innerWidth = viewportWidth)
+        if not settled || reported <> factor then
+            failwithf "device metrics did not settle: requested DPR %g / width %g; driver DPR %g, page DPR %g / width %g"
+                factor viewportWidth reported window.devicePixelRatio window.innerWidth
     }
 
 /// One case of the sizing matrix: what is set before the mount, what the page does to the frame at mount and after it,

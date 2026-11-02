@@ -768,10 +768,16 @@ module Theme =
                 fail alias (sprintf "%.2f:1 on %s, below the %g:1 floor" ratio other floor)
 
         for alias in
-            teamAliases
-            @ allegianceAliases
+            allegianceAliases
             @ [ "glyph.unit.body"; "glyph.stale"; "glyph.selection"; "glyph.marker"; "glyph.path"; "cue.focus.outer"; "cue.hover"; "status.keyline" ] do
             atLeast target alias "surface.ground" ground
+
+        // ADR erratum E7 (amendment A1): a team colour never touches the ground (E1: frame, keyline, ring, body), so it
+        // is held to 3:1 against what it touches (the body, and the badge and modifier inks below) and to a 3:1
+        // legibility floor on the ground, not to `contrastTarget`: at 7:1 on a black ground and 3:1 on a white body,
+        // only luminance 0.30 would pass both, and a high-contrast theme could not hold two distinct teams.
+        for alias in teamAliases do
+            atLeast 3.0 alias "surface.ground" ground
 
         atLeast 3.0 "cue.focus.inner" "cue.focus.outer" (colourOf "cue.focus.outer")
 

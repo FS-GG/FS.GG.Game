@@ -432,6 +432,42 @@ let tests =
                 Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] ("{ \"x\": " + deep + " }"))) (fun v -> v.Reason.Contains "nesting deeper than 128") "deep nesting is refused"
             }
 
+            test "erratum E7 (A1): a high-contrast theme holds several distinct teams, each 3:1 on the ground and the body, not 7:1 on the ground" {
+                let seed =
+                    ThemeSeed.classic
+                    |> ThemeSeed.named "high-contrast-sketch"
+                    |> ThemeSeed.number "contrastTarget" 7.0
+                    |> ThemeSeed.colour "ground" (rgb 0 0 0)
+                    |> ThemeSeed.colour "allegiance.own" (rgb 120 170 255)
+                    |> ThemeSeed.colour "allegiance.ally" (rgb 0 220 230)
+                    |> ThemeSeed.colour "allegiance.neutral" (rgb 90 220 120)
+                    |> ThemeSeed.colour "allegiance.enemy" (rgb 255 120 110)
+                    |> ThemeSeed.colour "allegiance.unknown" (rgb 240 200 40)
+
+                let theme = ok (Theme.create seed [ ThemeAlgorithm.standard ] [ ThemeOverride.colour "glyph.stale" (rgb 170 170 170) ])
+                let ground = colourOf "surface.ground" theme
+                let teams = [ for i in 0 .. Theme.teamCount theme - 1 -> colourOf (sprintf "glyph.team.%d" i) theme ]
+                Expect.equal (List.distinct teams).Length 8 "eight distinct teams"
+
+                for team in teams do
+                    Expect.isGreaterThanOrEqual (ThemeColour.contrast team ground) 3.0 "3:1 on the ground"
+                    Expect.isGreaterThanOrEqual (ThemeColour.contrast team (colourOf "glyph.unit.body" theme)) 3.0 "3:1 on the body"
+
+                Expect.isTrue (teams |> List.exists (fun t -> ThemeColour.contrast t ground < 7.0)) "teams below 7:1 on the ground are accepted, as A1 rules"
+
+                for alias in [ "glyph.allegiance.own"; "glyph.unit.body"; "glyph.selection"; "cue.focus.outer"; "status.keyline" ] do
+                    Expect.isGreaterThanOrEqual (ThemeColour.contrast (colourOf alias theme) ground) 7.0 (sprintf "%s keeps the 7:1 contrastTarget" alias)
+
+                // Still refused: a team below 3:1 on the ground or on the body, through create and the player path.
+                let dim = rgb 40 10 10
+                let pale = rgb 250 240 160
+                Expect.exists (refused (Theme.create (seed |> ThemeSeed.colour "team.2" dim) [ ThemeAlgorithm.standard ] [ ThemeOverride.colour "glyph.stale" (rgb 170 170 170) ])) (fun v -> v.Token = "glyph.team.2" && v.Reason.Contains "surface.ground") "below 3:1 on the ground"
+                Expect.exists (refused (Theme.withTeamColour 2 dim theme)) (fun v -> v.Token = "glyph.team.2" && v.Reason.Contains "surface.ground") "the player path too"
+                Expect.exists (refused (Theme.withTeamColour 2 pale theme)) (fun v -> v.Token = "glyph.team.2" && v.Reason.Contains "glyph.unit.body") "below 3:1 on the body"
+                Expect.exists (refused (Theme.withOverrides [ ThemeOverride.colour "glyph.team.2" dim ] theme)) (fun v -> v.Token = "glyph.team.2") "and withOverrides"
+                Expect.exists (refused (Theme.withOverrides [ ThemeOverride.colour "glyph.allegiance.own" (rgb 64 64 200) ] theme)) (fun v -> v.Token = "glyph.allegiance.own" && v.Reason.Contains "7:1") "an allegiance colour keeps contrastTarget"
+            }
+
             test "players change only a team colour, and nothing lowers a floor" {
                 let teal = rgb 0 150 136
                 Expect.equal (colourOf "glyph.team.2" (ok (Theme.withTeamColour 2 teal Theme.classic))) teal "an existing team"

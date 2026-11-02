@@ -122,7 +122,14 @@ const pageUrl = pathToFileURL(pagePath);
 if (process.env.RENDER_SMOKE_PART) pageUrl.searchParams.set("part", process.env.RENDER_SMOKE_PART);
 const started = Date.now();
 await page.goto(pageUrl.href);
-const reported = await Promise.race([done, new Promise((resolve) => setTimeout(() => resolve(false), Number(timeoutSeconds) * 1000))]);
+let timeout;
+let reported;
+try {
+  reported = await Promise.race([done, new Promise((resolve) => { timeout = setTimeout(() => resolve(false), Number(timeoutSeconds) * 1000); })]);
+} finally {
+  // A successful page must not retain an idle Node process until the unused page deadline.
+  clearTimeout(timeout);
+}
 if (!reported) write("DRIVER timeout after " + timeoutSeconds + "s");
 else write("DRIVER page-seconds " + ((Date.now() - started) / 1000).toFixed(1) + " of " + timeoutSeconds);
 await browser.close();

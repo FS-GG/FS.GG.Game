@@ -19,6 +19,7 @@
     <Compile Include="ScenePixelsTests.fs" />
     <Compile Include="ThemeTests.fs" />
     <Compile Include="GlyphsTests.fs" />
+    <Compile Include="ExperimentalThemesTests.fs" />
     <Compile Include="SceneInteractionTests.fs" />
     <Compile Include="InputPipelineContractTests.fs" />
     <!-- The input host's pure half (FS.GG.Game#788), compiled here so .NET checks it directly. -->
