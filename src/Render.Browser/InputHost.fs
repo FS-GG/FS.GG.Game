@@ -317,6 +317,13 @@ module internal InputHost =
             event.preventDefault ()
             stopImmediate event
 
+        /// Keys whose keydown the host contained and whose keyup has not come yet.
+        let containedKeys = System.Collections.Generic.HashSet<string>()
+
+        let containKey (event: Event) (key: string) =
+            containedKeys.Add key |> ignore
+            contain event
+
         do
             let surfaceTarget = surface :> EventTarget
 
@@ -464,6 +471,7 @@ module internal InputHost =
 
             listen surfaceTarget "blur" (fun raw ->
                 if not disposed && targets raw surface then
+                    containedKeys.Clear()
                     visible <- false
                     redraw false)
 
@@ -475,8 +483,13 @@ module internal InputHost =
                     let modifiers = modifiersOf raw
                     let repeat = isRepeat keyboard
 
-                    if InputLayout.isNavigation key then
-                        let next = InputLayout.navigate key focused items
+                    // An arrow (or any navigation key) with Alt or Meta held is the browser's (history back and
+                    // forward): it is neither reported nor contained.
+                    if InputLayout.isNavigation key && (modifiers.Alt || modifiers.Meta) then
+                        ()
+                    elif InputLayout.isNavigation key then
+                        let shape = layout |> Option.defaultValue (InputLayout.Layout.Listbox [])
+                        let next = InputLayout.navigate key modifiers.Control focused shape items
                         let moved = next <> focused
                         focused <- next
                         visible <- true
@@ -486,7 +499,7 @@ module internal InputHost =
                         if moved then
                             event InputSource.Keyboard InputAction.Focus next None modifiers repeat
 
-                        contain raw
+                        containKey raw key
                     else
                         let action =
                             match key with
@@ -509,8 +522,15 @@ module internal InputHost =
                                 event InputSource.Keyboard action target None modifiers repeat
                             | _ -> ()
 
-                            contain raw
+                            containKey raw key
                         | None -> ())
+
+            // The keyup of every key whose keydown was contained is contained too, so no page binding sees half a key.
+            listen surfaceTarget "keyup" (fun raw ->
+                let key = (raw :?> KeyboardEvent).key
+
+                if containedKeys.Remove key then
+                    contain raw)
 
             // A screen reader's click on an item (its default action) activates the item's object.
             listen (mirror :> EventTarget) "click" (fun raw ->

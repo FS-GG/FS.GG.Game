@@ -155,7 +155,66 @@ module internal InputLayout =
 
     let isNavigation (key: string) = navigationKeys.Contains key
 
-    let navigate (key: string) (focused: string option) (items: Item list) : string option =
+    /// Every grid cell with its (aria-rowindex, aria-colindex), in DOM order, and the rowgroup it is in.
+    let private cells (groups: RowGroup list) =
+        [
+            for groupIndex, group in List.indexed groups do
+                for row in group.Rows do
+                    for cell in row.Cells do
+                        yield cell.Item.Id, (row.RowIndex, cell.ColIndex), groupIndex
+        ]
+
+    /// The grid keyboard of the ARIA Authoring Practices: Left and Right move along the row and stop at its ends, Up and
+    /// Down move to the nearest cell of the previous or next row (by `aria-rowindex`, across rowgroups, the same column
+    /// when it has one), Home and End go to the ends of the row (with Control, of the grid), and Page Up and Page Down
+    /// move to the first cell of the previous or next rowgroup.
+    let private navigateGrid (key: string) (control: bool) (focused: string option) (groups: RowGroup list) =
+        let all = cells groups
+
+        match all with
+        | [] -> None
+        | (firstId, _, _) :: _ ->
+            let lastId, _, _ = List.last all
+            let backward = key = "ArrowLeft" || key = "ArrowUp" || key = "End"
+
+            match focused |> Option.bind (fun id -> all |> List.tryFind (fun (cell, _, _) -> cell = id)) with
+            | None -> Some(if backward then lastId else firstId)
+            | Some(here, (row, column), group) ->
+                let inRow = all |> List.filter (fun (_, (r, _), _) -> r = row) |> List.sortBy (fun (_, (_, c), _) -> c)
+                let idOf (id, _, _) = id
+
+                let vertical (pick: int -> bool) (nearest: int list -> int option) =
+                    let rows = all |> List.map (fun (_, (r, _), _) -> r) |> List.distinct |> List.filter pick
+
+                    match nearest rows with
+                    | None -> Some here
+                    | Some target ->
+                        all
+                        |> List.filter (fun (_, (r, _), _) -> r = target)
+                        |> List.sortBy (fun (_, (_, c), _) -> abs (c - column), c)
+                        |> List.head
+                        |> idOf
+                        |> Some
+
+                let groupFirst (index: int) =
+                    all |> List.tryFind (fun (_, _, g) -> g = index) |> Option.map idOf |> Option.orElse (Some here)
+
+                match key with
+                | "ArrowRight" ->
+                    inRow |> List.tryFind (fun (_, (_, c), _) -> c > column) |> Option.map idOf |> Option.orElse (Some here)
+                | "ArrowLeft" ->
+                    inRow |> List.filter (fun (_, (_, c), _) -> c < column) |> List.tryLast |> Option.map idOf |> Option.orElse (Some here)
+                | "ArrowDown" -> vertical (fun r -> r > row) (fun rows -> if rows.IsEmpty then None else Some(List.min rows))
+                | "ArrowUp" -> vertical (fun r -> r < row) (fun rows -> if rows.IsEmpty then None else Some(List.max rows))
+                | "Home" when control -> Some firstId
+                | "End" when control -> Some lastId
+                | "Home" -> inRow |> List.head |> idOf |> Some
+                | "End" -> inRow |> List.last |> idOf |> Some
+                | "PageDown" -> if group + 1 < groups.Length then groupFirst (group + 1) else Some here
+                | "PageUp" -> if group > 0 then groupFirst (group - 1) else Some here
+                | _ -> Some here
+
+    let private navigateList (key: string) (focused: string option) (items: Item list) : string option =
         match items with
         | [] -> None
         | first :: _ ->
@@ -168,27 +227,6 @@ module internal InputLayout =
                 let current = items.[index]
                 let count = List.length items
                 let linear step = Some items.[(index + step + count) % count].Id
-
-                // Inside a cell group the arrows move in two dimensions: the nearest cell in that direction on the same
-                // row (or column), skipping gaps, and nothing past the group's edge.
-                let move (along: int * int -> int) (across: int * int -> int) (forward: bool) =
-                    match current.Cell with
-                    | Some here ->
-                        let candidates =
-                            items
-                            |> List.filter (fun item ->
-                                item.Group = current.Group
-                                && item.Cell
-                                   |> Option.exists (fun cell ->
-                                       across cell = across here
-                                       && (if forward then along cell > along here else along cell < along here)))
-                            |> List.sortBy (fun item -> along (Option.get item.Cell))
-
-                        match (if forward then List.tryHead candidates else List.tryLast candidates) with
-                        | Some next -> Some next.Id
-                        | None -> Some current.Id
-                    | None -> linear (if forward then 1 else -1)
-
                 let groups = groupOrder items
 
                 let groupStep step =
@@ -201,12 +239,17 @@ module internal InputLayout =
                         members groups.[target] items |> List.head |> fun item -> Some item.Id
 
                 match key with
-                | "ArrowRight" -> move snd fst true
-                | "ArrowLeft" -> move snd fst false
-                | "ArrowDown" -> move fst snd true
-                | "ArrowUp" -> move fst snd false
+                | "ArrowRight"
+                | "ArrowDown" -> linear 1
+                | "ArrowLeft"
+                | "ArrowUp" -> linear -1
                 | "Home" -> Some first.Id
                 | "End" -> Some last.Id
                 | "PageDown" -> groupStep 1
                 | "PageUp" -> groupStep -1
                 | _ -> Some current.Id
+
+    let navigate (key: string) (control: bool) (focused: string option) (layout: Layout) (items: Item list) : string option =
+        match layout with
+        | Layout.Grid(groups, _, _) -> navigateGrid key control focused groups
+        | Layout.Listbox _ -> navigateList key focused items

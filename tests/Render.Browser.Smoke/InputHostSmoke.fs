@@ -1,18 +1,22 @@
 module FS.GG.Game.Render.Browser.Smoke.InputHostSmoke
 
 // FS.GG.Game#788 PR B: the input host of `SceneRenderers.withInput` on the real SVG, Pixi and Babylon backends, played
-// with REAL input (the driver's trusted mouse and keyboard). Each backend must report the same `InputEvent`s for the
-// same input, form ONE Tab stop that is a labelled listbox (or a grid once any cell group exists) naming the focused
-// object's item with `aria-activedescendant`, own its items (`aria-owns` on the SVG root, fallback content in a
-// canvas) without ever hiding them from assistive technology, contain the keys it reports, and release everything when
-// switched away. The full `input` section of the conformance kit (I1-I16) is PR C.
+// with REAL input (the driver's trusted mouse, touch and keyboard). Each backend must report the same `InputEvent`s for
+// the same input, form ONE Tab stop that is a labelled listbox (or a grid once any cell group exists) naming the focused
+// object's item with `aria-activedescendant`, own its items (`aria-owns` on the SVG root, fallback content in a canvas)
+// without ever hiding them from assistive technology, contain both the keydown and the keyup of every key it reports,
+// leave Alt- and Meta-modified arrows to the browser, move on a grid as the ARIA Authoring Practices say, draw the focus
+// ring's two tones at 1x and 2x CSS scale and at DPR 2, and release everything when switched away. The full `input`
+// section of the conformance kit (I1-I16) is PR C.
 
 open Browser.Dom
 open Browser.Types
 open Fable.Core
+open Fable.Core.JsInterop
 open FS.GG.Game.Render
 open FS.GG.Game.Render.Browser
 open FS.GG.Game.Reference
+open FS.GG.UI.Scene
 
 [<Emit("$0.focus()")>]
 let private focusElement (_element: Element) : unit = jsNative
@@ -26,21 +30,48 @@ let private find (_root: Element) (_selector: string) : Element = jsNative
 [<Emit("Array.from($0.querySelectorAll($1))")>]
 let private findAll (_root: Element) (_selector: string) : Element array = jsNative
 
-[<Emit("Array.from(document.querySelectorAll('[tabindex]')).filter(e => e.tabIndex >= 0 && $0.contains(e)).length")>]
+/// The elements of `container` a user can Tab to: focusable (natively, or by a `tabindex`), `tabIndex` 0 or more, not
+/// disabled or inert, and rendered (no `display:none` or `visibility:hidden` on it or an ancestor).
+[<Emit("[$0, ...$0.querySelectorAll('*')].filter(e => { if (e.tabIndex < 0 || e.disabled || e.closest('[inert]')) return false; for (let n = e; n && n.nodeType === 1; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden') return false } return e.hasAttribute('tabindex') || e.matches('a[href],button,input,select,textarea,summary,iframe,[contenteditable=\"\"],[contenteditable=true]') }).length")>]
 let private tabStops (_container: Element) : int = jsNative
 
-[<Emit("(() => { const s = getComputedStyle($0); return s.display === 'none' || s.visibility === 'hidden' || $0.closest('[aria-hidden=true]') !== null })()")>]
+/// Hidden from assistive technology: `aria-hidden`, `hidden`, `display:none` or `visibility:hidden` on the element or
+/// any ancestor.
+[<Emit("(() => { for (let n = $0; n && n.nodeType === 1; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden' || n.getAttribute('aria-hidden') === 'true' || n.hidden) return true } return false })()")>]
 let private hiddenFromAt (_element: Element) : bool = jsNative
 
-[<Emit("(() => { const r = $0.getBoundingClientRect(); return [r.width, r.height] })()")>]
-let private sizeOf (_element: Element) : float array = jsNative
+/// Page-level listeners (bubble phase) for every keydown and keyup, and a census of page context menus that opened (a
+/// `contextmenu` nobody prevented).
+[<Emit("(() => { if (!window.__fsggHostPage) { const p = { keys: [], menus: 0 }; window.__fsggHostPage = p; document.addEventListener('keydown', e => p.keys.push('down:' + e.key)); document.addEventListener('keyup', e => p.keys.push('up:' + e.key)); window.addEventListener('contextmenu', e => { if (!e.defaultPrevented) p.menus++ }) } })()")>]
+let private installPage () : unit = jsNative
 
-/// A page-level listener (bubble phase) that counts the keys reaching the page.
-[<Emit("(() => { window.__fsggPageKeys = []; document.addEventListener('keydown', e => window.__fsggPageKeys.push(e.key)) })()")>]
-let private installPageKeys () : unit = jsNative
+[<Emit("window.__fsggHostPage.keys.splice(0)")>]
+let private takePageKeys () : string array = jsNative
 
-[<Emit("window.__fsggPageKeys.splice(0).join(',')")>]
-let private takePageKeys () : string = jsNative
+[<Emit("window.__fsggHostPage.menus")>]
+let private pageMenus () : int = jsNative
+
+[<Emit("$0.click()")>]
+let private clickElement (_element: Element) : unit = jsNative
+
+[<Emit("$0.style.width = $1 + 'px', $0.style.height = $2 + 'px'")>]
+let private styleSize (_element: Element) (_width: float) (_height: float) : unit = jsNative
+
+/// A real input request of `kind` at the scene point `point` of `surface` (a scene of `width` x `height` units).
+let private inputAt (surface: Element) (width: float) (height: float) (kind: string) (point: Point) : Async<unit> =
+    let bounds = surface.getBoundingClientRect ()
+
+    let request =
+        createObj
+            [
+                "kind" ==> kind
+                "x" ==> bounds.left + point.X * bounds.width / width
+                "y" ==> bounds.top + point.Y * bounds.height / height
+                "ms" ==> 600
+            ]
+
+    let pending: JS.Promise<unit> = emitJsExpr request "window.__fsggInput($0)"
+    Async.AwaitPromise pending
 
 let private eventText (event: InputEvent) =
     let source =
@@ -58,6 +89,8 @@ let private eventText (event: InputEvent) =
         | InputAction.Cancel -> "cancel"
 
     sprintf "%s:%s:%s" source action (InputEvent.target event |> Option.defaultValue "-")
+
+let private texts (events: ResizeArray<InputEvent>) = events |> Seq.map eventText |> List.ofSeq
 
 let private start: ReferenceState.Model =
     {
@@ -81,18 +114,39 @@ let private settle frames =
             do! nextFrame
     }
 
-/// Play one backend of `renderers` (a registry from `withInput`) and check it.
-let private play
+/// The keys the host reports, in the page's `down:`/`up:` notation, that a page must never see.
+let private reportedKeys =
+    [ "ArrowRight"; "ArrowLeft"; "ArrowUp"; "ArrowDown"; "Home"; "End"; "PageUp"; "PageDown"; "Enter"; " "; "Escape" ]
+    |> List.collect (fun key -> [ "down:" + key; "up:" + key ])
+    |> Set.ofList
+
+let private surfaceOf (container: HTMLElement) (backend: RendererBackend) =
+    find container (sprintf "[data-renderer=%s]:is(svg, canvas)" (RendererBackend.id backend))
+
+let private itemsOf (backend: RendererBackend) (role: string) =
+    findAll document.body (sprintf "[data-input-host^='fsgg-input-%s'] [role=%s]" (RendererBackend.id backend) role)
+
+let private ownedBy (backend: RendererBackend) (surface: Element) (item: Element) =
+    match backend with
+    | RendererBackend.Svg ->
+        let owns = (surface.getAttribute "aria-owns").Split(' ') |> Set.ofArray
+
+        owns.Contains(item.getAttribute "id")
+        || (let group = item.closest "[role=group],[role=rowgroup]"
+            group.IsSome && owns.Contains(group.Value.getAttribute "id"))
+    | _ -> surface.contains item
+
+/// The reference game as a listbox: the structure, a press, the keyboard and key containment, and release.
+let private playListbox
     (check: string -> bool -> string -> unit)
     (container: HTMLElement)
     (late: LateFailureRoute)
     (route: InputRoute)
     (registry: RendererRegistry<ReferenceState.Model>)
-    (grid: bool)
     (backend: RendererBackend)
     : Async<unit> =
     async {
-        let name = (RendererBackend.id backend) + (if grid then " grid" else "")
+        let name = RendererBackend.id backend
         let events = ResizeArray<InputEvent>()
         InputRoute.bind events.Add route
         let driver = BrowserRenderers.start late registry start ignore
@@ -102,68 +156,31 @@ let private play
 
         let! _ = BrowserConformance.waitUntil 600 (fun () -> driver.Mounted = Some backend)
         do! settle 3
-        let selector = sprintf "[data-renderer=%s]:is(svg, canvas)" (RendererBackend.id backend)
-        let surface = find container selector
-
-        let role = surface.getAttribute "role"
-        let wantRole = if grid then "grid" else "listbox"
+        let surface = surfaceOf container backend
 
         check
-            (sprintf "input host %s: the surface is ONE labelled %s Tab stop" name wantRole)
-            (role = wantRole && surface.getAttribute "aria-label" = "Input board" && surface.getAttribute "tabindex" = "0" && tabStops container = 1)
-            (sprintf "role=%s label=%s tabindex=%s tabStops=%d" role (surface.getAttribute "aria-label") (surface.getAttribute "tabindex") (tabStops container))
+            (sprintf "input host %s: the surface is ONE labelled listbox Tab stop" name)
+            (surface.getAttribute "role" = "listbox" && surface.getAttribute "aria-label" = "Input board" && tabStops container = 1)
+            (sprintf "role=%s label=%s tabStops=%d" (surface.getAttribute "role") (surface.getAttribute "aria-label") (tabStops container))
 
-        let itemRole = if grid then "gridcell" else "option"
-        let items = findAll document.body (sprintf "[data-input-host^='fsgg-input-%s'] [role=%s]" (RendererBackend.id backend) itemRole)
+        let items = itemsOf backend "option"
         let itemIds = items |> Array.map (fun item -> item.getAttribute "data-scene-control-id") |> List.ofArray
-
-        let owned =
-            match backend with
-            | RendererBackend.Svg ->
-                let owns = (surface.getAttribute "aria-owns").Split(' ') |> Set.ofArray
-                // Every item is owned: directly, or through the group or rowgroup the root owns.
-                items
-                |> Array.forall (fun item ->
-                    owns.Contains(item.getAttribute "id")
-                    || (let group = item.closest "[role=group],[role=rowgroup]"
-                        group.IsSome && owns.Contains(group.Value.getAttribute "id")))
-            | _ -> items |> Array.forall (fun item -> surface.contains item)
+        let owned = items |> Array.forall (ownedBy backend surface)
 
         check
-            (sprintf "input host %s: one %s per keyboard-reachable object, owned by the surface, none hidden from assistive technology" name itemRole)
+            (sprintf "input host %s: one option per keyboard-reachable object, owned by the surface, none hidden from assistive technology (up the ancestor chain)" name)
             (itemIds = [ "token"; "aim" ] && owned && items |> Array.forall (hiddenFromAt >> not))
             (sprintf "items=%A owned=%b hidden=%A" itemIds owned (items |> Array.map hiddenFromAt))
 
-        if grid then
-            let cells =
-                items
-                |> Array.map (fun item ->
-                    sprintf
-                        "%s r%s c%s"
-                        (item.getAttribute "aria-label")
-                        ((item.closest "[role=row]").Value.getAttribute "aria-rowindex")
-                        (item.getAttribute "aria-colindex"))
-                |> List.ofArray
-
-            check
-                (sprintf "input host %s: cells carry their group's name and their row and column indices" name)
-                (cells = [ "Player token, Board r1 c1"; "Aim marker, Board r1 c3" ]
-                 && surface.getAttribute "aria-rowcount" = "1"
-                 && surface.getAttribute "aria-colcount" = "3")
-                (sprintf "%A rowcount=%s colcount=%s" cells (surface.getAttribute "aria-rowcount") (surface.getAttribute "aria-colcount"))
-
-        // A real primary press on the token: Activate from the pointer, on the token.
         events.Clear()
         let x, y, w, h = ReferenceRenderers.tokenBounds start
         do! BrowserConformance.press container backend { X = x + w / 2.0; Y = y + h / 2.0 }
-        do! settle 1
 
         check
             (sprintf "input host %s: a real press on an object reports Activate from the pointer on it" name)
-            (events |> Seq.map eventText |> Seq.contains "pointer:activate:token")
-            (events |> Seq.map eventText |> String.concat ",")
+            (texts events |> List.contains "pointer:activate:token")
+            (String.concat "," (texts events))
 
-        // Keyboard: focus, an arrow, Enter, Escape; the reported keys never reach the page.
         focusElement surface
         events.Clear()
         takePageKeys () |> ignore
@@ -171,38 +188,263 @@ let private play
         do! BrowserConformance.key "Enter"
         do! BrowserConformance.key "Escape"
         do! BrowserConformance.key "x"
-        do! settle 1
-        let reported = events |> Seq.map eventText |> List.ofSeq
         let active = surface.getAttribute "aria-activedescendant"
         let activeItem = if isNull active then None else items |> Array.tryFind (fun item -> item.getAttribute "id" = active)
 
         check
             (sprintf "input host %s: arrows report Focus, Enter Activate and Escape Cancel from the keyboard, on the focused object" name)
-            (reported = [ "keyboard:focus:aim"; "keyboard:activate:aim"; "keyboard:cancel:aim" ])
-            (String.concat "," reported)
+            (texts events = [ "keyboard:focus:aim"; "keyboard:activate:aim"; "keyboard:cancel:aim" ])
+            (String.concat "," (texts events))
 
         check
             (sprintf "input host %s: aria-activedescendant names the focused object's item, and Escape keeps the focus on the surface" name)
             (activeItem |> Option.map (fun item -> item.getAttribute "data-scene-control-id") = Some "aim" && isActive surface)
             (sprintf "activedescendant=%s focused=%b" active (isActive surface))
 
-        let pageKeys = takePageKeys ()
+        let pageKeys = takePageKeys () |> List.ofArray
 
         check
-            (sprintf "input host %s: the reported keys stop at the host; others reach the page" name)
-            (pageKeys = "x")
-            pageKeys
+            (sprintf "input host %s: neither the keydown nor the keyup of a reported key reaches the page; an unreported key does" name)
+            (pageKeys = [ "down:x"; "up:x" ])
+            (sprintf "%A" pageKeys)
 
-        // Disposal: switching away releases the host's mirror and its surface attributes.
+        driver.Dispatch(RendererMsg.SelectBackend(if backend = RendererBackend.Svg then RendererBackend.Pixi else RendererBackend.Svg))
+        do! settle 2
+        let left = findAll document.body (sprintf "[data-input-host^='fsgg-input-%s']" name)
+        check (sprintf "input host %s: switching away removes its mirror" name) (left.Length = 0) (string left.Length)
+        (driver :> System.IDisposable).Dispose()
+        InputRoute.unbind route
+        do! settle 2
+    }
+
+/// The board as a grid (every kind of ObjectAccess, rows across three rowgroups, a mixed ungrouped rowgroup): the
+/// structure, mouse, touch, long-press, secondary press, hover and mirror input, the APG grid keyboard, key containment,
+/// Alt-modified arrows left to the browser, and the focus ring's two tones at 1x and 2x CSS scale and at DPR 2.
+let private playGrid
+    (check: string -> bool -> string -> unit)
+    (container: HTMLElement)
+    (late: LateFailureRoute)
+    (route: InputRoute)
+    (registry: RendererRegistry<InputFixture.Board>)
+    (backend: RendererBackend)
+    : Async<unit> =
+    async {
+        let name = RendererBackend.id backend + " grid"
+        let events = ResizeArray<InputEvent>()
+        InputRoute.bind events.Add route
+        let board: InputFixture.Board = { Tick = 0; Selected = None }
+        let driver = BrowserRenderers.start late registry board ignore
+
+        if backend <> RendererBackend.Svg then
+            driver.Dispatch(RendererMsg.SelectBackend backend)
+
+        let! _ = BrowserConformance.waitUntil 600 (fun () -> driver.Mounted = Some backend)
+        do! settle 3
+        let surface = surfaceOf container backend
+        let width, height = InputFixture.width, InputFixture.height
+        let centre id =
+            InputFixture.objects board
+            |> List.find (fun target -> target.Id = id)
+            |> fun target -> { X = target.Bounds.X + target.Bounds.Width / 2.0; Y = target.Bounds.Y + target.Bounds.Height / 2.0 }
+
+        // Structure.
+        let items = itemsOf backend "gridcell"
+
+        let shape =
+            items
+            |> Array.map (fun item ->
+                sprintf
+                    "%s r%s c%s %s"
+                    (item.getAttribute "data-scene-control-id")
+                    ((item.closest "[role=row]").Value.getAttribute "aria-rowindex")
+                    (item.getAttribute "aria-colindex")
+                    ((item.closest "[role=rowgroup]").Value.getAttribute "aria-label"))
+            |> List.ofArray
+
+        check
+            (sprintf "input host %s: ONE grid Tab stop; rows across three rowgroups by aria-rowindex, the ungrouped a and b in one rowgroup, sparse Map columns, the pointer-only object absent, nothing hidden" name)
+            (surface.getAttribute "role" = "grid"
+             && tabStops container = 1
+             && surface.getAttribute "aria-rowcount" = "6"
+             && surface.getAttribute "aria-colcount" = "3"
+             && shape
+                = [
+                    "a r1 c1 Input board objects"
+                    "b r2 c1 Input board objects"
+                    "u1 r3 c1 Units"
+                    "u2 r4 c1 Units"
+                    "t00 r5 c1 Map"
+                    "t02 r5 c3 Map"
+                    "t10 r6 c1 Map"
+                    "t12 r6 c3 Map"
+                ]
+             && items |> Array.forall (ownedBy backend surface)
+             && items |> Array.forall (hiddenFromAt >> not))
+            (sprintf "role=%s tabStops=%d rows=%s cols=%s %A" (surface.getAttribute "role") (tabStops container) (surface.getAttribute "aria-rowcount") (surface.getAttribute "aria-colcount") shape)
+
+        // Pointer, touch, long-press, secondary press, hover and the mirror.
+        let after (action: Async<unit>) =
+            async {
+                events.Clear()
+                do! action
+                do! settle 1
+                return texts events
+            }
+
+        let! pressed = after (inputAt surface width height "click" (centre "u1"))
+        check (sprintf "input host %s: a mouse press reports Activate from the pointer" name) (List.contains "pointer:activate:u1" pressed) (String.concat "," pressed)
+
+        let! tapped = after (inputAt surface width height "touchTap" (centre "t02"))
+
+        check
+            (sprintf "input host %s: a touch tap reports Activate from the pointer, and nothing secondary" name)
+            (List.contains "pointer:activate:t02" tapped && not (tapped |> List.exists (fun e -> e.Contains "secondary")))
+            (String.concat "," tapped)
+
+        let menus = pageMenus ()
+        let! held = after (inputAt surface width height "touchHold" (centre "t10"))
+
+        check
+            (sprintf "input host %s: a touch long-press reports ActivateSecondary from the pointer, no Activate, and no page context menu" name)
+            (held |> List.filter (fun e -> e.Contains ":activate:" || e.Contains ":secondary:") = [ "pointer:secondary:t10" ]
+             && pageMenus () = menus)
+            (sprintf "%s menus %d -> %d" (String.concat "," held) menus (pageMenus ()))
+
+        let! secondary = after (inputAt surface width height "rightClick" (centre "t12"))
+
+        check
+            (sprintf "input host %s: a secondary press reports ActivateSecondary from the pointer, and no page context menu" name)
+            (List.contains "pointer:secondary:t12" secondary && pageMenus () = menus)
+            (sprintf "%s menus %d -> %d" (String.concat "," secondary) menus (pageMenus ()))
+
+        let centreA = centre "a"
+        do! inputAt surface width height "move" { X = 160.0; Y = 150.0 }
+
+        let! hovered =
+            after (
+                async {
+                    do! inputAt surface width height "move" centreA
+                    do! inputAt surface width height "move" { centreA with X = centreA.X + 5.0 }
+                    do! inputAt surface width height "move" { X = 160.0; Y = 150.0 }
+                }
+            )
+
+        check
+            (sprintf "input host %s: hover is reported once per change of hovered object, and once with no target when leaving it" name)
+            (hovered |> List.filter (fun e -> e.Contains "hover") = [ "pointer:hover:a"; "pointer:hover:-" ])
+            (String.concat "," hovered)
+
+        let u2 = items |> Array.find (fun item -> item.getAttribute "data-scene-control-id" = "u2")
+        let! clicked = after (async { clickElement u2 })
+        check (sprintf "input host %s: a screen reader's click on an item reports Activate from the Mirror" name) (clicked = [ "mirror:activate:u2" ]) (String.concat "," clicked)
+
+        // The APG grid keyboard, with every reported keydown and keyup contained.
+        focusElement surface
+        takePageKeys () |> ignore
+
+        let! walked =
+            after (
+                async {
+                    for key in
+                        [
+                            "Control+Home"
+                            "ArrowDown"
+                            "ArrowDown"
+                            "ArrowDown"
+                            "ArrowDown"
+                            "ArrowRight"
+                            "ArrowRight"
+                            "ArrowDown"
+                            "ArrowLeft"
+                            "ArrowUp"
+                            "End"
+                        ] do
+                        do! BrowserConformance.key key
+                }
+            )
+
+        let focus = walked |> List.filter (fun e -> e.StartsWith "keyboard:focus:") |> List.map (fun e -> e.Substring 15)
+
+        check
+            (sprintf "input host %s: the grid keyboard follows the APG: Control+Home, Down by aria-rowindex across rowgroups, Right stops at the row's end, Left, Up, End" name)
+            (focus = [ "a"; "b"; "u1"; "u2"; "t00"; "t02"; "t12"; "t10"; "t00"; "t02" ])
+            (String.concat "," focus)
+
+        let leaked = takePageKeys () |> Array.filter reportedKeys.Contains |> List.ofArray
+
+        check
+            (sprintf "input host %s: neither the keydown nor the keyup of a reported key reaches the page" name)
+            leaked.IsEmpty
+            (sprintf "%A" leaked)
+
+        let! history = after (BrowserConformance.key "Alt+ArrowRight")
+        let pageKeys = takePageKeys () |> List.ofArray
+
+        check
+            (sprintf "input host %s: an Alt-modified arrow is neither reported nor contained (the browser's history keys)" name)
+            (history |> List.forall (fun e -> not (e.StartsWith "keyboard:focus")) && List.contains "down:ArrowRight" pageKeys && List.contains "up:ArrowRight" pageKeys)
+            (sprintf "events=%A page=%A" history pageKeys)
+
+        // The focus ring's two tones around t00, 1 and 3 CSS px outside the middle of each edge.
+        do! inputAt surface width height "click" (centre "t00")
+        focusElement surface
+        do! BrowserConformance.key "ArrowRight"
+        do! BrowserConformance.key "ArrowLeft"
+
+        let ring () =
+            async {
+                driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+                do! settle 2
+                driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+                let css = surface.getBoundingClientRect().width / width
+                let b = (InputFixture.objects board |> List.find (fun t -> t.Id = "t00")).Bounds
+
+                let around distance =
+                    let d = distance / css
+
+                    [
+                        { X = b.X - d; Y = b.Y + b.Height / 2.0 }
+                        { X = b.X + b.Width / 2.0; Y = b.Y - d }
+                        { X = b.X + b.Width + d; Y = b.Y + b.Height / 2.0 }
+                        { X = b.X + b.Width / 2.0; Y = b.Y + b.Height + d }
+                    ]
+
+                let! inner = BrowserConformance.drawnPixels container width height backend (around 1.0)
+                let! outer = BrowserConformance.drawnPixels container width height backend (around 3.0)
+                let light = inner |> List.forall (Option.exists (fun (r, g, b) -> r >= 231 && g >= 231 && b >= 231))
+                let dark = outer |> List.forall (Option.exists (fun (r, g, b) -> r <= 40 && g <= 40 && b <= 40))
+                return light && dark, sprintf "css=%g inner=%A outer=%A" css inner outer
+            }
+
+        let! plain, plainDetail = ring ()
+
+        check
+            (sprintf "input host %s: the focus ring draws its light inner and dark outer band at their declared tones (1x CSS)" name)
+            plain
+            plainDetail
+
+        styleSize surface (width * 2.0) (height * 2.0)
+        let! doubled, doubledDetail = ring ()
+        styleSize surface width height
+
+        check
+            (sprintf "input host %s: the focus ring's two tones hold at 2x CSS scale" name)
+            doubled
+            doubledDetail
+
+        do! BrowserConformance.deviceScale 2.0
+        let! dense, denseDetail = ring ()
+        do! BrowserConformance.deviceScale 1.0
+
+        check
+            (sprintf "input host %s: the focus ring's two tones hold at DPR 2" name)
+            dense
+            denseDetail
+
         driver.Dispatch(RendererMsg.SelectBackend(if backend = RendererBackend.Svg then RendererBackend.Pixi else RendererBackend.Svg))
         do! settle 2
         let left = findAll document.body (sprintf "[data-input-host^='fsgg-input-%s']" (RendererBackend.id backend))
-
-        check
-            (sprintf "input host %s: switching away removes its mirror" name)
-            (left.Length = 0)
-            (string left.Length)
-
+        check (sprintf "input host %s: switching away removes its mirror" name) (left.Length = 0) (string left.Length)
         (driver :> System.IDisposable).Dispose()
         InputRoute.unbind route
         do! settle 2
@@ -210,36 +452,37 @@ let private play
 
 let run (check: string -> bool -> string -> unit) : Async<unit> =
     async {
-        installPageKeys ()
+        installPage ()
         let container = document.createElement "div"
         container.id <- "stage-input-host"
         document.body.appendChild container |> ignore
         let late = BrowserRenderers.route ()
-        let options = BrowserRenderers.options "Input board" ReferenceRenderers.width ReferenceRenderers.height
+        let route = InputRoute.create ()
 
-        let declare (interaction: SceneInteraction<ReferenceState.Model>) (route: InputRoute) =
-            match BrowserRenderers.surfaces container options late with
+        let listbox =
+            match BrowserRenderers.surfaces container (BrowserRenderers.options "Input board" ReferenceRenderers.width ReferenceRenderers.height) late with
             | (svg :: _) as all ->
                 ReferenceRenderers.declare (SceneSurface.mountScene svg) all
-                |> SceneRenderers.withInput interaction route
+                |> SceneRenderers.withInput ReferenceRenderers.interaction route
                 |> SceneRenderers.registry
             | [] -> failwith "no surfaces"
 
-        let route = InputRoute.create ()
-        let listbox = declare ReferenceRenderers.interaction route
-
-        let cells =
-            ReferenceRenderers.interaction
-            |> SceneInteraction.withAccess (fun target ->
-                if target.Id = "token" then ObjectAccess.cell "Board" 0 0 else ObjectAccess.cell "Board" 0 2)
-
-        let grid = declare cells route
-
-        for backend in RendererBackend.all do
-            do! play check container late route listbox false backend
+        let grid =
+            match BrowserRenderers.surfaces container (BrowserRenderers.options "Input board" InputFixture.width InputFixture.height) late with
+            | (svg :: _) as all ->
+                all
+                |> List.fold
+                    (fun renderers surface -> SceneRenderers.withSurface surface renderers)
+                    (SceneRenderers.create InputFixture.view (SceneSurface.mountScene svg))
+                |> SceneRenderers.withInput InputFixture.interaction route
+                |> SceneRenderers.registry
+            | [] -> failwith "no surfaces"
 
         for backend in RendererBackend.all do
-            do! play check container late route grid true backend
+            do! playListbox check container late route listbox backend
+
+        for backend in RendererBackend.all do
+            do! playGrid check container late route grid backend
 
         container.remove ()
     }

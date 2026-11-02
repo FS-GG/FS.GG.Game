@@ -107,6 +107,20 @@ module PixiSurface =
     [<Emit("$0.hitTest($1, $2)")>]
     let private boundaryHitTest (_boundary: obj) (_x: float) (_y: float) : obj = jsNative
 
+    [<Emit("$0.renderer.resolution")>]
+    let private resolutionOf (_app: P.Application) : float = jsNative
+
+    /// Resize the renderer to `width` x `height` CSS pixels at `resolution` device pixels per CSS pixel.
+    [<Emit("$0.renderer.resize($1, $2, $3)")>]
+    let private resizeAt (_app: P.Application) (_width: float) (_height: float) (_resolution: float) : unit = jsNative
+
+    /// Give an unstyled canvas its scene size as its inline CSS size, so a larger backing store never grows it.
+    [<Emit("(() => { if (!$0.style.width) { $0.style.width = $1 + 'px'; $0.style.height = $2 + 'px' } })()")>]
+    let private pinPresentedSize (_canvas: HTMLCanvasElement) (_width: float) (_height: float) : unit = jsNative
+
+    [<Emit("(window.devicePixelRatio || 1)")>]
+    let private devicePixelRatio () : float = jsNative
+
     let private rgb (color: Color) =
         (int color.Red <<< 16) ||| (int color.Green <<< 8) ||| int color.Blue
 
@@ -139,6 +153,12 @@ module PixiSurface =
         (host: InputHost.CanvasHost option)
         (first: InteractiveScene)
         : Result<RendererMount<InteractiveScene>, string> =
+        // FS.GG.Game#788: an input-host mount renders at the presented density.
+        let sharpens =
+            match host with
+            | Some(InputHost.CanvasHost.Input _) -> true
+            | _ -> false
+
         let scene = first.Scene
 
         if System.String.IsNullOrWhiteSpace options.Label then
@@ -180,6 +200,9 @@ module PixiSurface =
                 canvas.width <- options.Width
                 canvas.height <- options.Height
                 canvas.setAttribute ("data-renderer", "pixi")
+
+                if sharpens then
+                    pinPresentedSize canvas options.Width options.Height
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
                 container.appendChild canvas |> ignore
@@ -324,6 +347,21 @@ module PixiSurface =
                     // application's own ticker renders every later frame.
                     P.renderApplication app
 
+                // FS.GG.Game#788: an input-host mount renders at the presented density (the device pixel ratio times the
+                // CSS scale of the canvas), so the cue layer's 2 CSS px bands are drawn sharp, at their declared tones, on a
+                // canvas styled larger than its scene or on a high-DPI screen. Its CSS size is set inline at mount (see
+                // below), so a larger backing store never changes the size it is presented at.
+                let sharpen () =
+                    if sharpens && ready.Value && not destroyed.Value then
+                        let bounds = canvas.getBoundingClientRect ()
+
+                        if bounds.width > 0.0 then
+                            let wanted = devicePixelRatio () * bounds.width / options.Width
+
+                            if abs (wanted - resolutionOf app) > 0.01 then
+
+                                resizeAt app options.Width options.Height wanted
+
                 // The input host: `update frame` presents a frame to it, and `drawsItself` says whether it draws the frame
                 // (with its cue layer) or leaves that to `Present`.
                 let input =
@@ -353,6 +391,7 @@ module PixiSurface =
                             latest.Value <- drawn
 
                             if ready.Value then
+                                sharpen ()
                                 reconcile drawn
 
                         let attached =
@@ -393,6 +432,7 @@ module PixiSurface =
                             ready.Value <- true
 
                             try
+                                sharpen ()
                                 reconcile latest.Value
                             with ex ->
                                 failed.Value <- Some ex.Message

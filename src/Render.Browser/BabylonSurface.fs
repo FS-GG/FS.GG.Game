@@ -132,10 +132,11 @@ module BabylonSurface =
     [<Emit("$0.specularColor.copyFromFloats(0, 0, 0)")>]
     let private noSpecular (_material: B.StandardMaterial) : unit = jsNative
 
-    /// FS.GG.Game#786/#788: an unlit material shows its diffuse colour exactly (no light term), so the cue layer keeps
-    /// its declared tones and contrast on Babylon. The scene's own shapes stay lit.
-    [<Emit("$0.disableLighting = $1")>]
-    let private setUnlit (_material: B.StandardMaterial) (_unlit: bool) : unit = jsNative
+    /// FS.GG.Game#786/#788: an unlit material has no light term at all (`disableLighting`), so its colour is its
+    /// EMISSIVE colour, with a black diffuse; a lit one is diffuse with a black emissive. The cue layer is unlit so it
+    /// keeps its declared tones and contrast on Babylon; the scene's own shapes stay lit.
+    [<Emit("(($0.disableLighting = $1), ($0.emissiveColor = $1 ? $2 : $3), ($0.diffuseColor = $1 ? $3 : $2))")>]
+    let private paint (_material: B.StandardMaterial) (_unlit: bool) (_colour: B.Color3) (_black: B.Color3) : unit = jsNative
 
     /// Take `mesh` out of the scene's mesh list: it is never drawn or picked, and keeps only the geometry its clones share.
     [<Emit("$0.getScene().removeMesh($0)")>]
@@ -304,8 +305,7 @@ module BabylonSurface =
                             noSpecular fresh
                             fresh
 
-                    B.setDiffuseColor material (colour shape.Fill)
-                    setUnlit material unlit
+                    paint material unlit (colour shape.Fill) (B.color3 0.0 0.0 0.0)
                     B.setMaterial mesh material
 
                     {
@@ -321,9 +321,10 @@ module BabylonSurface =
                     a.X = b.X && a.Y = b.Y && a.Width = b.Width && a.Height = b.Height
 
                 let place (index: int) (slot: Slot) (shape: Shape) (unlit: bool) =
-                    if slot.Unlit <> unlit then
-                        setUnlit slot.Material unlit
+                    if slot.Unlit <> unlit || slot.Fill <> shape.Fill then
+                        paint slot.Material unlit (colour shape.Fill) (B.color3 0.0 0.0 0.0)
                         slot.Unlit <- unlit
+                        slot.Fill <- shape.Fill
 
                     // A shape that is where and what size it was needs no new vectors and does not dirty its mesh
                     // (the same scene presented again costs a render and nothing else).
@@ -337,9 +338,7 @@ module BabylonSurface =
                         B.setScaling slot.Mesh (B.vector3 shape.Width shape.Height thickness)
                         slot.Placed <- Some shape
 
-                    if slot.Fill <> shape.Fill then
-                        B.setDiffuseColor slot.Material (colour shape.Fill)
-                        slot.Fill <- shape.Fill
+
 
                 /// Reconcile the meshes with `next` and then the unlit cue layer `cues` above it: reuse slot i for shape
                 /// i, recreate it when the kind changes, create the missing ones and dispose the surplus.

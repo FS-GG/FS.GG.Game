@@ -35,6 +35,8 @@ page.on("pageerror", (error) => write("Uncaught " + error));
 const keys = { " ": "Space" };
 // The CDP session that holds the device-metrics override; it must outlive the request.
 let emulation = null;
+// The CDP session that dispatches touch input (FS.GG.Game#788).
+let touch = null;
 await page.exposeFunction("__fsggInput", async (request) => {
   switch (request.kind) {
     case "click":
@@ -46,6 +48,40 @@ await page.exposeFunction("__fsggInput", async (request) => {
     case "key":
       await page.keyboard.press(keys[request.key] ?? request.key);
       break;
+    // FS.GG.Game#788, the input host's smoke and the kit's input section: a secondary press, a touch tap and long-press
+    // (CDP touch events with touch emulation on, so Chromium produces pointer events of type "touch"), a press with a
+    // modifier held, and a held key (Playwright sends repeat: true for every keydown of a key already down).
+    case "rightClick":
+      await page.mouse.click(request.x, request.y, { button: "right" });
+      break;
+    case "touchHold": {
+      touch ??= await page.context().newCDPSession(page);
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+      await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: request.x, y: request.y }] });
+      await new Promise((resolve) => setTimeout(resolve, request.ms));
+      await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+      break;
+    }
+    case "touchTap": {
+      touch ??= await page.context().newCDPSession(page);
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+      await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: request.x, y: request.y }] });
+      await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+      break;
+    }
+    case "clickWith":
+      await page.keyboard.down(request.modifier);
+      await page.mouse.click(request.x, request.y);
+      await page.keyboard.up(request.modifier);
+      break;
+    case "keyHold": {
+      const key = keys[request.key] ?? request.key;
+      for (let i = 0; i < request.count; i++) await page.keyboard.down(key);
+      await page.keyboard.up(key);
+      break;
+    }
     case "scale": {
       // The page's device pixel ratio (FS.GG.Game#753), so one page can run a scenario at DPR 1 and 2. CSS pixels, and so
       // the mouse coordinates, are unchanged. The session stays attached: detaching it drops the override. The driver
