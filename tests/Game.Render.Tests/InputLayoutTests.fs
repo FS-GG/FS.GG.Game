@@ -108,41 +108,52 @@ let tests =
                 | other -> failtestf "expected a grid, got %A" other
             }
 
-            test "arrows move in two dimensions inside a cell group, skipping gaps and stopping at the edge" {
+            test "a grid follows the APG: rows by aria-rowindex across rowgroups, row edges stop, Home and End per row" {
+                // Rowgroups: the ungrouped a and b (rows 1, 2), Units (u: row 3), Map (t00 t02 at row 4, t12 at row 5).
                 let items =
                     itemsOf
                         [
+                            "a", ObjectAccess.full
+                            "u", ObjectAccess.grouped "Units"
                             "t00", ObjectAccess.cell "Map" 0 0
                             "t02", ObjectAccess.cell "Map" 0 2
-                            "t10", ObjectAccess.cell "Map" 1 0
                             "t12", ObjectAccess.cell "Map" 1 2
-                            "u", ObjectAccess.grouped "Units"
+                            "b", ObjectAccess.full
                         ]
 
-                let move key from = InputLayout.navigate key (Some from) items
+                let layout = InputLayout.layout "Board objects" items
+                let move key from = InputLayout.navigate key false (Some from) layout items
 
-                Expect.equal (move "ArrowRight" "t00") (Some "t02") "right skips the gap at column 1"
-                Expect.equal (move "ArrowRight" "t02") (Some "t02") "right stops at the edge"
-                Expect.equal (move "ArrowDown" "t02") (Some "t12") "down keeps the column"
-                Expect.equal (move "ArrowUp" "t00") (Some "t00") "up stops at the edge"
-                Expect.equal (move "ArrowLeft" "t12") (Some "t10") "left skips the gap"
-                Expect.equal (move "PageDown" "t00") (Some "u") "Page Down moves to the next group"
-                Expect.equal (move "PageUp" "u") (Some "t00") "Page Up moves to the previous group's first item"
-                Expect.equal (move "Home" "t12") (Some "t00") "Home is the first item"
-                Expect.equal (move "End" "t00") (Some "u") "End is the last item"
+                Expect.equal (move "ArrowDown" "a") (Some "b") "down to the next row of the same rowgroup"
+                Expect.equal (move "ArrowDown" "b") (Some "u") "down crosses into the next rowgroup"
+                Expect.equal (move "ArrowDown" "u") (Some "t00") "down into the cell group, same column"
+                Expect.equal (move "ArrowRight" "t00") (Some "t02") "right skips the empty column"
+                Expect.equal (move "ArrowRight" "t02") (Some "t02") "right stops at the row's end"
+                Expect.equal (move "ArrowLeft" "t00") (Some "t00") "left stops at the row's start: no wrap"
+                Expect.equal (move "ArrowDown" "t00") (Some "t12") "down to the nearest cell of a sparse row"
+                Expect.equal (move "ArrowDown" "t12") (Some "t12") "down stops at the last row"
+                Expect.equal (move "ArrowUp" "t00") (Some "u") "up leaves the cell group"
+                Expect.equal (move "Home" "t02") (Some "t00") "Home is the row's first cell"
+                Expect.equal (move "End" "t00") (Some "t02") "End is the row's last cell"
+                Expect.equal (InputLayout.navigate "Home" true (Some "t12") layout items) (Some "a") "Control+Home is the grid's first cell"
+                Expect.equal (InputLayout.navigate "End" true (Some "a") layout items) (Some "t12") "Control+End is the grid's last cell"
+                Expect.equal (move "PageDown" "a") (Some "u") "Page Down moves to the next rowgroup"
+                Expect.equal (move "PageUp" "t00") (Some "u") "Page Up moves to the previous rowgroup's first cell"
             }
 
             test "outside a cell group arrows move in object order, wrapping; no focus starts at an end" {
                 let items =
                     itemsOf [ "a", ObjectAccess.full; "b", ObjectAccess.pointerOnly; "c", ObjectAccess.full ]
 
-                Expect.equal (InputLayout.navigate "ArrowRight" (Some "a") items) (Some "c") "skips pointer-only b"
-                Expect.equal (InputLayout.navigate "ArrowDown" (Some "c") items) (Some "a") "wraps forward"
-                Expect.equal (InputLayout.navigate "ArrowUp" (Some "a") items) (Some "c") "wraps backward"
-                Expect.equal (InputLayout.navigate "ArrowRight" None items) (Some "a") "forward from nothing: first"
-                Expect.equal (InputLayout.navigate "ArrowLeft" None items) (Some "c") "backward from nothing: last"
-                Expect.equal (InputLayout.navigate "ArrowRight" (Some "b") items) (Some "a") "an unreachable focus restarts"
-                Expect.equal (InputLayout.navigate "ArrowRight" None []) None "no item, no focus"
+                let layout = InputLayout.layout "Board objects" items
+                let nav key focused = InputLayout.navigate key false focused layout items
+                Expect.equal (nav "ArrowRight" (Some "a")) (Some "c") "skips pointer-only b"
+                Expect.equal (nav "ArrowDown" (Some "c")) (Some "a") "wraps forward"
+                Expect.equal (nav "ArrowUp" (Some "a")) (Some "c") "wraps backward"
+                Expect.equal (nav "ArrowRight" None) (Some "a") "forward from nothing: first"
+                Expect.equal (nav "ArrowLeft" None) (Some "c") "backward from nothing: last"
+                Expect.equal (nav "ArrowRight" (Some "b")) (Some "a") "an unreachable focus restarts"
+                Expect.equal (InputLayout.navigate "ArrowRight" false None (InputLayout.Layout.Listbox []) []) None "no item, no focus"
                 Expect.isTrue (InputLayout.isNavigation "PageDown") "Page Down navigates"
                 Expect.isFalse (InputLayout.isNavigation "Enter") "Enter does not navigate"
             }

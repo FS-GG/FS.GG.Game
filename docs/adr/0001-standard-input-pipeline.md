@@ -134,8 +134,10 @@ than a theme value. The cue layer reads it on every draw, and a runtime theme sw
 cue change. `CueContext` stays as it is (cues, objects, `cssPerUnit`), and #793 adds no theme or view field. This
 split, with the node-list type and `CueContext` itself, is agreed with the #789 owner.
 
-**Compatibility.** `SelectionRequest`, `SelectionRoute` and `SceneRenderers.withInteraction` keep their meaning.
-#788 re-implements them over the input host through `InputEvent.toSelectionRequest`.
+**Compatibility.** `SelectionRequest`, `SelectionRoute` and `SceneRenderers.withInteraction` keep their meaning and,
+in #788, their own input hosts (Root's ruling on #797). A game gets the input host, its drawn focus and its
+single-Tab-stop mirror by declaring `SceneRenderers.withInput`. Moving `withInteraction` itself onto the input host,
+which would give existing games the same through `InputEvent.toSelectionRequest`, is a separate Delivery.
 
 ### 2. Guest stage (stage 2)
 
@@ -301,9 +303,16 @@ selected and active, the rule of `RendererDriver.failBackend`.
   - **Ownership.** The mirror's options or cells belong to the surface. For an SVG root, the surface owns them with
     `aria-owns`. For a canvas, they are the canvas's fallback content, its DOM children. Either way, the surface's
     `aria-activedescendant` names the active one.
-  - **Keys.** Arrow keys move the active option or cell (in two dimensions inside a cell group). Home and End jump to
-    the ends, and Page Up and Page Down move between groups. Enter, Space and the secondary keys act on the active
-    item.
+  - **Keys.**
+    - On a listbox, the arrows move the active option in order, and Home and End jump to the ends.
+    - On a grid, the keys follow the ARIA Authoring Practices grid pattern:
+      - Left and Right move along the row and stop at its ends.
+      - Up and Down move to the nearest cell of the previous or next row by `aria-rowindex`, across rowgroups, so an
+        arrow can leave a cell group.
+      - Home and End go to the ends of the row, and Control+Home and Control+End to the ends of the grid.
+    - Page Up and Page Down move between groups.
+    - Enter, Space and the secondary keys act on the active item.
+    - A navigation key with Alt or Meta held is left to the browser (history back and forward).
   - **Never hidden from assistive technology.** No item is `aria-hidden`, `display:none` or `visibility:hidden`.
   - **Hidden mirror.** The mirror stays visually hidden and never expands the layout. The drawn focus ring is the
     visible indicator. #788 may also place each hidden option transparently over its object's bounds, with
@@ -329,8 +338,8 @@ selected and active, the rule of `RendererDriver.failBackend`.
 | **#768**: late-failure routing without `RendererDriver` | `BrowserRenderers.bindTo model dispatch route`, covered by I15 | **Satisfied by the contract.** Finished by #788. |
 | **#783**: kit probes on object edges | Not a pipeline concern. Recorded for I14: hit regions are closed, and probes stay at least 1 CSS px inside or outside each edge at the presented scale. Edge probes skip objects smaller than 2 units in either dimension. | **Left open.** It stays its own kit Delivery. |
 | **#784**: pointer-only and grouped objects | `ObjectAccess` (`pointerOnly`, `grouped`, `cell`), the listbox or grid surface | **Satisfied by the contract.** Finished by #788. |
-| #787 comment N4: invisible keyboard focus | `InteractionCues`, `CueContext`, `standardCues`, `withCues` | Satisfied; implemented in #788. |
-| #787 comment N5: Tab stops, mirror expansion, `role=group` on SVG, Escape on a mirror button | The single-Tab-stop listbox or grid with `aria-activedescendant`, a hidden mirror, Escape is `Cancel` | Satisfied; implemented in #788. |
+| #787 comment N4: invisible keyboard focus | `InteractionCues`, `CueContext`, `standardCues`, `withCues` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the separate migration Delivery. |
+| #787 comment N5: Tab stops, mirror expansion, `role=group` on SVG, Escape on a mirror button | The single-Tab-stop listbox or grid with `aria-activedescendant`, a hidden mirror, Escape is `Cancel` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the separate migration Delivery. |
 
 ### 6. Kit specification
 
@@ -490,18 +499,25 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
   - A primary or secondary mouse or pen press reports on `pointerdown`.
   - A touch press reports `Activate` on release, if it moved less than 10 CSS px and was held less than 500 ms. It
     reports `ActivateSecondary` after 500 ms. The page's `contextmenu` is always prevented on the surface.
-  - `Focus` is reported when a navigation key moves the focus. A key that leaves it in place (the edge of a cell group)
+  - `Focus` is reported when a navigation key moves the focus. A key that leaves it in place (the end of a grid row)
     reports nothing but is still contained.
+  - Both the keydown and the keyup of every reported key are contained. A navigation key with Alt or Meta held is
+    neither reported nor contained.
   - Enter, Space and the secondary keys report only when an object is focused. Escape always reports `Cancel`, with
     the focused object as its target, if any.
   - Tabbing in focuses the selected object, or the first item, without an event.
   - A pointer press moves the focus to a keyboard-reachable object without showing it.
   - A mirror click (a screen reader's default action) reports `Activate` from the `Mirror` and shows focus.
-- **Cue layer on Babylon.** The cue nodes are drawn with unlit materials (their exact colours). The frame's own Scene
-  stays lit.
-- **`withInteraction` keeps its own hosts.** `SceneRenderers.withInteraction` and `withInput` replace each other on one
-  registry. A game moves to the input host by declaring `withInput` and binding its route, to a pipeline or to
-  `InputEvent.toSelectionRequest`.
+- **Cue layer on Babylon.** The cue nodes are drawn with unlit materials. With `disableLighting` a material shows only
+  its emissive colour, so the cue colour is the emissive colour and the diffuse colour is black (#797 review B1). The
+  frame's own Scene stays lit.
+- **Cue layer on Pixi.** An input-host canvas renders at the presented density: the device pixel ratio times the
+  canvas's CSS scale. It is re-evaluated at each draw, so both 2 CSS px bands reach their declared tones at 2x CSS scale
+  and at DPR 2. The canvas carries its scene size as its inline CSS size, so a larger backing store never grows it.
+- **`withInteraction` keeps its own hosts** (Root's ruling). `SceneRenderers.withInteraction` and `withInput` replace
+  each other on one registry. A game moves to the input host by declaring `withInput` and binding its route, to a
+  pipeline or to `InputEvent.toSelectionRequest`. Migrating `withInteraction` onto the input host is a separate
+  Delivery.
 
 ## Consequences
 

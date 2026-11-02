@@ -54,9 +54,12 @@ module internal InputLayout =
     /// Page Down.
     val isNavigation: key: string -> bool
 
-    /// Where navigation key `key` moves the focus from `focused` over `items`: arrows move to the next or previous
-    /// item (wrapping), or in two dimensions inside a cell group (stopping at its edge, skipping gaps); Home and End
-    /// jump to the ends; Page Up and Page Down move to the first item of the previous or next group (ungrouped objects
-    /// are one group). With no focus (or a focus no longer reachable), forward keys go to the first item and backward
+    /// Where navigation key `key` moves the focus from `focused`. On a listbox (no cell group) the arrows move to the
+    /// next or previous item in object order, wrapping; Home and End jump to the ends; Page Up and Page Down move to the
+    /// first item of the previous or next group (ungrouped objects are one group). On a grid it follows the ARIA
+    /// Authoring Practices: Left and Right move along the row and stop at its ends, Up and Down move to the nearest cell of
+    /// the previous or next row by `aria-rowindex`, across rowgroups (the same column when that row has one), Home and End
+    /// go to the ends of the row (with `control`, of the grid), and Page Up and Page Down to the first cell of the previous
+    /// or next rowgroup. With no focus (or a focus no longer reachable), forward keys go to the first item and backward
     /// keys to the last. `None` when there is no item.
-    val navigate: key: string -> focused: string option -> items: Item list -> string option
+    val navigate: key: string -> control: bool -> focused: string option -> layout: Layout -> items: Item list -> string option

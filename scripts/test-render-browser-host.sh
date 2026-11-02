@@ -19,7 +19,9 @@
 # the kit's interaction section (FS.GG.Game#751: hit test, keyboard, accessible mirror and input-host disposal on
 # every backend), and the reference game is then played by pointer through its renderer driver on each backend.
 # Last, the input host of SceneRenderers.withInput (FS.GG.Game#788) is played with real input on every backend, as a
-# listbox and as a grid: events, the single Tab stop and its owned ARIA items, key containment and release.
+# listbox and as a grid: mouse, touch, long-press, secondary, hover and mirror events, the single Tab stop and its owned
+# ARIA items, the APG grid keyboard, keydown and keyup containment, the focus ring's two tones at 1x and 2x CSS scale and
+# DPR 2, and release.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -39,7 +41,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=623
+MIN_CHECKS=641
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
