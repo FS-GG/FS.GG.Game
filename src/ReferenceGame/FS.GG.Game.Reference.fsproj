@@ -12,6 +12,7 @@
     <Compile Include="ExperimentalThemes.fs" />
     <Compile Include="ExperimentalSymbology.fs" />
     <Compile Include="ExperimentalPresetData.fs" />
+    <Compile Include="ExperimentalMotion.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
