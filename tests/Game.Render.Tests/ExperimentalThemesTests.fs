@@ -166,7 +166,13 @@ let tests =
             }
 
             test "DTCG export then import gives equal resolved hex, and the committed token files are current" {
-                let dir = System.IO.Path.Combine(__SOURCE_DIRECTORY__, "..", "..", "docs", "roadmaps", "game-render-02-themes", "themes")
+                // The repo root, found by walking up from the test binary (CI maps __SOURCE_DIRECTORY__ to /_/).
+                let rec up (d: System.IO.DirectoryInfo | null) =
+                    match d with
+                    | null -> failwith "repo root (FS.GG.Game.slnx) not found"
+                    | dir -> if System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "FS.GG.Game.slnx")) then dir.FullName else up dir.Parent
+                let root = up (System.IO.DirectoryInfo(System.AppContext.BaseDirectory))
+                let dir = System.IO.Path.Combine(root, "docs", "roadmaps", "game-render-02-themes", "themes")
                 for t in themes do
                     let text = toDtcg t
                     match ofDtcg (theme "classic") text with
