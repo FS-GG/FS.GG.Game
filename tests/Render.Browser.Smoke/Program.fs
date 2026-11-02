@@ -3045,6 +3045,14 @@ async {
             do! section "input host" (InputHostSmoke.run check)
 
         if layout then
+            if not main then
+                let glInfo = Probe.webGlInfo ()
+
+                if System.String.IsNullOrWhiteSpace glInfo || glInfo = "none" then
+                    failwith "layout renderer information is unavailable"
+
+                info "webgl" glInfo
+
             do! section "input host layouts" (InputHostSmoke.runLayout check)
 
         if not main && not layout then
