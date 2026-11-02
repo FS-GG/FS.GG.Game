@@ -458,6 +458,114 @@ module BrowserConformance =
                 |> Option.bind (fun element -> element.getAttribute "tabindex" |> Option.ofObj))
             inputHosts
 
+    [<Emit("$0 == null")>]
+    let private isNullOrUndefined (_value: obj) : bool = jsNative
+
+    // ── The input section's probe (FS.GG.Game#788) ───────────────────────────────────────────────────────────────
+
+    /// A page-level keydown listener (bubble phase) and a context-menu census, installed once.
+    let private installPageListeners () : unit =
+        emitJsStatement
+            0
+            "if (!window.__fsggPage) { const p = { keys: [], menus: 0 }; window.__fsggPage = p; document.addEventListener('keydown', e => p.keys.push(e.key)); window.addEventListener('contextmenu', e => { if (!e.defaultPrevented) p.menus++ }) }"
+
+    let private pageKeys () : string list =
+        installPageListeners ()
+        let keys: string[] = emitJsExpr 0 "window.__fsggPage.keys.splice(0)"
+        List.ofArray keys
+
+    let private contextMenus () : int =
+        installPageListeners ()
+        emitJsExpr 0 "window.__fsggPage.menus"
+
+    /// The input host's surface and mirror, read from the page as arrays (see `inputSurface`).
+    let private surfaceRaw (container: HTMLElement) (backend: string) : obj | null =
+        emitJsExpr
+            (container, backend)
+            "(() => { const surface = $0.querySelector($1 === 'svg' ? 'svg[data-renderer=svg]' : 'canvas[data-renderer=' + $1 + ']'); if (!surface) return null; const mirror = $0.querySelector('[data-input-host][data-renderer=' + $1 + ']') || $0.querySelector('[data-scene-controls][data-renderer=' + $1 + ']'); if (!mirror) return null; const owns = (surface.getAttribute('aria-owns') || '').split(/\s+/).filter(x => x); const owned = el => surface.contains(el) || owns.some(id => { const o = document.getElementById(id); return o !== null && (o === el || o.contains(el)) }); const hidden = el => { const s = getComputedStyle(el); return s.display === 'none' || s.visibility === 'hidden' || el.closest('[aria-hidden=true]') !== null }; const items = Array.from(mirror.querySelectorAll('[data-scene-control-id]')).map(el => { const g = el.closest('[role=group],[role=rowgroup]'); const row = el.closest('[role=row]'); return [el.getAttribute('data-scene-control-id'), el.getAttribute('role') || '', el.getAttribute('aria-label') || el.textContent || '', el.getAttribute('aria-selected') === 'true', g ? g.getAttribute('aria-label') : null, row && row.hasAttribute('aria-rowindex') ? parseInt(row.getAttribute('aria-rowindex'), 10) : null, el.hasAttribute('aria-colindex') ? parseInt(el.getAttribute('aria-colindex'), 10) : null, owned(el), hidden(el)] }); const all = [surface, ...surface.querySelectorAll('*'), mirror, ...mirror.querySelectorAll('*')]; const stops = new Set(all.filter(e => e.tabIndex >= 0)).size; const activeId = surface.getAttribute('aria-activedescendant'); const activeEl = activeId ? document.getElementById(activeId) : null; const r = mirror.getBoundingClientRect(); return [surface.getAttribute('role') || '', surface.getAttribute('aria-label') || '', stops, activeEl ? activeEl.getAttribute('data-scene-control-id') : null, document.activeElement === surface, items, [r.x, r.y, r.width, r.height]] })()"
+
+    let inputSurface (container: HTMLElement) (backend: RendererBackend) : InputSurface option =
+        match surfaceRaw container (RendererBackend.id backend) with
+        | null -> None
+        | raw ->
+            let fields: obj[] = unbox raw
+            let option (value: obj) : 'T option = if isNullOrUndefined value then None else Some(unbox<'T> value)
+            let items: obj[][] = unbox fields.[5]
+            let box: float[] = unbox fields.[6]
+
+            Some
+                {
+                    Role = unbox fields.[0]
+                    Label = unbox fields.[1]
+                    TabStops = unbox fields.[2]
+                    Active = option fields.[3]
+                    Focused = unbox fields.[4]
+                    Items =
+                        items
+                        |> Array.map (fun item ->
+                            {
+                                Id = unbox item.[0]
+                                Role = unbox item.[1]
+                                Name = unbox item.[2]
+                                Selected = unbox item.[3]
+                                Group = option item.[4]
+                                Row = option item.[5]
+                                Column = option item.[6]
+                                Owned = unbox item.[7]
+                                Hidden = unbox item.[8]
+                            })
+                        |> List.ofArray
+                    MirrorBox = box.[0], box.[1], box.[2], box.[3]
+                }
+
+    /// Real input at a scene point of `backend`'s output: the element is scrolled into view and the point mapped through
+    /// its bounds.
+    let private inputAt (container: HTMLElement) (boardWidth: float) (boardHeight: float) (backend: RendererBackend) (point: Point) (request: (string * obj) list) =
+        async {
+            match inputElement container backend with
+            | None -> ()
+            | Some element ->
+                let x, y = clientPoint element boardWidth boardHeight point
+                do! realInput (createObj ([ "x" ==> x; "y" ==> y ] @ request))
+        }
+
+    let inputProbe (container: HTMLElement) (boardWidth: float) (boardHeight: float) : InputProbe =
+        installPageListeners ()
+
+        {
+            Interaction = interactionProbe container
+            Pixels = pixelProbe container boardWidth boardHeight
+            SecondaryPress = fun backend point -> inputAt container boardWidth boardHeight backend point [ "kind" ==> "rightClick" ]
+            LongPress = fun backend point -> inputAt container boardWidth boardHeight backend point [ "kind" ==> "touchHold"; "ms" ==> 600 ]
+            PressHolding =
+                fun modifier backend point ->
+                    inputAt container boardWidth boardHeight backend point [ "kind" ==> "clickWith"; "modifier" ==> modifier ]
+            KeyHolding = fun modifier name -> realInput (createObj [ "kind" ==> "key"; "key" ==> (modifier + "+" + name) ])
+            HoldKey = fun name count -> realInput (createObj [ "kind" ==> "keyHold"; "key" ==> name; "count" ==> count ])
+            Surface = inputSurface container
+            ActivateItem =
+                fun backend id ->
+                    async {
+                        emitJsStatement
+                            (container, RendererBackend.id backend, id)
+                            "(() => { const m = $0.querySelector('[data-input-host][data-renderer=' + $1 + ']'); const el = m ? Array.from(m.querySelectorAll('[data-scene-control-id]')).find(e => e.getAttribute('data-scene-control-id') === $2) : null; if (el) el.click() })()"
+                    }
+            PageKeys = pageKeys
+            ContextMenus = contextMenus
+            CssPerUnit =
+                fun backend ->
+                    match inputElement container backend with
+                    | None -> 1.0
+                    | Some element ->
+                        let bounds = element.getBoundingClientRect ()
+                        if bounds.width > 0.0 then bounds.width / boardWidth else 1.0
+        }
+
+    let boundStart (route: LateFailureRoute) (registry: RendererRegistry<'State>) (state: 'State) : ConformanceHost<'State> =
+        let host = RendererConformance.inProcess registry state
+        BrowserRenderers.bindTo host.Model host.Dispatch route
+        host
+
     let subject
         (container: HTMLElement)
         (route: LateFailureRoute)

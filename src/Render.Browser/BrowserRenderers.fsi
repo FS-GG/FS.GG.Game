@@ -224,6 +224,23 @@ module BrowserConformance =
     /// read from the page.
     val interactionProbe: container: HTMLElement -> InteractionProbe
 
+    /// `backend`'s input-host surface in `container` as the kit reads it (FS.GG.Game#788): the surface's role, label and
+    /// focus, the tab stops of the output and its mirror, the item `aria-activedescendant` names, and each item's role,
+    /// name, selection, group, row and column, ownership and visibility. `None` when the backend has no input host there.
+    val inputSurface: container: HTMLElement -> backend: RendererBackend -> InputSurface option
+
+    /// The kit's input probe for the backends in `container`, whose scenes are `boardWidth` x `boardHeight` units
+    /// (FS.GG.Game#788): `interactionProbe container`, `pixelProbe container boardWidth boardHeight`, and real secondary
+    /// presses, touch long-presses (600 ms), presses and keys with a modifier held, and held keys through the test
+    /// driver (`window.__fsggInput`); the surface read back with `inputSurface`; a screen reader's default action as a
+    /// click on the item element; and a page-level keydown listener and context-menu census it installs once.
+    val inputProbe: container: HTMLElement -> boardWidth: float -> boardHeight: float -> InputProbe
+
+    /// A kit host that runs renderer selection itself (`RendererConformance.inProcess`) with `route` bound to it by
+    /// `BrowserRenderers.bindTo`, not through `RendererDriver`: the start of `RendererConformance.withBoundStart` (I15,
+    /// FS.GG.Game#768).
+    val boundStart: route: LateFailureRoute -> registry: RendererRegistry<'State> -> state: 'State -> ConformanceHost<'State>
+
     /// A subject for real browser backends in `container`: hosts are started with `BrowserRenderers.start route`,
     /// resources are `resources container`, waits last up to 600 frames, and, when the registry offers Pixi, Pixi's
     /// adapter late failure is `pixiLateFailure ()`.

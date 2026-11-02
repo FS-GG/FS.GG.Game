@@ -20,6 +20,9 @@
 # every backend), and the reference game is then played by pointer through its renderer driver on each backend.
 # Last, the input host of SceneRenderers.withInput (FS.GG.Game#788) is played with real input on every backend, as a
 # listbox and as a grid: events, the single Tab stop and its owned ARIA items, key containment and release.
+# Then the kit's `input` section (I1-I16) runs on the reference game (a listbox), on a hybrid page whose SVG input host is
+# declared the game's own, and on a grid board answered by an asynchronous F# guest through the input pipeline, followed
+# by a negative control whose broken probe and silent game must fail exactly the checks that guard them.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -39,7 +42,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=529
+MIN_CHECKS=879
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 

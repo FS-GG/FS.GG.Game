@@ -101,6 +101,47 @@ module PixelProbe =
 
     let create read appearance tolerance = PixelProbe(read, appearance, tolerance)
 
+type InputItem =
+    {
+        Id: string
+        Role: string
+        Name: string
+        Selected: bool
+        Group: string option
+        Row: int option
+        Column: int option
+        Owned: bool
+        Hidden: bool
+    }
+
+type InputSurface =
+    {
+        Role: string
+        Label: string
+        TabStops: int
+        Active: string option
+        Focused: bool
+        Items: InputItem list
+        MirrorBox: float * float * float * float
+    }
+
+[<NoEquality; NoComparison>]
+type InputProbe =
+    {
+        Interaction: InteractionProbe
+        Pixels: PixelProbe
+        SecondaryPress: RendererBackend -> Point -> Async<unit>
+        LongPress: RendererBackend -> Point -> Async<unit>
+        PressHolding: string -> RendererBackend -> Point -> Async<unit>
+        KeyHolding: string -> string -> Async<unit>
+        HoldKey: string -> int -> Async<unit>
+        Surface: RendererBackend -> InputSurface option
+        ActivateItem: RendererBackend -> string -> Async<unit>
+        PageKeys: unit -> string list
+        ContextMenus: unit -> int
+        CssPerUnit: RendererBackend -> float
+    }
+
 [<RequireQualifiedAccess>]
 module ScenePixels =
 
@@ -310,6 +351,13 @@ type ConformanceSubject<'State> =
         Viewport: (('State -> float * float) * (ConformanceHost<'State> -> RendererBackend -> Async<(float * float) option>)) option
         Interaction: (SceneInteraction<'State> * SelectionRoute * InteractionProbe) option
         Pixels: (('State -> PixelExpectation list) * PixelProbe) option
+        /// FS.GG.Game#788: the input section.
+        Input:
+            (SceneInteraction<'State> * InputRoute * InputProbe * ((('State -> 'State) -> unit) -> InputEvent -> unit)) option
+        /// Backends whose input host is the game's own (exempt from the markup checks).
+        OwnInputHosts: Set<RendererBackend>
+        /// A host that runs renderer selection itself (`BrowserRenderers.bindTo`), for I15.
+        BoundStart: (RendererRegistry<'State> -> 'State -> ConformanceHost<'State>) option
     }
 
 /// One mount the instrumented registry handed out: the states it received (newest first, the mount's own state
@@ -389,6 +437,9 @@ module RendererConformance =
             Viewport = None
             Interaction = None
             Pixels = None
+            Input = None
+            OwnInputHosts = Set.empty
+            BoundStart = None
         }
 
     let withStart start (subject: ConformanceSubject<'State>) = { subject with Start = start }
@@ -410,19 +461,31 @@ module RendererConformance =
             Interaction = Some(interaction, route, probe)
         }
 
-    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
-    let withInput
-        (_: SceneInteraction<'State>)
-        (_: InputRoute)
-        (_: InteractionProbe)
-        (_: unit -> InputEvent list)
-        (_: ConformanceSubject<'State>)
-        : ConformanceSubject<'State> =
-        failwith "RendererConformance.withInput is a contract stub; FS.GG.Game#788 implements it."
+    let withInput interaction route probe react (subject: ConformanceSubject<'State>) =
+        { subject with
+            Input = Some(interaction, route, probe, react)
+        }
 
-    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
-    let withOwnInputHost (_: RendererBackend) (_: ConformanceSubject<'State>) : ConformanceSubject<'State> =
-        failwith "RendererConformance.withOwnInputHost is a contract stub; FS.GG.Game#788 implements it."
+    let selectionReaction (interaction: SceneInteraction<'State>) =
+        fun (apply: ('State -> 'State) -> unit) (event: InputEvent) ->
+            apply (fun state ->
+                let frame: InteractiveScene =
+                    {
+                        Scene = { Nodes = [] }
+                        Objects = SceneInteraction.objects interaction state
+                        Selected = SceneInteraction.selected interaction state
+                    }
+
+                match InputEvent.toSelectionRequest frame event with
+                | Some request -> SceneInteraction.apply interaction request state
+                | None -> state)
+
+    let withOwnInputHost (backend: RendererBackend) (subject: ConformanceSubject<'State>) =
+        { subject with
+            OwnInputHosts = Set.add backend subject.OwnInputHosts
+        }
+
+    let withBoundStart start (subject: ConformanceSubject<'State>) = { subject with BoundStart = Some start }
 
     let withPixels expected probe (subject: ConformanceSubject<'State>) =
         { subject with
@@ -1698,6 +1761,726 @@ module RendererConformance =
                                      |> String.concat " "))
 
                         SelectionRoute.unbind route
+
+                // input (FS.GG.Game#788, ADR 0001 "Kit specification", I1-I16) -----------------------------------------
+                match subject.Input with
+                | None -> ()
+                | Some(interaction, route, probe, react) ->
+                    let objectsOf = SceneInteraction.objects interaction
+                    let selectedOf = SceneInteraction.selected interaction
+                    let accessOf = SceneInteraction.access interaction
+                    let reachesKeyboard (target: SelectableObject) = ObjectAccess.isKeyboardReachable (accessOf target)
+
+                    // The state the section plays: the first with the most objects, its selection cleared by the game.
+                    let play =
+                        match subject.States with
+                        | [] -> None
+                        | first :: rest ->
+                            rest
+                            |> List.fold
+                                (fun best state -> if (objectsOf state).Length > (objectsOf best).Length then state else best)
+                                first
+                            |> SceneInteraction.apply interaction SelectionRequest.Clear
+                            |> Some
+
+                    let events = ResizeArray<InputEvent>()
+                    let current: ConformanceHost<'State> option ref = ref None
+
+                    let apply (change: 'State -> 'State) =
+                        match current.Value with
+                        | Some host -> host.Dispatch(RendererMsg.StateChanged(change (host.Model()).State))
+                        | None -> ()
+
+                    route
+                    |> InputRoute.bind (fun event ->
+                        events.Add event
+                        react apply event)
+
+                    let eventText (event: InputEvent) =
+                        let source =
+                            match InputEvent.source event with
+                            | InputSource.Pointer -> "pointer"
+                            | InputSource.Keyboard -> "keyboard"
+                            | InputSource.Mirror -> "mirror"
+
+                        let action =
+                            match InputEvent.action event with
+                            | InputAction.Activate -> "activate"
+                            | InputAction.ActivateSecondary -> "secondary"
+                            | InputAction.Hover -> "hover"
+                            | InputAction.Focus -> "focus"
+                            | InputAction.Cancel -> "cancel"
+
+                        let m = InputEvent.modifiers event
+
+                        let held =
+                            [
+                                if m.Shift then "Shift"
+                                if m.Control then "Control"
+                                if m.Alt then "Alt"
+                                if m.Meta then "Meta"
+                            ]
+
+                        sprintf
+                            "%s:%s:%s%s%s"
+                            source
+                            action
+                            (InputEvent.target event |> Option.defaultValue "-")
+                            (if held.IsEmpty then "" else "+" + String.concat "+" held)
+                            (if InputEvent.isRepeat event then ":repeat" else "")
+
+                    let since (mark: int) =
+                        [ for index in mark .. events.Count - 1 -> events.[index] ]
+
+                    let textOf (list: InputEvent list) = list |> List.map eventText |> String.concat ","
+
+                    /// Run `action` and return the events it produced.
+                    let after (action: Async<unit>) =
+                        async {
+                            let mark = events.Count
+                            do! action
+                            return since mark
+                        }
+
+                    let is source action (target: string option) (event: InputEvent) =
+                        InputEvent.source event = source
+                        && InputEvent.action event = action
+                        && InputEvent.target event = target
+
+                    let surfaces = ResizeArray<RendererBackend * InputSurface>()
+
+                    match play with
+                    | None ->
+                        check "input: the states declare selectable objects" false "no state"
+                    | Some play ->
+                        let objects = objectsOf play
+                        let reach = objects |> List.filter reachesKeyboard
+
+                        let cellGroups =
+                            reach
+                            |> List.choose (fun target -> ObjectAccess.group (accessOf target) |> Option.map (fun g -> g, target))
+                            |> List.groupBy fst
+                            |> List.filter (fun (_, members) ->
+                                members |> List.forall (fun (_, target) -> (ObjectAccess.cellOf (accessOf target)).IsSome))
+                            |> List.map fst
+                            |> Set.ofList
+
+                        let isGrid = not cellGroups.IsEmpty
+
+                        let cellOf (target: SelectableObject) =
+                            match ObjectAccess.group (accessOf target) with
+                            | Some g when cellGroups.Contains g -> ObjectAccess.cellOf (accessOf target)
+                            | _ -> None
+
+                        let groupKey (target: SelectableObject) = ObjectAccess.group (accessOf target)
+
+                        for backend in offered do
+                            let name = id backend
+                            let own = subject.OwnInputHosts.Contains backend
+                            mounts.Clear()
+                            events.Clear()
+
+                            let baseline =
+                                RendererBackend.all
+                                |> List.map (fun other -> other, probe.Interaction.InputHosts other)
+                                |> Map.ofList
+
+                            let host = subject.Start registry initial
+                            current.Value <- Some host
+
+                            if backend <> RendererBackend.Svg then
+                                select host backend
+
+                            host.Dispatch(RendererMsg.StateChanged play)
+                            let selectedNow () = selectedOf (host.Model()).State
+                            let! attached = subject.WaitUntil(fun () -> probe.Interaction.InputHosts backend > baseline.[backend])
+
+                            check
+                                (sprintf "input %s I13: the input host is attached while the backend is mounted" name)
+                                (attached && isOn host backend)
+                                (sprintf "inputHosts=%d before=%d %s" (probe.Interaction.InputHosts backend) baseline.[backend] (describe host))
+
+                            // I14: every point the kit presses, moves to or samples is at least 1 CSS px from every object
+                            // edge at the presented scale (the hit test is the same a CSS px away in every direction).
+                            let css = probe.CssPerUnit backend
+                            let clearance = 1.0 / (if css > 0.0 then css else 1.0)
+
+                            let clear (point: Point) =
+                                let hit = SceneInteraction.hitTest point objects
+
+                                [ -1.0, 0.0; 1.0, 0.0; 0.0, -1.0; 0.0, 1.0; -1.0, -1.0; 1.0, 1.0; -1.0, 1.0; 1.0, -1.0 ]
+                                |> List.forall (fun (dx, dy) ->
+                                    SceneInteraction.hitTest
+                                        {
+                                            X = point.X + dx * clearance
+                                            Y = point.Y + dy * clearance
+                                        }
+                                        objects = hit)
+
+                            let pointsOf (target: SelectableObject) =
+                                pressPoints target
+                                |> List.filter (fun point -> SceneInteraction.hitTest point objects = Some target.Id && clear point)
+
+                            let reachable =
+                                objects |> List.choose (fun target -> pointsOf target |> List.tryHead |> Option.map (fun p -> target, p))
+
+                            let miss = missPoint objects |> Option.filter clear
+                            let used = ResizeArray<Point>()
+
+                            let pressAt (point: Point) =
+                                used.Add point
+                                probe.Interaction.Press backend point
+
+                            let moveTo (point: Point) =
+                                used.Add point
+                                probe.Interaction.Move backend point
+
+                            // I9 and I10: the surface and its mirror, unless the backend's input host is the game's own.
+                            let surface = probe.Surface backend
+
+                            if not own then
+                                match surface with
+                                | None ->
+                                    check (sprintf "input %s I9: the surface is a single-Tab-stop listbox or grid owning its items" name) false "no input-host surface in the page"
+                                | Some surface ->
+                                    surfaces.Add(backend, surface)
+                                    let wantRole = if isGrid then "grid" else "listbox"
+                                    let itemRole = if isGrid then "gridcell" else "option"
+                                    let ids = surface.Items |> List.map (fun item -> item.Id)
+                                    let want = reach |> List.map (fun target -> target.Id)
+
+                                    let problems =
+                                        [
+                                            if surface.Role <> wantRole then sprintf "role %s, want %s" surface.Role wantRole
+                                            if System.String.IsNullOrWhiteSpace surface.Label then "no label"
+                                            if surface.TabStops <> 1 then sprintf "%d tab stops" surface.TabStops
+                                            if List.sort ids <> List.sort want then sprintf "items %A, want %A" ids want
+                                            for item in surface.Items do
+                                                if item.Role <> itemRole then sprintf "%s has role %s" item.Id item.Role
+                                                if not item.Owned then sprintf "%s is not owned by the surface" item.Id
+                                                if item.Hidden then sprintf "%s is hidden from assistive technology" item.Id
+                                                if item.Selected then sprintf "%s says selected with nothing selected" item.Id
+
+                                                match objects |> List.tryFind (fun target -> target.Id = item.Id) with
+                                                | None -> ()
+                                                | Some target ->
+                                                    if not (item.Name.Contains target.Label) then
+                                                        sprintf "%s is named %s, not after %s" item.Id item.Name target.Label
+
+                                                    match groupKey target with
+                                                    | Some g ->
+                                                        if item.Group <> Some g then sprintf "%s is in group %A, want %s" item.Id item.Group g
+                                                        if isGrid && not (item.Name.Contains g) then sprintf "%s's name %s lacks its group %s" item.Id item.Name g
+                                                    | None ->
+                                                        if not isGrid && item.Group.IsSome then sprintf "%s is in a group" item.Id
+
+                                                    match cellOf target with
+                                                    | Some(_, column) when item.Column <> Some(column + 1) ->
+                                                        sprintf "%s has aria-colindex %A, want %d" item.Id item.Column (column + 1)
+                                                    | _ -> ()
+                                            if isGrid then
+                                                // Ungrouped objects share ONE rowgroup.
+                                                let ungrouped =
+                                                    surface.Items
+                                                    |> List.filter (fun item -> reach |> List.exists (fun t -> t.Id = item.Id && (groupKey t).IsNone))
+                                                    |> List.map (fun item -> item.Group)
+                                                    |> List.distinct
+
+                                                if ungrouped.Length > 1 then sprintf "ungrouped objects are in %d rowgroups" ungrouped.Length
+
+                                                if surface.Items |> List.exists (fun item -> item.Row.IsNone) then "an item has no aria-rowindex"
+
+                                                // Rows keep the declared gaps inside a cell group, and no two rowgroups share a row.
+                                                for target in reach do
+                                                    for other in reach do
+                                                        match cellOf target, cellOf other with
+                                                        | Some(r1, _), Some(r2, _) when groupKey target = groupKey other ->
+                                                            let row id = surface.Items |> List.tryFind (fun item -> item.Id = id) |> Option.bind (fun item -> item.Row)
+
+                                                            match row target.Id, row other.Id with
+                                                            | Some a, Some b when a - b <> r1 - r2 ->
+                                                                sprintf "%s and %s are %d rows apart, declared %d" target.Id other.Id (a - b) (r1 - r2)
+                                                            | _ -> ()
+                                                        | _ -> ()
+
+                                                let rowsByGroup =
+                                                    surface.Items
+                                                    |> List.choose (fun item -> item.Row |> Option.map (fun row -> row, item.Group))
+                                                    |> List.distinct
+                                                    |> List.groupBy fst
+
+                                                for row, groups in rowsByGroup do
+                                                    if groups.Length > 1 then sprintf "aria-rowindex %d is in %d rowgroups" row groups.Length
+                                        ]
+
+                                    check
+                                        (sprintf "input %s I9: the surface is ONE labelled %s Tab stop owning one %s per keyboard-reachable object, never hidden, pointer-only objects excluded%s" name wantRole itemRole (if isGrid then ", cells named with their group, at their row and column, ungrouped objects in one rowgroup" else ""))
+                                        problems.IsEmpty
+                                        (String.concat "; " problems)
+
+                                    do! probe.Interaction.Focus backend
+                                    let focusedSurface = probe.Surface backend
+
+                                    check
+                                        (sprintf "input %s I10: the mirror's bounding box does not change when the surface gains focus" name)
+                                        (focusedSurface |> Option.exists (fun after -> after.MirrorBox = surface.MirrorBox && after.Focused))
+                                        (sprintf "before %A after %A" surface.MirrorBox (focusedSurface |> Option.map (fun after -> after.MirrorBox)))
+
+                                    match reach |> List.tryLast with
+                                    | Some target ->
+                                        let! activated = after (probe.ActivateItem backend target.Id)
+
+                                        check
+                                            (sprintf "input %s I10: a screen reader's activation of an item reports Activate from the Mirror" name)
+                                            (activated |> List.exists (is InputSource.Mirror InputAction.Activate (Some target.Id)))
+                                            (textOf activated)
+                                    | None -> ()
+
+                            // I7: hover once per change of hovered object, and once with no target when leaving.
+                            match reachable, miss with
+                            | (target, _) :: _, Some empty ->
+                                do! moveTo empty
+                                let points = pointsOf target
+                                let! hovered = after (async {
+                                    do! moveTo points.Head
+                                    do! moveTo (points |> List.tryItem 1 |> Option.defaultValue points.Head)
+                                    do! moveTo empty
+                                })
+
+                                let hovers = hovered |> List.filter (fun e -> InputEvent.action e = InputAction.Hover)
+
+                                check
+                                    (sprintf "input %s I7: a pointer move reports Hover once per change of hovered object, and once with no target when leaving" name)
+                                    (hovers.Length = 2 && is InputSource.Pointer InputAction.Hover (Some target.Id) hovers.[0] && is InputSource.Pointer InputAction.Hover None hovers.[1])
+                                    (textOf hovered)
+                            | _ -> check (sprintf "input %s I7: a pointer move reports Hover once per change of hovered object, and once with no target when leaving" name) false "no reachable object or empty ground"
+
+                            // I1: a primary press on each pointer-reachable object, and on empty ground.
+                            let missed = ResizeArray<string>()
+
+                            for target, point in reachable do
+                                let! pressed = after (pressAt point)
+
+                                let hit =
+                                    pressed
+                                    |> List.exists (fun e ->
+                                        is InputSource.Pointer InputAction.Activate (Some target.Id) e
+                                        && InputEvent.point e |> Option.exists (fun p -> SceneInteraction.contains p target))
+
+                                if not hit then missed.Add(sprintf "%s: %s" target.Id (textOf pressed))
+
+                            match miss with
+                            | Some empty ->
+                                let! pressed = after (pressAt empty)
+
+                                let ground =
+                                    pressed
+                                    |> List.exists (fun e ->
+                                        is InputSource.Pointer InputAction.Activate None e
+                                        && InputEvent.point e |> Option.exists (fun p -> abs (p.X - empty.X) <= 1.0 && abs (p.Y - empty.Y) <= 1.0))
+
+                                if not ground then missed.Add(sprintf "ground: %s" (textOf pressed))
+                            | None -> ()
+
+                            check
+                                (sprintf "input %s I1: a primary press reports Activate from the pointer, with the object and a point inside it, and on empty ground no target and the press point" name)
+                                (not reachable.IsEmpty && missed.Count = 0)
+                                (String.concat "; " missed)
+
+                            match reachable with
+                            | [] -> ()
+                            | (target, point) :: _ ->
+                                // I2: a second press on the selected object reports Activate again.
+                                let! twice = after (async {
+                                    do! pressAt point
+                                    do! pressAt point
+                                })
+
+                                check
+                                    (sprintf "input %s I2: a second press on the same (selected) object reports Activate again" name)
+                                    ((twice |> List.filter (is InputSource.Pointer InputAction.Activate (Some target.Id))).Length = 2)
+                                    (textOf twice)
+
+                                // I3: secondary press and touch long-press, with no page context menu.
+                                let menus = probe.ContextMenus()
+                                used.Add point
+                                let! secondary = after (probe.SecondaryPress backend point)
+                                let! held = after (probe.LongPress backend point)
+
+                                check
+                                    (sprintf "input %s I3: a secondary press and a touch long-press report ActivateSecondary from the pointer, and the page's context menu does not open" name)
+                                    (secondary |> List.exists (is InputSource.Pointer InputAction.ActivateSecondary (Some target.Id))
+                                     && held |> List.exists (is InputSource.Pointer InputAction.ActivateSecondary (Some target.Id))
+                                     && not (held |> List.exists (fun e -> InputEvent.action e = InputAction.Activate))
+                                     && probe.ContextMenus() = menus)
+                                    (sprintf "secondary=%s long-press=%s context menus %d -> %d" (textOf secondary) (textOf held) menus (probe.ContextMenus()))
+
+                                // I4: each modifier, held alone, arrives alone.
+                                let wrong = ResizeArray<string>()
+
+                                for modifier in [ "Shift"; "Control"; "Alt"; "Meta" ] do
+                                    let! pressed = after (probe.PressHolding modifier backend point)
+
+                                    let ok =
+                                        pressed
+                                        |> List.exists (fun e ->
+                                            let m = InputEvent.modifiers e
+
+                                            is InputSource.Pointer InputAction.Activate (Some target.Id) e
+                                            && m.Shift = (modifier = "Shift")
+                                            && m.Control = (modifier = "Control")
+                                            && m.Alt = (modifier = "Alt")
+                                            && m.Meta = (modifier = "Meta"))
+
+                                    if not ok then wrong.Add(modifier + ": " + textOf pressed)
+
+                                check
+                                    (sprintf "input %s I4: Shift, Control, Alt and Meta, each held alone, arrive alone in modifiers" name)
+                                    (wrong.Count = 0)
+                                    (String.concat "; " wrong)
+
+                            // Keyboard (I5, I6, I3, I11): from the surface's own focus.
+                            do! probe.Interaction.Focus backend
+                            probe.PageKeys() |> ignore
+
+                            let focusTargets (list: InputEvent list) =
+                                list
+                                |> List.filter (fun e -> InputEvent.action e = InputAction.Focus)
+                                |> List.map (fun e -> InputEvent.target e |> Option.defaultValue "-")
+
+                            // I6: Home and End reach the ends; arrows walk the keyboard-reachable objects in order (or in
+                            // two dimensions inside a cell group); pointer-only objects are never focused.
+                            let ids = reach |> List.map (fun target -> target.Id)
+                            let! ends = after (async {
+                                do! probe.Interaction.Key "End"
+                                do! probe.Interaction.Key "Home"
+                            })
+
+                            let endsOk =
+                                match ids with
+                                | [] -> true
+                                | [ _ ] -> true
+                                | _ -> (focusTargets ends |> List.tryLast) = Some ids.Head
+
+                            if not isGrid then
+                                let! walked = after (async {
+                                    for _ in ids do
+                                        do! probe.Interaction.Key "ArrowRight"
+                                })
+
+                                let want =
+                                    match ids with
+                                    | [] -> []
+                                    | [ _ ] -> []
+                                    | first :: rest -> rest @ [ first ]
+
+                                check
+                                    (sprintf "input %s I6: Home and End reach the ends, and the arrows report Focus on each next keyboard-reachable object in order, skipping pointer-only objects" name)
+                                    (endsOk && focusTargets walked = want)
+                                    (sprintf "ends=%s walked=%s want=%A" (textOf ends) (focusTargets walked |> String.concat ",") want)
+                            else
+                                // Two dimensions: from a cell with a neighbour to its right and one below.
+                                let neighbour (target: SelectableObject) (along: int * int -> int) (across: int * int -> int) =
+                                    match cellOf target with
+                                    | None -> None
+                                    | Some here ->
+                                        reach
+                                        |> List.filter (fun other ->
+                                            groupKey other = groupKey target
+                                            && cellOf other |> Option.exists (fun cell -> across cell = across here && along cell > along here))
+                                        |> List.sortBy (fun other -> along (Option.get (cellOf other)))
+                                        |> List.tryHead
+
+                                let moves = ResizeArray<string>()
+
+                                for key, along, across in [ "ArrowRight", snd, fst; "ArrowDown", fst, snd ] do
+                                    match reach |> List.tryPick (fun target -> neighbour target along across |> Option.map (fun next -> target, next)) with
+                                    | None -> ()
+                                    | Some(from, next) ->
+                                        match reachable |> List.tryFind (fun (t, _) -> t.Id = from.Id) with
+                                        | None -> ()
+                                        | Some(_, point) ->
+                                            do! pressAt point
+                                            do! probe.Interaction.Focus backend
+                                            let! moved = after (probe.Interaction.Key key)
+
+                                            if focusTargets moved <> [ next.Id ] then
+                                                moves.Add(sprintf "%s from %s: %s, want %s" key from.Id (textOf moved) next.Id)
+
+                                let groups = reach |> List.map groupKey |> List.distinct
+                                do! probe.Interaction.Key "Home"
+                                let! paged = after (probe.Interaction.Key "PageDown")
+
+                                let pageWant =
+                                    match groups with
+                                    | _ :: second :: _ -> reach |> List.tryFind (fun t -> groupKey t = second) |> Option.map (fun t -> [ t.Id ])
+                                    | _ -> Some []
+
+                                check
+                                    (sprintf "input %s I6: Home and End reach the ends, arrows move in two dimensions inside a cell group, Page Down moves to the next group, and pointer-only objects are never focused" name)
+                                    (endsOk && moves.Count = 0 && Some(focusTargets paged) = pageWant)
+                                    (sprintf "ends=%s %s pageDown=%s want %A" (textOf ends) (String.concat "; " moves) (textOf paged) pageWant)
+
+                            let never =
+                                events
+                                |> Seq.filter (fun e -> InputEvent.action e = InputAction.Focus)
+                                |> Seq.choose InputEvent.target
+                                |> Seq.filter (fun t -> not (List.contains t ids))
+                                |> List.ofSeq
+
+                            check
+                                (sprintf "input %s I6: no Focus ever names a pointer-only object" name)
+                                never.IsEmpty
+                                (String.concat "," never)
+
+                            // I5: Enter and Space activate the focused object; a held key repeats.
+                            do! probe.Interaction.Key "Home"
+
+                            match ids with
+                            | [] -> ()
+                            | focusedId :: _ ->
+                                let! keys = after (async {
+                                    do! probe.Interaction.Key "Enter"
+                                    do! probe.Interaction.Key " "
+                                })
+
+                                let! heldDown = after (probe.HoldKey "Enter" 3)
+                                let repeats = heldDown |> List.filter (is InputSource.Keyboard InputAction.Activate (Some focusedId)) |> List.map InputEvent.isRepeat
+
+                                check
+                                    (sprintf "input %s I5: Enter and Space report Activate from the keyboard on the focused object, and a held key reports repeat after the first event" name)
+                                    ((keys |> List.filter (is InputSource.Keyboard InputAction.Activate (Some focusedId))).Length = 2
+                                     && keys |> List.forall (InputEvent.isRepeat >> not)
+                                     && repeats = [ false; true; true ])
+                                    (sprintf "keys=%s held=%s" (textOf keys) (textOf heldDown))
+
+                                // I3 (keyboard): the ContextMenu key and Shift+F10.
+                                let! secondaryKeys = after (async {
+                                    do! probe.Interaction.Key "ContextMenu"
+                                    do! probe.KeyHolding "Shift" "F10"
+                                })
+
+                                check
+                                    (sprintf "input %s I3: the ContextMenu key and Shift+F10 report ActivateSecondary from the keyboard" name)
+                                    ((secondaryKeys |> List.filter (is InputSource.Keyboard InputAction.ActivateSecondary (Some focusedId))).Length = 2)
+                                    (textOf secondaryKeys)
+
+                            // I11: Escape is Cancel and does not move the focus; reported keys never reach the page.
+                            let activeBefore = probe.Surface backend |> Option.bind (fun s -> s.Active)
+                            let! escaped = after (probe.Interaction.Key "Escape")
+                            let focusedAfter = probe.Interaction.Focused backend
+                            let activeAfter = probe.Surface backend |> Option.bind (fun s -> s.Active)
+                            do! probe.Interaction.Key "x"
+                            // Every key the section pressed since the surface took the focus, as the page saw it: the
+                            // keys the host reports must not be there; a key it does not report ("x", the Shift held for
+                            // Shift+F10) must.
+                            let pageKeys = probe.PageKeys()
+
+                            let reportedKeys =
+                                set [ "ArrowRight"; "ArrowLeft"; "ArrowUp"; "ArrowDown"; "Home"; "End"; "PageUp"; "PageDown"; "Enter"; " "; "Escape"; "ContextMenu"; "F10" ]
+
+                            check
+                                (sprintf "input %s I11: Escape on the surface reports Cancel and does not move the focus; the reported keys never reach a page-level listener" name)
+                                (escaped |> List.exists (fun e -> InputEvent.source e = InputSource.Keyboard && InputEvent.action e = InputAction.Cancel)
+                                 && focusedAfter = "surface"
+                                 && activeAfter = activeBefore
+                                 && pageKeys |> List.forall (reportedKeys.Contains >> not)
+                                 && List.contains "x" pageKeys)
+                                (sprintf "escape=%s focused=%s active %A -> %A page keys=%A" (textOf escaped) focusedAfter activeBefore activeAfter pageKeys)
+
+                            // I8: the focus ring, against a hover-only frame.
+                            match reachable with
+                            | (hoverTarget, hoverPoint) :: _ ->
+                                let candidates =
+                                    [ reach |> List.tryHead, "Home"; reach |> List.tryLast, "End" ]
+                                    |> List.choose (fun (target, key) -> target |> Option.map (fun t -> t, key))
+                                    |> List.filter (fun (t, _) -> t.Id <> hoverTarget.Id && t.Bounds.Width >= 2.0 && t.Bounds.Height >= 2.0)
+
+                                match candidates with
+                                | [] ->
+                                    check (sprintf "input %s I8: the focus ring is drawn outside the focused object, and not after a pointer press" name) false "no keyboard-reachable object of at least 2 units besides the hovered one"
+                                | (focusTarget, key) :: _ ->
+                                    let b = focusTarget.Bounds
+
+                                    let ring =
+                                        [
+                                            for distance in [ 1.0; 3.0 ] do
+                                                let d = distance * clearance
+                                                yield { X = b.X + b.Width / 2.0; Y = b.Y - d }
+                                                yield { X = b.X + b.Width / 2.0; Y = b.Y + b.Height + d }
+                                                yield { X = b.X - d; Y = b.Y + b.Height / 2.0 }
+                                                yield { X = b.X + b.Width + d; Y = b.Y + b.Height / 2.0 }
+                                        ]
+
+                                    let read () =
+                                        async {
+                                            host.Dispatch(RendererMsg.StateChanged (host.Model()).State)
+                                            return! probe.Pixels.Read backend ring
+                                        }
+
+                                    let tolerance = probe.Pixels.Tolerance backend
+
+                                    let same (a: (int * int * int) option) (b: (int * int * int) option) =
+                                        match a, b with
+                                        | Some(r1, g1, b1), Some(r2, g2, b2) ->
+                                            abs (r1 - r2) <= tolerance && abs (g1 - g2) <= tolerance && abs (b1 - b2) <= tolerance
+                                        | None, None -> true
+                                        | _ -> false
+
+                                    // Hover-only: a pointer press (focus not visible), then the pointer on the hovered object.
+                                    // The game state is held at the hover-only frame's, so only the cues can differ (a game
+                                    // that draws its selection, as the reference game does, reacts to the presses).
+                                    do! pressAt hoverPoint
+                                    do! moveTo hoverPoint
+                                    let held = (host.Model()).State
+                                    let! hoverOnly = read ()
+                                    do! probe.Interaction.Focus backend
+                                    do! probe.Interaction.Key(if key = "Home" then "End" else "Home")
+                                    do! probe.Interaction.Key key
+                                    host.Dispatch(RendererMsg.StateChanged held)
+                                    let! focused = read ()
+
+                                    let focusedPoint =
+                                        pointsOf focusTarget |> List.tryHead |> Option.defaultValue { X = b.X + b.Width / 2.0; Y = b.Y + b.Height / 2.0 }
+
+                                    do! pressAt focusedPoint
+                                    do! moveTo hoverPoint
+                                    host.Dispatch(RendererMsg.StateChanged held)
+                                    let! pressed = read ()
+                                    let present = List.zip hoverOnly focused |> List.filter (fun (a, _) -> a.IsSome)
+
+                                    check
+                                        (sprintf "input %s I8: with the pointer on %s and keyboard focus on %s, the pixels 1 and 3 CSS px outside %s's bounds differ from the hover-only frame" name hoverTarget.Id focusTarget.Id focusTarget.Id)
+                                        (not present.IsEmpty && present |> List.forall (fun (a, f) -> not (same a f)))
+                                        (sprintf "hover-only=%A focused=%A" hoverOnly focused)
+
+                                    check
+                                        (sprintf "input %s I8: after a pointer press on %s (focus not visible) those pixels equal the hover-only frame" name focusTarget.Id)
+                                        (List.forall2 same hoverOnly pressed)
+                                        (sprintf "hover-only=%A after press=%A" hoverOnly pressed)
+                            | [] -> ()
+
+                            // I12: a selection the game answers (at once, or later through an asynchronous guest) is shown
+                            // within the subject's wait, and survives a backend switch.
+                            match reachable with
+                            | (target, point) :: _ ->
+                                apply (SceneInteraction.apply interaction SelectionRequest.Clear)
+                                do! pressAt point
+                                let! shown = subject.WaitUntil(fun () -> selectedNow () = Some target.Id)
+                                let away = offered |> List.tryFind ((<>) backend)
+
+                                let! kept =
+                                    match away with
+                                    | None -> async { return true }
+                                    | Some away ->
+                                        async {
+                                            select host away
+                                            select host backend
+                                            return selectedNow () = Some target.Id && isOn host backend
+                                        }
+
+                                check
+                                    (sprintf "input %s I12: the game's answer to a press selects the object within the subject's wait, and the selection survives a backend switch" name)
+                                    (shown && kept)
+                                    (sprintf "shown=%b kept=%b selected=%A %s" shown kept (selectedNow ()) (describe host))
+                            | [] -> ()
+
+                            check
+                                (sprintf "input %s I14: every point the kit pressed or moved to was at least 1 CSS px from every object edge (%d points, %g CSS px per unit)" name used.Count css)
+                                (used |> Seq.forall clear)
+                                (used |> Seq.filter (clear >> not) |> Seq.map (fun p -> sprintf "(%g, %g)" p.X p.Y) |> String.concat " ")
+
+                            // I13: switching away and disposing release the input host.
+                            let away = offered |> List.tryFind ((<>) backend)
+
+                            let! releasedOnSwitch =
+                                match away with
+                                | None -> async { return true }
+                                | Some away ->
+                                    select host away
+                                    subject.WaitUntil(fun () -> probe.Interaction.InputHosts backend <= baseline.[backend])
+
+                            current.Value <- None
+                            do! stop host
+
+                            let! released =
+                                subject.WaitUntil(fun () ->
+                                    RendererBackend.all
+                                    |> List.forall (fun other -> probe.Interaction.InputHosts other <= baseline.[other]))
+
+                            check
+                                (sprintf "input %s I13: switching away and disposing the host release the input host" name)
+                                (releasedOnSwitch && released)
+                                (RendererBackend.all
+                                 |> List.map (fun other -> sprintf "%s=%d/%d" (id other) (probe.Interaction.InputHosts other) baseline.[other])
+                                 |> String.concat " ")
+
+                        // I16: every library surface presents the same roles and labels.
+                        match List.ofSeq surfaces with
+                        | (first, reference) :: rest ->
+                            let shape (surface: InputSurface) =
+                                surface.Role,
+                                surface.Label,
+                                surface.Items |> List.map (fun item -> item.Id, item.Role, item.Name, item.Group, item.Row, item.Column)
+
+                            let differing = rest |> List.filter (fun (_, surface) -> shape surface <> shape reference)
+
+                            check
+                                (sprintf "input I16: %s present the same surface roles and labels" (surfaces |> Seq.map (fst >> id) |> String.concat ", "))
+                                differing.IsEmpty
+                                (differing |> List.map (fun (backend, surface) -> sprintf "%s: %A vs %s: %A" (id backend) (shape surface) (id first) (shape reference)) |> String.concat "; ")
+                        | [] -> ()
+
+                    InputRoute.unbind route
+
+                    // I15: a host bound with BrowserRenderers.bindTo, not RendererDriver, falls back to SVG on the
+                    // adapter's own late failure, and a failure of a disposed mount is not reported (FS.GG.Game#768).
+                    match subject.BoundStart with
+                    | None -> ()
+                    | Some start ->
+                        for backend in offered |> List.filter ((<>) RendererBackend.defaultBackend) do
+                            match Map.tryFind backend subject.LateFailures with
+                            | None -> ()
+                            | Some trigger ->
+                                let name = id backend
+                                let kept = stateAt 1
+                                mounts.Clear()
+                                let host = start registry initial
+                                host.Dispatch(RendererMsg.StateChanged kept)
+                                trigger.Arm()
+                                select host backend
+                                let! settled = trigger.Settle
+                                let! fellBack = subject.WaitUntil(fun () -> isOn host RendererBackend.Svg)
+                                let model = host.Model()
+
+                                check
+                                    (sprintf "input I15 %s: a host bound with bindTo (no RendererDriver) falls back to SVG on the adapter's own late failure, state intact" name)
+                                    (settled
+                                     && fellBack
+                                     && model.State = kept
+                                     && (match model.Refusal with
+                                         | Some(RendererRefusal.MountFailed(failed, _)) -> failed = backend
+                                         | _ -> false))
+                                    (sprintf "settled=%b %s" settled (describe host))
+
+                                do! stop host
+                                mounts.Clear()
+                                let host = start registry initial
+                                host.Dispatch(RendererMsg.StateChanged kept)
+                                trigger.Arm()
+                                select host backend
+                                select host RendererBackend.Svg
+                                select host backend
+                                let attempt = (host.Model()).Attempt
+                                let! settled = trigger.Settle
+                                let! _ = subject.WaitUntil(fun () -> subject.Resources backend >= 1)
+
+                                check
+                                    (sprintf "input I15 %s: on a bound host a failure of a disposed mount is not reported, and the live mount stays" name)
+                                    (settled && isOn host backend && (host.Model()).Attempt = attempt && (host.Model()).Refusal = None)
+                                    (sprintf "settled=%b %s" settled (describe host))
+
+                                do! stop host
 
             return List.ofSeq results
         }

@@ -34,18 +34,6 @@ let private press target =
         }
         false
 
-let private raisesFor788 (name: string) (call: unit -> unit) =
-    let message =
-        try
-            call ()
-            None
-        with error ->
-            Some error.Message
-
-    match message with
-    | Some text -> Expect.stringContains text "FS.GG.Game#788" (name + " names the Delivery that implements it")
-    | None -> failtestf "%s returned instead of raising: it is a contract stub until FS.GG.Game#788" name
-
 [<Tests>]
 let tests =
     testList
@@ -426,32 +414,28 @@ let tests =
                 Expect.equal specs.Count before "no input host was mounted"
             }
 
-            test "the kit's input functions are stubs until their FS.GG.Game#788 PR" {
-                let objects = [ tile "a" ]
-
-                let frame =
-                    {
-                        Scene = Scene.empty
-                        Objects = objects
-                        Selected = None
-                    }
-
-                let guest: InputGuest<unit, unit, string, string> =
-                    InputGuest.sync (fun _ -> GuestOutcome.Decided [])
-
-                let pipeline =
-                    InputPipeline.create guest (CommandStage.create (fun (version: uint64) -> version))
-
-                let model = InputPipeline.init pipeline "e" None 0UL
-                let io = PipelineIo.create id ignore ignore ignore (fun _ _ -> ())
+            test "selectionReaction applies toSelectionRequest by the game's own rule, and withInput no longer raises" {
+                let objects = [ tile "a"; tile "b" ]
 
                 let interaction =
-                    SceneInteraction.create (fun () -> objects) (fun () -> None) (fun _ s -> s)
+                    SceneInteraction.create (fun (_: string option) -> objects) id (fun request _ ->
+                        match request with
+                        | SelectionRequest.Select id -> Some id
+                        | SelectionRequest.Clear -> None)
 
-                ignore frame
-                ignore model
-                ignore io
-                ignore interaction
+                let mutable state: string option = None
+                let apply change = state <- change state
+                let react = RendererConformance.selectionReaction interaction
+                let ev action target = InputEvent.create InputSource.Pointer action target None InputModifiers.none false
+                react apply (ev InputAction.Activate (Some "a"))
+                Expect.equal state (Some "a") "Activate selects"
+                react apply (ev InputAction.Hover (Some "b"))
+                Expect.equal state (Some "a") "Hover changes nothing"
+                react apply (ev InputAction.Activate None)
+                Expect.equal state (Some "a") "a press on empty ground keeps the selection"
+                react apply (InputEvent.create InputSource.Keyboard InputAction.Cancel None None InputModifiers.none false)
+                Expect.equal state None "Cancel clears"
+
                 let subject =
                     RendererConformance.subject
                         (RendererRegistry.svg (fun () -> Scene.empty) (fun _ -> Error "unused"))
@@ -460,23 +444,7 @@ let tests =
                         (fun _ -> 0)
                         (fun _ _ _ -> async { return Ok() })
 
-                let probe =
-                    InteractionProbe.create
-                        (fun _ _ -> async { return () })
-                        (fun _ _ -> async { return () })
-                        (fun _ -> async { return () })
-                        (fun _ -> async { return () })
-                        (fun _ -> "")
-                        (fun _ -> None)
-                        (fun _ -> 0)
-                        (fun _ -> None)
-                        (fun _ -> 0)
-
-                raisesFor788 "RendererConformance.withInput" (fun () ->
-                    RendererConformance.withInput interaction (InputRoute.create ()) probe (fun () -> []) subject
-                    |> ignore)
-
-                raisesFor788 "RendererConformance.withOwnInputHost" (fun () ->
-                    RendererConformance.withOwnInputHost RendererBackend.Svg subject |> ignore)
+                RendererConformance.withOwnInputHost RendererBackend.Svg subject |> ignore
+                RendererConformance.withBoundStart (fun registry state -> RendererConformance.inProcess registry state) subject |> ignore
             }
         ]

@@ -324,19 +324,22 @@ selected and active, the rule of `RendererDriver.failBackend`.
 
 | Gap | Decision | State |
 |---|---|---|
-| **#771**: source and modifiers; repeated and secondary activation | `InputEvent` (source, all modifiers, `Activate` always reported, `ActivateSecondary` including touch long-press, `repeat`), `InputRoute`, `SceneRenderers.withInput` | **Satisfied by the contract.** Finished when #788 implements it with the `input` section. |
-| **#772**: kit for hybrid pages and async selection | `RendererConformance.withOwnInputHost backend`, and a selection answered later through the pipeline (I12) | **Satisfied by the contract.** Finished by #788; SC2 then declares the section. |
-| **#768**: late-failure routing without `RendererDriver` | `BrowserRenderers.bindTo model dispatch route`, covered by I15 | **Satisfied by the contract.** Finished by #788. |
+| **#771**: source and modifiers; repeated and secondary activation | `InputEvent` (source, all modifiers, `Activate` always reported, `ActivateSecondary` including touch long-press, `repeat`), `InputRoute`, `SceneRenderers.withInput` | **Implemented (#788 PR B), verified by I1, I2, I3, I4 and I5** on all three backends. |
+| **#772**: kit for hybrid pages and async selection | `RendererConformance.withOwnInputHost backend`, and a selection answered later through the pipeline (I12) | **Implemented (#788 PR C), verified by I12** (an asynchronous F# guest) **and by the own-host run** (`withOwnInputHost Svg` exempts exactly I9 and I10 for SVG, and I16 compares the rest). SC2 then declares the section. |
+| **#768**: late-failure routing without `RendererDriver` | `BrowserRenderers.bindTo model dispatch route`, covered by I15 | **Implemented (#796), verified by I15** (Pixi's own late failure on a `bindTo` host) and by the browser smoke's `bindTo` check. |
 | **#783**: kit probes on object edges | Not a pipeline concern. Recorded for I14: hit regions are closed, and probes stay at least 1 CSS px inside or outside each edge at the presented scale. Edge probes skip objects smaller than 2 units in either dimension. | **Left open.** It stays its own kit Delivery. |
-| **#784**: pointer-only and grouped objects | `ObjectAccess` (`pointerOnly`, `grouped`, `cell`), the listbox or grid surface | **Satisfied by the contract.** Finished by #788. |
+| **#784**: pointer-only and grouped objects | `ObjectAccess` (`pointerOnly`, `grouped`, `cell`), the listbox or grid surface | **Implemented (#788 PR B), verified by I6 and I9** on a board with full, grouped, sparse-cell and pointer-only objects. |
 | #787 comment N4: invisible keyboard focus | `InteractionCues`, `CueContext`, `standardCues`, `withCues` | Satisfied; implemented in #788. |
 | #787 comment N5: Tab stops, mirror expansion, `role=group` on SVG, Escape on a mirror button | The single-Tab-stop listbox or grid with `aria-activedescendant`, a hidden mirror, Escape is `Cancel` | Satisfied; implemented in #788. |
 
 ### 6. Kit specification
 
-The kit gains an `input` section, declared with `RendererConformance.withInput interaction route probe events`. It
+The kit gains an `input` section, declared with `RendererConformance.withInput interaction route probe react`. It
 runs on every offered backend with real input. `withOwnInputHost` exempts a backend from the markup checks I9, I10 and
-I16 only.
+I16 only. (#788 PR C: `react apply event` is the game's reaction to each event, its pipeline, which may change the state
+the kit's host shows through `apply` at once or later; `RendererConformance.selectionReaction` is a game without a
+pipeline. `probe` is an `InputProbe`, built in the browser by `BrowserConformance.inputProbe`. I15 runs on hosts started
+by `RendererConformance.withBoundStart`, which `BrowserConformance.boundStart` provides.)
 
 | Id | Requirement |
 |---|---|
@@ -502,6 +505,31 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
 - **`withInteraction` keeps its own hosts.** `SceneRenderers.withInteraction` and `withInput` replace each other on one
   registry. A game moves to the input host by declaring `withInput` and binding its route, to a pipeline or to
   `InputEvent.toSelectionRequest`.
+
+## Implementation decisions of the kit's input section (FS.GG.Game#788 PR C)
+
+- **What each item reads.** The surface comes back from the page as an `InputSurface`: role, label, tab stops, the
+  active item, and each item's role, name, selection, group, row, column, ownership and visibility. I9 compares it with
+  the kit's own reading of the declared `ObjectAccess`, not with the library's layout code:
+  - each cell keeps its declared column (`aria-colindex = column + 1`);
+  - two cells of a group are as many rows apart as declared;
+  - no `aria-rowindex` is shared by two rowgroups;
+  - all ungrouped objects share one rowgroup;
+  - a grid cell's name contains its group's name.
+- **I6** checks Home and End, then either a linear walk of every keyboard-reachable object (no cell group) or, in a cell
+  group, an ArrowRight and an ArrowDown from a cell that has such a neighbour, and Page Down to the next group. No
+  `Focus` may ever name a pointer-only object.
+- **I8** takes the hover-only frame after a pointer press (focus not visible) with the pointer on a first object A. It
+  then focuses an object B of at least 2 units with Home or End. It samples 1 and 3 CSS px outside the middle of each of
+  B's edges. The game state is held at the hover-only frame's, so a game that draws its selection does not change the
+  pixels.
+- **I11** reads every key the page saw since the surface took the focus. None of the reported keys may be there, and an
+  unreported one must be.
+- **I12** expects the game's reaction to an `Activate` on an object to select it. The browser smoke answers it through
+  an `InputPipeline` with an asynchronous F# guest.
+- **I14** checks that every point the kit presses or moves to has the same hit-test result 1 CSS px away in all eight
+  directions (at the presented scale, `InputProbe.CssPerUnit`). I8 edge samples skip objects under 2 units.
+- **I15** reruns the adapter late-failure checks on a host that runs selection itself with `BrowserRenderers.bindTo`.
 
 ## Consequences
 

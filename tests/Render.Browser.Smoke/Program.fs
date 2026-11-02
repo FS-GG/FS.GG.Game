@@ -2600,6 +2600,227 @@ let runOverhang () : Async<unit> =
 
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
+/// FS.GG.Game#788 PR C: the kit's `input` section (I1-I16) with real input on SVG, Pixi and Babylon.
+/// Nineteen checks per backend whose input host is the library's (sixteen for a game's own host, which skips the
+/// markup checks I9 and I10), I16 once, and I15's two for Pixi through `BrowserRenderers.bindTo`.
+let inputChecks (backends: int) (own: int) = 19 * backends - 3 * own + 1 + 2
+
+let runInputKit () : Async<unit> =
+    async {
+        BrowserConformance.installContextProbe ()
+        BrowserConformance.installInputProbe ()
+        let container = document.createElement "div"
+        container.id <- "stage-input-kit"
+        document.body.appendChild container |> ignore
+        let late = BrowserRenderers.route ()
+
+        // The reference game, a listbox, answered at once by its own selection rule.
+        let options = BrowserRenderers.options "Reference game" ReferenceRenderers.width ReferenceRenderers.height
+        let route = InputRoute.create ()
+
+        let referenceRegistry (surfaces: SceneSurface list) =
+            ReferenceRenderers.declare (SceneSurface.mountScene surfaces.Head) surfaces
+            |> SceneRenderers.withInput ReferenceRenderers.interaction route
+            |> SceneRenderers.registry
+
+        let start: ReferenceState.Model =
+            {
+                Screen = ReferenceState.Playing
+                Room = ReferenceState.Atrium
+                X = 1
+                DestinationActive = false
+                CameraTransition = false
+                VaultClear = false
+                Aim = 200, 40
+                Tick = 0
+                Selected = None
+            }
+
+        let states =
+            [
+                start
+                { start with
+                    Screen = ReferenceState.Paused
+                    Room = ReferenceState.Vault
+                    X = 3
+                }
+            ]
+
+        let referenceShows (host: ConformanceHost<ReferenceState.Model>) backend (model: ReferenceState.Model) =
+            match backend with
+            | RendererBackend.Svg ->
+                async {
+                    let html = container.innerHTML
+
+                    return
+                        if has (svgFill (ReferenceRenderers.tokenColor model.Screen)) html
+                           && has (svgFill (ReferenceRenderers.roomColor model.Room)) html then
+                            Ok()
+                        else
+                            Error "svg does not show the state"
+                }
+            | _ ->
+                showsPixels
+                    host
+                    container
+                    backend
+                    (fun (m: ReferenceState.Model) ->
+                        let x, y, _, _ = ReferenceRenderers.tokenBounds m
+                        (ReferenceRenderers.tokenColor m.Screen, int x + 12, int y + 12), (ReferenceRenderers.roomColor m.Room, 2, 100))
+                    model
+
+        let all = BrowserRenderers.surfaces container options late
+
+        do!
+            runKit
+                "input kit (reference game)"
+                (kitChecks + inputChecks 3 0)
+                (BrowserConformance.subject container late (referenceRegistry all) RendererBackend.all states referenceShows
+                 |> RendererConformance.withInput
+                     ReferenceRenderers.interaction
+                     route
+                     (BrowserConformance.inputProbe container ReferenceRenderers.width ReferenceRenderers.height)
+                     (RendererConformance.selectionReaction ReferenceRenderers.interaction)
+                 |> RendererConformance.withBoundStart (BrowserConformance.boundStart late))
+
+        // A hybrid page (FS.GG.Game#772): SVG's input host declared the game's own, so the kit plays it through the probe
+        // and its events and skips only the markup checks.
+        let svgAndPixi = all |> List.filter (fun surface -> SceneSurface.backend surface <> RendererBackend.Babylon)
+
+        let! ownResults =
+            RendererConformance.run (
+                BrowserConformance.subject
+                    container
+                    late
+                    (referenceRegistry svgAndPixi)
+                    [ RendererBackend.Svg; RendererBackend.Pixi ]
+                    states
+                    referenceShows
+                |> RendererConformance.withInput
+                    ReferenceRenderers.interaction
+                    route
+                    (BrowserConformance.inputProbe container ReferenceRenderers.width ReferenceRenderers.height)
+                    (RendererConformance.selectionReaction ReferenceRenderers.interaction)
+                |> RendererConformance.withOwnInputHost RendererBackend.Svg
+            )
+
+        let inputResults = ownResults |> List.filter (fun result -> result.Check.StartsWith "input")
+        let svgMarkup = inputResults |> List.filter (fun result -> result.Check.StartsWith "input svg I9" || result.Check.StartsWith "input svg I10")
+        let pixiMarkup = inputResults |> List.filter (fun result -> result.Check.StartsWith "input pixi I9" || result.Check.StartsWith "input pixi I10")
+
+        for result in ownResults do
+            check ("input kit (own SVG host): " + result.Check) result.Passed result.Detail
+
+        check
+            "input kit (own SVG host): withOwnInputHost exempts SVG from I9 and I10 only, and Pixi keeps them"
+            (svgMarkup.IsEmpty && pixiMarkup.Length = 3 && inputResults.Length = inputChecks 2 1 - 2)
+            (sprintf "svg markup %d, pixi markup %d, input checks %d" svgMarkup.Length pixiMarkup.Length inputResults.Length)
+
+        // The grid board, answered LATER by an asynchronous F# guest through the input pipeline.
+        let boardOptions = BrowserRenderers.options "Board" InputFixture.width InputFixture.height
+        let boardRoute = InputRoute.create ()
+
+        let boardRegistry =
+            match BrowserRenderers.surfaces container boardOptions late with
+            | (svg :: _) as surfaces ->
+                surfaces
+                |> List.fold
+                    (fun renderers surface -> SceneRenderers.withSurface surface renderers)
+                    (SceneRenderers.create InputFixture.view (SceneSurface.mountScene svg))
+                |> SceneRenderers.withInput InputFixture.interaction boardRoute
+                |> SceneRenderers.registry
+            | [] -> failwith "no surfaces"
+
+        let boards: InputFixture.Board list =
+            [
+                { Tick = 0; Selected = None }
+                { Tick = 1; Selected = Some "a" }
+                { Tick = 2; Selected = None }
+            ]
+
+        let boardShows (host: ConformanceHost<InputFixture.Board>) backend (board: InputFixture.Board) =
+            match backend with
+            | RendererBackend.Svg ->
+                async {
+                    return
+                        if has (svgFill (InputFixture.tickColour board.Tick)) container.innerHTML then
+                            Ok()
+                        else
+                            Error "svg does not show the tick"
+                }
+            | _ ->
+                showsPixels
+                    host
+                    container
+                    backend
+                    (fun (b: InputFixture.Board) -> (InputFixture.tickColour b.Tick, 215, 140), (InputFixture.background, 2, 155))
+                    board
+
+        do!
+            runKit
+                "input kit (grid board, async guest)"
+                (kitChecks + inputChecks 3 0)
+                (BrowserConformance.subject container late boardRegistry RendererBackend.all boards boardShows
+                 |> RendererConformance.withInput
+                     InputFixture.interaction
+                     boardRoute
+                     (BrowserConformance.inputProbe container InputFixture.width InputFixture.height)
+                     (InputFixture.pipelineReaction ())
+                 |> RendererConformance.withBoundStart (BrowserConformance.boundStart late))
+
+        // Negative control: the section bites. On SVG alone, a probe that reports a hidden item and a second tab stop, a
+        // reported key reaching the page, a page context menu on every read and a canvas that never changes, and a game
+        // that never answers, must fail exactly the checks that guard them (I9, I11, I3, I8 and I12), and nothing else.
+        let honest = BrowserConformance.inputProbe container ReferenceRenderers.width ReferenceRenderers.height
+        let menus = ref 0
+
+        let broken =
+            { honest with
+                Surface =
+                    fun backend ->
+                        honest.Surface backend
+                        |> Option.map (fun surface ->
+                            { surface with
+                                TabStops = surface.TabStops + 1
+                                Items =
+                                    surface.Items
+                                    |> List.mapi (fun index item -> if index = 0 then { item with Hidden = true } else item)
+                            })
+                PageKeys = fun () -> "Enter" :: honest.PageKeys()
+                ContextMenus =
+                    fun () ->
+                        menus.Value <- menus.Value + 1
+                        menus.Value
+                Pixels =
+                    PixelProbe.create
+                        (fun _ points -> async { return points |> List.map (fun _ -> Some(9, 9, 9)) })
+                        (fun _ colour -> int colour.Red, int colour.Green, int colour.Blue)
+                        (fun _ -> 2)
+            }
+
+        let! controlResults =
+            RendererConformance.run (
+                BrowserConformance.subject container late (referenceRegistry [ all.Head ]) [ RendererBackend.Svg ] states referenceShows
+                |> RendererConformance.withInput ReferenceRenderers.interaction route broken (fun _ _ -> ())
+            )
+
+        let failedInput =
+            controlResults
+            |> List.filter (fun result -> not result.Passed)
+            |> List.map (fun result -> result.Check)
+
+        let guarded = [ "input svg I9:"; "input svg I11:"; "input svg I3: a secondary press"; "input svg I8: with the pointer"; "input svg I12:" ]
+
+        check
+            "input kit control: each broken obligation fails exactly the check that guards it (I9, I11, I3, I8, I12), and nothing else"
+            (failedInput.Length = guarded.Length
+             && guarded |> List.forall (fun prefix -> failedInput |> List.exists (fun failed -> failed.StartsWith prefix)))
+            (String.concat " | " failedInput)
+
+        check "input kit: the stage is empty afterwards" (container.children.length = 0) container.innerHTML
+        container.remove ()
+    }
+
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
 let announce (checks: int) (failures: int) (report: string) : unit = jsNative
 
@@ -2631,6 +2852,7 @@ async {
         do! runOverhang ()
         do! RetainedSurface.run check
         do! InputHostSmoke.run check
+        do! runInputKit ()
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

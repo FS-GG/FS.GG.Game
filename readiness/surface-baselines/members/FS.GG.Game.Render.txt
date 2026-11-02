@@ -110,6 +110,16 @@ FS.GG.Game.Render.InputHostSpec.access(FS.GG.Game.Render.InputHostSpec, FS.GG.Ga
 FS.GG.Game.Render.InputHostSpec.create(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectableObject, FS.GG.Game.Render.ObjectAccess>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>) : FS.GG.Game.Render.InputHostSpec
 FS.GG.Game.Render.InputHostSpec.cues(FS.GG.Game.Render.InputHostSpec) : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>
 FS.GG.Game.Render.InputHostSpec.standard : FS.GG.Game.Render.InputHostSpec [get]
+FS.GG.Game.Render.InputItem.Column : Microsoft.FSharp.Core.FSharpOption<System.Int32> [get]
+FS.GG.Game.Render.InputItem.Group : Microsoft.FSharp.Core.FSharpOption<System.String> [get]
+FS.GG.Game.Render.InputItem.Hidden : System.Boolean [get]
+FS.GG.Game.Render.InputItem.Id : System.String [get]
+FS.GG.Game.Render.InputItem.Name : System.String [get]
+FS.GG.Game.Render.InputItem.Owned : System.Boolean [get]
+FS.GG.Game.Render.InputItem.Role : System.String [get]
+FS.GG.Game.Render.InputItem.Row : Microsoft.FSharp.Core.FSharpOption<System.Int32> [get]
+FS.GG.Game.Render.InputItem.Selected : System.Boolean [get]
+FS.GG.Game.Render.InputItem.new(System.String, System.String, System.String, System.Boolean, Microsoft.FSharp.Core.FSharpOption<System.String>, Microsoft.FSharp.Core.FSharpOption<System.Int32>, Microsoft.FSharp.Core.FSharpOption<System.Int32>, System.Boolean, System.Boolean)
 FS.GG.Game.Render.InputModifiers.Alt : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.Control : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.Meta : System.Boolean [get]
@@ -126,6 +136,19 @@ FS.GG.Game.Render.InputPipeline.init<Input, Client, Server, Local, Command>(Inpu
 FS.GG.Game.Render.InputPipeline.lastSequence<Input, Server, Local, Command>(PipelineModel<Input, Server, Local, Command>) : System.UInt64
 FS.GG.Game.Render.InputPipeline.unsettled<Input, Server, Local, Command>(PipelineModel<Input, Server, Local, Command>) : Microsoft.FSharp.Collections.FSharpList<System.Tuple<FS.GG.Game.Render.CommandId, FS.GG.Game.Render.CommandSettlement>>
 FS.GG.Game.Render.InputPipeline.update<Input, Client, Server, Local, Command>(InputPipeline<Input, Client, Server, Local, Command>, PipelineMsg<Input, Server, Local, Command>, PipelineModel<Input, Server, Local, Command>) : Tuple<PipelineModel<Input, Server, Local, Command>, FSharpList<PipelineEffect<Input, Local, Command>>>
+FS.GG.Game.Render.InputProbe.ActivateItem : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>> [get]
+FS.GG.Game.Render.InputProbe.ContextMenus : Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, System.Int32> [get]
+FS.GG.Game.Render.InputProbe.CssPerUnit : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, System.Double> [get]
+FS.GG.Game.Render.InputProbe.HoldKey : Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.FSharpFunc<System.Int32, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>> [get]
+FS.GG.Game.Render.InputProbe.Interaction : FS.GG.Game.Render.InteractionProbe [get]
+FS.GG.Game.Render.InputProbe.KeyHolding : Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>> [get]
+FS.GG.Game.Render.InputProbe.LongPress : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Point, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>> [get]
+FS.GG.Game.Render.InputProbe.PageKeys : Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Collections.FSharpList<System.String>> [get]
+FS.GG.Game.Render.InputProbe.Pixels : FS.GG.Game.Render.PixelProbe [get]
+FS.GG.Game.Render.InputProbe.PressHolding : Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Point, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>>> [get]
+FS.GG.Game.Render.InputProbe.SecondaryPress : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Point, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>> [get]
+FS.GG.Game.Render.InputProbe.Surface : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.InputSurface>> [get]
+FS.GG.Game.Render.InputProbe.new(FS.GG.Game.Render.InteractionProbe, FS.GG.Game.Render.PixelProbe, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Point, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Point, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>>, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Point, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>>>, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>>, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.FSharpFunc<System.Int32, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.InputSurface>>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>>>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Collections.FSharpList<System.String>>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, System.Int32>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, System.Double>)
 FS.GG.Game.Render.InputRoute.bind(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InputEvent, Microsoft.FSharp.Core.Unit>, FS.GG.Game.Render.InputRoute) : System.Void
 FS.GG.Game.Render.InputRoute.create() : FS.GG.Game.Render.InputRoute
 FS.GG.Game.Render.InputRoute.report(FS.GG.Game.Render.InputEvent, FS.GG.Game.Render.InputRoute) : System.Void
@@ -133,6 +156,14 @@ FS.GG.Game.Render.InputRoute.unbind(FS.GG.Game.Render.InputRoute) : System.Void
 FS.GG.Game.Render.InputSource+Tags.Keyboard : System.Int32
 FS.GG.Game.Render.InputSource+Tags.Mirror : System.Int32
 FS.GG.Game.Render.InputSource+Tags.Pointer : System.Int32
+FS.GG.Game.Render.InputSurface.Active : Microsoft.FSharp.Core.FSharpOption<System.String> [get]
+FS.GG.Game.Render.InputSurface.Focused : System.Boolean [get]
+FS.GG.Game.Render.InputSurface.Items : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.InputItem> [get]
+FS.GG.Game.Render.InputSurface.Label : System.String [get]
+FS.GG.Game.Render.InputSurface.MirrorBox : System.Tuple<System.Double, System.Double, System.Double, System.Double> [get]
+FS.GG.Game.Render.InputSurface.Role : System.String [get]
+FS.GG.Game.Render.InputSurface.TabStops : System.Int32 [get]
+FS.GG.Game.Render.InputSurface.new(System.String, System.String, System.Int32, Microsoft.FSharp.Core.FSharpOption<System.String>, System.Boolean, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.InputItem>, System.Tuple<System.Double, System.Double, System.Double, System.Double>)
 FS.GG.Game.Render.InteractionCues.create(Microsoft.FSharp.Core.FSharpOption<System.String>, Microsoft.FSharp.Core.FSharpOption<System.String>, System.Boolean) : FS.GG.Game.Render.InteractionCues
 FS.GG.Game.Render.InteractionCues.focusVisible(FS.GG.Game.Render.InteractionCues) : System.Boolean
 FS.GG.Game.Render.InteractionCues.focused(FS.GG.Game.Render.InteractionCues) : Microsoft.FSharp.Core.FSharpOption<System.String>
@@ -238,8 +269,10 @@ FS.GG.Game.Render.RendererConformance.failures(Microsoft.FSharp.Collections.FSha
 FS.GG.Game.Render.RendererConformance.host<State>(FSharpFunc<Microsoft.FSharp.Core.Unit, RendererModel<State>>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.RendererBackend>>, FSharpFunc<RendererMsg<State>, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<System.String, Microsoft.FSharp.Core.Unit>>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>) : ConformanceHost<State>
 FS.GG.Game.Render.RendererConformance.inProcess<State>(RendererRegistry<State>, State) : ConformanceHost<State>
 FS.GG.Game.Render.RendererConformance.run<State>(ConformanceSubject<State>) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ConformanceResult>>
+FS.GG.Game.Render.RendererConformance.selectionReaction<State>(SceneInteraction<State>) : FSharpFunc<FSharpFunc<FSharpFunc<State, State>, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InputEvent, Microsoft.FSharp.Core.Unit>>
 FS.GG.Game.Render.RendererConformance.subject<State>(RendererRegistry<State>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>, FSharpList<State>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.RendererBackend, System.Int32>, FSharpFunc<ConformanceHost<State>, FSharpFunc<FS.GG.Game.Render.RendererBackend, FSharpFunc<State, Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>>>>) : ConformanceSubject<State>
-FS.GG.Game.Render.RendererConformance.withInput<State>(SceneInteraction<State>, FS.GG.Game.Render.InputRoute, FS.GG.Game.Render.InteractionProbe, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.InputEvent>>, ConformanceSubject<State>) : ConformanceSubject<State>
+FS.GG.Game.Render.RendererConformance.withBoundStart<State>(FSharpFunc<RendererRegistry<State>, FSharpFunc<State, ConformanceHost<State>>>, ConformanceSubject<State>) : ConformanceSubject<State>
+FS.GG.Game.Render.RendererConformance.withInput<State>(SceneInteraction<State>, FS.GG.Game.Render.InputRoute, FS.GG.Game.Render.InputProbe, FSharpFunc<FSharpFunc<FSharpFunc<State, State>, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InputEvent, Microsoft.FSharp.Core.Unit>>, ConformanceSubject<State>) : ConformanceSubject<State>
 FS.GG.Game.Render.RendererConformance.withInteraction<State>(SceneInteraction<State>, FS.GG.Game.Render.SelectionRoute, FS.GG.Game.Render.InteractionProbe, ConformanceSubject<State>) : ConformanceSubject<State>
 FS.GG.Game.Render.RendererConformance.withLateFailure<State>(FS.GG.Game.Render.RendererBackend, FS.GG.Game.Render.LateFailureTrigger, ConformanceSubject<State>) : ConformanceSubject<State>
 FS.GG.Game.Render.RendererConformance.withOwnInputHost<State>(FS.GG.Game.Render.RendererBackend, ConformanceSubject<State>) : ConformanceSubject<State>

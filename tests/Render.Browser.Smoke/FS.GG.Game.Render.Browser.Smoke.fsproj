@@ -15,6 +15,7 @@
     <Compile Include="GeneratedRenderers.fs" />
     <Compile Include="RetainedSurface.fs" />
     <Compile Include="InputHostSmoke.fs" />
+    <Compile Include="InputFixture.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

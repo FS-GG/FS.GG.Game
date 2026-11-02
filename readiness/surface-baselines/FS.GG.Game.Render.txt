@@ -39,12 +39,15 @@ FS.GG.Game.Render.InputEvent
 FS.GG.Game.Render.InputGuest
 FS.GG.Game.Render.InputGuest`4
 FS.GG.Game.Render.InputHostSpec
+FS.GG.Game.Render.InputItem
 FS.GG.Game.Render.InputModifiers
 FS.GG.Game.Render.InputPipeline
 FS.GG.Game.Render.InputPipeline`5
+FS.GG.Game.Render.InputProbe
 FS.GG.Game.Render.InputRoute
 FS.GG.Game.Render.InputSource
 FS.GG.Game.Render.InputSource+Tags
+FS.GG.Game.Render.InputSurface
 FS.GG.Game.Render.InteractionCues
 FS.GG.Game.Render.InteractionKey
 FS.GG.Game.Render.InteractionKey+Tags

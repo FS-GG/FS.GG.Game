@@ -20,11 +20,14 @@ FS.GG.Game.Render.Browser.BabylonSurface.mountScene(Browser.Types.HTMLElement, F
 FS.GG.Game.Render.Browser.BabylonSurface.register<State>(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions, FSharpFunc<State, FS.GG.UI.Scene.Scene>, RendererRegistry<State>) : RendererRegistry<State>
 FS.GG.Game.Render.Browser.BabylonSurface.surface(Browser.Types.HTMLElement, FS.GG.Game.Render.Browser.BabylonOptions) : FS.GG.Game.Render.SceneSurface
 FS.GG.Game.Render.Browser.BrowserConformance.babylonActiveMeshes() : System.Int32
+FS.GG.Game.Render.Browser.BrowserConformance.boundStart<State>(FS.GG.Game.Render.Browser.LateFailureRoute, RendererRegistry<State>, State) : ConformanceHost<State>
 FS.GG.Game.Render.Browser.BrowserConformance.deviceScale(System.Double) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Core.Unit>
 FS.GG.Game.Render.Browser.BrowserConformance.drawnPixels(Browser.Types.HTMLElement, System.Double, System.Double, FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.Point>) : Microsoft.FSharp.Control.FSharpAsync<Microsoft.FSharp.Collections.FSharpList<Microsoft.FSharp.Core.FSharpOption<System.Tuple<System.Int32, System.Int32, System.Int32>>>>
 FS.GG.Game.Render.Browser.BrowserConformance.focused(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend) : System.String
 FS.GG.Game.Render.Browser.BrowserConformance.host<State>(RendererDriver<State>) : ConformanceHost<State>
 FS.GG.Game.Render.Browser.BrowserConformance.inputHosts(FS.GG.Game.Render.RendererBackend) : System.Int32
+FS.GG.Game.Render.Browser.BrowserConformance.inputProbe(Browser.Types.HTMLElement, System.Double, System.Double) : FS.GG.Game.Render.InputProbe
+FS.GG.Game.Render.Browser.BrowserConformance.inputSurface(Browser.Types.HTMLElement, FS.GG.Game.Render.RendererBackend) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.InputSurface>
 FS.GG.Game.Render.Browser.BrowserConformance.installContextProbe() : System.Void
 FS.GG.Game.Render.Browser.BrowserConformance.installInputProbe() : System.Void
 FS.GG.Game.Render.Browser.BrowserConformance.interactionProbe(Browser.Types.HTMLElement) : FS.GG.Game.Render.InteractionProbe
