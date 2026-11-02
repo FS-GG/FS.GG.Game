@@ -7,7 +7,7 @@ open Expecto
 open FS.GG.UI.Scene
 open FS.GG.Game.Render
 
-let private idle = { Selected = false; Stale = false }
+let private idle = GlyphState.idle
 let private one: Size = { Width = 1; Height = 1 }
 let private identities = [ Identity.Own; Identity.Ally; Identity.Neutral; Identity.Enemy; Identity.Unknown ]
 let private theme = Theme.classic
@@ -127,7 +127,7 @@ let tests =
                         |> GlyphSpec.badged
                         |> GlyphSpec.amplifier AmplifierSlot.above (Amplifier.bar 0.4)
                         |> GlyphSpec.amplifier AmplifierSlot.below (Amplifier.pips 2 4)
-                        |> Glyph.ofSpec { Selected = true; Stale = true }
+                        |> Glyph.ofSpec (GlyphState.idle |> GlyphState.selected true |> GlyphState.stale true)
                         |> Glyphs.draw theme
 
                     Expect.equal (GlyphDrawing.frame busy) (GlyphDrawing.frame plain) (sprintf "%A frame" i)
@@ -251,7 +251,7 @@ let tests =
 
             test "amplifiers sit outside the 8-unit reserve, brackets at its outer edge, and the cue reserve is 2 x max(band, 2 / minCssPerUnit) + gap + bracket" {
                 Expect.equal (Glyphs.reserve theme) 8.0 "8 at classic"
-                let d = Glyphs.draw theme (unitAt 64.0 64.0 Identity.Own |> GlyphSpec.amplifier AmplifierSlot.above (Amplifier.bar 0.5) |> GlyphSpec.amplifier AmplifierSlot.below (Amplifier.pips 3 5) |> Glyph.ofSpec { idle with Selected = true })
+                let d = Glyphs.draw theme (unitAt 64.0 64.0 Identity.Own |> GlyphSpec.amplifier AmplifierSlot.above (Amplifier.bar 0.5) |> GlyphSpec.amplifier AmplifierSlot.below (Amplifier.pips 3 5) |> Glyph.ofSpec (GlyphState.selected true idle))
                 let f = GlyphDrawing.frame d
                 let boxes nodes = nodes |> List.choose (function SceneNode.Rectangle((x, y, w, h), _) -> Some(x, y, w, h) | _ -> None)
                 let amps = boxes (GlyphDrawing.amplifiers d)
@@ -316,8 +316,9 @@ let tests =
                         for e, _ in shown do
                             Expect.equal (shownAt scene.Nodes (int (floor e.Point.X)) (int (floor e.Point.Y))) (Some e.Colour) (sprintf "%s: control %s's own pixel" c.Name name)
 
+                Expect.equal [ for m in [ 0; 1; 10; 21; 59; 251 ] -> GlyphConformance.drawnControlFloor m ] [ 0; 1; 9; 19; 54; 226 ] "the drawn-control floor is 90 %, rounded up"
                 let _, _, _, denseDiffering = (cases |> List.find (fun c -> c.Name.StartsWith "dense board")).DrawnControls.Head
-                Expect.isGreaterThanOrEqual denseDiffering 59 "the bodies-first board differs in at least the modelled 59 bar-over-frame pixels"
+                Expect.isGreaterThanOrEqual (GlyphConformance.drawnControlFloor denseDiffering) 59 "the bodies-first board must differ in at least the reviewed 59 bar-over-frame pixels, floor included"
 
                 for c in cases do
                     Expect.isNonEmpty c.Expected (sprintf "%s decides pixels" c.Name)
@@ -455,7 +456,7 @@ let tests =
                 Expect.exists (GlyphDrawing.diagnostics facing) (fun d -> d.Contains "stroked profile") "facing waits for #773"
                 let path = Glyphs.draw theme (Glyph.path [ { X = 0.0; Y = 0.0 }; { X = 64.0; Y = 0.0 } ])
                 Expect.equal (GlyphDrawing.body path).Length (1 + 4 + 1) "dots every half cell and the end marker"
-                let staleDrawing = Glyphs.draw theme (Glyph.ofSpec { idle with Stale = true } (unitAt 16.0 16.0 Identity.Own))
+                let staleDrawing = Glyphs.draw theme (Glyph.ofSpec (GlyphState.stale true idle) (unitAt 16.0 16.0 Identity.Own))
                 Expect.equal (GlyphDrawing.body staleDrawing).Head (SceneNode.Rectangle((4.0, 8.0, 24.0, 16.0), theme.Palette.Stale)) "a stale frame takes glyph.stale"
             }
         ]
