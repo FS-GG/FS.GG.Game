@@ -138,6 +138,7 @@ FS.GG.Game.Render.SelectionRequest+Tags
 FS.GG.Game.Render.SelectionRoute
 FS.GG.Game.Render.Theme
 FS.GG.Game.Render.ThemeAlgorithm
+FS.GG.Game.Render.ThemeCheck
 FS.GG.Game.Render.ThemeColour
 FS.GG.Game.Render.ThemeOverride
 FS.GG.Game.Render.ThemeSeed

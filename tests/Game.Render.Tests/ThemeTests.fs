@@ -109,6 +109,7 @@ let tests =
                      @ [
                          "glyph.badge.ink"
                          "glyph.icon.ink"
+                         "glyph.modifier"
                          "glyph.selection"
                          "glyph.marker"
                          "glyph.path"
@@ -120,6 +121,7 @@ let tests =
                          "status.warn"
                          "status.bad"
                          "status.track"
+                         "status.keyline"
                          "terrain.open"
                          "terrain.blocked"
                          "terrain.difficult"
@@ -164,6 +166,12 @@ let tests =
 
                 for fill in [ "status.good"; "status.warn"; "status.bad" ] do
                     atLeast 3.0 fill "status.track"
+
+                Expect.isGreaterThanOrEqual (ThemeColour.contrast (c "status.keyline") ground) 3.0 "the keyline on the ground"
+                atLeast 3.0 "status.track" "status.keyline"
+
+                for on in "glyph.unit.body" :: teams @ allegiances do
+                    atLeast 3.0 "glyph.modifier" on
             }
 
             test "a theme that breaks a rule cannot be built, and every violation is named" {
@@ -236,18 +244,51 @@ let tests =
                 Expect.equal (colourOf "glyph.team.1" theme) (colourOf "glyph.team.1" Theme.classic) "the rest unchanged"
 
                 let violations = refused (Theme.withOverrides [ ThemeOverride.colour "glyph.team.0" (rgb 40 44 52) ] Theme.classic)
-                Expect.equal (violations |> List.map (fun v -> v.Token) |> List.sort) [ "glyph.badge.ink"; "glyph.team.0" ] "refused"
+                Expect.equal (violations |> List.map (fun v -> v.Token) |> List.sort) [ "glyph.badge.ink"; "glyph.modifier"; "glyph.team.0" ] "refused: the team on the ground, and the badge and modifier inks on the team"
                 let onGround = violations |> List.find (fun v -> v.Token = "glyph.team.0")
                 Expect.stringContains onGround.Reason "surface.ground" "too close to the ground"
                 let badge = violations |> List.find (fun v -> v.Token = "glyph.badge.ink")
                 Expect.stringContains badge.Reason "glyph.team.0" "and the badge ink no longer reads on it"
             }
 
+            test "added checks join validation: Theme.validate runs them after the built-in rules, the theme carries them, and withOverrides runs them again" {
+                // A stand-in for FS.GG.Game#795's distinctness check: every pair of team colours at least this far apart in OKLab.
+                let distinct (minimum: float) =
+                    ThemeCheck.create (sprintf "teams-distinct-%g" minimum) (fun theme ->
+                        let teams = [ for i in 0 .. Theme.teamCount theme - 1 -> sprintf "glyph.team.%d" i, colourOf (sprintf "glyph.team.%d" i) theme ]
+                        let lab (c: Color) =
+                            let p = ThemeColour.toOklch c
+                            let h = p.H * System.Math.PI / 180.0
+                            p.L, p.C * cos h, p.C * sin h
+                        [
+                            for i, (a, ca) in List.indexed teams do
+                                for b, cb in teams |> List.skip (i + 1) do
+                                    let l1, a1, b1 = lab ca
+                                    let l2, a2, b2 = lab cb
+                                    let d = sqrt ((l1 - l2) ** 2.0 + (a1 - a2) ** 2.0 + (b1 - b2) ** 2.0)
+                                    if d < minimum then
+                                        yield ThemeViolation.create b (sprintf "%.3f from %s, below %g" d a minimum)
+                        ])
+
+                let checkedTheme = ok (Theme.validate [ distinct 0.05 ] Theme.classic)
+                Expect.equal (Theme.checks checkedTheme) [ "teams-distinct-0.05" ] "the theme carries its check"
+                Expect.equal (Theme.hex checkedTheme) (Theme.hex Theme.classic) "and is the same theme"
+                Expect.isNonEmpty (refused (Theme.validate [ distinct 0.9 ] Theme.classic)) "a check that fails refuses the theme"
+
+                // A player override that passes the built-in rules but breaks the carried check is refused.
+                let clash = Theme.withOverrides [ ThemeOverride.colour "glyph.team.1" (colourOf "glyph.team.0" Theme.classic) ] checkedTheme
+                Expect.equal ((refused clash) |> List.map (fun v -> v.Token)) [ "glyph.team.1" ] "the carried check runs on an override"
+                Expect.isOk (Theme.withOverrides [ ThemeOverride.colour "glyph.team.1" (colourOf "glyph.team.0" Theme.classic) ] Theme.classic) "without the check the override passes"
+
+                let throws = ThemeCheck.create "broken" (fun _ -> failwith "boom")
+                Expect.equal ((refused (Theme.validate [ throws ] Theme.classic)) |> List.map (fun v -> v.Token)) [ "broken" ] "a check that throws is a violation"
+            }
+
             test "CSS variables and hex give the Scene's colours" {
                 let css = Theme.cssVariables Theme.classic
                 Expect.equal (css |> List.find (fun (k, _) -> k = "--fsgg-glyph-team-0") |> snd) (ThemeColour.hex (colourOf "glyph.team.0" Theme.classic)) "a colour"
                 Expect.equal (css |> List.find (fun (k, _) -> k = "--fsgg-size-cell") |> snd) "32" "a size"
-                Expect.equal (Theme.hex Theme.classic |> List.length) 33 "every colour alias"
+                Expect.equal (Theme.hex Theme.classic |> List.length) 35 "every colour alias"
             }
 
             test "DTCG: export then import gives equal resolved hex for every alias; hex wins over components; no alias group derives again" {

@@ -451,6 +451,8 @@ module ThemeAlgorithm =
             setColour "focus.inner" pole
             setColour "hover" (mix ink ground 0.3)
             setColour "status.track" pole
+            setColour "status.keyline" ink
+            setColour "modifier.ink" pole
             setColour "terrain.open" (mix ground ink 0.06)
             setColour "terrain.blocked" (mix ground ink 0.2)
             setColour "terrain.difficult" (ThemeColour.ofOklch { L = groundL + 0.06; C = 0.05; H = 70.0 })
@@ -490,6 +492,11 @@ type ThemeViolation internal (token: string, reason: string) =
     member _.Reason = reason
     override _.ToString() = token + ": " + reason
 
+[<RequireQualifiedAccess>]
+module ThemeViolation =
+
+    let create (token: string) (reason: string) = ThemeViolation(token, reason)
+
 /// The resolved colours glyph drawing reads (internal: the library's own view of the alias layer).
 [<NoComparison>]
 type internal Palette =
@@ -515,6 +522,8 @@ type internal Palette =
         Warn: Color
         Bad: Color
         Track: Color
+        Keyline: Color
+        ModifierInk: Color
         TerrainOpen: Color
         TerrainBlocked: Color
         TerrainDifficult: Color
@@ -538,14 +547,27 @@ type Theme
         overrides: ThemeOverride list,
         tokens: ThemeTokens,
         aliases: (string * TokenValue) list,
-        palette: Palette
+        palette: Palette,
+        checks: ThemeCheck list
     ) =
+    member internal _.Checks = checks
     member internal _.Seed = seed
     member internal _.Algorithms = algorithms
     member internal _.Overrides = overrides
     member internal _.Tokens = tokens
     member internal _.Aliases = aliases
     member internal _.Palette = palette
+
+and [<Sealed>] ThemeCheck internal (name: string, run: Theme -> ThemeViolation list) =
+    member internal _.Name = name
+    member internal _.Run = run
+
+[<RequireQualifiedAccess>]
+module ThemeCheck =
+
+    let create (name: string) (run: Theme -> ThemeViolation list) = ThemeCheck(name, run)
+
+    let name (check: ThemeCheck) = check.Name
 
 [<RequireQualifiedAccess>]
 module Theme =
@@ -566,6 +588,7 @@ module Theme =
         [
             "glyph.badge.ink", "badge.ink"
             "glyph.icon.ink", "icon.ink"
+            "glyph.modifier", "modifier.ink"
             "glyph.selection", "selection"
             "glyph.marker", "marker"
             "glyph.path", "path"
@@ -577,6 +600,7 @@ module Theme =
             "status.warn", "status.warn"
             "status.bad", "status.bad"
             "status.track", "status.track"
+            "status.keyline", "status.keyline"
             "terrain.open", "terrain.open"
             "terrain.blocked", "terrain.blocked"
             "terrain.difficult", "terrain.difficult"
@@ -608,7 +632,7 @@ module Theme =
             yield! numberAliases
         ]
 
-    let private resolve (seed: ThemeSeed) (algorithms: ThemeAlgorithm list) (overrides: ThemeOverride list) =
+    let private resolve (seed: ThemeSeed) (algorithms: ThemeAlgorithm list) (overrides: ThemeOverride list) (checks: ThemeCheck list) =
         let violations = ResizeArray<ThemeViolation>()
         let fail token reason = violations.Add(ThemeViolation(token, reason))
 
@@ -738,7 +762,7 @@ module Theme =
         for alias in
             teamAliases
             @ allegianceAliases
-            @ [ "glyph.unit.body"; "glyph.stale"; "glyph.selection"; "glyph.marker"; "glyph.path"; "cue.focus.outer"; "cue.hover" ] do
+            @ [ "glyph.unit.body"; "glyph.stale"; "glyph.selection"; "glyph.marker"; "glyph.path"; "cue.focus.outer"; "cue.hover"; "status.keyline" ] do
             atLeast target alias "surface.ground" ground
 
         atLeast 3.0 "cue.focus.inner" "cue.focus.outer" (colourOf "cue.focus.outer")
@@ -754,6 +778,11 @@ module Theme =
 
         for alias in [ "status.good"; "status.warn"; "status.bad" ] do
             atLeast 3.0 alias "status.track" (colourOf "status.track")
+
+        atLeast 3.0 "status.track" "status.keyline" (colourOf "status.keyline")
+
+        for on in "glyph.unit.body" :: teamAliases @ allegianceAliases do
+            atLeast 3.0 "glyph.modifier" on (colourOf on)
 
         let palette =
             {
@@ -778,6 +807,8 @@ module Theme =
                 Warn = colourOf "status.warn"
                 Bad = colourOf "status.bad"
                 Track = colourOf "status.track"
+                Keyline = colourOf "status.keyline"
+                ModifierInk = colourOf "glyph.modifier"
                 TerrainOpen = colourOf "terrain.open"
                 TerrainBlocked = colourOf "terrain.blocked"
                 TerrainDifficult = colourOf "terrain.difficult"
@@ -793,15 +824,30 @@ module Theme =
             }
 
         if violations.Count = 0 then
-            Ok(Theme(seed, algorithms, overrides, tokens, aliases, palette))
+            // The added checks (FS.GG.Game#795's distinctness and colour-vision checks, Theme.validate) run on the theme the
+            // built-in rules accept, in order; a check that throws is itself a violation.
+            let theme = Theme(seed, algorithms, overrides, tokens, aliases, palette, checks)
+
+            for check in checks do
+                try
+                    violations.AddRange(check.Run theme)
+                with error ->
+                    fail check.Name ("the check failed: " + error.Message)
+
+            if violations.Count = 0 then Ok theme else Error(List.ofSeq violations)
         else
             Error(List.ofSeq violations)
 
     let create (seed: ThemeSeed) (algorithms: ThemeAlgorithm list) (overrides: ThemeOverride list) =
-        resolve seed algorithms overrides
+        resolve seed algorithms overrides []
+
+    let validate (checks: ThemeCheck list) (theme: Theme) =
+        resolve theme.Seed theme.Algorithms theme.Overrides (theme.Checks @ checks)
+
+    let checks (theme: Theme) = theme.Checks |> List.map (fun c -> c.Name)
 
     let withOverrides (overrides: ThemeOverride list) (theme: Theme) =
-        resolve theme.Seed theme.Algorithms (theme.Overrides @ overrides)
+        resolve theme.Seed theme.Algorithms (theme.Overrides @ overrides) theme.Checks
 
     let name (theme: Theme) = theme.Seed.Name
     let seed (theme: Theme) = theme.Seed
@@ -1298,6 +1344,8 @@ module Theme =
                 Warn = colour "status.warn"
                 Bad = colour "status.bad"
                 Track = colour "status.track"
+                Keyline = colour "status.keyline"
+                ModifierInk = colour "glyph.modifier"
                 TerrainOpen = colour "terrain.open"
                 TerrainBlocked = colour "terrain.blocked"
                 TerrainDifficult = colour "terrain.difficult"
@@ -1314,6 +1362,6 @@ module Theme =
 
         // The map layer is the baked aliases' sources plus the seed numbers: enough for `tokens`, and a theme built
         // from it by `withOverrides` derives again from the seed.
-        Theme(seed, [ ThemeAlgorithm.standard ], [], ThemeTokens(seed.Values), aliases, palette)
+        Theme(seed, [ ThemeAlgorithm.standard ], [], ThemeTokens(seed.Values), aliases, palette, [])
 
     let presets = [ classic ]

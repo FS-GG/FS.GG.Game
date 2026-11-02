@@ -228,6 +228,14 @@ type ThemeViolation =
     /// The rule and the measured value.
     member Reason: string
 
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module ThemeViolation =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A violation of `token`, for a `ThemeCheck` to report.
+    val create: token: string -> reason: string -> ThemeViolation
+
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// A resolved, validated theme (ADR D4): seed, map and alias tokens. Glyph drawing reads its alias tokens only. A theme
@@ -235,6 +243,25 @@ type ThemeViolation =
 /// `Theme.create`, `Theme.ofDtcg` or a preset (`Theme.classic`).
 [<Sealed>]
 type Theme
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// A named validation rule beyond the built-in ones, such as FS.GG.Game#795's ΔE2000 distinctness and colour-vision
+/// checks: it reads a theme the built-in rules accept and returns what it breaks. Built by `ThemeCheck.create`; added
+/// by `Theme.validate`, and run again by `Theme.withOverrides`.
+and [<Sealed>] ThemeCheck
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module ThemeCheck =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A check named `name` (a check that throws is reported as a violation of `name`).
+    val create: name: string -> run: (Theme -> ThemeViolation list) -> ThemeCheck
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The check's name.
+    val name: check: ThemeCheck -> string
 
 /// Public contract module exposed by the FS.GG.Game.Render package.
 [<RequireQualifiedAccess>]
@@ -250,14 +277,26 @@ module Theme =
     ///   `cue.focus.outer` and `cue.hover`;
     /// - 3:1 between colours that touch: `cue.focus.inner` on `cue.focus.outer`; `glyph.badge.ink` on the body and on
     ///   every team and allegiance colour; `glyph.icon.ink` on the body and every allegiance colour; every team colour
-    ///   on the body (the team mark sits between fill and body); every status fill on `status.track`.
+    ///   on the body (the team mark sits between fill and body); every status fill on `status.track`; `status.track`
+    ///   on `status.keyline`; `glyph.modifier` on the body and on every team and allegiance colour. `status.keyline` is
+    ///   also held to the ground floor.
     val create:
         seed: ThemeSeed -> algorithms: ThemeAlgorithm list -> overrides: ThemeOverride list -> Result<Theme, ThemeViolation list>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The theme with `overrides` applied after its own, validated again (a player's team-colour override: an override
-    /// that fails is refused with its reasons).
+    /// The theme with `overrides` applied after its own, validated again by the built-in rules and every check the
+    /// theme carries (a player's team-colour override: an override that fails is refused with its reasons).
     val withOverrides: overrides: ThemeOverride list -> theme: Theme -> Result<Theme, ThemeViolation list>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The theme validated again with `checks` added after the checks it already carries (ADR D12: the validation
+    /// entry point FS.GG.Game#795's distinctness and colour-vision checks join). The theme it returns carries them, so
+    /// `withOverrides` runs them too: `Theme.create seed algorithms overrides |> Result.bind (Theme.validate checks)`.
+    val validate: checks: ThemeCheck list -> theme: Theme -> Result<Theme, ThemeViolation list>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The names of the checks the theme carries beyond the built-in rules, in order.
+    val checks: theme: Theme -> string list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The `classic` preset: dark, the default (Q10). Its resolved values are baked at build time, and a test compares
@@ -287,10 +326,10 @@ module Theme =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The alias names of this theme, in order: `surface.ground`, `glyph.unit.body`, `glyph.allegiance.*`,
-    /// `glyph.team.0` to the last team, `glyph.badge.ink`, `glyph.icon.ink`, `glyph.selection`, `glyph.marker`,
-    /// `glyph.path`, `glyph.stale`, `cue.focus.outer`, `cue.focus.inner`, `cue.hover`, `status.*`, `terrain.*` (open,
-    /// blocked, difficult, water, void), then the numbers `size.cell`, `stroke.outline`, `stroke.gap`,
-    /// `stroke.bracket` and `stroke.hover`. The set is closed: it grows only through the ADR's own review.
+    /// `glyph.team.0` to the last team, `glyph.badge.ink`, `glyph.icon.ink`, `glyph.modifier`, `glyph.selection`,
+    /// `glyph.marker`, `glyph.path`, `glyph.stale`, `cue.focus.outer`, `cue.focus.inner`, `cue.hover`, `status.*`
+    /// (good, warn, bad, track, keyline), `terrain.*` (open, blocked, difficult, water, void), then the numbers
+    /// `size.cell`, `stroke.outline`, `stroke.gap`, `stroke.bracket` and `stroke.hover`. The set is closed: it grows only through the ADR's own review.
     val aliases: theme: Theme -> string list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
