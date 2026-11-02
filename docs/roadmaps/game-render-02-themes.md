@@ -356,7 +356,8 @@ The proof does not constrain the API.
   - **Under Fable,** in the browser:
     - the five presets derive to exactly the 140 alias hex values .NET baked;
     - 636,056 sampled colours (every third value per channel) round-trip through OKLCH with half up. The full
-      16,777,216 run in .NET, because under the browser's maths they took most of the smoke's 180 s budget;
+      16,777,216 run in .NET. Scaling the sample's 4.2 s gives about 110 s for the full set in the browser, most of the
+      smoke's 180 s budget; a first run with the full set timed out;
     - the grammar accepts the worked example and refuses the role icon with the same typed error as .NET;
     - DTCG round-trips every preset;
     - every colour drawn is one of the preset's CSS variables.
