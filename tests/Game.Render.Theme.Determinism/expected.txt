@@ -1,0 +1,99 @@
+# classic
+surface.ground #222831
+glyph.unit.body #ffffff
+glyph.allegiance.own #408cff
+glyph.allegiance.ally #00a5be
+glyph.allegiance.neutral #28a550
+glyph.allegiance.enemy #eb5046
+glyph.allegiance.unknown #c89600
+glyph.team.0 #db2478
+glyph.team.1 #e56c03
+glyph.team.2 #01a18d
+glyph.team.3 #934fe8
+glyph.team.4 #809703
+glyph.team.5 #c039b9
+glyph.team.6 #0294d9
+glyph.team.7 #5a61f7
+glyph.badge.ink #0d0d0d
+glyph.icon.ink #0d0d0d
+glyph.modifier #0d0d0d
+glyph.selection #ffd600
+glyph.marker #00dcdc
+glyph.path #00dcdc
+glyph.stale #93979c
+cue.focus.outer #ffffff
+cue.focus.inner #0d0d0d
+cue.hover #b6b8bc
+status.good #46c864
+status.warn #f0b428
+status.bad #e63c32
+status.track #0d0d0d
+status.keyline #ffffff
+terrain.open #2d333c
+terrain.blocked #484d55
+terrain.difficult #473218
+terrain.water #0a3452
+terrain.void #15171b
+PASS classic: the baked aliases equal a fresh derivation from ThemeSeed.classic
+PASS classic: every alias resolves
+dtcg classic bytes=12330 digest=273008
+dtcg resolver bytes=709 digest=593761
+PASS dtcg: export then import gives equal resolved hex for every alias
+PASS dtcg: a 20,000-link reference chain is refused without exhausting the stack
+PASS dtcg: a 65-link reference chain is refused, and 64 links are followed
+css classic variables=40 digest=228677
+PASS css: every colour variable is the alias's #rrggbb
+custom 0 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#cf5582,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 1 refused glyph.team.0
+custom 2 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#d45666,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 3 refused glyph.team.0
+custom 4 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#d55948,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 5 refused glyph.team.0
+custom 6 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#d16022,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 7 refused glyph.team.0
+custom 8 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#c96900,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 9 refused glyph.team.0
+custom 10 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#b97600,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 11 refused glyph.team.0
+custom 12 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#a88000,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 13 refused glyph.team.0
+custom 14 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#958900,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 15 refused glyph.team.0
+custom 16 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#7b9300,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 17 refused glyph.team.0
+custom 18 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#589a28,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 19 refused glyph.team.0
+custom 20 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#20a04e,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 21 refused glyph.team.0
+custom 22 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#00a26e,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 23 refused glyph.team.0
+custom 24 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#009f89,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 25 refused glyph.team.0
+custom 26 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#009c9d,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 27 refused glyph.team.0
+custom 28 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#009ab0,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 29 refused glyph.team.0
+custom 30 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#0096c5,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 31 refused glyph.team.0
+custom 32 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#008fdb,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 33 refused glyph.team.0
+custom 34 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#3986e4,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 35 refused glyph.team.0
+custom 36 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#617de6,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 37 refused glyph.team.0
+custom 38 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#7e74e1,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 39 refused glyph.team.0
+custom 40 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#966cd7,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 41 refused glyph.team.0
+custom 42 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#aa64c7,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 43 refused glyph.team.0
+custom 44 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#ba5db3,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 45 refused glyph.team.0
+custom 46 ok #222831,#ffffff,#408cff,#00a5be,#28a550,#eb5046,#c89600,#c6589c,#e56c03,#01a18d,#934fe8,#809703,#c039b9,#0294d9,#5a61f7,#0d0d0d,#0d0d0d,#0d0d0d,#ffd600,#00dcdc,#00dcdc,#93979c,#ffffff,#0d0d0d,#b6b8bc,#46c864,#f0b428,#e63c32,#0d0d0d,#ffffff,#2d333c,#484d55,#473218,#0a3452,#15171b
+custom 47 refused glyph.team.0
+custom digest=598202
+gamut grid points=38556 digest=427031
+round trip colours=16777216 failures=0
+PASS round trip: every 8-bit colour survives toOklch then ofOklch
+grey contrast digest=851937
+theme-determinism checks=7 failed=0 digest=385899

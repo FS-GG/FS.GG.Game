@@ -268,6 +268,78 @@ let tests =
                                     Expect.isGreaterThanOrEqual both bare (sprintf "size %g: %A/%A with badges %d/%d keep the bare frames' %d" size a b (ta + 1) (tb + 1) bare)
             }
 
+            test "the kit's identity samples equal the proof's prototype, and reproduce ADR D1's D6-sample matrix exactly (#789)" {
+                // ADR D1, the table "With D6's corner and quarter-edge samples", rows 12, 16, 24 and 32, in the order
+                // Own/Ally, Own/Neutral, Own/Enemy, Own/Unknown, Ally/Neutral, Ally/Enemy, Ally/Unknown, Neutral/Enemy,
+                // Neutral/Unknown, Enemy/Unknown. Each cell is the smaller of the two directions.
+                let table =
+                    [
+                        12.0, [ 4; 6; 16; 16; 10; 24; 28; 16; 16; 28 ]
+                        16.0, [ 4; 6; 16; 16; 10; 40; 28; 16; 16; 28 ]
+                        24.0, [ 4; 6; 16; 16; 10; 54; 28; 16; 16; 28 ]
+                        32.0, [ 4; 6; 16; 16; 10; 93; 28; 16; 16; 28 ]
+                    ]
+
+                let kit a b = differingWith ScenePixels.identityExpectations a b
+                let key (e: PixelExpectation) = e.Point.X, e.Point.Y, e.Colour
+
+                for size, row in table do
+                    for a in Glyphs.identities do
+                        let nodes: Scene = { Nodes = frameNodes a size }
+                        Expect.equal
+                            (ScenePixels.identityExpectations 96.0 96.0 nodes |> List.map key)
+                            (Glyphs.identitySamples 96.0 96.0 nodes |> List.map key)
+                            (sprintf "size %g: %A, the kit's samples are the prototype's" size a)
+
+                    let pairs =
+                        [
+                            for i in 0 .. Glyphs.identities.Length - 1 do
+                                for j in i + 1 .. Glyphs.identities.Length - 1 do
+                                    yield Glyphs.identities.[i], Glyphs.identities.[j]
+                        ]
+
+                    let measured =
+                        pairs
+                        |> List.map (fun (a, b) -> min (kit (frameNodes a size) (frameNodes b size)) (kit (frameNodes b size) (frameNodes a size)))
+
+                    Expect.equal measured row (sprintf "size %g: the D6-sample row of ADR D1" size)
+
+                for d in 1..9 do
+                    let badge: Scene =
+                        { Nodes = SceneNode.Rectangle((0.0, 0.0, 16.0, 16.0), Glyphs.Theme.standard.Ground) :: Glyphs.badge d { X = 5.0; Y = 3.0 } 2.0 Glyphs.Theme.standard.BadgeInk }
+
+                    Expect.equal
+                        (ScenePixels.identityExpectations 16.0 16.0 badge |> List.map key)
+                        (Glyphs.identitySamples 16.0 16.0 badge |> List.map key)
+                        (sprintf "badge %d: the kit's samples are the prototype's" d)
+            }
+
+            test "a path label drawn last leaves the board decided outside its bounds; a text label still undecides it (ADR D6)" {
+                let board = Glyphs.proofScene Glyphs.Theme.standard Glyphs.Theme.colourBlindSafe
+                let path =
+                    SceneNode.Path(
+                        { Commands = [ MoveTo { X = 236.0; Y = 116.0 }; LineTo { X = 244.0; Y = 116.0 }; LineTo { X = 240.0; Y = 124.0 }; Close ]; FillType = Winding },
+                        {
+                            Fill = Some Glyphs.Theme.standard.Focus
+                            Stroke = None
+                            Opacity = 1.0
+                            Antialias = true
+                            BlendMode = SrcOver
+                            Shader = None
+                            ColorFilter = NoColorFilter
+                            MaskFilter = NoMaskFilter
+                            ImageFilter = NoImageFilter
+                            PathEffect = NoPathEffect
+                        }
+                    )
+                let alone = ScenePixels.expectations Glyphs.proofWidth Glyphs.proofHeight board
+                let withPath = ScenePixels.expectations Glyphs.proofWidth Glyphs.proofHeight { Nodes = board.Nodes @ [ path ] }
+                let key (e: PixelExpectation) = e.Point.X, e.Point.Y, e.Colour
+                Expect.isNonEmpty alone "the board alone is decided"
+                // The path's reach is 235..245 x 115..125: no glyph sample lies there, so the board keeps every pixel.
+                Expect.equal (withPath |> List.map key) (alone |> List.map key) "the board keeps every decided pixel"
+            }
+
             test "today a text node drawn last leaves no pixel of the board decided (the gap ADR D6 closes)" {
                 let board = Glyphs.proofScene Glyphs.Theme.standard Glyphs.Theme.colourBlindSafe
                 let label = SceneNode.Text((240.0, 120.0), "x", Glyphs.Theme.standard.Focus)

@@ -135,7 +135,7 @@ unchanged) and drives a host through the Elmish messages:
 | `late failure (adapter)` | For each backend with a `LateFailureTrigger` (Pixi in the browser, through `BrowserConformance.pixiLateFailure`), the trigger makes the adapter's next mount fail asynchronously. The adapter's own report (`OnFailure`, then `LateFailureRoute`, then `failBackend`) falls back to SVG with the state intact and releases the mount. A failure of a mount already disposed is not reported, so the live mount of the same backend stays: this is the live-mount rule, checked against the adapter. |
 | `present failure` | The kit makes the next `Present` of each backend throw. A canvas backend falls back to SVG with the latest state and is released. The default backend is released and mounted again with the latest state: one live mount remains and `Refusal` names the cause. If the remount fails too, `Failed` is reported with nothing mounted or held, and the next state mounts and shows. |
 | `viewport` | When the subject declares one (`RendererConformance.withViewport expected actual`): every state, then the states back again, is presented at its own viewport as the backend reports it; one live mount remains, each superseded one disposed once; and where the registry declares the viewport, the mount is replaced exactly when it changes. The subject must hold two different viewports. |
-| `pixels` | Only when `RendererConformance.withPixels expected probe` declares what the states must draw (FS.GG.Game#753; `ScenePixels.expectations (view state)` lists the pixels a scene decides: each node's middle, the first whole pixel inside and outside each rectangle edge, the pixel one clear of each round shape's extremes, and every pixel no node touches, which must be the clear colour so a node drawn larger than declared fails; a node that overhangs the canvas is read at its edge). On every backend each state's pixels are read back (`BrowserConformance.pixelProbe container width height`: canvases and the rasterised SVG, read the same way, with the scene's size mapped to a canvas styled to another size) and must be the scene's colours, so a node drawn at another position, size or layer fails. With `withInteraction` too, the pixels just inside and just outside each edge of every box object differ, and a real press on each lands where `SceneInteraction.hitTest` says: the hit region and the drawn edge coincide. |
+| `pixels` | Only when `RendererConformance.withPixels expected probe` declares what the states must draw (FS.GG.Game#753; `ScenePixels.expectations (view state)` lists the pixels a scene decides: each node's middle, the first whole pixel inside and outside each rectangle edge, the pixel one clear of each round shape's extremes, and every pixel no node touches, which must be the clear colour so a node drawn larger than declared fails; a node that overhangs the canvas is read at its edge; a node the kit does not model leaves open only the pixels inside its bounds when they are known, such as a stroked path, line, image or clip, FS.GG.Game#789; `ScenePixels.identityExpectations` adds each rectangle's corner and quarter-edge pixels, which tell identity frames and index badges apart). On every backend each state's pixels are read back (`BrowserConformance.pixelProbe container width height`: canvases and the rasterised SVG, read the same way, with the scene's size mapped to a canvas styled to another size) and must be the scene's colours, so a node drawn at another position, size or layer fails. With `withInteraction` too, the pixels just inside and just outside each edge of every box object differ, and a real press on each lands where `SceneInteraction.hitTest` says: the hit region and the drawn edge coincide. |
 | `interaction` | Only when `RendererConformance.withInteraction` declares the game's interaction (FS.GG.Game#751), with REAL input (trusted pointer and keyboard events and real focus). The states declare valid selectable objects. On every backend: the input host is attached while mounted; the accessible mirror lists every object, in order, with its label; a pointer move leaves the surface at `tabindex` 0; the arrows move the focus and Enter selects through the game's own rule, and Escape clears; a pointer press on each object a pointer can reach selects it (the backend's hit test agrees with `SceneInteraction.hitTest`), and a press where no object is asks for nothing; Tab walks the mirror entries and Space selects one; keyboard focus stays on that entry across the selection's Present and across unchanged Presents; an unchanged Present does not write the live status; the selection survives a switch away and back; switching away and disposing the host release the input host. |
 
 `Resources` must observe the page independently of the adapter. `BrowserConformance.resources` counts SVG
@@ -187,10 +187,66 @@ Adapter authors keep two obligations the kit checks:
 - An adapter that initialises asynchronously reports a late failure only while its own mount is undisposed.
   The driver cannot tell two mounts of the same backend apart.
 
+### Theme tokens (FS.GG.Game#789)
+
+A `Theme` is the view input every glyph colour, stroke and size comes from (ADR
+`docs/roadmaps/game-render-02-glyphs.md`, D4 and D11). It has three layers:
+
+- the **seed** (`ThemeSeed`): a small closed set of named colours and numbers, such as `ground`, `ink`, the allegiance
+  and team hues, `contrastTarget`, `cell` and `minCssPerUnit`;
+- the **map** (`ThemeTokens`): what the algorithms derive, in order (`ThemeAlgorithm.standard` first);
+- the **alias** layer: the closed set of names glyph code reads, such as `glyph.team.0`, `cue.focus.outer` and
+  `size.cell`.
+
+`Theme.create seed algorithms overrides` returns the theme or every violation: opaque colours only, a 3:1 WCAG 2 floor
+against the ground (`contrastTarget` raises it), and 3:1 between colours that touch. `Theme.withTeamColour` re-validates a
+player's team colour, the only token a player sets; no override can lower the seed's floors (`contrastTarget`,
+`minCssPerUnit`, `hueCapacity.*`). `Theme.validate checks theme` adds named `ThemeCheck`s, such as FS.GG.Game#795's
+distinctness and colour-vision checks; the theme carries them, so `Theme.withTeamColour` and `Theme.withOverrides` run them again.
+`Theme.classic` is the baked default preset. FS.GG.Game#795 adds the other presets.
+
+Colours are derived in OKLCH and quantised with a clamp then `Floor(v + 0.5)`. Contrast is computed on the 8-bit values
+through a committed table, so .NET on Linux and Windows and node (through Fable) give the same bytes.
+`scripts/test-theme-determinism.sh` checks this against `tests/Game.Render.Theme.Determinism/expected.txt`, including the
+full 8-bit round trip. `Theme.cssVariables` and `Theme.hex` export the aliases for the parts of a game the Scene does not
+draw. `Theme.toDtcg`, `Theme.ofDtcg` and `Theme.dtcgResolver` read and write DTCG 2025.10 token files, preferring `hex` on
+import. To regenerate the baked preset after an algorithm change, run
+`dotnet run --project tests/Game.Render.Theme.Determinism -- --bake src/Game.Render/ThemeBaked.fs`, then regenerate
+`expected.txt`.
+
+### Glyphs (FS.GG.Game#789)
+
+`Glyphs.draw theme glyph` draws one glyph in the portable profile: opaque rectangles, circles and ellipses only, so SVG,
+Pixi and Babylon draw it and `ScenePixels` decides it. A `GlyphSpec` says what a glyph means, never its colours:
+
+- a family, an anchor and a footprint;
+- an identity, whose frame shape the library fixes after APP-6 from bars on whole units;
+- optionally an icon, a team, a size or lightness step, inner modifiers and amplifiers.
+
+`GlyphDrawing.frame` is the hit bounds: the frame's drawn box, independent of state, amplifiers and brackets.
+`GlyphDrawing.extent` adds the cue reserve and the amplifiers.
+
+`Glyphs.scene` draws in passes: every amplifier, then every body, then every selection bracket. In the body, each frame
+comes before its team ring, icon, modifiers and, last, its team badge. The badge is drawn from 22 units (one digit) or
+33 (two digits; team numbers never wrap). While a mandatory badge takes the inner centre of a 22 to 39-unit frame, the
+icon slot is unavailable: `Glyphs.iconSlotAvailable` says so before drawing.
+
+`Glyphs.cues` and `Glyphs.cuesHover` are themed cue layers for `SceneInteraction.withCues`, and read the theme on every
+draw. `GlyphConformance.cases` is the kit's glyph section; each backend runs it through its pixel probe. It covers:
+
+- the starter set per theme against a swapped theme;
+- 20 identity pairs, bare and with badges;
+- 90 digit pairs;
+- box edges;
+- the dense board against its bodies-first control;
+- the theme switch A, B, A with the focus ring;
+- two monochrome teams told apart by their badges.
+
 ### Fable and the browser host
 
 The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneInteraction`,
-`SceneRenderers` and `RendererConformance`, each `.fsi` and `.fs`) so a Fable-compiled browser host can register adapters
+`SceneRenderers`, `RendererConformance`, `Theme`, `Glyphs` and `GlyphConformance`, each `.fsi` and `.fs`, with the baked
+`ThemeBaked.fs`) so a Fable-compiled browser host can register adapters
 against the same `RendererRegistry` and run the conformance kit. `Adapter` and
 `DefaultKeymap` are .NET-only and are not in that view. The view is first published in 0.18.0 (0.17.0 carries no
 Fable view). Its packed `fable/FS.GG.Game.Render.fsproj` lists its sources unconditionally, because Fable does not

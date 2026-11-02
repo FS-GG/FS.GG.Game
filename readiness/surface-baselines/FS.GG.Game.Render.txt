@@ -1,4 +1,6 @@
 FS.GG.Game.Render.Adapter
+FS.GG.Game.Render.Amplifier
+FS.GG.Game.Render.AmplifierSlot
 FS.GG.Game.Render.CommandAck
 FS.GG.Game.Render.CommandEnvelope
 FS.GG.Game.Render.CommandEnvelope`1
@@ -13,6 +15,14 @@ FS.GG.Game.Render.CueContext
 FS.GG.Game.Render.DefaultKeymap
 FS.GG.Game.Render.Displayed
 FS.GG.Game.Render.Displayed`1
+FS.GG.Game.Render.Glyph
+FS.GG.Game.Render.GlyphCase
+FS.GG.Game.Render.GlyphConformance
+FS.GG.Game.Render.GlyphDrawing
+FS.GG.Game.Render.GlyphFamily
+FS.GG.Game.Render.GlyphSpec
+FS.GG.Game.Render.GlyphState
+FS.GG.Game.Render.Glyphs
 FS.GG.Game.Render.GuestCall
 FS.GG.Game.Render.GuestCall`1
 FS.GG.Game.Render.GuestIntent`2
@@ -33,6 +43,9 @@ FS.GG.Game.Render.GuestReply+Refused
 FS.GG.Game.Render.GuestReply+Tags
 FS.GG.Game.Render.GuestRequest
 FS.GG.Game.Render.GuestRequest`2
+FS.GG.Game.Render.IconRef
+FS.GG.Game.Render.Identity
+FS.GG.Game.Render.Identity+Tags
 FS.GG.Game.Render.InputAction
 FS.GG.Game.Render.InputAction+Tags
 FS.GG.Game.Render.InputEvent
@@ -51,7 +64,9 @@ FS.GG.Game.Render.InteractionProbe
 FS.GG.Game.Render.InteractiveScene
 FS.GG.Game.Render.LateFailureTrigger
 FS.GG.Game.Render.MirrorEntry
+FS.GG.Game.Render.ModifierRef
 FS.GG.Game.Render.ObjectAccess
+FS.GG.Game.Render.Oklch
 FS.GG.Game.Render.PipelineEffect`3
 FS.GG.Game.Render.PipelineEffect`3+ApplyLocal
 FS.GG.Game.Render.PipelineEffect`3+ArmDeadline
@@ -133,3 +148,11 @@ FS.GG.Game.Render.SelectionRequest
 FS.GG.Game.Render.SelectionRequest+Select
 FS.GG.Game.Render.SelectionRequest+Tags
 FS.GG.Game.Render.SelectionRoute
+FS.GG.Game.Render.Theme
+FS.GG.Game.Render.ThemeAlgorithm
+FS.GG.Game.Render.ThemeCheck
+FS.GG.Game.Render.ThemeColour
+FS.GG.Game.Render.ThemeOverride
+FS.GG.Game.Render.ThemeSeed
+FS.GG.Game.Render.ThemeTokens
+FS.GG.Game.Render.ThemeViolation

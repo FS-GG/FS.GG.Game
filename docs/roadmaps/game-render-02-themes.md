@@ -24,10 +24,12 @@ frames, the token layers, the algorithm signature, the alias names, `Theme` as a
 | `ThemeColour`: OKLCH, gamut mapping, half-up quantisation, the sRGB table, contrast, hex | CIELAB, CIEDE2000, Machado simulation and Leonardo-style solving, which `ThemeColour` does not ship |
 
 **Root's ruling on the presets:** #795's derivation is the **source of truth for every preset, `classic` included**.
-#802's baked `classic` (`src/Game.Render/ThemeBaked.fs` at `9de9044e`) is a stand-in, regenerated from #795's
-derivation when #795's implementation lands. The two differ today in 27 of the 35 colour aliases, for example
-`glyph.team.1` is `#b15900` here and `#eb5046` in #802. #802's baked `classic` sets each team colour equal to an
-allegiance colour, which the #802 review flagged: the ring vanished at 1.00:1 before erratum E1's keyline.
+#802's baked `classic` (`src/Game.Render/ThemeBaked.fs`, merged at `8f9ced1`) is a stand-in, regenerated from #795's
+derivation when #795's implementation lands.
+- **Today** the two differ in 27 of the 35 colour aliases. For example, `glyph.team.1` is `#b15900` here and `#e56c03` in
+  #802.
+- **At the review** (`9de9044e`), #802's `classic` set each team colour equal to an allegiance colour (`#eb5046`, the
+  enemy's). The #802 review flagged it, because the ring vanished at 1.00:1 before erratum E1's keyline.
 
 **Inputs:**
 - The prior-art research on #795 (issuecomment-6564559497).
@@ -36,12 +38,15 @@ allegiance colour, which the #802 review flagged: the ring vanished at 1.00:1 be
   builder must fail at build time.
 - Root's decisions on the glyph ADR's questions (#789): **Q6**, no Scene text in v1; **Q11**, the ΔE thresholds are
   provisional and calibrated here; **Q12**, presets are baked.
-- The #789 owner's answer on names (#789 issuecomment-6567349935), #802's `Theme.fsi` at `9de9044e`, and the glyph ADR's
-  errata E1 (the team ring's layout) to E5.
+- The #789 owner's answer on names (#789 issuecomment-6567349935), #802's `Theme.fsi` (`9de9044e`, merged at
+  `8f9ced1`), part 3's `Glyphs.fsi` (`a567a25`), and the glyph ADR's errata E1 (the team ring's layout) to E5.
 - The independent review of #805 at `3ddb9ee7` (REQUEST_CHANGES), answered below.
 
-**Proof:** `FS.GG.Game.Reference.Experimental`, which is not packed. #802's types are not merged yet, so the proof keeps
-**stand-ins**, each marked in its source as replaced by #802 (or #789's part 3) on merge:
+**Proof:** `FS.GG.Game.Reference.Experimental`, which is not packed.
+- #802 (`8f9ced1`) and #789's part 3 (#806, `a567a25`) merged to main while this revision was under way, and this branch
+  merges them.
+- The proof still keeps **stand-ins**, each marked in its source as replaced by #802 or part 3. The swap is the first
+  step of #795's implementation PR, not this design PR.
 
 | Proof stand-in | Replaced by |
 |---|---|
@@ -461,7 +466,7 @@ The proof does not constrain the API.
     - the 40-unit side-by-side layout;
     - the worked example and its mirror labels.
 - **Browser smoke** (`runThemeProof` in `tests/Render.Browser.Smoke/Program.fs`) adds **30 checks**, and `MIN_CHECKS`
-  goes from 511 to **542**. Main already runs 512, so the old floor was one short.
+  goes from main's 605 to **635**.
   - **Under Fable,** in the browser:
     - the five presets derive to exactly the 175 alias hex values .NET baked;
     - all 16,777,216 colours round-trip, in a plain loop outside the async block (3.6 s in the software run);
@@ -539,8 +544,8 @@ None blocks the implementation.
 
 ## Implementation plan (after acceptance)
 
-1. **#802 and #789's part 3:** `Theme` and its API, the alias set, D11, `GlyphSpec`, the drawing (E1) and the named
-   frame constants. Amendment A1 and Q-T12, if #802 accepts them.
+1. **#802 and #789's part 3, merged** (`8f9ced1`, `a567a25`): `Theme` and its API, the alias set, D11, `GlyphSpec`, the
+   drawing (E1) and the named frame constants. Amendment A1 and Q-T12 remain to be decided with the #789 owner.
 2. **#795 on top of them, in FS.GG.Game.Render:**
    - `Symbology` and `Encode`, with `spec`'s run-time checks;
    - CIELAB, CIEDE2000, Machado and `solve`, beside `ThemeColour`;
