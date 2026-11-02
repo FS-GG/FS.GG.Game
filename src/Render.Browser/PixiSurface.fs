@@ -131,12 +131,12 @@ module PixiSurface =
 
         P.fill slot.Node (rgb slot.Fill) (float slot.Fill.Alpha / 255.0)
 
-    /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
-    /// whose hit test is Pixi's own `EventBoundary` over one hit region per selectable object.
+    /// The mount behind `mountScene`, `mountInteractive` and `mountInput`: with a `host`, the mount also holds an input
+    /// host whose hit test is Pixi's own `EventBoundary` over one hit region per selectable object.
     let private mountWith
         (container: HTMLElement)
         (options: PixiOptions)
-        (interactive: (SelectionRequest -> unit) option)
+        (host: InputHost.CanvasHost option)
         (first: InteractiveScene)
         : Result<RendererMount<InteractiveScene>, string> =
         let scene = first.Scene
@@ -245,24 +245,6 @@ module PixiSurface =
                     |> Seq.tryFind (fun (region, _) -> obj.ReferenceEquals(box region, hit))
                     |> Option.map snd
 
-                let input =
-                    interactive
-                    |> Option.map (fun report ->
-                        reregion first.Objects
-
-                        CanvasInput.attach
-                            container
-                            canvas
-                            RendererBackend.Pixi
-                            options.Label
-                            options.Width
-                            options.Height
-                            hitTest
-                            report
-                            first)
-
-                acquire (fun () -> input |> Option.iter (fun host -> host.Dispose()))
-
                 let slots = ResizeArray<Slot>()
                 let latest = ref scene
                 let failed: string option ref = ref None
@@ -342,6 +324,56 @@ module PixiSurface =
                     // application's own ticker renders every later frame.
                     P.renderApplication app
 
+                // The input host: `update frame` presents a frame to it, and `drawsItself` says whether it draws the frame
+                // (with its cue layer) or leaves that to `Present`.
+                let input =
+                    match host with
+                    | None -> None
+                    | Some(InputHost.CanvasHost.Selection report) ->
+                        reregion first.Objects
+
+                        let attached =
+                            CanvasInput.attach
+                                container
+                                canvas
+                                RendererBackend.Pixi
+                                options.Label
+                                options.Width
+                                options.Height
+                                hitTest
+                                report
+                                first
+
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), false)
+                    | Some(InputHost.CanvasHost.Input(spec, report)) ->
+                        reregion first.Objects
+
+                        let draw (next: Scene) (cues: SceneNode list) =
+                            let drawn = { next with Nodes = next.Nodes @ cues }
+                            latest.Value <- drawn
+
+                            if ready.Value then
+                                reconcile drawn
+
+                        let attached =
+                            InputHost.attach
+                                canvas
+                                InputHost.Ownership.Fallback
+                                RendererBackend.Pixi
+                                options.Label
+                                options.Width
+                                options.Height
+                                false
+                                hitTest
+                                spec
+                                report
+                                draw
+                                first
+
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), true)
+
+                acquire (fun () -> input |> Option.iter (fun (_, dispose, _) -> dispose ()))
+
                 let initialised =
                     P.initApplication
                         app
@@ -404,23 +436,26 @@ module PixiSurface =
                                     | None ->
                                         let next = frame.Scene
 
-                                        match input with
-                                        | Some host ->
-                                            match SceneInteraction.problems frame.Objects with
-                                            | [] -> ()
-                                            | problems ->
-                                                failwithf
-                                                    "Pixi surface refused the objects: %s"
-                                                    (String.concat "; " problems)
+                                        let drawsItself =
+                                            match input with
+                                            | Some(update, _, drawsItself) ->
+                                                match SceneInteraction.problems frame.Objects with
+                                                | [] -> ()
+                                                | problems ->
+                                                    failwithf
+                                                        "Pixi surface refused the objects: %s"
+                                                        (String.concat "; " problems)
 
-                                            reregion frame.Objects
-                                            host.Update frame
-                                        | None -> ()
+                                                reregion frame.Objects
+                                                update frame
+                                                drawsItself
+                                            | None -> false
 
-                                        latest.Value <- next
+                                        if not drawsItself then
+                                            latest.Value <- next
 
-                                        if ready.Value then
-                                            reconcile next
+                                            if ready.Value then
+                                                reconcile next
                         Dispose =
                             fun () ->
                                 if not disposed.Value then
@@ -468,11 +503,23 @@ module PixiSurface =
                     (String.concat "; " (SceneInteraction.problems frame.Objects))
             )
         else
-            mountWith container options (Some report) frame
+            mountWith container options (Some(InputHost.CanvasHost.Selection report)) frame
+
+    let mountInput
+        (container: HTMLElement)
+        (options: PixiOptions)
+        (spec: InputHostSpec)
+        (report: InputEvent -> unit)
+        (frame: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        match SceneInteraction.problems frame.Objects with
+        | [] -> mountWith container options (Some(InputHost.CanvasHost.Input(spec, report))) frame
+        | problems -> Error(sprintf "Pixi surface refused the objects: %s" (String.concat "; " problems))
 
     let surface (container: HTMLElement) (options: PixiOptions) : SceneSurface =
         SceneSurface.create RendererBackend.Pixi (mountScene container options)
         |> SceneSurface.withInteraction (mountInteractive container options)
+        |> SceneSurface.withInputHost (mountInput container options)
 
     let adapter (container: HTMLElement) (options: PixiOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
         SceneSurface.adapter view (surface container options)

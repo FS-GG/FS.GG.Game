@@ -39,9 +39,25 @@ module SvgSurface =
         frame: InteractiveScene ->
             Result<RendererMount<InteractiveScene>, string>
 
+    /// The SVG input-host mount (FS.GG.Game#788): the retained `SvgBrowser` root draws each frame's Scene with `spec`'s
+    /// cue layer above it, and the input host owns every input on the root (its own pan, zoom and keyboard focus never
+    /// run). The root is the single Tab stop, a `role=listbox` or `role=grid` labelled `options`' label, and owns the
+    /// mirror's items (a visually hidden group appended to `container`) through `aria-owns`; `aria-activedescendant`
+    /// names the focused object's item. The hit test is `SceneInteraction.hitTest`. Objects that
+    /// `SceneInteraction.problems` rejects, or that use the reserved id `game-render:scene`, are refused at mount and
+    /// raise from `Present`.
+    val mountInput:
+        container: HTMLElement ->
+        options: SvgBrowserOptions ->
+        spec: InputHostSpec ->
+        report: (InputEvent -> unit) ->
+        frame: InteractiveScene ->
+            Result<RendererMount<InteractiveScene>, string>
+
     /// `mountScene container options` as the SVG `SceneSurface` for `SceneRenderers` (`SceneRenderers.create view
     /// (surface ...).MountScene`, or `BrowserRenderers.declare`, which does that for all three backends).
-    /// It is interactive through `mountInteractive container options`.
+    /// It is interactive through `mountInteractive container options` and has the input host `mountInput container
+    /// options`.
     val surface: container: HTMLElement -> options: SvgBrowserOptions -> SceneSurface
 
     /// The SVG-default registry for a game-state type, mounted in `container`: `RendererRegistry.svg` with

@@ -23,6 +23,10 @@
     <Compile Include="generated/PixiBindings.fs" />
     <Compile Include="CanvasInput.fsi" />
     <Compile Include="CanvasInput.fs" />
+    <Compile Include="InputLayout.fsi" />
+    <Compile Include="InputLayout.fs" />
+    <Compile Include="InputHost.fsi" />
+    <Compile Include="InputHost.fs" />
     <Compile Include="SvgSurface.fsi" />
     <Compile Include="SvgSurface.fs" />
     <Compile Include="RetainedSvgSurface.fsi" />

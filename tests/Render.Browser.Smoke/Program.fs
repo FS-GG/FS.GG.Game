@@ -2630,6 +2630,7 @@ async {
         do! runScaledBoard ()
         do! runOverhang ()
         do! RetainedSurface.run check
+        do! InputHostSmoke.run check
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)
