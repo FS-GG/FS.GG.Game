@@ -192,11 +192,15 @@ module PixiSurface =
                 canvas.setAttribute ("data-renderer", "pixi")
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
-                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas fills a frame the host
-                // owns, out of layout, so its width and height attributes never size anything.
+                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas sits in a frame the
+                // host owns, out of layout at the frame's contain-fit, so its width and height attributes never size
+                // anything and the scene is never drawn at two scales.
                 let frame =
                     if sharpens then
-                        Some(CanvasSizing.frame container canvas "pixi" options.Width options.Height)
+                        let made = CanvasSizing.frame container "pixi" options.Width options.Height
+                        made.appendChild canvas |> ignore
+                        CanvasSizing.place canvas options.Width options.Height
+                        Some made
                     else
                         container.appendChild canvas |> ignore
                         None
@@ -346,15 +350,20 @@ module PixiSurface =
                     P.renderApplication app
 
                 // FS.GG.Game#788: an input-host mount renders at the presented density, its backing store derived from
-                // the presented CSS size and the device pixel ratio (CanvasSizing), so the cue layer's 2 CSS px bands are
-                // drawn sharp at any presented size and on a high-DPI screen.
+                // the frame's contain-fit and the device pixel ratio (CanvasSizing), so the cue layer's 2 CSS px bands
+                // are drawn sharp at any presented size and on a high-DPI screen. The fit is uniform, so one resolution
+                // serves both axes.
                 let tracker =
                     match frame with
                     | Some frame ->
                         Some(
-                            CanvasSizing.track frame (fun backingWidth _ _ _ ->
+                            CanvasSizing.track frame canvas options.Width options.Height (fun backingWidth backingHeight _ ->
                                 if ready.Value && not destroyed.Value && not disposed.Value then
-                                    resizeAt app options.Width options.Height (float backingWidth / options.Width)
+                                    // One resolution for both axes (the fit is uniform): the screen is the scene width
+                                    // and the backing height at that resolution, so the backing store is exactly the
+                                    // snapped fit.
+                                    let resolution = float backingWidth / options.Width
+                                    resizeAt app options.Width (float backingHeight / resolution) resolution
                                     reconcile latest.Value
                                     true
                                 else

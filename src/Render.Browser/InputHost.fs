@@ -18,6 +18,27 @@ module internal InputHost =
         | Selection of report: (SelectionRequest -> unit)
         | Input of spec: InputHostSpec * report: (InputEvent -> unit)
 
+    /// The scene point [x, y] under `pointer` on `surface` (a `sceneWidth` wide scene); see `localPoint`.
+    [<Emit("(() => { const el = $0, e = $1; if (typeof SVGSVGElement !== 'undefined' && el instanceof SVGSVGElement) { const m = el.getScreenCTM(); if (m) { const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()); return [p.x, p.y] } } const own = parseFloat(getComputedStyle(el).width) || 0; if (e.target === el && own > 0) { let z = 1; for (let a = el; a; a = a.parentElement) { const v = parseFloat(getComputedStyle(a).zoom); if (v > 0) z *= v } const s = own / $2; return [e.offsetX / z / s, e.offsetY / z / s] } const b = el.getBoundingClientRect(); const k = b.width > 0 ? b.width / $2 : 1; return [(e.clientX - b.left) / k, (e.clientY - b.top) / k] })()")>]
+    let private pointInScene (_surface: Element) (_pointer: MouseEvent) (_sceneWidth: float) : float[] = jsNative
+
+    /// The cue layer's top-level rectangles with their edges on whole device px (`unit` device px per scene unit; the
+    /// surface's origin is on a device px, CanvasSizing): two bands that share an edge still share it, and a band of N
+    /// CSS px is presented as solid device px at any scale instead of anti-aliased across a pixel boundary.
+    let private snapToDevice (unit: float) (nodes: SceneNode list) =
+        if not (unit > 0.0) || System.Double.IsInfinity unit then
+            nodes
+        else
+            let snap (v: float) = System.Math.Round(v * unit) / unit
+
+            nodes
+            |> List.map (fun node ->
+                match node with
+                | SceneNode.Rectangle((x, y, w, h), fill) ->
+                    let left, top = snap x, snap y
+                    SceneNode.Rectangle((left, top, snap (x + w) - left, snap (y + h) - top), fill)
+                | other -> other)
+
     [<Emit("$0.isComposing === true")>]
     let private isComposing (_event: KeyboardEvent) : bool = jsNative
 
@@ -158,10 +179,13 @@ module internal InputHost =
         let isReachable (id: string) =
             items |> List.exists (fun item -> item.Id = id)
 
+        /// The presented CSS px per scene unit: ONE scale for both axes. The surface sits at its frame's contain-fit
+        /// (CanvasSizing), so this is the fit's scale (its own width / the scene width) times the scale at which any page
+        /// transform or zoom presents it; the cue layer reads it, and the pointer mapping inverts the same placement.
         let cssPerUnit () =
-            let bounds = surface.getBoundingClientRect ()
+            let own = CanvasSizing.ownWidth surface
 
-            if bounds.width > 0.0 then bounds.width / width else 1.0
+            if own > 0.0 then own / width * CanvasSizing.presentedScale surface else 1.0
 
         /// Draw the frame with the cue layer, or only when the cues changed (`always` false).
         let redraw (always: bool) =
@@ -177,8 +201,9 @@ module internal InputHost =
 
             if always || changed then
                 drawnCues <- Some cues
-                let context = CueContext.create cues current.Objects (cssPerUnit ())
-                draw current.Scene (InputHostSpec.cues spec context)
+                let scale = cssPerUnit ()
+                let context = CueContext.create cues current.Objects scale
+                draw current.Scene (snapToDevice (scale * window.devicePixelRatio) (InputHostSpec.cues spec context))
 
         let syncActive () =
             match focused |> Option.filter isReachable with
@@ -288,13 +313,13 @@ module internal InputHost =
             if not disposed then
                 report (InputEvent.create source action target point modifiers repeat)
 
-        let localPoint (clientX: float) (clientY: float) : Point =
-            let bounds = surface.getBoundingClientRect ()
-
-            {
-                X = (clientX - bounds.left) * width / max 1.0 bounds.width
-                Y = (clientY - bounds.top) * height / max 1.0 bounds.height
-            }
+        /// The scene point under a pointer event, through the surface's placement (the fit) and any page transform or
+        /// zoom, rotations included: an SVG root through its screen CTM (viewBox units are scene units); a canvas through
+        /// the event's offset in its own CSS px (the browser maps it through every transform; zoom is divided out) over
+        /// the fit's scale.
+        let localPoint (pointer: MouseEvent) : Point =
+            let at = pointInScene surface pointer width
+            { X = at.[0]; Y = at.[1] }
 
         /// A pointer press moves the focus to the pressed object (when the keyboard reaches it) without showing it.
         let pressFocus (target: string option) =
@@ -343,7 +368,7 @@ module internal InputHost =
             listen surfaceTarget "pointerdown" (fun raw ->
                 if not disposed then
                     let pointer = raw :?> MouseEvent
-                    let point = localPoint pointer.clientX pointer.clientY
+                    let point = localPoint pointer
                     let target = hitTest point
                     let modifiers = modifiersOf raw
 
@@ -411,7 +436,7 @@ module internal InputHost =
                     | _ -> ()
 
                     if pointerType raw <> "touch" then
-                        let point = localPoint pointer.clientX pointer.clientY
+                        let point = localPoint pointer
                         let target = hitTest point
 
                         if target <> hovered then

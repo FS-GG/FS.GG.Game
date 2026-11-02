@@ -41,7 +41,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=859
+MIN_CHECKS=1100
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -226,7 +226,7 @@ printf '%s\n' \
 #    The default flags give WebGL through SwiftShader (software), which is what a CI runner has;
 #    RENDER_SMOKE_BROWSER_FLAGS selects a GPU instead. The result names the WebGL renderer that ran.
 BROWSER_FLAGS="${RENDER_SMOKE_BROWSER_FLAGS:---headless=new --no-sandbox --disable-gpu --enable-unsafe-swiftshader --use-angle=swiftshader}"
-BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-180}"
+BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-300}"
 mkdir -p "$TMP/driver"
 cp tests/Render.Browser.Smoke/driver/package.json tests/Render.Browser.Smoke/driver/package-lock.json \
   tests/Render.Browser.Smoke/driver/run-smoke.mjs "$TMP/driver/"

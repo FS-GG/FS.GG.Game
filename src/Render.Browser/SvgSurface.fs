@@ -259,9 +259,10 @@ module SvgSurface =
             // The retained root draws the frame's Scene with the cue layer above it as ONE non-selectable object; the
             // input host, not the root, owns every input (its capture listeners stop the root's own press, wheel and
             // keys, so the root never pans, zooms or moves its own focus).
-            // FS.GG.Game#788, the surface sizing model (CanvasSizing): the root fills a frame the host owns, out of
-            // layout, as the canvases do, so one page rule on the frame sizes every backend.
-            let surfaceFrame = CanvasSizing.emptyFrame container "svg" options.Width options.Height
+            // FS.GG.Game#788, the surface sizing model (CanvasSizing): the root sits in a frame the host owns, out of
+            // layout at the frame's contain-fit, as the canvases do, so one page rule on the frame sizes every backend
+            // and the root's own `xMidYMid meet` never has to letterbox (the pointer maps through the same box).
+            let surfaceFrame = CanvasSizing.frame container "svg" options.Width options.Height
 
             match SvgBrowser.mount surfaceFrame options (retained options 1 frame.Scene) ignore with
             | Error error ->
@@ -272,7 +273,10 @@ module SvgSurface =
                 let current = ref frame
                 let root = host.Root
                 root.setAttribute ("data-renderer", "svg")
-                CanvasSizing.fill root
+                root.setAttribute ("preserveAspectRatio", "xMidYMid meet")
+                CanvasSizing.place root options.Width options.Height
+                let placement = CanvasSizing.follow surfaceFrame root options.Width options.Height
+                placement.Ensure()
 
                 // The root's own (empty) object-selection group is replaced by the input host's mirror, and its
                 // description, which names that group, goes with it.
@@ -287,6 +291,7 @@ module SvgSurface =
                 | description -> root.removeChild description |> ignore
 
                 let draw (scene: Scene) (cues: SceneNode list) =
+                    placement.Ensure()
                     revision <- revision + 1
 
                     let result =
@@ -338,10 +343,12 @@ module SvgSurface =
                                         try
                                             input.Dispose()
                                         finally
+                                            placement.Dispose()
                                             (host :> System.IDisposable).Dispose()
                                             surfaceFrame.remove ()
                         }
                 with ex ->
+                    placement.Dispose()
                     (host :> System.IDisposable).Dispose()
                     surfaceFrame.remove ()
                     Error(sprintf "SVG surface could not start its input host: %s" ex.Message)

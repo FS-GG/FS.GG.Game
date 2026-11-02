@@ -118,6 +118,45 @@ let private ringTones (surface: Element) (width: float) (height: float) (b: Rect
         return light && dark, sprintf "css=%g dpr=%g inner=%A outer=%A" css window.devicePixelRatio inner outer
     }
 
+/// The focus ring around `b` as presented, at any scale. When every edge of `b` lands on a whole device pixel (the
+/// integer scales of the sizing matrix), `ringTones` (which also samples a quarter CSS px either side of the bands' common
+/// edge). Otherwise an edge falls inside a device pixel, which the renderer anti-aliases, so each band is sampled at its
+/// centre (1 and 3 CSS px out, a whole CSS px from either of its edges): both tones must still be presented solid.
+let private ringBands (surface: Element) (width: float) (height: float) (b: Rect) : Async<bool * string> =
+    async {
+        scrollIntoView surface
+        let bounds = surface.getBoundingClientRect ()
+        let css = bounds.width / width
+        let dpr = window.devicePixelRatio
+        let whole (v: float) = abs (v * dpr - System.Math.Round(v * dpr)) < 0.01
+
+        let aligned =
+            whole (bounds.left + b.X * css)
+            && whole (bounds.left + (b.X + b.Width) * css)
+            && whole (bounds.top + b.Y * css)
+            && whole (bounds.top + (b.Y + b.Height) * css)
+
+        if aligned then
+            let! ok, detail = ringTones surface width height b
+            return ok, "edges on whole device px; " + detail
+        else
+            let around distance =
+                let d = distance / css
+
+                [
+                    { X = b.X - d; Y = b.Y + b.Height / 2.0 }
+                    { X = b.X + b.Width / 2.0; Y = b.Y - d }
+                    { X = b.X + b.Width + d; Y = b.Y + b.Height / 2.0 }
+                    { X = b.X + b.Width / 2.0; Y = b.Y + b.Height + d }
+                ]
+
+            let! inner = presentedPixels surface width height (around 1.0)
+            let! outer = presentedPixels surface width height (around 3.0)
+            let light = inner |> List.forall (fun (r, g, b) -> r >= 231 && g >= 231 && b >= 231)
+            let dark = outer |> List.forall (fun (r, g, b) -> r <= 40 && g <= 40 && b <= 40)
+            return light && dark, sprintf "edges inside device px, band centres; css=%g dpr=%g inner=%A outer=%A" css dpr inner outer
+    }
+
 /// A real input request of `kind` at the scene point `point` of `surface` (a scene of `width` x `height` units).
 let private inputAt (surface: Element) (width: float) (height: float) (kind: string) (point: Point) : Async<unit> =
     let bounds = surface.getBoundingClientRect ()
@@ -787,6 +826,258 @@ let private playAttributes
         do! settle 2
     }
 
+/// The frame's content box as PRESENTED (viewport CSS px, through any page transform or zoom): [left, top, width, height].
+[<Emit("(() => { const s = getComputedStyle($0); const px = v => parseFloat(v) || 0; const r = $0.getBoundingClientRect(); const pl = px(s.paddingLeft), pr = px(s.paddingRight), pt = px(s.paddingTop), pb = px(s.paddingBottom), bl = px(s.borderLeftWidth), br = px(s.borderRightWidth), bt = px(s.borderTopWidth), bb = px(s.borderBottomWidth); const border = s.boxSizing === 'border-box'; const w = px(s.width) - (border ? pl + pr + bl + br : 0), h = px(s.height) - (border ? pt + pb + bt + bb : 0); const k = r.width / (w + pl + pr + bl + br); return [r.left + (bl + pl) * k, r.top + (bt + pt) * k, w * k, h * (r.height / (h + pt + pb + bt + bb))] })()")>]
+let private contentRect (_frame: Element) : float[] = jsNative
+
+/// Decode a base64 PNG of a `clipWidth` CSS px wide region; from the CSS px point (`x`, `y`) in it, the extent (CSS px)
+/// of the run of pixels of the colour there along its row and its column, and that colour: [width, height, r, g, b].
+[<Emit("(async () => { const img = new Image(); img.src = 'data:image/png;base64,' + $0; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0); const d = g.getImageData(0, 0, img.width, img.height).data; const k = img.width / $3; const at = (x, y) => { const i = (y * img.width + x) * 4; return [d[i], d[i + 1], d[i + 2]] }; const x0 = Math.floor($1 * k), y0 = Math.floor($2 * k); const c0 = at(x0, y0); const same = p => Math.abs(p[0] - c0[0]) + Math.abs(p[1] - c0[1]) + Math.abs(p[2] - c0[2]) < 60; let l = x0, r = x0, u = y0, b = y0; while (l > 0 && same(at(l - 1, y0))) l--; while (r < img.width - 1 && same(at(r + 1, y0))) r++; while (u > 0 && same(at(x0, u - 1))) u--; while (b < img.height - 1 && same(at(x0, b + 1))) b++; return [(r - l + 1) / k, (b - u + 1) / k, c0[0], c0[1], c0[2]] })()")>]
+let private extentAt (_png: string) (_x: float) (_y: float) (_clipWidth: float) : JS.Promise<float[]> = jsNative
+
+[<Emit("(() => { $0.scrollTop = $1 })()")>]
+let private scrollTo (_element: Element) (_top: float) : unit = jsNative
+
+/// One page layout around the frame (FS.GG.Game#788, round 5): the stage's stylesheet (`{S}` is the stage selector),
+/// the presented output size expected, if the layout determines it, and the ratio to set first.
+type private LayoutCase =
+    {
+        Name: string
+        Css: string
+        Expected: (float * float) option
+        /// Whether the frame's content box is the expected size too (no letterbox): the default size, or one dimension
+        /// set by the page with the other following the scene's aspect ratio.
+        FrameFits: bool
+        Dpr: float
+        Scroll: float
+    }
+
+let private layoutCases: LayoutCase list =
+    let case name css expected =
+        { Name = name; Css = css; Expected = expected; FrameFits = true; Dpr = 1.0; Scroll = 0.0 }
+
+    [
+        // Parents and page rules that stretched the frame before (the default must keep the scene's size).
+        case "flex-column parent" "{S} { display: flex; flex-direction: column; }" (Some(240.0, 160.0))
+        case "flex-row parent, 400 px tall" "{S} { display: flex; height: 400px; }" (Some(240.0, 160.0))
+        case "grid parent, 1fr column" "{S} { display: grid; grid-template-columns: 1fr; }" (Some(240.0, 160.0))
+        case "grid parent, 1fr column and a 400 px row" "{S} { display: grid; grid-template-columns: 1fr; grid-template-rows: 400px; }" (Some(240.0, 160.0))
+        case "page rule on every stage div: width 100%, padding 10 px" "{S} { width: 640px; } {S} div { width: 100%; padding: 10px; }" (Some(640.0, 640.0 / 1.5))
+        case "border-box everywhere and a 3 px border on every stage div" "{S} * { box-sizing: border-box; } {S} div { border: 3px solid red; }" (Some(240.0, 160.0))
+        // The page sizing the frame: one dimension, or a box of another aspect (contain-fit letterboxes).
+        case "frame width only, 480 px" "{S} [data-input-frame] { width: 480px; }" (Some(480.0, 320.0))
+        case "frame height only, 320 px" "{S} [data-input-frame] { height: 320px; }" (Some(480.0, 320.0))
+        { case "frame much wider than the scene, 600x100" "{S} [data-input-frame] { width: 600px; height: 100px; }" (Some(150.0, 100.0)) with FrameFits = false }
+        { case "frame much taller than the scene, 120x600" "{S} [data-input-frame] { width: 120px; height: 600px; }" (Some(120.0, 80.0)) with FrameFits = false }
+        // Adversarial placements: positioned, transformed, zoomed and scrolled parents.
+        case "absolutely positioned parent" "{S} { position: absolute; left: 300px; top: 40px; }" (Some(240.0, 160.0))
+        case "fixed parent" "{S} { position: fixed; left: 420px; top: 260px; }" (Some(240.0, 160.0))
+        case "transformed parent, scale 1.5" "{S} { transform: scale(1.5); transform-origin: 0 0; }" (Some(360.0, 240.0))
+        case "zoomed parent, zoom 2" "{S} { zoom: 2; }" (Some(480.0, 320.0))
+        { case "scrolled parent" "{S} { height: 260px; overflow: auto; } {S}::before { content: ''; display: block; height: 300px; }" (Some(240.0, 160.0)) with Scroll = 250.0 }
+        { case "flex-column parent" "{S} { display: flex; flex-direction: column; }" (Some(240.0, 160.0)) with Dpr = 2.0 }
+    ]
+
+/// One page layout on one backend: the output is the uniform contain-fit of the frame's content box (and the expected
+/// size); the token is DRAWN at one scale (a square tile presents square); outside the fit is letterbox (no scene, no
+/// press); a press activates a tile exactly where it is drawn, and nowhere it is not (screenshot plus click, also at the
+/// point a stretched mapping would use); both focus-ring bands are presented at least 2 CSS px wide.
+let private playLayout
+    (check: string -> bool -> string -> unit)
+    (stage: HTMLElement)
+    (late: LateFailureRoute)
+    (route: InputRoute)
+    (registry: RendererRegistry<InputFixture.Board>)
+    (case: LayoutCase)
+    (backend: RendererBackend)
+    : Async<unit> =
+    async {
+        let name =
+            sprintf "%s %s%s" (RendererBackend.id backend) case.Name (if case.Dpr <> 1.0 then sprintf ", DPR %g" case.Dpr else "")
+
+        let sheet = "stage-layout-sheet"
+        addStyle sheet (case.Css.Replace("{S}", "#" + stage.id))
+
+        if window.devicePixelRatio <> case.Dpr then
+            do! metrics case.Dpr 1024.0
+
+        let events = ResizeArray<InputEvent>()
+        InputRoute.bind events.Add route
+        let board: InputFixture.Board = { Tick = 0; Selected = None }
+        let driver = BrowserRenderers.start late registry board ignore
+
+        if backend <> RendererBackend.Svg then
+            driver.Dispatch(RendererMsg.SelectBackend backend)
+
+        let! _ = BrowserConformance.waitUntil 600 (fun () -> driver.Mounted = Some backend)
+        let surface = surfaceOf stage backend
+        let frame = surface.parentElement
+
+        if case.Scroll > 0.0 then
+            scrollTo stage case.Scroll
+
+        driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+        do! settle 4
+        let width, height = InputFixture.width, InputFixture.height
+        let out = surface.getBoundingClientRect ()
+        let box = contentRect frame
+        let scale = min (box.[2] / width) (box.[3] / height)
+        let fitWidth, fitHeight = width * scale, height * scale
+        let fitLeft, fitTop = box.[0] + (box.[2] - fitWidth) / 2.0, box.[1] + (box.[3] - fitHeight) / 2.0
+
+        let expectedOk =
+            match case.Expected with
+            | Some(w, h) ->
+                abs (out.width - w) < 1.0
+                && abs (out.height - h) < 1.0
+                && (not case.FrameFits || (abs (box.[2] - w) < 1.0 && abs (box.[3] - h) < 1.0))
+            | None -> true
+
+        check
+            (sprintf
+                "input host layout %s: the output is the uniform contain-fit of the frame's content box%s"
+                name
+                (match case.Expected with
+                 | Some(w, h) when case.FrameFits -> sprintf " (%gx%g, and so is the frame: it keeps the scene's aspect and does not stretch)" w h
+                 | Some(w, h) -> sprintf " (%gx%g)" w h
+                 | None -> ""))
+            (expectedOk
+             && abs (out.width / out.height - width / height) < 0.01
+             && abs (out.width - fitWidth) < 1.0
+             && abs (out.height - fitHeight) < 1.0
+             && abs (out.left - fitLeft) < 1.0
+             && abs (out.top - fitTop) < 1.0)
+            (sprintf "output %g,%g %gx%g; content box %A; fit %g,%g %gx%g; frame style=%s" out.left out.top out.width out.height box fitLeft fitTop fitWidth fitHeight (frame.getAttribute "style"))
+
+        // One screenshot of the whole frame, before any press changes what is drawn.
+        scrollIntoView frame
+        do! settle 1
+        let frameBox = frame.getBoundingClientRect ()
+        let out = surface.getBoundingClientRect ()
+        let box = contentRect frame
+
+        let request =
+            createObj
+                [
+                    "kind" ==> "shot"
+                    "x" ==> frameBox.left
+                    "y" ==> frameBox.top
+                    "width" ==> frameBox.width
+                    "height" ==> frameBox.height
+                ]
+
+        let pending: JS.Promise<string> = emitJsExpr request "window.__fsggInput($0)"
+        let! png = Async.AwaitPromise pending
+        let presented = out.width / width
+        let tile = InputFixture.objects board |> List.find (fun t -> t.Id = "a")
+        let tileX, tileY = tile.Bounds.X + tile.Bounds.Width / 2.0, tile.Bounds.Y + tile.Bounds.Height / 2.0
+        let drawnX, drawnY = out.left + tileX * presented, out.top + tileY * presented
+        let! extent = Async.AwaitPromise(extentAt png (drawnX - frameBox.left) (drawnY - frameBox.top) frameBox.width)
+        let colour = extent.[2], extent.[3], extent.[4]
+        let near (r: float, g: float, b: float) (r', g', b') = abs (r - r') + abs (g - g') + abs (b - b') < 60.0
+        let bg = InputFixture.background
+        let backgroundColour = float bg.Red, float bg.Green, float bg.Blue
+        let side = tile.Bounds.Width * presented
+
+        check
+            (sprintf "input host layout %s: a square tile is drawn square, at the fit's scale (one scale for both axes)" name)
+            (not (near colour backgroundColour) && abs (extent.[0] - side) <= 2.0 && abs (extent.[1] - side) <= 2.0)
+            (sprintf "drawn %gx%g, expected %gx%g; colour %A" extent.[0] extent.[1] side side colour)
+
+        // The letterbox: the content box outside the fit, where the scene is neither drawn nor pressed.
+        let gapX = out.left - box.[0]
+        let gapY = out.top - box.[1]
+
+        if gapX > 2.0 || gapY > 2.0 then
+            let lx, ly =
+                if gapX > 2.0 then box.[0] + gapX / 2.0, out.top + out.height / 2.0
+                else out.left + out.width / 2.0, box.[1] + gapY / 2.0
+
+            let! letter = Async.AwaitPromise(extentAt png (lx - frameBox.left) (ly - frameBox.top) frameBox.width)
+            let letterColour = letter.[2], letter.[3], letter.[4]
+            events.Clear()
+
+            do!
+                Async.AwaitPromise(
+                    emitJsExpr (createObj [ "kind" ==> "click"; "x" ==> lx; "y" ==> ly ]) "window.__fsggInput($0)"
+                    : JS.Promise<unit>
+                )
+
+            do! settle 2
+            let pressed = texts events |> List.filter (fun e -> e.Contains "activate")
+
+            check
+                (sprintf "input host layout %s: the letterbox shows no scene and a press there activates nothing" name)
+                (not (near letterColour backgroundColour) && not (near letterColour colour) && pressed.IsEmpty)
+                (sprintf "letterbox at %g,%g colour %A; presses %A" lx ly letterColour pressed)
+        else
+            check
+                (sprintf "input host layout %s: no letterbox (the frame's content box has the scene's aspect)" name)
+                (abs gapX < 1.0 && abs gapY < 1.0)
+                (sprintf "gaps %g,%g" gapX gapY)
+
+        // Press where the tile is drawn, and where a stretched mapping of the content box would put it: each press
+        // activates the tile exactly when the screenshot shows the tile there.
+        // The stretched point is judged only when it is clearly inside or clearly outside the drawn tile (1.5 CSS px from
+        // its edges); on an edge, the anti-aliased pixel and the inclusive hit test may differ.
+        let stretchedX = box.[0] + tileX * box.[2] / width
+        let stretchedY = box.[1] + tileY * box.[3] / height
+        let! atStretched = Async.AwaitPromise(extentAt png (stretchedX - frameBox.left) (stretchedY - frameBox.top) frameBox.width)
+        let shownThere = near (atStretched.[2], atStretched.[3], atStretched.[4]) colour
+        let tileLeft, tileTop = out.left + tile.Bounds.X * presented, out.top + tile.Bounds.Y * presented
+        let tileRight, tileBottom = tileLeft + side, tileTop + side
+
+        let edgeDistance =
+            min
+                (min (abs (stretchedX - tileLeft)) (abs (stretchedX - tileRight)))
+                (min (abs (stretchedY - tileTop)) (abs (stretchedY - tileBottom)))
+
+        let judged = edgeDistance >= 1.5
+
+        let press x y =
+            async {
+                events.Clear()
+
+                do!
+                    Async.AwaitPromise(
+                        emitJsExpr (createObj [ "kind" ==> "click"; "x" ==> x; "y" ==> y ]) "window.__fsggInput($0)"
+                        : JS.Promise<unit>
+                    )
+
+                do! settle 2
+                return texts events |> List.exists (fun e -> e.StartsWith "pointer:activate:a")
+            }
+
+        let! hitDrawn = press drawnX drawnY
+        let! hitStretched = press stretchedX stretchedY
+
+        check
+            (sprintf "input host layout %s: a press activates the tile where it is drawn and only there (screenshot plus press)" name)
+            (hitDrawn && (not judged || hitStretched = shownThere))
+            (sprintf "drawn %g,%g -> %b; stretched %g,%g (%g CSS px from an edge%s) shows tile=%b -> %b" drawnX drawnY hitDrawn stretchedX stretchedY edgeDistance (if judged then "" else ", not judged") shownThere hitStretched)
+
+        let t00 = InputFixture.objects board |> List.find (fun t -> t.Id = "t00")
+        do! inputAt surface width height "click" { X = t00.Bounds.X + 15.0; Y = t00.Bounds.Y + 15.0 }
+        focusElement surface
+        do! BrowserConformance.key "ArrowRight"
+        do! BrowserConformance.key "ArrowLeft"
+        driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+        do! settle 3
+        driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+        do! settle 2
+        let! tones, detail = ringBands surface width height t00.Bounds
+        check (sprintf "input host layout %s: both focus-ring bands are presented (2 CSS px each, one scale)" name) tones detail
+
+        (driver :> System.IDisposable).Dispose()
+        InputRoute.unbind route
+        removeStyle sheet
+
+        if window.devicePixelRatio <> 1.0 || window.innerWidth <> 1024.0 then
+            do! metrics 1.0 1024.0
+
+        do! settle 2
+    }
+
 let run (check: string -> bool -> string -> unit) : Async<unit> =
     async {
         installPage ()
@@ -846,6 +1137,28 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
 
         for backend in RendererBackend.all do
             do! playAttributes check stage late registry backend
+
+        stage.remove ()
+
+        // The page layouts around the frame (contain-fit and the default size), each on every backend.
+        let stage = document.createElement "div"
+        stage.id <- "stage-layout"
+        document.body.appendChild stage |> ignore
+
+        let registry =
+            match BrowserRenderers.surfaces stage (BrowserRenderers.options "Input board" InputFixture.width InputFixture.height) late with
+            | (svg :: _) as all ->
+                all
+                |> List.fold
+                    (fun renderers surface -> SceneRenderers.withSurface surface renderers)
+                    (SceneRenderers.create InputFixture.view (SceneSurface.mountScene svg))
+                |> SceneRenderers.withInput InputFixture.interaction route
+                |> SceneRenderers.registry
+            | [] -> failwith "no surfaces"
+
+        for case in layoutCases do
+            for backend in RendererBackend.all do
+                do! playLayout check stage late route registry case backend
 
         stage.remove ()
     }

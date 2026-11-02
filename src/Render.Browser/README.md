@@ -82,12 +82,20 @@ See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game).
 
 `SvgSurface.mountInput`, `PixiSurface.mountInput` and `BabylonSurface.mountInput` (the hosts of
 `SceneRenderers.withInput`) mount their output inside a frame the host owns: `<div data-input-frame="svg|pixi|babylon">`.
-The SVG root or canvas fills the frame, out of layout, so its width and height attributes never size anything.
+The host places the SVG root or canvas in the frame, out of layout, so its width and height attributes never size
+anything.
 
-- Without page CSS, the frame takes the scene size given in the options.
-- To size the surface, style the frame or its container, not the canvas or SVG:
-  `#stage [data-input-frame] { width: 480px; height: 320px; }`.
-- A canvas renders at the presented size × the device pixel ratio, re-derived when the frame is resized or the ratio
+- Without page CSS, the frame takes the scene size given in the options, in any parent: it keeps the scene's aspect
+  ratio and a flex or grid parent does not stretch it.
+- To size the surface, set the frame's own `width` and/or `height`. With one set, the other follows the scene's aspect
+  ratio: `#stage [data-input-frame] { width: 480px; }`. A container's size does not size the frame; to follow the
+  container, say so on the frame: `#stage [data-input-frame] { width: 100%; }`.
+- Whatever box results, the scene is drawn at one uniform scale, centred and letterboxed (contain-fit). Pointer
+  mapping, picking and the focus ring's 2 CSS px bands use the same fit.
+- Style the frame by `[data-input-frame]` only. A rule such as `#stage div { … }` also reaches the frame (and the
+  sizer, whose inline style ignores it); its width, height, padding or border change the frame's box. Never style the
+  canvas or SVG root, which the host places.
+- A canvas renders at the fitted size × the device pixel ratio, re-derived when the frame is resized or the ratio
   changes, and never over 8192 device pixels a side.
 
 See ADR 0001, "Surface sizing".

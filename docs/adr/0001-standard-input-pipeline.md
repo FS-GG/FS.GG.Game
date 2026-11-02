@@ -511,37 +511,75 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
 - **Cue layer on Babylon.** The cue nodes are drawn with unlit materials. With `disableLighting` a material shows only
   its emissive colour, so the cue colour is the emissive colour and the diffuse colour is black (#797 review B1). The
   frame's own Scene stays lit.
-- **Surface sizing: one model for SVG, Pixi and Babylon** (`CanvasSizing`; #797's fourth review, Root's ruling). The
-  invariant is structural: the output's width and height attributes, which are the backing store, can never
-  influence layout.
-  - **The frame.** The host mounts a frame it owns (`data-input-frame="svg|pixi|babylon"`, `position: relative;
-    display: inline-block`). The canvas or SVG root fills it out of layout (`position: absolute; inset: 0; width: 100%;
-    height: 100%`), so its attributes contribute nothing, whatever their values.
-  - **The frame's size** is the page's when the page sizes the frame: a stylesheet rule, an inline style, or a
-    container that gives it a definite size. Otherwise an in-flow sizer child gives it the scene size. The host never
-    writes the frame's own size, so page sizing that is added, changed or withdrawn after mount always wins or falls
-    back to the scene size, with no transition to track.
-  - **The presented size is the frame's content box.** A canvas's backing store is derived from it only: presented size
-    × DPR, rounded.
-    - Pixi sets its renderer resolution to backing width / scene width.
-    - Babylon sets its engine size to the backing store, and its hardware scaling level to CSS width / backing width,
-      which its pick reads.
+- **Surface sizing: one model for SVG, Pixi and Babylon** (`CanvasSizing`; #797's fourth and fifth reviews, Root's
+  rulings). Two invariants, both structural: the output's width and height attributes, which are the backing store,
+  never influence layout; and whatever size the frame ends up, the scene is drawn, pressed and cued at ONE uniform scale.
+  - **The frame.** The host mounts a frame it owns (`data-input-frame="svg|pixi|babylon"`). Its inline style is
+    `position: relative; display: inline-block; vertical-align: top; aspect-ratio: auto W / H` (the scene's, applied to
+    the content box) and `align-self: start; justify-self: start`, so a flex or grid parent does not stretch it. Its
+    only in-flow child is a sizer at the scene width and no height, whose inline style also zeroes padding, border and
+    margin.
+  - **What sizes the frame.** Exactly:
+    - by default, the sizer gives it the scene width and the aspect ratio gives it the scene height, in any parent
+      (block, flex row or column, grid, `display: contents`, positioned, transformed, zoomed or scrolled);
+    - a page rule or inline style that sets the frame's own `width` and/or `height` wins: with one of them set, the
+      other follows the scene's aspect ratio; with both set, the box may have any aspect;
+    - nothing else. A container's size does not size the frame (an earlier draft of this section said a container
+      with a definite size did; it does not). A page that wants the surface to follow its container says so on the
+      frame, for example `#stage [data-input-frame] { width: 100%; }`.
+    The host never writes the frame's size, so page sizing that is added, changed or withdrawn after mount always wins
+    or falls back to the scene size, with no transition to track.
+  - **Page rules on host-internal elements.** The frame and the sizer are `div`s inside the container, so a page rule
+    such as `#stage div { … }` reaches them. The sizer's inline style ignores it, and the frame's alignment, display and
+    aspect ratio are inline too. A rule that sets the frame's width, height, padding or border does apply, and
+    contain-fit keeps the scene uniform within whatever content box results. Style the frame by `[data-input-frame]`
+    only; never style the canvas or SVG root, which the host places.
+  - **Contain-fit.** `CanvasSizing.fit` computes, from the frame's content box (its own CSS px), `scale = min(boxWidth /
+    sceneWidth, boxHeight / sceneHeight)` and the centred rectangle of `scene × scale`. The tracker places the output
+    there (`position: absolute` at that left, top, width and height, out of layout) and nowhere else, snapped to whole
+    device px (its size and its offset in the frame, at the DPR × the presented scale) so a backing store maps 1:1
+    onto it. A canvas is presented with `image-rendering: pixelated` while no page transform rotates or skews it: the
+    1:1 backing store makes nearest sampling exact, where the default filter blended a solid band edge under a
+    `scale()` transform (#797 round 5, found by the layout smoke). Outside the fit is letterbox: page background, no
+    scene and no press.
+    - Drawing: the output's box is the fit, and a canvas's backing store is the fit × DPR (× the scale at which a page
+      transform or zoom presents the frame), rounded. Pixi sets its renderer resolution to backing width / scene
+      width. Babylon sets its engine size to the backing store, and its hardware scaling level to fitted width /
+      backing width, which its pick reads. The SVG root keeps `preserveAspectRatio="xMidYMid meet"`, which never has
+      to letterbox, because its box already has the scene's aspect.
+    - Input and cues invert the same placement, with ONE scale for both axes. The cue layer's CSS px per scene unit
+      (the ring's 2 CSS px bands) is the fit's scale (the output's own width / scene width) × the scale at which the
+      page presents it (`CanvasSizing.presentedScale`: the product of every ancestor's CSS `zoom` and the area scale
+      of every CSS `transform`); the same presented scale sets the backing store's density. The pointer maps an SVG
+      root's event through its screen CTM (viewBox units are scene units), and a canvas's through the event's offset
+      in the canvas's own CSS px (which the browser maps through every transform, rotations included; zoom is divided
+      out) over the fit's scale. Pixi's `EventBoundary` and Babylon's pick take those scene points. The host draws the
+      cue layer's top-level rectangles with their edges on whole device px (nearest), so the ring's 2 CSS px bands are
+      solid device px at any fractional scale, and two bands that share an edge still share it. Because the
+      output box is the fit, drawing, input and cues cannot disagree, under any page layout, transform or zoom.
   - **When it is re-derived:** on a `ResizeObserver` of the frame's content box and of its `device-pixel-content-box`
     (which changes with the DPR), on a `matchMedia` resolution query re-armed at each change, on the window's resize, and
     at each draw. A per-frame comparison of `devicePixelRatio` (one property read a frame) catches the changes that fire
-    none of those, such as a device-metrics override. Only when the size or ratio differs from the last one applied.
+    none of those, such as a device-metrics override. Only when the fit or ratio differs from the last one applied.
   - **A sanity cap:** a backing store over 8192 device pixels a side is refused with a console diagnostic, never grown.
   - **Migration (before release, so not a published break).** A page that sized the output directly, such as
-    `#stage canvas { … }` or `#stage svg { … }`, now sizes the frame (`#stage [data-input-frame] { … }`) or its
-    container. In this repository, the only such selectors were in this delivery's own browser smoke. The template,
-    ReferenceGame and the other smoke pages style no input-host output. Plain mounts (`mountScene`, `mountInteractive`)
-    are unchanged.
+    `#stage canvas { … }` or `#stage svg { … }`, now sizes the frame (`#stage [data-input-frame] { … }`). In this
+    repository, the only such selectors were in this delivery's own browser smoke. The template, ReferenceGame and the
+    other smoke pages style no input-host output. Plain mounts (`mountScene`, `mountInteractive`) are unchanged.
   - **The smoke** checks each case on all three backends:
-    - the cases: unsized, inline-sized and stylesheet-sized, each at DPR 1 and 2; page sizing withdrawn after mount (a
-      stylesheet removed, a media query turned off by a narrower viewport, an inline size removed) and added after mount
-      (a stylesheet), at DPR 1 and 2; a CSS resize after mount; DPR 1→2 after mount; and DPR 1→2 and 2→1 with no draw;
-    - for each case: the presented size, stable over three animation frames; the backing store as presented size × DPR;
-      and, for the cases that draw, picking and both focus-ring tones from presented pixels;
+    - the sizing cases: unsized, inline-sized and stylesheet-sized, each at DPR 1 and 2; page sizing withdrawn after
+      mount (a stylesheet removed, a media query turned off by a narrower viewport, an inline size removed) and added
+      after mount (a stylesheet), at DPR 1 and 2; a CSS resize after mount; DPR 1→2 after mount; and DPR 1→2 and 2→1
+      with no draw. For each: the presented size, stable over three animation frames; the backing store as presented
+      size × DPR; and, for the cases that draw, picking and both focus-ring tones from presented pixels;
+    - the layout cases: flex-column (at DPR 1 and 2), flex-row and grid `1fr` parents (also with a 400 px row),
+      `#stage div { width: 100%; padding: 10px }`, border-box with a border on every stage div, a width-only and a
+      height-only frame, a frame much wider (600×100) and much taller (120×600) than the scene, and absolutely
+      positioned, fixed, transformed (`scale(1.5)`), zoomed (`zoom: 2`) and scrolled parents. For each: the output is
+      the uniform contain-fit of the frame's content box (and the expected size); a square tile is drawn square at the
+      fit's scale (screenshot); the letterbox shows no scene and a press there activates nothing; a press activates the
+      tile where it is drawn, and at the point a stretched mapping would use only if the screenshot shows the tile
+      there; and both focus-ring bands are presented;
     - and on each backend, output attributes of 4096 × 4096 leave the layout box unchanged.
 - **`withInteraction` keeps its own hosts** (Root's ruling). `SceneRenderers.withInteraction` and `withInput` replace
   each other on one registry. A game moves to the input host by declaring `withInput` and binding its route, to a

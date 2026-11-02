@@ -214,13 +214,16 @@ module BabylonSurface =
                 canvas.setAttribute ("data-renderer", "babylon")
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
-                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas fills a frame the host
-                // owns, out of layout, so its width and height attributes (the engine's backing store) never size
-                // anything.
+                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas sits in a frame the
+                // host owns, out of layout at the frame's contain-fit, so its width and height attributes (the engine's
+                // backing store) never size anything and the scene is never drawn at two scales.
                 let frame =
                     match host with
                     | Some(InputHost.CanvasHost.Input _) ->
-                        Some(CanvasSizing.frame container canvas "babylon" options.Width options.Height)
+                        let made = CanvasSizing.frame container "babylon" options.Width options.Height
+                        made.appendChild canvas |> ignore
+                        CanvasSizing.place canvas options.Width options.Height
+                        Some made
                     | _ ->
                         container.appendChild canvas |> ignore
                         None
@@ -457,13 +460,14 @@ module BabylonSurface =
                         Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), false)
                     | Some(InputHost.CanvasHost.Input(spec, report)) ->
                         reregion first.Objects
-                        // FS.GG.Game#788: the backing store is derived from the presented CSS size and the device pixel
-                        // ratio (CanvasSizing), at each draw and when the presented size changes.
+                        // FS.GG.Game#788: the canvas is placed at the frame's contain-fit and its backing store is
+                        // derived from that fit and the device pixel ratio (CanvasSizing), at each draw and when the
+                        // presented size changes.
                         let lastDrawn = ref (first.Scene, ([]: SceneNode list))
 
                         let tracker =
-                            CanvasSizing.track frame.Value (fun width height cssWidth _ ->
-                                applyBacking engine width height cssWidth
+                            CanvasSizing.track frame.Value canvas options.Width options.Height (fun width height fit ->
+                                applyBacking engine width height fit.Width
                                 let next, cues = lastDrawn.Value
                                 reconcileWith next { Nodes = cues }
                                 true)
