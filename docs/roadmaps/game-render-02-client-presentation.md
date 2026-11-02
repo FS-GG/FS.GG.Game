@@ -26,6 +26,13 @@ in #799's frozen ancestry. The proof therefore does not establish compatibility 
 the merged glyph and theme surfaces. Reconcile and verify the stack after #797–#799 land. The owner proposals
 above still await confirmation.
 
+The integration proposals below are grounded in the retained-ledger implementation in
+[#797's InputPipeline](https://github.com/FS-GG/FS.GG.Game/blob/a209724bb7bfacbeeda0511ba1a92f8a507cf016/src/Game.Render/InputPipeline.fs),
+its [input-host mirror](https://github.com/FS-GG/FS.GG.Game/blob/a209724bb7bfacbeeda0511ba1a92f8a507cf016/src/Render.Browser/InputHost.fs),
+the existing [v0.19.0 frame record](https://github.com/FS-GG/FS.GG.Game/blob/9848c8d4a398669977bfc5f7d116f86d7424eb3d/src/Game.Render/SceneInteraction.fsi),
+and main's [glyph builders and passes](https://github.com/FS-GG/FS.GG.Game/blob/8d3ddd6ad028fe44471c383b8b27fd152cce848e/src/Game.Render/Glyphs.fs).
+These source readings establish feasibility and compatibility limits, not the owners' acceptance.
+
 ## Problem
 
 The owner's direction (2026-11-02) is that input flows **client input → WASM guest → server**, and also
@@ -200,6 +207,12 @@ client, from what the command carries:
 **Request (a), proposed to #788: `InputPipeline.settlement : CommandId -> PipelineModel -> CommandSettlement option`**, an
 additive accessor for a command still held in the ledger.
 
+The accessor reads the retained ledger, not a new history store. In #797 at `a209724b`, `prune` retains open commands
+and `AppliedAt(version, _)` only while that version exceeds the authoritative version; refused, cancelled and
+unconfirmed entries are pruned and their outcome still comes through `failed`. Therefore `None` means only
+"not retained", not an outcome by itself. A retained applied settlement keeps the overlay until the authoritative
+state catches up even when prediction is disabled. This is the proposed confirmation boundary for #788.
+
 - **Why it is needed.** Today `unsettled` lists open commands only. `track` therefore *infers* "applied" from a command
   that left `unsettled` with no `Fail`. That is sound only when `track` never runs between an update and the `Fail`s of
   the same batch.
@@ -287,8 +300,10 @@ identity 0 own 1 ally 2 neutral 3 enemy 4 unknown
   would encode as zero and is refused by the encoder. At half a quantum (`1/512`), half-up rounding produces the
   minimum positive wire radius (`1/256`). Encoder success never creates a zero-radius circle that the decoder rejects.
 - **The ghost on the wire** is a subset of `GlyphSpec`: family, identity, icon, team, anchor and footprint in cells.
-  `GlyphSpec` is opaque with no read accessors, so the library codec needs `GlyphSpec.family`, `anchor`, `footprint`,
-  `identity`, `icon` and `team` readers. These are additive, and are proposed to #789 (Q6). The default if #789
+  `GlyphSpec` is opaque with no field readers, so the library codec proposes `GlyphSpec.familyOf`, `anchorOf`,
+  `footprintOf`, `identityOf`, `iconOf` and `teamOf`. The `Of` suffix avoids the existing `identity`, `icon` and `team`
+  builder names at main `8d3ddd6a`; the last three readers return options, matching the stored data. Existing
+  `GlyphFamily.name` and `IconRef.name` supply the wire names. These additions are proposed to #789 (Q6). The default if #789
   declines is that a ghost element holds this subset record, and `toGlyphSpec` builds the spec for drawing.
 
 **Golden vectors** (all 23 are in `tests/Game.Render.Tests/ClientPresentationTests.fs`). The game's command codec in
@@ -330,13 +345,16 @@ amplifiers → bodies → PLANS → selection brackets → (cue layer: hover, th
   - #797 snaps top-level `Rect` nodes in the input host's cue layer to whole device pixels. Plan dots are plain
     rectangles, so drawing them as cues would move them.
   - Plans are not input-host state: they survive a backend switch, and cues do not.
-  - The #788 owner raised this, and the #789 owner is asked to confirm.
+  - The cue host's source imposes this restriction; #789 is asked to confirm the separate plan pass.
 
 **Surface** (proposed to #789, additive on its opaque types):
 
-- `Glyph.plan : bounds: (string -> Rect option) -> PlanView -> Glyph`. It draws only in the plan pass. An object
+- `ClientPresentation.glyph : bounds: (string -> Rect option) -> PlanView -> Glyph`. It draws only in the plan pass.
+  Keeping this factory after `Glyphs` avoids a dependency cycle with the `GlyphSpec` carried by ghosts. An object
   anchor ends at that object's frame plus the theme's gap, so an arrow stops short of the body it points at.
 - `GlyphDrawing.plan`: the new pass. `GlyphDrawing.nodes` returns amplifiers, body, plan, brackets.
+- `GlyphDrawing.withPlan : SceneNode list -> GlyphDrawing -> GlyphDrawing`: a proposed additive constructor for
+  the new pass, usable through existing `Glyph.custom`; it has no dependency on `PlanView` or `ClientEffect`.
 - `Glyphs.scene` draws every amplifier, then every body, then every plan, then every bracket.
 - **Highlights** draw in the plan pass as a ring of dots in the role's ink around the object's frame, outside the cue
   reserve.
@@ -415,14 +433,17 @@ additive aliases and their joint solver remain proposed work under #810 after #7
 
 - **Selection in the mirror.** `primary` maps to `InteractiveScene.Selected`, so the input host's `aria-selected` reflects
   the guest's selection without a server round trip. The proof's smoke checks this on all three backends.
-  - A `group` role needs `aria-multiselectable` on the listbox or grid and a selected *set* in `InteractiveScene`. That
-    is a host change, proposed to #788 (Q3).
+  - A `group` role needs `aria-multiselectable` on the listbox or grid and a selected set transported to the host.
+    `InteractiveScene` is already a released record with a single `Selected` field (`v0.19.0`); adding a field would
+    break callers. Propose a separate opaque presentation value and an additive mount/update path that carries it
+    beside the existing frame, or an explicitly scheduled MAJOR change. #788 owns that choice (Q3).
   - Until then, group members are listed in the summary.
 - **Announcements.** Every phase change of a plan is announced once in a **polite** live region (`role=status`,
   `aria-live=polite`): drafted, sent, done, refused, cancelled, unconfirmed and cleared.
   - **A drag never announces per move.** `plan p` replacing a draft is silent.
-  - **Hosting:** the input host already keeps a polite status in its mirror. The library writes `drain`'s output there,
-    proposed to #788. The proof uses its own region.
+  - **Hosting:** #797's input host at `a209724b` has no polite live-region/status transport. The proposed additive
+    presentation path must carry `drain`'s output to a host-owned polite region. Until that path exists, the game
+    owns the region, as the proof does. No reuse of an existing input-host status is assumed.
 - **Text summary.** `describe label plan` gives one line per plan, for example "Move Player token to (156, 60), sent".
   The surface references the summary list with `aria-describedby`.
 - **Single-pointer alternative (WCAG 2.5.7).** Every plan a drag can make, a press-press can make. The proof's guest
@@ -514,14 +535,23 @@ equivalence check do not establish highlight rendering.
 
 ## Implementation plan (after acceptance and #797–#799 merging)
 
+The supplier branches require reconciliation before this plan can be implemented against their current source.
+On 2026-11-02, #797 `a209724b` conflicts with main `8d3ddd6a` in the smoke script and smoke Program; #798 `6e0b3e96`
+and #799 `d2dc96d2` still carry the older host ancestry. Restack suppliers in their existing PRs first, preserving
+their retained local repair work, then replay this PR's own commits onto the reconciled #799. A direct merge of
+the latest host into this frozen proof creates conflicts across supplier-owned sources and is not the integration route.
+
 1. **#788 owner:**
    - the one-line pointer in ADR 0001;
    - `ClientPresentation.fs/.fsi` and `ClientEffectCodec`, from this proof, with opaque types and the CL laws on .NET
      and Fable;
    - the additive `InputPipeline.settlement` (request a);
    - the polite status hosting (CP8).
-2. **#789 owner:** the plan pass (`Glyph.plan`, `GlyphDrawing.plan`, the `Glyphs.scene` order), highlights, ghosts,
-   and the `GlyphSpec` readers.
+2. **#789 owner:** the plan pass (`GlyphDrawing.plan`, the `Glyphs.scene` order), highlights, ghosts,
+   and the `GlyphSpec` readers. Keep the plan factory in `ClientPresentation`, after `Glyphs` in compile order:
+   `ClientEffect` needs `GlyphSpec` for ghosts, so a `Glyph.plan` taking `PlanView` would introduce a dependency cycle.
+   An additive plan-node constructor on the opaque `GlyphDrawing` lets that factory use `Glyph.custom` without
+   making `Glyphs` depend on the client-effect vocabulary. Existing custom drawings keep an empty plan pass.
 3. **#795 owner:** the five `plan.*` aliases and their checks, after #805.
 4. **The kit's `presentation` section, K1–K9,** on all three backends, with K9 joining Game#814's equivalence section. Then delete this experimental module and
    point ReferenceGame at the library.
@@ -538,10 +568,10 @@ Work proceeds on the default unless the owner chooses otherwise.
 |---|---|---|
 | Q1 | Where does the plan pass sit? | Amplifiers, bodies, **plans**, brackets, then cues, in the glyph scene and not the cue layer (CP6). Proposed to #789. |
 | Q2 | Should the vocabulary be closed unions, as in the proof, or opaque? | Opaque, built by functions, so effects, elements and roles are additive (CP1). A game rarely matches them: the library interprets them. |
-| Q3 | How does a `group` selection reach ARIA? | The next input-host change adds a selected set to `InteractiveScene` and `aria-multiselectable`. Until then, the group is in the summary. Proposed to #788. |
+| Q3 | How does a `group` selection reach ARIA? | An additive opaque presentation path carries selected ids beside the released `InteractiveScene`, with `aria-multiselectable`; changing that record needs a MAJOR. Until then, the group is in the summary. Proposed to #788. |
 | Q4 | Does a refused plan linger on a timer? | No. It stays until the guest clears or replaces it, so the player always perceives it, with no time limit and no wall clock in the reducer. |
 | Q5 | What does a plan anchor to when the game predicts the planned effect? | The authoritative frame's bounds (CP3). The predicted unit is drawn marked by #799's rule. |
-| Q6 | How does a ghost cross the wire with an opaque `GlyphSpec`? | Additive read accessors on `GlyphSpec` from #789. Otherwise, a ghost subset record with `toGlyphSpec`. |
+| Q6 | How does a ghost cross the wire with an opaque `GlyphSpec`? | Additive `familyOf`, `anchorOf`, `footprintOf`, `identityOf`, `iconOf` and `teamOf` readers from #789; the names preserve existing builders. Otherwise, a ghost subset record with `toGlyphSpec`. |
 | Q7 | How are labels drawn? | A marker in the portable profile, with the text in the summary. Text in the stroked profile once #773 lands. |
 | Q8 | How is the link to a command made? | `planOf` on the command (CP3), not effect adjacency. It survives `PipelineMsg.Submit`, rebinds and a game that interprets effects itself. |
 | Q9 | Is there one draft per id, or many? | One draft per id, and a committed plan leaves the id (CP2). Multiple simultaneous drafts use several ids. |
