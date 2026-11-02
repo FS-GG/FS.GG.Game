@@ -190,19 +190,23 @@ let tests =
                     Expect.isGreaterThanOrEqual (differingD6 (badgeNodes b) (badgeNodes a)) 1 (sprintf "%d read against %d" b a)
             }
 
-            test "on D9's dense board, amplifiers draw before bodies, so every frame's decided pixels and box edges hold" {
+            test "on D9's dense board, amplifiers draw before bodies and badges sit inside frames, so every frame's and badge's decided pixels and box edges hold" {
                 let theme = Glyphs.Theme.standard
                 let board = Glyphs.denseBoard theme 5 3 true
                 let control = Glyphs.denseBoard theme 5 3 false
                 let width, height = 160.0, 104.0
                 let decided = ScenePixels.expectations width height board
-                // Each frame on its own: every pixel it decides in its ink must show that ink on the dense board too.
-                let bodyRects =
+                // Each frame with its badge on its own: every pixel it decides (with D6's samples) in its ink or the badge
+                // ink must show the same on the dense board.
+                let glyphs =
                     [ for r in 0 .. 2 do
                         for c in 0 .. 4 do
                             let identity = Glyphs.identities.[(r * 5 + c) % 5]
                             let ink = if (r + c) % 2 = 0 then theme.Body else Glyphs.Theme.team theme (r + c)
-                            yield identity, ink, Glyphs.identityFrame identity { X = 32.0 * float c + 16.0; Y = 32.0 * float r + 24.0 } 24.0 ink ]
+                            let centre = { X = 32.0 * float c + 16.0; Y = 32.0 * float r + 24.0 }
+                            let withBadge, _ = Glyphs.identityFrameWithBadge identity centre 24.0 ink theme.BadgeInk (Some(r * 5 + c))
+                            yield identity, ink, Glyphs.identityFrame identity centre 24.0 ink, withBadge ]
+                let bodyRects = glyphs |> List.map (fun (identity, ink, frame, _) -> identity, ink, frame)
                 // Some amplifier really overlaps another tile's frame, or the case proves nothing.
                 let overlaps =
                     [ for (_, _, a) in bodyRects do
@@ -218,16 +222,50 @@ let tests =
                     let box = Glyphs.boundsOf nodes
                     let midCol = int (floor (box.X + box.Width / 2.0))
                     let midRow = int (floor (box.Y + box.Height / 2.0))
-                    for col, row in [ int box.X, midRow; int (box.X + box.Width) - 1, midRow; midCol, int box.Y; midCol, int (box.Y + box.Height) - 1; midCol, midRow ] do
+                    for col, row in [ int box.X, midRow; int (box.X + box.Width) - 1, midRow; midCol, int box.Y; midCol, int (box.Y + box.Height) - 1 ] do
                         Expect.equal (colourAt board.Nodes col row) (Some ink) (sprintf "%A at (%d, %d) shows its frame" identity col row)
-                    let mine = ScenePixels.expectations width height { Nodes = SceneNode.Rectangle((0.0, 0.0, width, height), theme.Ground) :: nodes }
+                for identity, ink, _, withBadge in glyphs do
+                    let mine = Glyphs.identitySamples width height { Nodes = SceneNode.Rectangle((0.0, 0.0, width, height), theme.Ground) :: withBadge }
+                    let badgePixels = mine |> List.filter (fun e -> e.Colour = theme.BadgeInk)
+                    Expect.isNonEmpty badgePixels (sprintf "%A's badge decides pixels" identity)
                     for e in mine do
-                        if e.Colour = ink then
-                            Expect.equal (colourAt board.Nodes (int (floor e.Point.X)) (int (floor e.Point.Y))) (Some ink) (sprintf "%A's decided pixel %A" identity e.Point)
+                        if e.Colour = ink || e.Colour = theme.BadgeInk then
+                            Expect.equal (colourAt board.Nodes (int (floor e.Point.X)) (int (floor e.Point.Y))) (Some e.Colour) (sprintf "%A's decided pixel %A" identity e.Point)
                 Expect.isNonEmpty decided "the dense board decides pixels"
                 let wrongInControl =
                     decided |> List.filter (fun e -> colourAt control.Nodes (int (floor e.Point.X)) (int (floor e.Point.Y)) <> Some e.Colour)
                 Expect.isNonEmpty wrongInControl "control: with bodies drawn first, the bars cover frames and the pixels differ"
+            }
+
+            test "inside badges: drawn at 22 units and above, omitted below with a diagnostic, 3:1 on every fill, and the frame matrix holds with badges drawn" {
+                for theme in themes do
+                    for name, fill in ("body", theme.Body) :: (theme.Teams |> List.mapi (fun i c -> sprintf "team %d" i, c)) do
+                        let ratio = Glyphs.Theme.contrast theme.BadgeInk fill
+                        Expect.isGreaterThanOrEqual ratio 3.0 (sprintf "%s badge ink on %s: %.2f:1" theme.Name name ratio)
+                let theme = Glyphs.Theme.standard
+                for identity in Glyphs.identities do
+                    let below, why = Glyphs.identityFrameWithBadge identity { X = 48.0; Y = 48.0 } 21.0 theme.Body theme.BadgeInk (Some 0)
+                    Expect.equal below (Glyphs.identityFrame identity { X = 48.0; Y = 48.0 } 21.0 theme.Body) (sprintf "%A: no badge at 21" identity)
+                    Expect.isSome why (sprintf "%A: a diagnostic at 21" identity)
+                    let at22, none = Glyphs.identityFrameWithBadge identity { X = 48.0; Y = 48.0 } 22.0 theme.Body theme.BadgeInk (Some 0)
+                    Expect.isNone none (sprintf "%A: no diagnostic at 22" identity)
+                    // The badge lies wholly on the frame's ink, with a unit of margin: every badge cell's neighbourhood is frame.
+                    let frame = Glyphs.identityFrame identity { X = 48.0; Y = 48.0 } 22.0 theme.Body
+                    for col in 44 .. 51 do
+                        for row in 42 .. 53 do
+                            Expect.equal (colourAt (SceneNode.Rectangle((0.0, 0.0, 96.0, 96.0), theme.Ground) :: frame) col row) (Some theme.Body) (sprintf "%A: (%d, %d) under the badge and its margin is frame" identity col row)
+                    Expect.isGreaterThan at22.Length frame.Length (sprintf "%A: the badge is drawn at 22" identity)
+                let framed identity size team =
+                    SceneNode.Rectangle((0.0, 0.0, 96.0, 96.0), theme.Ground)
+                    :: fst (Glyphs.identityFrameWithBadge identity { X = 48.0; Y = 48.0 } size theme.Body theme.BadgeInk team)
+                for size in [ 24.0; 32.0 ] do
+                    for i, a in List.indexed Glyphs.identities do
+                        for b in List.skip (i + 1) Glyphs.identities do
+                            let bare = min (controlD6 a b size) (controlD6 b a size)
+                            for ta in [ 0; 7 ] do
+                                for tb in [ 0; 7 ] do
+                                    let both = min (differingD6 (framed a size (Some ta)) (framed b size (Some tb))) (differingD6 (framed b size (Some tb)) (framed a size (Some ta)))
+                                    Expect.isGreaterThanOrEqual both bare (sprintf "size %g: %A/%A with badges %d/%d keep the bare frames' %d" size a b (ta + 1) (tb + 1) bare)
             }
 
             test "today a text node drawn last leaves no pixel of the board decided (the gap ADR D6 closes)" {

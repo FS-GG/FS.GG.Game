@@ -27,6 +27,9 @@ module Glyphs =
             /// Status bar track and its good/warning/bad fills. The bar is keylined in `Body`, so the track and the fills are
             /// validated against their real neighbours: the keyline against the ground, each fill against the track.
             Track: Color
+            /// The ink of the team index badge, drawn inside its frame (ADR D1): validated against every frame fill it can
+            /// sit on.
+            BadgeInk: Color
             Good: Color
             Warn: Color
             Bad: Color
@@ -54,6 +57,7 @@ module Glyphs =
                 Focus = rgb 255uy 255uy 255uy
                 Marker = rgb 0uy 220uy 220uy
                 Track = rgb 10uy 10uy 10uy
+                BadgeInk = rgb 10uy 10uy 10uy
                 Good = rgb 70uy 200uy 100uy
                 Warn = rgb 240uy 180uy 40uy
                 Bad = rgb 230uy 60uy 50uy
@@ -243,6 +247,31 @@ module Glyphs =
             | _ -> "abcdfg"
         [ for ch in segments -> segment ch ]
 
+    /// The smallest frame size at which an index badge (unit 2: 6 x 10) fits inside every identity frame's ink, centred,
+    /// with a 1-unit margin all round (measured: Neutral 12, Unknown 16, Own 18, Enemy 20, Ally 22).
+    let minBadgeFrame = 22.0
+
+    /// An identity frame with its team index badge drawn INSIDE it, right after it, in the body pass (ADR D1, review M1 of
+    /// #794): the badge sits at the frame's centre, so it moves with the frame and no neighbour can cover it. Below
+    /// `minBadgeFrame` the badge is omitted and a diagnostic says so; team then rests on the allegiance frame and the
+    /// mirror label.
+    let identityFrameWithBadge
+        (identity: Identity)
+        (centre: Point)
+        (size: float)
+        (ink: Color)
+        (badgeInk: Color)
+        (team: int option)
+        : SceneNode list * string option =
+        let frame = identityFrame identity centre size ink
+        match team with
+        | None -> frame, None
+        | Some index when System.Math.Floor size < minBadgeFrame ->
+            frame, Some(sprintf "badge for team %d omitted: frame %g is below %g units" (index + 1) (System.Math.Floor size) minBadgeFrame)
+        | Some index ->
+            let digit = (index % 9) + 1
+            frame @ badge digit { X = snap centre.X - 3.0; Y = snap centre.Y - 5.0 } 2.0 badgeInk, None
+
     /// The scene nodes of one glyph in `theme`, in the portable primitive set.
     let draw (theme: Theme) (glyph: Glyph) : SceneNode list =
         let cell = theme.Cell
@@ -340,7 +369,8 @@ module Glyphs =
     /// D9's dense board (review N2 of #794): a `columns` x `rows` grid of 32-unit tiles, each holding a 24-unit identity
     /// frame with a status bar above it in the amplifier slot, outside the 8-unit cue reserve, so each bar reaches into
     /// the tile above. With `amplifiersFirst` the amplifier pass draws before the bodies, so frames win over neighbours'
-    /// amplifiers (the ruled order); without it, bodies draw first and the bars cover the frames above (the control).
+    /// amplifiers (the ruled order); without it, bodies draw first and the bars cover the frames above (the control). Each
+    /// frame carries its team index badge inside it, drawn right after it in the body pass (review M1 of #794).
     let denseBoard (theme: Theme) (columns: int) (rows: int) (amplifiersFirst: bool) : Scene =
         let tile = 32.0
         let frames =
@@ -350,8 +380,8 @@ module Glyphs =
                         let identity = identities.[(r * columns + c) % identities.Length]
                         let centre = { X = tile * float c + tile / 2.0; Y = tile * float r + tile / 2.0 + 8.0 }
                         let ink = if (r + c) % 2 = 0 then theme.Body else Theme.team theme (r + c)
-                        let nodes = identityFrame identity centre 24.0 ink
-                        let frame = boundsOf nodes
+                        let nodes, _ = identityFrameWithBadge identity centre 24.0 ink theme.BadgeInk (Some(r * columns + c))
+                        let frame = boundsOf (identityFrame identity centre 24.0 ink)
                         let bar = { X = frame.X; Y = frame.Y - 8.0 - 6.0; Width = 24.0; Height = 6.0 }
                         yield nodes, draw theme (Status(bar, 0.25 + 0.25 * float ((r + c) % 3)))
             ]

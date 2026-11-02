@@ -47,3 +47,15 @@ for label, sampler in samplers do
     let cells = [ for a in 1 .. 9 do for b in a + 1 .. 9 -> (a, b), min (differ sampler (badge a) (badge b)) (differ sampler (badge b) (badge a)) ]
     let zeros = cells |> List.filter (fun (_, v) -> v = 0)
     printfn "\nBadges at the minimum unit (2, so 10 units tall), %s: %d pairs, smallest %d, zero pairs %d %A" label cells.Length (cells |> List.map snd |> List.min) zeros.Length (zeros |> List.map fst)
+// Frames with the team index badge drawn inside them (review M1 of #794): for every pair and all 81 digit combinations,
+// the worst count per pair. Equal to the bare-frame matrix means the badge does not disturb identity sampling.
+let th = Glyphs.Theme.standard
+let framed id size team = onGround (fst (Glyphs.identityFrameWithBadge id { X = 48.0; Y = 48.0 } size th.Body th.BadgeInk team))
+for label, sampler in samplers do
+    for size in [ 24.0; 32.0 ] do
+        let worst =
+            [ for i, a in List.indexed Glyphs.identities do
+                for b in List.skip (i + 1) Glyphs.identities do
+                    let cells = [ for ta in 0 .. 8 do for tb in 0 .. 8 -> min (differ sampler (framed a size (Some ta)) (framed b size (Some tb))) (differ sampler (framed b size (Some tb)) (framed a size (Some ta))) ]
+                    yield sprintf "%A/%A %d" a b (List.min cells) ]
+        printfn "\nFrames with inside badges, %s, size %g, worst over 81 digit pairs: %s" label size (String.concat " | " worst)

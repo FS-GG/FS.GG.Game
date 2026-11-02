@@ -2715,6 +2715,12 @@ let runIdentityFrames () : Async<unit> =
                 SceneNode.Rectangle((0.0, 0.0, 48.0, 48.0), ground)
                 :: Experimental.Glyphs.identityFrame identity { X = 24.0; Y = 24.0 } size ink }
 
+        // The same frames with the team index badge drawn inside them (review M1 of #794): digit 8, the most cells.
+        let badged identity : Scene =
+            { Nodes =
+                SceneNode.Rectangle((0.0, 0.0, 48.0, 48.0), ground)
+                :: fst (Experimental.Glyphs.identityFrameWithBadge identity { X = 24.0; Y = 24.0 } size ink (fixtureColor 10uy 10uy 10uy) (Some 7)) }
+
         let mountOn backend (container: HTMLElement) name width height scene =
             match backend with
             | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
@@ -2746,38 +2752,39 @@ let runIdentityFrames () : Async<unit> =
 
             container.remove ()
 
-            let misses = ResizeArray<string>()
-            let pairs = ref 0
+            for label, sceneOf in [ "", single; " with badges inside", badged ] do
+                let misses = ResizeArray<string>()
+                let pairs = ref 0
 
-            for a in identities do
-                let host = document.createElement "div"
-                document.body.appendChild host |> ignore
+                for a in identities do
+                    let host = document.createElement "div"
+                    document.body.appendChild host |> ignore
 
-                match mountOn backend host (sprintf "%s %A" name a) 48.0 48.0 (single a) with
-                | Error reason -> misses.Add(sprintf "%A does not mount: %s" a reason)
-                | Ok mount ->
-                    let! own = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(single a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (single a)) 600
+                    match mountOn backend host (sprintf "%s %A" name a) 48.0 48.0 (sceneOf a) with
+                    | Error reason -> misses.Add(sprintf "%A does not mount: %s" a reason)
+                    | Ok mount ->
+                        let! own = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (sceneOf a)) 600
 
-                    if not own.IsEmpty then
-                        misses.Add(sprintf "%A does not show its own pixels: %s" a (own |> List.truncate 2 |> String.concat "; "))
+                        if not own.IsEmpty then
+                            misses.Add(sprintf "%A does not show its own pixels: %s" a (own |> List.truncate 2 |> String.concat "; "))
 
-                    for b in identities |> List.filter ((<>) a) do
-                        pairs.Value <- pairs.Value + 1
-                        let! other = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(single a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (single b)) 0
+                        for b in identities |> List.filter ((<>) a) do
+                            pairs.Value <- pairs.Value + 1
+                            let! other = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (sceneOf b)) 0
 
-                        if other.IsEmpty then
-                            misses.Add(sprintf "%A drawn passes %A's decided pixels" a b)
-                        else
-                            info (sprintf "identity pair %s %A drawn, %A read" id a b) (sprintf "%d differing decided pixels" other.Length)
+                            if other.IsEmpty then
+                                misses.Add(sprintf "%A drawn passes %A's decided pixels" a b)
+                            else
+                                info (sprintf "identity pair%s %s %A drawn, %A read" label id a b) (sprintf "%d differing decided pixels" other.Length)
 
-                    mount.Dispose()
+                        mount.Dispose()
 
-                host.remove ()
+                    host.remove ()
 
-            check
-                (sprintf "%s: each frame shows its own decided pixels and differs from every other frame's (%d ordered pairs)" name pairs.Value)
-                (misses.Count = 0 && pairs.Value = 20)
-                (String.concat "; " (Seq.truncate 4 misses))
+                check
+                    (sprintf "%s%s: each frame shows its own decided pixels and differs from every other frame's (%d ordered pairs)" name label pairs.Value)
+                    (misses.Count = 0 && pairs.Value = 20)
+                    (String.concat "; " (Seq.truncate 4 misses))
     }
 
 /// FS.GG.Game#789, review N2 of #794: the nine index badges (ADR D1) at the minimum unit (2, so 10 units tall), and D9's

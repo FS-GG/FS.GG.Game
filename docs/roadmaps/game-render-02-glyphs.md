@@ -54,8 +54,9 @@ of **slots** around one anchor, and the slot geometry comes from size tokens:
 | **Icon** | function or class, inside the frame | infantry, vehicle, scenery |
 | **Size step** | an ordinal field, as one of a few frame sizes within the footprint | small, medium, large |
 | **Team mark** | team, as a band or ring in the team colour on a neutral body (the RTS mask-region convention) | ring, foot band |
-| **Inner modifiers** | flags, in sector slots inside the frame | stale, carrying, disabled; the ally notch |
-| **Amplifiers** (outside the frame, beyond the cue reserve) | **above:** ordinal pips (rank or echelon); **below:** a fraction bar (health, progress); **corners:** badges, including the team badge; **from the anchor:** facing; **right:** the label (after Q6) | |
+| **Inner modifiers** | flags, in sector slots inside the frame | stale, carrying, disabled |
+| **Team badge** | the team's index, at the frame's inner centre, in the body pass (from 22 units) | a seven-segment digit |
+| **Amplifiers** (outside the frame, beyond the cue reserve) | **above:** ordinal pips (rank or echelon); **below:** a fraction bar (health, progress); **corners:** badges (never the team badge, which is drawn inside the frame); **from the anchor:** facing; **right:** the label (after Q6) | |
 
 **The identity-to-frame mapping is fixed in the library, per APP-6.** Themes choose colours, never shapes, so a frame
 shape carries identity everywhere and nothing else. Unit and structure **families** are told apart by icon, size and
@@ -141,14 +142,39 @@ relies on colour plus the accessible mirror label, and D12's redundancy rule is 
   - **Team colour** is the team mark.
   - **The index badge is mandatory whenever two or more of the game's teams share an allegiance.** Presence depends on
     the game's teams, not on which teams are visible, so a badge never appears or disappears as units come into view.
-  - **Badge geometry.** The badge is drawn from bars in the corner amplifier slot, as a **seven-segment numeral** (the
-    team's index, from 1).
+  - **The badge is drawn inside its own frame (review M1).** It sits at the frame's **inner centre**, in the body pass,
+    right after its own frame, so it moves with the frame and no neighbour can cover it.
+    - As an amplifier it was drawn first, and neighbouring frames covered it. The review measured 0 of 6 interior
+      badges intact on the dense board, with 22–92 % of each surviving.
+    - The top-right inner corner was considered. It does not fit Ally, whose quarter-point holes take the corners'
+      columns, or the stepped forms, whose corners are empty. The centre fits every frame.
+    - **Minimum frame for an inside badge: 22 units.** The 6 × 10 badge plus a 1-unit margin all round must lie wholly
+      on frame ink. Measured, the smallest size from which that always holds is: Neutral 12, Unknown 16, Own 18,
+      Enemy 20, Ally 22.
+    - **Below 22 units** the badge is omitted, and `draw` reports a diagnostic naming the team and the size. Team then
+      relies on the allegiance frame plus the mirror label.
+      *Trade-off:* on a board of small frames, two teams that share an allegiance look the same, and only the label
+      tells them apart. A game that needs at-a-glance team identity there must use frames of at least 22 units, or
+      keep its teams on distinct allegiances.
+    - **The badge and the icon share the inner centre.** When a badge is drawn, it takes the centre and the icon is not
+      drawn; the icon's class or function then rests on size, footprint and the mirror label. Side by side needs a
+      larger frame (Q15).
+    - **Contrast is checked against the badge's real neighbour,** the frame fill. The `glyph.badge.ink` token is at
+      least 3:1 against the body and every team and allegiance colour it can sit on, in every preset. The proof's
+      dark badge ink passes on the body and on every team colour of both themes.
+    - **Identity sampling is unaffected.** With badges drawn inside the frames, all 81 digit combinations of every
+      frame pair keep the bare-frame counts of the matrices above, at 24 and 32 units, with both samplers. The badge
+      sits only in the centre, away from the edges, corners and quarter points that the identity samples read.
+      `frames.fsx` prints this, and a .NET test checks digits 1 and 8.
+  - **Badge geometry.** The badge is a **seven-segment numeral** (the team's index, from 1), drawn from bars.
     - It sits on a 3 × 5 grid of whole-unit cells, with the unit at least 2, so the digit is at least 10 units tall:
       the 7-unit floor, rounded up to whole cells.
     - One digit covers 9 teams, above the largest hue capacity (8); two digits cover the rest.
     - The kit check covers **all 36 pairs of digits** at the minimum size, with D6's samples. Today's samples cannot
       tell 11 pairs apart in at least one direction, for example 1 against 7 and 7 against 9. D6's samples separate all 36 (smallest difference
       1 pixel each way).
+    - The dense-board kit case draws every frame with its badge inside it, and requires every badge's decided pixels
+      to hold. The identity-pair check runs both without and with badges.
   - When each of the game's teams has its own allegiance, the identity frame is the second channel, and the badge is
     optional.
   - The **accessible mirror label** names the team in every case.
@@ -403,7 +429,8 @@ per-channel tolerance.
      not match;
    - draws each identity frame alone and checks that every other frame's decided pixels differ from it (20 ordered
      pairs, with the identity-frame samples), as the proof's smoke does;
-   - draws each index badge alone against the other eight digits (all 36 pairs, both directions);
+   - draws each index badge alone against the other eight digits (all 36 pairs, both directions), and the identity
+     pairs again with badges inside the frames;
    - draws D10's dense-board case;
    - runs D12's team-badge check.
 
@@ -571,8 +598,9 @@ Amplifiers sit outside the reserve.
 
 **Layout extents may overlap neighbours.** A dense board, such as RuneScape's 32-unit tiles or FourD's 40-unit cells,
 cannot give every glyph its own reserve and amplifier ring. `Glyphs.scene` therefore draws in **passes** (review N2):
-1. all amplifiers (status bars, pips, badges, facing);
-2. all bodies (frame, fill, icon, team mark, inner modifiers);
+1. all amplifiers (status bars, pips, corner badges, facing);
+2. all bodies, each glyph's frame immediately followed by its fill, icon, team mark, inner modifiers and **team
+   badge**;
 3. all selection brackets.
 
 The cue layer then draws over all of them.
@@ -581,10 +609,11 @@ The cue layer then draws over all of them.
 may be covered where a neighbour's body overlaps it. A status bar that reaches into the tile above is cut by that tile's
 frame, and stays readable where it lies over ground. Brackets and cues are always on top.
 
-**Dense-board kit case.** The kit's glyph section draws D9's board: 32-unit tiles, each with a 24-unit identity frame
-and a status bar in its *above* amplifier slot, beyond the 8-unit reserve, so bars reach into the tiles above. The case
-requires two things:
+**Dense-board kit case.** The kit's glyph section draws D9's board: 32-unit tiles, each with a 24-unit identity frame,
+its team badge inside it, and a status bar in its *above* amplifier slot, beyond the 8-unit reserve, so bars reach into
+the tiles above. The case requires three things:
 - every frame's decided pixels and box edges hold;
+- every badge's decided pixels hold;
 - a control drawn with bodies first does not match.
 
 The proof runs this case (*The proof*).
@@ -748,9 +777,9 @@ The proof does not constrain the API.
   The proof predates D1's slot model and frame mapping, D4's token layers, D10's placement and D11. Its themes are
   flat records of colours, and its `standard` theme is the seed of the `classic` preset. After the review at
   `8cbd7bed`, its status bar is keylined in the body colour: the dark track alone measured 1.33:1 on the ground.
-- **.NET tests.** `tests/Game.Render.Tests/ExperimentalGlyphsTests.fs` checks eleven things:
+- **.NET tests.** `tests/Game.Render.Tests/ExperimentalGlyphsTests.fs` checks twelve things:
   - every glyph lowers to the portable set;
-  - the identity frames, the badges and the dense board (five tests, below);
+  - the identity frames, the badges and the dense board (six tests, below);
   - each status part meets 3:1 against its real neighbour: the keyline on the ground, each fill on the track;
   - every colour a glyph draws is a pixel `ScenePixels` decides;
   - the proof board decides more than 150 pixels;
@@ -761,25 +790,32 @@ The proof does not constrain the API.
   - `Glyphs.identityFrame` builds D1's five bar-only frames, snapped to whole units. `Glyphs.badge` builds the
     seven-segment index badges. `Glyphs.denseBoard` builds D10's dense board in either pass order.
   - `Glyphs.identitySamples` prototypes D6's corner and quarter-edge samples.
-  - Their .NET tests check:
+  - Their .NET tests (six, with the inside-badge test) check:
     - every ordered frame pair differs by at least 2 with D6's samples, and every pair but Own/Ally with today's, at 12,
       16, 24 and 32 units;
     - every frame passes the box-edge check on its drawn bounding box, and off-grid centres snap to the same frame;
     - Enemy's and Unknown's boxes are 20 × 20 and 30 × 30 at 24;
-    - all 36 badge pairs differ both ways, and the dense board keeps every frame's pixels, while its control does not.
+    - all 36 badge pairs differ both ways, and the dense board keeps every frame's and every badge's pixels, while its
+      control does not;
+    - inside badges are drawn from 22 units and omitted below with a diagnostic, sit wholly on frame ink with a 1-unit
+      margin, meet 3:1 against every fill, and leave the frame matrix unchanged.
   - The smoke repeats these on SVG, Pixi and Babylon:
     - the identity strip, and the 20 frame pairs at 24 units (`runIdentityFrames`);
-    - the badge strip, the 72 ordered digit pairs, the dense board, and its bodies-first control
+    - the 20 frame pairs again, with badges inside the frames;
+    - the badge strip, the 72 ordered digit pairs, the dense board with inside badges, and its bodies-first control
       (`runBadgesAndDenseBoard`).
 - **Browser smoke.** `runGlyphProof` in `tests/Render.Browser.Smoke/Program.fs` draws the 256×128 proof board, one
   theme per row, on SVG, Pixi and Babylon. It requires every decided pixel to match on each backend, with a
   theme-swap control that must not match. It reports a named pixel per glyph part and takes a screenshot when
   `RENDER_SMOKE_SCREENSHOTS` is set; the driver gained a `screenshot` request.
 - **Results** (fdev, Chrome for Testing 153.0.8010.12, both with SwiftShader and with the GPU (ANGLE Vulkan, RADV)):
-  the smoke passed **508** browser checks. 484 come from before this change; the rest were added in three rounds:
+  the smoke passed **511** browser checks. 484 come from before this change; the rest were added in four rounds:
   - 6 glyph-proof checks, on 2026-11-01;
   - 6 identity-frame checks, after the review at `0df23231`;
-  - 12 badge and dense-board checks, after the review at `fe8f4ad2`.
+  - 12 badge and dense-board checks, after the review at `fe8f4ad2`;
+  - 3 identity-pair checks with badges inside the frames, after the review at `12fe1183`.
+
+  The capacity probe answered `admit` before each run.
 
   On each backend:
   - all **403** pixels `ScenePixels` decides for the board matched (391 before the status keyline), and the theme-swap
@@ -787,9 +823,10 @@ The proof does not constrain the API.
   - the identity strip drew all **160** decided pixels, and every one of the 20 ordered frame pairs differed. Each
     pair's smaller count matched D1's D6-sample row for 24 units exactly, on SVG, Pixi and Babylon in both runs:
     Own/Ally 4, Own/Neutral 6, Ally/Neutral 10, Ally/Enemy 54, Ally/Unknown and Enemy/Unknown 28, and 16 for the
-    rest;
+    rest. With badges inside the frames the 20 pairs gave the same counts;
   - the badge strip drew all **684** samples, and all 72 ordered digit pairs differed;
-  - the dense board drew all **746** decided pixels, and its bodies-first control did not match.
+  - the dense board, with a badge inside every frame, drew all **1203** decided pixels, and its bodies-first control
+    did not match.
   - SVG and Pixi show the scene colours exactly.
   - Babylon shows 0.75 of them, within the kit's tolerance of 4, because it lights fills; #786 removes this.
   - Screenshots are in `game-render-02-glyphs/`, for the board (`glyphs-*`), the identity strip (`frames-*`), the badges
@@ -824,11 +861,18 @@ licence header. Ports are written in F#, so .NET and Fable stay identical (D11).
 ## Implementation plan (after acceptance)
 
 1. FS.GG.Rendering: Scene constructors in the Fable view (D7). This is owed intake.
-2. FS.GG.Game: #786 (unlit Babylon) and #773 (canvas strokes) as they are. They are prerequisites of D6 and of the
-   stroked profile.
+2. FS.GG.Game: #786 (unlit Babylon) and #773 (canvas strokes), as they are.
+   - #786 is the prerequisite of D6's **single colour and tolerance** across the three backends. Until it lands, the
+     kit keeps Babylon's 0.75 factor, as the proof does.
+   - #773 is the prerequisite of the **stroked profile** and its ring, band and polygon models (step 5).
+   - Neither blocks step 3.
 3. FS.GG.Game: `FS.GG.Game.Render.Glyphs`, in the portable profile, with tests, the kit's glyph section and bounded
    unmodelled nodes. It joins the Fable view and covers:
-   - the D1 slot model and `draw`;
+   - the D1 slot model and `draw`, the five bar-only identity frames, and the inside team badges;
+   - **D6's corner and quarter-edge samples for identity frames and badges,** shipped **together with** the frames and
+     badges. They need neither #786 nor #773, because frames and badges are opaque bars, which every backend already
+     draws. Without them, the kit cannot tell Own from Ally, or separate 11 of the 36 digit pairs;
+   - the dense-board and identity-pair kit cases (D10, D6);
    - the cue layer (D10);
    - the D4 token layers: `Theme.create`, the alias set, validation, CSS export and DTCG export and import;
    - the D11 determinism checks, with the `classic` seed as the first baked preset.
@@ -903,3 +947,7 @@ Each question has a recommended default. None blocks the implementation.
     Babylon and SVG.
   - *Trade-off:* this draws three layers per sprite. A shader is the measured alternative if the #761 bench shows
     the cost matters.
+- **Q15. Icon and badge side by side.** At 22 to 39 units the badge takes the inner centre and the icon is not drawn.
+  - *Default:* from 40 units, the inner box holds the icon (left) and the badge (right). The threshold is to be
+    measured per frame in the implementation, as the badge minimum was.
+  - *Trade-off:* small badged glyphs lose their class icon; class then rests on size, footprint and the label.
