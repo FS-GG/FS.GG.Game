@@ -831,6 +831,19 @@ with players.
 
 The proof does not constrain the API.
 
+**Retired (FS.GG.Game#789).** The shipped library in FS.GG.Game.Render replaced the proof. `ExperimentalGlyphs.fs`, its
+.NET tests and the three proof sections of the browser smoke are removed. Their coverage is now in the kit's glyph
+section (`GlyphConformance.cases`):
+- the identity pairs, bare and with badges;
+- the digit pairs, now 0–9;
+- the dense board and its control;
+- the theme switch;
+- the E1 and E6 cases.
+
+`frames.fsx` now measures the library itself, and reproduces D1's two matrices exactly from 8 to 32 units. At 6 units,
+below the 12-unit identity minimum, Ally/Unknown is 21 with D6's samples against the proof's 25. The text below
+records the proof as it was measured.
+
 - **Glyphs.** `src/ReferenceGame/ExperimentalGlyphs.fs`, namespace `FS.GG.Game.Reference.Experimental`, in a project
   that is not packed. It has six glyphs (unit, structure, waypoint, selection brackets, focus outline and status bar)
   and two themes (`standard` and `colourBlindSafe`), in the portable profile only.

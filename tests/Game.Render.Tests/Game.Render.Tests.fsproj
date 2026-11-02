@@ -19,7 +19,6 @@
     <Compile Include="ScenePixelsTests.fs" />
     <Compile Include="ThemeTests.fs" />
     <Compile Include="GlyphsTests.fs" />
-    <Compile Include="ExperimentalGlyphsTests.fs" />
     <Compile Include="SceneInteractionTests.fs" />
     <Compile Include="InputPipelineContractTests.fs" />
     <Compile Include="Program.fs" />
