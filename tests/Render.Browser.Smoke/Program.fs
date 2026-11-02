@@ -2853,6 +2853,7 @@ async {
         do! RetainedSurface.run check
         do! InputHostSmoke.run check
         do! runInputKit ()
+        do! ReferencePipelineSmoke.run check info
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)
