@@ -100,6 +100,26 @@ let main argv =
         | Ok back -> check "dtcg: export then import gives equal resolved hex for every alias" (resolved back = resolved Theme.classic)
         | Error _ -> check "dtcg: export then import resolves" false
 
+        // 2b. A hostile reference chain is refused on both runtimes, iteratively: no stack overflow (.NET) and no
+        // RangeError (Fable).
+        let chain (links: int) =
+            let entries =
+                [ for i in 0 .. links - 1 ->
+                      let value = if i = links - 1 then "{ \"hex\": \"#ff8000\" }" else "\"{chain.t" + string (i + 1) + "}\""
+                      "\"t" + string i + "\": { \"$type\": \"color\", \"$value\": " + value + " }" ]
+
+            "{ \"seed\": { \"ground\": { \"$type\": \"color\", \"$value\": \"{chain.t0}\" } }, \"chain\": { "
+            + String.concat ", " entries
+            + " } }"
+
+        let refusedFor (links: int) =
+            match Theme.ofDtcg [ ThemeAlgorithm.standard ] (chain links) with
+            | Error violations -> violations |> List.exists (fun v -> v.Reason.Contains "longer than 64")
+            | Ok _ -> false
+
+        check "dtcg: a 20,000-link reference chain is refused without exhausting the stack" (refusedFor 20000)
+        check "dtcg: a 65-link reference chain is refused, and 64 links are followed" (refusedFor 66 && not (refusedFor 64))
+
         // 3. The CSS variables equal the Scene's colours.
         let css = Theme.cssVariables Theme.classic
         print (sprintf "css classic variables=%d digest=%d" css.Length (digestOf (css |> List.map (fun (k, v) -> k + ":" + v) |> String.concat ";") 7))

@@ -233,4 +233,13 @@ module GlyphConformance =
                 [ "the structure's samples", pixels 48.0 48.0 (shaped GlyphFamily.structure) ]
             |> withDrawn [ drawn "the structure" 48.0 48.0 (shaped GlyphFamily.unit) (shaped GlyphFamily.structure) ]
 
-        starters @ identityCases false @ identityCases true @ digits @ [ edges; dense; switch; teams; ring; family ]
+        // 10. A hostile structure's foot band is wide enough to show its team (the diamond's bottom rows are narrow).
+        let hostile (team: bool) =
+            let spec = GlyphSpec.create GlyphFamily.structure { X = 24.0; Y = 24.0 } { Width = 1; Height = 1 } |> GlyphSpec.identity Identity.Enemy
+            single a (if team then spec |> GlyphSpec.team 1 else spec)
+
+        let foot =
+            case "a hostile structure's foot band shows its team" 48.0 48.0 [ hostile true ] [ "the structure with no team", pixels 48.0 48.0 (hostile false) ]
+            |> withDrawn [ drawn "the structure with no team" 48.0 48.0 (hostile true) (hostile false) ]
+
+        starters @ identityCases false @ identityCases true @ digits @ [ edges; dense; switch; teams; ring; family; foot ]

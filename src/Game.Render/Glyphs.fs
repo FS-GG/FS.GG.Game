@@ -563,7 +563,37 @@ module Glyphs =
                     // D3 and erratum E6: a structure's team mark is a foot band, the inner frame's lower rows in the team
                     // colour with the body above, inside every stepped frame, so a structure and a unit of the same
                     // identity, size and badge still differ.
-                    let foot = (boundsOf inner).Y + (boundsOf inner).Height - band
+                    // The band is as tall as it must be for its team-colour area to reach three quarters of Own's (the
+                    // inner width times the band), and never more than 0.6 of the inner frame: a diamond's or a
+                    // quatrefoil's bottom rows are narrow, so a fixed height left a hostile structure only a tip of
+                    // team colour (#789 review).
+                    let box = boundsOf inner
+                    let bottom = box.Y + box.Height
+                    let wanted = 0.75 * (w - 4.0 * band) * band
+
+                    // The ink area of the inner frame's bottom `h` rows, row by row as a union of spans: the clipped
+                    // pieces, like a quatrefoil's two bars, overlap.
+                    let area (h: float) =
+                        [ for row in 0 .. int h - 1 ->
+                              let y = bottom - 1.0 - float row
+                              let spans =
+                                  inner
+                                  |> List.choose (function
+                                      | SceneNode.Rectangle((x, ry, rw, rh), _) when ry <= y && y + 1.0 <= ry + rh -> Some(x, x + rw)
+                                      | _ -> None)
+                                  |> List.sortBy fst
+
+                              spans
+                              |> List.fold
+                                  (fun (total, reach) (l, r) ->
+                                      if r <= reach then total, reach else total + r - max l reach, r)
+                                  (0.0, -infinity)
+                              |> fst ]
+                        |> List.sum
+
+                    let cap = max band (floor (box.Height * 0.6))
+                    let height = [ band .. cap ] |> List.tryFind (fun h -> area h >= wanted) |> Option.defaultValue cap
+                    let foot = bottom - height
 
                     // The body above the band is drawn as the inner frame in the body colour, so the kit samples it where a
                     // unit's ring would be: the two families differ in decided pixels both ways.

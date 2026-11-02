@@ -425,10 +425,10 @@ module Theme =
     val cssVariables: theme: Theme -> (string * string) list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The theme as a DTCG 2025.10 token file: the seed (group `seed`) and every resolved alias (group `alias`), each
-    /// colour as `{colorSpace: "oklch", components, hex}`, each number as a number, with the theme's name, algorithm
-    /// names and number overrides under the `$extensions` key `gg.fs.theme`. The text is the same bytes on .NET and
-    /// through Fable.
+    /// The theme as a DTCG 2025.10 token file: the seed (group `seed`) and every resolved colour alias (group `alias`),
+    /// each colour as `{colorSpace: "oklch", components, hex}`, each seed number as a number, with the theme's name,
+    /// algorithm names and number overrides under the `$extensions` key `gg.fs.theme`. Size aliases are not written:
+    /// they derive from the seed. The text is the same bytes on .NET and through Fable.
     val toDtcg: theme: Theme -> string
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
@@ -441,11 +441,14 @@ module Theme =
     val dtcgResolver: themes: Theme list -> string
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Read a DTCG token file written by `toDtcg` (or edited from one): group `seed` becomes the seed, and the colours
-    /// of group `alias` become alias overrides, so deleting them derives every colour again from the edited seed. Size
-    /// aliases are always derived again from the seed (a size the theme overrode travels in the extension's
-    /// `numberOverrides`). A token's `$type` may be its own or its nearest group's, and a `$value` may be a reference such
-    /// as `"{seed.team.0}"`, followed through the document (a missing target or a cycle is refused). A colour with a
-    /// `hex` is read from the hex, never from its components. The algorithms are looked up by name in `algorithms`.
+    /// Read a DTCG token file written by `toDtcg` (or edited from one). This is an **author** path, for a game or a
+    /// designer; a player changes a team colour through `withTeamColour`. Group `seed` becomes the seed, and the colours
+    /// of group `alias` become alias overrides, so deleting them derives every colour again from the edited seed. Sizes
+    /// always derive again from the seed: a number in the alias group is refused, and a size the theme overrides travels
+    /// in the extension's `numberOverrides`. A token's `$type` may be its own or its nearest group's, and a `$value` may
+    /// be a whole-value reference such as `"{seed.team.0}"`, followed through the document; a missing target, a cycle,
+    /// a type mismatch or a chain of more than 64 links is refused. A JSON-pointer `$ref` is not supported and is
+    /// refused. A colour with alpha other than 1 is refused (Q5). A colour with a `hex` is read from the hex, never from
+    /// its components. Nesting deeper than 128 levels is refused. The algorithms are looked up by name in `algorithms`.
     /// Export then import gives equal resolved hex for every alias.
     val ofDtcg: algorithms: ThemeAlgorithm list -> json: string -> Result<Theme, ThemeViolation list>

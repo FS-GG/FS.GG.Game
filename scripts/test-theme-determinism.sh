@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT="$REPO_ROOT/tests/Game.Render.Theme.Determinism"
 EXPECTED="$PROJECT/expected.txt"
-MIN_CHECKS=5
+MIN_CHECKS=7
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

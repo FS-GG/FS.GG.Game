@@ -49,7 +49,22 @@ These corrections were ruled by Root during the implementation review. Each one 
   so a unit and a structure with the same identity, size and badge looked identical. A structure's team mark is
   therefore an **inner foot band built from bars**: the nested ring's lower rows in the team colour, with the body above
   them. It is drawn inside every stepped frame, and every team mark is clipped to the frame's own bars, so it never
-  fills Ally's holes. The kit checks that a unit and a structure with the same identity, size and badge, monochrome and
+  fills Ally's holes.
+  - **The band's height follows its area.** It grows until its team-colour area reaches three quarters of Own's (the
+    inner width times the band), up to 0.6 of the inner frame's height. A fixed height left the stepped diamond only
+    its narrow bottom tip: 21–33 % of Own's band at 22, 24 and 32 units.
+  - **Measured team-colour pixels** at 22, 24 and 32 units:
+
+    | Identity | 22 | 24 | 32 |
+    |---|---|---|---|
+    | Own | 28 | 36 | 64 |
+    | Ally | 29 | 28 | 56 |
+    | Neutral | 28 | 36 | 64 |
+    | Enemy | 30 | 30 | 56 |
+    | Unknown | 21 | 38 | 48 |
+
+  - **Kit minimums.** A test requires at least half of Own's area for every identity from 22 to 39 units. A kit case
+    requires a hostile structure's band to show its team colour on every backend. The kit checks that a unit and a structure with the same identity, size and badge, monochrome and
   with no icon, differ in decided pixels.
 
 ## Problem

@@ -54,7 +54,8 @@ module GlyphConformance =
     ///   with no team;
     /// - erratum E6: a unit and a structure of the same identity, size and badge, monochrome and with no icon, against
     ///   each other.
-    /// The dense board, the ring and the family cases also carry drawn controls.
+    /// - a hostile structure's foot band, which must show its team colour, against the structure with no team.
+    /// The dense board, the ring, the family and the foot-band cases also carry drawn controls.
     val cases: themes: Theme list -> GlyphCase list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.

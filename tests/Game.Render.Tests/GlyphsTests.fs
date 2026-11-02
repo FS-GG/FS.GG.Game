@@ -305,9 +305,9 @@ let tests =
 
             test "the kit's glyph section: every case's control differs from its expected pixels, and the A, B, A switch shows A's pixels again" {
                 let cases = GlyphConformance.cases [ theme ]
-                Expect.equal cases.Length (2 + 5 + 5 + 10 + 6) "cases"
-                Expect.equal (cases |> List.sumBy (fun c -> c.Controls.Length)) (2 + 20 + 20 + 90 + 6) "controls: 20 + 20 identity pairs and 90 digit pairs"
-                Expect.equal (cases |> List.sumBy (fun c -> c.DrawnControls.Length)) 3 "drawn controls: dense board, ring, family"
+                Expect.equal cases.Length (2 + 5 + 5 + 10 + 7) "cases"
+                Expect.equal (cases |> List.sumBy (fun c -> c.Controls.Length)) (2 + 20 + 20 + 90 + 7) "controls: 20 + 20 identity pairs and 90 digit pairs"
+                Expect.equal (cases |> List.sumBy (fun c -> c.DrawnControls.Length)) 4 "drawn controls: dense board, ring, family, foot band"
 
                 for c in cases do
                     for name, scene, own, differing in c.DrawnControls do
@@ -398,6 +398,23 @@ let tests =
                             for e in ScenePixels.identityExpectations 128.0 128.0 { Nodes = bare } do
                                 if e.Colour = t.Palette.Ground then
                                     Expect.equal (shownAt marked (int (floor e.Point.X)) (int (floor e.Point.Y))) (Some t.Palette.Ground) (sprintf "%A %s at %g: (%g, %g)" i (GlyphFamily.name family) size e.Point.X e.Point.Y)
+            }
+
+            test "the foot band's team-colour area is at least half of Own's for every identity from 22 to 39 units, Enemy included" {
+                for size in 22.0 .. 39.0 do
+                    let t = themeWithFrame size
+                    let team = t.Palette.Teams.[1]
+
+                    let area i =
+                        let body = GlyphDrawing.body (Glyphs.draw t (GlyphSpec.create GlyphFamily.structure { X = 64.0; Y = 64.0 } one |> GlyphSpec.identity i |> GlyphSpec.team 1 |> Glyph.ofSpec idle))
+                        let nodes = SceneNode.Rectangle((0.0, 0.0, 128.0, 128.0), t.Palette.Ground) :: body
+                        [ for y in 20..108 do for x in 20..108 do if shownAt nodes x y = Some team then yield 1 ] |> List.length
+
+                    let own = area Identity.Own
+                    Expect.isGreaterThan own 0 (sprintf "Own at %g" size)
+
+                    for i in identities do
+                        Expect.isGreaterThanOrEqual (float (area i)) (0.5 * float own) (sprintf "%A at %g against Own's %d" i size own)
             }
 
             test "erratum E6: a structure's team mark is a foot band, so a unit and a structure of one identity, size and badge differ, monochrome" {
