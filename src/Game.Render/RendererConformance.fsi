@@ -190,6 +190,11 @@ module ScenePixels =
     /// samples the kit tells every pair of the five identity frames, and every pair of the nine badge digits, apart.
     val identityExpectations: width: float -> height: float -> scene: FS.GG.UI.Scene.Scene -> PixelExpectation list
 
+    /// What `scene` decides for the pixel containing each point (the clear colour where nothing touches it), or `None`
+    /// where it leaves the pixel open: the same rule as `expectations`, at any pixel.
+    val internal decidedAt:
+        scene: FS.GG.UI.Scene.Scene -> points: FS.GG.UI.Scene.Point list -> FS.GG.UI.Scene.Color option list
+
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// What the kit needs to know about one game's renderers. Built by `RendererConformance.subject`, which fills the

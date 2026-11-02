@@ -238,13 +238,57 @@ module ThemeViolation =
     /// A violation of `token`, for a `ThemeCheck` to report.
     val create: token: string -> reason: string -> ThemeViolation
 
+/// The resolved colours glyph drawing reads (internal: the library's own view of the alias layer).
+[<NoComparison>]
+type internal Palette =
+    {
+        Ground: FS.GG.UI.Scene.Color
+        Body: FS.GG.UI.Scene.Color
+        Own: FS.GG.UI.Scene.Color
+        Ally: FS.GG.UI.Scene.Color
+        Neutral: FS.GG.UI.Scene.Color
+        Enemy: FS.GG.UI.Scene.Color
+        Unknown: FS.GG.UI.Scene.Color
+        Teams: FS.GG.UI.Scene.Color list
+        BadgeInk: FS.GG.UI.Scene.Color
+        IconInk: FS.GG.UI.Scene.Color
+        Selection: FS.GG.UI.Scene.Color
+        Marker: FS.GG.UI.Scene.Color
+        Path: FS.GG.UI.Scene.Color
+        Stale: FS.GG.UI.Scene.Color
+        FocusOuter: FS.GG.UI.Scene.Color
+        FocusInner: FS.GG.UI.Scene.Color
+        Hover: FS.GG.UI.Scene.Color
+        Good: FS.GG.UI.Scene.Color
+        Warn: FS.GG.UI.Scene.Color
+        Bad: FS.GG.UI.Scene.Color
+        Track: FS.GG.UI.Scene.Color
+        Keyline: FS.GG.UI.Scene.Color
+        ModifierInk: FS.GG.UI.Scene.Color
+        TerrainOpen: FS.GG.UI.Scene.Color
+        TerrainBlocked: FS.GG.UI.Scene.Color
+        TerrainDifficult: FS.GG.UI.Scene.Color
+        TerrainWater: FS.GG.UI.Scene.Color
+        TerrainVoid: FS.GG.UI.Scene.Color
+        Cell: float
+        Band: float
+        Gap: float
+        Bracket: float
+        HoverWidth: float
+        MinCssPerUnit: float
+        HueCapacity: int list
+    }
+
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// A resolved, validated theme (ADR D4): seed, map and alias tokens. Glyph drawing reads its alias tokens only. A theme
 /// is a view input, never game state: switching themes re-renders the next frame from the same state. Built by
 /// `Theme.create`, `Theme.ofDtcg` or a preset (`Theme.classic`).
 [<Sealed>]
-type Theme
+type Theme =
+
+    /// The resolved aliases the glyph library reads.
+    member internal Palette: Palette
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///

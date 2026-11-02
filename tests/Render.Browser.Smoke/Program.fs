@@ -2803,8 +2803,79 @@ let runIdentityFrames () : Async<unit> =
                     (String.concat "; " (Seq.truncate 4 misses))
     }
 
+/// FS.GG.Game#789, ADR D6: the kit's glyph section (`GlyphConformance.cases`), drawn by the library in FS.GG.Game.Render
+/// on every backend. Each case presents its scenes in order (the theme switch presents A, B and A again), then every
+/// pixel the last scene decides must be drawn, and every control (another identity, another digit, the board drawn
+/// bodies first, B's pixels, the other team...) must fail at least one pixel. The controls are read only after the
+/// subject's own pixels have settled.
+let runGlyphSection () : Async<unit> =
+    async {
+        let cases = GlyphConformance.cases [ Theme.classic ]
+        info "glyph section (#789)" (sprintf "%d cases, %d controls, %d decided pixels" cases.Length (cases |> List.sumBy (fun c -> c.Controls.Length)) (cases |> List.sumBy (fun c -> c.Expected.Length)))
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+
+            for case in cases do
+                let name = sprintf "glyph section (#789), %s: %s" id case.Name
+                let container = document.createElement "div"
+                container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" case.Width case.Height)
+                document.body.appendChild container |> ignore
+                let first = List.head case.Scenes
+                let last = List.last case.Scenes
+
+                let mounted =
+                    match backend with
+                    | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name case.Width case.Height) first
+                    | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name case.Width case.Height) first
+                    | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name case.Width case.Height) first
+
+                match mounted with
+                | Error reason -> check (name + ": mounts") false reason
+                | Ok mount ->
+                    for scene in List.tail case.Scenes do
+                        mount.Present scene
+
+                    let! wrong = drawnMismatches container case.Width case.Height backend (fun () -> mount.Present last) case.Expected 600
+                    let failedControls = ResizeArray<string>()
+
+                    if wrong.IsEmpty then
+                        for controlName, control in case.Controls do
+                            let! other = drawnMismatches container case.Width case.Height backend (fun () -> mount.Present last) control 0
+
+                            if other.IsEmpty then
+                                failedControls.Add controlName
+
+                        // A drawn control: present the control scene and wait until it shows its own pixels, so the read
+                        // is of the control and never of a stale frame, then require the modelled difference.
+                        for controlName, scene, own, modelled in case.DrawnControls do
+                            let! ownWrong = drawnMismatches container case.Width case.Height backend (fun () -> mount.Present scene) own 600
+
+                            if not ownWrong.IsEmpty then
+                                failedControls.Add(sprintf "%s (never showed its own pixels: %s)" controlName (ownWrong |> List.truncate 2 |> String.concat "; "))
+                            else
+                                let! differing = drawnMismatches container case.Width case.Height backend (fun () -> mount.Present scene) case.Expected 0
+                                info (sprintf "glyph drawn control %s, %s: %s" id case.Name controlName) (sprintf "%d differing (modelled %d)" differing.Length modelled)
+
+                                if differing.Length < modelled || modelled = 0 then
+                                    failedControls.Add(sprintf "%s (%d differ, modelled %d)" controlName differing.Length modelled)
+
+                    check
+                        (sprintf "%s: every decided pixel is drawn (%d) and every control differs (%d, %d drawn)" name case.Expected.Length case.Controls.Length case.DrawnControls.Length)
+                        (wrong.IsEmpty && failedControls.Count = 0 && not case.Expected.IsEmpty)
+                        (if not wrong.IsEmpty then
+                             sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; ")
+                         else
+                             sprintf "controls matched: %s" (String.concat ", " failedControls))
+
+                    mount.Dispose()
+
+                container.remove ()
+    }
+
 /// FS.GG.Game#789, ADR D6: a node the kit does not model but can bound leaves open only the pixels inside its bounds.
-/// The scene draws two bars and the ground, then a stroked path, a stroked rectangle and a line LAST, where a label
+/// The scene draws two bars and the ground, then a stroked path, a stroked rectangle, a line, a mitred acute path, a
+/// square-capped diagonal and a rectangle clip LAST, where a label
 /// usually goes. Before D6 such a node undecided every pixel; now every pixel outside the three nodes' reach stays
 /// decided, and each backend must draw it (Pixi and Babylon skip strokes until #773, SVG draws them, and none may draw
 /// outside their reach). The causal control reads the same pixels against the bars moved 6 units, which must not match.
@@ -2840,12 +2911,21 @@ let runBoundedUnmodelled () : Async<unit> =
                 )
                 SceneNode.PaintedRectangle({ X = 120.0; Y = 12.0; Width = 24.0; Height = 18.0 }, strokeOf ink)
                 SceneNode.Line({ X = 90.0; Y = 60.0 }, { X = 140.0; Y = 60.0 }, strokeOf ink)
+                // A mitred acute path: its join reaches the miter limit times the width past the vertex.
+                SceneNode.Path(
+                    { Commands = [ MoveTo { X = 60.0; Y = 40.0 }; LineTo { X = 80.0; Y = 42.0 }; LineTo { X = 60.0; Y = 44.0 } ]; FillType = Winding },
+                    { strokeOf ink with Stroke = Some { Width = 2.0; Cap = Butt; Join = Miter; Miter = 4.0 } }
+                )
+                // A square-capped diagonal: its caps reach half the width past each end, diagonally.
+                SceneNode.Line({ X = 150.0; Y = 40.0 }, { X = 156.0; Y = 50.0 }, { strokeOf ink with Stroke = Some { Width = 3.0; Cap = Square; Join = Bevel; Miter = 4.0 } })
+                // A rectangle clip: whatever it holds draws only inside it.
+                SceneNode.ClipNode(RectClip { X = 120.0; Y = 64.0; Width = 30.0; Height = 10.0 }, { Nodes = [ SceneNode.Rectangle((100.0, 50.0, 80.0, 40.0), ink) ] })
             ]
         let scene: Scene = { Nodes = bars 0.0 @ late }
         let moved: Scene = { Nodes = bars 6.0 @ late }
         let wanted = ScenePixels.expectations width height scene
         let labelled = ScenePixels.expectations width height { Nodes = bars 0.0 @ [ SceneNode.Text((100.0, 40.0), "x", ink) ] }
-        info "bounded unmodelled (#789)" (sprintf "%d pixels decided with three bounded nodes drawn last, %d with a text node drawn last" wanted.Length labelled.Length)
+        info "bounded unmodelled (#789)" (sprintf "%d pixels decided with six bounded nodes drawn last, %d with a text node drawn last" wanted.Length labelled.Length)
 
         for backend in RendererBackend.all do
             let id = RendererBackend.id backend
@@ -2865,7 +2945,7 @@ let runBoundedUnmodelled () : Async<unit> =
                 let! wrong = drawnMismatches container width height backend (fun () -> mount.Present scene) wanted 600
 
                 check
-                    (sprintf "%s: a stroked path, rectangle and line drawn last leave every pixel outside their reach decided and drawn (%d pixels)" name wanted.Length)
+                    (sprintf "%s: a stroked path, rectangle and line, a mitred acute path, a square-capped diagonal and a rectangle clip drawn last leave every pixel outside their reach decided and drawn (%d pixels)" name wanted.Length)
                     (wrong.IsEmpty && wanted.Length > 20 && labelled.IsEmpty)
                     (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
 
@@ -3025,6 +3105,7 @@ async {
         do! runIdentityFrames ()
         do! runBadgesAndDenseBoard ()
         do! runBoundedUnmodelled ()
+        do! runGlyphSection ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1

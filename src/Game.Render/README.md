@@ -214,10 +214,39 @@ import. To regenerate the baked preset after an algorithm change, run
 `dotnet run --project tests/Game.Render.Theme.Determinism -- --bake src/Game.Render/ThemeBaked.fs`, then regenerate
 `expected.txt`.
 
+### Glyphs (FS.GG.Game#789)
+
+`Glyphs.draw theme glyph` draws one glyph in the portable profile: opaque rectangles, circles and ellipses only, so SVG,
+Pixi and Babylon draw it and `ScenePixels` decides it. A `GlyphSpec` says what a glyph means, never its colours:
+
+- a family, an anchor and a footprint;
+- an identity, whose frame shape the library fixes after APP-6 from bars on whole units;
+- optionally an icon, a team, a size or lightness step, inner modifiers and amplifiers.
+
+`GlyphDrawing.frame` is the hit bounds: the frame's drawn box, independent of state, amplifiers and brackets.
+`GlyphDrawing.extent` adds the cue reserve and the amplifiers.
+
+`Glyphs.scene` draws in passes: every amplifier, then every body, then every selection bracket. In the body, each frame
+comes before its team ring, icon, modifiers and, last, its team badge. The badge is drawn from 22 units (one digit) or
+33 (two digits; team numbers never wrap). While a mandatory badge takes the inner centre of a 22 to 39-unit frame, the
+icon slot is unavailable: `Glyphs.iconSlotAvailable` says so before drawing.
+
+`Glyphs.cues` and `Glyphs.cuesHover` are themed cue layers for `SceneInteraction.withCues`, and read the theme on every
+draw. `GlyphConformance.cases` is the kit's glyph section; each backend runs it through its pixel probe. It covers:
+
+- the starter set per theme against a swapped theme;
+- 20 identity pairs, bare and with badges;
+- 90 digit pairs;
+- box edges;
+- the dense board against its bodies-first control;
+- the theme switch A, B, A with the focus ring;
+- two monochrome teams told apart by their badges.
+
 ### Fable and the browser host
 
 The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneInteraction`,
-`SceneRenderers`, `RendererConformance` and `Theme`, each `.fsi` and `.fs`, with the baked `ThemeBaked.fs`) so a Fable-compiled browser host can register adapters
+`SceneRenderers`, `RendererConformance`, `Theme`, `Glyphs` and `GlyphConformance`, each `.fsi` and `.fs`, with the baked
+`ThemeBaked.fs`) so a Fable-compiled browser host can register adapters
 against the same `RendererRegistry` and run the conformance kit. `Adapter` and
 `DefaultKeymap` are .NET-only and are not in that view. The view is first published in 0.18.0 (0.17.0 carries no
 Fable view). Its packed `fable/FS.GG.Game.Render.fsproj` lists its sources unconditionally, because Fable does not
