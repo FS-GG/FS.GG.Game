@@ -73,6 +73,13 @@ await page.exposeFunction("__fsggInput", async (request) => {
       await page.keyboard.up(key);
       break;
     }
+    // FS.GG.Game#810 (experimental client-presentation proof): a press-drag-release, moving in `steps` trusted moves.
+    case "drag":
+      await page.mouse.move(request.x0, request.y0);
+      await page.mouse.down();
+      await page.mouse.move(request.x1, request.y1, { steps: request.steps ?? 8 });
+      await page.mouse.up();
+      break;
     case "scale": {
       // The page's device pixel ratio (FS.GG.Game#753), so one page can run a scenario at DPR 1 and 2. CSS pixels, and so
       // the mouse coordinates, are unchanged. The session stays attached: detaching it drops the override. The driver

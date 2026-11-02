@@ -2854,6 +2854,9 @@ async {
         do! InputHostSmoke.run check
         do! runInputKit ()
         do! ReferencePipelineSmoke.run check info
+        do! ClientPresentationSmoke.runDragLifetime check
+        do! ClientPresentationSmoke.run check info
+        do! ClientPresentationSmoke.runEquivalence check info
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

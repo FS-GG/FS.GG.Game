@@ -9,6 +9,9 @@
     <Compile Include="State.fs" />
     <Compile Include="Renderers.fs" />
     <Compile Include="Pipeline.fs" />
+    <!-- EXPERIMENTAL, NOT SHIPPED (FS.GG.Game#810): the client-presentation proof. ReferenceGame is not packed. -->
+    <Compile Include="ExperimentalClientPresentation.fs" />
+    <Compile Include="ExperimentalPlanGame.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
