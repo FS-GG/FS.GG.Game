@@ -297,6 +297,7 @@ FS.GG.Game.Render.SceneInteraction.standardCues(FS.GG.Game.Render.CueContext) : 
 FS.GG.Game.Render.SceneInteraction.withAccess<State>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectableObject, FS.GG.Game.Render.ObjectAccess>, SceneInteraction<State>) : SceneInteraction<State>
 FS.GG.Game.Render.SceneInteraction.withCues<State>(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>, SceneInteraction<State>) : SceneInteraction<State>
 FS.GG.Game.Render.ScenePixels.expectations(System.Double, System.Double, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.PixelExpectation>
+FS.GG.Game.Render.ScenePixels.identityExpectations(System.Double, System.Double, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.PixelExpectation>
 FS.GG.Game.Render.SceneRenderers.backends<State>(SceneRenderers<State>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.RendererBackend>
 FS.GG.Game.Render.SceneRenderers.create<State>(FSharpFunc<State, FS.GG.UI.Scene.Scene>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Scene, Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>>) : SceneRenderers<State>
 FS.GG.Game.Render.SceneRenderers.registry<State>(SceneRenderers<State>) : RendererRegistry<State>

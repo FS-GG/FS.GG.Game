@@ -169,6 +169,105 @@ let tests =
                 Expect.isEmpty apart "no pixel is expected to be the clear colour when an unmodelled node may draw there"
             }
 
+            test "a node with known bounds leaves open only the pixels inside its bounds grown by its stroke reach (ADR D6, #789)" {
+                let stroke width : Paint =
+                    {
+                        Fill = None
+                        Stroke = Some { Width = width; Cap = Butt; Join = Bevel; Miter = 4.0 }
+                        Opacity = 1.0
+                        Antialias = true
+                        BlendMode = SrcOver
+                        Shader = None
+                        ColorFilter = NoColorFilter
+                        MaskFilter = NoMaskFilter
+                        ImageFilter = NoImageFilter
+                        PathEffect = NoPathEffect
+                    }
+
+                let path =
+                    SceneNode.Path(
+                        {
+                            Commands = [ MoveTo { X = 40.0; Y = 40.0 }; LineTo { X = 60.0; Y = 40.0 }; LineTo { X = 50.0; Y = 60.0 }; Close ]
+                            FillType = Winding
+                        },
+                        stroke 2.0
+                    )
+
+                let found =
+                    scene
+                        [
+                            SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
+                            SceneNode.Rectangle((10.0, 20.0, 30.0, 40.0), square)
+                            path
+                        ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                // The path's box is 40..60 x 40..60, grown by its stroke width (2) and one unit: 37..63 x 37..63.
+                Expect.equal (colourAt 25.5 40.5 found) (Some square) "the rectangle's middle, clear of the path, stays decided"
+                Expect.equal (colourAt 50.5 50.5 found) None "inside the path's bounds nothing is decided"
+                Expect.equal (colourAt 39.5 40.5 found) None "the rectangle's right edge pixel lies in the path's reach"
+                Expect.equal (colourAt 40.5 40.5 found) None "and so does the pixel just outside it"
+                Expect.isGreaterThan found.Length 10 "a path drawn last no longer undecides the scene"
+
+                let mitred =
+                    SceneNode.Line(
+                        { X = 70.0; Y = 70.0 },
+                        { X = 80.0; Y = 70.0 },
+                        { stroke 2.0 with Stroke = Some { Width = 2.0; Cap = Butt; Join = Miter; Miter = 4.0 } }
+                    )
+
+                let near =
+                    scene [ SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background); mitred; SceneNode.Rectangle((60.0, 60.0, 1.0, 1.0), square) ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                // A mitred join reaches 2 x 4 + 1 = 9 units: 61..89 x 61..79.
+                Expect.equal (colourAt 60.5 60.5 near) (Some square) "outside the mitred reach"
+
+                let image = SceneNode.Image((30.0, 30.0, 10.0, 10.0), "atlas.png")
+
+                let imaged =
+                    scene [ SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background); image ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                Expect.equal (colourAt 50.5 50.5 imaged) (Some background) "an image leaves the background's middle decided"
+
+                let blurred =
+                    SceneNode.Path(
+                        { Commands = [ MoveTo { X = 40.0; Y = 40.0 }; LineTo { X = 41.0; Y = 41.0 } ]; FillType = Winding },
+                        { stroke 1.0 with MaskFilter = Blur 2.0 }
+                    )
+
+                let unbounded =
+                    scene [ SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background); blurred ]
+                    |> ScenePixels.expectations 100.0 100.0
+
+                Expect.isEmpty unbounded "a blurred paint cannot be bounded, so it undecides every pixel it could overdraw"
+            }
+
+            test "identity samples add every rectangle's corner and quarter-edge pixels after the middle-of-edge ones (ADR D6, #789)" {
+                let nodes =
+                    scene
+                        [
+                            SceneNode.Rectangle((0.0, 0.0, 100.0, 100.0), background)
+                            SceneNode.Rectangle((10.0, 20.0, 40.0, 20.0), square)
+                        ]
+
+                let today = ScenePixels.expectations 100.0 100.0 nodes
+                let identity = ScenePixels.identityExpectations 100.0 100.0 nodes
+                let key (e: PixelExpectation) = e.Point.X, e.Point.Y, e.Colour
+                Expect.equal (identity |> List.truncate today.Length |> List.map key) (today |> List.map key) "today's samples come first, unchanged"
+                Expect.equal (identity |> List.map (fun e -> e.Point) |> List.distinct |> List.length) identity.Length "no pixel twice"
+                Expect.equal (colourAt 10.5 20.5 identity) (Some square) "the top-left corner, inside"
+                Expect.equal (colourAt 9.5 19.5 identity) (Some background) "the top-left corner, diagonally outside"
+                Expect.equal (colourAt 49.5 39.5 identity) (Some square) "the bottom-right corner, inside"
+                Expect.equal (colourAt 50.5 40.5 identity) (Some background) "the bottom-right corner, diagonally outside"
+                Expect.equal (colourAt 20.5 20.5 identity) (Some square) "a quarter along the top edge, inside"
+                Expect.equal (colourAt 20.5 19.5 identity) (Some background) "a quarter along the top edge, outside"
+                Expect.equal (colourAt 40.5 39.5 identity) (Some square) "three quarters along the bottom edge, inside"
+                Expect.equal (colourAt 9.5 25.5 identity) (Some background) "a quarter down the left edge, outside"
+                Expect.isNone (colourAt 10.5 20.5 today) "today's samples do not read corners"
+            }
+
             test "a node that overhangs the canvas is read at the canvas edge and nowhere outside it" {
                 let found =
                     scene

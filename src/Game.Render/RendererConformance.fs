@@ -108,15 +108,69 @@ module ScenePixels =
     type private Drawn =
         | Box of left: float * top: float * right: float * bottom: float * colour: Color
         | Oval of cx: float * cy: float * rx: float * ry: float * colour: Color
-        /// A node of a kind the kit does not model (text, lines, paths, images, clips...): it draws somewhere the kit
-        /// cannot say, so no pixel it could overdraw is decided.
+        /// A node the kit does not model whose bounds are known (a stroked rectangle or ellipse, a line, a path, points,
+        /// an arc, an image, a rectangle- or path-clipped scene): it may draw anywhere inside them, so no pixel it
+        /// touches there is decided, and it draws nothing outside them (FS.GG.Game#789, ADR D6).
+        | Bounded of left: float * top: float * right: float * bottom: float
+        /// A node of a kind the kit does not model and cannot bound (text, glyph runs, regions, vertices, pictures, a
+        /// filtered paint...): it draws somewhere the kit cannot say, so no pixel it could overdraw is decided.
         | Unmodelled
 
     let private colourOf drawn =
         match drawn with
         | Box(_, _, _, _, colour)
         | Oval(_, _, _, _, colour) -> colour
+        | Bounded _
         | Unmodelled -> failwith "an unmodelled node has no colour"
+
+    /// How far past its geometry a paint may draw, in scene units, or `None` when the kit cannot say (a blur, a drop
+    /// shadow or a displacing path effect). A stroke reaches its width past the geometry at most, or `Miter` widths at
+    /// a mitred join; one more unit covers antialiasing.
+    let private paintReach (paint: Paint) : float option =
+        let filtered =
+            paint.MaskFilter <> NoMaskFilter
+            || paint.ImageFilter <> NoImageFilter
+            || (match paint.PathEffect with
+                | Discrete _ -> true
+                | _ -> false)
+
+        if filtered then
+            None
+        else
+            match paint.Stroke with
+            | None -> Some 1.0
+            | Some stroke ->
+                let width = abs stroke.Width
+                let join = if stroke.Join = Miter then max 1.0 (abs stroke.Miter) else 1.0
+                Some(width * join + 1.0)
+
+    /// The box of `points` grown by `reach` on every side, or `Unmodelled` when the reach is unknown or nothing is
+    /// finite.
+    let private boundedBy (reach: float option) (points: (float * float) list) : Drawn =
+        match reach, points with
+        | Some reach, (_ :: _) when points |> List.forall (fun (x, y) -> not (System.Double.IsNaN x || System.Double.IsInfinity x || System.Double.IsNaN y || System.Double.IsInfinity y)) ->
+            let xs = points |> List.map fst
+            let ys = points |> List.map snd
+            Bounded(List.min xs - reach, List.min ys - reach, List.max xs + reach, List.max ys + reach)
+        | _ -> Unmodelled
+
+    let private corners (dx: float, dy: float) (bounds: Rect) =
+        [ bounds.X + dx, bounds.Y + dy; bounds.X + dx + bounds.Width, bounds.Y + dy + bounds.Height ]
+
+    /// Every point a path's outline can reach: its points, its curves' control points (a Bezier stays inside their
+    /// hull) and its arcs' bounds.
+    let private pathPoints (dx: float, dy: float) (path: PathSpec) =
+        let at (point: Point) = point.X + dx, point.Y + dy
+
+        path.Commands
+        |> List.collect (fun command ->
+            match command with
+            | MoveTo point
+            | LineTo point -> [ at point ]
+            | QuadTo(control, point) -> [ at control; at point ]
+            | CubicTo(control1, control2, point) -> [ at control1; at control2; at point ]
+            | ArcTo(bounds, _, _) -> corners (dx, dy) bounds
+            | Close -> [])
 
     let rec private flatten (dx: float, dy: float) (scene: Scene) (drawn: ResizeArray<Drawn>) : unit =
         for node in scene.Nodes do
@@ -139,6 +193,17 @@ module ScenePixels =
                 )
             | SceneNode.Circle(center, radius, fill) -> drawn.Add(Oval(center.X + dx, center.Y + dy, radius, radius, fill))
             | SceneNode.Empty -> ()
+            | SceneNode.PaintedRectangle(bounds, paint)
+            | SceneNode.Ellipse(bounds, paint)
+            | SceneNode.Arc(bounds, _, _, paint) -> drawn.Add(boundedBy (paintReach paint) (corners (dx, dy) bounds))
+            | SceneNode.Line(a, b, paint) ->
+                drawn.Add(boundedBy (paintReach paint) [ a.X + dx, a.Y + dy; b.X + dx, b.Y + dy ])
+            | SceneNode.Path(path, paint) -> drawn.Add(boundedBy (paintReach paint) (pathPoints (dx, dy) path))
+            | SceneNode.Points(points, paint) ->
+                drawn.Add(boundedBy (paintReach paint) (points |> List.map (fun point -> point.X + dx, point.Y + dy)))
+            | SceneNode.Image((x, y, w, h), _) -> drawn.Add(boundedBy (Some 1.0) [ x + dx, y + dy; x + dx + w, y + dy + h ])
+            | SceneNode.ClipNode(RectClip bounds, _) -> drawn.Add(boundedBy (Some 1.0) (corners (dx, dy) bounds))
+            | SceneNode.ClipNode(PathClip path, _) -> drawn.Add(boundedBy (Some 1.0) (pathPoints (dx, dy) path))
             | _ -> drawn.Add Unmodelled
 
     /// How a node covers the unit pixel `[col, col+1] x [row, row+1]`.
@@ -156,6 +221,11 @@ module ScenePixels =
 
         match drawn with
         | Unmodelled -> Partial
+        | Bounded(l, t, r, b) ->
+            if x1 <= l + epsilon || x0 >= r - epsilon || y1 <= t + epsilon || y0 >= b - epsilon then
+                Clear
+            else
+                Partial
         | Box(l, t, r, b, _) ->
             if x1 <= l + epsilon || x0 >= r - epsilon || y1 <= t + epsilon || y0 >= b - epsilon then
                 Clear
@@ -229,7 +299,7 @@ module ScenePixels =
             Alpha = 255uy
         }
 
-    let expectations (width: float) (height: float) (scene: Scene) : PixelExpectation list =
+    let private collect (identity: bool) (width: float) (height: float) (scene: Scene) : PixelExpectation list =
         let drawn = ResizeArray<Drawn>()
         flatten (0.0, 0.0) scene drawn
         let columns = floorInt width
@@ -279,6 +349,7 @@ module ScenePixels =
                     sample midCol (floorInt t - 1)
                     sample midCol (floorInt b - 1)
                     sample midCol (ceilInt b)
+            | Bounded _
             | Unmodelled -> ()
             | Oval(cx, cy, rx, ry, _) ->
                 // The centre, and the pixel one clear of the extreme on each axis: a round shape's inside is shaded
@@ -292,7 +363,51 @@ module ScenePixels =
                 sample midCol (ceilInt (cy + ry) + 1)
                 sample midCol (floorInt (cy - ry) - 2)
 
+        if identity then
+            // ADR D6 (review R3 of #794): for every rectangle, the pixels just inside and just outside each corner, and
+            // just inside and outside each edge at a quarter and three quarters of its length. They come after the
+            // samples above, so `expectations` is a prefix of `identityExpectations`.
+            for node in drawn do
+                match node with
+                | Box(l, t, r, b, _) ->
+                    let l = max l 0.0
+                    let t = max t 0.0
+                    let r = min r (float columns)
+                    let b = min b (float rows)
+
+                    if r > l && b > t then
+                        let insideLeft, insideTop = ceilInt l, ceilInt t
+                        let insideRight, insideBottom = floorInt r - 1, floorInt b - 1
+                        let outsideLeft, outsideTop = floorInt l - 1, floorInt t - 1
+                        let outsideRight, outsideBottom = ceilInt r, ceilInt b
+                        sample insideLeft insideTop
+                        sample insideRight insideTop
+                        sample insideLeft insideBottom
+                        sample insideRight insideBottom
+                        sample outsideLeft outsideTop
+                        sample outsideRight outsideTop
+                        sample outsideLeft outsideBottom
+                        sample outsideRight outsideBottom
+
+                        for fraction in [ 0.25; 0.75 ] do
+                            let col = floorInt (l + (r - l) * fraction)
+                            let row = floorInt (t + (b - t) * fraction)
+                            sample col insideTop
+                            sample col outsideTop
+                            sample col insideBottom
+                            sample col outsideBottom
+                            sample insideLeft row
+                            sample outsideLeft row
+                            sample insideRight row
+                            sample outsideRight row
+                | _ -> ()
+
         List.ofSeq found
+
+    let expectations (width: float) (height: float) (scene: Scene) : PixelExpectation list = collect false width height scene
+
+    let identityExpectations (width: float) (height: float) (scene: Scene) : PixelExpectation list =
+        collect true width height scene
 
 /// Opaque behind the .fsi: built by `RendererConformance.subject` and its `with*` functions only, so a field added
 /// later is not a breaking change.

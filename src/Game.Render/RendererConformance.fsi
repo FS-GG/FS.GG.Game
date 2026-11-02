@@ -171,11 +171,24 @@ module ScenePixels =
     /// Babylon all do), so a node drawn larger than declared fails it. A backend that draws a node at another
     /// position or size, or a later node at another layer, fails it too.
     ///
-    /// Only those three kinds are modelled. A node of any other kind (text, lines, paths, images, clips...) draws
-    /// where the kit cannot say, so it leaves open every pixel it could overdraw: nothing is expected to be the clear
-    /// colour in a scene that has one, and a pixel is decided only by an opaque node that wholly covers it AFTER the
-    /// last unmodelled node. A scene made of unmodelled nodes alone lists no pixel.
+    /// Only those three kinds are modelled. A node of another kind whose bounds are known (FS.GG.Game#789, ADR D6) —
+    /// a stroked rectangle or ellipse, a line, a path, points or an arc whose paint has no blur, drop shadow or
+    /// displacing path effect; an image; a scene clipped to a rectangle or a path — leaves open every pixel it touches
+    /// inside its bounds, grown by its stroke reach (the stroke width, times the miter limit at a mitred join) plus one
+    /// unit, and draws nothing outside them. A node the kit cannot bound (text, glyph runs, regions, vertices, pictures,
+    /// a filtered paint...) draws where the kit cannot say, so it leaves open every pixel it could overdraw: nothing is
+    /// expected to be the clear colour in a scene that has one, and a pixel is decided only by an opaque node that
+    /// wholly covers it AFTER the last such node. A scene made of unmodelled nodes alone lists no pixel.
     val expectations: width: float -> height: float -> scene: FS.GG.UI.Scene.Scene -> PixelExpectation list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `ScenePixels.expectations` followed by the corner and quarter-edge samples of ADR D6 (FS.GG.Game#789, review R3
+    /// of #794): for every rectangle, the first whole pixel inside and outside each corner (the outside one diagonally
+    /// past it), and the first whole pixel inside and outside each edge at a quarter and at three quarters of its
+    /// length, each kept when the scene decides it by the same rule. Identity frames and index badges are built from
+    /// bars that differ at corners and quarter points, where the middle-of-edge samples cannot see them: with these
+    /// samples the kit tells every pair of the five identity frames, and every pair of the nine badge digits, apart.
+    val identityExpectations: width: float -> height: float -> scene: FS.GG.UI.Scene.Scene -> PixelExpectation list
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///

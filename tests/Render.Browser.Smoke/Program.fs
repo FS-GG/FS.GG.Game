@@ -2706,8 +2706,8 @@ let runGlyphProof () : Async<unit> =
 /// FS.GG.Game#789, review R3 of #794: the five identity frames (ADR D1), monochrome so only shape counts, at the default
 /// frame size (24 units). On each backend: a strip of all five draws every pixel ScenePixels decides; and each frame, drawn
 /// alone, shows its own decided pixels while every other frame's decided pixels differ from it (20 ordered pairs), so a
-/// backend that drew one identity's frame for another's would be caught. The pairs use the prototype of ADR D6's corner
-/// and quarter-edge samples (`Glyphs.identitySamples`): today's middle-of-edge samples cannot see Ally's quarter-point
+/// backend that drew one identity's frame for another's would be caught. The pairs use the kit's ADR D6 corner and
+/// quarter-edge samples (`ScenePixels.identityExpectations`): the middle-of-edge samples cannot see Ally's quarter-point
 /// holes (review N1).
 let runIdentityFrames () : Async<unit> =
     async {
@@ -2779,14 +2779,14 @@ let runIdentityFrames () : Async<unit> =
                     match mountOn backend host (sprintf "%s %A" name a) 48.0 48.0 (sceneOf a) with
                     | Error reason -> misses.Add(sprintf "%A does not mount: %s" a reason)
                     | Ok mount ->
-                        let! own = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (sceneOf a)) 600
+                        let! own = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (ScenePixels.identityExpectations 48.0 48.0 (sceneOf a)) 600
 
                         if not own.IsEmpty then
                             misses.Add(sprintf "%A does not show its own pixels: %s" a (own |> List.truncate 2 |> String.concat "; "))
 
                         for b in identities |> List.filter ((<>) a) do
                             pairs.Value <- pairs.Value + 1
-                            let! other = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (sceneOf b)) 0
+                            let! other = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (ScenePixels.identityExpectations 48.0 48.0 (sceneOf b)) 0
 
                             if other.IsEmpty then
                                 misses.Add(sprintf "%A drawn passes %A's decided pixels" a b)
@@ -2801,6 +2801,84 @@ let runIdentityFrames () : Async<unit> =
                     (sprintf "%s%s: each frame shows its own decided pixels and differs from every other frame's (%d ordered pairs)" name label pairs.Value)
                     (misses.Count = 0 && pairs.Value = 20)
                     (String.concat "; " (Seq.truncate 4 misses))
+    }
+
+/// FS.GG.Game#789, ADR D6: a node the kit does not model but can bound leaves open only the pixels inside its bounds.
+/// The scene draws two bars and the ground, then a stroked path, a stroked rectangle and a line LAST, where a label
+/// usually goes. Before D6 such a node undecided every pixel; now every pixel outside the three nodes' reach stays
+/// decided, and each backend must draw it (Pixi and Babylon skip strokes until #773, SVG draws them, and none may draw
+/// outside their reach). The causal control reads the same pixels against the bars moved 6 units, which must not match.
+let runBoundedUnmodelled () : Async<unit> =
+    async {
+        let width, height = 160.0, 80.0
+        let stroke (width: float) : Paint =
+            {
+                Fill = None
+                Stroke = Some { Width = width; Cap = Butt; Join = Bevel; Miter = 4.0 }
+                Opacity = 1.0
+                Antialias = true
+                BlendMode = SrcOver
+                Shader = None
+                ColorFilter = NoColorFilter
+                MaskFilter = NoMaskFilter
+                ImageFilter = NoImageFilter
+                PathEffect = NoPathEffect
+            }
+        let ink = fixtureColor 255uy 255uy 255uy
+        let strokeOf colour = { stroke 2.0 with Fill = Some colour }
+        let bars dx : SceneNode list =
+            [
+                SceneNode.Rectangle((0.0, 0.0, width, height), fixtureColor 34uy 40uy 49uy)
+                SceneNode.Rectangle((10.0 + dx, 10.0, 40.0, 24.0), fixtureColor 200uy 40uy 90uy)
+                SceneNode.Rectangle((10.0 + dx, 46.0, 40.0, 24.0), fixtureColor 40uy 200uy 90uy)
+            ]
+        let late: SceneNode list =
+            [
+                SceneNode.Path(
+                    { Commands = [ MoveTo { X = 90.0; Y = 12.0 }; LineTo { X = 110.0; Y = 12.0 }; LineTo { X = 100.0; Y = 30.0 }; Close ]; FillType = Winding },
+                    strokeOf ink
+                )
+                SceneNode.PaintedRectangle({ X = 120.0; Y = 12.0; Width = 24.0; Height = 18.0 }, strokeOf ink)
+                SceneNode.Line({ X = 90.0; Y = 60.0 }, { X = 140.0; Y = 60.0 }, strokeOf ink)
+            ]
+        let scene: Scene = { Nodes = bars 0.0 @ late }
+        let moved: Scene = { Nodes = bars 6.0 @ late }
+        let wanted = ScenePixels.expectations width height scene
+        let labelled = ScenePixels.expectations width height { Nodes = bars 0.0 @ [ SceneNode.Text((100.0, 40.0), "x", ink) ] }
+        info "bounded unmodelled (#789)" (sprintf "%d pixels decided with three bounded nodes drawn last, %d with a text node drawn last" wanted.Length labelled.Length)
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+            let name = sprintf "bounded unmodelled nodes (#789), %s" id
+            let container = document.createElement "div"
+            document.body.appendChild container |> ignore
+
+            let mounted =
+                match backend with
+                | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+                | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+                | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+            match mounted with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container width height backend (fun () -> mount.Present scene) wanted 600
+
+                check
+                    (sprintf "%s: a stroked path, rectangle and line drawn last leave every pixel outside their reach decided and drawn (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 20 && labelled.IsEmpty)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+
+                let! control = drawnMismatches container width height backend (fun () -> mount.Present scene) (ScenePixels.expectations width height moved) 0
+
+                check
+                    (sprintf "%s: control, the bars moved 6 units do not match" name)
+                    (not control.IsEmpty)
+                    "the moved declaration matched"
+
+                mount.Dispose()
+
+            container.remove ()
     }
 
 /// FS.GG.Game#789, review N2 of #794: the nine index badges (ADR D1) at the minimum unit (2, so 10 units tall), and D9's
@@ -2839,7 +2917,7 @@ let runBadgesAndDenseBoard () : Async<unit> =
             container.id <- sprintf "badges-%s" id
             container.setAttribute ("style", sprintf "width: %gpx; height: 16px; line-height: 0; overflow: hidden" stripWidth)
             document.body.appendChild container |> ignore
-            let wanted = Experimental.Glyphs.identitySamples stripWidth 16.0 strip
+            let wanted = ScenePixels.identityExpectations stripWidth 16.0 strip
 
             match mountOn backend container name stripWidth 16.0 strip with
             | Error reason -> check (name + ": mounts") false reason
@@ -2866,12 +2944,12 @@ let runBadgesAndDenseBoard () : Async<unit> =
                 match mountOn backend host (sprintf "%s %d" name a) 16.0 16.0 (single a) with
                 | Error reason -> misses.Add(sprintf "%d does not mount: %s" a reason)
                 | Ok mount ->
-                    let! own = drawnMismatches host 16.0 16.0 backend (fun () -> mount.Present(single a)) (Experimental.Glyphs.identitySamples 16.0 16.0 (single a)) 600
+                    let! own = drawnMismatches host 16.0 16.0 backend (fun () -> mount.Present(single a)) (ScenePixels.identityExpectations 16.0 16.0 (single a)) 600
                     if not own.IsEmpty then misses.Add(sprintf "%d does not show its own pixels" a)
 
                     for b in digits |> List.filter ((<>) a) do
                         pairs.Value <- pairs.Value + 1
-                        let! other = drawnMismatches host 16.0 16.0 backend (fun () -> mount.Present(single a)) (Experimental.Glyphs.identitySamples 16.0 16.0 (single b)) 0
+                        let! other = drawnMismatches host 16.0 16.0 backend (fun () -> mount.Present(single a)) (ScenePixels.identityExpectations 16.0 16.0 (single b)) 0
                         if other.IsEmpty then misses.Add(sprintf "%d drawn passes %d's samples" a b)
 
                     mount.Dispose()
@@ -2946,6 +3024,7 @@ async {
         do! runGlyphProof ()
         do! runIdentityFrames ()
         do! runBadgesAndDenseBoard ()
+        do! runBoundedUnmodelled ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1
