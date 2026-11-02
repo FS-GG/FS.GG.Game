@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- FS.GG.Game#795 (GAME-RENDER-02.8), B4 of the #805 review: theme derivation, run-time custom seeds included, gives
+       the same bytes on .NET and through Fable (node). Dependency-free beyond the bounded Fable view of
+       FS.GG.Game.Render, so the same sources run with `dotnet run` and with `dotnet fable` then node;
+       scripts/test-theme-fuzz.sh compares both outputs byte for byte. It compiles the experimental colour and theme
+       modules from src/ReferenceGame, the code the design's proof derives with. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\ReferenceGame\ExperimentalColour.fs" Link="ExperimentalColour.fs" />
+    <Compile Include="..\..\src\ReferenceGame\ExperimentalThemes.fs" Link="ExperimentalThemes.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Game.Render\Fable\FS.GG.Game.Render.fsproj" />
+  </ItemGroup>
+
+</Project>

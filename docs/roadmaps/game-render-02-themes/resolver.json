@@ -1,0 +1,16 @@
+{
+  "version": "2025-10-01",
+  "modifiers": {
+    "theme": {
+      "contexts": {
+        "classic": [ { "$ref": "themes/classic.tokens.json" } ],
+        "light": [ { "$ref": "themes/light.tokens.json" } ],
+        "highContrast": [ { "$ref": "themes/highContrast.tokens.json" } ],
+        "colourBlindSafe": [ { "$ref": "themes/colourBlindSafe.tokens.json" } ],
+        "monochrome": [ { "$ref": "themes/monochrome.tokens.json" } ]
+      },
+      "default": "classic"
+    }
+  },
+  "resolutionOrder": [ { "$ref": "#/modifiers/theme" } ]
+}

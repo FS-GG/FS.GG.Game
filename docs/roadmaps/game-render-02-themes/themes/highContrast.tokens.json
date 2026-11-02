@@ -1,0 +1,68 @@
+{
+  "$extensions": { "gg.fs.theme": { "name": "highContrast", "algorithms": [ "base", "dark", "highContrast", "repair" ], "floor": 7.0 } },
+  "surface": {
+    "ground": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.0000, 0.0000, 0.00 ], "alpha": 1, "hex": "#000000" } }
+  },
+  "glyph": {
+    "unit": {
+      "body": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 1.0000, 0.0000, 89.88 ], "alpha": 1, "hex": "#ffffff" } }
+    },
+    "allegiance": {
+      "own": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7178, 0.1400, 239.97 ], "alpha": 1, "hex": "#3eaef2" } },
+      "ally": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8273, 0.1399, 195.36 ], "alpha": 1, "hex": "#0ee2e3" } },
+      "neutral": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6627, 0.1402, 144.96 ], "alpha": 1, "hex": "#55a95a" } },
+      "enemy": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7938, 0.1186, 25.71 ], "alpha": 1, "hex": "#ff9d94" } },
+      "unknown": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8417, 0.1403, 100.33 ], "alpha": 1, "hex": "#e0cd55" } }
+    },
+    "team": {
+      "0": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6565, 0.1391, 254.67 ], "alpha": 1, "hex": "#5193e4" } },
+      "1": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.5056, 0.1326, 50.57 ], "alpha": 1, "hex": "#9e4900" } },
+      "2": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6404, 0.1238, 172.30 ], "alpha": 1, "hex": "#00a484" } },
+      "3": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.5116, 0.1393, 329.88 ], "alpha": 1, "hex": "#91448c" } },
+      "4": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6447, 0.1410, 130.21 ], "alpha": 1, "hex": "#709e38" } },
+      "5": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.5066, 0.1388, 294.79 ], "alpha": 1, "hex": "#6c51ab" } },
+      "6": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6541, 0.1342, 94.39 ], "alpha": 1, "hex": "#ab8e00" } },
+      "7": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.5116, 0.1407, 19.79 ], "alpha": 1, "hex": "#a83d44" } }
+    },
+    "badge": {
+      "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.1591, 0.0000, 89.88 ], "alpha": 1, "hex": "#0d0d0d" } }
+    },
+    "icon": {
+      "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.1591, 0.0000, 89.88 ], "alpha": 1, "hex": "#0d0d0d" } }
+    },
+    "modifier": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.1591, 0.0000, 89.88 ], "alpha": 1, "hex": "#0d0d0d" } },
+    "selection": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9150, 0.0495, 354.12 ], "alpha": 1, "hex": "#ffd6e5" } },
+    "marker": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6654, 0.1131, 200.81 ], "alpha": 1, "hex": "#00a8b0" } },
+    "path": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6654, 0.1131, 200.81 ], "alpha": 1, "hex": "#00a8b0" } },
+    "stale": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7219, 0.0000, 89.88 ], "alpha": 1, "hex": "#a5a5a5" } }
+  },
+  "cue": {
+    "focus": {
+      "outer": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9097, 0.0000, 89.88 ], "alpha": 1, "hex": "#e1e1e1" } },
+      "inner": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.1591, 0.0000, 89.88 ], "alpha": 1, "hex": "#0d0d0d" } }
+    },
+    "hover": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8554, 0.0876, 356.24 ], "alpha": 1, "hex": "#ffb8d1" } }
+  },
+  "status": {
+    "good": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8934, 0.1401, 150.01 ], "alpha": 1, "hex": "#94f6aa" } },
+    "warn": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7858, 0.1405, 75.25 ], "alpha": 1, "hex": "#edab42" } },
+    "bad": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6301, 0.1393, 25.04 ], "alpha": 1, "hex": "#d0635d" } },
+    "track": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.1591, 0.0000, 89.88 ], "alpha": 1, "hex": "#0d0d0d" } },
+    "keyline": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 1.0000, 0.0000, 89.88 ], "alpha": 1, "hex": "#ffffff" } }
+  },
+  "terrain": {
+    "open": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.2931, 0.0000, 89.88 ], "alpha": 1, "hex": "#2c2c2c" } },
+    "blocked": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.4313, 0.0000, 89.88 ], "alpha": 1, "hex": "#505050" } },
+    "difficult": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3729, 0.0494, 71.26 ], "alpha": 1, "hex": "#513c22" } },
+    "water": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3668, 0.0598, 239.04 ], "alpha": 1, "hex": "#1d435b" } },
+    "void": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.0000, 0.0000, 0.00 ], "alpha": 1, "hex": "#000000" } }
+  },
+  "size": {
+    "cell": { "$type": "dimension", "$value": { "value": 32, "unit": "px" } },
+    "frame": { "$type": "dimension", "$value": { "value": 24, "unit": "px" } }
+  },
+  "stroke": {
+    "outline": { "$type": "dimension", "$value": { "value": 3, "unit": "px" } },
+    "gap": { "$type": "dimension", "$value": { "value": 3, "unit": "px" } }
+  }
+}
