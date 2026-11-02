@@ -292,9 +292,9 @@ module ThemeSeed =
                     "allegiance.neutral", ColourToken(rgb 40uy 165uy 80uy)
                     "allegiance.enemy", ColourToken(rgb 235uy 80uy 70uy)
                     "allegiance.unknown", ColourToken(rgb 200uy 150uy 0uy)
-                    // Provisional (FS.GG.Game#789 review): eight hues distinct from every allegiance colour (OKLab
-                    // distance at least 0.069) and from each other (at least 0.096), each 3:1 on the ground, the body and
-                    // the dark ink. FS.GG.Game#795's derivation replaces them.
+                    // Eight hues distinct from every allegiance colour (OKLab distance at least 0.069) and from each other
+                    // (at least 0.096), each 3:1 on the ground, the body and the dark ink, so `standard` alone resolves
+                    // them. The presets' own seeds are FS.GG.Game#795's (`ThemePresets.recipes`).
                     "team.0", ColourToken(rgb 0xdbuy 0x24uy 0x78uy)
                     "team.1", ColourToken(rgb 0xe5uy 0x6cuy 0x03uy)
                     "team.2", ColourToken(rgb 0x01uy 0xa1uy 0x8duy)
@@ -571,6 +571,691 @@ module ThemeCheck =
     let create (name: string) (run: Theme -> ThemeViolation list) = ThemeCheck(name, run)
 
     let name (check: ThemeCheck) = check.Name
+
+// ---- FS.GG.Game#795 (GAME-RENDER-02.8): colour vision, derivation, presets and checks --------------------------------
+
+[<RequireQualifiedAccess>]
+type Vision =
+    | Normal
+    | Protan
+    | Deutan
+    | Tritan
+
+[<RequireQualifiedAccess>]
+module ThemeVision =
+
+    let visions = [ Vision.Normal; Vision.Protan; Vision.Deutan; Vision.Tritan ]
+
+    let private cbrt (v: float) =
+        if v < 0.0 then -(System.Math.Pow(-v, 1.0 / 3.0)) else System.Math.Pow(v, 1.0 / 3.0)
+
+    let private clip01 (v: float) = if v < 0.0 then 0.0 elif v > 1.0 then 1.0 else v
+
+    /// Machado, Oliveira and Fernandes (IEEE TVCG 15(6), 2009), severity 1.0, applied in linear RGB (published facts).
+    let private machado (vision: Vision) =
+        match vision with
+        | Vision.Normal -> [| 1.0; 0.0; 0.0; 0.0; 1.0; 0.0; 0.0; 0.0; 1.0 |]
+        | Vision.Protan -> [| 0.152286; 1.052583; -0.204868; 0.114503; 0.786281; 0.099216; -0.003882; -0.048116; 1.051998 |]
+        | Vision.Deutan -> [| 0.367322; 0.860646; -0.227968; 0.280085; 0.672501; 0.047413; -0.011820; 0.042940; 0.968881 |]
+        | Vision.Tritan -> [| 1.255528; -0.076749; -0.178779; -0.078411; 0.930809; 0.147602; 0.004733; 0.691367; 0.303900 |]
+
+    /// The linear RGB a viewer with `vision` sees for `colour`.
+    let internal simulate (vision: Vision) (colour: Color) =
+        let r, g, b = ThemeColour.linear colour.Red, ThemeColour.linear colour.Green, ThemeColour.linear colour.Blue
+        let m = machado vision
+        clip01 (m.[0] * r + m.[1] * g + m.[2] * b), clip01 (m.[3] * r + m.[4] * g + m.[5] * b), clip01 (m.[6] * r + m.[7] * g + m.[8] * b)
+
+    /// CIELAB (D65) of linear RGB.
+    let internal labOfLinear (r: float, g: float, b: float) =
+        let x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047
+        let y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
+        let z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883
+        let d = 6.0 / 29.0
+        let f t = if t > d * d * d then cbrt t else t / (3.0 * d * d) + 4.0 / 29.0
+        let fx, fy, fz = f x, f y, f z
+        116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)
+
+    /// OKLab lightness of linear RGB (Ottosson's matrices).
+    let internal oklabLightness (r: float, g: float, b: float) =
+        let l = cbrt (0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        let m = cbrt (0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        let s = cbrt (0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+        0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+
+    /// CIEDE2000 (kL = kC = kH = 1), Sharma, Wu and Dalal (2005).
+    let internal deltaE2000Lab (l1: float, a1: float, b1: float) (l2: float, a2: float, b2: float) =
+        let rad d = d * System.Math.PI / 180.0
+        let deg r = r * 180.0 / System.Math.PI
+        let c1 = sqrt (a1 * a1 + b1 * b1)
+        let c2 = sqrt (a2 * a2 + b2 * b2)
+        let c7 = ((c1 + c2) / 2.0) ** 7.0
+        let g = 0.5 * (1.0 - sqrt (c7 / (c7 + 6103515625.0)))
+        let a1', a2' = (1.0 + g) * a1, (1.0 + g) * a2
+        let c1', c2' = sqrt (a1' * a1' + b1 * b1), sqrt (a2' * a2' + b2 * b2)
+        let hue (b: float) (a: float) =
+            if a = 0.0 && b = 0.0 then 0.0
+            else
+                let h = deg (System.Math.Atan2(b, a))
+                if h < 0.0 then h + 360.0 else h
+        let h1, h2 = hue b1 a1', hue b2 a2'
+        let dL = l2 - l1
+        let dC = c2' - c1'
+        let dh =
+            if c1' * c2' = 0.0 then 0.0
+            elif abs (h2 - h1) <= 180.0 then h2 - h1
+            elif h2 - h1 > 180.0 then h2 - h1 - 360.0
+            else h2 - h1 + 360.0
+        let dH = 2.0 * sqrt (c1' * c2') * sin (rad (dh / 2.0))
+        let lBar = (l1 + l2) / 2.0
+        let cBar' = (c1' + c2') / 2.0
+        let hBar =
+            if c1' * c2' = 0.0 then h1 + h2
+            elif abs (h1 - h2) <= 180.0 then (h1 + h2) / 2.0
+            elif h1 + h2 < 360.0 then (h1 + h2 + 360.0) / 2.0
+            else (h1 + h2 - 360.0) / 2.0
+        let t =
+            1.0 - 0.17 * cos (rad (hBar - 30.0)) + 0.24 * cos (rad (2.0 * hBar)) + 0.32 * cos (rad (3.0 * hBar + 6.0))
+            - 0.20 * cos (rad (4.0 * hBar - 63.0))
+        let dTheta = 30.0 * exp (-(((hBar - 275.0) / 25.0) ** 2.0))
+        let cBar7 = cBar' ** 7.0
+        let rc = 2.0 * sqrt (cBar7 / (cBar7 + 6103515625.0))
+        let l50 = (lBar - 50.0) * (lBar - 50.0)
+        let sl = 1.0 + 0.015 * l50 / sqrt (20.0 + l50)
+        let sc = 1.0 + 0.045 * cBar'
+        let sh = 1.0 + 0.015 * cBar' * t
+        let rt = -sin (rad (2.0 * dTheta)) * rc
+        sqrt ((dL / sl) ** 2.0 + (dC / sc) ** 2.0 + (dH / sh) ** 2.0 + rt * (dC / sc) * (dH / sh))
+
+    /// The 1e-6 grid, half up: every derivation decision compares values on it (FS.GG.Game#795 B4).
+    let internal gridL (x: float) = System.Math.Floor(x * 1e6 + 0.5) / 1e6
+
+    let deltaE2000 (vision: Vision) (a: Color) (b: Color) : float =
+        gridL (deltaE2000Lab (labOfLinear (simulate vision a)) (labOfLinear (simulate vision b)))
+
+    let lightnessGap (vision: Vision) (a: Color) (b: Color) : float =
+        gridL (abs (oklabLightness (simulate vision a) - oklabLightness (simulate vision b)))
+
+/// Derivation's deterministic arithmetic (FS.GG.Game#795 B4): inputs on a grid, and contrast solving that decides on
+/// 8-bit outcomes, so a run-time custom seed derives the same bytes on .NET and Fable.
+[<RequireQualifiedAccess>]
+module internal ThemeGrid =
+
+    let gridL (x: float) = ThemeVision.gridL x
+
+    let gridH (x: float) =
+        let h = System.Math.Floor(x * 1e4 + 0.5) / 1e4
+        if h >= 360.0 then h - 360.0 elif h < 0.0 then h + 360.0 else h
+
+    /// Below this chroma a colour's hue is not an input (a grey's hue is the noise of two tiny numbers).
+    let hueChromaFloor = 0.001
+
+    /// A colour's OKLCH as a derivation input: L and C to 1e-6, h to 1e-4, and no hue under `hueChromaFloor`.
+    let inputOf (colour: Color) : Oklch =
+        let lch = ThemeColour.toOklch colour
+        let c = gridL lch.C
+        { L = gridL lch.L; C = c; H = (if c < hueChromaFloor then 0.0 else gridH lch.H) }
+
+    let lightnessSteps = 10000
+
+    /// Leonardo-style contrast solving (the idea, not its code): the colour of hue `h` and chroma `c` nearest the
+    /// ground's lightness whose 8-bit contrast against `ground` meets `target`, searched over integer lightness steps
+    /// (L = k / 10000) on gridded inputs; `lighter` searches above the ground, else below. `None` when no step reaches it.
+    let solve (ground: Color) (lighter: bool) (target: float) (c: float) (h: float) : Color option =
+        let g = inputOf ground
+        let c, h = gridL c, gridH h
+        let at (k: int) = ThemeColour.ofOklch { L = float k / float lightnessSteps; C = c; H = h }
+        let meets (k: int) = ThemeColour.contrast (at k) ground >= target
+        let kg = int (System.Math.Floor(g.L * float lightnessSteps + 0.5))
+        if lighter then
+            if not (meets lightnessSteps) then None
+            elif meets kg then Some(at kg)
+            else
+                let mutable lo = kg
+                let mutable hi = lightnessSteps
+                while hi - lo > 1 do
+                    let mid = (lo + hi) / 2
+                    if meets mid then hi <- mid else lo <- mid
+                Some(at hi)
+        else if not (meets 0) then None
+        elif meets kg then Some(at kg)
+        else
+            let mutable lo = 0
+            let mutable hi = kg
+            while hi - lo > 1 do
+                let mid = (lo + hi) / 2
+                if meets mid then lo <- mid else hi <- mid
+            Some(at lo)
+
+/// The derivation's parameters, kept as `derive.*` number tokens between algorithms.
+[<NoComparison>]
+type internal DeriveParams =
+    {
+        Lighter: bool
+        Ground: Color
+        Body: Color
+        OnFill: Color
+        Floor: float
+        Chroma: float
+        AllegianceHues: float list
+        TeamHues: float list
+        SelectionHue: float
+        MarkerHue: float
+        HoverHue: float
+        StatusHues: float list
+        StepRatios: float list
+        TeamBands: float list
+        AllegianceSteps: int list
+        StatusSteps: int list
+        SelectionStep: int
+        MarkerStep: int
+        HoverStep: int
+        ColourCarries: bool
+        HueCeiling: int list
+    }
+
+[<RequireQualifiedAccess>]
+module ThemePresets =
+
+    let private rgb (r: byte) (g: byte) (b: byte) : Color = { Red = r; Green = g; Blue = b; Alpha = 255uy }
+    let private white = rgb 255uy 255uy 255uy
+    let private nearBlack = rgb 13uy 13uy 13uy
+
+    let thresholdNormal = 12.0
+    let thresholdSimulated = 8.0
+    let thresholdTeamLightnessGap = 0.08
+
+    let private identityNames = [ "own"; "ally"; "neutral"; "enemy"; "unknown" ]
+    let private statusNames = [ "good"; "warn"; "bad" ]
+    let private maxTeams = 8
+    let private darkRatios = [ 1.08; 1.18; 1.32; 1.5; 1.75; 2.1; 2.6; 3.2; 4.2; 5.6; 7.5; 11.0 ]
+    let private highContrastRatios = [ 1.2; 1.5; 2.0; 2.6; 3.4; 4.4; 5.6; 7.2; 8.5; 10.5; 13.0; 16.0 ]
+    let private teamBandCandidates = [ 3.02; 3.1; 3.2; 3.4; 3.7; 4.0; 4.4; 4.8; 4.9; 4.95; 5.3; 5.9; 6.6 ]
+
+    /// Okabe and Ito's colour-universal-design palette (2008), published sRGB values: orange, sky blue, bluish green,
+    /// yellow, blue, vermillion, reddish purple. Only their hue angles are used.
+    let private okabeIto =
+        [ rgb 230uy 159uy 0uy; rgb 86uy 180uy 233uy; rgb 0uy 158uy 115uy; rgb 240uy 228uy 66uy; rgb 0uy 114uy 178uy; rgb 213uy 94uy 0uy; rgb 204uy 121uy 167uy ]
+
+    // ---- Parameters as map tokens ----------------------------------------------------------------------------------
+
+    let private number (tokens: ThemeTokens) (name: string) (fallback: float) =
+        ThemeTokens.tryNumber name tokens |> Option.defaultValue fallback
+
+    let private list (tokens: ThemeTokens) (prefix: string) (fallback: float list) =
+        match ThemeTokens.tryNumber (prefix + ".count") tokens with
+        | Some n -> [ for i in 0 .. int n - 1 -> number tokens (sprintf "%s.%d" prefix i) 0.0 ]
+        | None -> fallback
+
+    let private colourOr (tokens: ThemeTokens) (name: string) (fallback: Color) =
+        ThemeTokens.tryColour name tokens |> Option.defaultValue fallback
+
+    let private readParams (tokens: ThemeTokens) : DeriveParams =
+        let ints prefix fallback = list tokens prefix (List.map float fallback) |> List.map int
+        {
+            Lighter = number tokens "derive.lighter" 1.0 = 1.0
+            Ground = colourOr tokens "ground" nearBlack
+            Body = colourOr tokens "body" white
+            OnFill = colourOr tokens "badge.ink" nearBlack
+            Floor = number tokens "contrastTarget" 3.0
+            Chroma = number tokens "derive.chroma" 0.14
+            AllegianceHues = list tokens "derive.hue.allegiance" []
+            TeamHues = list tokens "derive.hue.team" []
+            SelectionHue = number tokens "derive.hue.selection" 95.0
+            MarkerHue = number tokens "derive.hue.marker" 200.0
+            HoverHue = number tokens "derive.hue.hover" 200.0
+            StatusHues = list tokens "derive.hue.status" []
+            StepRatios = list tokens "derive.ratio" darkRatios
+            TeamBands = list tokens "derive.teamBand" [ 3.2; 4.8 ]
+            AllegianceSteps = ints "derive.step.allegiance" [ 10; 12; 9; 9; 11 ]
+            StatusSteps = ints "derive.step.status" [ 10; 12; 9 ]
+            SelectionStep = int (number tokens "derive.step.selection" 12.0)
+            MarkerStep = int (number tokens "derive.step.marker" 11.0)
+            HoverStep = int (number tokens "derive.step.hover" 10.0)
+            ColourCarries = number tokens "derive.colourCarries" 1.0 = 1.0
+            HueCeiling = ints "derive.ceiling" [ 6; 7; 8 ]
+        }
+
+    let private extreme (p: DeriveParams) = if p.Lighter then white else rgb 0uy 0uy 0uy
+
+    let private ramp (p: DeriveParams) (c: float) (h: float) =
+        p.StepRatios |> List.map (fun ratio -> ThemeGrid.solve p.Ground p.Lighter ratio c h |> Option.defaultValue (extreme p))
+
+    let private teamColourAt (p: DeriveParams) (band: float) (i: int) =
+        let c = if p.ColourCarries then p.Chroma else 0.0
+        ThemeGrid.solve p.Ground p.Lighter band c p.TeamHues.[i % p.TeamHues.Length] |> Option.defaultValue (extreme p)
+
+    /// Every derived ramp, by name.
+    let private ramps (p: DeriveParams) : Map<string, Color list> =
+        let c = if p.ColourCarries then p.Chroma else 0.0
+        [
+            yield "grey", ramp p 0.0 0.0
+            for name, h in List.zip identityNames p.AllegianceHues do
+                yield name, ramp p c h
+            yield "selection", ramp p c p.SelectionHue
+            yield "marker", ramp p c p.MarkerHue
+            yield "hover", ramp p c p.HoverHue
+            for name, h in List.zip statusNames p.StatusHues do
+                yield name, ramp p c h
+            yield "difficult", ramp p (if p.ColourCarries then 0.05 else 0.0) 70.0
+            yield "water", ramp p (if p.ColourCarries then 0.06 else 0.0) 240.0
+        ]
+        |> Map.ofList
+
+    let private step (rs: Map<string, Color list>) (name: string) (n: int) = rs.[name].[(max 1 (min 12 n)) - 1]
+
+    /// Write the parameters and every derived colour as map tokens.
+    let private write (p: DeriveParams) (tokens: ThemeTokens) : ThemeTokens =
+        let rs = ramps p
+        let setN name v (t: ThemeTokens) = ThemeTokens.withNumber name v t
+        let setC name c (t: ThemeTokens) = ThemeTokens.withColour name c t
+        let setList prefix (xs: float list) (t: ThemeTokens) =
+            xs |> List.indexed |> List.fold (fun t (i, x) -> setN (sprintf "%s.%d" prefix i) x t) (setN (prefix + ".count") (float xs.Length) t)
+        let g = ThemeGrid.inputOf p.Ground
+        let greyAt ratio =
+            let i = p.StepRatios |> List.tryFindIndex (fun r -> r >= ratio) |> Option.defaultValue 11
+            step rs "grey" (i + 1)
+        let voidColour =
+            if p.Lighter then ThemeColour.ofOklch { L = max 0.0 (g.L - 0.06); C = 0.0; H = 0.0 }
+            else ThemeColour.ofOklch { L = g.L - 0.12; C = 0.0; H = 0.0 }
+        let mutable t =
+            tokens
+            |> setN "derive.lighter" (if p.Lighter then 1.0 else 0.0)
+            |> setN "derive.chroma" p.Chroma
+            |> setList "derive.hue.allegiance" p.AllegianceHues
+            |> setList "derive.hue.team" p.TeamHues
+            |> setN "derive.hue.selection" p.SelectionHue
+            |> setN "derive.hue.marker" p.MarkerHue
+            |> setN "derive.hue.hover" p.HoverHue
+            |> setList "derive.hue.status" p.StatusHues
+            |> setList "derive.ratio" p.StepRatios
+            |> setList "derive.teamBand" p.TeamBands
+            |> setList "derive.step.allegiance" (p.AllegianceSteps |> List.map float)
+            |> setList "derive.step.status" (p.StatusSteps |> List.map float)
+            |> setN "derive.step.selection" (float p.SelectionStep)
+            |> setN "derive.step.marker" (float p.MarkerStep)
+            |> setN "derive.step.hover" (float p.HoverStep)
+            |> setN "derive.colourCarries" (if p.ColourCarries then 1.0 else 0.0)
+            |> setList "derive.ceiling" (p.HueCeiling |> List.map float)
+            |> setC "ground" p.Ground
+            |> setC "body" p.Body
+            |> setC "status.keyline" p.Body
+            |> setC "focus.outer" (step rs "grey" 12)
+            |> setC "selection" (step rs "selection" p.SelectionStep)
+            |> setC "marker" (step rs "marker" p.MarkerStep)
+            |> setC "path" (step rs "marker" p.MarkerStep)
+            |> setC "hover" (step rs "hover" p.HoverStep)
+            |> setC "stale" (greyAt (p.Floor + 0.5))
+            |> setC "terrain.open" (step rs "grey" 2)
+            |> setC "terrain.blocked" (step rs "grey" 4)
+            |> setC "terrain.difficult" (step rs "difficult" 3)
+            |> setC "terrain.water" (step rs "water" 3)
+            |> setC "terrain.void" voidColour
+        for name in [ "badge.ink"; "icon.ink"; "modifier.ink"; "focus.inner"; "status.track" ] do
+            t <- setC name p.OnFill t
+        for i, name in List.indexed identityNames do
+            t <- setC ("allegiance." + name) (step rs name p.AllegianceSteps.[i]) t
+        for i in 0 .. maxTeams - 1 do
+            t <- setC (sprintf "team.%d" i) (teamColourAt p p.TeamBands.[i % p.TeamBands.Length] i) t
+        for i, name in List.indexed statusNames do
+            t <- setC ("status." + name) (step rs name p.StatusSteps.[i]) t
+        t
+
+    let private refine (name: string) (change: ThemeSeed -> DeriveParams -> DeriveParams) =
+        ThemeAlgorithm.create name (fun seed tokens -> write (change seed (readParams tokens)) tokens)
+
+    let private hueOf (colour: Color) = (ThemeGrid.inputOf colour).H
+
+    // ---- Algorithms ------------------------------------------------------------------------------------------------
+
+    let leonardo =
+        ThemeAlgorithm.create "fsgg.leonardo" (fun seed tokens ->
+            let colour name fallback = ThemeSeed.tryColour name seed |> Option.defaultValue fallback
+            let ground = colour "ground" (rgb 34uy 40uy 49uy)
+            let lighter = (ThemeGrid.inputOf ground).L < 0.6
+            let teams =
+                [ 0..7 ] |> List.choose (fun i -> ThemeSeed.tryColour (sprintf "team.%d" i) seed) |> List.map hueOf
+            let p =
+                {
+                    Lighter = lighter
+                    Ground = ground
+                    Body = (if lighter then white else nearBlack)
+                    OnFill = (if lighter then nearBlack else white)
+                    Floor = ThemeSeed.tryNumber "contrastTarget" seed |> Option.defaultValue 3.0
+                    Chroma = 0.14
+                    AllegianceHues = identityNames |> List.map (fun n -> hueOf (colour ("allegiance." + n) ground))
+                    TeamHues = (if teams.IsEmpty then [ 255.0 ] else teams)
+                    SelectionHue = hueOf (colour "accent.selection" ground)
+                    MarkerHue = hueOf (colour "accent.marker" ground)
+                    HoverHue = hueOf (colour "accent.marker" ground)
+                    StatusHues = statusNames |> List.map (fun n -> hueOf (colour ("status." + n) ground))
+                    StepRatios = darkRatios
+                    TeamBands = [ 3.2; 4.8 ]
+                    AllegianceSteps = [ 10; 12; 9; 9; 11 ]
+                    StatusSteps = [ 10; 12; 9 ]
+                    SelectionStep = 12
+                    MarkerStep = 11
+                    HoverStep = 10
+                    ColourCarries = true
+                    HueCeiling = [ 6; 7; 8 ]
+                }
+            write p tokens)
+
+    let dark =
+        refine "fsgg.dark" (fun seed p ->
+            let g = ThemeGrid.inputOf p.Ground
+            let ground = if g.L < 0.6 then p.Ground else ThemeColour.ofOklch { L = 0.29; C = min g.C 0.02; H = g.H }
+            { p with Lighter = true; Ground = ground; Body = white; OnFill = nearBlack })
+
+    let light =
+        refine "fsgg.light" (fun _ p ->
+            let g = ThemeGrid.inputOf p.Ground
+            { p with Lighter = false; Ground = ThemeColour.ofOklch { L = 0.97; C = min g.C 0.01; H = g.H }; Body = nearBlack; OnFill = white })
+
+    let highContrast =
+        refine "fsgg.highContrast" (fun _ p ->
+            { p with Ground = (if p.Lighter then rgb 0uy 0uy 0uy else white); StepRatios = highContrastRatios; HueCeiling = [ 4; 5; 6 ] })
+
+    let colourBlindSafe =
+        refine "fsgg.colourBlindSafe" (fun _ p ->
+            let hue i = hueOf okabeIto.[i]
+            let orange, sky, green, yellow, blue, vermillion, purple = hue 0, hue 1, hue 2, hue 3, hue 4, hue 5, hue 6
+            { p with
+                TeamHues = [ blue; orange; green; purple; sky; vermillion; yellow ]
+                AllegianceHues = [ sky; green; yellow; vermillion; purple ]
+                StatusHues = [ green; orange; vermillion ]
+                SelectionHue = yellow
+                MarkerHue = sky
+                HoverHue = sky
+                HueCeiling = [ 4; 5; 6 ] })
+
+    let monochrome =
+        refine "fsgg.monochrome" (fun _ p ->
+            { p with ColourCarries = false; HueCeiling = [ 0; 0; 0 ]; TeamBands = [ 3.2 ]; AllegianceSteps = [ 11; 11; 11; 11; 11 ]; StatusSteps = [ 12; 12; 12 ] })
+
+    // ---- Status meaning --------------------------------------------------------------------------------------------
+
+    let private statusBands = [ "status.good", "green", 120.0, 200.0; "status.warn", "amber", 50.0, 110.0; "status.bad", "red", -20.0, 49.0 ]
+
+    let private inBand (lo: float) (hi: float) (h: float) =
+        let h' = if h > 180.0 && lo < 0.0 then h - 360.0 else h
+        h' >= lo && h' <= hi
+
+    let internal statusReads (alias: string) (c: Color) =
+        match statusBands |> List.tryFind (fun (a, _, _, _) -> a = alias) with
+        | Some(_, _, lo, hi) ->
+            let lch = ThemeGrid.inputOf c
+            lch.C >= 0.08 && inBand lo hi lch.H
+        | None -> true
+
+    let internal statusOrdered (warn: Color) (bad: Color) = (ThemeGrid.inputOf warn).L >= (ThemeGrid.inputOf bad).L + 0.05
+
+    // ---- Repair ----------------------------------------------------------------------------------------------------
+
+    let private labsOf (c: Color) =
+        ThemeVision.visions |> List.map (fun v -> v, ThemeVision.labOfLinear (ThemeVision.simulate v c)) |> Map.ofList
+
+    let private margin (a: Map<Vision, float * float * float>) (b: Map<Vision, float * float * float>) =
+        ThemeVision.visions
+        |> List.map (fun v ->
+            ThemeVision.gridL (ThemeVision.deltaE2000Lab a.[v] b.[v]) - (if v = Vision.Normal then thresholdNormal else thresholdSimulated))
+        |> List.min
+
+    let repair =
+        refine "fsgg.repair" (fun _ p ->
+            if not p.ColourCarries then p
+            else
+                let rs = ramps p
+                let candidates = [ 7..12 ]
+                let colourAt name n = rs.[name].[n - 1]
+                let onGround floor (c: Color) = ThemeColour.contrast c p.Ground >= floor
+                let inked (c: Color) = ThemeColour.contrast c p.OnFill >= 3.0
+                let labsAt = rs |> Map.map (fun _ colours -> colours |> List.map labsOf |> List.toArray)
+                let labAt name n = labsAt.[name].[n - 1]
+                let worst (xs: float list) = if xs.IsEmpty then infinity else List.min xs
+                let best (score: 'a -> float option) (options: 'a list) (fallback: 'a) =
+                    options
+                    |> List.fold
+                        (fun (bestScore, bestOption) option ->
+                            match score option with
+                            | Some s when s > bestScore -> s, option
+                            | _ -> bestScore, bestOption)
+                        (-infinity, fallback)
+                    |> snd
+                let rec combos n = if n = 0 then [ [] ] else [ for c in candidates do for rest in combos (n - 1) -> c :: rest ]
+                // Pairwise margins once per (pair, step, step), looked up per combination.
+                let groupScore (names: string list) (usable: string -> Color -> bool) =
+                    let arr = List.toArray names
+                    let k = arr.Length
+                    let nc = candidates.Length
+                    let pairMargin = Array.create (k * k * nc * nc) 0.0
+                    for i in 0 .. k - 1 do
+                        for j in i + 1 .. k - 1 do
+                            for si in candidates do
+                                for sj in candidates do
+                                    pairMargin.[((i * k + j) * nc + (si - 7)) * nc + (sj - 7)] <- margin (labAt arr.[i] si) (labAt arr.[j] sj)
+                    let usableAt = Array.init (k * nc) (fun idx -> usable arr.[idx / nc] (colourAt arr.[idx / nc] (idx % nc + 7)))
+                    fun (steps: int list) ->
+                        let st = List.toArray steps
+                        let mutable ok = true
+                        for i in 0 .. k - 1 do
+                            if not usableAt.[i * nc + (st.[i] - 7)] then ok <- false
+                        if not ok then None
+                        else
+                            let mutable w = infinity
+                            for i in 0 .. k - 1 do
+                                for j in i + 1 .. k - 1 do
+                                    let m = pairMargin.[((i * k + j) * nc + (st.[i] - 7)) * nc + (st.[j] - 7)]
+                                    if m < w then w <- m
+                            Some w
+                let allegianceSteps =
+                    best (groupScore identityNames (fun _ c -> onGround p.Floor c && inked c)) (combos 5) p.AllegianceSteps
+                let statusSteps =
+                    let score = groupScore statusNames (fun name c -> ThemeColour.contrast c p.OnFill >= 3.0 && statusReads ("status." + name) c)
+                    best (fun (steps: int list) -> if statusOrdered (colourAt "warn" steps.[1]) (colourAt "bad" steps.[2]) then score steps else None) (combos 3) p.StatusSteps
+                // Team bands (E1 and E7: at least 3:1 on the ground, on the body and under the ink).
+                let teamCount = p.TeamHues.Length
+                let ratios = List.toArray teamBandCandidates
+                let nr = ratios.Length
+                let solved = ratios |> Array.map (fun ratio -> [| for i in 0 .. teamCount - 1 -> teamColourAt p ratio i |])
+                let solvedLabs = solved |> Array.map (Array.map labsOf)
+                let teamUsable (c: Color) = onGround 3.0 c && ThemeColour.contrast c p.Body >= 3.0 && inked c
+                let cache = Array.create (teamCount * teamCount * nr * nr) nan
+                let teamMargin i j ri rj =
+                    let idx = ((i * teamCount + j) * nr + ri) * nr + rj
+                    if System.Double.IsNaN cache.[idx] then cache.[idx] <- margin solvedLabs.[ri].[i] solvedLabs.[rj].[j]
+                    cache.[idx]
+                let bandScore (bands: int list) =
+                    let b = List.toArray bands
+                    let bandOf i = b.[i % b.Length]
+                    if not ([ 0 .. teamCount - 1 ] |> List.forall (fun i -> teamUsable solved.[bandOf i].[i])) then None
+                    else
+                        let ok n =
+                            let mutable all = true
+                            for i in 0 .. n - 1 do
+                                for j in i + 1 .. n - 1 do
+                                    if all && teamMargin i j (bandOf i) (bandOf j) < 0.0 then all <- false
+                            all
+                        let mutable capacity = 1
+                        while capacity < teamCount && ok (capacity + 1) do
+                            capacity <- capacity + 1
+                        let gap =
+                            [ Vision.Protan; Vision.Deutan; Vision.Tritan ]
+                            |> List.map (fun v -> ThemeVision.lightnessGap v solved.[bandOf 0].[0] solved.[bandOf 1].[1 % teamCount])
+                            |> List.min
+                        let gapOk = if gap >= thresholdTeamLightnessGap then 1.0 else 0.0
+                        Some(gapOk * 100.0 + float capacity + min gap 0.5)
+                let options = [ for a in 0 .. nr - 1 do for b in 0 .. nr - 1 do if a <> b then yield [ a; b ] ]
+                let current = p.TeamBands |> List.map (fun r -> match Array.tryFindIndex ((=) r) ratios with Some i -> i | None -> 0)
+                let bandIdx = best bandScore options current
+                let teamBands = bandIdx |> List.map (fun i -> ratios.[i])
+                let teamColours = [ for i in 0 .. teamCount - 1 -> solved.[bandIdx.[i % bandIdx.Length]].[i] ]
+                let fills = (teamColours |> List.map labsOf) @ List.map2 labAt identityNames allegianceSteps
+                // Selection, marker and hover stand apart from every fill: the seed's hue first, strongest step down;
+                // then the twelve 30-degree hues.
+                let overPick (seedHue: float) (avoid: (float * int) list) =
+                    let options = [ for h in seedHue :: [ for k in 0..11 -> 30.0 * float k ] do for n in List.rev candidates -> h, n ]
+                    let score (h: float, n: int) =
+                        if List.contains (h, n) avoid then None
+                        else
+                            let c = ThemeGrid.solve p.Ground p.Lighter p.StepRatios.[n - 1] p.Chroma h |> Option.defaultValue p.Ground
+                            if onGround p.Floor c then
+                                let lab = ThemeVision.labOfLinear (ThemeVision.simulate Vision.Normal c)
+                                Some(worst [ for f in fills -> ThemeVision.gridL (ThemeVision.deltaE2000Lab lab f.[Vision.Normal]) ])
+                            else None
+                    match options |> List.tryFind (fun o -> match score o with Some s -> s >= thresholdNormal | None -> false) with
+                    | Some o -> o
+                    | None -> best score options (seedHue, 12)
+                let selectionHue, selectionStep = overPick p.SelectionHue []
+                let markerHue, markerStep = overPick p.MarkerHue []
+                let hoverHue, hoverStep = overPick p.HoverHue [ markerHue, markerStep; selectionHue, selectionStep ]
+                { p with
+                    AllegianceSteps = allegianceSteps
+                    StatusSteps = statusSteps
+                    TeamBands = teamBands
+                    SelectionHue = selectionHue
+                    SelectionStep = selectionStep
+                    MarkerHue = markerHue
+                    MarkerStep = markerStep
+                    HoverHue = hoverHue
+                    HoverStep = hoverStep })
+
+    let algorithms = [ ThemeAlgorithm.standard; leonardo; dark; light; highContrast; colourBlindSafe; monochrome; repair ]
+
+    // ---- Measured capacity and checks ------------------------------------------------------------------------------
+
+    let private colourCarries (theme: Theme) = number theme.Tokens "derive.colourCarries" 1.0 = 1.0
+
+    let private pairs (xs: 'a list) = [ for i in 0 .. xs.Length - 1 do for j in i + 1 .. xs.Length - 1 -> xs.[i], xs.[j] ]
+
+    let private distinct (a: string) (ca: Color) (b: string) (cb: Color) =
+        [
+            for v in ThemeVision.visions do
+                let threshold = if v = Vision.Normal then thresholdNormal else thresholdSimulated
+                let dE = ThemeVision.deltaE2000 v ca cb
+                if dE < threshold then
+                    yield ThemeViolation.create a (sprintf "differs from %s by deltaE2000 %g under %A, under %g" b dE v threshold)
+        ]
+
+    let private teamsOf (theme: Theme) = theme.Palette.Teams |> List.mapi (fun i c -> sprintf "glyph.team.%d" i, c)
+
+    let private allegiancesOf (theme: Theme) =
+        let p = theme.Palette
+        [ "glyph.allegiance.own", p.Own; "glyph.allegiance.ally", p.Ally; "glyph.allegiance.neutral", p.Neutral; "glyph.allegiance.enemy", p.Enemy; "glyph.allegiance.unknown", p.Unknown ]
+
+    /// The usable team hues per frame bucket (under 24 units, 24 to 39, 40 and over): 0 when colour carries no
+    /// category, else the largest n not above the bucket's ceiling whose first n teams pass every distinctness rule.
+    let measuredCapacity (theme: Theme) : int list =
+        if not (colourCarries theme) then [ 0; 0; 0 ]
+        else
+            let ceilings = list theme.Tokens "derive.ceiling" [ 6.0; 7.0; 8.0 ] |> List.map int
+            let teams = teamsOf theme
+            let top = min (List.max ceilings) teams.Length
+            let ok n = pairs (List.truncate n teams) |> List.forall (fun ((a, ca), (b, cb)) -> (distinct a ca b cb).IsEmpty)
+            let mutable n = 1
+            while n < top && ok (n + 1) do
+                n <- n + 1
+            ceilings |> List.map (fun c -> min n (min c teams.Length))
+
+    /// Whether colour carries categories in `theme` (false for `monochrome`).
+    let carriesColour (theme: Theme) = colourCarries theme
+
+    /// #795's checks for a game of `teams` teams (at least the two-team default).
+    let checks (teams: int) : ThemeCheck list =
+        let teamList theme = teamsOf theme |> List.truncate (max 2 (min teams maxTeams))
+        let fills theme = teamList theme @ allegiancesOf theme
+        [
+            ThemeCheck.create "fsgg.distinct.deltaE2000" (fun theme ->
+                if not (colourCarries theme) then []
+                else
+                    let p = theme.Palette
+                    let status = [ "status.good", p.Good; "status.warn", p.Warn; "status.bad", p.Bad ]
+                    [ for (a, ca), (b, cb) in pairs (teamList theme) @ pairs (allegiancesOf theme) @ pairs status do yield! distinct a ca b cb ])
+            ThemeCheck.create "fsgg.distinct.cues" (fun theme ->
+                if not (colourCarries theme) then []
+                else
+                    let p = theme.Palette
+                    [
+                        for over, c in [ "glyph.selection", p.Selection; "cue.focus.outer", p.FocusOuter; "cue.hover", p.Hover ] do
+                            for fill, cf in fills theme do
+                                let dE = ThemeVision.deltaE2000 Vision.Normal c cf
+                                if dE < thresholdNormal then
+                                    yield ThemeViolation.create over (sprintf "differs from %s by deltaE2000 %g, under %g" fill dE thresholdNormal)
+                    ])
+            ThemeCheck.create "fsgg.lightness.firstTwoTeams" (fun theme ->
+                match teamsOf theme with
+                | (_, a) :: (_, b) :: _ when colourCarries theme ->
+                    [
+                        for v in [ Vision.Protan; Vision.Deutan; Vision.Tritan ] do
+                            let gap = ThemeVision.lightnessGap v a b
+                            if gap < thresholdTeamLightnessGap then
+                                yield ThemeViolation.create "glyph.team.1" (sprintf "differs from glyph.team.0 by %g in OKLab L under %A, under %g" gap v thresholdTeamLightnessGap)
+                    ]
+                | _ -> [])
+            ThemeCheck.create "fsgg.status.meaning" (fun theme ->
+                if not (colourCarries theme) then []
+                else
+                    let p = theme.Palette
+                    [
+                        for alias, c in [ "status.good", p.Good; "status.warn", p.Warn; "status.bad", p.Bad ] do
+                            if not (statusReads alias c) then yield ThemeViolation.create alias "is outside its status hue band or below chroma 0.08"
+                        if not (statusOrdered p.Warn p.Bad) then yield ThemeViolation.create "status.warn" "must be at least 0.05 lighter (OKLab L) than status.bad"
+                    ])
+            ThemeCheck.create "fsgg.cue.innerOnFills" (fun theme ->
+                [
+                    for fill, c in fills theme do
+                        let ratio = ThemeColour.contrast theme.Palette.FocusInner c
+                        if ratio < 3.0 then yield ThemeViolation.create "cue.focus.inner" (sprintf "%.2f:1 on %s, below 3:1" ratio fill)
+                ])
+            ThemeCheck.create "fsgg.capacity.declared" (fun theme ->
+                if not (colourCarries theme) then []
+                else
+                    let measured = measuredCapacity theme
+                    // Size steps 0 to 2 fall under 24 units and step 3 in 24 to 39 at a 32-unit cell (#789's frameSize).
+                    let bucketOf step = if step < 3 then 0 else 1
+                    [
+                        for step, declared in List.indexed theme.Palette.HueCapacity do
+                            let m = measured.[bucketOf step]
+                            if declared > m then
+                                yield ThemeViolation.create (sprintf "hueCapacity.%d" step) (sprintf "declares %d team hues, but only %d pass the distinctness checks" declared m)
+                    ])
+        ]
+
+    // ---- Preset seeds --------------------------------------------------------------------------------------------
+
+    /// A preset's seed: `ThemeSeed.classic`'s numbers, with the hue intent ADR GAME-RENDER-02.8 T6 sets (each hued
+    /// colour at OKLCH L 0.6 and C 0.12, so it carries its hue; the derivation solves every lightness itself), its own
+    /// name, contrast target, stroke and gap, and its measured hue capacity per size step.
+    let private seedOf (name: string) (contrastTarget: float) (capacity: int list) =
+        let hue (h: float) = ThemeColour.ofOklch { L = 0.6; C = 0.12; H = h }
+        let colours =
+            [
+                for n, h in List.zip identityNames [ 240.0; 195.0; 145.0; 25.0; 100.0 ] do
+                    yield "allegiance." + n, hue h
+                // Tableau-style team hues, blue then orange (never red against green).
+                for i, h in List.indexed [ 255.0; 55.0; 175.0; 330.0; 130.0; 295.0; 95.0; 20.0 ] do
+                    yield sprintf "team.%d" i, hue h
+                yield "accent.selection", hue 95.0
+                yield "accent.marker", hue 200.0
+                for n, h in List.zip statusNames [ 150.0; 75.0; 25.0 ] do
+                    yield "status." + n, hue h
+            ]
+        let wide = if contrastTarget > 3.0 then 3.0 else 2.0
+        let numbers =
+            [ "contrastTarget", contrastTarget; "strokeBase", wide; "gap", wide ]
+            @ (capacity |> List.mapi (fun i c -> sprintf "hueCapacity.%d" i, float c))
+        let seed = colours |> List.fold (fun s (n, c) -> ThemeSeed.colour n c s) (ThemeSeed.classic |> ThemeSeed.named name)
+        numbers |> List.fold (fun s (n, v) -> ThemeSeed.number n v s) seed
+
+    /// The five presets: name, seed, algorithms. The seeds declare each preset's measured hue capacity (size steps 0 to
+    /// 2, then 3; `monochrome` declares 1, the least #802 allows, and falls back to allegiance colouring).
+    let recipes : (string * ThemeSeed * ThemeAlgorithm list) list =
+        [
+            "classic", seedOf "classic" 3.0 [ 5; 5; 5; 5 ], [ ThemeAlgorithm.standard; leonardo; dark; repair ]
+            "light", seedOf "light" 3.0 [ 5; 5; 5; 5 ], [ ThemeAlgorithm.standard; leonardo; light; repair ]
+            "highContrast", seedOf "highContrast" 7.0 [ 4; 4; 4; 5 ], [ ThemeAlgorithm.standard; leonardo; dark; highContrast; repair ]
+            "colourBlindSafe", seedOf "colourBlindSafe" 3.0 [ 3; 3; 3; 3 ], [ ThemeAlgorithm.standard; leonardo; dark; colourBlindSafe; repair ]
+            "monochrome", seedOf "monochrome" 3.0 [ 1; 1; 1; 1 ], [ ThemeAlgorithm.standard; leonardo; dark; monochrome; repair ]
+        ]
 
 [<RequireQualifiedAccess>]
 module Theme =
@@ -1302,7 +1987,8 @@ module Theme =
                 | _ ->
                     match field "colorSpace", field "components" with
                     | Some(JString "oklch"), Some(JArray [ JNumber l; JNumber c; JNumber h ]) ->
-                        Ok(ColourToken(ThemeColour.ofOklch { L = l; C = c; H = h }))
+                        // Gridded first (FS.GG.Game#795 B4), so the same components give the same bytes on .NET and Fable.
+                        Ok(ColourToken(ThemeColour.ofOklch { L = ThemeGrid.gridL l; C = ThemeGrid.gridL c; H = ThemeGrid.gridH h }))
                     | Some(JString "srgb"), Some(JArray [ JNumber r; JNumber g; JNumber b ]) ->
                         Ok(
                             ColourToken
@@ -1427,18 +2113,22 @@ module Theme =
                         create seed (found |> List.map (snd >> Option.get)) (colourOverrides @ sizeOverrides)
         | Ok _ -> refuse "a DTCG file is an object"
 
-    let classic =
-        // Baked at build time (ADR D11): the resolved alias values are committed data, never derived when the package
-        // loads. A test derives the classic seed afresh and requires the same values.
+    /// A preset as baked (ADR D11, Q12): its resolved aliases are committed data, never derived when the package loads;
+    /// the determinism probe derives each afresh from `ThemePresets.recipes` and requires the same values. The theme
+    /// carries FS.GG.Game#795's checks for the two-team default, so `withTeamColour` and `withOverrides` run them again.
+    let private baked (name: string) =
+        let _, seed, algorithms = ThemePresets.recipes |> List.find (fun (n, _, _) -> n = name)
+        let entries = ThemeBaked.presets |> List.find (fun (n, _) -> n = name) |> snd
+        let aliasEntries = entries |> List.filter (fun (k, _) -> not (k.StartsWith "map:"))
+        let mapNumbers = entries |> List.filter (fun (k, _) -> k.StartsWith "map:") |> List.map (fun (k, v) -> k.Substring 4, NumberToken(float v))
         let overrides =
-            ThemeBaked.classic
+            aliasEntries
             |> List.map (fun (alias, value) ->
                 match ThemeColour.ofHex value with
                 | Some c -> ThemeOverride(alias, ColourToken c)
                 | None -> ThemeOverride(alias, NumberToken(float value)))
 
         let aliases = overrides |> List.map (fun o -> o.Token, o.Value)
-        let seed = ThemeSeed.classic
 
         let colour alias =
             match aliases |> List.find (fun (a, _) -> a = alias) |> snd with
@@ -1492,8 +2182,12 @@ module Theme =
                 HueCapacity = [ for i in 0..3 -> int (seedNumber (sprintf "hueCapacity.%d" i)) ]
             }
 
-        // The map layer is the baked aliases' sources plus the seed numbers: enough for `tokens`, and a theme built
-        // from it by `withOverrides` derives again from the seed.
-        Theme(seed, [ ThemeAlgorithm.standard ], [], ThemeTokens(seed.Values), aliases, palette, [])
+        // The map layer is the seed plus the derivation's recorded numbers (colour carrying and the hue ceilings, which
+        // #795's checks read): enough for `tokens`, and a theme built from it by `withOverrides` derives again from the
+        // seed through the same algorithms.
+        let tokens = mapNumbers |> List.fold (fun (m: Map<string, TokenValue>) (k, v) -> m.Add(k, v)) seed.Values
+        Theme(seed, algorithms, [], ThemeTokens tokens, aliases, palette, ThemePresets.checks 2)
 
-    let presets = [ classic ]
+    let classic = baked "classic"
+
+    let presets = ThemePresets.recipes |> List.map (fun (name, _, _) -> baked name)
