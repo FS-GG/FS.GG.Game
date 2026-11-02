@@ -2966,6 +2966,185 @@ let runThemeProof () : Async<unit> =
                 (String.concat "; " monoMisses)
     }
 
+/// FS.GG.Game#812 (GAME-RENDER-02.10) proof: presentation-only motion as a pure function of render time. Under Fable it
+/// replays the frames .NET digested; on SVG, Pixi and Babylon it draws the frames at several render times, a theme
+/// switch mid-animation and reduced motion; and it compares SVG with Pixi frame by frame (Root's binding requirement on
+/// FS-GG/.github#5218: SVG stands in for Pixi in documentation).
+let runMotionProof () : Async<unit> =
+    let presetTheme name =
+        Experimental.Themes.presets
+        |> List.find (fun p -> p.Name = name)
+        |> Experimental.Themes.deriveOrFail
+        |> Experimental.Themes.renderOrFail
+
+    async {
+        let classic, light = presetTheme "classic", presetTheme "light"
+        let full, reduced = Experimental.Motion.full, Experimental.Motion.reduced
+        let sample = Experimental.Motion.sample
+        let at (theme: Theme) tokens (t: int) = Experimental.Motion.frame (fun () -> theme) (fun () -> tokens) sample t
+        let width, height = Experimental.Motion.width, Experimental.Motion.height
+
+        // ---- Under Fable -----------------------------------------------------------------------------------------
+        let started = System.DateTime.Now
+        let digest = Experimental.Motion.digest (at classic full) [ 0..2400 ]
+        info "motion (#812) digest time" (sprintf "%d ms for 2401 frames" (int (System.DateTime.Now - started).TotalMilliseconds))
+        check
+            "motion (#812): under Fable the 2401 frames (classic, every millisecond from 0 to 2400) digest exactly as .NET baked them"
+            (digest = Experimental.MotionBaked.digest)
+            (sprintf "Fable %s, .NET %s" digest Experimental.MotionBaked.digest)
+        let notStill =
+            [ for th in [ classic; light ] do
+                for t in 0..37..2400 do
+                    if at th reduced t <> Experimental.Motion.still th then yield sprintf "%s t=%d" (Theme.name th) t ]
+        check
+            "motion (#812): under Fable reduced motion draws the still frame at every sampled t (classic and light, every 37 ms)"
+            notStill.IsEmpty
+            (String.concat ", " (List.truncate 4 notStill))
+        let fast = { full with Values = full.Values.Add("motion.period.pulse", Experimental.Motion.Duration 250) }
+        let flashOk =
+            List.isEmpty (Experimental.Motion.flashViolations classic full)
+            && List.isEmpty (Experimental.Motion.flashViolations light full)
+            && not (List.isEmpty (Experimental.Motion.flashViolations classic fast))
+        check "motion (#812): under Fable the pulse passes the WCAG 2.3.1 flash check in classic and light, and a planted 250 ms pulse is refused" flashOk ""
+        let roundTrips =
+            [ full; reduced ]
+            |> List.forall (fun tokens ->
+                match Experimental.Motion.ofDtcg (Experimental.Motion.toDtcg tokens) with
+                | Ok back -> back.Values = tokens.Values && back.Algorithms = tokens.Algorithms
+                | Error _ -> false)
+        check "motion (#812): under Fable DTCG duration and cubicBezier motion tokens round-trip (full and reduced motion)" roundTrips ""
+
+        let mountOn backend (container: HTMLElement) name scene =
+            match backend with
+            | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+            | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+            | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+        let times = [ 0; 150; 300; 450; 600; 900 ]
+
+        // ---- On each backend --------------------------------------------------------------------------------------
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+            let name = sprintf "motion (#812), %s" id
+            let container = document.createElement "div"
+            container.id <- sprintf "motion-proof-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" width height)
+            document.body.appendChild container |> ignore
+            let currentTheme = ref classic
+            let currentMotion = ref full
+            let present t = Experimental.Motion.frame (fun () -> currentTheme.Value) (fun () -> currentMotion.Value) sample t
+
+            match mountOn backend container name (present 0) with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                // The frame at each t: every decided pixel.
+                let misses = ResizeArray<string>()
+                let counts = ResizeArray<int>()
+                for t in times do
+                    let wanted = ScenePixels.expectations width height (present t)
+                    counts.Add wanted.Length
+                    let! wrong = drawnMismatches container width height backend (fun () -> mount.Present(present t)) wanted 600
+                    if not wrong.IsEmpty || wanted.Length < 1000 then
+                        misses.Add(sprintf "t=%d: %d of %d differ, e.g. %s" t wrong.Length wanted.Length (wrong |> List.truncate 2 |> String.concat "; "))
+                    if t = 300 then
+                        let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "motion-%s.png" id)
+                        info (sprintf "motion screenshot %s" id) (if wrote then sprintf "motion-%s.png" id else "not requested")
+                check
+                    (sprintf "%s: the frame at each of t = %s ms draws every pixel ScenePixels decides (%s pixels)" name (times |> List.map string |> String.concat ", ") (counts |> Seq.map string |> String.concat "/"))
+                    (misses.Count = 0)
+                    (String.concat "; " misses)
+
+                // Control: t = 300 drawn does not pass t = 600's decided pixels (the animation changes the frame).
+                let! control =
+                    drawnMismatches container width height backend (fun () -> mount.Present(present 300)) (ScenePixels.expectations width height (present 600)) 0
+                check (sprintf "%s: control, the frame at t = 300 does not pass the frame at t = 600" name) (control.Length > 4) (sprintf "only %d differ" control.Length)
+
+                // A theme switch mid-animation, at t = 480, through the reader.
+                currentTheme.Value <- classic
+                let! _ = drawnMismatches container width height backend (fun () -> mount.Present(present 480)) (ScenePixels.expectations width height (at classic full 480)) 600
+                currentTheme.Value <- light
+                let! switched = drawnMismatches container width height backend (fun () -> mount.Present(present 480)) (ScenePixels.expectations width height (at light full 480)) 600
+                let! stale = drawnMismatches container width height backend (fun () -> mount.Present(present 480)) (ScenePixels.expectations width height (at classic full 480)) 0
+                let sameGeometry =
+                    let geometry (s: Scene) = s.Nodes |> List.choose (function SceneNode.Rectangle(r, _) -> Some r | _ -> None)
+                    geometry (at classic full 480) = geometry (at light full 480)
+                check
+                    (sprintf "%s: a theme switch at t = 480 draws light's frame at 480 with the same phase, and no longer classic's" name)
+                    (switched.IsEmpty && stale.Length > 20 && sameGeometry)
+                    (sprintf "%d differ from light's, %d from classic's, same geometry %b" switched.Length stale.Length sameGeometry)
+                currentTheme.Value <- classic
+
+                // Reduced motion turned on mid-animation: every later frame is the still frame.
+                currentMotion.Value <- reduced
+                let stillWanted = ScenePixels.expectations width height (Experimental.Motion.still classic)
+                let reducedMisses = ResizeArray<string>()
+                for t in [ 700; 950; 1333 ] do
+                    let! wrong = drawnMismatches container width height backend (fun () -> mount.Present(present t)) stillWanted 600
+                    if not wrong.IsEmpty then reducedMisses.Add(sprintf "t=%d: %d differ" t wrong.Length)
+                check
+                    (sprintf "%s: reduced motion, switched on at t = 700, draws the still frame at 700, 950 and 1333" name)
+                    (reducedMisses.Count = 0 && present 950 = Experimental.Motion.still classic)
+                    (String.concat "; " reducedMisses)
+                currentMotion.Value <- full
+                mount.Dispose()
+
+            container.remove ()
+
+        // ---- SVG against Pixi, frame by frame (Root's requirement on .github#5218) ---------------------------------
+        let hostSvg = document.createElement "div"
+        let hostPixi = document.createElement "div"
+        for h in [ hostSvg; hostPixi ] do
+            h.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" width height)
+            document.body.appendChild h |> ignore
+        match mountOn RendererBackend.Svg hostSvg "motion (#812) svg-vs-pixi" (at classic full 0), mountOn RendererBackend.Pixi hostPixi "motion (#812) pixi-vs-svg" (at classic full 0) with
+        | Ok svg, Ok pixi ->
+            let everyPixel = [ for y in 0 .. int height - 1 do for x in 0 .. int width - 1 -> { X = float x + 0.5; Y = float y + 0.5 } ]
+            let diff (a: (int * int * int) option) (b: (int * int * int) option) =
+                match a, b with
+                | Some(r1, g1, b1), Some(r2, g2, b2) -> max (abs (r1 - r2)) (max (abs (g1 - g2)) (abs (b1 - b2)))
+                | _ -> 999
+            let failures = ResizeArray<string>()
+            let measured = ResizeArray<string>()
+            let mutable maxDecided = 0
+            for t in times @ [ 1111; 2399 ] do
+                let scene = at classic full t
+                let wanted = ScenePixels.expectations width height scene
+                let! a = drawnMismatches hostSvg width height RendererBackend.Svg (fun () -> svg.Present scene) wanted 600
+                let! b = drawnMismatches hostPixi width height RendererBackend.Pixi (fun () -> pixi.Present scene) wanted 600
+                if not (a.IsEmpty && b.IsEmpty) then failures.Add(sprintf "t=%d: not shown (svg %d, pixi %d)" t a.Length b.Length)
+                let points = wanted |> List.map (fun e -> e.Point)
+                let! fromSvg = BrowserConformance.drawnPixels hostSvg width height RendererBackend.Svg points
+                let! fromPixi = BrowserConformance.drawnPixels hostPixi width height RendererBackend.Pixi points
+                let d = List.map2 diff fromSvg fromPixi |> List.fold max 0
+                maxDecided <- max maxDecided d
+                if d > 2 then failures.Add(sprintf "t=%d: decided pixels differ by up to %d" t d)
+                let! allSvg = BrowserConformance.drawnPixels hostSvg width height RendererBackend.Svg everyPixel
+                let! allPixi = BrowserConformance.drawnPixels hostPixi width height RendererBackend.Pixi everyPixel
+                let diffs = List.map2 diff allSvg allPixi
+                measured.Add(sprintf "t=%d: %d decided, max %d; all %d pixels: max %d, %d over 2" t wanted.Length d diffs.Length (List.fold max 0 diffs) (diffs |> List.filter (fun x -> x > 2) |> List.length))
+            info "motion (#812) svg-vs-pixi" (String.concat "; " measured)
+            check
+                (sprintf "motion (#812): SVG equals Pixi frame by frame at t = %s ms, on every decided pixel within 2 per channel (measured max %d)" (times @ [ 1111; 2399 ] |> List.map string |> String.concat ", ") maxDecided)
+                (failures.Count = 0)
+                (String.concat "; " failures)
+            // Planted divergence: SVG at t = 300 against Pixi at t = 600 must fail the same comparison.
+            let s300, s600 = at classic full 300, at classic full 600
+            let wanted = ScenePixels.expectations width height s300
+            let! _ = drawnMismatches hostSvg width height RendererBackend.Svg (fun () -> svg.Present s300) wanted 600
+            let! _ = drawnMismatches hostPixi width height RendererBackend.Pixi (fun () -> pixi.Present s600) (ScenePixels.expectations width height s600) 600
+            let points = wanted |> List.map (fun e -> e.Point)
+            let! fromSvg = BrowserConformance.drawnPixels hostSvg width height RendererBackend.Svg points
+            let! fromPixi = BrowserConformance.drawnPixels hostPixi width height RendererBackend.Pixi points
+            let over = List.map2 diff fromSvg fromPixi |> List.filter (fun x -> x > 2) |> List.length
+            check "motion (#812): control, SVG at t = 300 against Pixi at t = 600 fails the equivalence comparison" (over > 4) (sprintf "only %d differ" over)
+            svg.Dispose()
+            pixi.Dispose()
+        | Error reason, _
+        | _, Error reason -> check "motion (#812): SVG and Pixi mount for the equivalence comparison" false reason
+        hostSvg.remove ()
+        hostPixi.remove ()
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -3000,6 +3179,7 @@ async {
         do! runBoundedUnmodelled ()
         do! runGlyphSection ()
         do! runThemeProof ()
+        do! runMotionProof ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1

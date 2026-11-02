@@ -16,6 +16,7 @@
     <Compile Include="..\..\src\ReferenceGame\ExperimentalThemes.fs" Link="ReferenceGame\ExperimentalThemes.fs" />
     <Compile Include="..\..\src\ReferenceGame\ExperimentalSymbology.fs" Link="ReferenceGame\ExperimentalSymbology.fs" />
     <Compile Include="..\..\src\ReferenceGame\ExperimentalPresetData.fs" Link="ReferenceGame\ExperimentalPresetData.fs" />
+    <Compile Include="..\..\src\ReferenceGame\ExperimentalMotion.fs" Link="ReferenceGame\ExperimentalMotion.fs" />
     <Compile Include="GeneratedRenderers.fs" />
     <Compile Include="RetainedSurface.fs" />
     <Compile Include="Program.fs" />
