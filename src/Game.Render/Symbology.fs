@@ -60,6 +60,12 @@ module Symbology =
 
     /// Every broken rule names the field(s) involved. `explain` turns each into the change a game author makes.
     type SymbologyError =
+        /// A build needs at least one selectable theme to validate its channels.
+        | NoThemes
+        /// A default frame must be finite and positive.
+        | InvalidFrame of frame: float
+        /// The portable grammar lowers unit and structure families only.
+        | UnsupportedFamily of family: string
         /// D12 rule 1: an ordered field (ordinal, fraction, angle) on hue alone.
         | HueOnlyOrderedData of field: string * measure: string
         /// D12 rule 2: a nominal field on hue with no non-hue channel for the same field.
@@ -150,8 +156,8 @@ module Symbology =
     let maxPips = 5
     /// Size and lightness steps (glyph ADR D12 rule 3).
     let maxSteps = 4
-    /// One seven-segment digit; team numbers never wrap (Root's #794 merge comment), so above 9 the build fails until
-    /// part 3's two-digit badge (from 33 units) lands.
+    /// One seven-segment digit in the admitted grammar; team numbers never wrap (Root's #794 merge comment).
+    /// Larger rosters need an explicit grammar extension for the library's two-digit badge minimum.
     let maxBadgeTeams = 9
     /// The frame at the library's size step `step` (0 to 3) for a symbology whose default frame (step 3) is `frame`:
     /// `floor (cell x cells x (0.5 + step / 12))`, with `cell x cells = frame / 0.75` (part 3's `Glyphs.frameSize`).
@@ -179,6 +185,9 @@ module Symbology =
     /// What a game author changes for each error.
     let explain (error: SymbologyError) : string =
         match error with
+        | NoThemes -> "no selectable themes were supplied; pass the themes the player can choose to Symbology.build"
+        | InvalidFrame frame -> sprintf "the frame is %g; use a finite, positive frame size in scene units" frame
+        | UnsupportedFamily family -> sprintf "family %s is not supported by this grammar; use unit or structure" family
         | HueOnlyOrderedData(field, measure) ->
             sprintf
                 "%s is %s data on hue alone; hue has no order. Encode it on Slot.Amplifier Below (a bar), Slot.Amplifier Above (pips) or Slot.SizeStep."
@@ -259,6 +268,9 @@ module Symbology =
     /// allegiance colouring above a theme's hue capacity, a hue dropped in monochrome).
     type Symbology<'Entity> = { Draft: Draft<'Entity>; Notes: string list; Shared: Identity option; Roster: Identity list option }
 
+    /// The build's informational fallbacks, such as team colouring above a theme's hue capacity.
+    let notes (symbology: Symbology<'Entity>) = symbology.Notes
+
     /// `Symbology.create family frame`: a portable-profile draft at a frame size in units.
     let create<'Entity> (family: string) (frame: float) : Draft<'Entity> =
         { Family = family; Frame = System.Math.Floor frame; Stroked = false; Encodings = [] }
@@ -338,6 +350,10 @@ module Symbology =
         let shared = roster |> Option.bind (fun (_, r) -> sharedAllegiance r)
         let errors =
             [
+                if themes.IsEmpty then yield NoThemes
+                if System.Double.IsNaN draft.Frame || System.Double.IsInfinity draft.Frame || draft.Frame <= 0.0 then
+                    yield InvalidFrame draft.Frame
+                if draft.Family <> "unit" && draft.Family <> "structure" then yield UnsupportedFamily draft.Family
                 // Field names and slots.
                 for (field, _), n in es |> List.countBy (fun e -> e.Field, e.Slot) do
                     if n > 1 then yield DuplicateField field
@@ -389,6 +405,7 @@ module Symbology =
                     | Text, Label -> ()
                     | Text, _ -> yield wrong ()
                     // Team.
+                    | Team r, _ when r.IsEmpty -> yield EmptyDomain e.Field
                     | Team r, TeamMark ->
                         if r.Length > maxBadgeTeams then yield OverCapacity(e.Field, TeamMark, r.Length, maxBadgeTeams, None)
                         if not hasIdentity then yield TeamWithoutIdentity e.Field
@@ -401,13 +418,14 @@ module Symbology =
                         let labelled = small < minIdentityFrame && hasLabel
                         if not (redundant || labelled) then yield CategoricalHueWithoutRedundancy e.Field
                     | _ -> ()
-                // The themes must carry the game's teams (those within each theme's hue capacity keep team colours).
-                match roster with
-                | Some(_, r) ->
-                    for theme in themes do
-                        for violation in (match Theme.validate (ThemePresets.checks (max 2 (min r.Length (hueCapacity theme small)))) theme with Ok _ -> [] | Error violations -> violations) do
-                            yield ThemeRefuses((Theme.name theme), string violation)
-                | None -> ()
+                // Validate category, cue and status rules even for a symbology with no team field.
+                // Teams above the frame's hue capacity fall back to allegiance colouring.
+                for theme in themes do
+                    let teams = roster |> Option.map (fun (_, r) -> max 2 (min r.Length (hueCapacity theme small))) |> Option.defaultValue 2
+                    match Theme.validate (ThemePresets.checks teams) theme with
+                    | Ok _ -> ()
+                    | Error violations ->
+                        for violation in violations do yield ThemeRefuses(Theme.name theme, string violation)
                 // Rule 6 and the icon-slot case, for every size the symbology can reach.
                 match roster, shared with
                 | Some(teamField, _), Some allegiance ->

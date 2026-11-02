@@ -119,9 +119,6 @@ jobs:
       - name: Theme colour derivation on .NET and Fable (byte-identical and equal to expected.txt, ADR GAME-RENDER-02.4 D11)
         run: scripts/test-theme-determinism.sh
 
-      - name: Theme derivation fuzz, custom seeds included, on .NET and Fable (byte-identical; FS.GG.Game#795, glyph ADR Q12)
-        run: scripts/test-theme-fuzz.sh
-
       - name: Benchmark driver self-test (GPU/software refusal, flags and option handling; no browser)
         run: node tools/render-bench/driver.mjs selftest
 
@@ -140,6 +137,27 @@ jobs:
             echo "::error::the browser host's public surface changed but its baseline was not updated. Run scripts/materialize-js-bindings.sh all, dotnet build src/Render.Browser -c Debug, then dotnet fsi scripts/refresh-surface-baselines.fsx --browser, and commit the result."
             exit 1
           fi
+
+  # Preflight: independent numerical gate, no needs/artifact/cache coupling. Static validation is sufficient;
+  # keep the same tools/command while removing custom-seed fuzz from the browser critical path (#795).
+  theme-fuzz:
+    name: Production custom-seed theme derivation on .NET and Fable
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: "10.0.x"
+          cache: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "26"
+      - name: Compare production derivation, all review and custom seeds, and full-domain digests
+        run: scripts/test-theme-fuzz.sh
 
   # ADR GAME-RENDER-02.4 D11 (FS.GG.Game#789): the third runtime of the hex check. The browser-host job compares .NET on
   # Linux and node (through Fable) with tests/Game.Render.Theme.Determinism/expected.txt; this job compares .NET on

@@ -1,6 +1,6 @@
 # GAME-RENDER-02.8 — Theme machinery: game-state type to glyph symbology, with derived, selectable themes (ADR)
 
-Status: **proposed**. This is the design PR for FS.GG.Game#795. It adds an experimental proof and no shipped API.
+Status: **accepted design**, merged in [#805](https://github.com/FS-GG/FS.GG.Game/pull/805) on 2026-11-02. Production implementation is in draft [#818](https://github.com/FS-GG/FS.GG.Game/pull/818); Delivery #795 remains open through kit qualification and consumer adoption.
 Route: routine. Parent Outcome: FS-GG/.github#5218 (GAME-RENDER-02).
 
 This ADR is a **companion to the glyph ADR**, [`game-render-02-glyphs.md`](game-render-02-glyphs.md) (#789, accepted
@@ -24,9 +24,8 @@ frames, the token layers, the algorithm signature, the alias names, `Theme` as a
 | `ThemeColour`: OKLCH, gamut mapping, half-up quantisation, the sRGB table, contrast, hex | CIELAB, CIEDE2000, Machado simulation and Leonardo-style solving, which `ThemeColour` does not ship |
 
 **Root's ruling on the presets:** #795's derivation is the **source of truth for every preset, `classic` included**.
-#802's baked `classic` (`src/Game.Render/ThemeBaked.fs`, merged at `8f9ced1`) is a stand-in, regenerated from #795's
-derivation when #795's implementation lands.
-- **Today** the two differ in 27 of the 35 colour aliases. For example, `glyph.team.1` is `#b15900` here and `#e56c03` in
+#802's original baked `classic` (`src/Game.Render/ThemeBaked.fs`, merged at `8f9ced1`) was a stand-in. #818 regenerates it from #795's production recipe.
+- **Before the implementation** the two differed in 27 of the 35 colour aliases. For example, `glyph.team.1` was `#b15900` in the accepted proof and `#e56c03` in
   #802.
 - **At the review** (`9de9044e`), #802's `classic` set each team colour equal to an allegiance colour (`#eb5046`, the
   enemy's). The #802 review flagged it, because the ring vanished at 1.00:1 before erratum E1's keyline.
@@ -42,43 +41,34 @@ derivation when #795's implementation lands.
   `8f9ced1`), part 3's `Glyphs.fsi` (`a567a25`), and the glyph ADR's errata E1 (the team ring's layout) to E5.
 - The independent review of #805 at `3ddb9ee7` (REQUEST_CHANGES), answered below.
 
-**Proof:** `FS.GG.Game.Reference.Experimental`, which is not packed.
-- #802 (`8f9ced1`), #789's part 3 (#806, `a567a25`), #807 and #808 merged to main while this revision was under way, and
-  this branch merges them. #808 retired the #789 proof's `ExperimentalGlyphs`, so the proof now uses the shipped library
-  for identity, glyph specs and drawing.
-- The **drawing** is the library's. `Symbology.glyph` builds a `FS.GG.Game.Render.GlyphSpec` through its builders, and
-  `Glyphs.scene` draws it with erratum E1's layout, in a #802 `Theme`.
-- `Themes.toRenderTheme` builds that #802 `Theme` from this proof's derived colours:
-  - it starts from `ThemeSeed.classic`, sets all 35 colour aliases by `ThemeOverride.colour`, and sets `hueCapacity.N` to
-    the measured capacities;
-  - #802's built-in rules accept all five presets;
-  - it passes `strokeBase` and `gap` from the derived map (`highContrast`'s +1), and declares `monochrome`'s measured
-    capacity 0 as 1, because #802 requires a whole number from 1 to 8;
-  - until #809 (amendment A1, erratum E7) merges, it passes `contrastTarget` 3, and the proof's own `builtInRules`
-    validate `highContrast`'s 7:1.
-- The **theme-side** types remain stand-ins, each marked in its source as replaced by #802. The swap is the first step of
-  #795's implementation PR, not this design PR.
+## Production implementation (#818)
 
-| Proof stand-in | Replaced by |
-|---|---|
-| `Colour.oklchOf`, `ofOklch`, `gamutMap`, `quantise`, `srgbToLinear`, `contrast`, `hex`, `ofHex` | `ThemeColour.toOklch`, `ofOklch`, `quantise`, `linear`, `contrast`, `hex`, `ofHex` |
-| `Themes.Seed` | `ThemeSeed` plus algorithm parameters closed over by `ThemeAlgorithm.create` |
-| `Themes.MapTokens`, `Themes.Algorithm` | `ThemeTokens`, `ThemeAlgorithm` |
-| `Themes.Theme`, `create`, `builtInRules`, `ThemeViolation` | `Theme`, `Theme.create … \|> Result.bind (Theme.validate checks)`, #802's built-in rules, `ThemeViolation.create` |
-| `Themes.overrideTeam` | `Theme.withTeamColour` |
-| `Themes.hexes`, `cssVariables`, `toDtcg`, `ofDtcg`, `resolverDocument` | `Theme.hex`, `cssVariables`, `toDtcg`, `ofDtcg`, `dtcgResolver` |
-| `Themes.toRenderTheme` (the bridge to the library) | nothing: #795's presets are built on #802 directly |
+The package uses the existing `Theme`, `ThemeSeed`, `ThemeTokens`, `ThemeAlgorithm` and `ThemeCheck` contracts.
+There is one colour implementation and one theme type:
 
-Already the library's, not stand-ins:
-- `Identity`;
-- `GlyphSpec` (`team`, `badged`, `allegianceColouring`, `sizeStep`, `fillStep`, `modifier`, `amplifier`);
-- `Glyph.ofSpec`, `Glyphs.draw` and `Glyphs.scene`;
-- the frame constants `minBadgeFrame` (22), `minIdentityFrame` (12) and `minIconAndBadgeFrame` (40);
-- the icon set: infantry, armour, artillery, support and structure.
+- [`Theme.fs`](../../src/Game.Render/Theme.fs) supplies `ThemeVision`, the gridded solver, `ThemePresets` algorithms,
+  checks and recipes. [`ThemeBaked.fs`](../../src/Game.Render/ThemeBaked.fs) contains every preset's resolved data.
+- [`Symbology.fs`](../../src/Game.Render/Symbology.fs) supplies the checked grammar and `Encode`. Checked absolute
+  frame sizes reach the glyph drawing, so the icon/badge rule agrees with the drawn geometry. Facing angles are
+  retained in the encoded result; nonfinite angles are refused.
+- [`ThemeExample.fs`](../../src/ReferenceGame/ThemeExample.fs) builds the arena example on the package's types and
+  draws through a theme reader. The experimental colour, theme and grammar stand-ins are retired.
+- [`ThemeDerivationTests.fs`](../../tests/Game.Render.Tests/ThemeDerivationTests.fs) and
+  [`SymbologyTests.fs`](../../tests/Game.Render.Tests/SymbologyTests.fs) exercise production colour science, recipes,
+  capacities, exports, overrides, switching, redundancy, domains and rosters. `ThemeTests.fs` retains the base API tests.
+- The determinism probe compares all five recipes with the baked presets on .NET and Fable. The independent
+  `theme-fuzz` CI job compiles canonical theme sources and compares custom seeds, actual internal grid inputs and
+  conversion digests. Its input fixtures preserve the review's hue intentions through the public 8-bit seed API.
+- The browser theme section uses the same production example and records explicit SVG/Pixi byte equality per preset,
+  in addition to the existing per-backend, switch and monochrome controls. Source compilation is not browser qualification.
 
-The proof's alias set **is** #802's: the 35 colour aliases of `Theme.aliases`, from `surface.ground` to
-`terrain.void`. Its built-in rules are #802's with amendment A1, which Root adopted as erratum E7 in #809 (T5,
-Q-T11).
+The derived `classic` replaces the provisional palette. E7 (#809) is merged and applies directly; no bridge lowers
+`highContrast` to a 3:1 target. DTCG and CSS fixtures are generated from production recipes by `bake.fsx`.
+Template adoption, RuneScape migration, exact-candidate browser qualification and post-merge Atlas citations remain
+Delivery acceptance. The historical proof below establishes only its cited experimental source.
+
+The plan-overlay aliases proposed by #810 remain a future additive contract; the
+[theme-owner amendment](https://github.com/FS-GG/FS.GG.Game/issues/795#issuecomment-6575022763) does not extend the current 35 colours.
 
 ## Problem
 
@@ -97,7 +87,7 @@ organisation, after Bertin, Mackinlay's ranking and Munzner's channels. The them
 the icon set, as Vega-Lite's `config.range` does. The output is a `GlyphSpec`, the glyph ADR's D1 target.
 
 ```fsharp
-// The worked example (ExperimentalSymbology.fs, module ArenaExample): the template's arena players.
+// The worked example (ThemeExample.fs, module ArenaExample): the template's arena players.
 let roster = [ Own; Enemy; Enemy; Enemy ]            // the game's teams and their allegiances (Identity.Own … on #802)
 Symbology.create<Player> "unit" 24.0
 |> Encode.identity "allegiance" (fun p -> p.Allegiance) Frame          // shape + colour
@@ -135,8 +125,8 @@ Symbology.create<Player> "unit" 24.0
   - `SizeStep` is the frame size, an area channel. The levels map to the library's size steps with the top level at step
     3, the default frame. At a 24-unit default, three levels draw 18, 21 and 24 units (`floor (frame / 0.75 x (0.5 +
     step / 12))`).
-  - Flags on `Modifier` are the library's corner notches. The design also accepts `Amplifier Corner`; the proof refuses
-    it (`SlotNotInProof`), because a corner badge needs an icon per flag.
+  - Flags on `Modifier` are the library's corner notches. The design also accepts `Amplifier Corner`; the portable grammar refuses
+    it (`UnsupportedSlot`), because a corner badge needs an icon per flag.
   - `Label` is the accessible mirror label, because Q6 rules out Scene text.
 - **The mirror label is generated** from the encodings, for example `own, team 1, health 90%, rank 3, carrying, Ada`.
   It names identity and team in every case, as glyph ADR D1 requires.
@@ -164,7 +154,7 @@ Symbology.create<Player> "unit" 24.0
 | ordinal | `Amplifier Above` (pips, at most 5), `SizeStep` and `FillStep` (at most 4) | `Fill`: `HueOnlyOrderedData` |
 | fraction | `Amplifier Below` (a bar) | `SizeStep`: `FractionAsArea`; `Fill`: `HueOnlyOrderedData` |
 | angle | `Amplifier Facing`, in the stroked profile | in the portable profile: `NeedsStrokedProfile`; `Fill`: `HueOnlyOrderedData` |
-| flag | `Modifier` (corner notches); `Amplifier Corner` in the design, not drawn by the proof | anywhere else: `FlagNotSelective` |
+| flag | `Modifier` (corner notches); `Amplifier Corner` in the design, not yet supported by the portable grammar | anywhere else: `FlagNotSelective` |
 | label | `Label` | — |
 | team | `TeamMark` (at most 9 teams: one digit, never wrapped; two digits from part 3's 33 units) | more: `OverCapacity`; without identity on `Frame`: `TeamWithoutIdentity` |
 
@@ -180,13 +170,14 @@ the author makes. The rules are the glyph ADR's D12, plus the icon-slot rule fro
 | 3. Capacity | `OverCapacity (field, slot, n, capacity, theme)` | group the values, or use the icon; names the theme whose hue capacity is short |
 | 4. Fractions are length | `FractionAsArea field` | use `Amplifier Below` |
 | 5. Flags are selective | `FlagNotSelective (field, slot)` | use `Modifier` or `Amplifier Corner` |
+| Valid build inputs | `NoThemes`, `InvalidFrame`, `UnsupportedFamily`, `EmptyDomain` | provide selectable themes, a finite positive frame, unit or structure family and a nonempty domain |
 | 6. Identity double-encoded | `IdentityNotOnFrame`, `IdentityBelowMinimumWithoutLabel` | put identity on `Frame`; below 12 units, add `Encode.label` |
 | 6. Team double-encoded | `TeamWithoutIdentity field` | add `Encode.identity` on `Frame` |
 | 6. Team badge mandatory when allegiances are shared | `TeamBadgeBelowMinimumWithoutLabel (field, frame, allegiance)` | frames of at least 22 units, distinct allegiances, or a label |
 | Icon slot unavailable | `IconSlotTakenByBadge (icon, team, frame, allegiance)` | frames of at least 40 units, distinct allegiances, or move the field to `SizeStep`, `Modifier` or the label |
 | One field per slot | `SlotTaken`, `DuplicateField` | move one field |
 | The slot exists | `WrongSlot (field, measure, slot, allowed)` | names the allowed slots |
-| The proof draws it | `SlotNotInProof (field, slot)` | a corner flag needs an icon; use `Modifier` |
+| The portable grammar supports it | `UnsupportedSlot (field, slot)` | a corner flag needs an icon; use `Modifier` |
 | The themes carry the teams | `ThemeRefuses (theme, reason)` | the theme's own violation, explained |
 | Run time (`spec`) | `ValueOutOfRange (field, value, domain)`, `RosterMismatch (team field, team, roster allegiance, entity identity)` | add the value to the declaration, or fix the state or the roster |
 
@@ -294,7 +285,7 @@ A preset is
 `Theme.create seed algorithms [] |> Result.bind (Theme.validate (Checks.forTeams teams))`.
 The theme carries its checks, so `withTeamColour` and `withOverrides` run them again.
 
-**#802's built-in rules.** The proof's `builtInRules` is a stand-in for these:
+**#802's built-in rules.** `Theme.create` applies these rules before the additional `ThemePresets.checks`:
 - **Ground floor.** `contrastTarget` against the ground for allegiances, body, stale, selection, marker, path, the outer
   focus tone, hover and `status.keyline`.
 - **Touching pairs, at 3:1:**
@@ -322,7 +313,7 @@ The theme carries its checks, so `withTeamColour` and `withOverrides` run them a
 - **Effect on the presets.** At a 3:1 floor E7 is #802's merged rule unchanged, so `classic`, `light`,
   `colourBlindSafe` and `monochrome` pass #802 today. `highContrast` passes once #809 merges.
 
-**#795's checks** (`Themes.checks teams`, each a future `ThemeCheck`):
+**#795's checks** (`ThemePresets.checks teams`, each a `ThemeCheck`):
 
 | Check | Rule |
 |---|---|
@@ -346,7 +337,7 @@ The theme carries its checks, so `withTeamColour` and `withOverrides` run them a
 The measured capacities below stand on this amendment.
 
 **Hue capacity is measured, not declared.**
-- The proof's `hueCapacity theme frameUnits` is the largest n, up to the theme's ceiling for that size, whose first n
+- `ThemePresets.measuredCapacity` reports the largest n, up to the theme's ceiling for that size, whose first n
   team colours pass every distinctness rule. It is 0 in `monochrome`.
 - The ceilings are 6, 7 and 8 for frames under 24 units, 24–39, and 40 and over; `highContrast` and `colourBlindSafe`
   use 4, 5 and 6.
@@ -357,14 +348,13 @@ The measured capacities below stand on this amendment.
   GlyphSpec.sizeStep N)`. The check then follows the theme's own `cell` and `density`. At `classic`'s 32-unit cell,
   steps 0 to 3 are 16, 18, 21 and 24 units, so steps 0–2 fall under 24 and step 3 in 24–39.
 
-**Measured on the five presets.** These are the values `ExperimentalThemesTests.fs` asserts, row for row ("calibration
-evidence"):
+**Measured on the five production presets.** The table uses `ThemeVision.deltaE2000` over the first measured-capacity teams and all allegiance pairs. Simulated minima cover protan, deutan and tritan; contrast reads the quantised colours through `ThemeColour.contrast`. The production tests enforce the thresholds and measured capacities:
 
 | Preset | Hue capacity (24 units) | Teams: min ΔE normal / simulated | Allegiances: min ΔE normal / simulated | Min allegiance contrast on ground |
 |---|---|---|---|---|
-| `classic` | 5 | 20.0 / 8.4 | 25.4 / 16.2 | 3.20 |
-| `light` | 5 | 20.3 / 8.4 | 25.5 / 14.1 | 3.21 |
-| `highContrast` | 5 (4 under 24 units) | 19.9 / 8.3 | 24.5 / 11.2 | 7.21 |
+| `classic` | 5 | 19.9 / 8.4 | 25.5 / 16.2 | 3.20 |
+| `light` | 5 | 19.8 / 8.5 | 25.5 / 14.0 | 3.21 |
+| `highContrast` | 5 (4 under 24 units) | 19.8 / 8.4 | 25.1 / 11.2 | 7.21 |
 | `colourBlindSafe` | 3 | 37.8 / 8.0 | 27.9 / 17.1 | 3.22 |
 | `monochrome` | 0 | not checked (shape and badge carry identity and team) | — | 7.56 (one grey) |
 
@@ -372,7 +362,7 @@ In every coloured preset the binding constraint is the simulated threshold (8). 
 preset's hue capacity.
 
 **How the thresholds are calibrated (glyph ADR Q11).** 12, 8 and 0.08 ship as provisional constants
-(`Themes.thresholds`), and this ADR does not claim they are right. The calibration that replaces them has three steps:
+(`ThemePresets.thresholdNormal`, `thresholdSimulated` and `thresholdTeamLightnessGap`), and this ADR does not claim they are right. The calibration that replaces them has three steps:
 1. **Size.** Stone, Szafir and Setlur's model makes the noticeable difference grow as marks shrink. Compute the glyph's
    visual angle at the theme's `minCssPerUnit` and a stated viewing distance, for the 24-unit default frame and the
    12-unit minimum, and from it a threshold per size step.
@@ -392,14 +382,15 @@ preset's hue capacity.
 | `colourBlindSafe` | `[base; dark; colourBlindSafe; repair]` | Okabe–Ito hues, lightness solved for the ground |
 | `monochrome` | `[base; dark; monochrome; repair]` | no hue; identity by frame shape, team by badge |
 
-- **Baked (glyph ADR Q12).** `bake.fsx` writes all 35 colour aliases per preset to `ExperimentalPresetData.fs`. A .NET
+Here `base` is `ThemePresets.leonardo`, after `ThemeAlgorithm.standard`.
+
+- **Baked (glyph ADR Q12).** The determinism probe's `--bake` writes all preset aliases and numbers to `ThemeBaked.fs`. A .NET
   test and the browser smoke derive them again and must match byte for byte.
-  - The bake also writes the DTCG token files, the Resolver document and `presets.css` into
-    [`game-render-02-themes/`](game-render-02-themes/), and a test fails if they are stale.
-  - When #795's implementation lands, this baked data replaces #802's `ThemeBaked.fs` for `classic` (Root's ruling)
-    and adds the other four.
+  - `bake.fsx` separately writes the production DTCG token files, Resolver document, `presets.css` and browser grid digest.
+    The token fixtures live in [`game-render-02-themes/`](game-render-02-themes/); a test fails if they are stale.
+  - This replaces #802's provisional `classic` data and adds the other four (Root's ruling).
 - **The player's team-colour override** is `Theme.withTeamColour team colour theme` (glyph ADR erratum E4).
-  - Only one of the game's teams can be set: the proof refuses a team outside the game (`TeamOutsideGame`).
+  - Only a team declared by the theme seed can be set. A game supplies its roster when deriving its theme; `Theme.withTeamColour` refuses an index outside that roster with a `ThemeViolation`.
   - The theme is validated again by the built-in rules and every carried check, for the game's team count (XAG 103:
     presets plus free choice).
   - A failing override is refused with its reasons. The test refuses a team on the ground's colour (below the floor),
@@ -409,11 +400,10 @@ preset's hue capacity.
 ### T7. DTCG, CSS and runtime switching
 
 - **DTCG and CSS belong to #802:** `Theme.toDtcg`, `ofDtcg`, `dtcgResolver` (version `2025-10-01`, erratum E5) and
-  `cssVariables`. #795 adds no second export path. The proof's stand-ins, kept until #795's implementation swaps them for
-  #802's (merged at `8f9ced1`), write the same shapes:
+  `cssVariables`. #795 uses that single export path:
   - colour tokens as `{"colorSpace": "oklch", "components": [L, C, h], "alpha": 1, "hex": …}`;
   - CSS properties named `--fsgg-<alias with hyphens>`.
-- **The import rule is #802's** (Q-T12, settled; #789 issuecomment-6570698885), and the proof's stand-in follows it:
+- **The import rule is #802's** (Q-T12, settled; #789 issuecomment-6570698885), and the production import uses it:
   - **Read:**
     - a `hex` always wins (D11);
     - without one, `oklch` components go through `ThemeColour.ofOklch` (gamut mapping, then half up), and `srgb`
@@ -424,7 +414,7 @@ preset's hue capacity.
     - a malformed or 8-digit hex;
     - a colour token with no `$type`, of its own or from its nearest group.
 - **Runtime switching is #795's.**
-  - `Themes.switchOf theme` returns `{ Read: unit -> Theme; Select: Theme -> unit }`.
+  - The host owns the selected `Theme` and supplies a `unit -> Theme` reader. Changing that selection changes the next view; no second theme-switch type is required.
   - The game's view takes the reader, `view : (unit -> Theme) -> ArenaState -> Scene`, and the glyph ADR's cue layer
     takes the same reader (D10).
   - The theme is never game state. A switch keeps the state, the selection and the focus, and the next Present draws
@@ -433,10 +423,10 @@ preset's hue capacity.
 
 ### T8. Kit checks for themes and symbology
 
-These go to the kit's glyph section (glyph ADR D6) when #789's types land. The proof runs each one now.
+These are the production kit obligations (glyph ADR D6). The browser theme section uses the shipped types; exact-candidate browser qualification remains required.
 1. **Determinism, presets and run-time custom seeds alike** (glyph ADR Q12; B4).
    - **Presets.** Fable derives every preset alias's hex exactly as .NET baked it.
-   - **The custom-seed fuzz** (`scripts/test-theme-fuzz.sh`, `tests/Game.Render.Themes.Fuzz`, a CI step in
+   - **The custom-seed fuzz** (`scripts/test-theme-fuzz.sh`, `tests/Game.Render.Themes.Fuzz`, the independent `theme-fuzz` CI job in
      `render-browser-host`):
      - inputs: the #805 review's 120 seeds, plus 2,000 seeds from a fixed MINSTD generator;
      - kinds: a third random, a third near-grey (grounds within one step of grey, chroma 0 to 0.01), and a third near
@@ -462,7 +452,7 @@ These go to the kit's glyph section (glyph ADR D6) when #789's types land. The p
 
 ### T9. Licensing
 
-No third-party code is ported. The proof implements published formulas and uses published constants, each cited in
+No third-party code is ported. The implementation uses published formulas and uses published constants, each cited in
 the source:
 - **OKLab:** Ottosson's direct linear-sRGB matrices (2020). CSS Color 4 defines OKLab through XYZ D65 with its own
   matrices, and the two paths differ by at most 1.2e-4 in an OKLab component over the 8-bit colours (measured by the
@@ -486,7 +476,7 @@ table requires. **No `apca-w3` code or constants**; WCAG 2 is the gate.
     which colours fail depends on the direction of the last-ULP error, but `Floor` is unusable either way.
 - **Cube roots.** The #805 review measured the cube-root inputs of every 8-bit colour: about **58 %** differ between
   .NET's `Math.Cbrt` and Node's `Math.cbrt` by 1–3 ULP. The output bytes of a single conversion are still identical,
-  because half-up quantisation absorbs the difference. The proof now takes cube roots through `Pow`, as #802's
+  because half-up quantisation absorbs the difference. Production derivation takes cube roots through `Pow`, as #802's
   `ThemeColour` does; Fable has no mapping for `Math.Cbrt`.
 - **Why a custom seed could still differ (B4).** A conversion's bytes match, but the review found one derivation that
   did not: seed 22, ground `#281a22`, `colourBlindSafe`, gave `terrain.blocked` `#3b3c3c` on .NET and `#3c3c3c` under
@@ -508,9 +498,9 @@ table requires. **No `apca-w3` code or constants**; WCAG 2 is the gate.
     to 1e-15 / C radians. Hence the 0.001 chroma floor, and an exhaustive check rather than an argument: the gridded
     inputs of every 8-bit colour are digested on both runtimes and must match.
 
-## The proof (experimental)
+## Historical experimental proof (#805)
 
-The proof does not constrain the API.
+This section records the proof accepted at [`c3abc66c`](https://github.com/FS-GG/FS.GG.Game/tree/c3abc66c13ed4d45a4150c21c81849a4a7bdcd4c). Its filenames, counts, screenshots and runtime results describe that source, before the production port. They do not qualify #818.
 
 - **.NET tests** (`tests/Game.Render.Tests/ExperimentalThemesTests.fs`): **30**, all passing.
   - **Colour science:**
@@ -607,7 +597,7 @@ None blocks the implementation.
     `ThemePresets` module, with the baked data replacing `ThemeBaked.fs`.
 - **Q-T9. The DTCG Resolver version.** Settled by erratum E5: `2025-10-01`.
 - **Q-T10. More than 9 teams.**
-  - *Default:* refused in the proof. On #789's part 3, two-digit badges from 33 units (`minTwoDigitBadgeFrame`); team
+  - *Default:* the admitted grammar remains limited to nine teams. The glyph library has two-digit badges from 33 units (`minTwoDigitBadgeFrame`); team
     numbers never wrap.
 - **Q-T11. Amendment A1, the team floor against the ground: decided.** Root adopted it as glyph ADR erratum E7, in #809
   (#789 issuecomment-6570698885; Root's ruling 4 in #795 issuecomment-6570904451).

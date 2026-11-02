@@ -18,7 +18,7 @@ let private errorsOf (result: Result<Symbology<'E>, SymbologyError list>) =
 let private refuses (draft: Draft<'E>) (expected: SymbologyError -> bool) (what: string) =
     let errors = errorsOf (build themes draft)
     Expect.isTrue (errors |> List.exists expected) (sprintf "%s: expected the error, got %A" what errors)
-    Expect.equal errors (List.distinct errors) "errors are de-duplicated"
+    Expect.equal errors.Length (List.distinct errors).Length "errors are de-duplicated, including non-reflexive NaN inputs"
     for error in errors do
         Expect.isNotEmpty (explain error) "every error explains itself"
 
@@ -39,6 +39,19 @@ let private playerDraft =
 [<Tests>]
 let tests =
     testList "production symbology (#795)" [
+            test "empty theme sets, invalid frames, unsupported families and empty rosters are refused" {
+                Expect.contains (errorsOf (build [] base24)) NoThemes "no vacuous theme validation"
+                for frame in [0.0; -1.0; nan; infinity; -infinity] do
+                    refuses (Symbology.create<Probe> "unit" frame |> Encode.label "name" (fun p -> p.Name)) (function InvalidFrame _ -> true | _ -> false) "invalid frame"
+                refuses (Symbology.create<Probe> "terrain" 24.0) (function UnsupportedFamily "terrain" -> true | _ -> false) "no silent unit substitution"
+                refuses (base24 |> Encode.team "side" (fun p -> p.Side) [] TeamMark) (function EmptyDomain "side" -> true | _ -> false) "empty roster"
+            }
+            test "themes are checked for identity and status rules without a team encoding" {
+                let own = Theme.allegiance Identity.Own Theme.classic
+                let invalid = Theme.create ThemeSeed.classic [ThemeAlgorithm.standard] [ThemeOverride.colour "glyph.allegiance.enemy" own] |> Result.defaultWith (fun e -> failtestf "%A" e)
+                Expect.isOk (build [Theme.classic] base24) "valid theme positive control"
+                Expect.isTrue (errorsOf (build [invalid] base24) |> List.exists (function ThemeRefuses _ -> true | _ -> false)) "unchecked non-team categories are refused"
+            }
             test "D12 rule 1: no hue-only ordered data" {
                 refuses (base24 |> Encode.ordinal "level" (fun p -> p.Level) [ 0; 1; 2 ] Fill) (function HueOnlyOrderedData("level", _) -> true | _ -> false) "ordinal"
                 refuses (base24 |> Encode.fraction "share" (fun p -> p.Share) Fill) (function HueOnlyOrderedData("share", _) -> true | _ -> false) "fraction"
@@ -148,7 +161,11 @@ let tests =
                     | Error [ ValueOutOfRange("side", "team 9", _) ] -> ()
                     | other -> failtestf "team 9 of 9 drew (a wrap): %A" other
                     match Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Side = 8 } with
-                    | Ok spec -> Expect.equal (spec.Team, spec.Badged) (Some 8, true) "team 8 is badged (the library draws digit 9)"
+                    | Ok encoded ->
+                        let zero = Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Side = 0 } |> Result.defaultWith (fun e -> failtestf "%A" e)
+                        let body e = Symbology.glyph false false e |> Glyphs.draw Theme.classic |> GlyphDrawing.body
+                        Expect.notEqual (body encoded) (body zero) "digit 9 differs from digit 1 with allegiance colouring fixed"
+                        Expect.equal (Symbology.label s { probe with Side = 8 } |> Result.defaultWith (fun e -> failtestf "%A" e)) "own, team 9" "one-based mirror label, never wrapped"
                     | Error e -> failtestf "%A" e
                 | Error e -> failtestf "%A" e
                 let fraction = base24 |> Encode.fraction "share" (fun x -> x.Share) (Amplifier Below)
@@ -167,9 +184,9 @@ let tests =
                 | Ok s ->
                     let target = theme "classic"
                     let at level =
-                        let e = Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Identity.Enemy; Side = 1; Level = level } |> function Ok g -> g | Error e -> failtestf "%A" e
+                        let e = Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Identity.Own; Side = 0; Level = level } |> function Ok g -> g | Error e -> failtestf "%A" e
                         let drawing = FS.GG.Game.Render.Glyphs.draw target (Symbology.glyph true false e)
-                        e.Frame, FS.GG.Game.Render.GlyphDrawing.diagnostics drawing |> List.exists (fun d -> d.Contains "badge")
+                        (GlyphDrawing.frame drawing).Width, FS.GG.Game.Render.GlyphDrawing.diagnostics drawing |> List.exists (fun d -> d.Contains "badge")
                     Expect.equal (at 0) (18.0, true) "18 units: the library omits the badge and says so; the label carries team"
                     Expect.equal (at 1) (21.0, true) "21 units: still under the 22-unit minimum"
                     Expect.equal (at 2) (24.0, false) "24 units: the badge is drawn"
@@ -210,11 +227,12 @@ let tests =
                     Expect.equal (GlyphDrawing.frame drawing).Width frame "the checked frame is the drawn frame"
             }
 
-            test "facing angles survive checked encoding and nonfinite angles are refused" {
+            test "facing capability is reported and nonfinite angles are refused" {
                 let draft = base24 |> Symbology.stroked |> Encode.angle "facing" (fun p -> p.Share) (Amplifier Facing)
                 let built = build themes draft |> Result.defaultWith (fun e -> failtestf "%A" e)
                 let encoded = spec built { X = 0.0; Y = 0.0 } probe |> Result.defaultWith (fun e -> failtestf "%A" e)
-                Expect.equal encoded.Facing (Some 0.5) "radians retained for glyph lowering"
+                let drawing = glyph false false encoded |> Glyphs.draw Theme.classic
+                Expect.exists (GlyphDrawing.diagnostics drawing) (fun text -> text.Contains "facing needs the stroked profile") "the portable renderer reports its capability rather than silently dropping the angle"
                 for bad in [ nan; infinity; -infinity ] do
                     match spec built { X = 0.0; Y = 0.0 } { probe with Share = bad } with
                     | Error [ ValueOutOfRange("facing", _, _) ] -> ()

@@ -21,7 +21,8 @@
     <Compile Include="ThemeTests.fs" />
     <Compile Include="SymbologyTests.fs" />
     <Compile Include="GlyphsTests.fs" />
-    <Compile Include="ExperimentalThemesTests.fs" />
+    <Compile Include="../Game.Render.Themes.Fuzz/Numerics.fs" Link="ThemeNumerics.fs" />
+    <Compile Include="ThemeDerivationTests.fs" />
     <Compile Include="SceneInteractionTests.fs" />
     <Compile Include="InputPipelineContractTests.fs" />
     <Compile Include="Program.fs" />

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # ADR GAME-RENDER-02.4 D11 (FS.GG.Game#789): theme colour derivation is deterministic. The probe resolves the baked
-# `classic` preset and a fresh derivation of its seed, exports and re-imports DTCG, derives 48 custom seeds, maps an
+# five presets and fresh derivations of their recipes, exports and re-imports DTCG, derives 48 custom seeds, maps an
 # OKLCH grid into sRGB and runs the full 8-bit round trip, on .NET and on Fable (node). The project compiles the bounded
 # Fable view of FS.GG.Game.Render, so the Fable run is the code a browser consumer gets.
 #
@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT="$REPO_ROOT/tests/Game.Render.Theme.Determinism"
 EXPECTED="$PROJECT/expected.txt"
-MIN_CHECKS=7
+MIN_CHECKS=15
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

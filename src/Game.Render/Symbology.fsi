@@ -69,6 +69,12 @@ module Symbology =
 
     /// Every broken rule names the field(s) involved. `explain` turns each into the change a game author makes.
     type SymbologyError =
+        /// At least one selectable theme must be supplied.
+        | NoThemes
+        /// A frame must be finite and positive.
+        | InvalidFrame of frame: float
+        /// The portable grammar currently lowers unit and structure families.
+        | UnsupportedFamily of family: string
 
         /// D12 rule 1: an ordered field (ordinal, fraction, angle) on hue alone.
         | HueOnlyOrderedData of field: string * measure: string
@@ -160,8 +166,8 @@ module Symbology =
     /// Size and lightness steps (glyph ADR D12 rule 3).
     val maxSteps: int
 
-    /// One seven-segment digit; team numbers never wrap (Root's #794 merge comment), so above 9 the build fails until
-    /// part 3's two-digit badge (from 33 units) lands.
+    /// One seven-segment digit in the admitted grammar; team numbers never wrap (Root's #794 merge comment).
+    /// Larger rosters need an explicit grammar extension for the library's two-digit badge minimum.
     val maxBadgeTeams: int
 
     /// The frame at the library's size step `step` (0 to 3) for a symbology whose default frame (step 3) is `frame`:
@@ -189,6 +195,9 @@ module Symbology =
           Shared: Identity option
           Roster: Identity list option
         }
+
+    /// The build's informational fallbacks, such as team colouring above a theme's hue capacity.
+    val notes: symbology: Symbology<'Entity> -> string list
 
     /// `Symbology.create family frame`: a portable-profile draft at a frame size in units.
     val create: family: string -> frame: float -> Draft<'Entity>

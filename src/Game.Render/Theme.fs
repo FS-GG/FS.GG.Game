@@ -1210,8 +1210,10 @@ module ThemePresets =
                 if not (colourCarries theme) then []
                 else
                     let measured = measuredCapacity theme
-                    // Size steps 0 to 2 fall under 24 units and step 3 in 24 to 39 at a 32-unit cell (#789's frameSize).
-                    let bucketOf step = if step < 3 then 0 else 1
+                    // Follow Glyphs.frameSize for the smallest (one-cell) footprint, including density.
+                    let bucketOf step =
+                        let frame = floor (theme.Palette.Cell * (0.5 + float step / 12.0))
+                        if frame < 24.0 then 0 elif frame < 40.0 then 1 else 2
                     [
                         for step, declared in List.indexed theme.Palette.HueCapacity do
                             let m = measured.[bucketOf step]
