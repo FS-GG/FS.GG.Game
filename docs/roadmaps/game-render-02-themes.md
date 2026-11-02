@@ -495,7 +495,7 @@ The proof does not constrain the API.
     - DTCG round-trips every preset;
     - every colour drawn is one of the preset's CSS variables.
   - **On SVG, Pixi and Babylon each:**
-    - the worked example draws all **1236** decided pixels in each of the five presets;
+    - the worked example draws all **1192** decided pixels in each of the five presets;
     - the swap control does not match;
     - classic → each preset → classic shows each preset and then classic again;
     - five monochrome cases, each with its positive control, differ in drawn decided pixels: two badge pairs, a frame
@@ -503,7 +503,7 @@ The proof does not constrain the API.
   - **Runs.** Both runs used Chrome for Testing 153.0.8010.12 (Playwright chromium-1243) through `fdev-chromium-env`,
     and the capacity probe answered `admit` before each.
     - The software run used SwiftShader, and the GPU run the fdev GPU (ANGLE over Vulkan, RADV).
-    - Merged with main, each passed **635** checks, all 30 of the #795 checks among them.
+    - Merged with main, each passed **608** checks, all 30 of the #795 checks among them.
     - The whole #795 section took about 7 s of the software run, 3.6 s of it the full round trip.
   - **Screenshots** are in [`game-render-02-themes/`](game-render-02-themes/), named `themes-<preset>-<backend>.png`
     (GPU run), plus `themes-<preset>-babylon-software.png`.
