@@ -481,9 +481,10 @@ The proof does not constrain the API.
     - five monochrome cases, each with its positive control, differ in drawn decided pixels: two badge pairs, a frame
       and badge pair, and two frame-only pairs.
   - **Runs.** Both runs used Chrome for Testing 153.0.8010.12 (Playwright chromium-1243) through `fdev-chromium-env`,
-    and the capacity probe answered `admit` before each. The software run used SwiftShader, and the GPU run the fdev GPU
-    (ANGLE over Vulkan, RADV). Each passed **542** checks, all 30 of the #795 checks among them. The whole #795
-    section took about 7 s of the software run, 3.6 s of it the full round trip.
+    and the capacity probe answered `admit` before each.
+    - The software run used SwiftShader, and the GPU run the fdev GPU (ANGLE over Vulkan, RADV).
+    - Merged with main, each passed **635** checks, all 30 of the #795 checks among them.
+    - The whole #795 section took about 7 s of the software run, 3.6 s of it the full round trip.
   - **Screenshots** are in [`game-render-02-themes/`](game-render-02-themes/), named `themes-<preset>-<backend>.png`
     (GPU run), plus `themes-<preset>-babylon-software.png`.
     - Babylon shows about 0.75 of each colour until #786, as in the glyph proof.
