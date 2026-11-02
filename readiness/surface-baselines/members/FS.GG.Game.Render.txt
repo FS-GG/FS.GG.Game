@@ -66,6 +66,14 @@ FS.GG.Game.Render.DefaultKeymap.value : FS.GG.UI.KeyboardInput.Keymap [get]
 FS.GG.Game.Render.Displayed.authoritative<Server>(Displayed<Server>) : Server
 FS.GG.Game.Render.Displayed.predicted<Server>(Displayed<Server>) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.CommandId>
 FS.GG.Game.Render.Displayed.shown<Server>(Displayed<Server>) : Server
+FS.GG.Game.Render.Encode.angle<a>(System.String, FSharpFunc<a, System.Double>, FS.GG.Game.Render.Symbology+Slot, Draft<a>) : Draft<a>
+FS.GG.Game.Render.Encode.flag<a>(System.String, FSharpFunc<a, System.Boolean>, FS.GG.Game.Render.Symbology+Slot, Draft<a>) : Draft<a>
+FS.GG.Game.Render.Encode.fraction<a>(System.String, FSharpFunc<a, System.Double>, FS.GG.Game.Render.Symbology+Slot, Draft<a>) : Draft<a>
+FS.GG.Game.Render.Encode.identity<a>(System.String, FSharpFunc<a, FS.GG.Game.Render.Identity>, FS.GG.Game.Render.Symbology+Slot, Draft<a>) : Draft<a>
+FS.GG.Game.Render.Encode.label<a>(System.String, FSharpFunc<a, System.String>, Draft<a>) : Draft<a>
+FS.GG.Game.Render.Encode.nominal<a, b>(System.String, FSharpFunc<a, b>, FSharpList<b>, FS.GG.Game.Render.Symbology+Slot, Draft<a>) : Draft<a>
+FS.GG.Game.Render.Encode.ordinal<a, b>(System.String, FSharpFunc<a, b>, FSharpList<b>, FS.GG.Game.Render.Symbology+Slot, Draft<a>) : Draft<a>
+FS.GG.Game.Render.Encode.team<a>(System.String, FSharpFunc<a, System.Int32>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Identity>, FS.GG.Game.Render.Symbology+Slot, Draft<a>) : Draft<a>
 FS.GG.Game.Render.Glyph.custom(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.Theme, FS.GG.Game.Render.GlyphDrawing>) : FS.GG.Game.Render.Glyph
 FS.GG.Game.Render.Glyph.ofSpec(FS.GG.Game.Render.GlyphState, FS.GG.Game.Render.GlyphSpec) : FS.GG.Game.Render.Glyph
 FS.GG.Game.Render.Glyph.path(Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.Point>) : FS.GG.Game.Render.Glyph
@@ -417,6 +425,98 @@ FS.GG.Game.Render.SelectionRoute.bind(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Gam
 FS.GG.Game.Render.SelectionRoute.create() : FS.GG.Game.Render.SelectionRoute
 FS.GG.Game.Render.SelectionRoute.report(FS.GG.Game.Render.SelectionRequest, FS.GG.Game.Render.SelectionRoute) : System.Void
 FS.GG.Game.Render.SelectionRoute.unbind(FS.GG.Game.Render.SelectionRoute) : System.Void
+FS.GG.Game.Render.Symbology+Amp+Tags.Above : System.Int32
+FS.GG.Game.Render.Symbology+Amp+Tags.Below : System.Int32
+FS.GG.Game.Render.Symbology+Amp+Tags.Corner : System.Int32
+FS.GG.Game.Render.Symbology+Amp+Tags.Facing : System.Int32
+FS.GG.Game.Render.Symbology+Draft`1.Encodings : FSharpList<Encoding<Entity>> [get]
+FS.GG.Game.Render.Symbology+Draft`1.Family : System.String [get]
+FS.GG.Game.Render.Symbology+Draft`1.Frame : System.Double [get]
+FS.GG.Game.Render.Symbology+Draft`1.Stroked : System.Boolean [get]
+FS.GG.Game.Render.Symbology+Draft`1.new(System.String, System.Double, System.Boolean, FSharpList<Encoding<Entity>>)
+FS.GG.Game.Render.Symbology+Encode.angle<Entity>(System.String, FSharpFunc<Entity, System.Double>, FS.GG.Game.Render.Symbology+Slot, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encode.flag<Entity>(System.String, FSharpFunc<Entity, System.Boolean>, FS.GG.Game.Render.Symbology+Slot, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encode.fraction<Entity>(System.String, FSharpFunc<Entity, System.Double>, FS.GG.Game.Render.Symbology+Slot, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encode.identity<Entity>(System.String, FSharpFunc<Entity, FS.GG.Game.Render.Identity>, FS.GG.Game.Render.Symbology+Slot, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encode.label<Entity>(System.String, FSharpFunc<Entity, System.String>, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encode.nominal<Entity, v>(System.String, FSharpFunc<Entity, v>, FSharpList<v>, FS.GG.Game.Render.Symbology+Slot, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encode.ordinal<Entity, v>(System.String, FSharpFunc<Entity, v>, FSharpList<v>, FS.GG.Game.Render.Symbology+Slot, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encode.team<Entity>(System.String, FSharpFunc<Entity, System.Int32>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Identity>, FS.GG.Game.Render.Symbology+Slot, Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology+Encoding`1.Field : System.String [get]
+FS.GG.Game.Render.Symbology+Encoding`1.Measure : FS.GG.Game.Render.Symbology+Measure [get]
+FS.GG.Game.Render.Symbology+Encoding`1.Read : FSharpFunc<Entity, FS.GG.Game.Render.Symbology+Value> [get]
+FS.GG.Game.Render.Symbology+Encoding`1.Slot : FS.GG.Game.Render.Symbology+Slot [get]
+FS.GG.Game.Render.Symbology+Encoding`1.new(System.String, FS.GG.Game.Render.Symbology+Measure, FS.GG.Game.Render.Symbology+Slot, FSharpFunc<Entity, FS.GG.Game.Render.Symbology+Value>)
+FS.GG.Game.Render.Symbology+Measure+Tags.Angle : System.Int32
+FS.GG.Game.Render.Symbology+Measure+Tags.Flag : System.Int32
+FS.GG.Game.Render.Symbology+Measure+Tags.Fraction : System.Int32
+FS.GG.Game.Render.Symbology+Measure+Tags.IdentityMeasure : System.Int32
+FS.GG.Game.Render.Symbology+Measure+Tags.Nominal : System.Int32
+FS.GG.Game.Render.Symbology+Measure+Tags.Ordinal : System.Int32
+FS.GG.Game.Render.Symbology+Measure+Tags.Team : System.Int32
+FS.GG.Game.Render.Symbology+Measure+Tags.Text : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.Amplifier : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.Fill : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.FillStep : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.Frame : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.Icon : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.Label : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.Modifier : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.SizeStep : System.Int32
+FS.GG.Game.Render.Symbology+Slot+Tags.TeamMark : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.CategoricalHueWithoutRedundancy : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.DuplicateField : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.EmptyDomain : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.FlagNotSelective : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.FractionAsArea : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.HueOnlyOrderedData : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.IconSlotTakenByBadge : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.IdentityBelowMinimumWithoutLabel : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.IdentityNotOnFrame : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.InvalidFrame : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.NeedsStrokedProfile : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.NoThemes : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.OverCapacity : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.RosterMismatch : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.SlotTaken : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.TeamBadgeBelowMinimumWithoutLabel : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.TeamWithoutIdentity : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.ThemeRefuses : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.UnsupportedFamily : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.UnsupportedSlot : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.ValueOutOfRange : System.Int32
+FS.GG.Game.Render.Symbology+SymbologyError+Tags.WrongSlot : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VAngle : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VCase : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VFlag : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VFraction : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VIdentity : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VLevel : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VTeam : System.Int32
+FS.GG.Game.Render.Symbology+Value+Tags.VText : System.Int32
+FS.GG.Game.Render.Symbology.allowedSlots(FS.GG.Game.Render.Symbology+Measure) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Symbology+Slot>
+FS.GG.Game.Render.Symbology.build<Entity>(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Theme>, Draft<Entity>) : FSharpResult<Symbology<Entity>, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Symbology+SymbologyError>>
+FS.GG.Game.Render.Symbology.create<Entity>(System.String, System.Double) : Draft<Entity>
+FS.GG.Game.Render.Symbology.explain(FS.GG.Game.Render.Symbology+SymbologyError) : System.String
+FS.GG.Game.Render.Symbology.frameAtStep(System.Double, System.Int32) : System.Double
+FS.GG.Game.Render.Symbology.frameRange<Entity>(Draft<Entity>) : System.Tuple<System.Double, System.Double>
+FS.GG.Game.Render.Symbology.glyph(System.Boolean, System.Boolean, FS.GG.Game.Render.Symbology+Encoded) : FS.GG.Game.Render.Glyph
+FS.GG.Game.Render.Symbology.iconSet : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
+FS.GG.Game.Render.Symbology.label<Entity>(Symbology<Entity>, Entity) : Microsoft.FSharp.Core.FSharpResult<System.String, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Symbology+SymbologyError>>
+FS.GG.Game.Render.Symbology.maxBadgeTeams : System.Int32 [get]
+FS.GG.Game.Render.Symbology.maxPips : System.Int32 [get]
+FS.GG.Game.Render.Symbology.maxSteps : System.Int32 [get]
+FS.GG.Game.Render.Symbology.measureName(FS.GG.Game.Render.Symbology+Measure) : System.String
+FS.GG.Game.Render.Symbology.minBadgeFrame : System.Double [get]
+FS.GG.Game.Render.Symbology.minIdentityFrame : System.Double [get]
+FS.GG.Game.Render.Symbology.notes<Entity>(Symbology<Entity>) : Microsoft.FSharp.Collections.FSharpList<System.String>
+FS.GG.Game.Render.Symbology.sharedAllegiance(Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Identity>) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.Identity>
+FS.GG.Game.Render.Symbology.sideBySideFrame : System.Double [get]
+FS.GG.Game.Render.Symbology.slotName(FS.GG.Game.Render.Symbology+Slot) : System.String
+FS.GG.Game.Render.Symbology.spec<Entity>(Symbology<Entity>, FS.GG.UI.Scene.Point, Entity) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.Symbology+Encoded, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Symbology+SymbologyError>>
+FS.GG.Game.Render.Symbology.stepOfLevel(System.Int32, System.Int32) : System.Int32
+FS.GG.Game.Render.Symbology.stroked<Entity>(Draft<Entity>) : Draft<Entity>
+FS.GG.Game.Render.Symbology.teamColouring<Entity>(FS.GG.Game.Render.Theme, Symbology<Entity>) : System.Boolean
 FS.GG.Game.Render.Theme.algorithms(FS.GG.Game.Render.Theme) : Microsoft.FSharp.Collections.FSharpList<System.String>
 FS.GG.Game.Render.Theme.aliases(FS.GG.Game.Render.Theme) : Microsoft.FSharp.Collections.FSharpList<System.String>
 FS.GG.Game.Render.Theme.allegiance(FS.GG.Game.Render.Identity, FS.GG.Game.Render.Theme) : FS.GG.UI.Scene.Color
@@ -455,6 +555,21 @@ FS.GG.Game.Render.ThemeColour.quantise(System.Double) : System.Byte
 FS.GG.Game.Render.ThemeColour.toOklch(FS.GG.UI.Scene.Color) : FS.GG.Game.Render.Oklch
 FS.GG.Game.Render.ThemeOverride.colour(System.String, FS.GG.UI.Scene.Color) : FS.GG.Game.Render.ThemeOverride
 FS.GG.Game.Render.ThemeOverride.number(System.String, System.Double) : FS.GG.Game.Render.ThemeOverride
+FS.GG.Game.Render.ThemePresets.algorithms : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeAlgorithm> [get]
+FS.GG.Game.Render.ThemePresets.carriesColour(FS.GG.Game.Render.Theme) : System.Boolean
+FS.GG.Game.Render.ThemePresets.checks(System.Int32) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeCheck>
+FS.GG.Game.Render.ThemePresets.colourBlindSafe : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemePresets.dark : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemePresets.highContrast : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemePresets.leonardo : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemePresets.light : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemePresets.measuredCapacity(FS.GG.Game.Render.Theme) : Microsoft.FSharp.Collections.FSharpList<System.Int32>
+FS.GG.Game.Render.ThemePresets.monochrome : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemePresets.recipes : Microsoft.FSharp.Collections.FSharpList<System.Tuple<System.String, FS.GG.Game.Render.ThemeSeed, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.ThemeAlgorithm>>> [get]
+FS.GG.Game.Render.ThemePresets.repair : FS.GG.Game.Render.ThemeAlgorithm [get]
+FS.GG.Game.Render.ThemePresets.thresholdNormal : System.Double [get]
+FS.GG.Game.Render.ThemePresets.thresholdSimulated : System.Double [get]
+FS.GG.Game.Render.ThemePresets.thresholdTeamLightnessGap : System.Double [get]
 FS.GG.Game.Render.ThemeSeed.classic : FS.GG.Game.Render.ThemeSeed [get]
 FS.GG.Game.Render.ThemeSeed.colour(System.String, FS.GG.UI.Scene.Color, FS.GG.Game.Render.ThemeSeed) : FS.GG.Game.Render.ThemeSeed
 FS.GG.Game.Render.ThemeSeed.colourNames : Microsoft.FSharp.Collections.FSharpList<System.String> [get]
@@ -477,3 +592,10 @@ FS.GG.Game.Render.ThemeViolation.Reason : System.String [get]
 FS.GG.Game.Render.ThemeViolation.ToString() : System.String
 FS.GG.Game.Render.ThemeViolation.Token : System.String [get]
 FS.GG.Game.Render.ThemeViolation.create(System.String, System.String) : FS.GG.Game.Render.ThemeViolation
+FS.GG.Game.Render.ThemeVision.deltaE2000(FS.GG.Game.Render.Vision, FS.GG.UI.Scene.Color, FS.GG.UI.Scene.Color) : System.Double
+FS.GG.Game.Render.ThemeVision.lightnessGap(FS.GG.Game.Render.Vision, FS.GG.UI.Scene.Color, FS.GG.UI.Scene.Color) : System.Double
+FS.GG.Game.Render.ThemeVision.visions : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.Vision> [get]
+FS.GG.Game.Render.Vision+Tags.Deutan : System.Int32
+FS.GG.Game.Render.Vision+Tags.Normal : System.Int32
+FS.GG.Game.Render.Vision+Tags.Protan : System.Int32
+FS.GG.Game.Render.Vision+Tags.Tritan : System.Int32

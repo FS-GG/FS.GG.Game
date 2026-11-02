@@ -10,6 +10,7 @@
        Game.Render project reference (Skia-free), so it still runs with zero Skia — the adapter is a
        pure sim->Scene projection (ADR-0022 §2 / P4). -->
   <ItemGroup>
+    <Compile Include="TestSupport.fs" />
     <Compile Include="AdapterTests.fs" />
     <Compile Include="DefaultKeymapTests.fs" />
     <Compile Include="PortalPresentationTests.fs" />
@@ -18,8 +19,10 @@
     <Compile Include="RendererConformanceTests.fs" />
     <Compile Include="ScenePixelsTests.fs" />
     <Compile Include="ThemeTests.fs" />
+    <Compile Include="SymbologyTests.fs" />
     <Compile Include="GlyphsTests.fs" />
-    <Compile Include="ExperimentalThemesTests.fs" />
+    <Compile Include="../Game.Render.Themes.Fuzz/Numerics.fs" Link="ThemeNumerics.fs" />
+    <Compile Include="ThemeDerivationTests.fs" />
     <Compile Include="SceneInteractionTests.fs" />
     <Compile Include="InputPipelineContractTests.fs" />
     <!-- The input host's pure half (FS.GG.Game#788), compiled here so .NET checks it directly. -->

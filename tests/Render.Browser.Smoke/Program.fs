@@ -2786,30 +2786,33 @@ let runBoundedUnmodelled () : Async<unit> =
 ///   two identities with no team (frames only), still differ in drawn decided pixels.
 let runThemeProof () : Async<unit> =
     let roundTripStarted = System.DateTime.Now
-    let roundTripFailures = Experimental.Colour.roundTripFailures ()
+    let roundTripFailures = ThemeNumerics.roundTripFailures ()
     let roundTripMs = int (System.DateTime.Now - roundTripStarted).TotalMilliseconds
     let gridStarted = System.DateTime.Now
-    let gridDigest = Experimental.Colour.gridDigest ()
+    let gridDigest = ThemeNumerics.gridDigest ThemeNumerics.referenceInput
     let gridMs = int (System.DateTime.Now - gridStarted).TotalMilliseconds
 
     async {
         let derivedAt = System.DateTime.Now
-        let presets = Experimental.Themes.presets
-        let themes = presets |> List.map Experimental.Themes.deriveOrFail
+        let themes =
+            ThemePresets.recipes |> List.map (fun (name, seed, algorithms) ->
+                match Theme.create seed algorithms [] |> Result.bind (Theme.validate (ThemePresets.checks 2)) with
+                | Ok theme -> theme
+                | Error errors -> failwithf "%s: %A" name errors)
         info "themes (#795) derivation time" (sprintf "%d ms for %d presets" (int (System.DateTime.Now - derivedAt).TotalMilliseconds) themes.Length)
         info "themes (#795) round-trip time" (sprintf "%d ms for 16777216 colours" roundTripMs)
         info "themes (#795) grid digest time" (sprintf "%d ms" gridMs)
-        let themeNamed name = themes |> List.find (fun t -> t.Name = name)
+        let themeNamed name = themes |> List.find (fun t -> (Theme.name t) = name)
 
         // .NET and Fable derive the same bytes.
         let differences =
             [
                 for t in themes do
-                    let baked = Experimental.PresetData.hexes |> List.tryFind (fun (n, _) -> n = t.Name) |> Option.map snd |> Option.defaultValue []
-                    for (alias, got), (_, want) in List.zip (Experimental.Themes.hexes t) baked do
-                        if got <> want then yield sprintf "%s %s: Fable %s, .NET %s" t.Name alias got want
+                    let baked = Theme.presets |> List.find (fun b -> Theme.name b = Theme.name t) |> Theme.hex
+                    for (alias, got), (_, want) in List.zip (Theme.hex t) baked do
+                        if got <> want then yield sprintf "%s %s: Fable %s, .NET %s" (Theme.name t) alias got want
             ]
-        let aliasCount = themes |> List.sumBy (fun t -> (Experimental.Themes.hexes t).Length)
+        let aliasCount = themes |> List.sumBy (fun t -> (Theme.hex t).Length)
         check
             (sprintf "themes (#795): Fable derives every preset alias's hex exactly as .NET baked it (%d presets, %d aliases)" themes.Length aliasCount)
             (differences.IsEmpty && aliasCount = 175)
@@ -2819,40 +2822,40 @@ let runThemeProof () : Async<unit> =
             (roundTripFailures = 0)
             (sprintf "%d failures" roundTripFailures)
         check
-            "themes (#795): the OKLCH grid digest (157560 colours) under Fable equals .NET's"
-            (gridDigest = Experimental.PresetData.gridDigest)
-            (sprintf "Fable %g, .NET %g" gridDigest Experimental.PresetData.gridDigest)
+            "themes (#795): the OKLCH grid digest (6350635 colours) under Fable equals .NET's"
+            (gridDigest = ThemeProofData.gridDigest)
+            (sprintf "Fable %g, .NET %g" gridDigest ThemeProofData.gridDigest)
 
         let refused =
-            match Experimental.Symbology.build themes Experimental.ArenaExample.playerDraftWithRoleIcon with
-            | Error [ Experimental.Symbology.IconSlotTakenByBadge("role", "team", 24.0, Identity.Enemy) ] -> true
+            match Symbology.build themes ArenaExample.playerDraftWithRoleIcon with
+            | Error [ Symbology.IconSlotTakenByBadge("role", "team", 24.0, Identity.Enemy) ] -> true
             | _ -> false
         let accepted =
-            match Experimental.Symbology.build themes Experimental.ArenaExample.playerDraft with
-            | Ok s -> s.Notes.Length = 2
+            match Symbology.build themes ArenaExample.playerDraft with
+            | Ok s -> (Symbology.notes s).Length = 2
             | Error _ -> false
         check "themes (#795): under Fable the grammar accepts the worked example and refuses its role icon with IconSlotTakenByBadge" (refused && accepted) (sprintf "refused %b, accepted %b" refused accepted)
 
         let roundTrips =
             themes
             |> List.filter (fun t ->
-                match Experimental.Themes.ofDtcg t (Experimental.Themes.toDtcg t) with
-                | Ok back -> Experimental.Themes.hexes back <> Experimental.Themes.hexes t
+                match Theme.ofDtcg ThemePresets.algorithms (Theme.toDtcg t) with
+                | Ok back -> Theme.hex back <> Theme.hex t
                 | Error _ -> true)
-            |> List.map (fun t -> t.Name)
+            |> List.map (fun t -> (Theme.name t))
         check "themes (#795): under Fable DTCG export then import gives equal resolved hex for every preset" roundTrips.IsEmpty (String.concat ", " roundTrips)
 
-        let view = Experimental.ArenaExample.view themes
-        let state = Experimental.ArenaExample.sample
-        let width, height = Experimental.ArenaExample.width, Experimental.ArenaExample.height
+        let view = ArenaExample.view themes
+        let state = ArenaExample.sample
+        let width, height = ArenaExample.width, ArenaExample.height
         let colours (nodes: SceneNode list) =
             nodes |> List.collect (function SceneNode.Rectangle(_, c) -> [ c ] | _ -> [])
         let cssMisses =
             [
                 for t in themes do
-                    let css = Experimental.Themes.cssVariables t
+                    let css = Theme.cssVariables t |> List.map (fun (name, value) -> name + ": " + value) |> String.concat ";"
                     for c in colours (view (fun () -> t) state).Nodes |> List.distinct do
-                        if not (css.Contains(Experimental.Colour.hex c)) then yield sprintf "%s %s" t.Name (Experimental.Colour.hex c)
+                        if not (css.Contains(ThemeColour.hex c)) then yield sprintf "%s %s" (Theme.name t) (ThemeColour.hex c)
             ]
         check "themes (#795): every colour the worked example draws is one of the preset's CSS variables" cssMisses.IsEmpty (String.concat ", " (List.truncate 4 cssMisses))
 
@@ -2862,32 +2865,34 @@ let runThemeProof () : Async<unit> =
             | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
             | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
 
-        let unwrap (r: Result<'T, Experimental.Symbology.SymbologyError list>) =
+        let unwrap (r: Result<'T, Symbology.SymbologyError list>) =
             match r with
             | Ok v -> v
             | Error e -> failwithf "refused: %A" e
 
         let mono = themeNamed "monochrome"
-        let monoTarget = Experimental.Themes.renderOrFail mono
-        let players = Experimental.Symbology.build themes Experimental.ArenaExample.playerDraft |> unwrap
-        let teamColours = Experimental.Symbology.teamColouring mono players
+        let monoTarget = mono
+        let players = Symbology.build themes ArenaExample.playerDraft |> unwrap
+        let teamColours = Symbology.teamColouring mono players
         let onGround (glyphs: FS.GG.Game.Render.Glyph list) : Scene =
-            { Nodes = SceneNode.Rectangle((0.0, 0.0, 48.0, 64.0), Experimental.Themes.colour mono "surface.ground") :: (Glyphs.scene monoTarget glyphs).Nodes }
-        let single (p: Experimental.ArenaExample.Player) : Scene =
-            onGround [ Experimental.Symbology.glyph teamColours false (Experimental.Symbology.spec players { X = 24.0; Y = 30.0 } p |> unwrap) ]
+            { Nodes = SceneNode.Rectangle((0.0, 0.0, 48.0, 64.0), (Theme.tryColour "surface.ground" mono |> Option.get)) :: (Glyphs.scene monoTarget glyphs).Nodes }
+        let single (p: ArenaExample.Player) : Scene =
+            onGround [ Symbology.glyph teamColours false (Symbology.spec players { X = 24.0; Y = 30.0 } p |> unwrap) ]
         // Frames only: the same identities with no team encoded, so only the frame tells them apart.
         let framesOnly =
-            Experimental.Symbology.create<Experimental.ArenaExample.Player> "unit" 24.0
-            |> Experimental.Symbology.Encode.identity "allegiance" (fun p -> p.Allegiance) Experimental.Symbology.Frame
-            |> Experimental.Symbology.build themes
+            Symbology.create<ArenaExample.Player> "unit" 24.0
+            |> Symbology.Encode.identity "allegiance" (fun p -> p.Allegiance) Symbology.Frame
+            |> Symbology.build themes
             |> unwrap
-        let frameOnly (p: Experimental.ArenaExample.Player) : Scene =
-            onGround [ Experimental.Symbology.glyph false false (Experimental.Symbology.spec framesOnly { X = 24.0; Y = 30.0 } p |> unwrap) ]
+        let frameOnly (p: ArenaExample.Player) : Scene =
+            onGround [ Symbology.glyph false false (Symbology.spec framesOnly { X = 24.0; Y = 30.0 } p |> unwrap) ]
 
+        let snapshots = System.Collections.Generic.Dictionary<string, (int * int * int) option list>()
         for backend in RendererBackend.all do
             let id = RendererBackend.id backend
-            let switch = Experimental.Themes.switchOf (themeNamed "classic")
-            let present () = view switch.Read state
+            let mutable chosen = themeNamed "classic"
+            let select theme = chosen <- theme
+            let present () = view (fun () -> chosen) state
             let container = document.createElement "div"
             container.id <- sprintf "theme-proof-%s" id
             container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" width height)
@@ -2899,19 +2904,22 @@ let runThemeProof () : Async<unit> =
             | Ok mount ->
                 // Each preset, switched through the reader, on one mount.
                 for t in themes do
-                    switch.Select t
+                    select t
                     let scene = present ()
                     let wanted = ScenePixels.expectations width height scene
                     let! wrong = drawnMismatches container width height backend (fun () -> mount.Present(present ())) wanted 600
                     check
-                        (sprintf "%s: the worked example in %s draws every pixel ScenePixels decides (%d pixels)" name t.Name wanted.Length)
+                        (sprintf "%s: the worked example in %s draws every pixel ScenePixels decides (%d pixels)" name (Theme.name t) wanted.Length)
                         (wrong.IsEmpty && wanted.Length > 600)
                         (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
-                    let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "themes-%s-%s.png" t.Name id)
-                    info (sprintf "theme screenshot %s %s" t.Name id) (if wrote then sprintf "themes-%s-%s.png" t.Name id else "not requested")
+                    if backend = RendererBackend.Svg || backend = RendererBackend.Pixi then
+                        let! shown = BrowserConformance.drawnPixels container width height backend (wanted |> List.map (fun p -> p.Point))
+                        snapshots.[id + "/" + Theme.name t] <- shown
+                    let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "themes-%s-%s.png" (Theme.name t) id)
+                    info (sprintf "theme screenshot %s %s" (Theme.name t) id) (if wrote then sprintf "themes-%s-%s.png" (Theme.name t) id else "not requested")
 
                 // Swap control: classic shown, light's expectations read.
-                switch.Select(themeNamed "classic")
+                select(themeNamed "classic")
                 let! control =
                     drawnMismatches container width height backend (fun () -> mount.Present(present ())) (ScenePixels.expectations width height (view (fun () -> themeNamed "light") state)) 0
                 check (sprintf "%s: control, classic drawn does not pass light's decided pixels" name) (control.Length > 20) (sprintf "only %d differ" control.Length)
@@ -2920,15 +2928,15 @@ let runThemeProof () : Async<unit> =
                 let misses = ResizeArray<string>()
                 let classicWanted = ScenePixels.expectations width height (view (fun () -> themeNamed "classic") state)
                 for t in themes |> List.tail do
-                    switch.Select t
+                    select t
                     let! shownB = drawnMismatches container width height backend (fun () -> mount.Present(present ())) (ScenePixels.expectations width height (present ())) 600
-                    if not shownB.IsEmpty then misses.Add(sprintf "%s not shown" t.Name)
-                    switch.Select(themeNamed "classic")
+                    if not shownB.IsEmpty then misses.Add(sprintf "%s not shown" (Theme.name t))
+                    select(themeNamed "classic")
                     let! back = drawnMismatches container width height backend (fun () -> mount.Present(present ())) classicWanted 600
-                    if not back.IsEmpty then misses.Add(sprintf "classic -> %s -> classic differs at %d pixels" t.Name back.Length)
+                    if not back.IsEmpty then misses.Add(sprintf "classic -> %s -> classic differs at %d pixels" (Theme.name t) back.Length)
                 check
                     (sprintf "%s: classic -> each preset -> classic through the theme reader, with the same game state, shows each and then classic's pixels again" name)
-                    (misses.Count = 0 && obj.ReferenceEquals(state, Experimental.ArenaExample.sample))
+                    (misses.Count = 0 && obj.ReferenceEquals(state, ArenaExample.sample))
                     (String.concat "; " misses)
                 mount.Dispose()
 
@@ -2964,6 +2972,12 @@ let runThemeProof () : Async<unit> =
                 (sprintf "%s: in monochrome, with a positive control each, team badges and identity frames (also frame-only) differ in drawn decided pixels (%d cases)" name cases.Length)
                 (monoMisses.Count = 0)
                 (String.concat "; " monoMisses)
+        for theme in themes do
+            let name = Theme.name theme
+            let svgKey, pixiKey = "svg/" + name, "pixi/" + name
+            let present = snapshots.ContainsKey svgKey && snapshots.ContainsKey pixiKey
+            let identical = present && not snapshots.[svgKey].IsEmpty && List.forall Option.isSome snapshots.[svgKey] && snapshots.[svgKey] = snapshots.[pixiKey]
+            check (sprintf "themes (#795): SVG and Pixi have byte-identical decided pixels in %s" name) identical (if present then sprintf "%d decided pixels" snapshots.[svgKey].Length else "a backend did not mount")
     }
 
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report

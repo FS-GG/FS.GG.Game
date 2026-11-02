@@ -457,8 +457,12 @@ let tests =
                 let mismatches = System.Collections.Concurrent.ConcurrentBag<string>()
 
                 for round in 1..40 do
-                    // A fresh cell each round, so the team-layer cache keeps meeting shapes it has not seen.
-                    let t = themeWithFrame (float (100 + round))
+                    // Keep 40 fresh frame sizes and the original range's endpoints (101 and 140), with
+                    // three-cell footprints reaching 420 units. The other 38 rounds cover 13..50 units.
+                    // This exercises concurrent cache insertion and the same large-grid boundary shapes,
+                    // without repeating every intermediate 101..140-unit raster in an ordinary test.
+                    let frame = if round = 39 then 101 else if round = 40 then 140 else 12 + round
+                    let t = themeWithFrame (float frame)
 
                     let spec i =
                         GlyphSpec.create GlyphFamily.unit { X = 64.0; Y = 64.0 } { Width = 1 + i % 3; Height = 1 + i % 3 }

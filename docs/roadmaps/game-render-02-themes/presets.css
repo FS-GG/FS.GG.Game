@@ -1,29 +1,29 @@
-[data-theme="classic"] {
+[data-fsgg-theme="classic"] {
   --fsgg-surface-ground: #222831;
   --fsgg-glyph-unit-body: #ffffff;
-  --fsgg-glyph-allegiance-own: #36a8eb;
+  --fsgg-glyph-allegiance-own: #37a8eb;
   --fsgg-glyph-allegiance-ally: #008383;
   --fsgg-glyph-allegiance-neutral: #9cf29f;
-  --fsgg-glyph-allegiance-enemy: #be534e;
+  --fsgg-glyph-allegiance-enemy: #be534d;
   --fsgg-glyph-allegiance-unknown: #b3a019;
   --fsgg-glyph-team-0: #5597e9;
-  --fsgg-glyph-team-1: #b15900;
-  --fsgg-glyph-team-2: #00a888;
-  --fsgg-glyph-team-3: #a2549d;
-  --fsgg-glyph-team-4: #74a23d;
+  --fsgg-glyph-team-1: #b05a00;
+  --fsgg-glyph-team-2: #00a887;
+  --fsgg-glyph-team-3: #a3549c;
+  --fsgg-glyph-team-4: #74a23c;
   --fsgg-glyph-team-5: #7c61bd;
   --fsgg-glyph-team-6: #b09200;
   --fsgg-glyph-team-7: #ba4e52;
   --fsgg-glyph-badge-ink: #0d0d0d;
   --fsgg-glyph-icon-ink: #0d0d0d;
   --fsgg-glyph-modifier: #0d0d0d;
-  --fsgg-glyph-selection: #fbdd67;
-  --fsgg-glyph-marker: #3cf5fd;
-  --fsgg-glyph-path: #3cf5fd;
+  --fsgg-glyph-selection: #fcdd67;
+  --fsgg-glyph-marker: #3cf4ff;
+  --fsgg-glyph-path: #3cf4ff;
   --fsgg-glyph-stale: #898989;
   --fsgg-cue-focus-outer: #dedede;
   --fsgg-cue-focus-inner: #0d0d0d;
-  --fsgg-cue-hover: #00cdd6;
+  --fsgg-cue-hover: #00cdd7;
   --fsgg-status-good: #91f3a7;
   --fsgg-status-warn: #d39322;
   --fsgg-status-bad: #ae4440;
@@ -34,37 +34,42 @@
   --fsgg-terrain-difficult: #4c371d;
   --fsgg-terrain-water: #193f57;
   --fsgg-terrain-void: #191919;
+  --fsgg-size-cell: 32;
+  --fsgg-stroke-outline: 2;
+  --fsgg-stroke-gap: 2;
+  --fsgg-stroke-bracket: 2;
+  --fsgg-stroke-hover: 1;
 }
 
-[data-theme="light"] {
+[data-fsgg-theme="light"] {
   --fsgg-surface-ground: #f1f5fc;
   --fsgg-glyph-unit-body: #0d0d0d;
   --fsgg-glyph-allegiance-own: #0065a4;
   --fsgg-glyph-allegiance-ally: #003d3e;
   --fsgg-glyph-allegiance-neutral: #469a4c;
-  --fsgg-glyph-allegiance-enemy: #73020f;
+  --fsgg-glyph-allegiance-enemy: #73020e;
   --fsgg-glyph-allegiance-unknown: #726100;
   --fsgg-glyph-team-0: #4e8fe1;
   --fsgg-glyph-team-1: #a34d00;
-  --fsgg-glyph-team-2: #00a082;
-  --fsgg-glyph-team-3: #954890;
+  --fsgg-glyph-team-2: #00a080;
+  --fsgg-glyph-team-3: #964790;
   --fsgg-glyph-team-4: #6e9a35;
   --fsgg-glyph-team-5: #7055b0;
-  --fsgg-glyph-team-6: #a88b00;
+  --fsgg-glyph-team-6: #a98a00;
   --fsgg-glyph-team-7: #ac4148;
   --fsgg-glyph-badge-ink: #ffffff;
   --fsgg-glyph-icon-ink: #ffffff;
   --fsgg-glyph-modifier: #ffffff;
-  --fsgg-glyph-selection: #443400;
+  --fsgg-glyph-selection: #453400;
   --fsgg-glyph-marker: #006c73;
   --fsgg-glyph-path: #006c73;
   --fsgg-glyph-stale: #757575;
   --fsgg-cue-focus-outer: #363636;
   --fsgg-cue-focus-inner: #ffffff;
   --fsgg-cue-hover: #00828a;
-  --fsgg-status-good: #379b55;
+  --fsgg-status-good: #389b55;
   --fsgg-status-warn: #8b5600;
-  --fsgg-status-bad: #73020f;
+  --fsgg-status-bad: #73020e;
   --fsgg-status-track: #ffffff;
   --fsgg-status-keyline: #0d0d0d;
   --fsgg-terrain-open: #e2e2e2;
@@ -72,37 +77,42 @@
   --fsgg-terrain-difficult: #edd2b5;
   --fsgg-terrain-water: #b3dcfb;
   --fsgg-terrain-void: #cdcdcd;
+  --fsgg-size-cell: 32;
+  --fsgg-stroke-outline: 2;
+  --fsgg-stroke-gap: 2;
+  --fsgg-stroke-bracket: 2;
+  --fsgg-stroke-hover: 1;
 }
 
-[data-theme="highContrast"] {
+[data-fsgg-theme="highContrast"] {
   --fsgg-surface-ground: #000000;
   --fsgg-glyph-unit-body: #ffffff;
   --fsgg-glyph-allegiance-own: #3eaef2;
-  --fsgg-glyph-allegiance-ally: #0ee2e3;
+  --fsgg-glyph-allegiance-ally: #10e3e2;
   --fsgg-glyph-allegiance-neutral: #55a95a;
   --fsgg-glyph-allegiance-enemy: #ff9d94;
   --fsgg-glyph-allegiance-unknown: #e0cd55;
   --fsgg-glyph-team-0: #5193e4;
   --fsgg-glyph-team-1: #9e4900;
-  --fsgg-glyph-team-2: #00a484;
+  --fsgg-glyph-team-2: #00a483;
   --fsgg-glyph-team-3: #91448c;
-  --fsgg-glyph-team-4: #709e38;
-  --fsgg-glyph-team-5: #6c51ab;
-  --fsgg-glyph-team-6: #ab8e00;
+  --fsgg-glyph-team-4: #719e38;
+  --fsgg-glyph-team-5: #6d51ab;
+  --fsgg-glyph-team-6: #ac8e00;
   --fsgg-glyph-team-7: #a83d44;
   --fsgg-glyph-badge-ink: #0d0d0d;
   --fsgg-glyph-icon-ink: #0d0d0d;
   --fsgg-glyph-modifier: #0d0d0d;
   --fsgg-glyph-selection: #ffd6e5;
-  --fsgg-glyph-marker: #00a8b0;
-  --fsgg-glyph-path: #00a8b0;
+  --fsgg-glyph-marker: #00a8b1;
+  --fsgg-glyph-path: #00a8b1;
   --fsgg-glyph-stale: #a5a5a5;
   --fsgg-cue-focus-outer: #e1e1e1;
   --fsgg-cue-focus-inner: #0d0d0d;
   --fsgg-cue-hover: #ffb8d1;
-  --fsgg-status-good: #94f6aa;
+  --fsgg-status-good: #94f6a9;
   --fsgg-status-warn: #edab42;
-  --fsgg-status-bad: #d0635d;
+  --fsgg-status-bad: #d0635c;
   --fsgg-status-track: #0d0d0d;
   --fsgg-status-keyline: #ffffff;
   --fsgg-terrain-open: #2c2c2c;
@@ -110,9 +120,14 @@
   --fsgg-terrain-difficult: #513c22;
   --fsgg-terrain-water: #1d435b;
   --fsgg-terrain-void: #000000;
+  --fsgg-size-cell: 32;
+  --fsgg-stroke-outline: 3;
+  --fsgg-stroke-gap: 3;
+  --fsgg-stroke-bracket: 3;
+  --fsgg-stroke-hover: 1;
 }
 
-[data-theme="colourBlindSafe"] {
+[data-fsgg-theme="colourBlindSafe"] {
   --fsgg-surface-ground: #222831;
   --fsgg-glyph-unit-body: #ffffff;
   --fsgg-glyph-allegiance-own: #28a9e8;
@@ -148,9 +163,14 @@
   --fsgg-terrain-difficult: #4c371d;
   --fsgg-terrain-water: #193f57;
   --fsgg-terrain-void: #191919;
+  --fsgg-size-cell: 32;
+  --fsgg-stroke-outline: 2;
+  --fsgg-stroke-gap: 2;
+  --fsgg-stroke-bracket: 2;
+  --fsgg-stroke-hover: 1;
 }
 
-[data-theme="monochrome"] {
+[data-fsgg-theme="monochrome"] {
   --fsgg-surface-ground: #222831;
   --fsgg-glyph-unit-body: #ffffff;
   --fsgg-glyph-allegiance-own: #b9b9b9;
@@ -186,4 +206,9 @@
   --fsgg-terrain-difficult: #3b3b3b;
   --fsgg-terrain-water: #3b3b3b;
   --fsgg-terrain-void: #191919;
+  --fsgg-size-cell: 32;
+  --fsgg-stroke-outline: 2;
+  --fsgg-stroke-gap: 2;
+  --fsgg-stroke-bracket: 2;
+  --fsgg-stroke-hover: 1;
 }

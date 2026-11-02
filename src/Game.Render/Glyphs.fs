@@ -92,6 +92,7 @@ type internal SpecData =
         Badged: bool
         AllegianceColouring: bool
         SizeStep: int
+        FrameSize: float option
         FillStep: int
         Modifiers: ModifierRef list
         Amplifiers: (AmplifierSlot * Amplifier) list
@@ -115,6 +116,7 @@ module GlyphSpec =
                 Badged = false
                 AllegianceColouring = false
                 SizeStep = 3
+                FrameSize = None
                 FillStep = 0
                 Modifiers = []
                 Amplifiers = []
@@ -127,6 +129,7 @@ module GlyphSpec =
     let badged spec = update (fun d -> { d with Badged = true }) spec
     let allegianceColouring spec = update (fun d -> { d with AllegianceColouring = true }) spec
     let sizeStep (step: int) spec = update (fun d -> { d with SizeStep = max 0 (min 3 step) }) spec
+    let internal withFrameSize frame spec = update (fun d -> { d with FrameSize = Some frame }) spec
     let fillStep (step: int) spec = update (fun d -> { d with FillStep = max 0 (min 3 step) }) spec
     let modifier (modifier: ModifierRef) spec = update (fun d -> { d with Modifiers = d.Modifiers @ [ modifier ] }) spec
 
@@ -497,7 +500,7 @@ module Glyphs =
 
     let private size (theme: Theme) (data: SpecData) =
         let cells = float (max 1 (min data.Footprint.Width data.Footprint.Height))
-        floor (theme.Palette.Cell * cells * (0.5 + float data.SizeStep / 12.0))
+        data.FrameSize |> Option.defaultWith (fun () -> floor (theme.Palette.Cell * cells * (0.5 + float data.SizeStep / 12.0)))
 
     let frameSize (theme: Theme) (spec: GlyphSpec) = size theme spec.Data
 

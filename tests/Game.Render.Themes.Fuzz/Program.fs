@@ -11,9 +11,17 @@ module Program
 //   colours, and the digest of `ofOklch` over the grid derivation visits;
 // - a summary line, `theme-fuzz seeds=N derivations=M ok=K checks=C failed=F digest=D`.
 
-open FS.GG.Game.Reference.Experimental
-open FS.GG.Game.Reference.Experimental.Colour
-open FS.GG.Game.Reference.Experimental.Themes
+open FS.GG.UI.Scene
+open FS.GG.Game.Render
+open ThemeNumerics
+
+// Input fixture, not a runtime theme type. The test translates these hue intentions to the public 8-bit seed API.
+type FuzzSeed = { Name: string; Ground: Color; Chroma: float; AllegianceHues: float list; TeamHues: float list; SelectionHue: float; MarkerHue: float; StatusHues: float list }
+let classicSeed =
+    { Name = "classic"; Ground = rgb 34 40 49; Chroma = 0.14
+      AllegianceHues = [240.0;195.0;145.0;25.0;100.0]; TeamHues = [255.0;55.0;175.0;330.0;130.0;295.0;95.0;20.0]
+      SelectionHue = 95.0; MarkerHue = 200.0; StatusHues = [150.0;75.0;25.0] }
+let hueChromaFloor = 0.001
 
 /// MINSTD (Park and Miller): exact in IEEE doubles (the product stays under 2^53), so .NET and Fable draw the same
 /// numbers.
@@ -28,7 +36,7 @@ let private hue () = System.Math.Floor(next () * 36000.0) / 100.0
 
 /// The seed of fuzz case `i`. Every draw is its own `let`, in order: F# and Fable may order the evaluation of one
 /// expression's arguments differently, so no expression draws more than once.
-let seedOf (i: int) : Seed =
+let seedOf (i: int) : FuzzSeed =
     let kind = i % 3
     let draws n f = [ for _ in 1..n -> f () ]
     let ground, chroma =
@@ -75,7 +83,7 @@ let seedOf (i: int) : Seed =
 
 /// The #805 review's 120 custom seeds (its net-probe3.fsx), which found B4: seed 22, ground #281a22, colourBlindSafe,
 /// gave terrain.blocked #3b3c3c on .NET and #3c3c3c under Fable before derivation inputs were gridded.
-let reviewSeed (i: int) : Seed =
+let reviewSeed (i: int) : FuzzSeed =
     let ground = rgb (18 + (i % 30)) (22 + ((i * 7) % 30)) (28 + ((i * 13) % 35))
     let rot = float i * 1.7
     let hues xs = xs |> List.map (fun x -> (x + rot) % 360.0)
@@ -89,26 +97,23 @@ let reviewSeed (i: int) : Seed =
         MarkerHue = (200.0 + rot) % 360.0
         StatusHues = hues [ 150.0; 75.0; 25.0 ] }
 
-/// A violation's rule and the aliases it names, without measured values (their formatting is the runtime's).
+// Compare tokens and rule wording, excluding runtime-specific floating-point formatting.
 let violationKey (v: ThemeViolation) =
-    match v with
-    | NotOpaque a -> "opaque " + a
-    | UnknownAlias a -> "unknown " + a
-    | BelowFloor(a, b, _, f) -> sprintf "floor %s/%s/%s" a b (fixedText 1 f)
-    | NotDistinct(a, b, vision, _, _) -> sprintf "distinct %s/%s/%A" a b vision
-    | LightnessTooClose(a, b, vision, _, _) -> sprintf "lightness %s/%s/%A" a b vision
-    | StatusMeaningLost(a, _, band) -> sprintf "status %s %s" a band
-    | TeamOutsideGame(t, n) -> sprintf "team %d/%d" t n
-    | BadToken(a, _) -> "token " + a
+    v.Token + " " + System.Text.RegularExpressions.Regex.Replace(v.Reason, @"(?<![A-Za-z0-9_.])-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", "#")
 
-let private lists =
-    [
-        "dark", [ baseAlgorithm; dark; repair ]
-        "light", [ baseAlgorithm; light; repair ]
-        "highContrast", [ baseAlgorithm; dark; highContrast; repair ]
-        "colourBlindSafe", [ baseAlgorithm; dark; colourBlindSafe; repair ]
-        "monochrome", [ baseAlgorithm; dark; monochrome; repair ]
-    ]
+let private lists = ThemePresets.recipes
+
+let private seedFor (input: FuzzSeed) (seed: ThemeSeed) =
+    let hue h = ThemeColour.ofOklch { L = 0.6; C = 0.12; H = h }
+    let colours =
+        [ yield "ground", input.Ground
+          for name, h in List.zip ["own";"ally";"neutral";"enemy";"unknown"] input.AllegianceHues do
+              yield "allegiance." + name, hue h
+          for i, h in List.indexed input.TeamHues do yield sprintf "team.%d" i, hue h
+          yield "accent.selection", hue input.SelectionHue
+          yield "accent.marker", hue input.MarkerHue
+          for name, h in List.zip ["good";"warn";"bad"] input.StatusHues do yield "status." + name, hue h ]
+    colours |> List.fold (fun s (name, colour) -> ThemeSeed.colour name colour s) (ThemeSeed.named input.Name seed)
 
 [<EntryPoint>]
 let main argv =
@@ -123,7 +128,7 @@ let main argv =
     let mutable derivations = 0
     let mutable ok = 0
     let fx (xs: float list) = xs |> List.map (fixedText 5) |> String.concat " "
-    let fuzz (label: string) (seed: Seed) =
+    let fuzz (label: string) (seed: FuzzSeed) =
         emit (
             sprintf
                 "%s seed %s c=%s a=[%s] t=[%s] s=%s m=%s st=[%s]"
@@ -136,12 +141,14 @@ let main argv =
                 (fixedText 5 seed.MarkerHue)
                 (fx seed.StatusHues)
         )
-        for name, algorithms in lists do
+        for name, recipeSeed, algorithms in lists do
             derivations <- derivations + 1
-            match create seed algorithms Map.empty with
+            let customise = ThemeAlgorithm.create "fuzz.chroma" (fun _ tokens -> ThemeTokens.withNumber "derive.chroma" seed.Chroma tokens)
+            let algorithms = algorithms |> List.collect (fun a -> if ThemeAlgorithm.name a = "fsgg.leonardo" then [a; customise] else [a])
+            match Theme.create (seedFor seed recipeSeed) algorithms [] |> Result.bind (Theme.validate (ThemePresets.checks 2)) with
             | Ok theme ->
                 ok <- ok + 1
-                emit (sprintf "%s %s OK %s" label name (hexes theme |> List.map snd |> String.concat ","))
+                emit (sprintf "%s %s OK %s" label name (Theme.hex theme |> List.map snd |> String.concat ","))
             | Error violations ->
                 emit (sprintf "%s %s ERR %d %s" label name violations.Length (violations |> List.map violationKey |> String.concat ";"))
     for i in 0..119 do
@@ -154,9 +161,9 @@ let main argv =
         if not pass then failed <- failed + 1
     let roundTrip = roundTripFailures ()
     check "the 8-bit OKLCH round trip" (roundTrip = 0) (sprintf "%d of 16777216 fail" roundTrip)
-    check "the derivation inputs of every 8-bit colour" true (sprintf "digest %s" (fixedText 0 (inputDigest ())))
-    check "ofOklch over derivation's grid" true (sprintf "digest %s" (fixedText 0 (gridDigest ())))
-    check "every preset derives" (presets |> List.forall (fun p -> (derive p) |> Result.isOk)) "5 presets"
+    check "the derivation inputs of every 8-bit colour" true (sprintf "digest %s" (fixedText 0 (inputDigest ThemeGrid.inputOf)))
+    check "ofOklch over derivation's grid" true (sprintf "digest %s" (fixedText 0 (gridDigest ThemeGrid.inputOf)))
+    check "every preset derives" (ThemePresets.recipes |> List.forall (fun (_, seed, algorithms) -> Theme.create seed algorithms [] |> Result.bind (Theme.validate (ThemePresets.checks 2)) |> Result.isOk)) "5 presets"
     check "the fuzz derived" (derivations = (seeds + 120) * lists.Length) (sprintf "%d derivations, %d accepted" derivations ok)
     printfn "theme-fuzz seeds=%d derivations=%d ok=%d checks=5 failed=%d digest=%s" seeds derivations ok failed (fixedText 0 digest)
     if failed = 0 then 0 else 1
