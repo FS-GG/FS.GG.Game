@@ -39,6 +39,8 @@ module internal InputHost =
     /// cue nodes above it (unlit on Babylon). Every event goes to `report`, from the host's own event handlers. The
     /// listeners are capture-phase listeners on the surface; `stopPointer` also stops a pointer press and a wheel there,
     /// so that a surface's own built-in handling (the retained SVG root's pan and zoom) never runs.
+    /// If initial access, cue generation or drawing throws, the partial mirror, listeners and timers are released
+    /// before the original failure propagates to the mounting surface.
     val attach:
         surface: Element ->
         ownership: Ownership ->

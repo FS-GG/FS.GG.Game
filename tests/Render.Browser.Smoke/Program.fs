@@ -3027,6 +3027,7 @@ async {
             do! section "glyphs" (runGlyphSection ())
             do! section "theme proof" (runThemeProof ())
             do! section "retained surface" (RetainedSurface.run check)
+            do! section "input host failed mounts" (InputHostSmoke.runFailedMounts check)
             do! section "input host" (InputHostSmoke.run check)
 
         if layout then

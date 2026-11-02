@@ -349,242 +349,7 @@ module internal InputHost =
             containedKeys.Add key |> ignore
             contain event
 
-        do
-            let surfaceTarget = surface :> EventTarget
-
-            setAttribute surface "tabindex" "0"
-            setAttribute surface "aria-label" label
-            mirror.setAttribute ("data-scene-controls", RendererBackend.id backend)
-            mirror.setAttribute ("data-renderer", RendererBackend.id backend)
-            mirror.setAttribute ("data-input-host", prefix)
-            mirror.setAttribute ("role", "none")
-
-            match ownership with
-            | Ownership.Owns parent ->
-                mirror.setAttribute ("style", hiddenStyle)
-                parent.appendChild mirror |> ignore
-            | Ownership.Fallback -> surface.appendChild mirror |> ignore
-
-            listen surfaceTarget "pointerdown" (fun raw ->
-                if not disposed then
-                    let pointer = raw :?> MouseEvent
-                    let point = localPoint pointer
-                    let target = hitTest point
-                    let modifiers = modifiersOf raw
-
-                    if stopPointer then
-                        stopImmediate raw
-
-                    if pointerType raw = "touch" then
-                        clearTouch ()
-
-                        let pending =
-                            {
-                                Pointer = pointerId raw
-                                ClientX = pointer.clientX
-                                ClientY = pointer.clientY
-                                Target = target
-                                Point = point
-                                Modifiers = modifiers
-                                Timer = None
-                                Fired = false
-                            }
-
-                        pending.Timer <-
-                            Some(
-                                setTimeout
-                                    (fun () ->
-                                        match touch with
-                                        | Some waiting when obj.ReferenceEquals(waiting, pending) && not pending.Fired ->
-                                            pending.Fired <- true
-                                            pending.Timer <- None
-                                            pressFocus pending.Target
-
-                                            event
-                                                InputSource.Pointer
-                                                InputAction.ActivateSecondary
-                                                pending.Target
-                                                (Some pending.Point)
-                                                pending.Modifiers
-                                                false
-                                        | _ -> ())
-                                    longPressMs
-                            )
-
-                        touch <- Some pending
-                    else
-                        match button raw with
-                        | 0.0 ->
-                            pressFocus target
-                            event InputSource.Pointer InputAction.Activate target (Some point) modifiers false
-                        | 2.0 ->
-                            pressFocus target
-                            event InputSource.Pointer InputAction.ActivateSecondary target (Some point) modifiers false
-                        | _ -> ())
-
-            listen surfaceTarget "pointermove" (fun raw ->
-                if not disposed then
-                    let pointer = raw :?> MouseEvent
-
-                    match touch with
-                    | Some pending when pending.Pointer = pointerId raw ->
-                        let dx = pointer.clientX - pending.ClientX
-                        let dy = pointer.clientY - pending.ClientY
-
-                        if dx * dx + dy * dy >= slop * slop then
-                            clearTouch ()
-                    | _ -> ()
-
-                    if pointerType raw <> "touch" then
-                        let point = localPoint pointer
-                        let target = hitTest point
-
-                        if target <> hovered then
-                            hovered <- target
-                            redraw false
-                            event InputSource.Pointer InputAction.Hover target (Some point) (modifiersOf raw) false)
-
-            listen surfaceTarget "pointerup" (fun raw ->
-                if not disposed then
-                    match touch with
-                    | Some pending when pending.Pointer = pointerId raw ->
-                        let fired = pending.Fired
-                        clearTouch ()
-
-                        if not fired then
-                            pressFocus pending.Target
-
-                            event
-                                InputSource.Pointer
-                                InputAction.Activate
-                                pending.Target
-                                (Some pending.Point)
-                                pending.Modifiers
-                                false
-                    | _ -> ())
-
-            listen surfaceTarget "pointercancel" (fun raw ->
-                match touch with
-                | Some pending when pending.Pointer = pointerId raw -> clearTouch ()
-                | _ -> ())
-
-            // Leaving fires on each child too (capture sees non-bubbling events); only leaving the surface counts.
-            listen surfaceTarget "pointerleave" (fun raw ->
-                if not disposed && targets raw surface && hovered.IsSome && pointerType raw <> "touch" then
-                    hovered <- None
-                    redraw false
-                    event InputSource.Pointer InputAction.Hover None None (modifiersOf raw) false)
-
-            // The page's context menu never opens on the surface: a secondary press, a long-press and the ContextMenu
-            // key are reported as `ActivateSecondary` instead.
-            listen surfaceTarget "contextmenu" (fun raw -> raw.preventDefault ())
-
-            if stopPointer then
-                listen surfaceTarget "wheel" (fun raw -> stopImmediate raw)
-
-            listen surfaceTarget "focus" (fun raw ->
-                if not disposed && targets raw surface then
-                    if (focused |> Option.filter isReachable).IsNone then
-                        focused <-
-                            current.Selected
-                            |> Option.filter isReachable
-                            |> Option.orElse (items |> List.tryHead |> Option.map (fun first -> first.Id))
-
-                    visible <- focusVisible surface
-                    syncActive ()
-                    redraw false)
-
-            listen surfaceTarget "blur" (fun raw ->
-                if not disposed && targets raw surface then
-                    containedKeys.Clear()
-                    visible <- false
-                    redraw false)
-
-            listen surfaceTarget "keydown" (fun raw ->
-                let keyboard = raw :?> KeyboardEvent
-
-                if not disposed && not (isComposing keyboard) then
-                    let key = keyboard.key
-                    let modifiers = modifiersOf raw
-                    let repeat = isRepeat keyboard
-
-                    // An arrow (or any navigation key) with Alt or Meta held is the browser's (history back and
-                    // forward): it is neither reported nor contained.
-                    if InputLayout.isNavigation key && (modifiers.Alt || modifiers.Meta) then
-                        ()
-                    elif InputLayout.isNavigation key then
-                        let shape = layout |> Option.defaultValue (InputLayout.Layout.Listbox [])
-                        let next = InputLayout.navigate key modifiers.Control focused shape items
-                        let moved = next <> focused
-                        focused <- next
-                        visible <- true
-                        syncActive ()
-                        redraw false
-
-                        if moved then
-                            event InputSource.Keyboard InputAction.Focus next None modifiers repeat
-
-                        containKey raw key
-                    else
-                        let action =
-                            match key with
-                            | "Enter"
-                            | " " -> Some InputAction.Activate
-                            | "ContextMenu" -> Some InputAction.ActivateSecondary
-                            | "F10" when keyboard.shiftKey -> Some InputAction.ActivateSecondary
-                            | "Escape" -> Some InputAction.Cancel
-                            | _ -> None
-
-                        match action with
-                        | Some action ->
-                            let target = focused |> Option.filter isReachable
-
-                            match action with
-                            | InputAction.Cancel -> event InputSource.Keyboard action target None modifiers repeat
-                            | _ when target.IsSome ->
-                                visible <- true
-                                redraw false
-                                event InputSource.Keyboard action target None modifiers repeat
-                            | _ -> ()
-
-                            containKey raw key
-                        | None -> ())
-
-            // The keyup of every key whose keydown was contained is contained too, so no page binding sees half a key.
-            listen surfaceTarget "keyup" (fun raw ->
-                let key = (raw :?> KeyboardEvent).key
-
-                if containedKeys.Remove key then
-                    contain raw)
-
-            // A screen reader's click on an item (its default action) activates the item's object.
-            listen (mirror :> EventTarget) "click" (fun raw ->
-                match controlIdOf raw.target with
-                | Some id when not disposed && isReachable id ->
-                    focused <- Some id
-                    visible <- true
-                    syncActive ()
-                    redraw false
-                    event InputSource.Mirror InputAction.Activate (Some id) None (modifiersOf raw) false
-                | _ -> ())
-
-            sync ()
-            redraw true
-
-        member _.Update(frame: InteractiveScene) =
-            if not disposed then
-                current <- frame
-                sync ()
-                focused <- focused |> Option.filter isReachable
-
-                hovered <-
-                    hovered
-                    |> Option.filter (fun id -> frame.Objects |> List.exists (fun target -> target.Id = id))
-
-                syncActive ()
-                redraw true
-
-        member _.Dispose() =
+        let release () =
             if not disposed then
                 disposed <- true
                 clearTouch ()
@@ -600,6 +365,250 @@ module internal InputHost =
 
                 for name in [ "aria-owns"; "aria-activedescendant" ] do
                     surface.removeAttribute name
+
+        do
+            try
+                let surfaceTarget = surface :> EventTarget
+
+                setAttribute surface "tabindex" "0"
+                setAttribute surface "aria-label" label
+                mirror.setAttribute ("data-scene-controls", RendererBackend.id backend)
+                mirror.setAttribute ("data-renderer", RendererBackend.id backend)
+                mirror.setAttribute ("data-input-host", prefix)
+                mirror.setAttribute ("role", "none")
+
+                match ownership with
+                | Ownership.Owns parent ->
+                    mirror.setAttribute ("style", hiddenStyle)
+                    parent.appendChild mirror |> ignore
+                | Ownership.Fallback -> surface.appendChild mirror |> ignore
+
+                listen surfaceTarget "pointerdown" (fun raw ->
+                    if not disposed then
+                        let pointer = raw :?> MouseEvent
+                        let point = localPoint pointer
+                        let target = hitTest point
+                        let modifiers = modifiersOf raw
+
+                        if stopPointer then
+                            stopImmediate raw
+
+                        if pointerType raw = "touch" then
+                            clearTouch ()
+
+                            let pending =
+                                {
+                                    Pointer = pointerId raw
+                                    ClientX = pointer.clientX
+                                    ClientY = pointer.clientY
+                                    Target = target
+                                    Point = point
+                                    Modifiers = modifiers
+                                    Timer = None
+                                    Fired = false
+                                }
+
+                            pending.Timer <-
+                                Some(
+                                    setTimeout
+                                        (fun () ->
+                                            match touch with
+                                            | Some waiting when obj.ReferenceEquals(waiting, pending) && not pending.Fired ->
+                                                pending.Fired <- true
+                                                pending.Timer <- None
+                                                pressFocus pending.Target
+
+                                                event
+                                                    InputSource.Pointer
+                                                    InputAction.ActivateSecondary
+                                                    pending.Target
+                                                    (Some pending.Point)
+                                                    pending.Modifiers
+                                                    false
+                                            | _ -> ())
+                                        longPressMs
+                                )
+
+                            touch <- Some pending
+                        else
+                            match button raw with
+                            | 0.0 ->
+                                pressFocus target
+                                event InputSource.Pointer InputAction.Activate target (Some point) modifiers false
+                            | 2.0 ->
+                                pressFocus target
+                                event InputSource.Pointer InputAction.ActivateSecondary target (Some point) modifiers false
+                            | _ -> ())
+
+                listen surfaceTarget "pointermove" (fun raw ->
+                    if not disposed then
+                        let pointer = raw :?> MouseEvent
+
+                        match touch with
+                        | Some pending when pending.Pointer = pointerId raw ->
+                            let dx = pointer.clientX - pending.ClientX
+                            let dy = pointer.clientY - pending.ClientY
+
+                            if dx * dx + dy * dy >= slop * slop then
+                                clearTouch ()
+                        | _ -> ()
+
+                        if pointerType raw <> "touch" then
+                            let point = localPoint pointer
+                            let target = hitTest point
+
+                            if target <> hovered then
+                                hovered <- target
+                                redraw false
+                                event InputSource.Pointer InputAction.Hover target (Some point) (modifiersOf raw) false)
+
+                listen surfaceTarget "pointerup" (fun raw ->
+                    if not disposed then
+                        match touch with
+                        | Some pending when pending.Pointer = pointerId raw ->
+                            let fired = pending.Fired
+                            clearTouch ()
+
+                            if not fired then
+                                pressFocus pending.Target
+
+                                event
+                                    InputSource.Pointer
+                                    InputAction.Activate
+                                    pending.Target
+                                    (Some pending.Point)
+                                    pending.Modifiers
+                                    false
+                        | _ -> ())
+
+                listen surfaceTarget "pointercancel" (fun raw ->
+                    match touch with
+                    | Some pending when pending.Pointer = pointerId raw -> clearTouch ()
+                    | _ -> ())
+
+                // Leaving fires on each child too (capture sees non-bubbling events); only leaving the surface counts.
+                listen surfaceTarget "pointerleave" (fun raw ->
+                    if not disposed && targets raw surface && hovered.IsSome && pointerType raw <> "touch" then
+                        hovered <- None
+                        redraw false
+                        event InputSource.Pointer InputAction.Hover None None (modifiersOf raw) false)
+
+                // The page's context menu never opens on the surface: a secondary press, a long-press and the ContextMenu
+                // key are reported as `ActivateSecondary` instead.
+                listen surfaceTarget "contextmenu" (fun raw -> raw.preventDefault ())
+
+                if stopPointer then
+                    listen surfaceTarget "wheel" (fun raw -> stopImmediate raw)
+
+                listen surfaceTarget "focus" (fun raw ->
+                    if not disposed && targets raw surface then
+                        if (focused |> Option.filter isReachable).IsNone then
+                            focused <-
+                                current.Selected
+                                |> Option.filter isReachable
+                                |> Option.orElse (items |> List.tryHead |> Option.map (fun first -> first.Id))
+
+                        visible <- focusVisible surface
+                        syncActive ()
+                        redraw false)
+
+                listen surfaceTarget "blur" (fun raw ->
+                    if not disposed && targets raw surface then
+                        containedKeys.Clear()
+                        visible <- false
+                        redraw false)
+
+                listen surfaceTarget "keydown" (fun raw ->
+                    let keyboard = raw :?> KeyboardEvent
+
+                    if not disposed && not (isComposing keyboard) then
+                        let key = keyboard.key
+                        let modifiers = modifiersOf raw
+                        let repeat = isRepeat keyboard
+
+                        // An arrow (or any navigation key) with Alt or Meta held is the browser's (history back and
+                        // forward): it is neither reported nor contained.
+                        if InputLayout.isNavigation key && (modifiers.Alt || modifiers.Meta) then
+                            ()
+                        elif InputLayout.isNavigation key then
+                            let shape = layout |> Option.defaultValue (InputLayout.Layout.Listbox [])
+                            let next = InputLayout.navigate key modifiers.Control focused shape items
+                            let moved = next <> focused
+                            focused <- next
+                            visible <- true
+                            syncActive ()
+                            redraw false
+
+                            if moved then
+                                event InputSource.Keyboard InputAction.Focus next None modifiers repeat
+
+                            containKey raw key
+                        else
+                            let action =
+                                match key with
+                                | "Enter"
+                                | " " -> Some InputAction.Activate
+                                | "ContextMenu" -> Some InputAction.ActivateSecondary
+                                | "F10" when keyboard.shiftKey -> Some InputAction.ActivateSecondary
+                                | "Escape" -> Some InputAction.Cancel
+                                | _ -> None
+
+                            match action with
+                            | Some action ->
+                                let target = focused |> Option.filter isReachable
+
+                                match action with
+                                | InputAction.Cancel -> event InputSource.Keyboard action target None modifiers repeat
+                                | _ when target.IsSome ->
+                                    visible <- true
+                                    redraw false
+                                    event InputSource.Keyboard action target None modifiers repeat
+                                | _ -> ()
+
+                                containKey raw key
+                            | None -> ())
+
+                // The keyup of every key whose keydown was contained is contained too, so no page binding sees half a key.
+                listen surfaceTarget "keyup" (fun raw ->
+                    let key = (raw :?> KeyboardEvent).key
+
+                    if containedKeys.Remove key then
+                        contain raw)
+
+                // A screen reader's click on an item (its default action) activates the item's object.
+                listen (mirror :> EventTarget) "click" (fun raw ->
+                    match controlIdOf raw.target with
+                    | Some id when not disposed && isReachable id ->
+                        focused <- Some id
+                        visible <- true
+                        syncActive ()
+                        redraw false
+                        event InputSource.Mirror InputAction.Activate (Some id) None (modifiersOf raw) false
+                    | _ -> ())
+
+                sync ()
+                redraw true
+
+            with _ ->
+                // The caller has no Host to dispose until construction returns. Retire partial
+                // acquisition here, preserving the original access/cue/draw failure.
+                try release () with _ -> ()
+                reraise ()
+
+        member _.Update(frame: InteractiveScene) =
+            if not disposed then
+                current <- frame
+                sync ()
+                focused <- focused |> Option.filter isReachable
+
+                hovered <-
+                    hovered
+                    |> Option.filter (fun id -> frame.Objects |> List.exists (fun target -> target.Id = id))
+
+                syncActive ()
+                redraw true
+
+        member _.Dispose() = release ()
 
     let attach surface ownership backend label width height stopPointer hitTest spec report draw frame =
         Host(surface, ownership, backend, label, width, height, stopPointer, hitTest, spec, report, draw, frame)

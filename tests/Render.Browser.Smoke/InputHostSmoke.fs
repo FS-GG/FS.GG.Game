@@ -1222,3 +1222,72 @@ let runLayout (check: string -> bool -> string -> unit) : Async<unit> =
 
         stage.remove ()
     }
+
+/// Actual input-host mounts, including the SVG mirror outside its frame: initialization is transactional even when
+/// game access/cues or the initial retained draw fails. These checks use real DOM/listener census, not a fake host.
+let runFailedMounts (check: string -> bool -> string -> unit) : Async<unit> =
+    async {
+        BrowserConformance.installInputProbe ()
+
+        for backend in RendererBackend.all do
+            let cases = [ "access"; "cues" ] @ (if backend = RendererBackend.Svg then [ "draw" ] else [])
+
+            for kind in cases do
+                let container = document.createElement "div"
+                document.body.appendChild container |> ignore
+                let baseline = BrowserConformance.inputHosts backend
+                let late = BrowserRenderers.route ()
+                let route = InputRoute.create ()
+                let options = BrowserRenderers.options "Failed input mount" InputFixture.width InputFixture.height
+                let surface =
+                    BrowserRenderers.surfaces container options late
+                    |> List.find (fun surface -> SceneSurface.backend surface = backend)
+                let board: InputFixture.Board = { Tick = 0; Selected = None }
+                let mutable calls = 0
+                let token = sprintf "initial %s failure" kind
+                let broken =
+                    match kind with
+                    | "access" ->
+                        InputFixture.interaction
+                        |> SceneInteraction.withAccess (fun _ -> calls <- calls + 1; failwith token)
+                    | "cues" ->
+                        InputFixture.interaction
+                        |> SceneInteraction.withCues (fun _ -> calls <- calls + 1; failwith token)
+                    | _ ->
+                        // Initial frame is valid; only the cue-bearing ReplaceScene fails retained validation.
+                        InputFixture.interaction
+                        |> SceneInteraction.withCues (fun _ ->
+                            calls <- calls + 1
+                            [ SceneNode.Rectangle((nan, 0.0, 1.0, 1.0), InputFixture.background) ])
+                let expected = if kind = "draw" then "SVG surface rejected the scene" else token
+                let bad = (SceneSurface.inputAdapter InputFixture.view broken route surface).Mount board
+                let reason =
+                    match bad with
+                    | Error reason -> reason
+                    | Ok mounted -> mounted.Dispose(); "unexpected success"
+                let! retired =
+                    BrowserConformance.waitUntil 120 (fun () ->
+                        container.children.length = 0 && BrowserConformance.inputHosts backend = baseline)
+
+                check
+                    (sprintf "input host partial mount %s %s: original failure releases its mirror, listeners and DOM" (RendererBackend.id backend) kind)
+                    (calls > 0 && reason.Contains expected && retired)
+                    (sprintf "calls=%d reason=%s children=%d resources=%d baseline=%d" calls reason container.children.length (BrowserConformance.inputHosts backend) baseline)
+
+                let retry = (SceneSurface.inputAdapter InputFixture.view InputFixture.interaction route surface).Mount board
+                let mutable positive = false
+                match retry with
+                | Ok mounted ->
+                    positive <- tabStops container = 1 && BrowserConformance.inputHosts backend > baseline
+                    mounted.Dispose()
+                | Error _ -> ()
+                let! cleanRetry =
+                    BrowserConformance.waitUntil 120 (fun () ->
+                        container.children.length = 0 && BrowserConformance.inputHosts backend = baseline)
+
+                check
+                    (sprintf "input host partial mount %s %s: healthy retry acquires and releases one input host" (RendererBackend.id backend) kind)
+                    (positive && cleanRetry)
+                    (sprintf "positive=%b children=%d resources=%d baseline=%d" positive container.children.length (BrowserConformance.inputHosts backend) baseline)
+                container.remove ()
+    }
