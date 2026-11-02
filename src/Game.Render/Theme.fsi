@@ -318,16 +318,17 @@ module Theme =
     /// check every rule. The theme, or every violation:
     /// - an unknown seed, map or alias name, a missing colour, a colour with alpha below 255 (alpha waits for Babylon and
     ///   the kit, Q5), or a number out of range;
-    /// - the WCAG 2.x contrast floor (`contrastTarget`, at least 3:1) against `surface.ground` for every team and
-    ///   allegiance colour, `glyph.unit.body`, `glyph.stale`, `glyph.selection`, `glyph.marker`, `glyph.path`,
-    ///   `cue.focus.outer` and `cue.hover`;
+    /// - the WCAG 2.x contrast floor (`contrastTarget`, at least 3:1) against `surface.ground` for every allegiance
+    ///   colour, `glyph.unit.body`, `glyph.stale`, `glyph.selection`, `glyph.marker`, `glyph.path`, `cue.focus.outer`,
+    ///   `cue.hover` and `status.keyline`;
+    /// - a 3:1 legibility floor against `surface.ground` for every team colour, which never touches the ground (ADR
+    ///   erratum E7, amendment A1): it is held to 3:1 against what it touches instead, below, whatever `contrastTarget`;
     /// - 3:1 between colours that touch: `cue.focus.inner` on `cue.focus.outer`; `glyph.badge.ink` on the body and on
     ///   every team and allegiance colour; `glyph.icon.ink` on the body and every allegiance colour; every team colour
     ///   on the body (the team ring's layout, ADR D1 erratum: from the edge in, the frame in its identity colour, a
     ///   keyline in the body colour, the ring in the team colour, then the body fill, so the ring touches the body on
     ///   both sides and never the identity colour); every status fill on `status.track`; `status.track`
-    ///   on `status.keyline`; `glyph.modifier` on the body and on every team and allegiance colour. `status.keyline` is
-    ///   also held to the ground floor.
+    ///   on `status.keyline`; `glyph.modifier` on the body and on every team and allegiance colour.
     val create:
         seed: ThemeSeed -> algorithms: ThemeAlgorithm list -> overrides: ThemeOverride list -> Result<Theme, ThemeViolation list>
 

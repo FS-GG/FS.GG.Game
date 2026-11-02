@@ -67,6 +67,16 @@ These corrections were ruled by Root during the implementation review. Each one 
     requires a hostile structure's band to show its team colour on every backend. The kit checks that a unit and a structure with the same identity, size and badge, monochrome and
   with no icon, differ in decided pixels.
 
+- **E7. The team floor against the ground (D4; amendment A1, FS.GG.Game#795 Q-T11).** Under E1 a team colour never
+  touches the ground: it sits between a body-colour keyline and the body fill. It is therefore held to:
+  - **3:1 against the colours it touches**: the body, and the badge and modifier inks drawn on it;
+  - **a 3:1 legibility floor against the ground**.
+
+  It is no longer held to `contrastTarget` against the ground. `contrastTarget` still applies to the colours drawn on
+  the ground (allegiances, body, stale, selection, marker, path, keyline) and to the cue tones (the outer focus tone,
+  hover). Before A1, a `contrastTarget` of 7 on a black ground with a white body accepted only luminance 0.30 for a
+  team colour, so a high-contrast theme could not hold two distinct teams.
+
 ## Problem
 
 Every game draws its own symbology, using the same few fill-only nodes. The survey below was taken on 2026-11-01 from
