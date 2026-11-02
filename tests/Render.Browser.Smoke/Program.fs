@@ -558,6 +558,22 @@ let near (expected: int[]) (actual: int[]) (tolerance: int) =
     actual.Length >= 3
     && Array.forall2 (fun e a -> abs (e - a) <= tolerance) expected.[0..2] actual.[0..2]
 
+/// FS.GG.Game#786: every backend shows a fill at its declared colour, within one tolerance.
+let pixelTolerance = BrowserConformance.pixelTolerance
+
+/// The largest per-channel difference read on each backend between a decided pixel's declared colour and what the
+/// backend drew, over every read whose pixels all matched: the measurement behind `pixelTolerance`.
+let deviation = System.Collections.Generic.Dictionary<string, int>()
+
+let noteDeviation (backend: RendererBackend) (want: int[]) (got: int * int * int) =
+    let r, g, b = got
+    let d = max (abs (want.[0] - r)) (max (abs (want.[1] - g)) (abs (want.[2] - b)))
+    let id = RendererBackend.id backend
+
+    match deviation.TryGetValue id with
+    | true, current when current >= d -> ()
+    | _ -> deviation.[id] <- d
+
 let nextFrame: Async<unit> =
     Async.FromContinuations(fun (continuation, _, _) ->
         window.requestAnimationFrame (fun _ -> continuation ()) |> ignore)
@@ -687,15 +703,15 @@ let runBabylon () : Async<unit> =
         info "pixel token (80,50)" (sprintf "%A" tokenPixel)
         info "pixel background (20,20)" (sprintf "%A" backgroundPixel)
 
-        // A face toward the camera is lit at 3/4 by the tilted hemispheric light, with no specular highlight.
+        // FS.GG.Game#786: the materials are unlit, so a face shows its declared colour.
         check
-            "the token pixel is the token colour, lit (about 200,40,90 x 0.75)"
-            (near [| 150; 30; 68 |] tokenPixel 4)
+            "the token pixel is the token colour, unlit (200,40,90)"
+            (near [| 200; 40; 90 |] tokenPixel pixelTolerance)
             (sprintf "%A" tokenPixel)
 
         check
-            "the background pixel is the background colour, lit (about 10,20,30 x 0.75)"
-            (near [| 8; 15; 23 |] backgroundPixel 4)
+            "the background pixel is the background colour, unlit (10,20,30)"
+            (near [| 10; 20; 30 |] backgroundPixel pixelTolerance)
             (sprintf "%A" backgroundPixel)
 
         // 4. Presenting 100 newer states moves the token in place: nothing is created, nothing leaks.
@@ -738,8 +754,8 @@ let runBabylon () : Async<unit> =
         let vacated = Probe.pixel (babylonCanvas ()) 80 50
         info "pixel moved token (160,50)" (sprintf "%A" moved)
 
-        check "the token pixel followed the state" (near [| 150; 30; 68 |] moved 4) (sprintf "%A" moved)
-        check "the vacated pixel is background again" (near [| 8; 15; 23 |] vacated 4) (sprintf "%A" vacated)
+        check "the token pixel followed the state" (near [| 200; 40; 90 |] moved pixelTolerance) (sprintf "%A" moved)
+        check "the vacated pixel is background again" (near [| 10; 20; 30 |] vacated pixelTolerance) (sprintf "%A" vacated)
 
         // 5. Babylon -> SVG: everything is released, the latest state is shown.
         driver.Dispatch(RendererMsg.SelectBackend RendererBackend.Svg)
@@ -1711,12 +1727,12 @@ let runThreeBackends () : Async<unit> =
                         (fun p -> p.[0] > 40)
                         600
 
-                if near [| 150; 30; 68 |] pixel 4 then
+                if near [| 200; 40; 90 |] pixel pixelTolerance then
                     renderedRight.Value <- renderedRight.Value + 1
 
                 check
-                    (name + ": the babylon token pixel is lit as expected (150,30,68)")
-                    (near [| 150; 30; 68 |] pixel 4)
+                    (name + ": the babylon token pixel is the declared colour, unlit (200,40,90)")
+                    (near [| 200; 40; 90 |] pixel pixelTolerance)
                     (sprintf "%A" pixel)
 
             let canvases = count container "canvas"
@@ -1813,9 +1829,6 @@ let knownGaps =
 
 let rgbOf (color: Color) = [| int color.Red; int color.Green; int color.Blue |]
 
-/// Babylon draws the flat meshes lit at 0.75 of the scene colour (the known limit in the roadmap).
-let litOf (color: Color) =
-    rgbOf color |> Array.map (fun value -> int (System.Math.Round(float value * 0.75)))
 
 let svgFill (color: Color) =
     sprintf "fill=\"rgb(%d %d %d)\"" color.Red color.Green color.Blue
@@ -1834,8 +1847,7 @@ let showsPixels
     async {
         let expect, tolerance =
             match backend with
-            | RendererBackend.Babylon -> litOf, 4
-            | _ -> rgbOf, 2
+            | _ -> rgbOf, pixelTolerance
 
         let read (color: Color, x: int, y: int) (frames: int) =
             BrowserConformance.readPixel host container backend x y (fun p -> near (expect color) p tolerance) frames
@@ -2062,12 +2074,8 @@ let runConformance () : Async<unit> =
                     }
                 | _ ->
                     async {
-                        let expect =
-                            match backend with
-                            | RendererBackend.Babylon -> litOf ReferenceRenderers.selectionColor
-                            | _ -> rgbOf ReferenceRenderers.selectionColor
-
-                        let tolerance = if backend = RendererBackend.Babylon then 4 else 2
+                        let expect = rgbOf ReferenceRenderers.selectionColor
+                        let tolerance = pixelTolerance
 
                         let! pixel =
                             BrowserConformance.readPixel
@@ -2221,15 +2229,25 @@ let runBabylonScale (columns: int) (rows: int) (stride: int) : Async<unit> =
                 let! shown = BrowserConformance.drawnPixels container width height RendererBackend.Babylon points
                 active.Value <- BrowserConformance.babylonActiveMeshes ()
 
+                let matched = ResizeArray<int[] * (int * int * int)>()
+
                 wrong.Value <-
                     List.zip wanted shown
                     |> List.choose (fun (expectation, got) ->
-                        let lit = litOf expectation.Colour
-                        let wantR, wantG, wantB = lit.[0], lit.[1], lit.[2]
+                        let want = rgbOf expectation.Colour
+                        let wantR, wantG, wantB = want.[0], want.[1], want.[2]
 
                         match got with
-                        | Some(r, g, b) when abs (r - wantR) <= 4 && abs (g - wantG) <= 4 && abs (b - wantB) <= 4 -> None
+                        | Some(r, g, b) when
+                            abs (r - wantR) <= pixelTolerance && abs (g - wantG) <= pixelTolerance && abs (b - wantB) <= pixelTolerance
+                            ->
+                            matched.Add((want, (r, g, b)))
+                            None
                         | _ -> Some(sprintf "(%g, %g) wants (%d,%d,%d) shows %A" expectation.Point.X expectation.Point.Y wantR wantG wantB got))
+
+                if wrong.Value.IsEmpty then
+                    for want, got in matched do
+                        noteDeviation RendererBackend.Babylon want got
 
                 if (wrong.Value.IsEmpty && active.Value = total) || frames.Value >= 600 then
                     finished.Value <- true
@@ -2374,18 +2392,24 @@ let drawnMismatches
             present ()
             let! shown = BrowserConformance.drawnPixels container width height backend points
 
+            let matched = ResizeArray<int[] * (int * int * int)>()
+
             last.Value <-
                 List.zip wanted shown
                 |> List.choose (fun (expectation, got) ->
-                    let want, tolerance =
-                        match backend with
-                        | RendererBackend.Babylon -> litOf expectation.Colour, 4
-                        | _ -> rgbOf expectation.Colour, 2
+                    let want, tolerance = rgbOf expectation.Colour, pixelTolerance
 
                     match got with
-                    | Some(r, g, b) when near want [| r; g; b |] tolerance -> None
+                    | Some(r, g, b) when near want [| r; g; b |] tolerance ->
+                        matched.Add((want, (r, g, b)))
+                        None
                     | _ ->
                         Some(sprintf "(%g, %g) wants %A shows %A" expectation.Point.X expectation.Point.Y want got))
+
+            // The deviation is measured on reads that match in full: a read of a frame still being drawn is not one.
+            if last.Value.IsEmpty then
+                for want, got in matched do
+                    noteDeviation backend want got
 
             if last.Value.IsEmpty || remaining.Value <= 0 then
                 finished.Value <- true
@@ -2682,10 +2706,7 @@ let runGlyphProof () : Async<unit> =
                 let! shown = BrowserConformance.drawnPixels container width height backend (named |> List.map (fun (_, p, _) -> p))
 
                 for (label, point, colour), got in List.zip named shown do
-                    let want, tolerance =
-                        match backend with
-                        | RendererBackend.Babylon -> litOf colour, 4
-                        | _ -> rgbOf colour, 2
+                    let want, tolerance = rgbOf colour, pixelTolerance
 
                     let verdict =
                         match got with
@@ -3108,6 +3129,10 @@ async {
         do! runGlyphSection ()
         do! RetainedSurface.run check
         do! InputHostSmoke.run check
+
+        // FS.GG.Game#786: the measured deviation behind the one pixel tolerance.
+        for entry in deviation do
+            info (sprintf "pixel deviation %s" entry.Key) (sprintf "%d (tolerance %d)" entry.Value pixelTolerance)
     with ex ->
         failures <- failures + 1
         results.Add("FAIL smoke raised: " + ex.Message)

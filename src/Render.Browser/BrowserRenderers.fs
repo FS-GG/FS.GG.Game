@@ -271,22 +271,18 @@ module BrowserConformance =
                         None)
         }
 
+    /// Measured (FS.GG.Game#786): every decided pixel of the smoke read exactly its declared colour on SVG, Pixi and
+    /// Babylon, on GPU (ANGLE over Vulkan) and on SwiftShader; 1 leaves one 8-bit step for a driver's rounding.
+    let pixelTolerance = 1
+
     let pixelProbe (container: HTMLElement) (boardWidth: float) (boardHeight: float) : PixelProbe =
         let read = drawnPixels container boardWidth boardHeight
 
-        // Babylon draws a flat shape lit, at 0.75 of its colour.
-        let appearance (backend: RendererBackend) (colour: Color) =
-            let channel (value: byte) =
-                match backend with
-                | RendererBackend.Babylon -> int (System.Math.Round(float value * 0.75))
-                | _ -> int value
+        // FS.GG.Game#786: every backend draws a fill at its declared colour (Babylon's materials are unlit), so the
+        // appearance is the colour itself and the tolerance is one value for all three.
+        let appearance (_: RendererBackend) (colour: Color) = int colour.Red, int colour.Green, int colour.Blue
 
-            channel colour.Red, channel colour.Green, channel colour.Blue
-
-        PixelProbe.create
-            read
-            appearance
-            (fun backend -> if backend = RendererBackend.Babylon then 4 else 2)
+        PixelProbe.create read appearance (fun _ -> pixelTolerance)
 
     let babylonActiveMeshes () : int =
         emitJsExpr engineStore "$0.Instances.reduce((total, engine) => total + engine.scenes.reduce((n, scene) => n + scene.getActiveMeshes().length, 0), 0)"

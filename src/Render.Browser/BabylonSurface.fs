@@ -144,8 +144,8 @@ module BabylonSurface =
     let private noSpecular (_material: B.StandardMaterial) : unit = jsNative
 
     /// FS.GG.Game#786/#788: an unlit material has no light term at all (`disableLighting`), so its colour is its
-    /// EMISSIVE colour, with a black diffuse; a lit one is diffuse with a black emissive. The cue layer is unlit so it
-    /// keeps its declared tones and contrast on Babylon; the scene's own shapes stay lit.
+    /// EMISSIVE colour, with a black diffuse; a lit one is diffuse with a black emissive. Every shape is unlit
+    /// (FS.GG.Game#786), so Babylon shows each declared colour, as SVG and Pixi do.
     [<Emit("(($0.disableLighting = $1), ($0.emissiveColor = $1 ? $2 : $3), ($0.diffuseColor = $1 ? $3 : $2))")>]
     let private paint (_material: B.StandardMaterial) (_unlit: bool) (_colour: B.Color3) (_black: B.Color3) : unit = jsNative
 
@@ -357,12 +357,13 @@ module BabylonSurface =
                     created.Value <- false
                     let shapes = ResizeArray<Shape>()
                     unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) next shapes
-                    let lit = shapes.Count
                     unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) cues shapes
 
                     for index in 0 .. shapes.Count - 1 do
                         let shape = shapes.[index]
-                        let unlit = index >= lit
+                        // FS.GG.Game#786: every shape is unlit, the scene's as well as the cue layer's, so Babylon draws
+                        // each fill at its declared colour (it drew lit fills at about 0.75 of it).
+                        let unlit = true
 
                         if index < slots.Count && slots.[index].Kind <> shape.Kind then
                             release slots.[index]

@@ -154,10 +154,16 @@ module BrowserConformance =
     /// The pixel probe of the kit's `pixels` section (FS.GG.Game#753) for scenes of `boardWidth` x `boardHeight`
     /// units: what `container`'s backend DREW at scene points. A canvas is copied to a 2D canvas in the task that
     /// reads it (the caller presents the state again just before); the SVG root is serialised and rasterised by the
-    /// browser, so SVG, Pixi and Babylon are read the same way. A lit backend (Babylon draws a flat shape at 0.75 of
-    /// its colour) declares that as its appearance; tolerance is 4 per channel for Babylon and 2 for the others, the
-    /// values the smoke has always used.
+    /// browser, so SVG, Pixi and Babylon are read the same way. Every backend draws a fill at its declared colour
+    /// (FS.GG.Game#786: Babylon's materials are unlit), so the appearance is the colour itself on all three, within
+    /// `BrowserConformance.pixelTolerance` per channel.
     val pixelProbe: container: HTMLElement -> boardWidth: float -> boardHeight: float -> PixelProbe
+
+    /// The one per-channel tolerance of the pixel probe on SVG, Pixi and Babylon (FS.GG.Game#786), measured on GPU
+    /// (ANGLE over Vulkan) and SwiftShader: 1. Every decided pixel the browser smoke reads showed exactly its declared
+    /// colour on all three backends, on both renderers (a largest deviation of 0); 1 leaves one 8-bit step for a
+    /// driver's rounding.
+    val pixelTolerance: int
 
     /// The number of meshes Babylon selected for drawing in its last frame, summed over its live scenes
     /// (`scene.getActiveMeshes()`): a scene whose nodes are culled or off screen draws fewer than it has nodes.

@@ -172,6 +172,7 @@ Template adoption is blocked on publishing the browser host (`FS.GG.Game.Render.
 4. **Live-mount rule by construction.** `failBackend` cannot tell two mounts of one backend apart, so the rule
    is an adapter obligation. A per-mount report function, or the attempt token handed to `Mount`, would
    enforce it in the type.
-5. **Babylon colour fidelity.** Babylon still draws lit at about 0.75 of the scene colour and ignores alpha,
-   so output probes need a backend-specific expectation. An unlit or emissive material would remove it. This
-   is a candidate for GPU-measured work under Game#747.
+5. **Babylon colour fidelity.** *Resolved by FS.GG.Game#786.* Babylon drew lit, at about 0.75 of the scene colour, so
+   output probes needed a backend-specific expectation. Its materials are now unlit: the colour is in `emissiveColor`,
+   with `disableLighting` and a black diffuse. The kit checks one colour at one tolerance (1) on all three backends.
+   Babylon still ignores alpha.

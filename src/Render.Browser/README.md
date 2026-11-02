@@ -69,7 +69,8 @@ define its own `Qualification.Pixi` or `Qualification.Babylon` module.
 
 ## Known limits
 
-- Babylon draws lit at about 0.75 of the scene colour and ignores `Color.Alpha`. It draws a 2D scene through an
+- Babylon draws every fill unlit, at its declared colour (FS.GG.Game#786: colour in `emissiveColor`, `disableLighting`,
+  a black diffuse), and ignores `Color.Alpha`. It draws a 2D scene through an
   orthographic camera, so every node is at its declared position and size at any node count (FS.GG.Game#753); one
   mesh and one draw call per node remain (instancing would need a per-instance colour shader).
 - There is no runtime `webglcontextlost` handling, and WebGPU is not exercised.
