@@ -57,6 +57,67 @@ let private clickElement (_element: Element) : unit = jsNative
 [<Emit("$0.style.width = $1 + 'px', $0.style.height = $2 + 'px'")>]
 let private styleSize (_element: Element) (_width: float) (_height: float) : unit = jsNative
 
+[<Emit("$0.scrollIntoView({ block: 'center', inline: 'center' })")>]
+let private scrollIntoView (_element: Element) : unit = jsNative
+
+/// Decode a base64 PNG of a `clipWidth` x `clipHeight` CSS px region and read the pixel under each point (CSS px from the
+/// region's top left), at whatever device scale the image has.
+[<Emit("(async () => { const img = new Image(); img.src = 'data:image/png;base64,' + $0; await img.decode(); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d'); g.drawImage(img, 0, 0); return $1.map(p => { const x = Math.floor(p[0] * img.width / $2), y = Math.floor(p[1] * img.height / $3); const d = g.getImageData(x, y, 1, 1).data; return [d[0], d[1], d[2]] }) })()")>]
+let private decodeAt (_png: string) (_points: float[][]) (_clipWidth: float) (_clipHeight: float) : JS.Promise<int[][]> = jsNative
+
+/// The PRESENTED pixels (what the page shows, at the device pixel ratio, through the driver's screenshot) of `surface`
+/// at scene points of a `width` x `height` scene.
+let private presentedPixels (surface: Element) (width: float) (height: float) (points: Point list) : Async<(int * int * int) list> =
+    async {
+        scrollIntoView surface
+        let bounds = surface.getBoundingClientRect ()
+
+        let request =
+            createObj
+                [
+                    "kind" ==> "shot"
+                    "x" ==> bounds.left
+                    "y" ==> bounds.top
+                    "width" ==> bounds.width
+                    "height" ==> bounds.height
+                ]
+
+        let pending: JS.Promise<string> = emitJsExpr request "window.__fsggInput($0)"
+        let! png = Async.AwaitPromise pending
+
+        let at =
+            points
+            |> List.map (fun p -> [| p.X * bounds.width / width; p.Y * bounds.height / height |])
+            |> Array.ofList
+
+        let! read = Async.AwaitPromise(decodeAt png at bounds.width bounds.height)
+        return read |> Array.map (fun p -> p.[0], p.[1], p.[2]) |> List.ofArray
+    }
+
+/// The focus ring around `b` as PRESENTED, from the middle of each edge: in the light inner band at 1.5 and 1.75 CSS px
+/// out, in the dark outer band at 2.25 and 3.5. The samples a quarter CSS px either side of the bands' common edge see an
+/// image drawn at a lower density and scaled up (it blends the two tones there); the others, the tones themselves.
+let private ringTones (surface: Element) (width: float) (height: float) (b: Rect) : Async<bool * string> =
+    async {
+        let css = surface.getBoundingClientRect().width / width
+
+        let around distance =
+            let d = distance / css
+
+            [
+                { X = b.X - d; Y = b.Y + b.Height / 2.0 }
+                { X = b.X + b.Width / 2.0; Y = b.Y - d }
+                { X = b.X + b.Width + d; Y = b.Y + b.Height / 2.0 }
+                { X = b.X + b.Width / 2.0; Y = b.Y + b.Height + d }
+            ]
+
+        let! inner = presentedPixels surface width height (around 1.5 @ around 1.75)
+        let! outer = presentedPixels surface width height (around 2.25 @ around 3.5)
+        let light = inner |> List.forall (fun (r, g, b) -> r >= 231 && g >= 231 && b >= 231)
+        let dark = outer |> List.forall (fun (r, g, b) -> r <= 40 && g <= 40 && b <= 40)
+        return light && dark, sprintf "css=%g dpr=%g inner=%A outer=%A" css window.devicePixelRatio inner outer
+    }
+
 /// A real input request of `kind` at the scene point `point` of `surface` (a scene of `width` x `height` units).
 let private inputAt (surface: Element) (width: float) (height: float) (kind: string) (point: Point) : Async<unit> =
     let bounds = surface.getBoundingClientRect ()
@@ -394,32 +455,16 @@ let private playGrid
         let ring () =
             async {
                 driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
-                do! settle 2
+                do! settle 3
                 driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
-                let css = surface.getBoundingClientRect().width / width
-                let b = (InputFixture.objects board |> List.find (fun t -> t.Id = "t00")).Bounds
-
-                let around distance =
-                    let d = distance / css
-
-                    [
-                        { X = b.X - d; Y = b.Y + b.Height / 2.0 }
-                        { X = b.X + b.Width / 2.0; Y = b.Y - d }
-                        { X = b.X + b.Width + d; Y = b.Y + b.Height / 2.0 }
-                        { X = b.X + b.Width / 2.0; Y = b.Y + b.Height + d }
-                    ]
-
-                let! inner = BrowserConformance.drawnPixels container width height backend (around 1.0)
-                let! outer = BrowserConformance.drawnPixels container width height backend (around 3.0)
-                let light = inner |> List.forall (Option.exists (fun (r, g, b) -> r >= 231 && g >= 231 && b >= 231))
-                let dark = outer |> List.forall (Option.exists (fun (r, g, b) -> r <= 40 && g <= 40 && b <= 40))
-                return light && dark, sprintf "css=%g inner=%A outer=%A" css inner outer
+                do! settle 2
+                return! ringTones surface width height (InputFixture.objects board |> List.find (fun t -> t.Id = "t00")).Bounds
             }
 
         let! plain, plainDetail = ring ()
 
         check
-            (sprintf "input host %s: the focus ring draws its light inner and dark outer band at their declared tones (1x CSS)" name)
+            (sprintf "input host %s: the focus ring is presented with its light inner and dark outer band at their declared tones (1x CSS, presented pixels)" name)
             plain
             plainDetail
 
@@ -428,7 +473,7 @@ let private playGrid
         styleSize surface width height
 
         check
-            (sprintf "input host %s: the focus ring's two tones hold at 2x CSS scale" name)
+            (sprintf "input host %s: the focus ring's two presented tones hold at 2x CSS scale (inline style, after mount)" name)
             doubled
             doubledDetail
 
@@ -437,7 +482,7 @@ let private playGrid
         do! BrowserConformance.deviceScale 1.0
 
         check
-            (sprintf "input host %s: the focus ring's two tones hold at DPR 2" name)
+            (sprintf "input host %s: the focus ring's two presented tones hold at DPR 2" name)
             dense
             denseDetail
 
@@ -445,6 +490,80 @@ let private playGrid
         do! settle 2
         let left = findAll document.body (sprintf "[data-input-host^='fsgg-input-%s']" (RendererBackend.id backend))
         check (sprintf "input host %s: switching away removes its mirror" name) (left.Length = 0) (string left.Length)
+        (driver :> System.IDisposable).Dispose()
+        InputRoute.unbind route
+        do! settle 2
+    }
+
+[<Emit("document.head.insertAdjacentHTML('beforeend', '<style>' + $0 + '</style>')")>]
+let private addStylesheet (_css: string) : unit = jsNative
+
+/// The board sized by a page STYLESHEET (no inline style) to twice its scene: every backend must be presented at the
+/// stylesheet's size, hit-test at it, and present the focus ring's two tones at it.
+let private playSheet
+    (check: string -> bool -> string -> unit)
+    (container: HTMLElement)
+    (late: LateFailureRoute)
+    (route: InputRoute)
+    (registry: RendererRegistry<InputFixture.Board>)
+    (backend: RendererBackend)
+    : Async<unit> =
+    async {
+        let name = RendererBackend.id backend + " stylesheet"
+        let events = ResizeArray<InputEvent>()
+        InputRoute.bind events.Add route
+        let board: InputFixture.Board = { Tick = 0; Selected = None }
+        let driver = BrowserRenderers.start late registry board ignore
+
+        if backend <> RendererBackend.Svg then
+            driver.Dispatch(RendererMsg.SelectBackend backend)
+
+        let! _ = BrowserConformance.waitUntil 600 (fun () -> driver.Mounted = Some backend)
+        do! settle 3
+        let surface = surfaceOf container backend
+        let width, height = InputFixture.width, InputFixture.height
+        let bounds = surface.getBoundingClientRect ()
+
+        check
+            (sprintf "input host %s: a page stylesheet sizes the surface (480 x 320 CSS px, no inline style overrides it)" name)
+            (bounds.width = 480.0 && bounds.height = 320.0)
+            (sprintf "%gx%g inline=%s" bounds.width bounds.height (surface.getAttribute "style"))
+
+        let centre id =
+            InputFixture.objects board
+            |> List.find (fun target -> target.Id = id)
+            |> fun target -> { X = target.Bounds.X + target.Bounds.Width / 2.0; Y = target.Bounds.Y + target.Bounds.Height / 2.0 }
+
+        let edge id =
+            InputFixture.objects board
+            |> List.find (fun target -> target.Id = id)
+            |> fun target -> { X = target.Bounds.X + target.Bounds.Width - 2.0; Y = target.Bounds.Y + 2.0 }
+
+        events.Clear()
+        do! inputAt surface width height "click" (centre "u1")
+        do! inputAt surface width height "click" (edge "t12")
+        let pressed = texts events |> List.filter (fun e -> e.Contains "activate")
+
+        check
+            (sprintf "input host %s: presses hit the objects at the stylesheet's size (a centre, and 2 units inside a corner)" name)
+            (pressed = [ "pointer:activate:u1"; "pointer:activate:t12" ])
+            (String.concat "," pressed)
+
+        do! inputAt surface width height "click" (centre "t00")
+        focusElement surface
+        do! BrowserConformance.key "ArrowRight"
+        do! BrowserConformance.key "ArrowLeft"
+        driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+        do! settle 3
+        driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+        do! settle 2
+        let! tones, detail = ringTones surface width height (InputFixture.objects board |> List.find (fun t -> t.Id = "t00")).Bounds
+
+        check
+            (sprintf "input host %s: the focus ring's two presented tones hold at the stylesheet's 2x size" name)
+            tones
+            detail
+
         (driver :> System.IDisposable).Dispose()
         InputRoute.unbind route
         do! settle 2
@@ -485,4 +604,25 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
             do! playGrid check container late route grid backend
 
         container.remove ()
+
+        addStylesheet "#stage-input-sheet canvas, #stage-input-sheet svg { width: 480px; height: 320px; }"
+        let sheet = document.createElement "div"
+        sheet.id <- "stage-input-sheet"
+        document.body.appendChild sheet |> ignore
+
+        let sheetRegistry =
+            match BrowserRenderers.surfaces sheet (BrowserRenderers.options "Input board" InputFixture.width InputFixture.height) late with
+            | (svg :: _) as all ->
+                all
+                |> List.fold
+                    (fun renderers surface -> SceneRenderers.withSurface surface renderers)
+                    (SceneRenderers.create InputFixture.view (SceneSurface.mountScene svg))
+                |> SceneRenderers.withInput InputFixture.interaction route
+                |> SceneRenderers.registry
+            | [] -> failwith "no surfaces"
+
+        for backend in RendererBackend.all do
+            do! playSheet check sheet late route sheetRegistry backend
+
+        sheet.remove ()
     }
