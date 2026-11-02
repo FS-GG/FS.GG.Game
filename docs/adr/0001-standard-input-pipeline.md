@@ -511,9 +511,18 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
 - **Cue layer on Babylon.** The cue nodes are drawn with unlit materials. With `disableLighting` a material shows only
   its emissive colour, so the cue colour is the emissive colour and the diffuse colour is black (#797 review B1). The
   frame's own Scene stays lit.
-- **Cue layer on Pixi.** An input-host canvas renders at the presented density: the device pixel ratio times the
-  canvas's CSS scale. It is re-evaluated at each draw, so both 2 CSS px bands reach their declared tones at 2x CSS scale
-  and at DPR 2. The canvas carries its scene size as its inline CSS size, so a larger backing store never grows it.
+- **Presented density on the canvases.** An input-host canvas is drawn at the device pixel ratio times its CSS scale,
+  so both 2 CSS px bands reach their declared tones at any presented size and on a high-DPI screen.
+  - **Pixi** sets its renderer resolution.
+  - **Babylon** sets a hardware scaling level of 1 / DPR and resizes its engine to the presented size. Its pick takes
+    the point at that level.
+  - **Both** re-evaluate at each draw and on a `ResizeObserver`.
+  - **Page sizing wins.** A page that sizes the canvas, inline or by a stylesheet rule, keeps its size. Only a canvas
+    the page does not size gets its scene size as an inline CSS size, as Pixi's `autoDensity` does, so a larger backing
+    store never grows it.
+  - **The smoke checks this** on all three backends from the presented pixels, using the driver's screenshot rather
+    than a backing-store read: the ring's two tones at 1x CSS, 2x CSS (an inline style after mount) and DPR 2. A board
+    sized by a page stylesheet must be presented at the stylesheet's size, hit-test at it, and show both tones.
 - **`withInteraction` keeps its own hosts** (Root's ruling). `SceneRenderers.withInteraction` and `withInput` replace
   each other on one registry. A game moves to the input host by declaring `withInput` and binding its route, to a
   pipeline or to `InputEvent.toSelectionRequest`. Migrating `withInteraction` onto the input host is a separate

@@ -73,7 +73,9 @@ module BabylonSurface =
     /// `(x, y)` (board units). `scene.pick` takes render pixels, and the engine sizes its backing store to the canvas's
     /// CSS size, so a canvas styled to another size than the board has another render size: the point is scaled by
     /// the live render size over the board size (FS.GG.Game#753).
-    [<Emit("(() => { const p = $0.pick($1 * $3.getRenderWidth() / $4, $2 * $3.getRenderHeight() / $5, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
+    // `Scene.pick` multiplies its point by 1 / the hardware scaling level, so the point is given in render pixels times
+    // that level (FS.GG.Game#788: an input-host mount scales for the device pixel ratio).
+    [<Emit("(() => { const k = $3.getHardwareScalingLevel(); const p = $0.pick($1 * $3.getRenderWidth() * k / $4, $2 * $3.getRenderHeight() * k / $5, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
     let private pickRegion
         (_scene: B.Scene)
         (_x: float)
@@ -89,6 +91,15 @@ module BabylonSurface =
     /// document order, like the SVG root and the Pixi canvas.
     [<Emit("$0.canvasTabIndex = 0")>]
     let private keepDocumentTabOrder (_engine: B.Engine) : unit = jsNative
+
+    /// FS.GG.Game#788: render an input-host canvas at the device pixel ratio (a hardware scaling level of 1 / DPR) and
+    /// at its presented CSS size, so the cue layer's 2 CSS px bands are drawn sharp; whether it changed anything.
+    [<Emit("(() => { const want = 1 / (window.devicePixelRatio || 1); const w = $0.getRenderWidth(); const h = $0.getRenderHeight(); if (Math.abs($0.getHardwareScalingLevel() - want) > 0.001) $0.setHardwareScalingLevel(want); $0.resize(); return $0.getRenderWidth() !== w || $0.getRenderHeight() !== h })()")>]
+    let private adaptDensity (_engine: B.Engine) : bool = jsNative
+
+    /// Call `action` whenever `element`'s presented size changes; returns the function that stops observing.
+    [<Emit("(() => { const o = new ResizeObserver(() => $1()); o.observe($0); return () => o.disconnect() })()")>]
+    let private observeSize (_element: HTMLElement) (_action: unit -> unit) : (unit -> unit) = jsNative
 
     let private channel (value: byte) = float value / 255.0
 
@@ -436,6 +447,17 @@ module BabylonSurface =
                         Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), false)
                     | Some(InputHost.CanvasHost.Input(spec, report)) ->
                         reregion first.Objects
+                        // FS.GG.Game#788: the device pixel ratio and the presented size, now and on every resize.
+                        let lastDrawn = ref (first.Scene, ([]: SceneNode list))
+                        adaptDensity engine |> ignore
+
+                        acquire (
+                            observeSize (unbox<HTMLElement> (box canvas)) (fun () ->
+                                let next, cues = lastDrawn.Value
+
+                                if adaptDensity engine then
+                                    reconcileWith next { Nodes = cues })
+                        )
 
                         let attached =
                             InputHost.attach
@@ -449,7 +471,10 @@ module BabylonSurface =
                                 (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
                                 spec
                                 report
-                                (fun next cues -> reconcileWith next { Nodes = cues })
+                                (fun next cues ->
+                                    lastDrawn.Value <- (next, cues)
+                                    adaptDensity engine |> ignore
+                                    reconcileWith next { Nodes = cues })
                                 first
 
                         Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), true)

@@ -37,6 +37,8 @@ const keys = { " ": "Space" };
 let emulation = null;
 // The CDP session that dispatches touch input (FS.GG.Game#788).
 let touch = null;
+// The CDP session that captures presented pixels (FS.GG.Game#788).
+let shots = null;
 await page.exposeFunction("__fsggInput", async (request) => {
   switch (request.kind) {
     case "click":
@@ -81,6 +83,15 @@ await page.exposeFunction("__fsggInput", async (request) => {
       for (let i = 0; i < request.count; i++) await page.keyboard.down(key);
       await page.keyboard.up(key);
       break;
+    }
+    case "shot": {
+      // FS.GG.Game#788: the PRESENTED pixels of a page region (what the compositor shows, at the device pixel ratio), as
+      // a base64 PNG the page decodes; unlike reading a canvas's backing store, it sees a scaled or blurred image.
+      // Through CDP, so the device-metrics override the "scale" request sets (DPR 2) is honoured: Playwright's own
+      // screenshot scale follows the context's device scale factor, not the override.
+      shots ??= emulation ?? (await page.context().newCDPSession(page));
+      const shot = await shots.send("Page.captureScreenshot", { format: "png", clip: { x: request.x, y: request.y, width: request.width, height: request.height, scale: 1 } });
+      return shot.data;
     }
     case "scale": {
       // The page's device pixel ratio (FS.GG.Game#753), so one page can run a scenario at DPR 1 and 2. CSS pixels, and so

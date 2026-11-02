@@ -114,9 +114,15 @@ module PixiSurface =
     [<Emit("$0.renderer.resize($1, $2, $3)")>]
     let private resizeAt (_app: P.Application) (_width: float) (_height: float) (_resolution: float) : unit = jsNative
 
-    /// Give an unstyled canvas its scene size as its inline CSS size, so a larger backing store never grows it.
-    [<Emit("(() => { if (!$0.style.width) { $0.style.width = $1 + 'px'; $0.style.height = $2 + 'px' } })()")>]
+    /// Give a canvas the page does not size its scene size as its inline CSS size, so a larger backing store never grows
+    /// it (what Pixi's `autoDensity` does). A canvas the page sizes (an inline style, or a stylesheet rule: its computed
+    /// width does not follow its width attribute) is left alone. Run at mount, before the canvas has a context.
+    [<Emit("(() => { const c = $0; if (c.style.width) return; const before = getComputedStyle(c).width; c.width = c.width + 1; const after = getComputedStyle(c).width; c.width = c.width - 1; if (before !== after) { c.style.width = $1 + 'px'; c.style.height = $2 + 'px' } })()")>]
     let private pinPresentedSize (_canvas: HTMLCanvasElement) (_width: float) (_height: float) : unit = jsNative
+
+    /// Call `action` whenever `element`'s presented size changes; returns the function that stops observing.
+    [<Emit("(() => { const o = new ResizeObserver(() => $1()); o.observe($0); return () => o.disconnect() })()")>]
+    let private observeSize (_element: HTMLElement) (_action: unit -> unit) : (unit -> unit) = jsNative
 
     [<Emit("(window.devicePixelRatio || 1)")>]
     let private devicePixelRatio () : float = jsNative
@@ -349,8 +355,10 @@ module PixiSurface =
 
                 // FS.GG.Game#788: an input-host mount renders at the presented density (the device pixel ratio times the
                 // CSS scale of the canvas), so the cue layer's 2 CSS px bands are drawn sharp, at their declared tones, on a
-                // canvas styled larger than its scene or on a high-DPI screen. Its CSS size is set inline at mount (see
-                // below), so a larger backing store never changes the size it is presented at.
+                // canvas styled larger than its scene (inline or by a stylesheet) or on a high-DPI screen. A canvas the page
+                // does not size gets its scene size inline at mount (see above), so a larger backing store never changes
+                // the size it is presented at; a canvas the page sizes keeps the page's size. A ResizeObserver redraws at
+                // the new density when the presented size changes.
                 let sharpen () =
                     if sharpens && ready.Value && not destroyed.Value then
                         let bounds = canvas.getBoundingClientRect ()
@@ -422,6 +430,15 @@ module PixiSurface =
                         0x000000
                         options.Antialias
                         "webgl"
+
+                if sharpens then
+                    let stop =
+                        observeSize (unbox<HTMLElement> (box canvas)) (fun () ->
+                            if ready.Value && not destroyed.Value && not disposed.Value then
+                                sharpen ()
+                                reconcile latest.Value)
+
+                    acquire stop
 
                 initialised.``then`` (
                     (fun () ->
