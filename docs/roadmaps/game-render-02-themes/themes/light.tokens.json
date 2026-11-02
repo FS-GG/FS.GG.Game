@@ -1,0 +1,57 @@
+{
+  "$extensions": { "gg.fs.theme": { "name": "light", "algorithms": [ "base", "light", "repair" ], "floor": 3.0 } },
+  "ground": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9691, 0.0103, 261.79 ], "alpha": 1, "hex": "#f1f5fc" } },
+  "glyph": {
+    "unit": {
+      "body": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.4274, 0.0122, 267.23 ], "alpha": 1, "hex": "#4c4f56" } }
+    },
+    "badge": {
+      "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 1.0000, 0.0000, 89.88 ], "alpha": 1, "hex": "#ffffff" } }
+    },
+    "icon": {
+      "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 1.0000, 0.0000, 89.88 ], "alpha": 1, "hex": "#ffffff" } }
+    },
+    "allegiance": {
+      "own": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.4917, 0.1272, 246.29 ], "alpha": 1, "hex": "#0065a4" } },
+      "ally": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3264, 0.0556, 196.60 ], "alpha": 1, "hex": "#003d3e" } },
+      "neutral": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6151, 0.1399, 144.98 ], "alpha": 1, "hex": "#469a4c" } },
+      "enemy": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3512, 0.1406, 24.80 ], "alpha": 1, "hex": "#73020f" } },
+      "unknown": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.4943, 0.1019, 97.14 ], "alpha": 1, "hex": "#726100" } }
+    },
+    "team": {
+      "0": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6290, 0.1411, 255.31 ], "alpha": 1, "hex": "#498adc" } },
+      "1": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3427, 0.0985, 44.72 ], "alpha": 1, "hex": "#602300" } },
+      "2": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6147, 0.1178, 173.18 ], "alpha": 1, "hex": "#009b7e" } },
+      "3": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3522, 0.1406, 329.79 ], "alpha": 1, "hex": "#60125d" } },
+      "4": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6168, 0.1395, 129.81 ], "alpha": 1, "hex": "#69952f" } },
+      "5": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3493, 0.1406, 294.66 ], "alpha": 1, "hex": "#42227a" } },
+      "6": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6298, 0.1289, 92.98 ], "alpha": 1, "hex": "#a48600" } },
+      "7": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3499, 0.1396, 20.08 ], "alpha": 1, "hex": "#720119" } }
+    },
+    "selection": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3334, 0.0681, 89.69 ], "alpha": 1, "hex": "#443400" } },
+    "marker": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6184, 0.1052, 201.39 ], "alpha": 1, "hex": "#0098a0" } },
+    "modifier": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3327, 0.0130, 267.15 ], "alpha": 1, "hex": "#33363d" } }
+  },
+  "cue": {
+    "focus": {
+      "outer": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3327, 0.0130, 267.15 ], "alpha": 1, "hex": "#33363d" } },
+      "inner": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 1.0000, 0.0000, 89.88 ], "alpha": 1, "hex": "#ffffff" } }
+    },
+    "hover": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.5524, 0.0940, 202.40 ], "alpha": 1, "hex": "#00828a" } }
+  },
+  "status": {
+    "keyline": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.4274, 0.0122, 267.23 ], "alpha": 1, "hex": "#4c4f56" } },
+    "track": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 1.0000, 0.0000, 89.88 ], "alpha": 1, "hex": "#ffffff" } },
+    "good": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6140, 0.1395, 150.04 ], "alpha": 1, "hex": "#379b55" } },
+    "warn": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.5012, 0.1092, 69.03 ], "alpha": 1, "hex": "#8b5600" } },
+    "bad": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.3512, 0.1406, 24.80 ], "alpha": 1, "hex": "#73020f" } }
+  },
+  "size": {
+    "cell": { "$type": "dimension", "$value": { "value": 32, "unit": "px" } },
+    "frame": { "$type": "dimension", "$value": { "value": 24, "unit": "px" } }
+  },
+  "stroke": {
+    "outline": { "$type": "dimension", "$value": { "value": 2, "unit": "px" } },
+    "gap": { "$type": "dimension", "$value": { "value": 2, "unit": "px" } }
+  }
+}

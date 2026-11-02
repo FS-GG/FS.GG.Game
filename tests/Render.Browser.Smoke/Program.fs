@@ -2912,6 +2912,175 @@ let runBadgesAndDenseBoard () : Async<unit> =
             container.remove ()
     }
 
+/// FS.GG.Game#795 (GAME-RENDER-02.8) proof: the theme machinery under Fable and on the three backends.
+/// - The five presets are derived again in the browser (Fable's JavaScript maths) and every alias's hex must equal the
+///   baked .NET derivation (glyph ADR D11: .NET and Node give the same bytes); the full 8-bit OKLCH round trip runs
+///   under Node's maths too.
+/// - The encoding grammar refuses the worked example's role icon with the same typed error as on .NET, and DTCG export
+///   and import round-trips every preset.
+/// - The worked example (a symbology generated from the arena-like `ArenaExample.Player` type) is drawn in every preset
+///   on SVG, Pixi and Babylon, and every pixel ScenePixels decides must match; a theme-swap control must not.
+/// - A runtime switch through the theme reader, classic -> every other preset -> classic, on one mount with the same
+///   game state, shows each preset's pixels and then classic's again.
+/// - In monochrome, two teams that share an allegiance, and two identities, still differ in drawn decided pixels.
+let runThemeProof () : Async<unit> =
+    async {
+        let derivedAt = System.DateTime.Now
+        let presets = Experimental.Themes.presets
+        let themes = presets |> List.map Experimental.Themes.deriveOrFail
+        info "themes (#795) derivation time" (sprintf "%d ms for %d presets" (int (System.DateTime.Now - derivedAt).TotalMilliseconds) themes.Length)
+        let themeNamed name = themes |> List.find (fun t -> t.Name = name)
+
+        // .NET and Fable derive the same bytes.
+        let differences =
+            [
+                for t in themes do
+                    let baked = Experimental.PresetData.hexes |> List.tryFind (fun (n, _) -> n = t.Name) |> Option.map snd |> Option.defaultValue []
+                    for (alias, got), (_, want) in List.zip (Experimental.Themes.hexes t) baked do
+                        if got <> want then yield sprintf "%s %s: Fable %s, .NET %s" t.Name alias got want
+            ]
+        let aliasCount = themes |> List.sumBy (fun t -> (Experimental.Themes.hexes t).Length)
+        check
+            (sprintf "themes (#795): Fable derives every preset alias's hex exactly as .NET baked it (%d presets, %d aliases)" themes.Length aliasCount)
+            (differences.IsEmpty && aliasCount = 140)
+            (String.concat "; " (List.truncate 4 differences))
+
+        // Every third value per channel (86^3 = 636,056 colours) under the browser's maths; the full 16,777,216 run
+        // under .NET in ExperimentalThemesTests, and would take most of the smoke's time budget here.
+        let started = System.DateTime.Now
+        let mutable failuresHalfUp = 0
+        let mutable sampled = 0
+        for r in 0..3..255 do
+            for g in 0..3..255 do
+                for b in 0..3..255 do
+                    sampled <- sampled + 1
+                    let c = Experimental.Colour.rgb r g b
+                    let back = Experimental.Colour.ofLinear (Experimental.Colour.linearOfOklab (Experimental.Colour.oklabOfOklch (Experimental.Colour.oklchOf c)))
+                    if back.Red <> c.Red || back.Green <> c.Green || back.Blue <> c.Blue then failuresHalfUp <- failuresHalfUp + 1
+        info "themes (#795) round-trip time" (sprintf "%d ms" (int (System.DateTime.Now - started).TotalMilliseconds))
+        check
+            (sprintf "themes (#795): under the browser's maths %d sampled 8-bit colours (every third value per channel) round-trip through OKLCH with half-up quantisation" sampled)
+            (failuresHalfUp = 0 && sampled = 636056)
+            (sprintf "%d failures" failuresHalfUp)
+
+        let refused =
+            match Experimental.Symbology.build themes Experimental.ArenaExample.playerDraftWithRoleIcon with
+            | Error [ Experimental.Symbology.IconSlotTakenByBadge("role", "team", 24.0, Experimental.Glyphs.Enemy) ] -> true
+            | _ -> false
+        let accepted =
+            match Experimental.Symbology.build themes Experimental.ArenaExample.playerDraft with
+            | Ok s -> s.Notes.Length = 2
+            | Error _ -> false
+        check "themes (#795): under Fable the grammar accepts the worked example and refuses its role icon with IconSlotTakenByBadge" (refused && accepted) (sprintf "refused %b, accepted %b" refused accepted)
+
+        let roundTrips =
+            themes
+            |> List.filter (fun t ->
+                match Experimental.Themes.ofDtcg t (Experimental.Themes.toDtcg t) with
+                | Ok back -> Experimental.Themes.hexes back <> Experimental.Themes.hexes t
+                | Error _ -> true)
+            |> List.map (fun t -> t.Name)
+        check "themes (#795): under Fable DTCG export then import gives equal resolved hex for every preset" roundTrips.IsEmpty (String.concat ", " roundTrips)
+
+        let view = Experimental.ArenaExample.view themes
+        let state = Experimental.ArenaExample.sample
+        let width, height = Experimental.ArenaExample.width, Experimental.ArenaExample.height
+        let rec colours (nodes: SceneNode list) =
+            nodes |> List.collect (function SceneNode.Rectangle(_, c) -> [ c ] | _ -> [])
+        let cssMisses =
+            [
+                for t in themes do
+                    let css = Experimental.Themes.cssVariables t
+                    for c in colours (view (fun () -> t) state).Nodes |> List.distinct do
+                        if not (css.Contains(Experimental.Colour.hex c)) then yield sprintf "%s %s" t.Name (Experimental.Colour.hex c)
+            ]
+        check "themes (#795): every colour the worked example draws is one of the preset's CSS variables" cssMisses.IsEmpty (String.concat ", " (List.truncate 4 cssMisses))
+
+        let mountOn backend (container: HTMLElement) name width height scene =
+            match backend with
+            | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+            | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+            | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+            let switch = Experimental.Themes.switchOf (themeNamed "classic")
+            let present () = view switch.Read state
+            let container = document.createElement "div"
+            container.id <- sprintf "theme-proof-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" width height)
+            document.body.appendChild container |> ignore
+            let name = sprintf "themes (#795), %s" id
+
+            match mountOn backend container name width height (present ()) with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                // Each preset, switched through the reader, on one mount.
+                for t in themes do
+                    switch.Select t
+                    let scene = present ()
+                    let wanted = ScenePixels.expectations width height scene
+                    let! wrong = drawnMismatches container width height backend (fun () -> mount.Present(present ())) wanted 600
+                    check
+                        (sprintf "%s: the worked example in %s draws every pixel ScenePixels decides (%d pixels)" name t.Name wanted.Length)
+                        (wrong.IsEmpty && wanted.Length > 600)
+                        (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+                    let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "themes-%s-%s.png" t.Name id)
+                    info (sprintf "theme screenshot %s %s" t.Name id) (if wrote then sprintf "themes-%s-%s.png" t.Name id else "not requested")
+
+                // Swap control: classic shown, light's expectations read.
+                switch.Select(themeNamed "classic")
+                let! control =
+                    drawnMismatches container width height backend (fun () -> mount.Present(present ())) (ScenePixels.expectations width height (view (fun () -> themeNamed "light") state)) 0
+                check (sprintf "%s: control, classic drawn does not pass light's decided pixels" name) (control.Length > 20) (sprintf "only %d differ" control.Length)
+
+                // A -> B -> A for every B.
+                let misses = ResizeArray<string>()
+                let classicWanted = ScenePixels.expectations width height (view (fun () -> themeNamed "classic") state)
+                for t in themes |> List.tail do
+                    switch.Select t
+                    let! shownB = drawnMismatches container width height backend (fun () -> mount.Present(present ())) (ScenePixels.expectations width height (present ())) 600
+                    if not shownB.IsEmpty then misses.Add(sprintf "%s not shown" t.Name)
+                    switch.Select(themeNamed "classic")
+                    let! back = drawnMismatches container width height backend (fun () -> mount.Present(present ())) classicWanted 600
+                    if not back.IsEmpty then misses.Add(sprintf "classic -> %s -> classic differs at %d pixels" t.Name back.Length)
+                check
+                    (sprintf "%s: classic -> each preset -> classic through the theme reader, with the same game state, shows each and then classic's pixels again" name)
+                    (misses.Count = 0 && obj.ReferenceEquals(state, Experimental.ArenaExample.sample))
+                    (String.concat "; " misses)
+                mount.Dispose()
+
+            container.remove ()
+
+            info (sprintf "themes (#795) %s time" id) (sprintf "%d ms since derivation" (int (System.DateTime.Now - derivedAt).TotalMilliseconds))
+
+            // Monochrome redundancy: team badges and identity frames, drawn alone.
+            let mono = themeNamed "monochrome"
+            let players =
+                match Experimental.Symbology.build themes Experimental.ArenaExample.playerDraft with
+                | Ok s -> s
+                | Error _ -> failwith "worked example refused"
+            let single (p: Experimental.ArenaExample.Player) : Scene =
+                Experimental.Symbology.scene mono 48.0 64.0 [ Experimental.Symbology.draw mono 4 (Experimental.Symbology.spec players { X = 24.0; Y = 30.0 } p) false ]
+            let a = state.Players.[1]
+            let others = [ { a with Team = 2 }; { a with Team = 3 }; { a with Allegiance = Experimental.Glyphs.Own; Team = 0 } ]
+            let monoMisses = ResizeArray<string>()
+            let host = document.createElement "div"
+            document.body.appendChild host |> ignore
+            match mountOn backend host (name + " monochrome") 48.0 64.0 (single a) with
+            | Error reason -> monoMisses.Add reason
+            | Ok mount ->
+                for b in others do
+                    let! other = drawnMismatches host 48.0 64.0 backend (fun () -> mount.Present(single a)) (ScenePixels.expectations 48.0 64.0 (single b)) 0
+                    if other.IsEmpty then monoMisses.Add(sprintf "team %d %A passes team %d %A" a.Team a.Allegiance b.Team b.Allegiance)
+                mount.Dispose()
+            host.remove ()
+            check
+                (sprintf "%s: in monochrome, a team-2 enemy differs in drawn decided pixels from teams 3 and 4 (badges) and from the own frame" name)
+                (monoMisses.Count = 0)
+                (String.concat "; " monoMisses)
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -2946,6 +3115,7 @@ async {
         do! runGlyphProof ()
         do! runIdentityFrames ()
         do! runBadgesAndDenseBoard ()
+        do! runThemeProof ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1

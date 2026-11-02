@@ -1,0 +1,154 @@
+[data-theme="classic"] {
+  --ground: #222831;
+  --glyph-unit-body: #b4b9c0;
+  --glyph-badge-ink: #0a0a0c;
+  --glyph-icon-ink: #0a0a0c;
+  --glyph-allegiance-own: #36a8eb;
+  --glyph-allegiance-ally: #008383;
+  --glyph-allegiance-neutral: #9cf29f;
+  --glyph-allegiance-enemy: #be534e;
+  --glyph-allegiance-unknown: #b3a019;
+  --glyph-team-0: #3476c5;
+  --glyph-team-1: #ffa35e;
+  --glyph-team-2: #00856a;
+  --glyph-team-3: #f09ce9;
+  --glyph-team-4: #558113;
+  --glyph-team-5: #c5abff;
+  --glyph-team-6: #8d7200;
+  --glyph-team-7: #ff9e9e;
+  --glyph-selection: #fbdd67;
+  --glyph-marker: #00b1b9;
+  --glyph-modifier: #d9dfe6;
+  --cue-focus-outer: #d9dfe6;
+  --cue-focus-inner: #0a0a0c;
+  --cue-hover: #00cdd6;
+  --status-keyline: #b4b9c0;
+  --status-track: #0a0a0c;
+  --status-good: #50b36b;
+  --status-warn: #925a00;
+  --status-bad: #ffd5cf;
+}
+
+[data-theme="light"] {
+  --ground: #f1f5fc;
+  --glyph-unit-body: #4c4f56;
+  --glyph-badge-ink: #ffffff;
+  --glyph-icon-ink: #ffffff;
+  --glyph-allegiance-own: #0065a4;
+  --glyph-allegiance-ally: #003d3e;
+  --glyph-allegiance-neutral: #469a4c;
+  --glyph-allegiance-enemy: #73020f;
+  --glyph-allegiance-unknown: #726100;
+  --glyph-team-0: #498adc;
+  --glyph-team-1: #602300;
+  --glyph-team-2: #009b7e;
+  --glyph-team-3: #60125d;
+  --glyph-team-4: #69952f;
+  --glyph-team-5: #42227a;
+  --glyph-team-6: #a48600;
+  --glyph-team-7: #720119;
+  --glyph-selection: #443400;
+  --glyph-marker: #0098a0;
+  --glyph-modifier: #33363d;
+  --cue-focus-outer: #33363d;
+  --cue-focus-inner: #ffffff;
+  --cue-hover: #00828a;
+  --status-keyline: #4c4f56;
+  --status-track: #ffffff;
+  --status-good: #379b55;
+  --status-warn: #8b5600;
+  --status-bad: #73020f;
+}
+
+[data-theme="highContrast"] {
+  --ground: #000000;
+  --glyph-unit-body: #d4c9cc;
+  --glyph-badge-ink: #000000;
+  --glyph-icon-ink: #000000;
+  --glyph-allegiance-own: #3daef1;
+  --glyph-allegiance-ally: #0ee2e3;
+  --glyph-allegiance-neutral: #55a95a;
+  --glyph-allegiance-enemy: #ff9d94;
+  --glyph-allegiance-unknown: #e0cd55;
+  --glyph-team-0: #589aec;
+  --glyph-team-1: #ffdbba;
+  --glyph-team-2: #00ab8c;
+  --glyph-team-3: #ffd3ff;
+  --glyph-team-4: #77a540;
+  --glyph-team-5: #e6dcff;
+  --glyph-team-6: #b39500;
+  --glyph-team-7: #ffd8d6;
+  --glyph-selection: #e17599;
+  --glyph-marker: #00a8b0;
+  --glyph-modifier: #e9dee1;
+  --cue-focus-outer: #e9dee1;
+  --cue-focus-inner: #000000;
+  --cue-hover: #f183a7;
+  --status-keyline: #d4c9cc;
+  --status-track: #000000;
+  --status-good: #6acc82;
+  --status-warn: #cb8b13;
+  --status-bad: #ffd8d2;
+}
+
+[data-theme="colourBlindSafe"] {
+  --ground: #222831;
+  --glyph-unit-body: #b4b9c0;
+  --glyph-badge-ink: #0a0a0c;
+  --glyph-icon-ink: #0a0a0c;
+  --glyph-allegiance-own: #28a9e8;
+  --glyph-allegiance-ally: #00865a;
+  --glyph-allegiance-neutral: #aca21f;
+  --glyph-allegiance-enemy: #ffd6ba;
+  --glyph-allegiance-unknown: #b3548b;
+  --glyph-team-0: #007abf;
+  --glyph-team-1: #ecad42;
+  --glyph-team-2: #00865a;
+  --glyph-team-3: #fe98d1;
+  --glyph-team-4: #007cb8;
+  --glyph-team-5: #ffa26c;
+  --glyph-team-6: #807700;
+  --glyph-team-7: #60c2ff;
+  --glyph-selection: #eae26b;
+  --glyph-marker: #aae7ff;
+  --glyph-modifier: #d9dfe6;
+  --cue-focus-outer: #d9dfe6;
+  --cue-focus-inner: #0a0a0c;
+  --cue-hover: #ffd2e3;
+  --status-keyline: #b4b9c0;
+  --status-track: #0a0a0c;
+  --status-good: #6ff6c2;
+  --status-warn: #905b00;
+  --status-bad: #e98550;
+}
+
+[data-theme="monochrome"] {
+  --ground: #222831;
+  --glyph-unit-body: #b9b9b9;
+  --glyph-badge-ink: #0a0a0c;
+  --glyph-icon-ink: #0a0a0c;
+  --glyph-allegiance-own: #b9b9b9;
+  --glyph-allegiance-ally: #b9b9b9;
+  --glyph-allegiance-neutral: #b9b9b9;
+  --glyph-allegiance-enemy: #b9b9b9;
+  --glyph-allegiance-unknown: #b9b9b9;
+  --glyph-team-0: #b9b9b9;
+  --glyph-team-1: #b9b9b9;
+  --glyph-team-2: #b9b9b9;
+  --glyph-team-3: #b9b9b9;
+  --glyph-team-4: #b9b9b9;
+  --glyph-team-5: #b9b9b9;
+  --glyph-team-6: #b9b9b9;
+  --glyph-team-7: #b9b9b9;
+  --glyph-selection: #dedede;
+  --glyph-marker: #b9b9b9;
+  --glyph-modifier: #dedede;
+  --cue-focus-outer: #dedede;
+  --cue-focus-inner: #0a0a0c;
+  --cue-hover: #9f9f9f;
+  --status-keyline: #b9b9b9;
+  --status-track: #0a0a0c;
+  --status-good: #dedede;
+  --status-warn: #dedede;
+  --status-bad: #dedede;
+}

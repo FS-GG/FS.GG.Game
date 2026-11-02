@@ -9,6 +9,10 @@
     <Compile Include="State.fs" />
     <Compile Include="Renderers.fs" />
     <Compile Include="ExperimentalGlyphs.fs" />
+    <Compile Include="ExperimentalColour.fs" />
+    <Compile Include="ExperimentalThemes.fs" />
+    <Compile Include="ExperimentalSymbology.fs" />
+    <Compile Include="ExperimentalPresetData.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

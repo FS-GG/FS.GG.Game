@@ -1,0 +1,57 @@
+{
+  "$extensions": { "gg.fs.theme": { "name": "highContrast", "algorithms": [ "base", "dark", "highContrast", "repair" ], "floor": 7.0 } },
+  "ground": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.0000, 0.0000, 0.00 ], "alpha": 1, "hex": "#000000" } },
+  "glyph": {
+    "unit": {
+      "body": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8457, 0.0129, 358.83 ], "alpha": 1, "hex": "#d4c9cc" } }
+    },
+    "badge": {
+      "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.0000, 0.0000, 0.00 ], "alpha": 1, "hex": "#000000" } }
+    },
+    "icon": {
+      "ink": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.0000, 0.0000, 0.00 ], "alpha": 1, "hex": "#000000" } }
+    },
+    "allegiance": {
+      "own": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7170, 0.1393, 239.44 ], "alpha": 1, "hex": "#3daef1" } },
+      "ally": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8273, 0.1399, 195.36 ], "alpha": 1, "hex": "#0ee2e3" } },
+      "neutral": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6627, 0.1402, 144.96 ], "alpha": 1, "hex": "#55a95a" } },
+      "enemy": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7938, 0.1186, 25.71 ], "alpha": 1, "hex": "#ff9d94" } },
+      "unknown": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8417, 0.1403, 100.33 ], "alpha": 1, "hex": "#e0cd55" } }
+    },
+    "team": {
+      "0": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6791, 0.1396, 254.83 ], "alpha": 1, "hex": "#589aec" } },
+      "1": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9134, 0.0592, 64.50 ], "alpha": 1, "hex": "#ffdbba" } },
+      "2": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6611, 0.1262, 173.62 ], "alpha": 1, "hex": "#00ab8c" } },
+      "3": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9176, 0.0753, 326.17 ], "alpha": 1, "hex": "#ffd3ff" } },
+      "4": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6673, 0.1404, 130.12 ], "alpha": 1, "hex": "#77a540" } },
+      "5": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9132, 0.0484, 298.50 ], "alpha": 1, "hex": "#e6dcff" } },
+      "6": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6772, 0.1389, 94.54 ], "alpha": 1, "hex": "#b39500" } },
+      "7": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9145, 0.0438, 21.46 ], "alpha": 1, "hex": "#ffd8d6" } }
+    },
+    "selection": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6950, 0.1390, 0.16 ], "alpha": 1, "hex": "#e17599" } },
+    "marker": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6654, 0.1131, 200.81 ], "alpha": 1, "hex": "#00a8b0" } },
+    "modifier": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9102, 0.0126, 358.79 ], "alpha": 1, "hex": "#e9dee1" } }
+  },
+  "cue": {
+    "focus": {
+      "outer": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9102, 0.0126, 358.79 ], "alpha": 1, "hex": "#e9dee1" } },
+      "inner": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.0000, 0.0000, 0.00 ], "alpha": 1, "hex": "#000000" } }
+    },
+    "hover": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7406, 0.1394, 0.19 ], "alpha": 1, "hex": "#f183a7" } }
+  },
+  "status": {
+    "keyline": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.8457, 0.0129, 358.83 ], "alpha": 1, "hex": "#d4c9cc" } },
+    "track": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.0000, 0.0000, 0.00 ], "alpha": 1, "hex": "#000000" } },
+    "good": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.7667, 0.1409, 149.94 ], "alpha": 1, "hex": "#6acc82" } },
+    "warn": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.6841, 0.1400, 75.20 ], "alpha": 1, "hex": "#cb8b13" } },
+    "bad": { "$type": "color", "$value": { "colorSpace": "oklch", "components": [ 0.9135, 0.0446, 28.26 ], "alpha": 1, "hex": "#ffd8d2" } }
+  },
+  "size": {
+    "cell": { "$type": "dimension", "$value": { "value": 32, "unit": "px" } },
+    "frame": { "$type": "dimension", "$value": { "value": 24, "unit": "px" } }
+  },
+  "stroke": {
+    "outline": { "$type": "dimension", "$value": { "value": 3, "unit": "px" } },
+    "gap": { "$type": "dimension", "$value": { "value": 3, "unit": "px" } }
+  }
+}
