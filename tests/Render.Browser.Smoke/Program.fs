@@ -17,6 +17,7 @@ module FS.GG.Game.Render.Browser.Smoke.Program
 open Browser.Dom
 open Browser.Types
 open Fable.Core
+open Fable.Core.JsInterop
 open FS.GG.Game.Render
 open FS.GG.Game.Render.Browser
 open FS.GG.UI.Scene
@@ -2598,6 +2599,319 @@ let runOverhang () : Async<unit> =
             container.remove ()
     }
 
+/// The page's request for a screenshot of `selector` named `name`. The driver writes it when RENDER_SMOKE_SCREENSHOTS
+/// names a directory and answers whether it did; without the variable it writes nothing and answers false.
+let screenshot (selector: string) (name: string) : Async<bool> =
+    async {
+        let pending: JS.Promise<bool> =
+            emitJsExpr
+                (createObj [ "kind" ==> "screenshot"; "selector" ==> selector; "name" ==> name ])
+                "(window.__fsggInput ? window.__fsggInput($0) : Promise.resolve(false))"
+
+        return! Async.AwaitPromise pending
+    }
+
+/// FS.GG.Game#789 (GAME-RENDER-02.4) proof: six experimental glyphs (unit, structure, waypoint, selection, focus,
+/// status) in two themes, lowered to the portable primitive set, drawn on each backend at the pixels the kit's
+/// `ScenePixels` model decides. A causal control reads the same pixels against the board with its themes swapped, which
+/// must not match, so a backend that drew the theme tokens wrong (or ignored the glyphs) would be caught. Named points
+/// (one per glyph part) are reported as INFO lines for the PR's pixel table; they are informational, not asserted (the
+/// asserted pixels are the ones ScenePixels decides).
+let runGlyphProof () : Async<unit> =
+    async {
+        let width = Experimental.Glyphs.proofWidth
+        let height = Experimental.Glyphs.proofHeight
+        let standard = Experimental.Glyphs.Theme.standard
+        let safe = Experimental.Glyphs.Theme.colourBlindSafe
+        let scene = Experimental.Glyphs.proofScene standard safe
+        let swapped = Experimental.Glyphs.proofScene safe standard
+        let wanted = ScenePixels.expectations width height scene
+
+        let named =
+            [
+                for label, top, theme in [ "standard", 0.0, standard; "colour-blind-safe", 64.0, safe ] do
+                    yield sprintf "%s unit body" label, { X = 32.5; Y = top + 32.5 }, theme.Body
+                    yield sprintf "%s unit team-0 ring" label, { X = 42.5; Y = top + 32.5 }, Experimental.Glyphs.Theme.team theme 0
+                    yield sprintf "%s selection bracket" label, { X = 19.5; Y = top + 16.5 }, theme.Selection
+                    yield sprintf "%s status 25%% fill" label, { X = 22.5; Y = top + 9.5 }, theme.Bad
+                    yield sprintf "%s status track" label, { X = 42.5; Y = top + 9.5 }, theme.Track
+                    yield sprintf "%s status keyline" label, { X = 42.5; Y = top + 6.5 }, theme.Body
+                    yield sprintf "%s structure body" label, { X = 96.5; Y = top + 30.5 }, theme.Body
+                    yield sprintf "%s structure team-1 band" label, { X = 96.5; Y = top + 42.5 }, Experimental.Glyphs.Theme.team theme 1
+                    yield sprintf "%s focus outline" label, { X = 96.5; Y = top + 16.5 }, theme.Focus
+                    yield sprintf "%s unit team-2 ring" label, { X = 170.5; Y = top + 32.5 }, Experimental.Glyphs.Theme.team theme 2
+                    yield sprintf "%s status 100%% fill" label, { X = 160.5; Y = top + 9.5 }, theme.Good
+                    yield sprintf "%s waypoint" label, { X = 219.5; Y = top + 32.5 }, theme.Marker
+                    yield sprintf "%s ground" label, { X = 128.5; Y = top + 60.5 }, theme.Ground
+            ]
+
+        info "glyph proof" (sprintf "%gx%g board, %d nodes, %d pixels decided by ScenePixels" width height scene.Nodes.Length wanted.Length)
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+            let name = sprintf "glyph proof (#789), %s" id
+            let container = document.createElement "div"
+            container.id <- sprintf "glyph-proof-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" width height)
+            document.body.appendChild container |> ignore
+
+            let mounted =
+                match backend with
+                | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+                | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+                | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+            match mounted with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container width height backend (fun () -> mount.Present scene) wanted 600
+
+                check
+                    (sprintf "%s: every pixel ScenePixels decides for the six glyphs in both themes is drawn (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 150)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+
+                let! control =
+                    drawnMismatches container width height backend (fun () -> mount.Present scene) (ScenePixels.expectations width height swapped) 0
+
+                check
+                    (sprintf "%s: control, the same pixels read against the board with its themes swapped do not match" name)
+                    (control.Length > 20)
+                    (sprintf "only %d differ" control.Length)
+
+                let! shown = BrowserConformance.drawnPixels container width height backend (named |> List.map (fun (_, p, _) -> p))
+
+                for (label, point, colour), got in List.zip named shown do
+                    let want, tolerance =
+                        match backend with
+                        | RendererBackend.Babylon -> litOf colour, 4
+                        | _ -> rgbOf colour, 2
+
+                    let verdict =
+                        match got with
+                        | Some(r, g, b) when near want [| r; g; b |] tolerance -> "ok"
+                        | _ -> "DIFF"
+
+                    info
+                        (sprintf "glyph pixel %s %s" id label)
+                        (sprintf "(%g, %g) scene %A want %A got %A %s" point.X point.Y (rgbOf colour) want got verdict)
+
+                let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "glyphs-%s.png" id)
+                info (sprintf "glyph screenshot %s" id) (if wrote then sprintf "glyphs-%s.png" id else "not requested")
+                mount.Dispose()
+
+            container.remove ()
+    }
+
+/// FS.GG.Game#789, review R3 of #794: the five identity frames (ADR D1), monochrome so only shape counts, at the default
+/// frame size (24 units). On each backend: a strip of all five draws every pixel ScenePixels decides; and each frame, drawn
+/// alone, shows its own decided pixels while every other frame's decided pixels differ from it (20 ordered pairs), so a
+/// backend that drew one identity's frame for another's would be caught. The pairs use the prototype of ADR D6's corner
+/// and quarter-edge samples (`Glyphs.identitySamples`): today's middle-of-edge samples cannot see Ally's quarter-point
+/// holes (review N1).
+let runIdentityFrames () : Async<unit> =
+    async {
+        let ink = fixtureColor 225uy 228uy 232uy
+        let ground = fixtureColor 34uy 40uy 49uy
+        let size = 24.0
+        let identities = Experimental.Glyphs.identities
+        let stripWidth = 48.0 * float identities.Length
+        let stripHeight = 48.0
+
+        let strip: Scene =
+            { Nodes =
+                SceneNode.Rectangle((0.0, 0.0, stripWidth, stripHeight), ground)
+                :: (identities
+                    |> List.mapi (fun i identity ->
+                        Experimental.Glyphs.identityFrame identity { X = 24.0 + 48.0 * float i; Y = 24.0 } size ink)
+                    |> List.concat) }
+
+        let single identity : Scene =
+            { Nodes =
+                SceneNode.Rectangle((0.0, 0.0, 48.0, 48.0), ground)
+                :: Experimental.Glyphs.identityFrame identity { X = 24.0; Y = 24.0 } size ink }
+
+        // The same frames with the team index badge drawn inside them (review M1 of #794): digit 8, the most cells.
+        let badged identity : Scene =
+            { Nodes =
+                SceneNode.Rectangle((0.0, 0.0, 48.0, 48.0), ground)
+                :: fst (Experimental.Glyphs.identityFrameWithBadge identity { X = 24.0; Y = 24.0 } size ink (fixtureColor 10uy 10uy 10uy) (Some 7)) }
+
+        let mountOn backend (container: HTMLElement) name width height scene =
+            match backend with
+            | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+            | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+            | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+            let name = sprintf "identity frames (#789), %s" id
+            let container = document.createElement "div"
+            container.id <- sprintf "identity-frames-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" stripWidth stripHeight)
+            document.body.appendChild container |> ignore
+            let wanted = ScenePixels.expectations stripWidth stripHeight strip
+
+            match mountOn backend container name stripWidth stripHeight strip with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container stripWidth stripHeight backend (fun () -> mount.Present strip) wanted 600
+
+                check
+                    (sprintf "%s: the strip of five frames draws every pixel ScenePixels decides (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 40)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+
+                let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "frames-%s.png" id)
+                info (sprintf "identity frames screenshot %s" id) (if wrote then sprintf "frames-%s.png" id else "not requested")
+                mount.Dispose()
+
+            container.remove ()
+
+            for label, sceneOf in [ "", single; " with badges inside", badged ] do
+                let misses = ResizeArray<string>()
+                let pairs = ref 0
+
+                for a in identities do
+                    let host = document.createElement "div"
+                    document.body.appendChild host |> ignore
+
+                    match mountOn backend host (sprintf "%s %A" name a) 48.0 48.0 (sceneOf a) with
+                    | Error reason -> misses.Add(sprintf "%A does not mount: %s" a reason)
+                    | Ok mount ->
+                        let! own = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (sceneOf a)) 600
+
+                        if not own.IsEmpty then
+                            misses.Add(sprintf "%A does not show its own pixels: %s" a (own |> List.truncate 2 |> String.concat "; "))
+
+                        for b in identities |> List.filter ((<>) a) do
+                            pairs.Value <- pairs.Value + 1
+                            let! other = drawnMismatches host 48.0 48.0 backend (fun () -> mount.Present(sceneOf a)) (Experimental.Glyphs.identitySamples 48.0 48.0 (sceneOf b)) 0
+
+                            if other.IsEmpty then
+                                misses.Add(sprintf "%A drawn passes %A's decided pixels" a b)
+                            else
+                                info (sprintf "identity pair%s %s %A drawn, %A read" label id a b) (sprintf "%d differing decided pixels" other.Length)
+
+                        mount.Dispose()
+
+                    host.remove ()
+
+                check
+                    (sprintf "%s%s: each frame shows its own decided pixels and differs from every other frame's (%d ordered pairs)" name label pairs.Value)
+                    (misses.Count = 0 && pairs.Value = 20)
+                    (String.concat "; " (Seq.truncate 4 misses))
+    }
+
+/// FS.GG.Game#789, review N2 of #794: the nine index badges (ADR D1) at the minimum unit (2, so 10 units tall), and D9's
+/// dense board. On each backend: a strip of the nine digits draws every decided pixel; each digit drawn alone differs
+/// from every other digit's D6 samples (72 ordered pairs); the dense board, with amplifiers drawn before bodies, draws
+/// every decided pixel; and the control, the same board with bodies drawn first, does not match it.
+let runBadgesAndDenseBoard () : Async<unit> =
+    async {
+        let ink = fixtureColor 225uy 228uy 232uy
+        let ground = fixtureColor 34uy 40uy 49uy
+        let digits = [ 1..9 ]
+        let stripWidth = 16.0 * float digits.Length
+        let strip: Scene =
+            { Nodes =
+                SceneNode.Rectangle((0.0, 0.0, stripWidth, 16.0), ground)
+                :: (digits |> List.collect (fun d -> Experimental.Glyphs.badge d { X = 16.0 * float (d - 1) + 5.0; Y = 3.0 } 2.0 ink)) }
+        let single d : Scene =
+            { Nodes = SceneNode.Rectangle((0.0, 0.0, 16.0, 16.0), ground) :: Experimental.Glyphs.badge d { X = 5.0; Y = 3.0 } 2.0 ink }
+        let theme = Experimental.Glyphs.Theme.standard
+        let board = Experimental.Glyphs.denseBoard theme 5 3 true
+        let control = Experimental.Glyphs.denseBoard theme 5 3 false
+        let boardWidth, boardHeight = 160.0, 104.0
+
+        let mountOn backend (container: HTMLElement) name width height scene =
+            match backend with
+            | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
+            | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
+            | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+        for backend in RendererBackend.all do
+            let id = RendererBackend.id backend
+
+            // The badge strip.
+            let name = sprintf "index badges (#789), %s" id
+            let container = document.createElement "div"
+            container.id <- sprintf "badges-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: 16px; line-height: 0; overflow: hidden" stripWidth)
+            document.body.appendChild container |> ignore
+            let wanted = Experimental.Glyphs.identitySamples stripWidth 16.0 strip
+
+            match mountOn backend container name stripWidth 16.0 strip with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container stripWidth 16.0 backend (fun () -> mount.Present strip) wanted 600
+                check
+                    (sprintf "%s: the strip of nine digits draws every decided pixel (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 100)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+                let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "badges-%s.png" id)
+                info (sprintf "badges screenshot %s" id) (if wrote then sprintf "badges-%s.png" id else "not requested")
+                mount.Dispose()
+
+            container.remove ()
+
+            // Each digit against the other eight.
+            let misses = ResizeArray<string>()
+            let pairs = ref 0
+
+            for a in digits do
+                let host = document.createElement "div"
+                document.body.appendChild host |> ignore
+
+                match mountOn backend host (sprintf "%s %d" name a) 16.0 16.0 (single a) with
+                | Error reason -> misses.Add(sprintf "%d does not mount: %s" a reason)
+                | Ok mount ->
+                    let! own = drawnMismatches host 16.0 16.0 backend (fun () -> mount.Present(single a)) (Experimental.Glyphs.identitySamples 16.0 16.0 (single a)) 600
+                    if not own.IsEmpty then misses.Add(sprintf "%d does not show its own pixels" a)
+
+                    for b in digits |> List.filter ((<>) a) do
+                        pairs.Value <- pairs.Value + 1
+                        let! other = drawnMismatches host 16.0 16.0 backend (fun () -> mount.Present(single a)) (Experimental.Glyphs.identitySamples 16.0 16.0 (single b)) 0
+                        if other.IsEmpty then misses.Add(sprintf "%d drawn passes %d's samples" a b)
+
+                    mount.Dispose()
+
+                host.remove ()
+
+            check
+                (sprintf "%s: each digit shows its own samples and differs from every other digit's (%d ordered pairs)" name pairs.Value)
+                (misses.Count = 0 && pairs.Value = 72)
+                (String.concat "; " (Seq.truncate 4 misses))
+
+            // The dense board.
+            let name = sprintf "dense board (#789), %s" id
+            let container = document.createElement "div"
+            container.id <- sprintf "dense-board-%s" id
+            container.setAttribute ("style", sprintf "width: %gpx; height: %gpx; line-height: 0; overflow: hidden" boardWidth boardHeight)
+            document.body.appendChild container |> ignore
+            let wanted = ScenePixels.expectations boardWidth boardHeight board
+
+            match mountOn backend container name boardWidth boardHeight board with
+            | Error reason -> check (name + ": mounts") false reason
+            | Ok mount ->
+                let! wrong = drawnMismatches container boardWidth boardHeight backend (fun () -> mount.Present board) wanted 600
+                check
+                    (sprintf "%s: with amplifiers drawn before bodies, every decided pixel is drawn, frames' edges included (%d pixels)" name wanted.Length)
+                    (wrong.IsEmpty && wanted.Length > 150)
+                    (sprintf "%d differ, e.g. %s" wrong.Length (wrong |> List.truncate 3 |> String.concat "; "))
+                let! wrote = screenshot (sprintf "#%s %s" container.id (if backend = RendererBackend.Svg then "svg" else "canvas")) (sprintf "dense-%s.png" id)
+                info (sprintf "dense board screenshot %s" id) (if wrote then sprintf "dense-%s.png" id else "not requested")
+                mount.Present control
+                let! controlled = drawnMismatches container boardWidth boardHeight backend (fun () -> mount.Present control) wanted 0
+                check
+                    (sprintf "%s: control, the same board with bodies drawn first does not match" name)
+                    (not controlled.IsEmpty)
+                    "bodies-first drew the same pixels, so the order is not proven"
+                mount.Dispose()
+
+            container.remove ()
+    }
+
 /// The channel scripts/test-render-browser-host.sh reads: one console line with the counts and the base64 report
 /// (a real-time browser run, because a WebGL canvas needs compositor frames that a virtual-time run does not give).
 [<Emit("console.log('RENDER-SMOKE-RESULT checks=' + $0 + ' failures=' + $1 + ' ' + btoa(unescape(encodeURIComponent($2))))")>]
@@ -2629,6 +2943,9 @@ async {
         do! measureBabylon 100 50
         do! runScaledBoard ()
         do! runOverhang ()
+        do! runGlyphProof ()
+        do! runIdentityFrames ()
+        do! runBadgesAndDenseBoard ()
         do! RetainedSurface.run check
     with ex ->
         failures <- failures + 1

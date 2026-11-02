@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="State.fs" />
     <Compile Include="Renderers.fs" />
+    <Compile Include="ExperimentalGlyphs.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

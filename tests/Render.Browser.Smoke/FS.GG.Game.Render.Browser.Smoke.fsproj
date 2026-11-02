@@ -12,6 +12,7 @@
          Fable from the very files the .NET reference game compiles, and the generator's sample output. -->
     <Compile Include="..\..\src\ReferenceGame\State.fs" Link="ReferenceGame\State.fs" />
     <Compile Include="..\..\src\ReferenceGame\Renderers.fs" Link="ReferenceGame\Renderers.fs" />
+    <Compile Include="..\..\src\ReferenceGame\ExperimentalGlyphs.fs" Link="ReferenceGame\ExperimentalGlyphs.fs" />
     <Compile Include="GeneratedRenderers.fs" />
     <Compile Include="RetainedSurface.fs" />
     <Compile Include="Program.fs" />
