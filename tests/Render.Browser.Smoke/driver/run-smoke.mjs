@@ -98,7 +98,8 @@ await page.exposeFunction("__fsggInput", async (request) => {
       // the mouse coordinates, are unchanged. The session stays attached: detaching it drops the override. The driver
       // answers with the ratio the page then has, so the page can assert it.
       emulation ??= await page.context().newCDPSession(page);
-      await emulation.send("Emulation.setDeviceMetricsOverride", { width: 1024, height: 768, deviceScaleFactor: request.factor, mobile: false });
+      // FS.GG.Game#788: an optional viewport width, so a page media query can be turned off and on.
+      await emulation.send("Emulation.setDeviceMetricsOverride", { width: request.width ?? 1024, height: 768, deviceScaleFactor: request.factor, mobile: false });
       return await page.evaluate(() => window.devicePixelRatio);
     }
     case "screenshot": {

@@ -32,6 +32,8 @@
   <ItemGroup>
     <Compile Include="CanvasInput.fsi" />
     <Compile Include="CanvasInput.fs" />
+    <Compile Include="CanvasSizing.fsi" />
+    <Compile Include="CanvasSizing.fs" />
     <Compile Include="InputLayout.fsi" />
     <Compile Include="InputLayout.fs" />
     <Compile Include="InputHost.fsi" />
@@ -42,8 +44,6 @@
     <Compile Include="RetainedSvgSurface.fs" />
     <Compile Include="CanvasSupport.fsi" />
     <Compile Include="CanvasSupport.fs" />
-    <Compile Include="CanvasSizing.fsi" />
-    <Compile Include="CanvasSizing.fs" />
     <Compile Include="SceneShapes.fsi" />
     <Compile Include="SceneShapes.fs" />
     <Compile Include="BabylonSurface.fsi" />

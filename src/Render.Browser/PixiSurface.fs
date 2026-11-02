@@ -192,13 +192,19 @@ module PixiSurface =
                 canvas.setAttribute ("data-renderer", "pixi")
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
-                container.appendChild canvas |> ignore
-                acquire (fun () -> container.removeChild canvas |> ignore)
+                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas fills a frame the host
+                // owns, out of layout, so its width and height attributes never size anything.
+                let frame =
+                    if sharpens then
+                        Some(CanvasSizing.frame container canvas "pixi" options.Width options.Height)
+                    else
+                        container.appendChild canvas |> ignore
+                        None
 
-                // FS.GG.Game#788, the canvas sizing model (CanvasSizing): who owns the presented size is decided now,
-                // attached and before any backing-store change.
-                if sharpens then
-                    CanvasSizing.claim canvas options.Width options.Height |> ignore
+                acquire (fun () ->
+                    match frame with
+                    | Some frame -> frame.remove ()
+                    | None -> container.removeChild canvas |> ignore)
 
                 let app = P.application ()
                 applicationsCreated <- applicationsCreated + 1
@@ -343,9 +349,10 @@ module PixiSurface =
                 // the presented CSS size and the device pixel ratio (CanvasSizing), so the cue layer's 2 CSS px bands are
                 // drawn sharp at any presented size and on a high-DPI screen.
                 let tracker =
-                    if sharpens then
+                    match frame with
+                    | Some frame ->
                         Some(
-                            CanvasSizing.track canvas (fun backingWidth _ _ _ ->
+                            CanvasSizing.track frame (fun backingWidth _ _ _ ->
                                 if ready.Value && not destroyed.Value && not disposed.Value then
                                     resizeAt app options.Width options.Height (float backingWidth / options.Width)
                                     reconcile latest.Value
@@ -353,8 +360,7 @@ module PixiSurface =
                                 else
                                     false)
                         )
-                    else
-                        None
+                    | None -> None
 
                 acquire (fun () -> tracker |> Option.iter (fun t -> t.Dispose()))
                 let sharpen () = tracker |> Option.iter (fun t -> t.Ensure())

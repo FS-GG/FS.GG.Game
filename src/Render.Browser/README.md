@@ -77,3 +77,17 @@ define its own `Qualification.Pixi` or `Qualification.Babylon` module.
   reports only while its own mount is undisposed, as `PixiSurface` does.
 
 See [FS-GG/FS.GG.Game](https://github.com/FS-GG/FS.GG.Game).
+
+## Sizing an input-host surface (FS.GG.Game#788)
+
+`SvgSurface.mountInput`, `PixiSurface.mountInput` and `BabylonSurface.mountInput` (the hosts of
+`SceneRenderers.withInput`) mount their output inside a frame the host owns: `<div data-input-frame="svg|pixi|babylon">`.
+The SVG root or canvas fills the frame, out of layout, so its width and height attributes never size anything.
+
+- Without page CSS, the frame takes the scene size given in the options.
+- To size the surface, style the frame or its container, not the canvas or SVG:
+  `#stage [data-input-frame] { width: 480px; height: 320px; }`.
+- A canvas renders at the presented size × the device pixel ratio, re-derived when the frame is resized or the ratio
+  changes, and never over 8192 device pixels a side.
+
+See ADR 0001, "Surface sizing".

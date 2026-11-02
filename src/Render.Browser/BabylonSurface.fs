@@ -214,18 +214,21 @@ module BabylonSurface =
                 canvas.setAttribute ("data-renderer", "babylon")
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
-                container.appendChild canvas |> ignore
-                acquire (fun () -> container.removeChild canvas |> ignore)
-
-                // FS.GG.Game#788, the canvas sizing model (CanvasSizing): who owns the presented size is decided now,
-                // attached and before the engine touches the backing store.
-                let sharpens =
+                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas fills a frame the host
+                // owns, out of layout, so its width and height attributes (the engine's backing store) never size
+                // anything.
+                let frame =
                     match host with
-                    | Some(InputHost.CanvasHost.Input _) -> true
-                    | _ -> false
+                    | Some(InputHost.CanvasHost.Input _) ->
+                        Some(CanvasSizing.frame container canvas "babylon" options.Width options.Height)
+                    | _ ->
+                        container.appendChild canvas |> ignore
+                        None
 
-                if sharpens then
-                    CanvasSizing.claim canvas options.Width options.Height |> ignore
+                acquire (fun () ->
+                    match frame with
+                    | Some frame -> frame.remove ()
+                    | None -> container.removeChild canvas |> ignore)
 
                 // `webGlEngine` throws when the browser has no WebGL context.
                 let engine = B.webGlEngine (unbox<B.Canvas>(box canvas)) options.Antialias
@@ -459,7 +462,7 @@ module BabylonSurface =
                         let lastDrawn = ref (first.Scene, ([]: SceneNode list))
 
                         let tracker =
-                            CanvasSizing.track canvas (fun width height cssWidth _ ->
+                            CanvasSizing.track frame.Value (fun width height cssWidth _ ->
                                 applyBacking engine width height cssWidth
                                 let next, cues = lastDrawn.Value
                                 reconcileWith next { Nodes = cues }

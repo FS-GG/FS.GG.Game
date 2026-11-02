@@ -259,28 +259,28 @@ module SvgSurface =
             // The retained root draws the frame's Scene with the cue layer above it as ONE non-selectable object; the
             // input host, not the root, owns every input (its capture listeners stop the root's own press, wheel and
             // keys, so the root never pans, zooms or moves its own focus).
-            let before = ownControls container
+            // FS.GG.Game#788, the surface sizing model (CanvasSizing): the root fills a frame the host owns, out of
+            // layout, as the canvases do, so one page rule on the frame sizes every backend.
+            let surfaceFrame = CanvasSizing.emptyFrame container "svg" options.Width options.Height
 
-            let existing =
-                [ for index in 0 .. before.length - 1 -> before.[index] ]
-
-            match SvgBrowser.mount container options (retained options 1 frame.Scene) ignore with
-            | Error error -> Error(sprintf "SVG surface refused the scene: %A" error)
+            match SvgBrowser.mount surfaceFrame options (retained options 1 frame.Scene) ignore with
+            | Error error ->
+                surfaceFrame.remove ()
+                Error(sprintf "SVG surface refused the scene: %A" error)
             | Ok host ->
                 let mutable revision = 1
                 let current = ref frame
                 let root = host.Root
                 root.setAttribute ("data-renderer", "svg")
+                CanvasSizing.fill root
 
                 // The root's own (empty) object-selection group is replaced by the input host's mirror, and its
                 // description, which names that group, goes with it.
-                let after = ownControls container
+                let made = ownControls surfaceFrame
 
-                for index in 0 .. after.length - 1 do
-                    let element = after.[index]
-
-                    if not (existing |> List.exists (fun seen -> obj.ReferenceEquals(seen, element))) then
-                        element.parentNode.removeChild element |> ignore
+                for index in 0 .. made.length - 1 do
+                    let element = made.[index]
+                    element.parentNode.removeChild element |> ignore
 
                 match descriptionOf root with
                 | null -> ()
@@ -339,9 +339,11 @@ module SvgSurface =
                                             input.Dispose()
                                         finally
                                             (host :> System.IDisposable).Dispose()
+                                            surfaceFrame.remove ()
                         }
                 with ex ->
                     (host :> System.IDisposable).Dispose()
+                    surfaceFrame.remove ()
                     Error(sprintf "SVG surface could not start its input host: %s" ex.Message)
 
     let surface (container: HTMLElement) (options: SvgBrowserOptions) : SceneSurface =
