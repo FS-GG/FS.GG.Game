@@ -452,6 +452,41 @@ let tests =
                             Expect.isGreaterThan teamPixels 0 (sprintf "%s %A at %g shows its team" (GlyphFamily.name family) i size)
             }
 
+            test "draw is safe to call on many threads at once: 64 parallel draws per round, each equal to a sequential draw (#809 review B1)" {
+                let errors = System.Collections.Concurrent.ConcurrentBag<string>()
+                let mismatches = System.Collections.Concurrent.ConcurrentBag<string>()
+
+                for round in 1..40 do
+                    // A fresh cell each round, so the team-layer cache keeps meeting shapes it has not seen.
+                    let t = themeWithFrame (float (100 + round))
+
+                    let spec i =
+                        GlyphSpec.create GlyphFamily.unit { X = 64.0; Y = 64.0 } { Width = 1 + i % 3; Height = 1 + i % 3 }
+                        |> GlyphSpec.identity identities.[i % 5]
+                        |> GlyphSpec.sizeStep (i % 4)
+                        |> GlyphSpec.team 0
+
+                    let parallelBodies = Array.zeroCreate<SceneNode list> 64
+
+                    System.Threading.Tasks.Parallel.For(
+                        0,
+                        64,
+                        fun i ->
+                            try
+                                parallelBodies.[i] <- GlyphDrawing.body (Glyphs.draw t (Glyph.ofSpec idle (spec i)))
+                            with error ->
+                                errors.Add(error.GetType().Name + ": " + error.Message)
+                    )
+                    |> ignore
+
+                    for i in 0..63 do
+                        if errors.IsEmpty && parallelBodies.[i] <> GlyphDrawing.body (Glyphs.draw t (Glyph.ofSpec idle (spec i))) then
+                            mismatches.Add(sprintf "round %d, glyph %d" round i)
+
+                Expect.isEmpty errors "no draw throws"
+                Expect.isEmpty mismatches "every parallel draw equals the sequential one"
+            }
+
             test "erratum E6: a structure's team mark is a foot band, so a unit and a structure of one identity, size and badge differ, monochrome" {
                 let mono = GlyphConformance.monochrome theme
                 for i in identities do

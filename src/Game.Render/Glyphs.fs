@@ -295,8 +295,16 @@ module Glyphs =
                 let armHalf = floor (arm / 2.0)
                 [ at -reach -armHalf (2.0 * reach) arm; at -armHalf -reach arm (2.0 * reach) ]
 
+    /// The team-mark layers by shape, so `draw` erodes each frame shape once. The key space is bounded: five identities
+    /// times the whole-unit frame sizes a game's themes produce (the band and keyline follow from the size), so a few
+    /// hundred entries at most; past `layerCacheLimit` entries a shape is computed and not kept. `draw` may run on many
+    /// threads (.NET), so every read and write of the cache holds its lock (`lock` compiles to a plain call under Fable,
+    /// which has one thread). The layers are a pure function of the key, so a shape computed twice by two threads gives
+    /// the same value, and either may be kept.
     let private layerCache =
         System.Collections.Generic.Dictionary<string, (float * float * float * float) list * (float * float * float * float) list * (float * float * float * float) list>()
+
+    let private layerCacheLimit = 4096
 
     /// The team-mark layers of `identity`'s frame at size `w`, with a frame band of `band` units and a keyline of
     /// `keyline` units, as rectangles relative to the frame's centre (ADR erratum E1, as corrected in #809):
@@ -307,13 +315,27 @@ module Glyphs =
     /// - the keyline: the ring grown by `keyline` units in every direction, on frame ink, so every cell next to a ring
     ///   cell is keyline or ring, never ground, a hole or the frame colour;
     /// - the body: cells at least `2 band + keyline` inside the outline, within the ring.
-    /// Rows with the same runs are merged into one rectangle. Cached per shape.
+    /// Rows with the same runs are merged into one rectangle. Cached per shape, under a lock (`layerCache`).
     let internal teamLayers (identity: Identity) (w: float) (band: int) (keyline: int) =
-        let key = sprintf "%A|%g|%d|%d" identity w band keyline
+        let shape =
+            match identity with
+            | Identity.Own -> "o"
+            | Identity.Ally -> "a"
+            | Identity.Neutral -> "n"
+            | Identity.Enemy -> "e"
+            | Identity.Unknown -> "u"
 
-        match layerCache.TryGetValue key with
-        | true, cached -> cached
-        | _ ->
+        let key = shape + "|" + string w + "|" + string band + "|" + string keyline
+
+        let cached =
+            lock layerCache (fun () ->
+                match layerCache.TryGetValue key with
+                | true, value -> Some value
+                | _ -> None)
+
+        match cached with
+        | Some value -> value
+        | None ->
             let barsOf (shape: Identity) =
                 identityFrame shape 0.0 0.0 w { Red = 0uy; Green = 0uy; Blue = 0uy; Alpha = 255uy }
                 |> List.choose (function
@@ -351,19 +373,36 @@ module Glyphs =
                         Array.init (cols * rows) (fun i ->
                             let x, y = i % cols, i / cols
 
-                            x - n >= 0
-                            && x + n < cols
-                            && y - n >= 0
-                            && y + n < rows
-                            && Seq.forall (fun d -> cells.[at (x + d) y] && cells.[at x (y + d)]) (seq { -n .. n }))
+                            if x - n < 0 || x + n >= cols || y - n < 0 || y + n >= rows then
+                                false
+                            else
+                                let mutable ok = true
+                                let mutable d = -n
+
+                                while ok && d <= n do
+                                    ok <- cells.[at (x + d) y] && cells.[at x (y + d)]
+                                    d <- d + 1
+
+                                ok)
 
                     // Dilation by a square of radius n.
                     let dilate (cells: bool[]) (n: int) =
                         Array.init (cols * rows) (fun i ->
                             let x, y = i % cols, i / cols
+                            let mutable found = false
+                            let mutable dy = -n
 
-                            seq { for dy in -n .. n do for dx in -n .. n -> x + dx, y + dy }
-                            |> Seq.exists (fun (cx, cy) -> cx >= 0 && cx < cols && cy >= 0 && cy < rows && cells.[at cx cy]))
+                            while not found && dy <= n do
+                                let mutable dx = -n
+
+                                while not found && dx <= n do
+                                    let cx, cy = x + dx, y + dy
+                                    found <- cx >= 0 && cx < cols && cy >= 0 && cy < rows && cells.[at cx cy]
+                                    dx <- dx + 1
+
+                                dy <- dy + 1
+
+                            found)
 
                     let ink = grid bars
                     let shape = grid outline
@@ -408,7 +447,10 @@ module Glyphs =
 
                     rectsOf keyed, rectsOf ring, rectsOf body
 
-            layerCache.[key] <- result
+            lock layerCache (fun () ->
+                if layerCache.Count < layerCacheLimit && not (layerCache.ContainsKey key) then
+                    layerCache.[key] <- result)
+
             result
 
     /// One seven-segment digit, 0 to 9, on a 3 x 5 grid of 2-unit cells (6 x 10) whose top left is (x, y).
