@@ -51,6 +51,7 @@ FS.GG.Game.Render.InputAction+Tags
 FS.GG.Game.Render.InputEvent
 FS.GG.Game.Render.InputGuest
 FS.GG.Game.Render.InputGuest`4
+FS.GG.Game.Render.InputHostSpec
 FS.GG.Game.Render.InputModifiers
 FS.GG.Game.Render.InputPipeline
 FS.GG.Game.Render.InputPipeline`5

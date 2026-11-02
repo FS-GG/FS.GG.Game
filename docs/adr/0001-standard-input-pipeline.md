@@ -292,15 +292,19 @@ selected and active, the rule of `RendererDriver.failBackend`.
   - **No cell group:** the surface is a `role=listbox`. Each keyboard-reachable object is a `role=option` with
     `aria-selected`. A `grouped` set is nested in a labelled `role=group`.
   - **Any cell group (a mixed scene):** the surface is ONE `role=grid`.
-    - Each cell group is a labelled `rowgroup` of `row`s and `gridcell`s, at its declared rows and columns.
-    - Every other object, or `grouped` set, is a labelled `rowgroup` whose rows each hold a single `gridcell`.
-    - `aria-selected` is on the cells.
+    - Each cell group is a labelled `rowgroup` of `row`s and `gridcell`s, at its declared rows and columns, with
+      `aria-rowindex` and `aria-colindex` so a sparse group keeps its positions (the grid carries `aria-rowcount` and
+      `aria-colcount`).
+    - Each `grouped` set is a labelled `rowgroup` whose rows each hold a single `gridcell`. All ungrouped objects
+      share ONE such `rowgroup`.
+    - The group's name is part of each cell's accessible name (`Label, Group`), and `aria-selected` is on the cells.
   - **Ownership.** The mirror's options or cells belong to the surface. For an SVG root, the surface owns them with
     `aria-owns`. For a canvas, they are the canvas's fallback content, its DOM children. Either way, the surface's
     `aria-activedescendant` names the active one.
   - **Keys.** Arrow keys move the active option or cell (in two dimensions inside a cell group). Home and End jump to
     the ends, and Page Up and Page Down move between groups. Enter, Space and the secondary keys act on the active
     item.
+  - **Never hidden from assistive technology.** No item is `aria-hidden`, `display:none` or `visibility:hidden`.
   - **Hidden mirror.** The mirror stays visually hidden and never expands the layout. The drawn focus ring is the
     visible indicator. #788 may also place each hidden option transparently over its object's bounds, with
     `pointer-events: none`, so that screen-reader highlight boxes line up with the drawing.
@@ -469,6 +473,35 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
 - **Elmish.** `PipelineRunner.performAll effects runner` performs one `update`'s effects in order. An Elmish program
   runs it inside one `Cmd.ofEffect`, never split across `Cmd.batch` entries or run through `Cmd.OfAsync` or
   `Cmd.OfPromise`, so `ApplyLocal` messages are dispatched before `StartNext` (P7b).
+
+## Implementation decisions of the input host (FS.GG.Game#788 PR B)
+
+- **The input-host mount receives an `InputHostSpec`.** `SceneSurface.withInputHost`'s mount takes `spec report frame`:
+  `InteractiveScene` carries no access or cue layer, so `SceneSurface.inputAdapter` passes
+  `SceneInteraction.inputHost interaction` (its `withAccess` declaration and its `withCues` layer). The contract was
+  unreleased, so its signature changed rather than adding a second mount.
+- **One host, three backends.** One browser input host (`InputHost`) serves all three surfaces, so the same input gives
+  the same events: the SVG root owns a visually hidden mirror through `aria-owns`, and a canvas holds its items as
+  fallback content. Its listeners are capture-phase listeners on the surface. On SVG they also stop the retained root's
+  own press, wheel and keys, so the input host's surface never pans, zooms or moves an SVG focus of its own. The
+  pointer hit test is the backend's own (Pixi's `EventBoundary`, Babylon's pick), and `SceneInteraction.hitTest` on
+  SVG.
+- **Events.**
+  - A primary or secondary mouse or pen press reports on `pointerdown`.
+  - A touch press reports `Activate` on release, if it moved less than 10 CSS px and was held less than 500 ms. It
+    reports `ActivateSecondary` after 500 ms. The page's `contextmenu` is always prevented on the surface.
+  - `Focus` is reported when a navigation key moves the focus. A key that leaves it in place (the edge of a cell group)
+    reports nothing but is still contained.
+  - Enter, Space and the secondary keys report only when an object is focused. Escape always reports `Cancel`, with
+    the focused object as its target, if any.
+  - Tabbing in focuses the selected object, or the first item, without an event.
+  - A pointer press moves the focus to a keyboard-reachable object without showing it.
+  - A mirror click (a screen reader's default action) reports `Activate` from the `Mirror` and shows focus.
+- **Cue layer on Babylon.** The cue nodes are drawn with unlit materials (their exact colours). The frame's own Scene
+  stays lit.
+- **`withInteraction` keeps its own hosts.** `SceneRenderers.withInteraction` and `withInput` replace each other on one
+  registry. A game moves to the input host by declaring `withInput` and binding its route, to a pipeline or to
+  `InputEvent.toSelectionRequest`.
 
 ## Consequences
 

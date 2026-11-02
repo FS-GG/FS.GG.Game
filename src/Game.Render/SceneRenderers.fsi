@@ -53,13 +53,15 @@ module SceneSurface =
     val isInteractive: surface: SceneSurface -> bool
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The surface with an input-host mount (FS.GG.Game#787, `docs/adr/0001-standard-input-pipeline.md`):
-    /// `mountInput report frame` has the `RendererAdapter.Mount` contract at the `InteractiveScene` type and attaches the
-    /// surface's input host, which reports every `InputEvent` (source, modifiers, primary and secondary activation,
-    /// repeats, hover, focus and Cancel) to `report` and draws the interaction's cue layer. Contract only:
-    /// FS.GG.Game#788 implements it, and until then it raises.
+    /// The surface with an input-host mount (FS.GG.Game#788, `docs/adr/0001-standard-input-pipeline.md`):
+    /// `mountInput spec report frame` has the `RendererAdapter.Mount` contract at the `InteractiveScene` type and attaches
+    /// the surface's input host, which reports every `InputEvent` (source, modifiers, primary and secondary activation,
+    /// repeats, hover, focus and Cancel) to `report`, offers each object as `spec` declares (`InputHostSpec.access`) on
+    /// a single-Tab-stop listbox or grid, and draws `spec`'s cue layer above each frame. Replaces any input-host mount the
+    /// surface had; the plain and interactive mounts are kept.
     val withInputHost:
-        mountInput: ((InputEvent -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>) ->
+        mountInput:
+            (InputHostSpec -> (InputEvent -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>) ->
         surface: SceneSurface ->
             SceneSurface
 
@@ -75,6 +77,18 @@ module SceneSurface =
         view: ('State -> FS.GG.UI.Scene.Scene) ->
         interaction: SceneInteraction<'State> ->
         route: SelectionRoute ->
+        surface: SceneSurface ->
+            RendererAdapter<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The input adapter for the surface's backend (FS.GG.Game#788): every state is presented as `SceneInteraction.frame
+    /// view interaction state`, the input host is given `SceneInteraction.inputHost interaction`, and it reports to
+    /// `route`. A surface without an input-host mount gives the plain `SceneSurface.adapter view surface`, which the
+    /// input checks of the conformance kit fail.
+    val inputAdapter:
+        view: ('State -> FS.GG.UI.Scene.Scene) ->
+        interaction: SceneInteraction<'State> ->
+        route: InputRoute ->
         surface: SceneSurface ->
             RendererAdapter<'State>
 
@@ -134,8 +148,8 @@ module SceneRenderers =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Make the declared renderers interactive (FS.GG.Game#751): from now on `registry` gives every backend
     /// `SceneSurface.interactiveAdapter (view backend) interaction route surface`, so the selectable objects of each
-    /// presented state are offered on every backend and their requests go to `route`. Replaces any interaction
-    /// declared before.
+    /// presented state are offered on every backend and their requests go to `route`. Replaces any interaction or
+    /// input route declared before.
     val withInteraction:
         interaction: SceneInteraction<'State> ->
         route: SelectionRoute ->
@@ -143,11 +157,12 @@ module SceneRenderers =
             SceneRenderers<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Make the declared renderers report every input to `route` (FS.GG.Game#787): from now on `registry` mounts each
-    /// backend's input host (`SceneSurface.withInputHost`), which presents `SceneInteraction.frame` of each state with
-    /// the interaction's cue layer above it. A game binds `route` to its `InputPipeline` (`PipelineHost.start`, or its
-    /// own dispatch of `PipelineMsg.Input`). It replaces `withInteraction`, which keeps working as this route seen
-    /// through `InputEvent.toSelectionRequest`. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// Make the declared renderers report every input to `route` (FS.GG.Game#788): from now on `registry` gives every
+    /// backend `SceneSurface.inputAdapter (view backend) interaction route surface`, whose input host presents
+    /// `SceneInteraction.frame` of each state with the interaction's cue layer above it. A game binds `route` to its
+    /// `InputPipeline` (`PipelineHost.start`, or its own dispatch of `PipelineMsg.Input`), or to
+    /// `InputEvent.toSelectionRequest` for plain selection. It replaces `withInteraction` (and `withInteraction` replaces
+    /// it): one registry has one kind of input host. `withInteraction` keeps its own hosts and meaning.
     val withInput:
         interaction: SceneInteraction<'State> ->
         route: InputRoute ->
@@ -156,6 +171,6 @@ module SceneRenderers =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The registry of the declared renderers: `SceneSurface.adapter (view backend) surface` for every declared
-    /// backend (`SceneSurface.interactiveAdapter` once `withInteraction` declared an interaction), so exactly the
-    /// declared backends are selectable.
+    /// backend (`SceneSurface.interactiveAdapter` once `withInteraction` declared an interaction, `SceneSurface.inputAdapter`
+    /// once `withInput` declared an input route), so exactly the declared backends are selectable.
     val registry: renderers: SceneRenderers<'State> -> RendererRegistry<'State>

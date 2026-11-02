@@ -93,6 +93,19 @@ module PixiSurface =
         frame: InteractiveScene ->
             Result<RendererMount<InteractiveScene>, string>
 
+    /// The Pixi input-host mount (FS.GG.Game#788): `mountScene` with each frame's Scene and `spec`'s cue layer above
+    /// it, plus the input host of `SceneSurface.withInputHost`. The hit test is Pixi's own `EventBoundary` over one hit region per selectable object. The canvas is the single Tab stop,
+    /// a `role=listbox` or `role=grid` labelled `options`' label, and the mirror's items are its fallback content (its
+    /// children); `aria-activedescendant` names the focused object's item. Objects that `SceneInteraction.problems`
+    /// rejects are refused at mount and raise from `Present`. `Dispose` removes the input host with everything else.
+    val mountInput:
+        container: HTMLElement ->
+        options: PixiOptions ->
+        spec: InputHostSpec ->
+        report: (InputEvent -> unit) ->
+        frame: InteractiveScene ->
+            Result<RendererMount<InteractiveScene>, string>
+
     /// `mountScene container options` as the Pixi `SceneSurface` for `SceneRenderers.withSurface`, interactive through
     /// `mountInteractive container options`.
     val surface: container: HTMLElement -> options: PixiOptions -> SceneSurface

@@ -175,6 +175,10 @@ FS.GG.Game.Render.InputGuest.policy<Input, Client, Local, Command>(InputGuest<In
 FS.GG.Game.Render.InputGuest.run<Input, Client, Local, Command>(InputGuest<Input, Client, Local, Command>, GuestRequest<Input, Client>, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.Unit, Microsoft.FSharp.Core.Unit>, System.Threading.CancellationToken) : FSharpAsync<GuestOutcome<Local, Command>>
 FS.GG.Game.Render.InputGuest.sync<Input, Client, Local, Command>(FSharpFunc<GuestRequest<Input, Client>, GuestOutcome<Local, Command>>) : InputGuest<Input, Client, Local, Command>
 FS.GG.Game.Render.InputGuest.withAdmission<Client, Input, Local, Command>(FSharpFunc<Client, Microsoft.FSharp.Core.FSharpResult<Microsoft.FSharp.Core.Unit, System.String>>, InputGuest<Input, Client, Local, Command>) : InputGuest<Input, Client, Local, Command>
+FS.GG.Game.Render.InputHostSpec.access(FS.GG.Game.Render.InputHostSpec, FS.GG.Game.Render.SelectableObject) : FS.GG.Game.Render.ObjectAccess
+FS.GG.Game.Render.InputHostSpec.create(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectableObject, FS.GG.Game.Render.ObjectAccess>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>) : FS.GG.Game.Render.InputHostSpec
+FS.GG.Game.Render.InputHostSpec.cues(FS.GG.Game.Render.InputHostSpec) : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>
+FS.GG.Game.Render.InputHostSpec.standard : FS.GG.Game.Render.InputHostSpec [get]
 FS.GG.Game.Render.InputModifiers.Alt : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.Control : System.Boolean [get]
 FS.GG.Game.Render.InputModifiers.Meta : System.Boolean [get]
@@ -366,6 +370,7 @@ FS.GG.Game.Render.SceneInteraction.create<State>(FSharpFunc<State, Microsoft.FSh
 FS.GG.Game.Render.SceneInteraction.cues<State>(SceneInteraction<State>) : Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.CueContext, Microsoft.FSharp.Collections.FSharpList<FS.GG.UI.Scene.SceneNode>>
 FS.GG.Game.Render.SceneInteraction.frame<State>(FSharpFunc<State, FS.GG.UI.Scene.Scene>, SceneInteraction<State>, State) : FS.GG.Game.Render.InteractiveScene
 FS.GG.Game.Render.SceneInteraction.hitTest(FS.GG.UI.Scene.Point, Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>) : Microsoft.FSharp.Core.FSharpOption<System.String>
+FS.GG.Game.Render.SceneInteraction.inputHost<State>(SceneInteraction<State>) : FS.GG.Game.Render.InputHostSpec
 FS.GG.Game.Render.SceneInteraction.key(FS.GG.Game.Render.InteractionKey, Microsoft.FSharp.Core.FSharpOption<System.String>, FS.GG.Game.Render.InteractiveScene) : System.Tuple<Microsoft.FSharp.Core.FSharpOption<System.String>, Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.SelectionRequest>>
 FS.GG.Game.Render.SceneInteraction.objects<State>(SceneInteraction<State>, State) : Microsoft.FSharp.Collections.FSharpList<FS.GG.Game.Render.SelectableObject>
 FS.GG.Game.Render.SceneInteraction.press(FS.GG.UI.Scene.Point, FS.GG.Game.Render.InteractiveScene) : Microsoft.FSharp.Core.FSharpOption<FS.GG.Game.Render.SelectionRequest>
@@ -388,10 +393,11 @@ FS.GG.Game.Render.SceneSurface.adapter<State>(FSharpFunc<State, FS.GG.UI.Scene.S
 FS.GG.Game.Render.SceneSurface.backend(FS.GG.Game.Render.SceneSurface) : FS.GG.Game.Render.RendererBackend
 FS.GG.Game.Render.SceneSurface.create(FS.GG.Game.Render.RendererBackend, Microsoft.FSharp.Core.FSharpFunc<FS.GG.UI.Scene.Scene, Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>>) : FS.GG.Game.Render.SceneSurface
 FS.GG.Game.Render.SceneSurface.hasInputHost(FS.GG.Game.Render.SceneSurface) : System.Boolean
+FS.GG.Game.Render.SceneSurface.inputAdapter<State>(FSharpFunc<State, FS.GG.UI.Scene.Scene>, SceneInteraction<State>, FS.GG.Game.Render.InputRoute, FS.GG.Game.Render.SceneSurface) : RendererAdapter<State>
 FS.GG.Game.Render.SceneSurface.interactiveAdapter<State>(FSharpFunc<State, FS.GG.UI.Scene.Scene>, SceneInteraction<State>, FS.GG.Game.Render.SelectionRoute, FS.GG.Game.Render.SceneSurface) : RendererAdapter<State>
 FS.GG.Game.Render.SceneSurface.isInteractive(FS.GG.Game.Render.SceneSurface) : System.Boolean
 FS.GG.Game.Render.SceneSurface.mountScene(FS.GG.Game.Render.SceneSurface, FS.GG.UI.Scene.Scene) : Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.UI.Scene.Scene>, System.String>
-FS.GG.Game.Render.SceneSurface.withInputHost(Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InputEvent, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InteractiveScene, Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.Game.Render.InteractiveScene>, System.String>>>, FS.GG.Game.Render.SceneSurface) : FS.GG.Game.Render.SceneSurface
+FS.GG.Game.Render.SceneSurface.withInputHost(Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InputHostSpec, Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InputEvent, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InteractiveScene, Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.Game.Render.InteractiveScene>, System.String>>>>, FS.GG.Game.Render.SceneSurface) : FS.GG.Game.Render.SceneSurface
 FS.GG.Game.Render.SceneSurface.withInteraction(Microsoft.FSharp.Core.FSharpFunc<Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.SelectionRequest, Microsoft.FSharp.Core.Unit>, Microsoft.FSharp.Core.FSharpFunc<FS.GG.Game.Render.InteractiveScene, Microsoft.FSharp.Core.FSharpResult<FS.GG.Game.Render.RendererMount<FS.GG.Game.Render.InteractiveScene>, System.String>>>, FS.GG.Game.Render.SceneSurface) : FS.GG.Game.Render.SceneSurface
 FS.GG.Game.Render.SelectableObject.Bounds : FS.GG.UI.Scene.Rect [get]
 FS.GG.Game.Render.SelectableObject.Id : System.String [get]

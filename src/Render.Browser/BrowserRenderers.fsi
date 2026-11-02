@@ -66,13 +66,15 @@ module BrowserRenderers =
 
     /// The SVG, Pixi and Babylon surfaces in `container`, in that order, each at `options`' size with the backends'
     /// default settings, each interactive (`SvgSurface.mountInteractive`, `PixiSurface.mountInteractive`,
-    /// `BabylonSurface.mountInteractive`). Each Pixi mount reports a late initialisation failure to the driver `route` is bound to when
+    /// `BabylonSurface.mountInteractive`) and each with an input host (`SvgSurface.mountInput`, `PixiSurface.mountInput`,
+    /// `BabylonSurface.mountInput`). Each Pixi mount reports a late initialisation failure to the driver `route` is bound to when
     /// that mount is created.
     val surfaces: container: HTMLElement -> options: BrowserRenderOptions -> route: LateFailureRoute -> SceneSurface list
 
     /// Declare all three backends for a game-state type: `SceneRenderers.create view` over `surfaces`. Add
     /// `SceneRenderers.withView` for a backend that needs its own representation, and
-    /// `SceneRenderers.withInteraction` to make the game playable by selection on every backend.
+    /// `SceneRenderers.withInteraction` to make the game playable by selection on every backend, or
+    /// `SceneRenderers.withInput` to report every input through the standard input pipeline's input hosts.
     val declare:
         container: HTMLElement ->
         options: BrowserRenderOptions ->

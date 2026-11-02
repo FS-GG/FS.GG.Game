@@ -74,7 +74,8 @@ type InteractionKey =
 /// `docs/adr/0001-standard-input-pipeline.md`). Every object stays reachable by a pointer. Built by `ObjectAccess.full`,
 /// `ObjectAccess.pointerOnly` and `ObjectAccess.grouped`; a game that declares nothing gets `full` for every object.
 ///
-/// Contract only: FS.GG.Game#788 implements the mirror and keyboard behaviour.
+/// The input hosts of `SceneRenderers.withInput` (FS.GG.Game#788) implement it: a single-Tab-stop listbox, or a grid when
+/// any cell group exists, with two-dimensional arrow keys inside a cell group.
 [<Sealed>]
 type ObjectAccess
 
@@ -175,6 +176,15 @@ module CueContext =
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// CSS pixels per scene unit at the presented size.
     val cssPerUnit: context: CueContext -> float
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// What an input host needs from a game's interaction besides each frame (FS.GG.Game#788): how each object is offered to
+/// the keyboard and the accessible mirror (`ObjectAccess`), and the cue layer it draws above the frame. A surface's
+/// input-host mount (`SceneSurface.withInputHost`) receives it with the first frame. Built by `InputHostSpec.create`, or
+/// taken from an interaction with `SceneInteraction.inputHost`.
+[<Sealed>]
+type InputHostSpec
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
@@ -319,3 +329,29 @@ module SceneInteraction =
     /// 2 CSS pixels at the context's scale) drawn as filled rectangles just outside the focused object's bounds, so it
     /// contrasts with any background and every backend can draw it; nothing for hover.
     val standardCues: context: CueContext -> FS.GG.UI.Scene.SceneNode list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// What the interaction's input hosts need besides each frame: its declared access (`withAccess`) and its cue layer
+    /// (`withCues`, or `standardCues`).
+    val inputHost: interaction: SceneInteraction<'State> -> InputHostSpec
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module InputHostSpec =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Every object `ObjectAccess.full`, drawn with `SceneInteraction.standardCues`.
+    val standard: InputHostSpec
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A spec from an access declaration and a cue layer.
+    val create:
+        access: (SelectableObject -> ObjectAccess) -> cues: (CueContext -> FS.GG.UI.Scene.SceneNode list) -> InputHostSpec
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// How `target` is offered to the keyboard and the mirror.
+    val access: spec: InputHostSpec -> target: SelectableObject -> ObjectAccess
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The cue layer the input host draws above each frame.
+    val cues: spec: InputHostSpec -> (CueContext -> FS.GG.UI.Scene.SceneNode list)

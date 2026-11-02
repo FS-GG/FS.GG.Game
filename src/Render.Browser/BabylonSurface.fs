@@ -132,6 +132,11 @@ module BabylonSurface =
     [<Emit("$0.specularColor.copyFromFloats(0, 0, 0)")>]
     let private noSpecular (_material: B.StandardMaterial) : unit = jsNative
 
+    /// FS.GG.Game#786/#788: an unlit material shows its diffuse colour exactly (no light term), so the cue layer keeps
+    /// its declared tones and contrast on Babylon. The scene's own shapes stay lit.
+    [<Emit("$0.disableLighting = $1")>]
+    let private setUnlit (_material: B.StandardMaterial) (_unlit: bool) : unit = jsNative
+
     /// Take `mesh` out of the scene's mesh list: it is never drawn or picked, and keeps only the geometry its clones share.
     [<Emit("$0.getScene().removeMesh($0)")>]
     let private takeOutOfScene (_mesh: B.Mesh) : unit = jsNative
@@ -143,16 +148,18 @@ module BabylonSurface =
             Mesh: B.Mesh
             Material: B.StandardMaterial
             mutable Fill: Color
+            /// Whether the material is unlit (a cue-layer shape).
+            mutable Unlit: bool
             /// What the mesh was last placed and sized for; `None` until it is placed.
             mutable Placed: Shape option
         }
 
-    /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
-    /// whose hit test is Babylon's own pick over one invisible mesh per selectable object.
+    /// The mount behind `mountScene`, `mountInteractive` and `mountInput`: with a `host`, the mount also holds an input
+    /// host whose hit test is Babylon's own pick over one invisible mesh per selectable object.
     let private mountWith
         (container: HTMLElement)
         (options: BabylonOptions)
-        (interactive: (SelectionRequest -> unit) option)
+        (host: InputHost.CanvasHost option)
         (first: InteractiveScene)
         : Result<RendererMount<InteractiveScene>, string> =
         let scene = first.Scene
@@ -277,7 +284,7 @@ module BabylonSurface =
                 // How many layers the camera is backed off for.
                 let depth = ref -1
 
-                let create (index: int) (shape: Shape) : Slot =
+                let create (index: int) (shape: Shape) (unlit: bool) : Slot =
                     created.Value <- true
                     serial.Value <- serial.Value + 1
                     let name = sprintf "shape-%d" serial.Value
@@ -298,6 +305,7 @@ module BabylonSurface =
                             fresh
 
                     B.setDiffuseColor material (colour shape.Fill)
+                    setUnlit material unlit
                     B.setMaterial mesh material
 
                     {
@@ -305,13 +313,18 @@ module BabylonSurface =
                         Mesh = mesh
                         Material = material
                         Fill = shape.Fill
+                        Unlit = unlit
                         Placed = None
                     }
 
                 let sameBox (a: Shape) (b: Shape) =
                     a.X = b.X && a.Y = b.Y && a.Width = b.Width && a.Height = b.Height
 
-                let place (index: int) (slot: Slot) (shape: Shape) =
+                let place (index: int) (slot: Slot) (shape: Shape) (unlit: bool) =
+                    if slot.Unlit <> unlit then
+                        setUnlit slot.Material unlit
+                        slot.Unlit <- unlit
+
                     // A shape that is where and what size it was needs no new vectors and does not dirty its mesh
                     // (the same scene presented again costs a render and nothing else).
                     match slot.Placed with
@@ -328,23 +341,26 @@ module BabylonSurface =
                         B.setDiffuseColor slot.Material (colour shape.Fill)
                         slot.Fill <- shape.Fill
 
-                /// Reconcile the meshes with `next`: reuse slot i for shape i, recreate it when the kind changes,
-                /// create the missing ones and dispose the surplus.
-                let reconcile (next: Scene) =
+                /// Reconcile the meshes with `next` and then the unlit cue layer `cues` above it: reuse slot i for shape
+                /// i, recreate it when the kind changes, create the missing ones and dispose the surplus.
+                let reconcileWith (next: Scene) (cues: Scene) =
                     created.Value <- false
                     let shapes = ResizeArray<Shape>()
                     unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) next shapes
+                    let lit = shapes.Count
+                    unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) cues shapes
 
                     for index in 0 .. shapes.Count - 1 do
                         let shape = shapes.[index]
+                        let unlit = index >= lit
 
                         if index < slots.Count && slots.[index].Kind <> shape.Kind then
                             release slots.[index]
-                            slots.[index] <- create index shape
+                            slots.[index] <- create index shape unlit
                         elif index >= slots.Count then
-                            slots.Add(create index shape)
+                            slots.Add(create index shape unlit)
 
-                        place index slots.[index] shapes.[index]
+                        place index slots.[index] shapes.[index] unlit
 
                     while slots.Count > shapes.Count do
                         release slots.[slots.Count - 1]
@@ -356,6 +372,8 @@ module BabylonSurface =
                         backOffCamera camera (float (max shapes.Count 1)) layerStep clearance
 
                     renderNow babylon created.Value
+
+                let reconcile (next: Scene) = reconcileWith next { Nodes = [] }
 
                 reconcile scene
 
@@ -399,22 +417,45 @@ module BabylonSurface =
                 acquire clearRegions
 
                 let input =
-                    interactive
-                    |> Option.map (fun report ->
+                    match host with
+                    | None -> None
+                    | Some(InputHost.CanvasHost.Selection report) ->
                         reregion first.Objects
 
-                        CanvasInput.attach
-                            container
-                            canvas
-                            RendererBackend.Babylon
-                            options.Label
-                            options.Width
-                            options.Height
-                            (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
-                            report
-                            first)
+                        let attached =
+                            CanvasInput.attach
+                                container
+                                canvas
+                                RendererBackend.Babylon
+                                options.Label
+                                options.Width
+                                options.Height
+                                (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
+                                report
+                                first
 
-                acquire (fun () -> input |> Option.iter (fun host -> host.Dispose()))
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), false)
+                    | Some(InputHost.CanvasHost.Input(spec, report)) ->
+                        reregion first.Objects
+
+                        let attached =
+                            InputHost.attach
+                                canvas
+                                InputHost.Ownership.Fallback
+                                RendererBackend.Babylon
+                                options.Label
+                                options.Width
+                                options.Height
+                                false
+                                (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
+                                spec
+                                report
+                                (fun next cues -> reconcileWith next { Nodes = cues })
+                                first
+
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), true)
+
+                acquire (fun () -> input |> Option.iter (fun (_, dispose, _) -> dispose ()))
 
                 runPendingRenderLoop engine babylon
                 loopsStarted <- loopsStarted + 1
@@ -431,7 +472,7 @@ module BabylonSurface =
                             fun frame ->
                                 if not disposed.Value then
                                     match input with
-                                    | Some host ->
+                                    | Some(update, _, drawsItself) ->
                                         match SceneInteraction.problems frame.Objects with
                                         | [] -> ()
                                         | problems ->
@@ -440,10 +481,11 @@ module BabylonSurface =
                                                 (String.concat "; " problems)
 
                                         reregion frame.Objects
-                                        host.Update frame
-                                    | None -> ()
+                                        update frame
 
-                                    reconcile frame.Scene
+                                        if not drawsItself then
+                                            reconcile frame.Scene
+                                    | None -> reconcile frame.Scene
                         Dispose =
                             fun () ->
                                 if not disposed.Value then
@@ -485,12 +527,24 @@ module BabylonSurface =
         (frame: InteractiveScene)
         : Result<RendererMount<InteractiveScene>, string> =
         match SceneInteraction.problems frame.Objects with
-        | [] -> mountWith container options (Some report) frame
+        | [] -> mountWith container options (Some(InputHost.CanvasHost.Selection report)) frame
+        | problems -> Error(sprintf "Babylon surface refused the objects: %s" (String.concat "; " problems))
+
+    let mountInput
+        (container: HTMLElement)
+        (options: BabylonOptions)
+        (spec: InputHostSpec)
+        (report: InputEvent -> unit)
+        (frame: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        match SceneInteraction.problems frame.Objects with
+        | [] -> mountWith container options (Some(InputHost.CanvasHost.Input(spec, report))) frame
         | problems -> Error(sprintf "Babylon surface refused the objects: %s" (String.concat "; " problems))
 
     let surface (container: HTMLElement) (options: BabylonOptions) : SceneSurface =
         SceneSurface.create RendererBackend.Babylon (mountScene container options)
         |> SceneSurface.withInteraction (mountInteractive container options)
+        |> SceneSurface.withInputHost (mountInput container options)
 
     let adapter (container: HTMLElement) (options: BabylonOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
         SceneSurface.adapter view (surface container options)
