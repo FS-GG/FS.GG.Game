@@ -325,9 +325,10 @@ module Theme =
     ///   erratum E7, amendment A1): it is held to 3:1 against what it touches instead, below, whatever `contrastTarget`;
     /// - 3:1 between colours that touch: `cue.focus.inner` on `cue.focus.outer`; `glyph.badge.ink` on the body and on
     ///   every team and allegiance colour; `glyph.icon.ink` on the body and every allegiance colour; every team colour
-    ///   on the body (the team ring's layout, ADR D1 erratum: from the edge in, the frame in its identity colour, a
-    ///   keyline in the body colour, the ring in the team colour, then the body fill, so the ring touches the body on
-    ///   both sides and never the identity colour); every status fill on `status.track`; `status.track`
+    ///   on the body (the team ring's layout, ADR erratum E1: from the edge in, the frame in its identity colour, a
+    ///   keyline in the body colour that also lines Ally's holes, the ring in the team colour, then the body fill, so
+    ///   the ring shares an edge only with the body colour, never with the ground or the identity colour); every
+    ///   status fill on `status.track`; `status.track`
     ///   on `status.keyline`; `glyph.modifier` on the body and on every team and allegiance colour.
     val create:
         seed: ThemeSeed -> algorithms: ThemeAlgorithm list -> overrides: ThemeOverride list -> Result<Theme, ThemeViolation list>

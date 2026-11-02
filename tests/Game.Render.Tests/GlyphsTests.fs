@@ -375,11 +375,11 @@ let tests =
                 let f = GlyphDrawing.frame d
                 let row = int (f.Y + floor (f.Height / 2.0))
                 let left = int f.X
-                // At 24 units the band is 3: frame 52..55, keyline 55..58, ring 58..61, body from 61.
                 let across = [ for x in left .. left + 11 -> shownAt nodes x row ]
                 let own = Theme.allegiance Identity.Own theme
                 Expect.notEqual own theme.Palette.Teams.Head "classic's team 0 is distinct from the own colour"
-                Expect.equal across [ for i in 0..11 -> Some(if i < 3 then own elif i < 6 then theme.Palette.Body elif i < 9 then theme.Palette.Teams.Head else theme.Palette.Body) ] "frame, keyline, ring, body"
+                // At 24 units the band is 3 and the keyline 1 (half a band, at least one unit).
+                Expect.equal across [ for i in 0..11 -> Some(if i < 3 then own elif i < 4 then theme.Palette.Body elif i < 7 then theme.Palette.Teams.Head else theme.Palette.Body) ] "frame, keyline, ring, body"
             }
 
             test "a team mark never changes the frame's shape: every node of a team-marked body lies on the bare frame's ink" {
@@ -416,6 +416,40 @@ let tests =
 
                     for i in identities do
                         Expect.isGreaterThanOrEqual (float (area i)) (0.5 * float own) (sprintf "%A at %g against Own's %d" i size own)
+            }
+
+            test "erratum E1 (#809): no team-colour pixel shares an edge with the ground or the frame colour, on every family, identity and size, Ally's holes included" {
+                for family in [ GlyphFamily.unit; GlyphFamily.structure ] do
+                    for i in identities do
+                        for size in [ 12.0; 16.0; 18.0; 21.0; 22.0; 24.0; 32.0; 39.0; 48.0 ] do
+                            let t = themeWithFrame size
+                            let team = t.Palette.Teams.[1]
+                            let frame = Theme.allegiance i t
+                            let body = GlyphDrawing.body (Glyphs.draw t (GlyphSpec.create family { X = 64.0; Y = 64.0 } one |> GlyphSpec.identity i |> GlyphSpec.team 1 |> Glyph.ofSpec idle))
+                            let grid = Array2D.create 128 128 t.Palette.Ground
+
+                            for n in body do
+                                match n with
+                                | SceneNode.Rectangle((x, y, w, h), c) ->
+                                    for yy in int y .. int (y + h) - 1 do
+                                        for xx in int x .. int (x + w) - 1 do
+                                            grid.[xx, yy] <- c
+                                | _ -> ()
+
+                            let mutable touching = 0
+                            let mutable teamPixels = 0
+
+                            for y in 1..126 do
+                                for x in 1..126 do
+                                    if grid.[x, y] = team then
+                                        teamPixels <- teamPixels + 1
+
+                                        for dx, dy in [ 1, 0; -1, 0; 0, 1; 0, -1 ] do
+                                            let n = grid.[x + dx, y + dy]
+                                            if n = t.Palette.Ground || n = frame then touching <- touching + 1
+
+                            Expect.equal touching 0 (sprintf "%s %A at %g" (GlyphFamily.name family) i size)
+                            Expect.isGreaterThan teamPixels 0 (sprintf "%s %A at %g shows its team" (GlyphFamily.name family) i size)
             }
 
             test "erratum E6: a structure's team mark is a foot band, so a unit and a structure of one identity, size and badge differ, monochrome" {

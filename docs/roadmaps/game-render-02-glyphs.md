@@ -21,18 +21,37 @@ Related work:
 
 These corrections were ruled by Root during the implementation review. Each one is marked in place.
 
-- **E1. The team ring's layout (D1, D3, D12).** From the edge inwards, a team-marked glyph is drawn as:
-  - the frame, in its identity colour;
-  - a **keyline in the body colour**;
-  - the **ring** in the team colour;
+- **E1. The team ring's layout (D1, D3, D12; corrected in #809).** From the edge inwards, a team-marked glyph is
+  drawn as:
+  - the frame, in its identity colour, one band wide;
+  - a **keyline in the body colour**, half a band wide and at least 1 unit;
+  - the **ring** in the team colour, one band wide;
   - the body fill.
 
-  The ring therefore touches the body on both sides and never touches the identity colour, so validating each team
-  colour against the body alone is correct. Without the keyline, the first baked `classic`, whose team colours equalled
-  allegiance colours, measured 1.00:1 for team 0 against the own frame. `classic`'s team colours are now distinct from
-  every allegiance colour, and are a provisional stand-in: #795's derivation is the source of truth for every preset,
-  `classic` included. The keyline makes the ring-to-frame contrast moot whatever the preset. The kit checks that
-  team 0 on the own allegiance shows a visible ring.
+  *Correction.* The first implementation drew the keyline, ring and body as nested frames of the same shape. On Ally,
+  the nested frames' bars met the quarter-point holes, so the ring met the ground at a hole's edge and the identity
+  colour beside it. The same happened at 12 units on Own and Unknown. The #805 review found this by rasterising every
+  family, identity and size step, and #809 measured 235 such shared edges in `classic`.
+
+  The layers are now built from the frame's own cells:
+  - **The ring** is the cells at least a band plus the keyline inside the outline, along their row and their column (a
+    plus-shaped erosion, which shrinks a stepped diamond the way a nested diamond does). They must also be at least the
+    keyline plus 1 unit from any cell that is not frame ink. Ally's outline is the friend rectangle without its holes,
+    so the keyline lines the holes too.
+  - **The keyline** is the ring grown by its own width, on frame ink.
+  - **The body** is the ring's interior.
+
+  A test rasterises every family, identity and size from 12 to 48 units and finds **no team-colour pixel that shares an
+  edge with the ground or the frame colour**. The ring therefore touches only the body colour, and validating each
+  team colour against the body alone is correct.
+
+  This was the layout fix, not a new check. The ring against the Ally colour measured 1.10 to 1.59:1 in `classic`,
+  well under 3:1, so a check would have refused every preset whose team and Ally colours are close in lightness.
+
+  Without the keyline, the first baked `classic`, whose team colours equalled allegiance colours, measured 1.00:1 for
+  team 0 against the own frame. `classic`'s team colours are now distinct from every allegiance colour, and are a
+  provisional stand-in: #795's derivation is the source of truth for every preset. The kit checks that team 0 on the
+  own allegiance shows a visible ring.
 - **E2. The outer focus tone (D3, D10).** The focus ring's outer tone is **whichever tone contrasts with the ground**
   (3:1), and the inner tone contrasts with the outer one. On a dark ground the outer tone is light and the inner tone
   dark. "A dark outer band and a light inner band" holds only on a light ground.
@@ -47,28 +66,30 @@ These corrections were ruled by Root during the implementation review. Each one 
   seed on import, so the `compact` density context changes them.
 - **E6. A structure's team mark (D3).** From 22 to 39 units the badge takes the inner centre and the icon is not drawn,
   so a unit and a structure with the same identity, size and badge looked identical. A structure's team mark is
-  therefore an **inner foot band built from bars**: the nested ring's lower rows in the team colour, with the body above
-  them. It is drawn inside every stepped frame, and every team mark is clipped to the frame's own bars, so it never
-  fills Ally's holes.
+  therefore an **inner foot band built from bars**: the ring layer's lower rows in the team colour (E1), with the body
+  above them. It is drawn inside every stepped frame, and like every team mark it is built from the frame's own cells,
+  so it never fills or meets Ally's holes.
   - **The band's height follows its area.** It grows until its team-colour area reaches three quarters of Own's (the
     inner width times the band), up to 0.6 of the inner frame's height. A fixed height left the stepped diamond only
     its narrow bottom tip: 21–33 % of Own's band at 22, 24 and 32 units.
-  - **Measured team-colour pixels** at 22, 24 and 32 units:
+  - **Measured team-colour pixels** at 22, 24 and 32 units, with the layers of E1 as corrected in #809:
 
     | Identity | 22 | 24 | 32 |
     |---|---|---|---|
-    | Own | 28 | 36 | 64 |
-    | Ally | 29 | 28 | 56 |
-    | Neutral | 28 | 36 | 64 |
-    | Enemy | 30 | 30 | 56 |
-    | Unknown | 21 | 38 | 48 |
+    | Own | 32 | 48 | 80 |
+    | Ally | 36 | 48 | 62 |
+    | Neutral | 32 | 48 | 80 |
+    | Enemy | 30 | 36 | 64 |
+    | Unknown | 31 | 44 | 72 |
 
   - **Kit minimums.** A test requires at least half of Own's area for every identity from 22 to 39 units. A kit case
     requires a hostile structure's band to show its team colour on every backend. The kit checks that a unit and a structure with the same identity, size and badge, monochrome and
   with no icon, differ in decided pixels.
 
-- **E7. The team floor against the ground (D4; amendment A1, FS.GG.Game#795 Q-T11).** Under E1 a team colour never
-  touches the ground: it sits between a body-colour keyline and the body fill. It is therefore held to:
+- **E7. The team floor against the ground (D4; amendment A1, FS.GG.Game#795 Q-T11).** Under E1, as corrected in
+  #809, a team colour touches neither the ground nor the frame colour: a body-colour keyline lines the frame and Ally's
+  holes. The 3:1 ground floor below is kept anyway, as a legibility floor. Before that correction the ring did meet the
+  ground at Ally's holes; the #805 review found 15 such high-contrast configurations. A team colour is held to:
   - **3:1 against the colours it touches**: the body, and the badge and modifier inks drawn on it;
   - **a 3:1 legibility floor against the ground**.
 
