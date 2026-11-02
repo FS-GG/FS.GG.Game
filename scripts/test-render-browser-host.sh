@@ -26,6 +26,10 @@
 # Last, ReferenceGame is played end to end through the input pipeline on every backend (FS.GG.Game#788 PR D): real
 # presses on the token go to the F# guest, its commands to an authority that admits them with NetworkAdmission, and the
 # authoritative snapshot back to the backend; the page reports input-to-command and input-to-snapshot latency as INFO.
+# Then the EXPERIMENTAL client-presentation proof (FS.GG.Game#810, not shipped) runs on every backend: a real
+# press-drag-release draws a move arrow through the guest's Locals, Enter submits it, and the arrow follows the pending
+# command to settlement; a refused plan survives a backend switch and Escape clears it. Last, SVG and Pixi must draw
+# every plan element kind equivalently, within 2 per channel on every decided pixel.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -45,7 +49,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=885
+MIN_CHECKS=911
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 

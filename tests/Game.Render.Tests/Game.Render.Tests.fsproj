@@ -24,6 +24,8 @@
     <Compile Include="..\..\src\Render.Browser\InputLayout.fs" Link="InputLayout.fs" />
     <Compile Include="InputLayoutTests.fs" />
     <Compile Include="ReferencePipelineTests.fs" />
+    <!-- EXPERIMENTAL (FS.GG.Game#810): the client-presentation proof. -->
+    <Compile Include="ClientPresentationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
