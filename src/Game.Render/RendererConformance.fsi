@@ -7,7 +7,7 @@ namespace FS.GG.Game.Render
 type ConformanceResult =
 
     /// The requirement, prefixed by its section (`subject`, `registry`, `round-trip`, `switch`, `dispose`,
-    /// `late failure`, `present failure`, `viewport`, `pixels`, `interaction`).
+    /// `late failure`, `present failure`, `viewport`, `pixels`, `interaction`, `input`).
     member Check: string
 
     /// Whether the requirement held.
@@ -155,6 +155,85 @@ module PixelProbe =
         tolerance: (RendererBackend -> int) ->
             PixelProbe
 
+/// Public contract type exposed by the FS.GG.Game.Render package.
+/// One item of an input host's accessible mirror, as read back from the page (FS.GG.Game#788, I9).
+type InputItem =
+    {
+        /// The object the item stands for (`SelectableObject.Id`).
+        Id: string
+        /// Its role: `option` or `gridcell`.
+        Role: string
+        /// Its accessible name.
+        Name: string
+        /// Whether it says its object is selected (`aria-selected`).
+        Selected: bool
+        /// The label of the `group` or `rowgroup` it is in, if any.
+        Group: string option
+        /// The `aria-rowindex` of its row, on a grid.
+        Row: int option
+        /// Its `aria-colindex`, on a grid.
+        Column: int option
+        /// Whether the surface owns it (`aria-owns`, directly or through its group, or as a canvas's fallback content).
+        Owned: bool
+        /// Whether it is hidden from assistive technology (`aria-hidden`, `display:none` or `visibility:hidden`).
+        Hidden: bool
+    }
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+/// A backend's input-host surface as read back from the page (FS.GG.Game#788, I9, I10, I11 and I16).
+type InputSurface =
+    {
+        /// The surface's role: `listbox` or `grid`.
+        Role: string
+        /// The surface's accessible label.
+        Label: string
+        /// How many elements of the backend's output and mirror are in the tab order.
+        TabStops: int
+        /// The object whose item `aria-activedescendant` names, if any.
+        Active: string option
+        /// Whether the surface has the keyboard focus.
+        Focused: bool
+        /// The mirror's items, in document order.
+        Items: InputItem list
+        /// The mirror's bounding box in CSS pixels (x, y, width, height).
+        MirrorBox: float * float * float * float
+    }
+
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// How the kit plays a backend's input host for the `input` section (FS.GG.Game#788): REAL input (trusted pointer,
+/// touch and keyboard events from the test driver, never synthesised DOM events), the surface read back from the page,
+/// and the drawn pixels. Points are scene coordinates. Built as a record by `BrowserConformance.inputProbe` or by a
+/// game's own host.
+[<NoEquality; NoComparison>]
+type InputProbe =
+    {
+        /// Press, move, focus, keys, what has the focus, the tabindex and the input-host census.
+        Interaction: InteractionProbe
+        /// What a backend drew, for the focus ring (I8).
+        Pixels: PixelProbe
+        /// A real secondary (right) press.
+        SecondaryPress: RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>
+        /// A real touch held 600 ms without moving.
+        LongPress: RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>
+        /// A real primary press while the modifier key (`Shift`, `Control`, `Alt` or `Meta`) is held.
+        PressHolding: string -> RendererBackend -> FS.GG.UI.Scene.Point -> Async<unit>
+        /// A real key press (a `KeyboardEvent.key` value) while the modifier key is held.
+        KeyHolding: string -> string -> Async<unit>
+        /// A real key held down for that many key-down events (the first unrepeated, the rest repeats), then released.
+        HoldKey: string -> int -> Async<unit>
+        /// The surface as read back; `None` when the backend has no input-host surface in the page.
+        Surface: RendererBackend -> InputSurface option
+        /// A screen reader's default action on the item of an object (a click on the item element).
+        ActivateItem: RendererBackend -> string -> Async<unit>
+        /// The keys that reached a page-level (bubble-phase) listener since the last call.
+        PageKeys: unit -> string list
+        /// How many page context menus have opened (a `contextmenu` event nobody prevented) so far.
+        ContextMenus: unit -> int
+        /// CSS pixels per scene unit of the backend's presented output.
+        CssPerUnit: RendererBackend -> float
+    }
+
 /// Public contract module exposed by the FS.GG.Game.Render package.
 ///
 /// The pixels a scene decides (FS.GG.Game#753), for `RendererConformance.withPixels`.
@@ -227,7 +306,13 @@ type ConformanceSubject<'State>
 ///   where no object is asks for nothing, Tab walks the mirror entries in order and Space selects one, keyboard
 ///   focus stays on that entry across the selection's Present and across unchanged Presents, an unchanged Present
 ///   does not write the live status, the selection survives a switch away and back, and switching away and
-///   disposing the host release the input host.
+///   disposing the host release the input host;
+/// - **input**, when `withInput` declared one (FS.GG.Game#788, ADR 0001 I1-I16): on every backend, with real pointer,
+///   touch and keyboard input, the events (source, target, point, modifiers, primary, secondary, repeated activation,
+///   long-press, hover, focus, Cancel), the single-Tab-stop listbox or grid surface and its owned items (pointer-only,
+///   grouped and cell objects), key containment, the drawn focus ring against a hover-only frame, a selection the game
+///   answers later, the kit's own probe distance from object edges, the release of the input host, the same surface on
+///   every backend, and, with `withBoundStart`, late failures on a host bound with `BrowserRenderers.bindTo`.
 [<RequireQualifiedAccess>]
 module RendererConformance =
 
@@ -307,28 +392,40 @@ module RendererConformance =
             ConformanceSubject<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Declare the game's input pipeline for the kit's `input` section (FS.GG.Game#787, `docs/adr/0001-standard-input-pipeline.md`
-    /// "Kit specification"), replacing any declared before: the registry's input hosts report to `route`, `probe` plays
-    /// them with real input, and `events` reads back, in order, the events the game's binding of `route` received. The
-    /// section checks the events (source, modifiers, primary, secondary, repeated activation, hover, focus, Cancel), the
-    /// drawn focus ring, the single-Tab-stop listbox or grid surface (pointer-only, grouped and cell objects) and
-    /// disposal on every backend, and a selection that the game answers later (through a guest) within the subject's
-    /// wait. Contract only:
-    /// FS.GG.Game#788 implements it, and until then it raises.
+    /// Declare the game's input for the kit's `input` section (FS.GG.Game#788, ADR 0001 "Kit specification" I1-I16),
+    /// replacing any declared before: the registry's input hosts report to `route` (`SceneRenderers.withInput
+    /// interaction route`), `probe` plays them with real input, and `react apply event` is the game's reaction to each
+    /// event (its pipeline), which may call `apply` (a change of the game state the kit's host shows) at once or later,
+    /// as an asynchronous guest does. The kit binds `route` to each host it starts, records every event, and unbinds it
+    /// when the section ends. `RendererConformance.selectionReaction` is the reaction of a game without a pipeline.
     val withInput:
         interaction: SceneInteraction<'State> ->
         route: InputRoute ->
-        probe: InteractionProbe ->
-        events: (unit -> InputEvent list) ->
+        probe: InputProbe ->
+        react: ((('State -> 'State) -> unit) -> InputEvent -> unit) ->
         subject: ConformanceSubject<'State> ->
             ConformanceSubject<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The reaction of a game without a pipeline: each event's `InputEvent.toSelectionRequest`, applied at once by the
+    /// game's own selection rule (`SceneInteraction.apply`).
+    val selectionReaction:
+        interaction: SceneInteraction<'State> -> ((('State -> 'State) -> unit) -> InputEvent -> unit)
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Declare that `backend`'s input host is the game's own (a hybrid page: SC2's own SVG map beside the canvas
-    /// backends, FS.GG.Game#772). The `interaction` and `input` sections then check that backend through `probe` and
-    /// the events it reports, not through the library's mirror markup. Contract only: FS.GG.Game#788 implements it,
-    /// and until then it raises.
+    /// backends, FS.GG.Game#772). The `input` section then checks that backend through `probe` and the events it
+    /// reports, and exempts it from the library's markup checks only (I9, I10 and I16).
     val withOwnInputHost: backend: RendererBackend -> subject: ConformanceSubject<'State> -> ConformanceSubject<'State>
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Declare a second way to start a host: one that runs renderer selection itself, not through the browser's
+    /// `RendererDriver` (an Elmish program with `BrowserRenderers.bindTo`, FS.GG.Game#768). The `input` section runs the
+    /// adapter late-failure checks again on hosts it starts (I15).
+    val withBoundStart:
+        start: (RendererRegistry<'State> -> 'State -> ConformanceHost<'State>) ->
+        subject: ConformanceSubject<'State> ->
+            ConformanceSubject<'State>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Declare what the states must DRAW (FS.GG.Game#753), replacing any declared before: `expected state` lists the
