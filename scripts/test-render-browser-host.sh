@@ -29,7 +29,7 @@
 # Then the EXPERIMENTAL client-presentation proof (FS.GG.Game#810, not shipped) runs on every backend: a real
 # press-drag-release draws a move arrow through the guest's Locals, Enter submits it, and the arrow follows the pending
 # command to settlement; a refused plan survives a backend switch and Escape clears it. Last, SVG and Pixi must draw
-# every plan element kind equivalently, within 2 per channel on every decided pixel.
+# every plan element kind equivalently, with zero channel tolerance on every decided pixel.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed

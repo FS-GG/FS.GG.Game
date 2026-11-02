@@ -8,7 +8,7 @@ ADR 0001 gets only a one-line pointer to this file, and only after #797, #798 an
 - **Parent Outcome:** FS-GG/.github#5218 (GAME-RENDER-02).
 - **Built against these surfaces:**
   - ADR 0001 and its reducer as merged at `f712d08`;
-  - #788's open PRs at their current heads: the input host #797 (`ce667980`), the kit #798 (`6e0b3e96`) and ReferenceGame end to end #799 (`d2dc96d2`);
+  - the frozen #788 stack ending at ReferenceGame #799 (`d2dc96d2`), with kit #798 (`6e0b3e96`) and input host #797 (`22417887`) in its ancestry;
   - the glyph library and theme tokens as merged at `0eadca0` (#802, #806, #807, #808);
   - the theme-machinery design in #805 (open).
 - **Owners consulted:**
@@ -20,6 +20,11 @@ ADR 0001 gets only a one-line pointer to this file, and only after #797, #798 an
   #795* until that owner confirms it.
 - **The working proof** is experimental and not shipped: `src/ReferenceGame/ExperimentalClientPresentation.fs` and
   `ExperimentalPlanGame.fs`. ReferenceGame is not packed.
+
+The supplier stack is pinned for this proof. On 2026-11-02, #797 had moved to `a209724b`; that head is not
+in #799's frozen ancestry. The proof therefore does not establish compatibility with that later host or with
+the merged glyph and theme surfaces. Reconcile and verify the stack after #797–#799 land. The owner proposals
+above still await confirmation.
 
 ## Problem
 
@@ -367,7 +372,7 @@ amplifiers → bodies → PLANS → selection brackets → (cue layer: hover, th
   - **Doc-safe set:** arrows, paths, ghosts, areas, target lines, highlights and the label *marker* are all in the
     portable, doc-safe set. A label's *text* is not portable (Q7). It is `docSafe = false`, and its static equivalent
     is the marker plus the summary text.
-  - **Tolerance:** 2 per channel on every decided pixel, the kit's existing SVG and Pixi tolerance.
+  - **Tolerance:** zero on every decided pixel, matching the exact SVG/Pixi portable-profile requirement in #786. Babylon's tolerance is separate and cannot relax SVG/Pixi equivalence.
   - **Checking:** the proof measures it (K9). Game#814 adds the kit's standing equivalence section and the doc export.
 - **Babylon draws plans unlit** (#786) through the same fill path as glyphs. Until #786 lands, the kit asserts the
   declared colours on SVG and Pixi, and the 0.75 lit factor on Babylon, as the glyph kit does.
@@ -380,16 +385,26 @@ settles the 35 colour aliases**, so neither count moves now.
 | Alias | Drawn as | Proposed derivation (#795 decides) | Validation |
 |---|---|---|---|
 | `plan.move` | move arrows and paths; valid ghosts | the `glyph.path` ramp step | ≥ `contrastTarget` on the ground; ≥ 3:1 on `plan.keyline` |
-| `plan.attack` | attack arrows, target lines | a `status.bad`-hue step, distinct from `plan.invalid` | same |
-| `plan.support` | support arrows | an `allegiance.ally`-hue step | same |
+| `plan.attack` | attack arrows, target lines | a higher-contrast `status.bad`-hue step, distinct from `plan.invalid`; never an unchecked alias of `status.bad` | same |
+| `plan.support` | support arrows | a `glyph.allegiance.ally`-hue step | same |
 | `plan.invalid` | failed plans, invalid ghosts, the `invalid` highlight | a `status.warn` or `status.bad` step | same |
-| `plan.keyline` | the keyline under every plan mark | the pole opposite the plan inks, as `status.keyline` | the separator; not held to the ground |
+| `plan.keyline` | the keyline under every plan mark | a common opposite pole solved jointly with the four plan inks | the separator; not held to the ground |
 
-- **Distinctness:** the four style inks differ pairwise at the status-level ΔE2000 threshold, normal and under CVD (#795's
-  checks).
+- **Joint derivation:** solve the inks and their common keyline together: each ink meets the ground target and 3:1
+  on the keyline, followed by joint ΔE repair or a typed refusal when the constraints cannot be met. Reusing
+  `status.keyline` without that check is unsafe.
+- **Distinctness:** in colour presets, the four style inks differ pairwise at the status-level ΔE2000 threshold,
+  normal and under CVD (#795's checks). Monochrome skips hue distinctness and instead requires the shape and phase
+  redundancy proof in CP6.
 - **Shape redundancy** is required whatever the inks are (CP6). Sizes reuse `band` and `gap`.
 - **The proof** uses fixed inks with no theme, each at least 7:1 on its keyline (a test pins this), because the
   glyph library is not on the #799 stack it sits on.
+
+The [#795 owner's source measurements](https://github.com/FS-GG/FS.GG.Game/issues/795#issuecomment-6575022763)
+at `6cc90b5b` (`src/Game.Render/ThemeBaked.fs`) motivate these amendments: `status.bad` against the ground is
+2.614:1 in classic, 5.621:1 in highContrast and 2.612:1 in colourBlindSafe, below the respective 3/7/3 targets;
+classic's path ink against white is only 1.348:1. The owner confirms the proposed hue families fit, while the
+additive aliases and their joint solver remain proposed work under #810 after #795's 35-alias surface settles.
 
 ### CP8. Accessibility
 
@@ -430,7 +445,7 @@ implementation PR:
 | K6 | Pass order: where a plan crosses a body, the plan's pixel shows. Where it meets a selection bracket or the focus ring, the bracket or ring shows. |
 | K7 | Exactly one polite announcement per phase change, and none per drag move. The summary names every plan. |
 | K8 | Escape through the reference guest clears drafts and settled plans, never a plan that follows a sent command. |
-| K9 | **SVG and Pixi equivalence** (Root's binding requirement, #5218). A scene with every plan element kind and every phase is drawn on SVG and on Pixi. On every decided pixel, the two agree, and each agrees with the scene's decided colour, within 2 per channel. Game#814's standing equivalence section runs it with the rest of the portable set. |
+| K9 | **SVG and Pixi equivalence** (Root's binding requirement, #5218). A scene with every plan element kind and every phase is drawn on SVG and on Pixi. On every decided pixel, the two agree, and each agrees with the scene's decided colour, with zero channel tolerance. Game#814's standing equivalence section runs it with the rest of the portable set. |
 
 **Laws** (in process, on .NET and on emitted Fable with equal counts, like P1–P20):
 

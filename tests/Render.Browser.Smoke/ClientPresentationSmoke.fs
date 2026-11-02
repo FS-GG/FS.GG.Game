@@ -34,6 +34,12 @@ let private cancelFrame (_handle: float) : unit = jsNative
 [<Emit("$0.scrollIntoView({ block: 'center', inline: 'center' })")>]
 let private scrollIntoView (_element: Element) : unit = jsNative
 
+[<Emit("$0.addEventListener($1, $2, true)")>]
+let private listenCapture (_element: HTMLElement) (_name: string) (_listener: Event -> unit) : unit = jsNative
+
+[<Emit("$0.removeEventListener($1, $2, true)")>]
+let private unlistenCapture (_element: HTMLElement) (_name: string) (_listener: Event -> unit) : unit = jsNative
+
 [<Emit("(window.__fsggInput ? window.__fsggInput($0) : Promise.reject(new Error('the smoke needs the real-input driver')))")>]
 let private realInput (_request: obj) : JS.Promise<unit> = jsNative
 
@@ -129,15 +135,14 @@ let private attachDrag (container: HTMLElement) (surface: unit -> HTMLElement op
             feed (Release(scenePoint element pointer.clientX pointer.clientY, dragged))
         | _ -> down <- None
 
-    let options = createObj [ "capture" ==> true ]
-    container?addEventListener ("pointerdown", onDown, options)
-    container?addEventListener ("pointermove", onMove, options)
-    container?addEventListener ("pointerup", onUp, options)
+    listenCapture container "pointerdown" onDown
+    listenCapture container "pointermove" onMove
+    listenCapture container "pointerup" onUp
 
     fun () ->
-        container?removeEventListener ("pointerdown", onDown, options)
-        container?removeEventListener ("pointermove", onMove, options)
-        container?removeEventListener ("pointerup", onUp, options)
+        unlistenCapture container "pointerdown" onDown
+        unlistenCapture container "pointermove" onMove
+        unlistenCapture container "pointerup" onUp
 
 /// A real press-drag-release (Playwright's mouse) on `backend`'s surface between two scene points.
 let private dragOn (container: HTMLElement) (backend: RendererBackend) (from: Point) (target: Point) : Async<unit> =
@@ -195,6 +200,8 @@ let run (check: string -> bool -> string -> unit) (info: string -> string -> uni
             live.setAttribute ("role", "status")
             live.setAttribute ("aria-live", "polite")
             live.setAttribute ("data-plan-status", name)
+            // Announcements must not shift the surface while trusted pointer coordinates are in flight.
+            live.setAttribute ("style", "position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap")
             container.appendChild live |> ignore
             let said = ResizeArray<string>()
 
@@ -311,8 +318,8 @@ let run (check: string -> bool -> string -> unit) (info: string -> string -> uni
             check
                 (sprintf "client presentation %s: the guest's selection is reflected in the mirror (aria-selected on the Player token)" name)
                 (not (isNull selectedItem)
-                 && (selectedItem.getAttribute "aria-label" |> string).Contains "Player token")
-                (if isNull selectedItem then "no selected item" else selectedItem.outerHTML)
+                 && (selectedItem.textContent |> Option.ofObj |> Option.exists (fun label -> label.Contains "Player token")))
+                (if isNull selectedItem then "no selected item" else (unbox<HTMLElement> selectedItem).outerHTML)
 
             // On the shaft, sample 6 (x=98) is drawn in every phase and sample 7 (x=102) only once submitted.
             let onShaft = { X = 98.0; Y = 60.0 }
@@ -511,17 +518,12 @@ let runEquivalence (check: string -> bool -> string -> unit) (info: string -> st
         let driver = BrowserRenderers.start late registry equivalenceScene ignore
         let! _ = BrowserConformance.waitUntil 600 (fun () -> driver.Mounted = Some RendererBackend.Svg)
         let nodes = (view equivalenceScene).Nodes
-        let plan = planPass proofInks (bounds equivalenceScene) equivalenceScene.Presentation
-
-        // Every plan rectangle's centre, and a pixel inside each keyline band, where the scene decides the colour.
+        // Exhaust the bounded 240 x 120 scene at pixel centres. Sampling only rectangle centres
+        // and one keyline point cannot establish the promised agreement on every decided pixel.
         let samples =
-            plan
-            |> List.collect (fun node ->
-                match node with
-                | SceneNode.Rectangle((x, y, w, h), _) -> [ { X = x + w / 2.0; Y = y + h / 2.0 }; { X = x + 0.5; Y = y + 0.5 } ]
-                | _ -> [])
-            |> List.distinct
-            |> List.filter (fun p -> p.X >= 0.0 && p.Y >= 0.0 && p.X < sceneWidth && p.Y < sceneHeight)
+            [ for y in 0 .. int sceneHeight - 1 do
+                for x in 0 .. int sceneWidth - 1 do
+                    { X = float x + 0.5; Y = float y + 0.5 } ]
             |> List.choose (fun p -> decided nodes p |> Option.map (fun colour -> p, colour))
 
         let points = samples |> List.map fst
@@ -568,10 +570,10 @@ let runEquivalence (check: string -> bool -> string -> unit) (info: string -> st
             |> List.filter (fun entry -> not (drawPlan proofInks (bounds equivalenceScene) entry).IsEmpty)
             |> List.length
 
-        let tolerance = 2
+        let tolerance = 0
 
         check
-            "client presentation: SVG and Pixi draw every plan element kind equivalently (arrow, path, ghost, circle and box areas, target line, label marker; draft, pending, applied and refused), within 2 per channel on every decided pixel"
+            "client presentation: SVG and Pixi draw every plan element kind equivalently (arrow, path, ghost, circle and box areas, target line, label marker; draft, pending, applied and refused), with zero channel tolerance on every decided pixel"
             (points.Length >= 100 && kinds = 7 && worstPair <= tolerance && worstSvg <= tolerance)
             (sprintf "samples=%d kinds=%d worst svg-vs-pixi=%d worst svg-vs-decided=%d" points.Length kinds worstPair worstSvg)
 

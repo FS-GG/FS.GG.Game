@@ -352,7 +352,7 @@ let private propertyN (count: int) name (gen: Gen<'T>) (check: 'T -> unit) =
                 check value
                 true)
 
-        Check.One(Config.QuickThrowOnFailure.WithMaxTest count, prop)
+        Check.One(TestSupport.propertyConfig count, prop)
 
 let private property name gen check = propertyN cases name gen check
 
@@ -473,12 +473,9 @@ let private rects (nodes: SceneNode list) =
         | SceneNode.Rectangle(bounds, fill) -> Some(bounds, fill)
         | _ -> None)
 
-// Sequenced: run in parallel, this list stalled locally with every property started and none finishing (the cause was
-// not isolated; each property alone finishes in under a second). Run in sequence, the whole list takes about 2 s.
 [<Tests>]
 let tests =
-    testSequencedGroup "ExperimentalClientPresentation"
-    <| testList
+    testList
         "ExperimentalClientPresentation"
         [
             testList
