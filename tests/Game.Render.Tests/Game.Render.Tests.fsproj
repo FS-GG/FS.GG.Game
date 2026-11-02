@@ -19,6 +19,7 @@
     <Compile Include="RendererConformanceTests.fs" />
     <Compile Include="ScenePixelsTests.fs" />
     <Compile Include="ThemeTests.fs" />
+    <Compile Include="SymbologyTests.fs" />
     <Compile Include="GlyphsTests.fs" />
     <Compile Include="ExperimentalThemesTests.fs" />
     <Compile Include="SceneInteractionTests.fs" />

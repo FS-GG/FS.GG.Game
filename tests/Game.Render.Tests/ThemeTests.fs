@@ -89,8 +89,9 @@ let tests =
             }
 
             test "classic is the default preset: baked, equal to a fresh derivation of its seed, and every alias of the closed set" {
-                Expect.equal (Theme.presets |> List.map Theme.name) [ "classic" ] "presets"
-                let fresh = ok (derive ThemeSeed.classic)
+                Expect.equal (Theme.presets |> List.map Theme.name) [ "classic"; "light"; "highContrast"; "colourBlindSafe"; "monochrome" ] "presets"
+                let _, seed, algorithms = List.head ThemePresets.recipes
+                let fresh = ok (Theme.create seed algorithms [] |> Result.bind (Theme.validate (ThemePresets.checks 2)))
                 Expect.equal (Theme.hex Theme.classic) (Theme.hex fresh) "baked equals fresh"
                 Expect.equal (Theme.cssVariables Theme.classic) (Theme.cssVariables fresh) "numbers too"
 
@@ -137,8 +138,8 @@ let tests =
 
                 Expect.equal (Theme.teamCount Theme.classic) 8 "eight teams"
                 Expect.equal (Theme.minCssPerUnit Theme.classic) 1.0 "minCssPerUnit defaults to 1"
-                Expect.equal [ for s in -1..5 -> Theme.hueCapacity Theme.classic s ] [ 5; 5; 6; 7; 8; 8; 8 ] "hue capacity per size step, clamped"
-                Expect.equal (Theme.algorithms Theme.classic) [ "standard" ] "algorithms"
+                Expect.equal [ for s in -1..5 -> Theme.hueCapacity Theme.classic s ] [ 5; 5; 5; 5; 5; 5; 5 ] "hue capacity per size step, clamped"
+                Expect.equal (Theme.algorithms Theme.classic) [ "standard"; "fsgg.leonardo"; "fsgg.dark"; "fsgg.repair" ] "algorithms"
                 Expect.equal (Theme.allegiance Identity.Enemy Theme.classic) (colourOf "glyph.allegiance.enemy" Theme.classic) "allegiance"
             }
 
@@ -174,7 +175,7 @@ let tests =
                     atLeast 3.0 "glyph.modifier" on
             }
 
-            test "classic's provisional team colours are distinct from every allegiance colour and from each other (OKLab distance)" {
+            test "the standard algorithm's provisional team colours are distinct from every allegiance colour and from each other (OKLab distance)" {
                 let lab (c: Color) =
                     let p = ThemeColour.toOklch c
                     let h = p.H * System.Math.PI / 180.0
@@ -184,8 +185,9 @@ let tests =
                     let (l1, a1, b1), (l2, a2, b2) = lab a, lab b
                     sqrt ((l1 - l2) ** 2.0 + (a1 - a2) ** 2.0 + (b1 - b2) ** 2.0)
 
-                let teams = [ for i in 0..7 -> colourOf (sprintf "glyph.team.%d" i) Theme.classic ]
-                let allegiances = [ Identity.Own; Identity.Ally; Identity.Neutral; Identity.Enemy; Identity.Unknown ] |> List.map (fun i -> Theme.allegiance i Theme.classic)
+                let provisional = ok (derive ThemeSeed.classic)
+                let teams = [ for i in 0..7 -> colourOf (sprintf "glyph.team.%d" i) provisional ]
+                let allegiances = [ Identity.Own; Identity.Ally; Identity.Neutral; Identity.Enemy; Identity.Unknown ] |> List.map (fun i -> Theme.allegiance i provisional)
 
                 for i, team in List.indexed teams do
                     for a in allegiances do
@@ -260,13 +262,13 @@ let tests =
             }
 
             test "a player's team-colour override is validated again: one that passes applies, one that fails is refused with its reason" {
-                let teal = rgb 0 150 136
+                let teal = rgb 86 151 233
                 let theme = ok (Theme.withOverrides [ ThemeOverride.colour "glyph.team.0" teal ] Theme.classic)
                 Expect.equal (colourOf "glyph.team.0" theme) teal "applied"
                 Expect.equal (colourOf "glyph.team.1" theme) (colourOf "glyph.team.1" Theme.classic) "the rest unchanged"
 
                 let violations = refused (Theme.withOverrides [ ThemeOverride.colour "glyph.team.0" (rgb 40 44 52) ] Theme.classic)
-                Expect.equal (violations |> List.map (fun v -> v.Token) |> List.sort) [ "glyph.badge.ink"; "glyph.modifier"; "glyph.team.0" ] "refused: the team on the ground, and the badge and modifier inks on the team"
+                Expect.containsAll (violations |> List.map (fun v -> v.Token)) [ "glyph.badge.ink"; "glyph.modifier"; "glyph.team.0" ] "refused by built-in rules and carried preset checks"
                 let onGround = violations |> List.find (fun v -> v.Token = "glyph.team.0")
                 Expect.stringContains onGround.Reason "surface.ground" "too close to the ground"
                 let badge = violations |> List.find (fun v -> v.Token = "glyph.badge.ink")
@@ -274,7 +276,8 @@ let tests =
             }
 
             test "added checks join validation: Theme.validate runs them after the built-in rules, the theme carries them, and withOverrides runs them again" {
-                // A stand-in for FS.GG.Game#795's distinctness check: every pair of team colours at least this far apart in OKLab.
+                let baseTheme = ok (derive ThemeSeed.classic)
+                // An additional for FS.GG.Game#795's distinctness check: every pair of team colours at least this far apart in OKLab.
                 let distinct (minimum: float) =
                     ThemeCheck.create (sprintf "teams-distinct-%g" minimum) (fun theme ->
                         let teams = [ for i in 0 .. Theme.teamCount theme - 1 -> sprintf "glyph.team.%d" i, colourOf (sprintf "glyph.team.%d" i) theme ]
@@ -292,18 +295,18 @@ let tests =
                                         yield ThemeViolation.create b (sprintf "%.3f from %s, below %g" d a minimum)
                         ])
 
-                let checkedTheme = ok (Theme.validate [ distinct 0.05 ] Theme.classic)
+                let checkedTheme = ok (Theme.validate [ distinct 0.05 ] baseTheme)
                 Expect.equal (Theme.checks checkedTheme) [ "teams-distinct-0.05" ] "the theme carries its check"
-                Expect.equal (Theme.hex checkedTheme) (Theme.hex Theme.classic) "and is the same theme"
-                Expect.isNonEmpty (refused (Theme.validate [ distinct 0.9 ] Theme.classic)) "a check that fails refuses the theme"
+                Expect.equal (Theme.hex checkedTheme) (Theme.hex baseTheme) "and is the same theme"
+                Expect.isNonEmpty (refused (Theme.validate [ distinct 0.9 ] baseTheme)) "a check that fails refuses the theme"
 
                 // A player override that passes the built-in rules but breaks the carried check is refused.
-                let clash = Theme.withOverrides [ ThemeOverride.colour "glyph.team.1" (colourOf "glyph.team.0" Theme.classic) ] checkedTheme
+                let clash = Theme.withOverrides [ ThemeOverride.colour "glyph.team.1" (colourOf "glyph.team.0" baseTheme) ] checkedTheme
                 Expect.equal ((refused clash) |> List.map (fun v -> v.Token)) [ "glyph.team.1" ] "the carried check runs on an override"
-                Expect.isOk (Theme.withOverrides [ ThemeOverride.colour "glyph.team.1" (colourOf "glyph.team.0" Theme.classic) ] Theme.classic) "without the check the override passes"
+                Expect.isOk (Theme.withOverrides [ ThemeOverride.colour "glyph.team.1" (colourOf "glyph.team.0" baseTheme) ] baseTheme) "without the check the override passes"
 
                 let throws = ThemeCheck.create "broken" (fun _ -> failwith "boom")
-                Expect.equal ((refused (Theme.validate [ throws ] Theme.classic)) |> List.map (fun v -> v.Token)) [ "broken" ] "a check that throws is a violation"
+                Expect.equal ((refused (Theme.validate [ throws ] baseTheme)) |> List.map (fun v -> v.Token)) [ "broken" ] "a check that throws is a violation"
             }
 
             test "CSS variables and hex give the Scene's colours" {
@@ -318,7 +321,7 @@ let tests =
                 Expect.stringContains text "\"colorSpace\": \"oklch\"" "oklch colours"
                 Expect.stringContains text "\"hex\": \"#222831\"" "with hex"
                 Expect.stringContains text "\"gg.fs.theme\"" "the extension"
-                let back = ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] text)
+                let back = ok (Theme.ofDtcg ThemePresets.algorithms text)
                 Expect.equal (Theme.hex back) (Theme.hex Theme.classic) "lossless"
                 Expect.equal (Theme.cssVariables back) (Theme.cssVariables Theme.classic) "numbers too"
                 Expect.equal (Theme.name back) "classic" "the name"
@@ -328,20 +331,21 @@ let tests =
                 let components = text.IndexOf("\"components\": [", firstGround)
                 let close = text.IndexOf(']', components)
                 let edited = text.Substring(0, components) + "\"components\": [0.9, 0, 0" + text.Substring close
-                Expect.equal (Theme.hex (ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] edited))) (Theme.hex Theme.classic) "hex preferred"
+                Expect.equal (Theme.hex (ok (Theme.ofDtcg ThemePresets.algorithms edited))) (Theme.hex Theme.classic) "hex preferred"
 
                 // A designer edits the seed and deletes the alias group: every alias is derived again.
+                let text = Theme.toDtcg (ok (derive ThemeSeed.classic))
                 let seedOnly = text.Substring(0, text.IndexOf ",\n  \"alias\"") + "\n}\n"
                 let reseeded = seedOnly.Replace("\"hex\": \"#db2478\"", "\"hex\": \"#2f6fd0\"")
-                let derived = ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] reseeded)
+                let derived = ok (Theme.ofDtcg ThemePresets.algorithms reseeded)
                 Expect.equal (colourOf "glyph.team.0" derived) (rgb 0x2f 0x6f 0xd0) "the edited seed reaches the alias"
 
                 Expect.isNonEmpty (refused (Theme.ofDtcg [] text)) "an algorithm not given is refused"
-                Expect.isNonEmpty (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] "{ \"seed\": ")) "malformed JSON is refused"
+                Expect.isNonEmpty (refused (Theme.ofDtcg ThemePresets.algorithms "{ \"seed\": ")) "malformed JSON is refused"
             }
 
             test "the DTCG resolver document: version 2025-10-01, a set for one theme, a theme modifier for two or more, and the density modifier" {
-                let one = Theme.dtcgResolver Theme.presets
+                let one = Theme.dtcgResolver [ Theme.classic ]
                 Expect.stringContains one "\"version\": \"2025-10-01\"" "the version is a date"
                 Expect.stringContains one "\"sets\"" "one theme is a set"
                 Expect.isFalse (one.Contains "\"theme\":") "no single-context theme modifier"
@@ -364,11 +368,11 @@ let tests =
                 let close0 = text.IndexOf("\n        }", open0)
                 let referenced = text.Substring(0, open0) + "\"0\": { \"$type\": \"color\", \"$value\": \"{seed.team.1}\" }" + text.Substring(close0 + "\n        }".Length)
                 ignore teamZero
-                let back = ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] referenced)
-                Expect.equal (colourOf "glyph.team.0" back) (colourOf "glyph.team.1" Theme.classic) "the reference is followed"
+                let back = ok (Theme.ofDtcg ThemePresets.algorithms referenced)
+                Expect.equal (colourOf "glyph.team.0" back) (ThemeSeed.tryColour "team.1" (Theme.seed Theme.classic) |> Option.get) "the reference is followed"
 
                 let missing = referenced.Replace("{seed.team.1}", "{seed.team.9}")
-                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] missing)) (fun v -> v.Reason.Contains "names no token") "a missing target"
+                Expect.exists (refused (Theme.ofDtcg ThemePresets.algorithms missing)) (fun v -> v.Reason.Contains "names no token") "a missing target"
 
                 // Group-level $type: the seed's colour tokens drop their own $type, and the group declares it.
                 let cut = text.IndexOf "\"alias\""
@@ -380,16 +384,16 @@ let tests =
                 let own (t: string) = (t.Length - t.Replace("\"$type\": \"color\"", "").Length) / "\"$type\": \"color\"".Length
                 // Ground and ink sit directly under the seed group and keep theirs; the 18 one level deeper lose theirs.
                 Expect.equal (own seedPart - own (grouped.Substring(0, grouped.IndexOf "\"alias\""))) 17 "18 token types dropped, one group type added"
-                Expect.equal (Theme.hex (ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] grouped))) (Theme.hex Theme.classic) "types inherited from the group"
+                Expect.equal (Theme.hex (ok (Theme.ofDtcg ThemePresets.algorithms grouped))) (Theme.hex Theme.classic) "types inherited from the group"
 
                 // The resolver's compact context sets the seed's density; the sizes follow it.
                 let compact = text.Replace("\"density\": {\n      \"$type\": \"number\",\n      \"$value\": 1\n", "\"density\": {\n      \"$type\": \"number\",\n      \"$value\": 0.75\n")
                 Expect.notEqual compact text "the density was edited"
-                Expect.equal (Theme.tryNumber "size.cell" (ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] compact))) (Some 24.0) "sizes derived again from the seed"
+                Expect.equal (Theme.tryNumber "size.cell" (ok (Theme.ofDtcg ThemePresets.algorithms compact))) (Some 24.0) "sizes derived again from the seed"
 
                 // A size the theme overrode travels in the extension.
                 let gapped = ok (Theme.withOverrides [ ThemeOverride.number "stroke.gap" 3.0 ] Theme.classic)
-                let gappedBack = ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] (Theme.toDtcg gapped))
+                let gappedBack = ok (Theme.ofDtcg ThemePresets.algorithms (Theme.toDtcg gapped))
                 Expect.equal (Theme.tryNumber "stroke.gap" gappedBack) (Some 3.0) "the number override survives"
                 Expect.equal (Theme.cssVariables gappedBack) (Theme.cssVariables gapped) "and everything else"
             }
@@ -411,25 +415,29 @@ let tests =
                     let close0 = withChain.IndexOf("\n        }", open0)
                     withChain.Substring(0, open0) + "\"0\": { \"$type\": \"color\", \"$value\": \"{chain.t0}\" }" + withChain.Substring(close0 + "\n        }".Length)
 
-                Expect.equal (colourOf "glyph.team.0" (ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] (chained 64)))) (rgb 0xc0 0x39 0xb9) "64 links are followed"
-                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] (chained 66))) (fun v -> v.Reason.Contains "longer than 64") "a longer chain is refused"
+                Expect.equal (colourOf "glyph.team.0" (ok (Theme.ofDtcg ThemePresets.algorithms (chained 64)))) (rgb 0xc0 0x39 0xb9) "64 links are followed"
+                Expect.exists (refused (Theme.ofDtcg ThemePresets.algorithms (chained 66))) (fun v -> v.Reason.Contains "longer than 64") "a longer chain is refused"
                 let watch = System.Diagnostics.Stopwatch.StartNew()
-                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] (chained 20000))) (fun v -> v.Reason.Contains "longer than 64") "20,000 links: refused, no stack overflow"
+                Expect.exists (refused (Theme.ofDtcg ThemePresets.algorithms (chained 20000))) (fun v -> v.Reason.Contains "longer than 64") "20,000 links: refused, no stack overflow"
                 Expect.isLessThan watch.Elapsed.TotalSeconds 10.0 "quickly"
 
-                let alpha = text.Replace("\"hex\": \"#db2478\"", "\"hex\": \"#db2478\", \"alpha\": 0.5")
-                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] alpha)) (fun v -> v.Reason.Contains "alpha 0.5") "alpha is refused, not made opaque"
-                let eightDigit = text.Replace("\"hex\": \"#db2478\"", "\"hex\": \"#db247880\"")
-                Expect.isNonEmpty (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] eightDigit)) "an 8-digit hex is refused"
+                let seedHex = ThemeSeed.tryColour "team.0" (Theme.seed Theme.classic) |> Option.get |> ThemeColour.hex
+                let needle = sprintf "\"hex\": \"%s\"" seedHex
+                let alpha = text.Replace(needle, needle + ", \"alpha\": 0.5")
+                Expect.notEqual alpha text "the alpha mutation changed a present seed token"
+                Expect.exists (refused (Theme.ofDtcg ThemePresets.algorithms alpha)) (fun v -> v.Reason.Contains "alpha 0.5") "alpha is refused, not made opaque"
+                let eightDigit = text.Replace(needle, sprintf "\"hex\": \"%s80\"" seedHex)
+                Expect.notEqual eightDigit text "the invalid hex mutation changed a present seed token"
+                Expect.isNonEmpty (refused (Theme.ofDtcg ThemePresets.algorithms eightDigit)) "an 8-digit hex is refused"
 
                 let aliasNumber = text.Replace("\"alias\": {", "\"alias\": {\n    \"size\": { \"cell\": { \"$type\": \"number\", \"$value\": 40 } },")
-                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] aliasNumber)) (fun v -> v.Token = "alias.size.cell") "a number in the alias group is refused"
+                Expect.exists (refused (Theme.ofDtcg ThemePresets.algorithms aliasNumber)) (fun v -> v.Token = "alias.size.cell") "a number in the alias group is refused"
 
                 let pointer = text.Replace("\"alias\": {", "\"alias\": {\n    \"marker\": { \"$type\": \"color\", \"$value\": { \"$ref\": \"#/seed/team/0/$value\" } },")
-                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] pointer)) (fun v -> v.Reason.Contains "$ref is not supported") "a JSON-pointer $ref is refused"
+                Expect.exists (refused (Theme.ofDtcg ThemePresets.algorithms pointer)) (fun v -> v.Reason.Contains "$ref is not supported") "a JSON-pointer $ref is refused"
 
                 let deep = String.replicate 200 "[" + String.replicate 200 "]"
-                Expect.exists (refused (Theme.ofDtcg [ ThemeAlgorithm.standard ] ("{ \"x\": " + deep + " }"))) (fun v -> v.Reason.Contains "nesting deeper than 128") "deep nesting is refused"
+                Expect.exists (refused (Theme.ofDtcg ThemePresets.algorithms ("{ \"x\": " + deep + " }"))) (fun v -> v.Reason.Contains "nesting deeper than 128") "deep nesting is refused"
             }
 
             test "erratum E7 (A1): a high-contrast theme holds several distinct teams, each 3:1 on the ground and the body, not 7:1 on the ground" {

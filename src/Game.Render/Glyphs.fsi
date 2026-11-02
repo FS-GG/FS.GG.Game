@@ -187,6 +187,9 @@ module GlyphSpec =
     /// 24 units at a 32-unit cell.
     val sizeStep: step: int -> spec: GlyphSpec -> GlyphSpec
 
+    /// The grammar's checked absolute frame, carried through lowering without changing ordinary theme sizing.
+    val internal withFrameSize: frame: float -> spec: GlyphSpec -> GlyphSpec
+
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The ordinal lightness step of the fill, 0 to 3 (0 is the colour itself; each step moves it 0.06 towards the
     /// ground in OKLCH lightness).

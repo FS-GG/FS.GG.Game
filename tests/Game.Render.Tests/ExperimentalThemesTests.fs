@@ -175,12 +175,15 @@ let tests =
             }
 
             test "DTCG export then import gives equal resolved hex, and the committed token files are current" {
-                // The repo root, found by walking up from the test binary (CI maps __SOURCE_DIRECTORY__ to /_/).
+                // Resolve fixtures from the binary or the working tree; isolated artifact output may live outside the checkout.
                 let rec up (d: System.IO.DirectoryInfo | null) =
                     match d with
-                    | null -> failwith "repo root (FS.GG.Game.slnx) not found"
-                    | dir -> if System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "FS.GG.Game.slnx")) then dir.FullName else up dir.Parent
-                let root = up (System.IO.DirectoryInfo(System.AppContext.BaseDirectory))
+                    | null -> None
+                    | dir -> if System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "FS.GG.Game.slnx")) then Some dir.FullName else up dir.Parent
+                let root =
+                    up (System.IO.DirectoryInfo(System.AppContext.BaseDirectory))
+                    |> Option.orElseWith (fun () -> up (System.IO.DirectoryInfo(System.IO.Directory.GetCurrentDirectory())))
+                    |> Option.defaultWith (fun () -> failwith "repo root (FS.GG.Game.slnx) not found")
                 let dir = System.IO.Path.Combine(root, "docs", "roadmaps", "game-render-02-themes", "themes")
                 for t in themes do
                     let text = toDtcg t

@@ -15,7 +15,9 @@
     "SceneInteraction contract: selectable objects, reference hit test, keyboard reducer and SelectionRoute",
     "RendererConformance kit: registry, round-trip, switch, dispose, late-failure and interaction checks with an in-process host",
     "Theme tokens: seed, map and alias layers, validation, deterministic OKLCH derivation, CSS variables and DTCG export and import (FS.GG.Game#789)",
-    "Glyphs: the portable glyph library (identity frames, team badges, amplifiers, passes, the themed cue layer) and the kit's glyph section, GlyphConformance (FS.GG.Game#789)"
+    "Glyphs: the portable glyph library (identity frames, team badges, amplifiers, passes, the themed cue layer) and the kit's glyph section, GlyphConformance (FS.GG.Game#789)",
+    "ThemePresets: five derived presets, composable OKLCH algorithms, CIEDE2000 and Machado validation (FS.GG.Game#795)",
+    "Symbology and Encode: typed game-state encodings, build-time channel rules, runtime domains and roster validation (FS.GG.Game#795)"
   ],
   "dotNetOnly": [
     "Adapter (Game.Core Grids projection)",

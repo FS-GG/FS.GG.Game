@@ -38,6 +38,8 @@
     <Compile Include="../Theme.fs" />
     <Compile Include="../Glyphs.fsi" />
     <Compile Include="../Glyphs.fs" />
+    <Compile Include="../Symbology.fsi" />
+    <Compile Include="../Symbology.fs" />
     <Compile Include="../GlyphConformance.fsi" />
     <Compile Include="../GlyphConformance.fs" />
   </ItemGroup>
