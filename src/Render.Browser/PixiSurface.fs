@@ -49,8 +49,8 @@ module PixiSurface =
     let mutable private initFailures = 0
     let mutable private unsupportedNodes = 0
 
-    /// An application the adapter created, and where its asynchronous initialisation stands: an application has no
-    /// ticker or stage before it is initialised, and one whose initialisation failed never held anything to destroy.
+    /// An application the adapter created, and where its asynchronous initialisation stands. Pixi allocates a stage
+    /// in the constructor; the renderer and ticker become available only during asynchronous initialisation.
     type private Entry =
         {
             App: P.Application
@@ -70,8 +70,8 @@ module PixiSurface =
             UnsupportedNodes = unsupportedNodes
         }
 
-    /// Pixi's own record of destruction: `Application.destroy` leaves `stage` null (before initialisation it is
-    /// undefined). The adapter's books say what it asked for; this says what Pixi did.
+    /// Pixi's own record of destruction: `Application.destroy` leaves `stage` null (construction creates a Container).
+    /// The adapter's books say what it asked for; this says what Pixi did.
     [<Emit("$0.stage === null")>]
     let private destroyedByPixi (app: P.Application) : bool = jsNative
 
@@ -210,17 +210,17 @@ module PixiSurface =
                     | Some frame -> frame.remove ()
                     | None -> container.removeChild canvas |> ignore)
 
-                let app = P.application ()
-                applicationsCreated <- applicationsCreated + 1
                 let ready = ref false
                 let failedInit = ref false
-
-                liveApplications.Add
-                    {
-                        App = app
-                        Ready = ready
-                        Failed = failedInit
-                    }
+                // Initial access/cue callbacks can fail before initialisation starts. Do not acquire an application
+                // (and its stage) or retain it in the registry until those synchronous host callbacks have succeeded.
+                let app =
+                    lazy (
+                        let made = P.application ()
+                        applicationsCreated <- applicationsCreated + 1
+                        liveApplications.Add { App = made; Ready = ready; Failed = failedInit }
+                        made
+                    )
 
                 // FS.GG.Game#751: the hit regions live in their own tree, never on the stage, so they are not drawn and
                 // the stage keeps one display object per drawable scene node. Drawn at their scene coordinates, which are
@@ -286,14 +286,14 @@ module PixiSurface =
                         slots.Clear()
 
                         try
-                            P.destroyApplication app
+                            P.destroyApplication app.Value
                         finally
                             CanvasSupport.loseContext canvas
 
                 let reconcile (next: Scene) =
                     let shapes = ResizeArray<Shape>()
                     unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) next shapes
-                    let stage = P.stage app
+                    let stage = P.stage app.Value
                     P.setSortableChildren stage true
 
                     for index in 0 .. shapes.Count - 1 do
@@ -347,7 +347,7 @@ module PixiSurface =
 
                     // Render now, in this task, so the presented state is what a reader of the canvas sees; the
                     // application's own ticker renders every later frame.
-                    P.renderApplication app
+                    P.renderApplication app.Value
 
                 // FS.GG.Game#788: an input-host mount renders at the presented density, its backing store derived from
                 // the frame's contain-fit and the device pixel ratio (CanvasSizing), so the cue layer's 2 CSS px bands
@@ -363,7 +363,7 @@ module PixiSurface =
                                     // and the backing height at that resolution, so the backing store is exactly the
                                     // snapped fit.
                                     let resolution = float backingWidth / options.Width
-                                    resizeAt app options.Width (float backingHeight / resolution) resolution
+                                    resizeAt app.Value options.Width (float backingHeight / resolution) resolution
                                     reconcile latest.Value
                                     true
                                 else
@@ -427,7 +427,7 @@ module PixiSurface =
 
                 let initialised =
                     P.initApplication
-                        app
+                        app.Value
                         (unbox<P.Canvas>(box canvas))
                         (int options.Width)
                         (int options.Height)

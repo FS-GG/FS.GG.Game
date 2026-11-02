@@ -1236,6 +1236,15 @@ let runFailedMounts (check: string -> bool -> string -> unit) : Async<unit> =
                 let container = document.createElement "div"
                 document.body.appendChild container |> ignore
                 let baseline = BrowserConformance.inputHosts backend
+                let pixiBaseline = PixiSurface.live ()
+                let createdBefore = (PixiSurface.counters ()).ApplicationsCreated
+                let nativeReleased () =
+                    if backend <> RendererBackend.Pixi then true
+                    else
+                        let live = PixiSurface.live ()
+                        live.Applications = pixiBaseline.Applications
+                        && live.TickerListeners = pixiBaseline.TickerListeners
+                        && live.DisplayObjects = pixiBaseline.DisplayObjects
                 let late = BrowserRenderers.route ()
                 let route = InputRoute.create ()
                 let options = BrowserRenderers.options "Failed input mount" InputFixture.width InputFixture.height
@@ -1267,23 +1276,29 @@ let runFailedMounts (check: string -> bool -> string -> unit) : Async<unit> =
                     | Ok mounted -> mounted.Dispose(); "unexpected success"
                 let! retired =
                     BrowserConformance.waitUntil 120 (fun () ->
-                        container.children.length = 0 && BrowserConformance.inputHosts backend = baseline)
+                        container.children.length = 0 && BrowserConformance.inputHosts backend = baseline && nativeReleased ())
 
                 check
                     (sprintf "input host partial mount %s %s: original failure releases its mirror, listeners and DOM" (RendererBackend.id backend) kind)
-                    (calls > 0 && reason.Contains expected && retired)
-                    (sprintf "calls=%d reason=%s children=%d resources=%d baseline=%d" calls reason container.children.length (BrowserConformance.inputHosts backend) baseline)
+                    (calls > 0 && reason.Contains expected && retired
+                     && (backend <> RendererBackend.Pixi || (PixiSurface.counters ()).ApplicationsCreated = createdBefore))
+                    (sprintf "calls=%d reason=%s children=%d resources=%d baseline=%d pixi=%A created=%d" calls reason container.children.length (BrowserConformance.inputHosts backend) baseline (PixiSurface.live ()) (PixiSurface.counters ()).ApplicationsCreated)
 
                 let retry = (SceneSurface.inputAdapter InputFixture.view InputFixture.interaction route surface).Mount board
                 let mutable positive = false
                 match retry with
                 | Ok mounted ->
-                    positive <- tabStops container = 1 && BrowserConformance.inputHosts backend > baseline
+                    positive <-
+                        tabStops container = 1 && BrowserConformance.inputHosts backend > baseline
+                        && (backend <> RendererBackend.Pixi
+                            || ((PixiSurface.counters ()).ApplicationsCreated = createdBefore + 1
+                                && (PixiSurface.live ()).Applications = pixiBaseline.Applications + 1))
                     mounted.Dispose()
                 | Error _ -> ()
                 let! cleanRetry =
-                    BrowserConformance.waitUntil 120 (fun () ->
-                        container.children.length = 0 && BrowserConformance.inputHosts backend = baseline)
+                    // A disposed pending Pixi init is retired by its existing completion continuation.
+                    BrowserConformance.waitUntil 600 (fun () ->
+                        container.children.length = 0 && BrowserConformance.inputHosts backend = baseline && nativeReleased ())
 
                 check
                     (sprintf "input host partial mount %s %s: healthy retry acquires and releases one input host" (RendererBackend.id backend) kind)
