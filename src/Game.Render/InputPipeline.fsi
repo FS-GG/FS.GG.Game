@@ -2,12 +2,13 @@ namespace FS.GG.Game.Render
 
 // The standard input pipeline (FS.GG.Game#787, `docs/adr/0001-standard-input-pipeline.md`): an input (stage 1) goes to
 // an optional guest (stage 2), whose intents are applied locally or sent to the authority as commands (stage 3). The
-// server is the only authority. Contract only: FS.GG.Game#788 implements every function below that the ADR gives
-// behaviour to, and until then those functions raise. Builders and accessors are data and work now.
+// server is the only authority. Implemented by FS.GG.Game#788; the laws are tests/Game.Render.Pipeline.Laws.
 //
-// Open unions: `PipelineInput`, `GuestOutcome`, `PipelineFailure` and `PipelineMsg` may gain cases in a minor version;
-// match the first three with a wildcard. `PipelineEffect` may too: a game that interprets effects itself instead of
-// through `PipelineRunner` handles new cases on upgrade.
+// Union policy (FS.GG.Game#788, Root decision on #788): the input vocabulary (`InputAction`, `PipelineInput` and
+// `GuestOutcome`) is CLOSED, so a new case is a major version change and a game matches it exhaustively.
+// `PipelineFailure` is OPAQUE: a new failure is an additive builder and predicate. `PipelineMsg` and `PipelineEffect`
+// may gain cases in a minor version: a game that interprets effects itself instead of through `PipelineRunner`
+// handles new cases on upgrade.
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 /// What enters the guest queue: a scene input from the `InputRoute`, or an input the game reports itself (an ability
@@ -221,7 +222,7 @@ module InputGuest =
     /// Run one request: admission, then the guest, calling `started ()` when it is warm. Never raises: an exception from
     /// `admit`, `decide`, `encode`, `invoke` or `decode` is `Faulted`, a `GuestReply` maps as its cases say, and a
     /// cancelled token is `Cancelled`. For an Elmish game that interprets `PipelineEffect.StartGuest` in its own `Cmd`.
-    /// Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    ///
     val run:
         guest: InputGuest<'Input, 'Client, 'Local, 'Command> ->
         request: GuestRequest<'Input, 'Client> ->
@@ -413,7 +414,9 @@ module CommandStage =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// A command that is not final settles `Unconfirmed` once the highest version heard (states and heartbeats) is
-    /// `patience` (at least one) past its basis, or past its latest `queued`, `started` or `progress` answer.
+    /// `patience` (at least one) past where its patience starts: the later of its basis and the highest version heard
+    /// when it was sent, or the highest version heard at its latest running answer (`accepted`, `queued`, `started` or
+    /// `progress`).
     val withPatience: patience: uint64 -> stage: CommandStage<'Server, 'Command> -> CommandStage<'Server, 'Command>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
@@ -457,32 +460,158 @@ module Displayed =
     val predicted: displayed: Displayed<'Server> -> CommandId list
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
-/// A failure the pipeline routes to the game, for display and recovery. Never raised. Open: match with a wildcard.
-[<RequireQualifiedAccess>]
+///
+/// A failure the pipeline routes to the game, for display and recovery. Never raised. OPAQUE (FS.GG.Game#788 union
+/// policy): read it through the predicates and accessors of `PipelineFailure`, so a failure added later is a new
+/// builder and predicate in a minor version, never a new case a game's match must handle. Equal when it is the same
+/// failure with the same details.
 type PipelineFailure =
-    /// The guest faulted on input `sequence`; the guest stage halts until `PipelineMsg.RearmGuest`.
+    private
     | GuestFaulted of sequence: uint64 * reason: string
-    /// The guest passed its deadline on input `sequence`; only that input failed.
     | GuestTimedOut of sequence: uint64
-    /// `failures` consecutive timeouts tripped the breaker; the guest stage halts until `PipelineMsg.RearmGuest`.
     | GuestHalted of failures: int
-    /// Input `sequence` was refused (admission, the guest's own rule, or a halted guest stage).
     | InputRefused of sequence: uint64 * reason: string
-    /// Input `sequence` ended before a decision (invalidated, frozen, rebound or disposed).
     | InputCancelled of sequence: uint64 * reason: string
-    /// The queue was full; these inputs (the arriving one) were dropped, never sent to the guest.
     | QueueOverflow of dropped: uint64 list
+    | CommandWindowFull of sequence: uint64 option
+    | CommandRejected of id: CommandId * reason: string
+    | CommandCancelled of id: CommandId * reason: string
+    | CommandUnconfirmed of id: CommandId
+    | RebindRefused of reason: string
+    | EffectFailed of effect: string * reason: string
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+/// Builders, predicates and accessors of `PipelineFailure`.
+[<RequireQualifiedAccess>]
+module PipelineFailure =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The guest faulted on input `sequence`; the guest stage halts until `PipelineMsg.RearmGuest`.
+    val guestFaulted: sequence: uint64 -> reason: string -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The guest passed its deadline on input `sequence`; only that input failed.
+    val guestTimedOut: sequence: uint64 -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `failures` consecutive timeouts tripped the breaker; the guest stage halts until `PipelineMsg.RearmGuest`.
+    val guestHalted: failures: int -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Input `sequence` was refused (admission, the guest's own rule, or a halted guest stage).
+    val inputRefused: sequence: uint64 -> reason: string -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Input `sequence` ended before a decision (invalidated, frozen, rebound or disposed).
+    val inputCancelled: sequence: uint64 -> reason: string -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The queue was full; these inputs (the arriving one) were dropped, never sent to the guest.
+    val queueOverflow: dropped: uint64 list -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The decision for input `sequence` (`None` for a direct `Submit`) did not fit the command window; none of its
     /// intents was applied.
-    | CommandWindowFull of sequence: uint64 option
+    val commandWindowFull: sequence: uint64 option -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The authority rejected the command before it ran.
-    | CommandRejected of id: CommandId * reason: string
+    val commandRejected: id: CommandId -> reason: string -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The authority ended the command after accepting it.
-    | CommandCancelled of id: CommandId * reason: string
+    val commandCancelled: id: CommandId -> reason: string -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The command settled `Unconfirmed`.
-    | CommandUnconfirmed of id: CommandId
+    val commandUnconfirmed: id: CommandId -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
     /// A `Rebind` was refused (a blank client).
-    | RebindRefused of reason: string
+    val rebindRefused: reason: string -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// One of the game's `PipelineIo` callbacks (`effect`: `applyLocal`, `send` or `schedule`) raised while a runner
+    /// performed an effect. The runner went on with the rest of the batch.
+    val effectFailed: effect: string -> reason: string -> PipelineFailure
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `guestFaulted`.
+    val isGuestFaulted: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `guestTimedOut`.
+    val isGuestTimedOut: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `guestHalted`.
+    val isGuestHalted: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `inputRefused`.
+    val isInputRefused: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `inputCancelled`.
+    val isInputCancelled: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `queueOverflow`.
+    val isQueueOverflow: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `commandWindowFull`.
+    val isCommandWindowFull: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `commandRejected`.
+    val isCommandRejected: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `commandCancelled`.
+    val isCommandCancelled: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `commandUnconfirmed`.
+    val isCommandUnconfirmed: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `rebindRefused`.
+    val isRebindRefused: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure is `effectFailed`.
+    val isEffectFailed: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the failure halted the guest stage (`guestFaulted`, `guestHalted`): it stays halted until
+    /// `PipelineMsg.RearmGuest`.
+    val haltsGuest: failure: PipelineFailure -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The input sequence the failure is about: the input of a guest or input failure, or of a decision that did not
+    /// fit the window. `None` for the others and for a direct `Submit`.
+    val sequence: failure: PipelineFailure -> uint64 option
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The inputs a queue overflow dropped; empty for every other failure.
+    val dropped: failure: PipelineFailure -> uint64 list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The command a command failure is about.
+    val command: failure: PipelineFailure -> CommandId option
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The reason given, when the failure carries one.
+    val reason: failure: PipelineFailure -> string option
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The consecutive timeouts that tripped the breaker, for `guestHalted`.
+    val failures: failure: PipelineFailure -> int option
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// A stable one-line text for logs and tests, such as `GuestTimedOut(3)` or `CommandRejected(c1:4,stale)`.
+    val text: failure: PipelineFailure -> string
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 /// What the game and the effect interpreter tell the pipeline.
@@ -591,7 +720,7 @@ module InputPipeline =
             PipelineModel<'Input, 'Server, 'Local, 'Command>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Apply one message. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// Apply one message.
     val update:
         pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> ->
         msg: PipelineMsg<'Input, 'Server, 'Local, 'Command> ->
@@ -642,8 +771,11 @@ module PipelineIo =
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
-/// Performs `PipelineEffect`s for a game that runs the reducer itself (an Elmish program: `Cmd.ofEffect (fun dispatch
-/// -> PipelineRunner.perform effect runner)`). It holds the cancellation of the call in flight. Built by
+/// Performs `PipelineEffect`s for a game that runs the reducer itself (an Elmish program: one
+/// `Cmd.ofEffect (fun _ -> PipelineRunner.performAll effects runner)` per `update`). It holds the cancellation of the
+/// call in flight. An exception from an `io` callback never escapes it: the rest of the batch runs and the exception is
+/// routed to `io.Fail` as `PipelineFailure.effectFailed`; an exception from `client ()` ends that call `Faulted`. After
+/// `Dispose` it performs nothing and dispatches nothing, even for a guest reply or a timer that arrives later. Built by
 /// `PipelineRunner.create`.
 [<Sealed>]
 type PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> =
@@ -655,7 +787,7 @@ module PipelineRunner =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// A runner for `pipeline` that reports `GuestRunning`, `GuestEnded` and `GuestDeadline` to `dispatch`. Disposing
-    /// it cancels the call in flight. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// it cancels the call in flight.
     val create:
         pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> ->
         io: PipelineIo<'Client, 'Local, 'Command> ->
@@ -663,17 +795,33 @@ module PipelineRunner =
             PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command>
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// Perform one effect. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// Perform one effect. A game that performs a batch effect by effect keeps the batch's order and performs it
+    /// synchronously; `performAll` does that.
     val perform:
         effect: PipelineEffect<'Input, 'Local, 'Command> ->
+        runner: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> ->
+            unit
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Perform one `update`'s effects synchronously and in order. An Elmish program runs it in ONE
+    /// `Cmd.ofEffect (fun _ -> PipelineRunner.performAll effects runner)`, never split across `Cmd.batch` entries or
+    /// run through `Cmd.OfAsync` or `Cmd.OfPromise`: the order of `ApplyLocal` and `Continue` is what lets the next guest
+    /// call read the state the decision's `Local`s produced (ADR 0001, P7b).
+    val performAll:
+        effects: PipelineEffect<'Input, 'Local, 'Command> list ->
         runner: PipelineRunner<'Input, 'Client, 'Server, 'Local, 'Command> ->
             unit
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
 /// Runs `InputPipeline` for a page that is not an Elmish program, as `RendererDriver` runs renderer selection: the
-/// reducer, a `PipelineRunner`, and an `InputRoute` bound to `PipelineMsg.Input (Scene event)`. Built by
-/// `PipelineHost.start`.
+/// reducer, a `PipelineRunner`, and an `InputRoute` bound to `PipelineMsg.Input (Scene event)`. Messages dispatched while
+/// it runs a batch are queued and run after it, in order. Built by `PipelineHost.start`.
+///
+/// **Threads.** It is not thread-safe. In the browser everything runs on one thread. On .NET, every `Dispatch` (the
+/// game's, and the runner's for guest replies and `io.Schedule` timers, which may complete on thread-pool threads) must
+/// reach it on one thread: marshal them to the game's synchronization context, or serialise the game's `dispatch` and
+/// `schedule` with a lock.
 [<Sealed>]
 type PipelineHost<'Input, 'Client, 'Server, 'Local, 'Command> =
     interface System.IDisposable
@@ -693,7 +841,7 @@ module PipelineHost =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// Start `pipeline` for `client` above `lastSequence` on `authoritative`, bound to `route`. Disposing it cancels the
-    /// call in flight and unbinds `route`. Contract only: FS.GG.Game#788 implements it, and until then it raises.
+    /// call in flight and unbinds `route`.
     val start:
         pipeline: InputPipeline<'Input, 'Client, 'Server, 'Local, 'Command> ->
         route: InputRoute ->

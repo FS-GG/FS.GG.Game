@@ -63,17 +63,23 @@ Every game's input runs through one pipeline of three stages, typed in `FS.GG.Ga
 The reducer is pure Elmish, like `RendererSelection`. `InputPipeline.init` and `update` return `PipelineEffect`s, and
 three hosts can run them:
 
-- **`PipelineRunner`** performs them for an Elmish game, as `Cmd.ofEffect (fun _ -> PipelineRunner.perform effect
-  runner)`. It holds the cancellation of the call in flight. BAR is this case.
+- **`PipelineRunner`** performs them for an Elmish game, as one `Cmd.ofEffect (fun _ -> PipelineRunner.performAll
+  effects runner)` per `update`. It holds the cancellation of the call in flight. BAR is this case.
 - **`PipelineHost`** does it for a page that is not an Elmish program.
 - **`InputGuest.run`** runs a single guest call, for a game that interprets `StartGuest` itself.
 
 The game's `version`, `settled` and `predict` functions run inside `update`, and an exception from them propagates.
 
-**Open unions.** `InputAction`, `PipelineInput`, `GuestOutcome`, `PipelineFailure` and `PipelineMsg` may gain cases in
-a minor version, so match the first four with a wildcard. `PipelineEffect` may also gain cases. A game that interprets
-effects itself, rather than through `PipelineRunner`, handles the new cases on upgrade. The answer and settlement types
-(`CommandAck`, `CommandSettlement`) are opaque, so later states are additive.
+**Union policy** (Root's decision on FS.GG.Game#788, which supersedes the earlier "open unions, match with a wildcard"
+rule: this repository promotes FS0026, so a wildcard after an exhaustive match does not compile):
+
+- **Closed:** the input vocabulary, `InputAction`, `PipelineInput` and `GuestOutcome`. A new case is a MAJOR version
+  change, and a game matches them exhaustively.
+- **Opaque:** `PipelineFailure`, read through builders, predicates and accessors (`PipelineFailure.isGuestHalted`,
+  `sequence`, `reason`, `text` and so on), so a new failure is additive. The answer and settlement types (`CommandAck`,
+  `CommandSettlement`) are opaque for the same reason.
+- `PipelineMsg` and `PipelineEffect` may gain cases in a minor version. A game that interprets effects itself, rather
+  than through `PipelineRunner`, handles the new cases on upgrade.
 
 ### 1. Input events (stage 1)
 
@@ -93,8 +99,8 @@ effects itself, rather than through `PipelineRunner`, handles the new cases on u
 
 Every activation is reported, including a second activation of the selected object.
 
-**Extension policy (`InputAction`).** The union is open. Continuous input (drag, wheel, press and release) will arrive
-as new cases in a minor version. Consumers match with a wildcard.
+**Extension policy (`InputAction`).** The union is closed (see the union policy above). Continuous input (drag, wheel,
+press and release) arrives as new cases in a major version.
 
 **Game input.** Ability buttons, control groups, a submit button, and RuneScape's takeover, release and reacquire are
 not scene objects. They enter the same queue as `PipelineMsg.Input (PipelineInput.Game input)`, so the guest decides
@@ -426,12 +432,50 @@ Each migration is its own Delivery after #788 publishes.
   - The arbiter sends `progress` for a `hold` more often than patience.
   - "Proven by arrival" is `withSettlement` with patience 200.
 
+## Implementation decisions (FS.GG.Game#788)
+
+These settle details the contract left open. The laws in `tests/Game.Render.Pipeline.Laws` pin them.
+
+- **Queued `Submit`s do not count toward the guest queue limit.** They never overflow; the command window bounds
+  them.
+- **A halted stage keeps its `Submit`s.** When the stage halts, queued guest inputs fail
+  `InputRefused "guest halted"`, and queued `Submit`s stay and are sent in order.
+- **`Unconfirmed` is final.** A late positive answer (`applied`, `ended`) for an `Unconfirmed` command does not
+  upgrade it (first final answer wins, P18b). The authoritative state remains the evidence of what happened, and a
+  game that needs the effect reads it there.
+- **Ledger pruning.** A final command leaves the ledger once nothing depends on it. A command applied or ended at a
+  version the authoritative state has not reached stays, for prediction. Answers for a pruned id are ignored, which is
+  the same as first-final-wins.
+- **Patience starts at the later of the basis and the version heard at issue** (#796 review B1). A command sent after
+  heartbeats advanced the highest version heard does not count those versions against its patience, so it is never
+  `Unconfirmed` before the authority could answer. A running answer restarts it at the version heard then.
+- **A `Rebind` keeps a pending `StartNext`** (#796 review B2). A call that ended before the rebind has its `Continue`
+  on the way behind the game's `Local` messages, so an input that arrives after the rebind waits for it (P7b).
+- **Queued `Submit`s survive a `Rebind`** and are sent under the new binding, in the rebind's own batch, after
+  `CancelGuest` and before the `Fail`s (P10).
+- **A command's basis is the authoritative version when it is decided**: when the guest call ends for a decided
+  command (not the call's own basis), and when a `Submit` reaches the front of the queue. Patience and prediction count
+  from the same version.
+- **The window counts every unsettled command**, an earlier binding's included, as patience does.
+- **A cancelled call does not reset the breaker**; a decided or refused one does. An authoritative state at the same
+  version as the one shown is taken (versions are non-decreasing); only an older one is ignored.
+- **A press on empty ground selects nothing.** `InputEvent.toSelectionRequest` maps an `Activate` with no target to no
+  request, as `SceneInteraction.press` and every backend always have; only `Cancel` clears.
+- **Hosts never wedge on the game's callbacks.** An exception from an `io` callback (`applyLocal`, `send`, `schedule`)
+  is routed to `io.Fail` as `PipelineFailure.effectFailed`, and the rest of the batch runs; one from `client ()` ends
+  that call `Faulted`. `InputGuest.run` never raises: a cancelled token makes a late decision or exception
+  `Cancelled`. A disposed runner performs and dispatches nothing, including guest replies and timers that fire later.
+  `PipelineHost` is not thread-safe on .NET; its documentation says how to marshal.
+- **Elmish.** `PipelineRunner.performAll effects runner` performs one `update`'s effects in order. An Elmish program
+  runs it inside one `Cmd.ofEffect`, never split across `Cmd.batch` entries or run through `Cmd.OfAsync` or
+  `Cmd.OfPromise`, so `ApplyLocal` messages are dispatched before `StartNext` (P7b).
+
 ## Consequences
 
 - One contract replaces three hand-built pipelines.
 - **The change is additive.** No existing type or function changes, and the surface baselines record additions only.
-  New records are opaque or have private representations, and the answer and settlement types are opaque. The open
-  unions and their wildcard rule are stated above.
+  New records are opaque or have private representations, and the answer, settlement and failure types are opaque.
+  The union policy is stated above.
 - Until #788 merges, every stub raises with a message naming FS.GG.Game#788, and tests pin that (the .NET tests, and
   the browser smoke for `bindTo`).
 - Authorities that adopt the pipeline take on the answer-cache and heartbeat duties in stage 3. Game.Core does not

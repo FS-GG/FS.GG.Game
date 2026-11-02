@@ -228,7 +228,137 @@ let tests =
                 Expect.throws (fun () -> InputPipeline.init pipeline " " None 0UL |> ignore) "a blank client is refused"
             }
 
-            test "every behaviour is a stub until FS.GG.Game#788" {
+            test "toSelectionRequest keeps SelectionRoute's change-only meaning" {
+                let frame selected =
+                    {
+                        Scene = Scene.empty
+                        Objects = [ tile "a"; tile "b" ]
+                        Selected = selected
+                    }
+
+                let ev action target repeat =
+                    InputEvent.create InputSource.Keyboard action target None InputModifiers.none repeat
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame None) (ev InputAction.Activate (Some "a") false))
+                    (Some(SelectionRequest.Select "a"))
+                    "select"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame (Some "a")) (ev InputAction.Activate (Some "a") false))
+                    None
+                    "already selected"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame None) (ev InputAction.Activate (Some "zz") false))
+                    None
+                    "unknown object"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame None) (ev InputAction.Activate (Some "a") true))
+                    None
+                    "a repeat asks nothing"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame (Some "a")) (ev InputAction.Cancel None false))
+                    (Some SelectionRequest.Clear)
+                    "cancel clears"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame None) (ev InputAction.Cancel None false))
+                    None
+                    "nothing to clear"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame None) (ev InputAction.Hover (Some "a") false))
+                    None
+                    "hover asks nothing"
+
+                // FS.GG.Game#788: a press on empty ground asks for nothing, with or without a selection (the SVG
+                // surface and every canvas host have never cleared on it); only Cancel clears.
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame (Some "a")) (ev InputAction.Activate None false))
+                    None
+                    "a press on empty ground with a selection asks nothing"
+
+                Expect.equal
+                    (InputEvent.toSelectionRequest (frame None) (ev InputAction.Activate None false))
+                    None
+                    "a press on empty ground without a selection asks nothing"
+            }
+
+            test "standardCues draws a two-tone ring of 2 CSS px bands outside the focused object" {
+                let objects = [ tile "a" ]
+
+                let at scale visible =
+                    CueContext.create (InteractionCues.create (Some "a") None visible) objects scale
+
+                Expect.isEmpty (SceneInteraction.standardCues (at 1.0 false)) "no ring when focus is not visible"
+
+                Expect.isEmpty
+                    (SceneInteraction.standardCues (
+                        CueContext.create (InteractionCues.create (Some "zz") None true) objects 1.0
+                    ))
+                    "no ring for an unknown object"
+
+                let rects scale =
+                    SceneInteraction.standardCues (at scale true)
+                    |> List.choose (fun node ->
+                        match node with
+                        | SceneNode.Rectangle((x, y, w, h), fill) -> Some(x, y, w, h, fill.Red)
+                        | _ -> None)
+
+                let ring = rects 1.0
+                Expect.equal ring.Length 8 "two bands of four rectangles"
+                Expect.contains ring (-2.0, -2.0, 14.0, 2.0, 255uy) "the light inner band hugs the bounds"
+                Expect.contains ring (-4.0, -4.0, 18.0, 2.0, 16uy) "the dark outer band surrounds it"
+                Expect.contains (rects 2.0) (-1.0, -1.0, 12.0, 1.0, 255uy) "bands stay 2 CSS px at 2 CSS px per unit"
+            }
+
+            test "the pipeline host runs a sync guest end to end" {
+                let sent = ResizeArray<string>()
+                let locals = ResizeArray<string>()
+                let route = InputRoute.create ()
+
+                let guest: InputGuest<unit, int, string, string> =
+                    InputGuest.sync (fun request ->
+                        match GuestCall.input (GuestRequest.call request) with
+                        | PipelineInput.Scene event ->
+                            GuestOutcome.Decided
+                                [
+                                    GuestIntent.Local "select"
+                                    GuestIntent.Submit(defaultArg (InputEvent.target event) "-")
+                                ]
+                        | PipelineInput.Game _ -> GuestOutcome.Decided [])
+
+                let pipeline =
+                    InputPipeline.create guest (CommandStage.create (fun (version: uint64) -> version))
+
+                let io =
+                    PipelineIo.create
+                        (fun () -> locals.Count)
+                        locals.Add
+                        (fun e -> sent.Add(CommandId.text (CommandEnvelope.id e) + "=" + CommandEnvelope.command e))
+                        ignore
+                        (fun _ _ -> ())
+
+                use host = PipelineHost.start pipeline route io "c" (Some 9UL) 0UL
+                InputRoute.report (press (Some "a")) route
+                InputRoute.report (press (Some "b")) route
+                Expect.equal (List.ofSeq sent) [ "c:10=a"; "c:11=b" ] "commands continue above lastSequence"
+                Expect.equal locals.Count 2 "each decision's Local applied"
+
+                Expect.isEmpty
+                    (InputPipeline.unsettled host.Model
+                     |> List.filter (fun (_, s) -> not (CommandSettlement.isPending s)))
+                    "both pending"
+
+                (host :> System.IDisposable).Dispose()
+                InputRoute.report (press (Some "c")) route
+                Expect.equal sent.Count 2 "a disposed host unbinds its route"
+            }
+
+            test "the input host and kit functions are stubs until their FS.GG.Game#788 PR" {
                 let objects = [ tile "a" ]
 
                 let frame =
@@ -249,25 +379,6 @@ let tests =
 
                 let interaction =
                     SceneInteraction.create (fun () -> objects) (fun () -> None) (fun _ s -> s)
-
-                raisesFor788 "SceneInteraction.standardCues" (fun () ->
-                    SceneInteraction.standardCues (CueContext.create InteractionCues.none objects 1.0)
-                    |> ignore)
-
-                raisesFor788 "InputEvent.toSelectionRequest" (fun () ->
-                    InputEvent.toSelectionRequest frame (press (Some "a")) |> ignore)
-
-                raisesFor788 "InputGuest.run" (fun () ->
-                    InputGuest.run guest (Unchecked.defaultof<_>) ignore System.Threading.CancellationToken.None
-                    |> ignore)
-
-                raisesFor788 "InputPipeline.update" (fun () ->
-                    InputPipeline.update pipeline (PipelineMsg.Authoritative 1UL) model |> ignore)
-
-                raisesFor788 "PipelineRunner.create" (fun () -> PipelineRunner.create pipeline io ignore |> ignore)
-
-                raisesFor788 "PipelineHost.start" (fun () ->
-                    PipelineHost.start pipeline (InputRoute.create ()) io "e" None 0UL |> ignore)
 
                 raisesFor788 "SceneRenderers.withInput" (fun () ->
                     SceneRenderers.create (fun () -> Scene.empty) (fun _ -> Error "unused")

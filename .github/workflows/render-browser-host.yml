@@ -25,6 +25,8 @@ on:
       - "src/Render.Browser/**"
       - "src/Render.Browser.Bindings/**"
       - "tests/Render.Browser.Smoke/**"
+      - "tests/Game.Render.Pipeline.Laws/**"
+      - "scripts/test-pipeline-laws.sh"
       - "src/ReferenceGame/State.fs"
       - "src/ReferenceGame/Renderers.fs"
       - "eng/render-kit/**"
@@ -53,6 +55,8 @@ on:
       - "src/Render.Browser/**"
       - "src/Render.Browser.Bindings/**"
       - "tests/Render.Browser.Smoke/**"
+      - "tests/Game.Render.Pipeline.Laws/**"
+      - "scripts/test-pipeline-laws.sh"
       - "src/ReferenceGame/State.fs"
       - "src/ReferenceGame/Renderers.fs"
       - "eng/render-kit/**"
@@ -100,6 +104,9 @@ jobs:
 
       - name: Pack the Fable view, compile the host and run the browser smoke
         run: scripts/test-render-browser-host.sh
+
+      - name: Input pipeline laws on .NET and Fable (byte-identical output, ADR 0001)
+        run: scripts/test-pipeline-laws.sh
 
       - name: Benchmark driver self-test (GPU/software refusal, flags and option handling; no browser)
         run: node tools/render-bench/driver.mjs selftest

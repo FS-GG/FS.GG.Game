@@ -198,19 +198,21 @@ let run () =
 
     check "only svg is offered" (RendererSelection.available driver.Model = [ RendererBackend.Svg ]) "available"
 
-    // FS.GG.Game#787: `BrowserRenderers.bindTo` is a contract stub until FS.GG.Game#788 implements it (and the kit's
-    // late-failure section covers it, ADR 0001 I15). This pins that it raises naming #788 rather than doing nothing.
-    let bindToMessage =
-        try
-            BrowserRenderers.bindTo (fun () -> driver.Model) ignore (BrowserRenderers.route ())
-            None
-        with error ->
-            Some error.Message
+    // FS.GG.Game#768/#788: `BrowserRenderers.bindTo` lets a host without `RendererDriver` hear a late failure, as
+    // `MountFailed` for the model's current attempt, and only for the selected, active backend (ADR 0001, I15).
+    let lateRoute = BrowserRenderers.route ()
+    let heard = ResizeArray<RendererMsg<Board>>()
+    BrowserRenderers.bindTo (fun () -> driver.Model) heard.Add lateRoute
+    lateRoute.Report RendererBackend.Pixi "not selected"
+    lateRoute.Report RendererBackend.Svg "late"
 
     check
-        "BrowserRenderers.bindTo is a contract stub until FS.GG.Game#788"
-        (bindToMessage |> Option.exists (fun text -> text.Contains "FS.GG.Game#788"))
-        (sprintf "%A" bindToMessage)
+        "BrowserRenderers.bindTo routes only the selected, active backend's late failure, for its current attempt"
+        (heard.Count = 1
+         && (match heard[0] with
+             | RendererMsg.MountFailed(RendererBackend.Svg, attempt, "late") -> attempt = driver.Model.Attempt
+             | _ -> false))
+        (string heard.Count)
 
     // 2. Presenting a newer state reconciles the same SVG root and does not leak nodes.
     let nodesBefore = count container "*"

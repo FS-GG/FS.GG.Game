@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The laws of the standard input pipeline (ADR 0001). Dependency-free, so the same sources run on .NET
+       (`dotnet run`) and on Fable (`dotnet fable` then node); scripts/test-pipeline-laws.sh compares the outputs. It
+       references the bounded Fable view of FS.GG.Game.Render, the sources a Fable consumer compiles. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Laws.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Game.Render\Fable\FS.GG.Game.Render.fsproj" />
+  </ItemGroup>
+
+</Project>
