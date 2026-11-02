@@ -137,7 +137,7 @@ split, with the node-list type and `CueContext` itself, is agreed with the #789 
 **Compatibility.** `SelectionRequest`, `SelectionRoute` and `SceneRenderers.withInteraction` keep their meaning and,
 in #788, their own input hosts (Root's ruling on #797). A game gets the input host, its drawn focus and its
 single-Tab-stop mirror by declaring `SceneRenderers.withInput`. Moving `withInteraction` itself onto the input host,
-which would give existing games the same through `InputEvent.toSelectionRequest`, is a separate Delivery.
+which would give existing games the same through `InputEvent.toSelectionRequest`, is a separate Delivery: FS.GG.Game#800.
 
 ### 2. Guest stage (stage 2)
 
@@ -338,8 +338,8 @@ selected and active, the rule of `RendererDriver.failBackend`.
 | **#768**: late-failure routing without `RendererDriver` | `BrowserRenderers.bindTo model dispatch route`, covered by I15 | **Satisfied by the contract.** Finished by #788. |
 | **#783**: kit probes on object edges | Not a pipeline concern. Recorded for I14: hit regions are closed, and probes stay at least 1 CSS px inside or outside each edge at the presented scale. Edge probes skip objects smaller than 2 units in either dimension. | **Left open.** It stays its own kit Delivery. |
 | **#784**: pointer-only and grouped objects | `ObjectAccess` (`pointerOnly`, `grouped`, `cell`), the listbox or grid surface | **Satisfied by the contract.** Finished by #788. |
-| #787 comment N4: invisible keyboard focus | `InteractionCues`, `CueContext`, `standardCues`, `withCues` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the separate migration Delivery. |
-| #787 comment N5: Tab stops, mirror expansion, `role=group` on SVG, Escape on a mirror button | The single-Tab-stop listbox or grid with `aria-activedescendant`, a hidden mirror, Escape is `Cancel` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the separate migration Delivery. |
+| #787 comment N4: invisible keyboard focus | `InteractionCues`, `CueContext`, `standardCues`, `withCues` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the migration Delivery, FS.GG.Game#800. |
+| #787 comment N5: Tab stops, mirror expansion, `role=group` on SVG, Escape on a mirror button | The single-Tab-stop listbox or grid with `aria-activedescendant`, a hidden mirror, Escape is `Cancel` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the migration Delivery, FS.GG.Game#800. |
 
 ### 6. Kit specification
 
@@ -517,7 +517,7 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
 - **`withInteraction` keeps its own hosts** (Root's ruling). `SceneRenderers.withInteraction` and `withInput` replace
   each other on one registry. A game moves to the input host by declaring `withInput` and binding its route, to a
   pipeline or to `InputEvent.toSelectionRequest`. Migrating `withInteraction` onto the input host is a separate
-  Delivery.
+  Delivery, FS.GG.Game#800.
 
 ## Consequences
 
