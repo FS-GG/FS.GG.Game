@@ -28,8 +28,11 @@ These corrections were ruled by Root during the implementation review. Each one 
   - the body fill.
 
   The ring therefore touches the body on both sides and never touches the identity colour, so validating each team
-  colour against the body alone is correct. Without the keyline, `classic`'s team 0 against the own allegiance measured
-  1.00:1 (the same colour). The kit checks that team 0 next to the own allegiance shows a visible ring.
+  colour against the body alone is correct. Without the keyline, the first baked `classic`, whose team colours equalled
+  allegiance colours, measured 1.00:1 for team 0 against the own frame. `classic`'s team colours are now distinct from
+  every allegiance colour, and are a provisional stand-in: #795's derivation is the source of truth for every preset,
+  `classic` included. The keyline makes the ring-to-frame contrast moot whatever the preset. The kit checks that
+  team 0 on the own allegiance shows a visible ring.
 - **E2. The outer focus tone (D3, D10).** The focus ring's outer tone is **whichever tone contrasts with the ground**
   (3:1), and the inner tone contrasts with the outer one. On a dark ground the outer tone is light and the inner tone
   dark. "A dark outer band and a light inner band" holds only on a light ground.

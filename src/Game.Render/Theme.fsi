@@ -99,7 +99,9 @@ module ThemeSeed =
     val numberNames: string list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The seed of the `classic` preset: a dark ground, white ink and eight team hues.
+    /// The seed of the `classic` preset: a dark ground, white ink and eight team hues distinct from every allegiance
+    /// colour. Provisional: FS.GG.Game#795's derivation is the source of truth for every preset, `classic` included,
+    /// and replaces this seed's values when it lands.
     val classic: ThemeSeed
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
@@ -310,7 +312,8 @@ module Theme =
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// The `classic` preset: dark, the default (Q10). Its resolved values are baked at build time, and a test compares
-    /// them with a fresh derivation from `ThemeSeed.classic`.
+    /// them with a fresh derivation from `ThemeSeed.classic`. A provisional stand-in: it is regenerated from
+    /// FS.GG.Game#795's derivation, the source of truth for every preset, when that lands.
     val classic: Theme
 
     /// Public contract function exposed by the FS.GG.Game.Render package.

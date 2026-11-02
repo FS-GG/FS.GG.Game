@@ -174,6 +174,28 @@ let tests =
                     atLeast 3.0 "glyph.modifier" on
             }
 
+            test "classic's provisional team colours are distinct from every allegiance colour and from each other (OKLab distance)" {
+                let lab (c: Color) =
+                    let p = ThemeColour.toOklch c
+                    let h = p.H * System.Math.PI / 180.0
+                    p.L, p.C * cos h, p.C * sin h
+
+                let distance a b =
+                    let (l1, a1, b1), (l2, a2, b2) = lab a, lab b
+                    sqrt ((l1 - l2) ** 2.0 + (a1 - a2) ** 2.0 + (b1 - b2) ** 2.0)
+
+                let teams = [ for i in 0..7 -> colourOf (sprintf "glyph.team.%d" i) Theme.classic ]
+                let allegiances = [ Identity.Own; Identity.Ally; Identity.Neutral; Identity.Enemy; Identity.Unknown ] |> List.map (fun i -> Theme.allegiance i Theme.classic)
+
+                for i, team in List.indexed teams do
+                    for a in allegiances do
+                        Expect.isGreaterThanOrEqual (distance team a) 0.065 (sprintf "team %d against allegiance %s" i (ThemeColour.hex a))
+
+                    for j, other in List.indexed teams do
+                        if j > i then
+                            Expect.isGreaterThanOrEqual (distance team other) 0.09 (sprintf "team %d against team %d" i j)
+            }
+
             test "a theme that breaks a rule cannot be built, and every violation is named" {
                 let tokens violations = violations |> List.map (fun (v: ThemeViolation) -> v.Token) |> List.sort
 
@@ -310,7 +332,7 @@ let tests =
 
                 // A designer edits the seed and deletes the alias group: every alias is derived again.
                 let seedOnly = text.Substring(0, text.IndexOf ",\n  \"alias\"") + "\n}\n"
-                let reseeded = seedOnly.Replace("\"hex\": \"#408cff\"", "\"hex\": \"#2f6fd0\"")
+                let reseeded = seedOnly.Replace("\"hex\": \"#db2478\"", "\"hex\": \"#2f6fd0\"")
                 let derived = ok (Theme.ofDtcg [ ThemeAlgorithm.standard ] reseeded)
                 Expect.equal (colourOf "glyph.team.0" derived) (rgb 0x2f 0x6f 0xd0) "the edited seed reaches the alias"
 
@@ -379,7 +401,14 @@ let tests =
                 Expect.exists (refused (Theme.withTeamColour 0 (rgb 40 44 52) Theme.classic)) (fun v -> v.Token = "glyph.team.0") "a failing colour is refused"
 
                 // The reviewer's case: a stricter floor in the seed cannot be lowered by an override.
-                let strict = ok (derive (ThemeSeed.classic |> ThemeSeed.named "strict" |> ThemeSeed.number "contrastTarget" 4.0))
+                let strictSeed =
+                    [ 2..7 ]
+                    |> List.fold (fun seed i -> ThemeSeed.without (sprintf "team.%d" i) seed) ThemeSeed.classic
+                    |> ThemeSeed.colour "team.0" (rgb 0x40 0x8c 0xff)
+                    |> ThemeSeed.colour "team.1" (rgb 0xeb 0x50 0x46)
+                    |> ThemeSeed.named "strict"
+                    |> ThemeSeed.number "contrastTarget" 4.0
+                let strict = ok (derive strictSeed)
                 let weak = rgb 150 60 60
                 Expect.isError (Theme.withTeamColour 0 weak strict) "below the strict floor"
                 let lowered = refused (Theme.withOverrides [ ThemeOverride.number "contrastTarget" 3.0; ThemeOverride.colour "glyph.team.0" weak ] strict)
