@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# FS.GG.Game#795 (GAME-RENDER-02.8), B4 of the #805 review: the experimental theme derivation gives the same bytes on
+# FS.GG.Game#795 (GAME-RENDER-02.8), B4 of the #805 review: the production theme derivation gives the same bytes on
 # .NET and on Fable (node), run-time custom seeds included (glyph ADR Q12). tests/Game.Render.Themes.Fuzz derives
 # SEEDS fuzz seeds through all five preset algorithm lists, runs the full 8-bit OKLCH round trip, and digests the gridded
 # inputs of every 8-bit colour and ofOklch over derivation's grid. Both runs must print the summary line, derive every
@@ -17,7 +17,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 cd "$REPO_ROOT"
-dotnet run --project "$PROJECT" -c Release -- "$SEEDS" >"$TMP/dotnet.txt"
+dotnet run --project "$PROJECT" -c Release --no-launch-profile -- "$SEEDS" >"$TMP/dotnet.txt"
 dotnet tool restore >/dev/null
 dotnet fable "$PROJECT" --outDir "$TMP/js" --noCache >"$TMP/fable.log" 2>&1 || { cat "$TMP/fable.log" >&2; exit 1; }
 printf '{"type":"module"}\n' >"$TMP/js/package.json"

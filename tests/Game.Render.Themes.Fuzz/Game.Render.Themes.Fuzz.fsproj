@@ -1,23 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- FS.GG.Game#795 (GAME-RENDER-02.8), B4 of the #805 review: theme derivation, run-time custom seeds included, gives
-       the same bytes on .NET and through Fable (node). Dependency-free beyond the bounded Fable view of
-       FS.GG.Game.Render, so the same sources run with `dotnet run` and with `dotnet fable` then node;
-       scripts/test-theme-fuzz.sh compares both outputs byte for byte. It compiles the experimental colour and theme
-       modules from src/ReferenceGame, the code the design's proof derives with. -->
+       the same bytes on .NET and through Fable (node). It uses only the Scene dependency and canonical theme sources,
+       so the same production code runs with `dotnet run` and with `dotnet fable` then node.
+       scripts/test-theme-fuzz.sh compares both outputs byte for byte and observes internal gridded inputs. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- Compile the exact canonical theme sources into this numerical probe so its full-domain digest can
+       observe internal ThemeGrid inputs; no experimental theme implementation or widened public API. -->
   <ItemGroup>
-    <Compile Include="..\..\src\ReferenceGame\ExperimentalColour.fs" Link="ExperimentalColour.fs" />
-    <Compile Include="..\..\src\ReferenceGame\ExperimentalThemes.fs" Link="ExperimentalThemes.fs" />
+    <Compile Include="../../src/Game.Render/ThemeBaked.fs" Link="ThemeBaked.fs" />
+    <Compile Include="../../src/Game.Render/Theme.fsi" Link="Theme.fsi" />
+    <Compile Include="../../src/Game.Render/Theme.fs" Link="Theme.fs" />
+    <Compile Include="Numerics.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
-
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Game.Render\Fable\FS.GG.Game.Render.fsproj" />
+    <PackageReference Include="FS.GG.UI.Scene" />
   </ItemGroup>
-
 </Project>

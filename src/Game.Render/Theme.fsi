@@ -99,9 +99,9 @@ module ThemeSeed =
     val numberNames: string list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The seed of the `classic` preset: a dark ground, white ink and eight team hues distinct from every allegiance
-    /// colour. Provisional: FS.GG.Game#795's derivation is the source of truth for every preset, `classic` included,
-    /// and replaces this seed's values when it lands.
+    /// A seed that `ThemeAlgorithm.standard` alone resolves: a dark ground, white ink, allegiance colours and eight team
+    /// colours each 3:1 on the ground, the body and the dark ink. It is not the `classic` preset's seed: every preset,
+    /// `classic` included, derives from FS.GG.Game#795's recipes (`ThemePresets.recipes`), Root's ruling.
     val classic: ThemeSeed
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
@@ -309,6 +309,138 @@ module ThemeCheck =
     /// The check's name.
     val name: check: ThemeCheck -> string
 
+/// Public contract type exposed by the FS.GG.Game.Render package.
+///
+/// Colour vision for theme checks (FS.GG.Game#795): normal, or a dichromacy simulated with Machado, Oliveira and
+/// Fernandes' severity-1.0 matrices (IEEE TVCG 15(6), 2009) in linear RGB.
+[<RequireQualifiedAccess>]
+type Vision =
+    /// Normal colour vision.
+    | Normal
+    /// Protanopia.
+    | Protan
+    /// Deuteranopia.
+    | Deutan
+    /// Tritanopia.
+    | Tritan
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+///
+/// Colour differences as a viewer sees them (FS.GG.Game#795): CIEDE2000 (Sharma, Wu and Dalal, 2005) and OKLab
+/// lightness, after Machado simulation. Results are rounded half up to 1e-6, so a comparison against a threshold is the
+/// same on .NET and through Fable.
+[<RequireQualifiedAccess>]
+module ThemeVision =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The four visions: normal, protan, deutan, tritan.
+    val visions: Vision list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// CIEDE2000 between `a` and `b` as a viewer with `vision` sees them, on the 1e-6 grid.
+    val deltaE2000: vision: Vision -> a: FS.GG.UI.Scene.Color -> b: FS.GG.UI.Scene.Color -> float
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The OKLab lightness difference between `a` and `b` as a viewer with `vision` sees them, on the 1e-6 grid.
+    val lightnessGap: vision: Vision -> a: FS.GG.UI.Scene.Color -> b: FS.GG.UI.Scene.Color -> float
+
+    val internal simulate: vision: Vision -> colour: FS.GG.UI.Scene.Color -> float * float * float
+    val internal labOfLinear: float * float * float -> float * float * float
+    val internal oklabLightness: float * float * float -> float
+    val internal deltaE2000Lab: float * float * float -> float * float * float -> float
+    val internal gridL: x: float -> float
+
+/// Derivation's deterministic arithmetic (FS.GG.Game#795 B4).
+[<RequireQualifiedAccess>]
+module internal ThemeGrid =
+    val gridL: x: float -> float
+    val gridH: x: float -> float
+    val hueChromaFloor: float
+    val inputOf: colour: FS.GG.UI.Scene.Color -> Oklch
+    val lightnessSteps: int
+    val solve: ground: FS.GG.UI.Scene.Color -> lighter: bool -> target: float -> c: float -> h: float -> FS.GG.UI.Scene.Color option
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+///
+/// FS.GG.Game#795's derivation (ADR GAME-RENDER-02.8): the theme algorithms, the checks and the five preset recipes.
+/// Every lightness is solved Leonardo-style for a target WCAG 2 contrast against the ground, on gridded inputs and over
+/// integer lightness steps, so a seed derives the same bytes on .NET and through Fable. The derivation's parameters
+/// travel between algorithms as `derive.*` map tokens. `Theme.presets` holds the five presets as baked.
+[<RequireQualifiedAccess>]
+module ThemePresets =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The CIEDE2000 threshold within a category, normal vision (12, provisional: ADR Q-T1).
+    val thresholdNormal: float
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The CIEDE2000 threshold within a category under Machado simulation (8, provisional).
+    val thresholdSimulated: float
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The OKLab lightness gap the first two teams keep under every simulation (0.08, provisional; ADR D12 as amended).
+    val thresholdTeamLightnessGap: float
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `fsgg.leonardo`, after `ThemeAlgorithm.standard`: reads the seed's hues (each colour's OKLCH hue) and the ground,
+    /// and derives 12-step ramps solved for target contrast, team colours in light and dark bands, the body and the ink
+    /// on fills.
+    val leonardo: ThemeAlgorithm
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `fsgg.dark`: a dark ground, a white body, near-black ink on fills.
+    val dark: ThemeAlgorithm
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `fsgg.light`: a near-white ground of the seed ground's hue, a near-black body, white ink on fills.
+    val light: ThemeAlgorithm
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `fsgg.highContrast`: a black (or white) ground and steeper ramps; the seed sets `contrastTarget` 7 and the
+    /// wider stroke and gap.
+    val highContrast: ThemeAlgorithm
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `fsgg.colourBlindSafe`: Okabe and Ito's hue angles for teams, allegiances, status, selection and marker.
+    val colourBlindSafe: ThemeAlgorithm
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `fsgg.monochrome`: every hue removed; colour carries no category, and team falls back to the badge.
+    val monochrome: ThemeAlgorithm
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// `fsgg.repair`: chooses the lightness of every allegiance, status level and team band, and the step (and, only if
+    /// the seed's hue fails, the hue) of selection, marker and hover, to maximise the smallest distinctness margin while
+    /// keeping the contrast rules and status meaning. Deterministic: candidates in a fixed order, the first best wins.
+    val repair: ThemeAlgorithm
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Every algorithm, `standard` first: the list `Theme.ofDtcg` looks names up in.
+    val algorithms: ThemeAlgorithm list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The usable team hues per frame bucket (under 24 units, 24 to 39, 40 and over): 0 when colour carries no category,
+    /// else the largest n, not above the bucket's ceiling, whose first n team colours pass every distinctness rule.
+    val measuredCapacity: theme: Theme -> int list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether colour carries categories in `theme` (false for `monochrome`).
+    val carriesColour: theme: Theme -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// FS.GG.Game#795's checks for a game of `teams` teams (at least two): ΔE2000 within each category under normal vision
+    /// and every simulation, cues against fills, the first two teams' lightness gap, status meaning, the inner focus tone
+    /// on fills, and a declared hue capacity no larger than the measured one. Add them with `Theme.validate`.
+    val checks: teams: int -> ThemeCheck list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// The five presets as recipes: name, seed and algorithms (`classic`, `light`, `highContrast`, `colourBlindSafe`,
+    /// `monochrome`). `Theme.presets` is these, baked.
+    val recipes: (string * ThemeSeed * ThemeAlgorithm list) list
+
+    val internal statusReads: alias: string -> c: FS.GG.UI.Scene.Color -> bool
+    val internal statusOrdered: warn: FS.GG.UI.Scene.Color -> bad: FS.GG.UI.Scene.Color -> bool
+
 /// Public contract module exposed by the FS.GG.Game.Render package.
 [<RequireQualifiedAccess>]
 module Theme =
@@ -357,14 +489,15 @@ module Theme =
     val checks: theme: Theme -> string list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The `classic` preset: dark, the default (Q10). Its resolved values are baked at build time, and a test compares
-    /// them with a fresh derivation from `ThemeSeed.classic`. A provisional stand-in: it is regenerated from
-    /// FS.GG.Game#795's derivation, the source of truth for every preset, when that lands.
+    /// The `classic` preset: dark, the default (Q10), derived by FS.GG.Game#795's recipe (Root's ruling: the derivation is
+    /// the source of truth for every preset). Its resolved values are baked at build time, the determinism probe derives
+    /// it afresh and requires the same values, and it carries `ThemePresets.checks 2`, so a player's team colour is
+    /// validated by them too.
     val classic: Theme
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
-    /// The shipped presets, `classic` first. FS.GG.Game#795 adds `light`, `highContrast`, `colourBlindSafe` and
-    /// `monochrome`.
+    /// The five shipped presets, baked from `ThemePresets.recipes` and carrying `ThemePresets.checks 2`: `classic`,
+    /// `light`, `highContrast`, `colourBlindSafe` and `monochrome`.
     val presets: Theme list
 
     /// Public contract function exposed by the FS.GG.Game.Render package.

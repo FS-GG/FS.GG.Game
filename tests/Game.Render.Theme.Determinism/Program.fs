@@ -45,21 +45,36 @@ let private resolved (theme: Theme) = Theme.hex theme @ (Theme.cssVariables them
 let main argv =
     let bake = argv |> Array.tryFindIndex ((=) "--bake")
 
-    let fresh =
-        match Theme.create ThemeSeed.classic [ ThemeAlgorithm.standard ] [] with
-        | Ok theme -> theme
-        | Error violations -> failwithf "classic does not resolve: %s" (violations |> List.map string |> String.concat "; ")
+    // Every preset derived afresh from its recipe (FS.GG.Game#795: the derivation is the source of truth, Root's ruling),
+    // with #795's checks for the two-team default.
+    let derived =
+        ThemePresets.recipes
+        |> List.map (fun (name, seed, algorithms) ->
+            match Theme.create seed algorithms [] |> Result.bind (Theme.validate (ThemePresets.checks 2)) with
+            | Ok theme -> name, theme
+            | Error violations -> failwithf "%s does not resolve: %s" name (violations |> List.map (fun v -> v.Token + " " + v.Reason) |> String.concat "; "))
+
+    let fresh = derived |> List.find (fun (n, _) -> n = "classic") |> snd
+
+    /// The map numbers #795's checks read on a baked theme.
+    let recorded (theme: Theme) =
+        Theme.tokens theme
+        |> ThemeTokens.names
+        |> List.filter (fun n -> n = "derive.colourCarries" || n.StartsWith "derive.ceiling")
+        |> List.map (fun n -> n, ThemeTokens.tryNumber n (Theme.tokens theme) |> Option.get)
 
     match bake with
     | Some index ->
         let path = argv.[index + 1]
 
-        let entries =
-            Theme.aliases fresh
-            |> List.map (fun alias ->
-                match Theme.tryColour alias fresh with
-                | Some c -> sprintf "        \"%s\", \"%s\"" alias (ThemeColour.hex c)
-                | None -> sprintf "        \"%s\", \"%s\"" alias (Theme.cssVariables fresh |> List.find (fun (k, _) -> k = "--fsgg-" + alias.Replace('.', '-')) |> snd))
+        let entriesOf (theme: Theme) =
+            [
+                for alias in Theme.aliases theme ->
+                    match Theme.tryColour alias theme with
+                    | Some c -> sprintf "                \"%s\", \"%s\"" alias (ThemeColour.hex c)
+                    | None -> sprintf "                \"%s\", \"%s\"" alias (Theme.cssVariables theme |> List.find (fun (k, _) -> k = "--fsgg-" + alias.Replace('.', '-')) |> snd)
+                for name, value in recorded theme -> sprintf "                \"map:%s\", \"%g\"" name value
+            ]
 
         let text =
             [
@@ -68,27 +83,34 @@ let main argv =
                 "/// requires these values, so a change to an algorithm regenerates this file in the same PR (Q12)."
                 "module internal FS.GG.Game.Render.ThemeBaked"
                 ""
-                "/// `Theme.classic`, alias by alias: `#rrggbb` for a colour, a number for a size."
-                "let classic: (string * string) list ="
+                "/// Every preset (`Theme.presets`, `classic` first), alias by alias: `#rrggbb` for a colour, a number for a size; then"
+                "/// `map:` entries, the derivation's numbers FS.GG.Game#795's checks read (colour carrying, hue ceilings)."
+                "let presets: (string * (string * string) list) list ="
                 "    ["
-                yield! entries
+                for name, theme in derived do
+                    sprintf "        \"%s\"," name
+                    "            ["
+                    yield! entriesOf theme
+                    "            ]"
                 "    ]"
                 ""
             ]
             |> String.concat "\n"
 
         System.IO.File.WriteAllText(path, text)
-        printfn "baked %d aliases of classic into %s" entries.Length path
+        printfn "baked %d presets into %s" derived.Length path
         0
     | None ->
-        // 1. The baked preset equals a fresh derivation from its seed (Q12), alias by alias.
-        print "# classic"
+        // 1. Every baked preset equals a fresh derivation from its recipe (Q12), alias by alias.
+        for name, theme in derived do
+            let baked = Theme.presets |> List.find (fun t -> Theme.name t = name)
+            print ("# " + name)
 
-        for alias, value in Theme.hex Theme.classic do
-            print (alias + " " + value)
+            for alias, value in Theme.hex baked do
+                print (alias + " " + value)
 
-        check "classic: the baked aliases equal a fresh derivation from ThemeSeed.classic" (resolved Theme.classic = resolved fresh)
-        check "classic: every alias resolves" (Theme.aliases Theme.classic = Theme.aliases fresh)
+            check (name + ": the baked aliases equal a fresh derivation from its recipe") (resolved baked = resolved theme)
+            check (name + ": every alias resolves") (Theme.aliases baked = Theme.aliases theme)
 
         // 2. DTCG export is the same bytes, and export then import gives equal resolved hex for every alias.
         let dtcg = Theme.toDtcg Theme.classic
@@ -96,7 +118,7 @@ let main argv =
         let resolver = Theme.dtcgResolver Theme.presets
         print (sprintf "dtcg resolver bytes=%d digest=%d" resolver.Length (digestOf resolver 7))
 
-        match Theme.ofDtcg [ ThemeAlgorithm.standard ] dtcg with
+        match Theme.ofDtcg ThemePresets.algorithms dtcg with
         | Ok back -> check "dtcg: export then import gives equal resolved hex for every alias" (resolved back = resolved Theme.classic)
         | Error _ -> check "dtcg: export then import resolves" false
 

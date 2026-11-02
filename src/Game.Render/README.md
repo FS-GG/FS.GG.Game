@@ -203,7 +203,11 @@ against the ground (`contrastTarget` raises it), and 3:1 between colours that to
 player's team colour, the only token a player sets; no override can lower the seed's floors (`contrastTarget`,
 `minCssPerUnit`, `hueCapacity.*`). `Theme.validate checks theme` adds named `ThemeCheck`s, such as FS.GG.Game#795's
 distinctness and colour-vision checks; the theme carries them, so `Theme.withTeamColour` and `Theme.withOverrides` run them again.
-`Theme.classic` is the baked default preset. FS.GG.Game#795 adds the other presets.
+`Theme.classic` is the baked default. `Theme.presets` contains `classic`, `light`, `highContrast`, `colourBlindSafe`
+and `monochrome`, all derived from `ThemePresets.recipes`. Presets carry `ThemePresets.checks 2`; a game validates
+its declared team count with `Theme.validate (ThemePresets.checks count)`. The checks cover CIEDE2000 under normal
+and simulated colour vision, the first two teams' lightness gap, status meaning, cue contrast and measured capacity.
+The thresholds are provisional; simulation does not replace player testing.
 
 Colours are derived in OKLCH and quantised with a clamp then `Floor(v + 0.5)`. Contrast is computed on the 8-bit values
 through a committed table, so .NET on Linux and Windows and node (through Fable) give the same bytes.
@@ -242,10 +246,26 @@ draw. `GlyphConformance.cases` is the kit's glyph section; each backend runs it 
 - the theme switch A, B, A with the focus ring;
 - two monochrome teams told apart by their badges.
 
+### Game-state encodings (FS.GG.Game#795)
+
+`Symbology.create<'Entity> family frame` starts a typed encoding grammar for `unit` or `structure` families. `Encode.identity`, `team`, `nominal`,
+`ordinal`, `fraction`, `angle`, `flag` and `label` bind named accessors to glyph slots. `Symbology.build themes draft`
+checks every selectable theme and returns typed errors explaining invalid measures, missing redundant channels,
+capacity or icon/badge collisions. `Symbology.notes` reports accepted colour fallbacks. Field names and measure declarations are trusted; accessor bodies are not reflected.
+
+`Symbology.spec` checks actual values and team allegiance against the roster. Out-of-range cases, levels, fractions,
+teams and nonfinite angles are errors, rather than wrapped or defaulted values. `Symbology.glyph` lowers a checked
+result to the glyph library, retaining its declared frame size. Team colouring is chosen once per scene with
+`Symbology.teamColouring`; above a theme's hue capacity, allegiance frames, badges and mirror labels carry identity.
+
+The [arena example](../ReferenceGame/ThemeExample.fs) derives player and feature glyphs from game-state types.
+Its view accepts a `unit -> Theme` reader, so switching themes keeps the game state and selection. The
+[theme ADR](../../docs/roadmaps/game-render-02-themes.md) documents the encoding rules and production recipes.
+
 ### Fable and the browser host
 
 The package also ships a bounded Fable source view (`fable/RendererSelection`, `SceneInteraction`,
-`SceneRenderers`, `RendererConformance`, `Theme`, `Glyphs` and `GlyphConformance`, each `.fsi` and `.fs`, with the baked
+`SceneRenderers`, `RendererConformance`, `Theme`, `Glyphs`, `Symbology` and `GlyphConformance`, each `.fsi` and `.fs`, with the baked
 `ThemeBaked.fs`) so a Fable-compiled browser host can register adapters
 against the same `RendererRegistry` and run the conformance kit. `Adapter` and
 `DefaultKeymap` are .NET-only and are not in that view. The view is first published in 0.18.0 (0.17.0 carries no

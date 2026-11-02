@@ -1,16 +1,61 @@
 {
+  "name": "fsgg-glyph-themes",
+  "description": "FS.GG.Game.Render glyph themes (ADR GAME-RENDER-02.4 D4)",
   "version": "2025-10-01",
   "modifiers": {
     "theme": {
       "contexts": {
-        "classic": [ { "$ref": "themes/classic.tokens.json" } ],
-        "light": [ { "$ref": "themes/light.tokens.json" } ],
-        "highContrast": [ { "$ref": "themes/highContrast.tokens.json" } ],
-        "colourBlindSafe": [ { "$ref": "themes/colourBlindSafe.tokens.json" } ],
-        "monochrome": [ { "$ref": "themes/monochrome.tokens.json" } ]
+        "classic": [
+          {
+            "$ref": "classic.tokens.json"
+          }
+        ],
+        "light": [
+          {
+            "$ref": "light.tokens.json"
+          }
+        ],
+        "highContrast": [
+          {
+            "$ref": "highContrast.tokens.json"
+          }
+        ],
+        "colourBlindSafe": [
+          {
+            "$ref": "colourBlindSafe.tokens.json"
+          }
+        ],
+        "monochrome": [
+          {
+            "$ref": "monochrome.tokens.json"
+          }
+        ]
       },
       "default": "classic"
+    },
+    "density": {
+      "contexts": {
+        "regular": [],
+        "compact": [
+          {
+            "seed": {
+              "density": {
+                "$type": "number",
+                "$value": 0.75
+              }
+            }
+          }
+        ]
+      },
+      "default": "regular"
     }
   },
-  "resolutionOrder": [ { "$ref": "#/modifiers/theme" } ]
+  "resolutionOrder": [
+    {
+      "$ref": "#/modifiers/theme"
+    },
+    {
+      "$ref": "#/modifiers/density"
+    }
+  ]
 }
