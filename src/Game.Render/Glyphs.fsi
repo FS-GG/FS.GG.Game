@@ -202,14 +202,35 @@ module GlyphSpec =
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///
-/// Game state a glyph shows. Focus and hover are never here: they are cues the input host holds (ADR D10).
-type GlyphState =
-    {
-        /// The object is selected: corner brackets in the cue reserve.
-        Selected: bool
-        /// The information is stale: the frame is drawn in `glyph.stale`.
-        Stale: bool
-    }
+/// Game state a glyph shows: opaque, built from `GlyphState.idle` with `GlyphState.selected` and `GlyphState.stale`, so
+/// a later state (planned, dashed...) is additive. Focus and hover are never here: they are cues the input host holds
+/// (ADR D10).
+[<Sealed>]
+type GlyphState
+
+/// Public contract module exposed by the FS.GG.Game.Render package.
+[<RequireQualifiedAccess>]
+module GlyphState =
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Neither selected nor stale.
+    val idle: GlyphState
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the object is selected: corner brackets in the cue reserve.
+    val selected: selected: bool -> state: GlyphState -> GlyphState
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the information is stale: the frame is drawn in `glyph.stale`.
+    val stale: stale: bool -> state: GlyphState -> GlyphState
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the state is selected.
+    val isSelected: state: GlyphState -> bool
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// Whether the state is stale.
+    val isStale: state: GlyphState -> bool
 
 /// Public contract type exposed by the FS.GG.Game.Render package.
 ///

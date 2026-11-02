@@ -261,7 +261,8 @@ module GlyphSpec =
     val fillStep   : int -> GlyphSpec -> GlyphSpec               // ordinal lightness step
     val modifier   : ModifierRef -> GlyphSpec -> GlyphSpec
     val amplifier  : AmplifierSlot -> Amplifier -> GlyphSpec -> GlyphSpec
-type GlyphState = { Selected: bool; Stale: bool }                // game state only; focus and hover are cues (D10)
+[<Sealed>] type GlyphState     // GlyphState.idle |> GlyphState.selected true |> GlyphState.stale true: opaque, so a later
+                                 // state (planned, dashed) is additive; game state only, focus and hover are cues (D10)
 [<Sealed>] type Glyph                                            // Spec, Selection, Path or Custom, by constructors
 [<Sealed>] type GlyphDrawing
 module GlyphDrawing =
@@ -585,7 +586,7 @@ The glyph layer follows that split. Two reviews raised conflicts and requirement
 review of this ADR at `8cbd7bed` (B2 and B3). They are settled as follows.
 
 - **Selection** is game state (`InteractiveScene.Selected`). It is drawn in the frame's Scene as `Selection` brackets
-  through `GlyphState.Selected`.
+  through `GlyphState.selected`.
 - **Focus and hover** are never in `GlyphState`. They are drawn only by the cue layer.
 
 **One type, with no wrapping.** The cue layer has exactly the `withCues` type that #793 set at `f0561a79`. Its

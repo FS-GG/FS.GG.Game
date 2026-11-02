@@ -25,6 +25,10 @@ type GlyphCase
 [<RequireQualifiedAccess>]
 module GlyphConformance =
 
+    /// 90 %, rounded up: see the signature for why it is not the exact count.
+    let drawnControlFloor (modelled: int) =
+        if modelled <= 0 then 0 else max 1 (int (System.Math.Ceiling(0.9 * float modelled)))
+
     let private grey: Color = { Red = 128uy; Green = 128uy; Blue = 128uy; Alpha = 255uy }
 
     let private rebuild (theme: Theme) (change: ThemeSeed -> ThemeSeed) =
@@ -78,7 +82,7 @@ module GlyphConformance =
         let a = List.head themes
         let b = match themes with _ :: second :: _ -> second | _ -> swapped a
         let all = match themes with [ only ] -> [ only; b ] | _ -> themes
-        let idle = { Selected = false; Stale = false }
+        let idle = GlyphState.idle
 
         // 1. The starter set in each theme, against the next theme.
         let starterWidth, starterHeight = 176.0, 128.0

@@ -28,7 +28,7 @@ type GlyphCase =
 
     /// Each drawn control's name, scene, own pixels and modelled difference: a backend draws the control scene,
     /// waits (with retries) until it shows the control's own pixels, so the read is never of a stale frame, and then at
-    /// least the modelled number of this case's `Expected` pixels must differ on it.
+    /// least `GlyphConformance.drawnControlFloor modelled` of this case's `Expected` pixels must differ on it.
     member DrawnControls: (string * FS.GG.UI.Scene.Scene * PixelExpectation list * int) list
 
 /// Public contract module exposed by the FS.GG.Game.Render package.
@@ -57,6 +57,14 @@ module GlyphConformance =
     /// - a hostile structure's foot band, which must show its team colour, against the structure with no team.
     /// The dense board, the ring, the family and the foot-band cases also carry drawn controls.
     val cases: themes: Theme list -> GlyphCase list
+
+    /// Public contract function exposed by the FS.GG.Game.Render package.
+    /// How many of a drawn control's `modelled` differing pixels a backend must show: 90 %, rounded up (at least 1 when
+    /// any are modelled). Not the exact count, because a backend compares each pixel within its tolerance (Babylon's
+    /// lit colours until #786, rasteriser and driver differences), so a pixel whose subject and control colours lie
+    /// within that tolerance of each other can read as equal; the floor keeps the control causal without making it
+    /// brittle across backends and GPUs.
+    val drawnControlFloor: modelled: int -> int
 
     /// Public contract function exposed by the FS.GG.Game.Render package.
     /// A monochrome theme derived from `theme`: every team and allegiance in one grey, so only frame shape and badge

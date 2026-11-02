@@ -2855,10 +2855,13 @@ let runGlyphSection () : Async<unit> =
                                 failedControls.Add(sprintf "%s (never showed its own pixels: %s)" controlName (ownWrong |> List.truncate 2 |> String.concat "; "))
                             else
                                 let! differing = drawnMismatches container case.Width case.Height backend (fun () -> mount.Present scene) case.Expected 0
-                                info (sprintf "glyph drawn control %s, %s: %s" id case.Name controlName) (sprintf "%d differing (modelled %d)" differing.Length modelled)
+                                // 90 % of the modelled count (GlyphConformance.drawnControlFloor): pixels are compared within each
+                                // backend's tolerance, so a subject/control pair of near colours can read as equal.
+                                let floor = GlyphConformance.drawnControlFloor modelled
+                                info (sprintf "glyph drawn control %s, %s: %s" id case.Name controlName) (sprintf "%d differing (modelled %d, floor %d)" differing.Length modelled floor)
 
-                                if differing.Length < modelled || modelled = 0 then
-                                    failedControls.Add(sprintf "%s (%d differ, modelled %d)" controlName differing.Length modelled)
+                                if differing.Length < floor || modelled = 0 then
+                                    failedControls.Add(sprintf "%s (%d differ, floor %d of the modelled %d)" controlName differing.Length floor modelled)
 
                     check
                         (sprintf "%s: every decided pixel is drawn (%d) and every control differs (%d, %d drawn)" name case.Expected.Length case.Controls.Length case.DrawnControls.Length)
