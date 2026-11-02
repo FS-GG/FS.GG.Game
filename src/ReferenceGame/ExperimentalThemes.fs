@@ -4,25 +4,39 @@ open FS.GG.UI.Scene
 open FS.GG.Game.Reference.Experimental.Colour
 
 /// EXPERIMENTAL (FS.GG.Game#795, GAME-RENDER-02.8): theme derivation for the glyph layer, as the design
-/// `docs/roadmaps/game-render-02-themes.md` proposes. Seed tokens are expanded by an ordered list of composable
-/// algorithms (Ant Design v5's layering, MIT; the idea, not its HSV maths) into map tokens: one 12-step OKLCH ramp per
-/// hue, each step solved for a target WCAG 2 contrast against the ground (Adobe Leonardo's idea, Apache-2.0), gamut-mapped
-/// per CSS Color 4 and quantised half up. A closed alias set names the colours glyph code reads. A theme that fails
-/// validation cannot be built. Not a contract: #789 owns `Theme`, its alias names and the algorithm signature; the
-/// names here follow its ADR (D4) so the swap is a rename.
+/// `docs/roadmaps/game-render-02-themes.md` proposes.
+///
+/// Ownership (Root's ruling on #789): #802 owns `Theme`, `ThemeSeed`, `ThemeTokens`, `ThemeAlgorithm`, `Theme.create`,
+/// `Theme.validate [ThemeCheck]`, `ThemeViolation`, `withOverrides`/`withTeamColour`, DTCG and CSS export, and
+/// `ThemeColour`. #795 supplies `ThemeAlgorithm`s, `ThemeCheck`s and the preset seeds. This module therefore has two
+/// parts:
+/// - **STAND-INS for #802, replaced by #802's types on merge:** `Seed` (`ThemeSeed` plus algorithm parameters),
+///   `MapTokens` (`ThemeTokens`), `Algorithm` (`ThemeAlgorithm`), `Theme`, `ThemeViolation`, `builtInRules` (#802's
+///   built-in validation), `create`, `overrideTeam` (`Theme.withTeamColour`), `hexes`, `cssVariables`, `toDtcg`,
+///   `ofDtcg` and `resolverDocument`. The alias names are #802's 35 colour aliases.
+/// - **#795's own work, which becomes `ThemeAlgorithm`s, `ThemeCheck`s and preset seeds on #802:** the Leonardo-style
+///   ramps and team bands, the algorithms `base`, `dark`, `light`, `highContrast`, `colourBlindSafe`, `monochrome` and
+///   `repair`, the distinctness, colour-vision, lightness-gap, status-meaning and cue checks, the measured hue
+///   capacity, and the five preset seeds. Root's ruling: this derivation is the source of truth for every preset,
+///   `classic` included.
 module Themes =
 
     type Identity = Glyphs.Identity
 
-    /// Seed tokens: intent, about a dozen values (glyph ADR D4).
+    // =================================================================================================================
+    // STAND-INS for #802 (replaced on merge)
+    // =================================================================================================================
+
+    /// STAND-IN for #802's `ThemeSeed` plus #795's algorithm parameters (#802 keeps `ThemeSeed` closed; per-band ratios
+    /// and chroma are algorithm parameters, closed over by `ThemeAlgorithm.create`).
     type Seed =
         {
             Name: string
-            /// The ground glyphs sit on.
+            /// `surface.ground`.
             Ground: Color
-            /// The key chroma of hued tokens (OKLCH C).
+            /// The key chroma of hued tokens (OKLCH C): an algorithm parameter on #802.
             Chroma: float
-            /// Allegiance hues (OKLCH h, degrees), in `Glyphs.identities` order: own, ally, neutral, enemy, unknown.
+            /// Allegiance hues (OKLCH h), in `Glyphs.identities` order: own, ally, neutral, enemy, unknown.
             AllegianceHues: float list
             /// Team key hues, in team order. The first two are the two-team default (never red against green).
             TeamHues: float list
@@ -30,7 +44,8 @@ module Themes =
             MarkerHue: float
             /// Status hues: good, warn, bad.
             StatusHues: float list
-            /// The non-text contrast floor: 3 (WCAG 2 SC 1.4.11), or 7 for `highContrast` (provisional, AAA text value).
+            /// `contrastTarget`: the floor against the ground, 3 (WCAG 2 SC 1.4.11) or 7 for `highContrast`
+            /// (provisional).
             ContrastTarget: float
             Cell: float
             StrokeBase: float
@@ -39,13 +54,17 @@ module Themes =
             Frame: float
         }
 
-    /// Map tokens: the parameters algorithms refine, and the ramps derived from them.
+    /// STAND-IN for #802's `ThemeTokens`: the parameters #795's algorithms refine, and the ramps derived from them.
     type MapTokens =
         {
             /// Lighter: hued tokens are lighter than the ground (a dark theme). Darker: a light theme.
             Polarity: Polarity
             Ground: Color
-            /// The ink drawn on fills: badge, icon, status track and the inner focus tone.
+            /// `glyph.unit.body` (and `status.keyline`): white on a dark ground, near-black on a light one, as #802's
+            /// standard algorithm derives it.
+            Body: Color
+            /// The ink drawn on fills: `glyph.badge.ink`, `glyph.icon.ink`, `glyph.modifier`, `status.track` and
+            /// `cue.focus.inner`.
             OnFill: Color
             Floor: float
             Chroma: float
@@ -58,49 +77,35 @@ module Themes =
             /// Twelve target contrast ratios against the ground, one per ramp step (Radix-style step jobs: 1-2 ground
             /// tints, 3-5 states, 6-8 borders, 9-12 solid fills and marks).
             StepRatios: float list
-            /// The ramp step (1-12) of team N is `TeamSteps.[N % length]`: alternating light and dark bands, so teams
-            /// differ in lightness too (Game Accessibility Guidelines: a light/dark split for team colours).
-            TeamSteps: int list
-            /// The ramp step of each allegiance, in `Glyphs.identities` order.
+            /// Team N is solved for the contrast ratio `TeamBands.[N % length]` against the ground: alternating light
+            /// and dark bands (Game Accessibility Guidelines: a light/dark split for team colours), inside the window
+            /// the body leaves (E1: the ring sits on the body).
+            TeamBands: float list
             AllegianceSteps: int list
             /// Status steps: good, warn, bad.
             StatusSteps: int list
-            /// The ramp steps of selection, the marker and hover.
             SelectionStep: int
             MarkerStep: int
             HoverStep: int
             /// False for `monochrome`: colour carries no category, hue capacity is 0, and every hued alias is a grey.
             ColourCarries: bool
-            /// The hue ceiling per size step: frames under 24 units, 24 to 39, 40 and over (Munzner's 6-12 bins, fewer at
-            /// small sizes; glyph ADR D12 rule 3).
+            /// The hue ceiling per size bucket: frames under 24 units, 24 to 39, 40 and over.
             HueCeiling: int list
             Stroke: float
             Gap: float
             Cell: float
             Frame: float
-            /// Derived: ramp name -> 12 colours.
+            /// Derived: ramp name -> 12 colours; team name -> its solved colour.
             Ramps: Map<string, Color list>
+            Teams: Color list
             /// The algorithms applied, in order.
             Applied: string list
         }
 
-    /// An algorithm refines the map from the seed (glyph ADR D4: `Seed -> MapTokens -> MapTokens`). A list composes.
+    /// STAND-IN for #802's `ThemeAlgorithm` (`ThemeAlgorithm.create name refine`).
     type Algorithm = { Name: string; Apply: Seed -> MapTokens -> MapTokens }
 
-    /// The provisional distinctness thresholds (glyph ADR Q11; calibrated as the design's Q-T1 states).
-    type Thresholds =
-        {
-            /// CIEDE2000 between two colours of one category, normal vision.
-            Normal: float
-            /// CIEDE2000 under Machado protan, deutan and tritan simulation, severity 1.0.
-            Simulated: float
-            /// The OKLab lightness gap between the first two teams under every simulation.
-            TeamLightnessGap: float
-        }
-
-    let thresholds: Thresholds = { Normal = 12.0; Simulated = 8.0; TeamLightnessGap = 0.08 }
-
-    /// The most team aliases a theme carries (the largest hue ceiling).
+    /// The most team aliases a theme carries.
     let maxTeams = 8
 
     let identityName (identity: Identity) =
@@ -111,32 +116,24 @@ module Themes =
         | Glyphs.Enemy -> "enemy"
         | Glyphs.Unknown -> "unknown"
 
-    /// The closed alias set (glyph ADR D4, plus the five names #795 asks #789 to add: badge and icon ink, status track
-    /// and keyline, modifier). Glyph code reads only these.
+    /// #802's 35 colour aliases, in #802's order (`Theme.aliases`, without its five number aliases). Glyph code reads
+    /// only these.
     let aliasNames: string list =
         [
-            yield "ground"
+            yield "surface.ground"
             yield "glyph.unit.body"
-            yield "glyph.badge.ink"
-            yield "glyph.icon.ink"
             for identity in Glyphs.identities do
                 yield "glyph.allegiance." + identityName identity
             for team in 0 .. maxTeams - 1 do
                 yield sprintf "glyph.team.%d" team
-            yield "glyph.selection"
-            yield "glyph.marker"
-            yield "glyph.modifier"
-            yield "cue.focus.outer"
-            yield "cue.focus.inner"
-            yield "cue.hover"
-            yield "status.keyline"
-            yield "status.track"
-            yield "status.good"
-            yield "status.warn"
-            yield "status.bad"
+            yield! [ "glyph.badge.ink"; "glyph.icon.ink"; "glyph.modifier"; "glyph.selection"; "glyph.marker"; "glyph.path" ]
+            yield! [ "glyph.stale"; "cue.focus.outer"; "cue.focus.inner"; "cue.hover" ]
+            yield! [ "status.good"; "status.warn"; "status.bad"; "status.track"; "status.keyline" ]
+            yield! [ "terrain.open"; "terrain.blocked"; "terrain.difficult"; "terrain.water"; "terrain.void" ]
         ]
 
-    /// A resolved theme: the seed, the map, every alias, and the overrides the player or a DTCG file applied.
+    /// STAND-IN for #802's `Theme`, plus #795's measured hue capacity (which #802 reads from the seed's
+    /// `hueCapacity.N`, checked by #795's capacity check).
     type Theme =
         {
             Name: string
@@ -144,19 +141,21 @@ module Themes =
             Map: MapTokens
             Aliases: Map<string, Color>
             Overrides: Map<string, Color>
-            /// The measured hue capacity per size step (under 24 units, 24-39, 40 and over), computed when the theme is
-            /// resolved, overridden or imported.
+            /// The measured hue capacity per size bucket (under 24 units, 24-39, 40 and over).
             Capacity: int list
         }
 
-    /// A theme rule a theme breaks, named so a designer knows what to change.
+    /// A broken rule, named so a designer knows what to change. STAND-IN for #802's `ThemeViolation` (token and
+    /// reason); `explainViolation` is the reason text.
     type ThemeViolation =
         | NotOpaque of alias: string
         | UnknownAlias of alias: string
         | BelowFloor of alias: string * against: string * ratio: float * floor: float
         | NotDistinct of a: string * b: string * vision: Vision * deltaE: float * threshold: float
         | LightnessTooClose of a: string * b: string * vision: Vision * gap: float * minimum: float
-        | Unreachable of ramp: string * step: int * ratio: float
+        | StatusMeaningLost of alias: string * hue: float * band: string
+        | TeamOutsideGame of team: int * teams: int
+        | BadToken of alias: string * reason: string
 
     let private visionName (vision: Vision) =
         match vision with
@@ -175,53 +174,160 @@ module Themes =
             sprintf "%s and %s differ by deltaE2000 %.1f under %s, under %g; change one's hue or lightness band" a b dE (visionName vision) threshold
         | LightnessTooClose(a, b, vision, gap, minimum) ->
             sprintf "%s and %s differ by %.3f in OKLab L under %s, under %g; put them in different lightness bands" a b gap (visionName vision) minimum
-        | Unreachable(ramp, step, ratio) ->
-            sprintf "ramp %s step %d cannot reach %g:1 against the ground at any lightness; lower the step's target or change the ground" ramp step ratio
+        | StatusMeaningLost(alias, hue, band) ->
+            sprintf "%s has hue %.0f, outside its %s band, so it no longer reads as its status; keep its hue in the band" alias hue band
+        | TeamOutsideGame(team, teams) ->
+            sprintf "team %d is not one of the game's %d teams; only an existing team's colour can be set" team teams
+        | BadToken(alias, reason) -> sprintf "%s: %s" alias reason
 
-    // ---- Derivation -------------------------------------------------------------------------------------------------
+    let colour (theme: Theme) (alias: string) : Color =
+        match theme.Aliases.TryFind alias with
+        | Some c -> c
+        | None -> theme.Map.Ground
+
+    let team (theme: Theme) (index: int) = colour theme (sprintf "glyph.team.%d" index)
+    let allegiance (theme: Theme) (identity: Identity) = colour theme ("glyph.allegiance." + identityName identity)
+
+    let private teamAliases n = [ for i in 0 .. n - 1 -> sprintf "glyph.team.%d" i ]
+    let private allegianceAliases = Glyphs.identities |> List.map (fun i -> "glyph.allegiance." + identityName i)
+    let private statusAliases = [ "status.good"; "status.warn"; "status.bad" ]
+
+    /// STAND-IN for #802's built-in rules (Theme.fsi at 9de9044e, `Theme.create`), applied to every team the theme
+    /// carries, with ONE stated deviation (amendment A1, Q-T11): team colours are held to 3:1 against the ground, not to
+    /// `contrastTarget`, because under erratum E1 the team ring sits between a body-colour keyline and the body fill and
+    /// never touches the ground. With a 7:1 floor and #802's 3:1 ring-on-body rule, no team colour satisfies both except
+    /// luminance 0.30 exactly (black ground, white body). At a 3:1 floor A1 is #802's rule unchanged.
+    let builtInRules (theme: Theme) : ThemeViolation list =
+        let floor = theme.Map.Floor
+        let c = colour theme
+        let below (floor: float) alias against =
+            let ratio = contrast (c alias) (c against)
+            if ratio < floor then [ BelowFloor(alias, against, ratio, floor) ] else []
+        let teams = teamAliases maxTeams
+        [
+            for alias in aliasNames do
+                if (c alias).Alpha <> 255uy then yield NotOpaque alias
+            for alias in theme.Overrides |> Map.toList |> List.map fst do
+                if not (List.contains alias aliasNames) then yield UnknownAlias alias
+            for alias in
+                allegianceAliases
+                @ [ "glyph.unit.body"; "glyph.stale"; "glyph.selection"; "glyph.marker"; "glyph.path"; "cue.focus.outer"; "cue.hover"; "status.keyline" ] do
+                yield! below floor alias "surface.ground"
+            for alias in teams do
+                yield! below 3.0 alias "surface.ground"
+            yield! below 3.0 "cue.focus.inner" "cue.focus.outer"
+            for fill in "glyph.unit.body" :: teams @ allegianceAliases do
+                yield! below 3.0 "glyph.badge.ink" fill
+                yield! below 3.0 "glyph.modifier" fill
+            for fill in "glyph.unit.body" :: allegianceAliases do
+                yield! below 3.0 "glyph.icon.ink" fill
+            for alias in teams do
+                yield! below 3.0 alias "glyph.unit.body"
+            for status in statusAliases do
+                yield! below 3.0 status "status.track"
+            yield! below 3.0 "status.track" "status.keyline"
+        ]
+
+    // =================================================================================================================
+    // #795: ramps, algorithms, checks, capacity, presets
+    // =================================================================================================================
+
+    /// The provisional thresholds (glyph ADR Q11; calibrated as the design's Q-T1 states).
+    type Thresholds =
+        {
+            /// CIEDE2000 between two colours of one category, normal vision.
+            Normal: float
+            /// CIEDE2000 under Machado protan, deutan and tritan simulation, severity 1.0.
+            Simulated: float
+            /// The OKLab lightness gap between the first two teams under every simulation (glyph ADR D12 as amended
+            /// by Root: required for the first two teams only).
+            TeamLightnessGap: float
+        }
+
+    let thresholds: Thresholds = { Normal = 12.0; Simulated = 8.0; TeamLightnessGap = 0.08 }
+
+    /// Status hue bands (OKLCH h, degrees, with a minimum chroma), so `repair` and an override keep status meaning:
+    /// bad stays red, warn stays amber, good stays green (to bluish green, for Okabe-Ito).
+    let statusBands: (string * string * float * float) list =
+        [ "status.good", "green", 120.0, 200.0; "status.warn", "amber", 50.0, 110.0; "status.bad", "red", -20.0, 49.0 ]
+
+    let private inBand (lo: float) (hi: float) (h: float) =
+        let h' = if h > 180.0 && lo < 0.0 then h - 360.0 else h
+        h' >= lo && h' <= hi
+
+    /// Does `colour` read as the status `alias`: its hue in the band and chroma at least 0.08, so not a pastel or a grey?
+    let statusReads (alias: string) (c: Color) : bool =
+        match statusBands |> List.tryFind (fun (a, _, _, _) -> a = alias) with
+        | Some(_, _, lo, hi) ->
+            let lch = oklchOf c
+            lch.C >= 0.08 && inBand lo hi lch.H
+        | None -> true
+
+    /// Amber reads lighter than red: warn's OKLab L is at least 0.05 above bad's (Okabe-Ito's orange is lighter than
+    /// their vermillion too).
+    let statusOrdered (warn: Color) (bad: Color) : bool = (oklabOf warn).L >= (oklabOf bad).L + 0.05
 
     let private darkRatios = [ 1.08; 1.18; 1.32; 1.5; 1.75; 2.1; 2.6; 3.2; 4.2; 5.6; 7.5; 11.0 ]
     let private highContrastRatios = [ 1.2; 1.5; 2.0; 2.6; 3.4; 4.4; 5.6; 7.2; 8.5; 10.5; 13.0; 16.0 ]
 
+    /// The candidate team-band ratios against the ground that `repair` chooses from.
+    let teamBandCandidates = [ 3.02; 3.1; 3.2; 3.4; 3.7; 4.0; 4.4; 4.8; 4.9; 4.95; 5.3; 5.9; 6.6 ]
+
     let private groundHue (map: MapTokens) = (oklchOf map.Ground).H
 
-    /// One 12-step ramp of hue `h` at chroma `c`: each step is the colour nearest the ground's lightness whose contrast
-    /// against the ground meets the step's ratio. A step no lightness reaches takes the extreme (white or black), and the
-    /// alias validation reports it if an alias uses it.
-    let private ramp (map: MapTokens) (c: float) (h: float) : Color list =
-        let extreme = match map.Polarity with Lighter -> rgb 255 255 255 | Darker -> rgb 0 0 0
-        map.StepRatios |> List.map (fun ratio -> solve map.Ground map.Polarity ratio c h |> Option.defaultValue extreme)
+    let private extreme (map: MapTokens) = match map.Polarity with Lighter -> rgb 255 255 255 | Darker -> rgb 0 0 0
 
-    /// Recompute every ramp from the map's parameters. Algorithms call this after they change parameters.
+    /// One 12-step ramp of hue `h` at chroma `c`: each step is the colour nearest the ground's lightness whose contrast
+    /// against the ground meets the step's ratio (Leonardo's idea). A step no lightness reaches takes the extreme, and
+    /// validation reports it if an alias uses it.
+    let private ramp (map: MapTokens) (c: float) (h: float) : Color list =
+        map.StepRatios |> List.map (fun ratio -> solve map.Ground map.Polarity ratio c h |> Option.defaultValue (extreme map))
+
+    let private teamColour (map: MapTokens) (bands: float list) (i: int) =
+        let c = if map.ColourCarries then map.Chroma else 0.0
+        let h = map.TeamHues.[i % map.TeamHues.Length]
+        solve map.Ground map.Polarity bands.[i % bands.Length] c h |> Option.defaultValue (extreme map)
+
+    /// Recompute every ramp and team colour from the map's parameters. Algorithms call this after they change
+    /// parameters.
     let rederive (map: MapTokens) : MapTokens =
         let c = if map.ColourCarries then map.Chroma else 0.0
         let named =
             [
-                yield "grey", ramp map (if map.ColourCarries then 0.012 else 0.0) (groundHue map)
+                yield "grey", ramp map 0.0 (groundHue map)
                 for identity, h in List.zip Glyphs.identities map.AllegianceHues do
                     yield identityName identity, ramp map c h
-                for i, h in List.indexed map.TeamHues do
-                    yield sprintf "team%d" i, ramp map c h
                 yield "selection", ramp map c map.SelectionHue
                 yield "marker", ramp map c map.MarkerHue
                 yield "hover", ramp map c map.HoverHue
                 for name, h in List.zip [ "good"; "warn"; "bad" ] map.StatusHues do
                     yield name, ramp map c h
+                yield "difficult", ramp map (if map.ColourCarries then 0.05 else 0.0) 70.0
+                yield "water", ramp map (if map.ColourCarries then 0.06 else 0.0) 240.0
             ]
-        { map with Ramps = Map.ofList named }
+        { map with Ramps = Map.ofList named; Teams = [ for i in 0 .. maxTeams - 1 -> teamColour map map.TeamBands i ] }
 
-    /// `base`: the map a seed gives with a dark polarity when the ground is darker than mid grey, light otherwise.
+    let private applied name (map: MapTokens) = { map with Applied = map.Applied @ [ name ] }
+
+    let private poles (polarity: Polarity) =
+        match polarity with
+        | Lighter -> rgb 255 255 255, rgb 13 13 13
+        | Darker -> rgb 13 13 13, rgb 255 255 255
+
+    /// `base`: the map a seed gives, dark polarity when the ground's OKLCH L is under 0.6.
     let baseAlgorithm: Algorithm =
         {
             Name = "base"
             Apply =
                 fun seed _ ->
-                    let dark = (oklchOf seed.Ground).L < 0.6
+                    let polarity = if (oklchOf seed.Ground).L < 0.6 then Lighter else Darker
+                    let body, onFill = poles polarity
                     rederive
                         {
-                            Polarity = (if dark then Lighter else Darker)
+                            Polarity = polarity
                             Ground = seed.Ground
-                            OnFill = (if dark then rgb 10 10 12 else rgb 255 255 255)
+                            Body = body
+                            OnFill = onFill
                             Floor = seed.ContrastTarget
                             Chroma = seed.Chroma
                             AllegianceHues = seed.AllegianceHues
@@ -231,7 +337,7 @@ module Themes =
                             HoverHue = seed.MarkerHue
                             StatusHues = seed.StatusHues
                             StepRatios = darkRatios
-                            TeamSteps = [ 9; 11 ]
+                            TeamBands = [ 3.2; 4.8 ]
                             AllegianceSteps = [ 10; 12; 9; 9; 11 ]
                             StatusSteps = [ 10; 12; 9 ]
                             SelectionStep = 12
@@ -244,14 +350,12 @@ module Themes =
                             Cell = seed.Cell
                             Frame = seed.Frame
                             Ramps = Map.empty
+                            Teams = []
                             Applied = [ "base" ]
                         }
         }
 
-    let private applied name (map: MapTokens) = { map with Applied = map.Applied @ [ name ] }
-
-    /// `dark`: a dark ground of the seed's ground hue (the seed's own ground when it is already dark), near-black ink on
-    /// fills, ramps lighter than the ground.
+    /// `dark`: a dark ground (the seed's own, if already dark), a white body, near-black ink on fills.
     let dark: Algorithm =
         {
             Name = "dark"
@@ -259,50 +363,35 @@ module Themes =
                 fun seed map ->
                     let g = oklchOf seed.Ground
                     let ground = if g.L < 0.6 then seed.Ground else ofOklch { L = 0.29; C = min g.C 0.02; H = g.H }
-                    { map with Polarity = Lighter; Ground = ground; OnFill = rgb 10 10 12 } |> rederive |> applied "dark"
+                    let body, onFill = poles Lighter
+                    { map with Polarity = Lighter; Ground = ground; Body = body; OnFill = onFill } |> rederive |> applied "dark"
         }
 
-    /// `light`: a near-white ground of the seed's ground hue, white ink on fills, ramps darker than the ground
-    /// (FourD's look).
+    /// `light`: a near-white ground of the seed's hue, a near-black body, white ink on fills (FourD's look).
     let light: Algorithm =
         {
             Name = "light"
             Apply =
                 fun seed map ->
                     let g = oklchOf seed.Ground
-                    let ground = ofOklch { L = 0.97; C = min g.C 0.01; H = g.H }
+                    let body, onFill = poles Darker
                     { map with
                         Polarity = Darker
-                        Ground = ground
-                        OnFill = rgb 255 255 255
-                        TeamSteps = [ 9; 11 ]
-                        AllegianceSteps = [ 10; 12; 9; 9; 11 ]
-                        StatusSteps = [ 9; 11; 12 ] }
+                        Ground = ofOklch { L = 0.97; C = min g.C 0.01; H = g.H }
+                        Body = body
+                        OnFill = onFill }
                     |> rederive
                     |> applied "light"
         }
 
-    /// `highContrast`: a black ground, the 7:1 floor (provisional), steeper ramps, thicker strokes and gaps.
+    /// `highContrast`: a black (or white) ground, the 7:1 floor (provisional), steeper ramps, thicker strokes and gaps.
     let highContrast: Algorithm =
         {
             Name = "highContrast"
             Apply =
                 fun _ map ->
-                    let ground, onFill =
-                        match map.Polarity with
-                        | Lighter -> rgb 0 0 0, rgb 0 0 0
-                        | Darker -> rgb 255 255 255, rgb 255 255 255
-                    { map with
-                        Ground = ground
-                        OnFill = onFill
-                        Floor = 7.0
-                        StepRatios = highContrastRatios
-                        TeamSteps = [ 8; 11 ]
-                        AllegianceSteps = [ 9; 12; 8; 8; 11 ]
-                        StatusSteps = [ 9; 12; 8 ]
-                        HueCeiling = [ 4; 5; 6 ]
-                        Stroke = map.Stroke + 1.0
-                        Gap = map.Gap + 1.0 }
+                    let ground = match map.Polarity with Lighter -> rgb 0 0 0 | Darker -> rgb 255 255 255
+                    { map with Ground = ground; Floor = 7.0; StepRatios = highContrastRatios; HueCeiling = [ 4; 5; 6 ]; Stroke = map.Stroke + 1.0; Gap = map.Gap + 1.0 }
                     |> rederive
                     |> applied "highContrast"
         }
@@ -312,8 +401,7 @@ module Themes =
     let okabeIto: Color list =
         [ rgb 230 159 0; rgb 86 180 233; rgb 0 158 115; rgb 240 228 66; rgb 0 114 178; rgb 213 94 0; rgb 204 121 167 ]
 
-    /// `colourBlindSafe`: Okabe-Ito hue angles for teams, allegiances and status, with lightness solved for the ground
-    /// (their blue is 2.86:1 on the classic ground; solving lifts it) and a wider light/dark band split.
+    /// `colourBlindSafe`: Okabe-Ito hue angles for teams, allegiances, status, selection and marker.
     let colourBlindSafe: Algorithm =
         {
             Name = "colourBlindSafe"
@@ -328,30 +416,175 @@ module Themes =
                         SelectionHue = yellow
                         MarkerHue = sky
                         HoverHue = sky
-                        TeamSteps = (match map.Polarity with Lighter -> [ 8; 11 ] | Darker -> [ 8; 11 ])
                         HueCeiling = [ 4; 5; 6 ] }
                     |> rederive
                     |> applied "colourBlindSafe"
         }
 
-    /// `monochrome`: every hue removed (milsymbol's monoColor). Colour carries no category, so identity must survive
+    /// `monochrome`: every hue removed (milsymbol's monoColor). Colour carries no category, so identity survives
     /// through frame shape alone and team through the badge; it is also the redundancy test (glyph ADR D4).
     let monochrome: Algorithm =
         {
             Name = "monochrome"
             Apply =
                 fun _ map ->
-                    { map with ColourCarries = false; HueCeiling = [ 0; 0; 0 ]; TeamSteps = [ 11 ]; AllegianceSteps = [ 11; 11; 11; 11; 11 ]; StatusSteps = [ 12; 12; 12 ] }
+                    { map with ColourCarries = false; HueCeiling = [ 0; 0; 0 ]; TeamBands = [ 3.2 ]; AllegianceSteps = [ 11; 11; 11; 11; 11 ]; StatusSteps = [ 12; 12; 12 ] }
                     |> rederive
                     |> applied "monochrome"
         }
 
-    /// `repair`: the deterministic check-and-repair pass (the design's palette step 4). Over the Leonardo-solved ramps,
-    /// it chooses the lightness step of every allegiance, status level and team band, and of selection, the marker and
-    /// hover, to maximise the smallest distinctness margin (deltaE2000 minus its threshold, under normal vision and every
-    /// simulation) while every step keeps the contrast floor against the ground and the on-fill ink. Candidates are
-    /// enumerated in a fixed order and the first best wins, so .NET and Fable choose the same steps. It nudges lightness
-    /// only, never hue: hue is the seed's intent. Whatever still fails is reported by validation, naming the pair.
+    let private step (map: MapTokens) (rampName: string) (n: int) : Color =
+        match map.Ramps.TryFind rampName with
+        | Some colours -> colours.[(max 1 (min 12 n)) - 1]
+        | None -> map.Ground
+
+    /// The first grey step at or past `ratio` against the ground.
+    let private greyAt (map: MapTokens) (ratio: float) =
+        let i = map.StepRatios |> List.tryFindIndex (fun r -> r >= ratio) |> Option.defaultValue 11
+        step map "grey" (i + 1)
+
+    let private resolveAliases (map: MapTokens) : Map<string, Color> =
+        let g = oklchOf map.Ground
+        let void' = match map.Polarity with Lighter -> ofOklch { L = max 0.0 (g.L - 0.06); C = 0.0; H = 0.0 } | Darker -> ofOklch { L = g.L - 0.12; C = 0.0; H = 0.0 }
+        [
+            yield "surface.ground", map.Ground
+            yield "glyph.unit.body", map.Body
+            for i, identity in List.indexed Glyphs.identities do
+                yield "glyph.allegiance." + identityName identity, step map (identityName identity) map.AllegianceSteps.[i]
+            for team in 0 .. maxTeams - 1 do
+                yield sprintf "glyph.team.%d" team, map.Teams.[team]
+            yield "glyph.badge.ink", map.OnFill
+            yield "glyph.icon.ink", map.OnFill
+            yield "glyph.modifier", map.OnFill
+            yield "glyph.selection", step map "selection" map.SelectionStep
+            yield "glyph.marker", step map "marker" map.MarkerStep
+            yield "glyph.path", step map "marker" map.MarkerStep
+            yield "glyph.stale", greyAt map (map.Floor + 0.5)
+            yield "cue.focus.outer", step map "grey" 12
+            yield "cue.focus.inner", map.OnFill
+            yield "cue.hover", step map "hover" map.HoverStep
+            for i, name in List.indexed [ "good"; "warn"; "bad" ] do
+                yield "status." + name, step map name map.StatusSteps.[i]
+            yield "status.track", map.OnFill
+            yield "status.keyline", map.Body
+            yield "terrain.open", step map "grey" 2
+            yield "terrain.blocked", step map "grey" 4
+            yield "terrain.difficult", step map "difficult" 3
+            yield "terrain.water", step map "water" 3
+            yield "terrain.void", void'
+        ]
+        |> Map.ofList
+
+    let private pairs (xs: 'a list) = [ for i in 0 .. xs.Length - 1 do for j in i + 1 .. xs.Length - 1 -> xs.[i], xs.[j] ]
+
+    let private distinct (theme: Theme) (a: string) (b: string) : ThemeViolation list =
+        let ca, cb = colour theme a, colour theme b
+        [
+            for vision in visions do
+                let threshold = if vision = Normal then thresholds.Normal else thresholds.Simulated
+                let dE = deltaEUnder vision ca cb
+                if dE < threshold then yield NotDistinct(a, b, vision, dE, threshold)
+        ]
+
+    /// Do the first `n` teams pass every distinctness rule (pairwise deltaE, normal and simulated)?
+    let private teamsDistinct (theme: Theme) (n: int) =
+        pairs (teamAliases n) |> List.forall (fun (a, b) -> (distinct theme a b).IsEmpty)
+
+    let private measureCapacity (theme: Theme) : int list =
+        if not theme.Map.ColourCarries then [ 0; 0; 0 ]
+        else
+            let top = min (List.max theme.Map.HueCeiling) maxTeams
+            let mutable n = 1
+            while n < top && teamsDistinct theme (n + 1) do
+                n <- n + 1
+            theme.Map.HueCeiling |> List.map (fun ceiling -> min n (min ceiling maxTeams))
+
+    let private measured (theme: Theme) = { theme with Capacity = measureCapacity theme }
+
+    /// The usable team hues at a frame size (glyph ADR D12 rule 3): 0 when colour carries no category; otherwise the
+    /// largest n, not above the size's ceiling, whose first n team colours pass every distinctness rule. Measured, not
+    /// declared: on #802 the preset seeds set `hueCapacity.N` to these values and #795's capacity check refuses a seed
+    /// that declares more than it separates.
+    let hueCapacity (theme: Theme) (frameUnits: float) : int =
+        let c = theme.Capacity
+        if c.IsEmpty then 0 elif frameUnits < 24.0 then c.[0] elif frameUnits < 40.0 then c.[1] else c.[2]
+
+    /// #795's checks, each a future `ThemeCheck` on #802 (name, run), for a game that tells `teams` teams apart (at
+    /// least the two-team default). They run on a theme the built-in rules accept, when colour carries categories:
+    /// - `distinct.deltaE2000`: teams (the game's), allegiances and status levels pairwise, by CIEDE2000 >= 12 with
+    ///   normal vision and >= 8 under Machado protan, deutan and tritan (severity 1.0, linear RGB);
+    /// - `distinct.cues`: selection, the outer focus tone and hover against every team and allegiance colour (>= 12,
+    ///   normal vision), because they are drawn over them;
+    /// - `lightness.firstTwoTeams`: the first two teams differ by >= 0.08 in OKLab L under every simulation (D12 as
+    ///   amended: beyond the first two, team rests on the allegiance frame plus the mandatory badge);
+    /// - `status.meaning`: good, warn and bad keep their hue bands at chroma >= 0.08, and warn stays lighter than bad (in
+    ///   `monochrome`, where status reads by bar length alone, the check is skipped);
+    /// - `cue.innerOnFills`: the inner focus tone on every team and allegiance colour it rings (3:1).
+    let checks (teams: int) : (string * (Theme -> ThemeViolation list)) list =
+        let teamList = teamAliases (max 2 (min teams maxTeams))
+        let fills theme = teamList @ allegianceAliases
+        [
+            "distinct.deltaE2000",
+            fun theme ->
+                if not theme.Map.ColourCarries then []
+                else [ for a, b in pairs teamList @ pairs allegianceAliases @ pairs statusAliases do yield! distinct theme a b ]
+            "distinct.cues",
+            fun theme ->
+                if not theme.Map.ColourCarries then []
+                else
+                    [
+                        for over in [ "glyph.selection"; "cue.focus.outer"; "cue.hover" ] do
+                            for fill in fills theme do
+                                let dE = deltaE2000 (labOf (colour theme over)) (labOf (colour theme fill))
+                                if dE < thresholds.Normal then yield NotDistinct(over, fill, Normal, dE, thresholds.Normal)
+                    ]
+            "lightness.firstTwoTeams",
+            fun theme ->
+                if not theme.Map.ColourCarries then []
+                else
+                    [
+                        for vision in [ Protan; Deutan; Tritan ] do
+                            let gap = lightnessGapUnder vision (colour theme "glyph.team.0") (colour theme "glyph.team.1")
+                            if gap < thresholds.TeamLightnessGap then
+                                yield LightnessTooClose("glyph.team.0", "glyph.team.1", vision, gap, thresholds.TeamLightnessGap)
+                    ]
+            "status.meaning",
+            fun theme ->
+                if not theme.Map.ColourCarries then []
+                else
+                    [
+                        for alias, band, _, _ in statusBands do
+                            let c = colour theme alias
+                            if not (statusReads alias c) then yield StatusMeaningLost(alias, (oklchOf c).H, band)
+                        let warn = colour theme "status.warn"
+                        if not (statusOrdered warn (colour theme "status.bad")) then
+                            yield StatusMeaningLost("status.warn", (oklchOf warn).H, "amber, lighter than status.bad,")
+                    ]
+            "cue.innerOnFills",
+            fun theme ->
+                [
+                    for fill in fills theme do
+                        let ratio = contrast (colour theme "cue.focus.inner") (colour theme fill)
+                        if ratio < 3.0 then yield BelowFloor("cue.focus.inner", fill, ratio, 3.0)
+                ]
+        ]
+
+    /// Every rule a theme breaks for a game of `teams` teams: the built-in rules (stand-in for #802's), then #795's
+    /// checks in order.
+    let validateFor (teams: int) (theme: Theme) : ThemeViolation list =
+        match builtInRules theme with
+        | [] -> checks teams |> List.collect (fun (_, run) -> run theme)
+        | violations -> violations
+
+    /// Validate with the two-team default.
+    let validate (theme: Theme) = validateFor 2 theme
+
+    /// `repair`: the deterministic check-and-repair pass (the design's palette step 4). Over the Leonardo-solved ramps
+    /// and team bands, it chooses the lightness of every allegiance, status level and team band, and the step of
+    /// selection, the marker and hover, to maximise the smallest distinctness margin while every choice keeps the
+    /// built-in contrast rules and status meaning. It changes hue only for selection, marker and hover, and only when
+    /// the seed's hue fails at every step. Candidates are enumerated in a fixed order and the first best wins, so .NET
+    /// and Fable choose the same values.
     let repair: Algorithm =
         let margin (labs: Map<Vision, Lab>) (other: Map<Vision, Lab>) =
             visions
@@ -367,7 +600,8 @@ module Themes =
                     else
                         let candidates = [ 7..12 ]
                         let colourAt name n = map.Ramps.[name].[n - 1]
-                        let usable (c: Color) = contrast c map.Ground >= map.Floor && contrast c map.OnFill >= map.Floor
+                        let onGround floor (c: Color) = contrast c map.Ground >= floor
+                        let inked (c: Color) = contrast c map.OnFill >= 3.0
                         let labsAt = map.Ramps |> Map.map (fun _ colours -> colours |> List.map labsOf)
                         let labAt name n = labsAt.[name].[n - 1]
                         let best (score: 'a -> float option) (options: 'a list) (fallback: 'a) =
@@ -381,48 +615,56 @@ module Themes =
                             |> snd
                         let rec combos n =
                             if n = 0 then [ [] ] else [ for c in candidates do for rest in combos (n - 1) -> c :: rest ]
-                        let groupScore (names: string list) (steps: int list) =
-                            if List.forall2 (fun name n -> usable (colourAt name n)) names steps then
+                        let groupScore (names: string list) (usable: string -> Color -> bool) (steps: int list) =
+                            if List.forall2 (fun name n -> usable name (colourAt name n)) names steps then
                                 let labs = List.map2 labAt names steps
                                 Some(worst [ for i in 0 .. labs.Length - 1 do for j in i + 1 .. labs.Length - 1 -> margin labs.[i] labs.[j] ])
                             else None
                         let allegianceNames = Glyphs.identities |> List.map identityName
-                        let allegianceSteps = best (groupScore allegianceNames) (combos 5) map.AllegianceSteps
+                        let allegianceSteps =
+                            best (groupScore allegianceNames (fun _ c -> onGround map.Floor c && inked c)) (combos 5) map.AllegianceSteps
                         let statusNames = [ "good"; "warn"; "bad" ]
-                        let statusScore steps =
-                            if List.forall2 (fun name n -> contrast (colourAt name n) map.OnFill >= map.Floor) statusNames steps then
-                                let labs = List.map2 labAt statusNames steps
-                                Some(worst [ for i in 0..2 do for j in i + 1 .. 2 -> margin labs.[i] labs.[j] ])
-                            else None
-                        let statusSteps = best statusScore (combos 3) map.StatusSteps
+                        let amberOverRed (steps: int list) = statusOrdered (colourAt "warn" steps.[1]) (colourAt "bad" steps.[2])
+                        let statusSteps =
+                            best
+                                (fun steps ->
+                                    if amberOverRed steps then
+                                        groupScore statusNames (fun name c -> contrast c map.OnFill >= 3.0 && statusReads ("status." + name) c) steps
+                                    else None)
+                                (combos 3)
+                                map.StatusSteps
+                        // Team bands: solved per candidate ratio once, then every ordered pair of distinct ratios.
                         let teamCount = map.TeamHues.Length
-                        let teamScore (bands: int list) =
-                            let teamLab i = labAt (sprintf "team%d" i) bands.[i % bands.Length]
-                            let teamColour i = colourAt (sprintf "team%d" i) bands.[i % bands.Length]
-                            if not ([ 0 .. teamCount - 1 ] |> List.forall (fun i -> usable (teamColour i))) then None
+                        let solved =
+                            [ for ratio in teamBandCandidates -> ratio, [ for i in 0 .. teamCount - 1 -> teamColour map [ ratio ] i ] ] |> Map.ofList
+                        let teamUsable (c: Color) = onGround 3.0 c && contrast c map.Body >= 3.0 && inked c
+                        let bandScore (bands: float list) =
+                            let colourOf i = solved.[bands.[i % bands.Length]].[i]
+                            if not ([ 0 .. teamCount - 1 ] |> List.forall (fun i -> teamUsable (colourOf i))) then None
                             else
-                                let ok n = [ for i in 0 .. n - 1 do for j in i + 1 .. n - 1 -> margin (teamLab i) (teamLab j) ] |> List.forall (fun m -> m >= 0.0)
+                                let labs = [ for i in 0 .. teamCount - 1 -> labsOf (colourOf i) ]
+                                let ok n = [ for i in 0 .. n - 1 do for j in i + 1 .. n - 1 -> margin labs.[i] labs.[j] ] |> List.forall (fun m -> m >= 0.0)
                                 let mutable capacity = 1
                                 while capacity < teamCount && ok (capacity + 1) do
                                     capacity <- capacity + 1
-                                let gap =
-                                    [ Protan; Deutan; Tritan ] |> List.map (fun v -> lightnessGapUnder v (teamColour 0) (teamColour 1)) |> List.min
+                                let gap = [ Protan; Deutan; Tritan ] |> List.map (fun v -> lightnessGapUnder v (colourOf 0) (colourOf 1)) |> List.min
                                 let gapOk = if gap >= thresholds.TeamLightnessGap then 1.0 else 0.0
                                 Some(gapOk * 100.0 + float capacity + min gap 0.5)
-                        let teamSteps = best teamScore [ [ 8; 11 ]; [ 9; 11 ]; [ 8; 12 ]; [ 9; 12 ]; [ 10; 12 ]; [ 7; 11 ]; [ 7; 12 ] ] map.TeamSteps
-                        let fills =
-                            [ for i in 0 .. teamCount - 1 -> labAt (sprintf "team%d" i) teamSteps.[i % teamSteps.Length] ]
-                            @ List.map2 labAt allegianceNames allegianceSteps
+                        let bandOptions = [ for a in teamBandCandidates do for b in teamBandCandidates do if a <> b then yield [ a; b ] ]
+                        let teamBands = best bandScore bandOptions map.TeamBands
+                        let teamColours = [ for i in 0 .. teamCount - 1 -> solved.[teamBands.[i % teamBands.Length]].[i] ]
+                        let fills = (teamColours |> List.map labsOf) @ List.map2 labAt allegianceNames allegianceSteps
                         // Selection, the marker and hover are drawn over fills, so each must stand apart from every fill.
-                        // The seed's hue is tried first, at every step; only if none reaches the normal-vision threshold
+                        // The seed's hue is tried first, at every step from the strongest down; only if none reaches the
+                        // normal-vision threshold
                         // are the twelve 30-degree hues tried, in order. The first that reaches it wins, else the best.
                         let overPick (seedHue: float) (avoid: (float * int) list) =
-                            let options = [ for h in seedHue :: [ for k in 0..11 -> 30.0 * float k ] do for n in candidates -> h, n ]
+                            let options = [ for h in seedHue :: [ for k in 0..11 -> 30.0 * float k ] do for n in List.rev candidates -> h, n ]
                             let score (h: float, n: int) =
                                 if List.contains (h, n) avoid then None
                                 else
-                                    let c = match map.Ramps.TryFind(sprintf "probe%g" h) with Some r -> r.[n - 1] | None -> solve map.Ground map.Polarity map.StepRatios.[n - 1] map.Chroma h |> Option.defaultValue map.Ground
-                                    if usable c then Some(worst [ for f in fills -> deltaE2000 (labOf c) f.[Normal] ]) else None
+                                    let c = solve map.Ground map.Polarity map.StepRatios.[n - 1] map.Chroma h |> Option.defaultValue map.Ground
+                                    if onGround map.Floor c then Some(worst [ for f in fills -> deltaE2000 (labOf c) f.[Normal] ]) else None
                             match options |> List.tryFind (fun o -> match score o with Some s -> s >= thresholds.Normal | None -> false) with
                             | Some o -> o
                             | None -> best score options (seedHue, 12)
@@ -432,7 +674,7 @@ module Themes =
                         { map with
                             AllegianceSteps = allegianceSteps
                             StatusSteps = statusSteps
-                            TeamSteps = teamSteps
+                            TeamBands = teamBands
                             SelectionHue = selectionHue
                             SelectionStep = selectionStep
                             MarkerHue = markerHue
@@ -443,133 +685,12 @@ module Themes =
                         |> applied "repair"
         }
 
-    // ---- Aliases ----------------------------------------------------------------------------------------------------
+    // =================================================================================================================
+    // STAND-INS for #802 (replaced on merge), continued
+    // =================================================================================================================
 
-    let private step (map: MapTokens) (rampName: string) (n: int) : Color =
-        match map.Ramps.TryFind rampName with
-        | Some colours -> colours.[(max 1 (min 12 n)) - 1]
-        | None -> map.Ground
-
-    let private resolveAliases (map: MapTokens) : Map<string, Color> =
-        let teamStep n = map.TeamSteps.[n % map.TeamSteps.Length]
-        let teamRamp n = if n < map.TeamHues.Length then sprintf "team%d" n else sprintf "team%d" (n % map.TeamHues.Length)
-        let body = step map "grey" 11
-        [
-            yield "ground", map.Ground
-            yield "glyph.unit.body", body
-            yield "glyph.badge.ink", map.OnFill
-            yield "glyph.icon.ink", map.OnFill
-            for i, identity in List.indexed Glyphs.identities do
-                yield "glyph.allegiance." + identityName identity, step map (identityName identity) map.AllegianceSteps.[i]
-            for team in 0 .. maxTeams - 1 do
-                yield sprintf "glyph.team.%d" team, step map (teamRamp team) (teamStep team)
-            yield "glyph.selection", step map "selection" map.SelectionStep
-            yield "glyph.marker", step map "marker" map.MarkerStep
-            yield "glyph.modifier", step map "grey" 12
-            yield "cue.focus.outer", step map "grey" 12
-            yield "cue.focus.inner", map.OnFill
-            yield "cue.hover", step map "hover" map.HoverStep
-            yield "status.keyline", body
-            yield "status.track", map.OnFill
-            for i, name in List.indexed [ "good"; "warn"; "bad" ] do
-                yield "status." + name, step map name map.StatusSteps.[i]
-        ]
-        |> Map.ofList
-
-    let colour (theme: Theme) (alias: string) : Color =
-        match theme.Aliases.TryFind alias with
-        | Some c -> c
-        | None -> theme.Map.Ground
-
-    let team (theme: Theme) (index: int) = colour theme (sprintf "glyph.team.%d" index)
-    let allegiance (theme: Theme) (identity: Identity) = colour theme ("glyph.allegiance." + identityName identity)
-
-    // ---- Validation -------------------------------------------------------------------------------------------------
-
-    let private pairs (xs: 'a list) = [ for i in 0 .. xs.Length - 1 do for j in i + 1 .. xs.Length - 1 -> xs.[i], xs.[j] ]
-
-    let private distinct (theme: Theme) (a: string) (b: string) : ThemeViolation list =
-        let ca, cb = colour theme a, colour theme b
-        [
-            for vision in visions do
-                let threshold = if vision = Normal then thresholds.Normal else thresholds.Simulated
-                let dE = deltaEUnder vision ca cb
-                if dE < threshold then yield NotDistinct(a, b, vision, dE, threshold)
-        ]
-
-    let private teamAliases n = [ for i in 0 .. n - 1 -> sprintf "glyph.team.%d" i ]
-    let private allegianceAliases = Glyphs.identities |> List.map (fun i -> "glyph.allegiance." + identityName i)
-
-    /// Do the first `n` teams pass every distinctness rule (pairwise deltaE, normal and simulated)?
-    let private teamsDistinct (theme: Theme) (n: int) =
-        pairs (teamAliases n) |> List.forall (fun (a, b) -> (distinct theme a b).IsEmpty)
-
-    /// The usable team hues at a frame size (glyph ADR D12 rule 3, `Theme.hueCapacity`): 0 when colour carries no
-    /// category; otherwise the largest n not above the size's ceiling whose first n team colours pass every
-    /// distinctness rule. Measured, not declared, so a theme cannot claim more hues than it separates.
-    let private measureCapacity (theme: Theme) : int list =
-        if not theme.Map.ColourCarries then [ 0; 0; 0 ]
-        else
-            let top = min (List.max theme.Map.HueCeiling) maxTeams
-            let mutable n = 1
-            while n < top && teamsDistinct theme (n + 1) do
-                n <- n + 1
-            theme.Map.HueCeiling |> List.map (fun ceiling -> min n (min ceiling maxTeams))
-
-    let private measured (theme: Theme) = { theme with Capacity = measureCapacity theme }
-
-    let hueCapacity (theme: Theme) (frameUnits: float) : int =
-        let c = theme.Capacity
-        if c.IsEmpty then 0 elif frameUnits < 24.0 then c.[0] elif frameUnits < 40.0 then c.[1] else c.[2]
-
-    /// Every rule a theme breaks, with `teams` the number of teams whose colours must be told apart (at least the
-    /// two-team default). Contrast: every alias drawn on the ground meets the floor, and each touching pair does
-    /// (ink on fills, the inner focus tone on the outer one and on every fill it rings, status fills on the track).
-    /// Distinctness (when colour carries categories): teams, allegiances and status levels pairwise, and selection, the
-    /// outer focus tone and hover against every team and allegiance, by deltaE2000 under normal vision and Machado
-    /// simulation; the first two teams also differ in OKLab lightness under every simulation.
-    let validateFor (teams: int) (theme: Theme) : ThemeViolation list =
-        let floor = theme.Map.Floor
-        let c = colour theme
-        let ground = c "ground"
-        let teamList = teamAliases (max 2 (min teams maxTeams))
-        let fills = teamList @ allegianceAliases
-        let below alias against =
-            let ratio = contrast (c alias) (c against)
-            if ratio < floor then [ BelowFloor(alias, against, ratio, floor) ] else []
-        [
-            for alias in aliasNames do
-                if (c alias).Alpha <> 255uy then yield NotOpaque alias
-            for alias in theme.Overrides |> Map.toList |> List.map fst do
-                if not (List.contains alias aliasNames) then yield UnknownAlias alias
-            for alias in
-                fills
-                @ [ "glyph.unit.body"; "glyph.selection"; "glyph.marker"; "glyph.modifier"; "cue.focus.outer"; "cue.hover"; "status.keyline" ] do
-                yield! below alias "ground"
-            for fill in fills do
-                yield! below "glyph.badge.ink" fill
-                yield! below "cue.focus.inner" fill
-            yield! below "cue.focus.inner" "cue.focus.outer"
-            for status in [ "status.good"; "status.warn"; "status.bad" ] do
-                yield! below status "status.track"
-            if theme.Map.ColourCarries then
-                for a, b in pairs teamList @ pairs allegianceAliases @ pairs [ "status.good"; "status.warn"; "status.bad" ] do
-                    yield! distinct theme a b
-                for over in [ "glyph.selection"; "cue.focus.outer"; "cue.hover" ] do
-                    for fill in fills do
-                        let dE = deltaE2000 (labOf (c over)) (labOf (c fill))
-                        if dE < thresholds.Normal then yield NotDistinct(over, fill, Normal, dE, thresholds.Normal)
-                for vision in [ Protan; Deutan; Tritan ] do
-                    let gap = lightnessGapUnder vision (c "glyph.team.0") (c "glyph.team.1")
-                    if gap < thresholds.TeamLightnessGap then
-                        yield LightnessTooClose("glyph.team.0", "glyph.team.1", vision, gap, thresholds.TeamLightnessGap)
-        ]
-
-    /// Validate with the two-team default.
-    let validate (theme: Theme) = validateFor 2 theme
-
-    /// Resolve a theme: run the algorithms in order, resolve the aliases, apply overrides, validate. A theme that fails
-    /// validation cannot be built (glyph ADR D4).
+    /// STAND-IN for `Theme.create seed algorithms overrides |> Result.bind (Theme.validate checks)`: run the algorithms in
+    /// order, resolve the aliases, apply overrides, then the built-in rules and #795's checks for the two-team default.
     let create (seed: Seed) (algorithms: Algorithm list) (overrides: Map<string, Color>) : Result<Theme, ThemeViolation list> =
         let map = algorithms |> List.fold (fun map algorithm -> algorithm.Apply seed map) (baseAlgorithm.Apply seed Unchecked.defaultof<MapTokens>)
         let aliases = overrides |> Map.fold (fun acc k v -> Map.add k v acc) (resolveAliases map)
@@ -578,16 +699,17 @@ module Themes =
         | [] -> Ok theme
         | violations -> Error violations
 
-    /// The player's team-colour override at the alias layer (XAG 103: presets plus free choice). The theme is validated
-    /// again for the game's `teams`, and an override that fails is refused with its reasons.
+    /// STAND-IN for `Theme.withTeamColour team colour theme` (XAG 103: presets plus free choice), validated again for the
+    /// game's `teams`. Only one of the game's teams can be set (#802 E4); an override that fails is refused with its
+    /// reasons.
     let overrideTeam (teams: int) (index: int) (colour: Color) (theme: Theme) : Result<Theme, ThemeViolation list> =
-        let alias = sprintf "glyph.team.%d" index
-        let next = measured { theme with Aliases = theme.Aliases.Add(alias, colour); Overrides = theme.Overrides.Add(alias, colour) }
-        match validateFor teams next with
-        | [] -> Ok next
-        | violations -> Error violations
-
-    // ---- Presets ----------------------------------------------------------------------------------------------------
+        if index < 0 || index >= teams || index >= maxTeams then Error [ TeamOutsideGame(index, teams) ]
+        else
+            let alias = sprintf "glyph.team.%d" index
+            let next = measured { theme with Aliases = theme.Aliases.Add(alias, colour); Overrides = theme.Overrides.Add(alias, colour) }
+            match validateFor teams next with
+            | [] -> Ok next
+            | violations -> Error violations
 
     /// The seed of every preset: the #789 proof's `standard` ground (34, 40, 49), Tableau-style hue angles with blue and
     /// orange first, APP-6-style allegiance hues.
@@ -608,8 +730,8 @@ module Themes =
             Frame = 24.0
         }
 
-    /// A preset: a name, its seed and its algorithm list (glyph ADR D4 and Q12: presets are baked; this is the recipe the
-    /// baked data is checked against).
+    /// A preset: a name, its seed and its algorithm list (glyph ADR Q12: presets are baked; this is the recipe the baked
+    /// data is checked against). On #802 each is `Theme.create seed algorithms []` with #795's checks.
     type Preset = { Name: string; Seed: Seed; Algorithms: Algorithm list }
 
     let presets: Preset list =
@@ -631,18 +753,17 @@ module Themes =
         | Ok theme -> theme
         | Error violations -> failwithf "preset %s fails: %s" preset.Name (violations |> List.map explainViolation |> String.concat "; ")
 
-    /// Every alias of a theme as hex, in alias order.
+    /// STAND-IN for `Theme.hex`: every alias as hex, in alias order.
     let hexes (theme: Theme) : (string * string) list = aliasNames |> List.map (fun a -> a, hex (colour theme a))
 
-    /// `Theme.cssVariables` (glyph ADR D4): the aliases as CSS custom properties, for the parts of a game the Scene does
-    /// not draw.
+    /// STAND-IN for `Theme.cssVariables` (#802 writes `--fsgg-` names).
     let cssVariables (theme: Theme) : string =
         aliasNames
-        |> List.map (fun a -> sprintf "  --%s: %s;" (a.Replace(".", "-")) (hex (colour theme a)))
+        |> List.map (fun a -> sprintf "  --fsgg-%s: %s;" (a.Replace(".", "-")) (hex (colour theme a)))
         |> String.concat "\n"
         |> sprintf "[data-theme=\"%s\"] {\n%s\n}" theme.Name
 
-    // ---- Runtime switching ------------------------------------------------------------------------------------------
+    // ---- Runtime switching (#795) -----------------------------------------------------------------------------------
 
     /// The theme as a Scene input through a reader (glyph ADR D1 and D10): the game keeps its selected theme outside
     /// game state, renders every frame with `Read ()`, and switches by `Select`; game state, selection and focus are
@@ -653,7 +774,7 @@ module Themes =
         let current = ref initial
         { Read = (fun () -> current.Value); Select = (fun theme -> current.Value <- theme) }
 
-    // ---- DTCG 2025.10 -----------------------------------------------------------------------------------------------
+    // ---- DTCG 2025.10: STAND-IN for #802's `Theme.toDtcg`, `Theme.ofDtcg` and `Theme.dtcgResolver` ----------------
 
     let private quote (s: string) = "\"" + s + "\""
 
@@ -786,38 +907,47 @@ module Themes =
         value 0 |> Result.map fst
 
     /// The colour tokens of a DTCG document as alias -> colour, taking `hex` when present (glyph ADR D11).
-    let dtcgColours (json: Json) : Map<string, Color> =
-        let rec walk (prefix: string) (node: Json) : (string * Color) list =
+    /// The colour tokens of a DTCG document as alias -> colour, each read from its `hex` (glyph ADR D11). A colour token
+    /// with alpha other than 1, without a hex, or with a malformed hex is refused, never silently dropped.
+    let dtcgColours (json: Json) : (string * Result<Color, string>) list =
+        let rec walk (prefix: string) (node: Json) : (string * Result<Color, string>) list =
             match node with
             | JObject fields ->
-                let isToken = fields |> List.exists (fun (k, _) -> k = "$value")
-                if isToken then
-                    match fields |> List.tryFind (fun (k, _) -> k = "$value") with
-                    | Some(_, JObject value) ->
-                        match value |> List.tryFind (fun (k, _) -> k = "hex") with
-                        | Some(_, JString h) ->
-                            match ofHex h with
-                            | Some c -> [ prefix, c ]
-                            | None -> []
-                        | _ -> []
+                match fields |> List.tryFind (fun (k, _) -> k = "$value") with
+                | Some(_, value) ->
+                    match fields |> List.tryFind (fun (k, _) -> k = "$type") with
+                    | Some(_, JString "color") ->
+                        match value with
+                        | JObject parts ->
+                            let alpha = parts |> List.tryPick (function "alpha", JNumber a -> Some a | _ -> None)
+                            match alpha, parts |> List.tryPick (function "hex", JString h -> Some h | _ -> None) with
+                            | Some a, _ when a <> 1.0 -> [ prefix, Error(sprintf "alpha %g; tokens are opaque until alpha is supported (glyph ADR Q5)" a) ]
+                            | _, None -> [ prefix, Error "no hex; import reads a colour from its hex only (glyph ADR D11)" ]
+                            | _, Some h ->
+                                match ofHex h with
+                                | Some c -> [ prefix, Ok c ]
+                                | None -> [ prefix, Error(sprintf "malformed hex %s; write #rrggbb" h) ]
+                        | _ -> [ prefix, Error "a colour token's $value must be an object" ]
                     | _ -> []
-                else
+                | None ->
                     fields
                     |> List.filter (fun (k, _) -> not (k.StartsWith "$"))
                     |> List.collect (fun (k, v) -> walk (if prefix = "" then k else prefix + "." + k) v)
             | _ -> []
-        walk "" json |> Map.ofList
+        walk "" json
 
-    /// `Theme.ofDtcg` (glyph ADR D4): import a DTCG token file onto a base theme as alias overrides, validated again.
+    /// STAND-IN for `Theme.ofDtcg` (glyph ADR D4): import a DTCG token file onto a base theme as alias overrides, validated again.
     /// Export followed by import gives equal resolved hex for every alias.
     let ofDtcg (baseTheme: Theme) (text: string) : Result<Theme, string list> =
         match parseJson text with
         | Error e -> Error [ "DTCG: " + e ]
         | Ok json ->
-            let colours = dtcgColours json
-            let unknown = colours |> Map.toList |> List.map fst |> List.filter (fun a -> not (List.contains a aliasNames))
-            if not unknown.IsEmpty then Error(unknown |> List.map (fun a -> explainViolation (UnknownAlias a)))
+            let tokens = dtcgColours json
+            let unknown = tokens |> List.map fst |> List.filter (fun a -> not (List.contains a aliasNames))
+            let bad = tokens |> List.choose (fun (a, r) -> match r with Error e -> Some(explainViolation (BadToken(a, e))) | Ok _ -> None)
+            if not unknown.IsEmpty || not bad.IsEmpty then Error((unknown |> List.map (fun a -> explainViolation (UnknownAlias a))) @ bad)
             else
+                let colours = tokens |> List.choose (fun (a, r) -> match r with Ok c -> Some(a, c) | Error _ -> None) |> Map.ofList
                 let changed = colours |> Map.filter (fun a c -> colour baseTheme a <> c)
                 let theme =
                     measured

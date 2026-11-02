@@ -24,6 +24,7 @@ let private errorsOf (result: Result<Symbology<'E>, SymbologyError list>) =
 let private refuses (draft: Draft<'E>) (expected: SymbologyError -> bool) (what: string) =
     let errors = errorsOf (build themes draft)
     Expect.isTrue (errors |> List.exists expected) (sprintf "%s: expected the error, got %A" what errors)
+    Expect.equal errors (List.distinct errors) "errors are de-duplicated"
     for error in errors do
         Expect.isNotEmpty (explain error) "every error explains itself"
 
@@ -131,31 +132,38 @@ let tests =
                 Expect.equal presetNames [ "classic"; "light"; "highContrast"; "colourBlindSafe"; "monochrome" ] "the presets"
                 let capacities = themes |> List.map (fun t -> t.Name, hueCapacity t 24.0)
                 printfn "hue capacity at 24 units: %A" capacities
-                Expect.equal (capacities |> List.map snd) [ 5; 5; 3; 4; 0 ] "capacities"
+                Expect.equal (capacities |> List.map snd) [ 5; 5; 5; 3; 0 ] "capacities at 24 units"
+                Expect.equal (theme "highContrast").Capacity [ 4; 5; 5 ] "highContrast per size bucket"
                 for t in themes do
                     Expect.isEmpty (validateFor (hueCapacity t 24.0) t) (sprintf "%s validates for its capacity" t.Name)
                 Expect.equal (theme "highContrast").Map.Floor 7.0 "highContrast's floor"
                 Expect.equal (theme "highContrast").Map.Applied [ "base"; "dark"; "highContrast"; "repair" ] "composed in order"
             }
 
-            test "calibration evidence: the presets' smallest margins over the provisional thresholds" {
-                for t in themes |> List.filter (fun t -> t.Map.ColourCarries) do
+            test "calibration evidence: the presets' smallest margins, asserted as the design's table states them" {
+                let r1 (x: float) = System.Math.Floor(x * 10.0 + 0.5) / 10.0
+                let pairs (xs: string list) = [ for i in 0 .. xs.Length - 1 do for j in i + 1 .. xs.Length - 1 -> xs.[i], xs.[j] ]
+                let allegiances = [ for i in Glyphs.identities -> "glyph.allegiance." + identityName i ]
+                // Preset: capacity at 24, teams min dE normal / simulated, allegiances min dE normal / simulated, min
+                // allegiance contrast on the ground (rounded to 0.1 and 0.01). The design's T5 table.
+                let expected =
+                    [
+                        "classic", (5, 20.0, 8.4, 25.4, 16.2, 3.20)
+                        "light", (5, 20.3, 8.4, 25.5, 14.1, 3.21)
+                        "highContrast", (5, 19.9, 8.3, 24.3, 11.1, 7.21)
+                        "colourBlindSafe", (3, 37.8, 8.0, 27.9, 17.1, 3.22)
+                    ]
+                for name, (capacity, teamN, teamS, allegN, allegS, floorMin) in expected do
+                    let t = theme name
                     let n = hueCapacity t 24.0
-                    let group = [ for i in 0 .. n - 1 -> sprintf "glyph.team.%d" i ] @ [ for i in Glyphs.identities -> "glyph.allegiance." + identityName i ]
-                    let teamPairs = [ for i in 0 .. n - 1 do for j in i + 1 .. n - 1 -> sprintf "glyph.team.%d" i, sprintf "glyph.team.%d" j ]
-                    let allegiancePairs = [ for i in 5 .. group.Length - 1 do for j in i + 1 .. group.Length - 1 -> group.[i], group.[j] ]
-                    let minimum vision pairs = pairs |> List.map (fun (a, b) -> deltaEUnder vision (colour t a) (colour t b)) |> List.min
-                    let floorMin = group |> List.map (fun a -> contrast (colour t a) (colour t "ground")) |> List.min
-                    printfn
-                        "%s: teams %d, min dE normal %.1f, simulated %.1f; allegiances min dE normal %.1f, simulated %.1f; min contrast on ground %.2f"
-                        t.Name
-                        n
-                        (minimum Normal teamPairs)
-                        ([ Protan; Deutan; Tritan ] |> List.map (fun v -> minimum v teamPairs) |> List.min)
-                        (minimum Normal allegiancePairs)
-                        ([ Protan; Deutan; Tritan ] |> List.map (fun v -> minimum v allegiancePairs) |> List.min)
-                        floorMin
-                    Expect.isGreaterThanOrEqual floorMin t.Map.Floor "contrast floor"
+                    let teamPairs = pairs [ for i in 0 .. n - 1 -> sprintf "glyph.team.%d" i ]
+                    let minimum vision ps = ps |> List.map (fun (a, b) -> deltaEUnder vision (colour t a) (colour t b)) |> List.min
+                    let simulated ps = [ Protan; Deutan; Tritan ] |> List.map (fun v -> minimum v ps) |> List.min
+                    let floor = allegiances |> List.map (fun a -> contrast (colour t a) (colour t "surface.ground")) |> List.min
+                    let measured = n, r1 (minimum Normal teamPairs), r1 (simulated teamPairs), r1 (minimum Normal (pairs allegiances)), r1 (simulated (pairs allegiances)), System.Math.Floor(floor * 100.0 + 0.5) / 100.0
+                    printfn "%s: %A" name measured
+                    Expect.equal measured (capacity, teamN, teamS, allegN, allegS, floorMin) (sprintf "%s's row of the design's table" name)
+                    Expect.isGreaterThanOrEqual floor t.Map.Floor "contrast floor"
             }
 
             test "the baked preset data equals a fresh .NET derivation, alias for alias" {
@@ -163,6 +171,7 @@ let tests =
                 for t in themes do
                     let baked = PresetData.hexes |> List.find (fun (n, _) -> n = t.Name) |> snd
                     Expect.equal (hexes t) baked (sprintf "%s re-derives to its baked hex" t.Name)
+                Expect.equal (gridDigest ()) PresetData.gridDigest "the OKLCH grid digest is the baked one"
             }
 
             test "DTCG export then import gives equal resolved hex, and the committed token files are current" {
@@ -197,19 +206,22 @@ let tests =
                 for t in themes do
                     let css = cssVariables t
                     for alias, hex in hexes t do
-                        Expect.stringContains css (sprintf "--%s: %s;" (alias.Replace(".", "-")) hex) alias
+                        Expect.stringContains css (sprintf "--fsgg-%s: %s;" (alias.Replace(".", "-")) hex) alias
             }
 
             test "a player team-colour override is validated again, and refused with its reason" {
                 let classic = theme "classic"
                 match overrideTeam 2 0 (rgb 40 46 56) classic with
-                | Error violations -> Expect.isTrue (violations |> List.exists (function BelowFloor("glyph.team.0", "ground", _, _) -> true | _ -> false)) "below the floor"
+                | Error violations -> Expect.isTrue (violations |> List.exists (function BelowFloor("glyph.team.0", "surface.ground", _, _) -> true | _ -> false)) "below the floor"
                 | Ok _ -> failtest "a ground-coloured team was accepted"
                 match overrideTeam 2 1 (colour classic "glyph.team.0") classic with
                 | Error violations -> Expect.isTrue (violations |> List.exists (function NotDistinct("glyph.team.0", "glyph.team.1", _, _, _) -> true | _ -> false)) "not distinct"
                 | Ok _ -> failtest "two equal teams were accepted"
-                match overrideTeam 2 0 (rgb 150 110 255) classic with
-                | Ok t -> Expect.equal (colour t "glyph.team.0") (rgb 150 110 255) "applied at the alias layer"
+                match overrideTeam 2 4 (colour classic "glyph.team.0") classic with
+                | Error [ TeamOutsideGame(4, 2) ] -> ()
+                | other -> failtestf "a team outside the game was accepted: %A" other
+                match overrideTeam 2 0 (rgb 116 162 61) classic with
+                | Ok t -> Expect.equal (colour t "glyph.team.0") (rgb 116 162 61) "applied at the alias layer"
                 | Error violations -> failtestf "a valid override was refused: %A" (violations |> List.map explainViolation)
             }
 
@@ -234,7 +246,8 @@ let tests =
                 let mono = theme "monochrome"
                 let players = build themes ArenaExample.playerDraft |> function Ok s -> s | Error e -> failtestf "%A" e
                 let one (p: ArenaExample.Player) =
-                    Symbology.scene mono 48.0 64.0 [ Symbology.draw mono 4 (Symbology.spec players { X = 24.0; Y = 30.0 } p) false ]
+                    let spec = Symbology.spec players { X = 24.0; Y = 30.0 } p |> function Ok s -> s | Error e -> failtestf "%A" e
+                    Symbology.scene mono 48.0 64.0 [ Symbology.draw mono (teamColouring mono players) spec false ]
                 let a = ArenaExample.sample.Players.[1]
                 for b in [ { a with Team = 2 }; { a with Team = 3 }; { a with Allegiance = Glyphs.Own; Team = 0 } ] do
                     let n = min (differing 48.0 64.0 (one a) (one b)) (differing 48.0 64.0 (one b) (one a))
@@ -248,7 +261,7 @@ let tests =
                 | Error [ IconSlotTakenByBadge("role", "team", 24.0, Glyphs.Enemy) as e ] -> printfn "%s" (explain e)
                 | other -> failtestf "expected the icon-slot error, got %A" other
                 let notes = match build themes ArenaExample.playerDraft with Ok s -> s.Notes | Error _ -> []
-                Expect.equal notes.Length 2 "team colour falls back in highContrast and monochrome"
+                Expect.equal notes.Length 2 "team colour falls back in colourBlindSafe (capacity 3) and monochrome"
                 Expect.equal
                     (ArenaExample.labels themes ArenaExample.sample |> List.head)
                     "own, team 1, health 90%, rank 3, carrying, Ada"
@@ -271,8 +284,8 @@ let tests =
                 let cases = [ 0..3 ]
                 refuses
                     (base24 |> Encode.nominal "kind" (fun p -> p.Kind) cases Fill |> Encode.nominal "kind" (fun p -> p.Kind) cases Icon)
-                    (function OverCapacity("kind", Fill, 4, 3, Some "highContrast") -> true | _ -> false)
-                    "four hues in highContrast"
+                    (function OverCapacity("kind", Fill, 4, 3, Some "colourBlindSafe") -> true | _ -> false)
+                    "four hues in colourBlindSafe"
                 refuses (base24 |> Encode.ordinal "level" (fun p -> p.Level) [ 0..5 ] (Amplifier Above)) (function OverCapacity("level", _, 6, 5, None) -> true | _ -> false) "six pips"
                 refuses (base24 |> Encode.ordinal "level" (fun p -> p.Level) [ 0..4 ] SizeStep) (function OverCapacity("level", SizeStep, 5, 4, None) -> true | _ -> false) "five size steps"
                 refuses (base24 |> Encode.nominal "kind" (fun p -> p.Kind) [ 0..4 ] Icon) (function OverCapacity("kind", Icon, 5, 4, None) -> true | _ -> false) "five icons"
@@ -336,13 +349,15 @@ let tests =
                 let theme = theme "classic"
                 for identity in Glyphs.identities do
                     let spec: GlyphSpec =
-                        { Family = "unit"; Anchor = { X = 48.0; Y = 48.0 }; Frame = 40.0; Identity = Some identity; Icon = Some 3; Team = Some 7; Badge = Some 7
-                          FillCase = None; SizeStep = 0; FillStep = 0; Pips = None; Bar = None; Modifier = false; Corner = false; Label = "" }
-                    let d = Symbology.draw theme 8 spec false
+                        { Family = "unit"; Anchor = { X = 48.0; Y = 48.0 }; Frame = 40.0; Identity = Some identity; Icon = Some 3; Team = Some 7; Badge = Some 8
+                          FillCase = None; SizeStep = 0; Pips = None; Bar = None; Modifier = false; Corner = false; Label = "" }
+                    let d = Symbology.draw theme true spec false
                     let frame = Glyphs.identityFrame identity spec.Anchor 40.0 (rgb 1 1 1)
                     let covered (x: float) (y: float) =
                         frame |> List.exists (function SceneNode.Rectangle((rx, ry, rw, rh), _) -> x >= rx && x + 1.0 <= rx + rw && y >= ry && y + 1.0 <= ry + rh | _ -> false)
-                    let inner = d.Body |> List.skip frame.Length
+                    let ink = colour theme "glyph.badge.ink"
+                    let inner = d.Body |> List.filter (function SceneNode.Rectangle(_, c) -> c = ink | _ -> false)
+                    Expect.equal inner.Length ((Symbology.iconCells 3).Length + 7) "the icon's bars and digit 8's seven segments"
                     for node in inner do
                         match node with
                         | SceneNode.Rectangle((x, y, w, h), _) ->
@@ -350,5 +365,116 @@ let tests =
                                 for py in [ y - 1.0 .. y + h ] do
                                     Expect.isTrue (covered px py) (sprintf "%A: (%g, %g) is on frame ink" identity px py)
                         | _ -> ()
+            }
+
+            test "B2: a team without identity on the frame is refused, and a roster that disagrees with an entity is a typed error" {
+                // The #805 review's two drafts.
+                let teamOnly = Symbology.create<Probe> "unit" 24.0 |> Encode.team "side" (fun x -> x.Side) [ Glyphs.Own; Glyphs.Enemy ] TeamMark
+                refuses teamOnly (function TeamWithoutIdentity "side" -> true | _ -> false) "team only"
+                let lie =
+                    Symbology.create<Probe> "unit" 24.0
+                    |> Encode.identity "who" (fun x -> x.Who) Frame
+                    |> Encode.team "side" (fun x -> x.Side) [ Glyphs.Own; Glyphs.Enemy; Glyphs.Ally ] TeamMark
+                match build themes lie with
+                | Ok s ->
+                    match Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Glyphs.Enemy; Side = 2 } with
+                    | Error [ RosterMismatch("side", 2, Glyphs.Ally, Glyphs.Enemy) as e ] -> Expect.stringContains (explain e) "roster" "explained"
+                    | other -> failtestf "an Enemy on the Ally team was drawn: %A" other
+                    Expect.isOk (Symbology.spec s { X = 24.0; Y = 24.0 } { probe with Who = Glyphs.Enemy; Side = 1 }) "a matching entity"
+                | Error e -> failtestf "the roster itself is valid: %A" e
+            }
+
+            test "N7: an out-of-range value is a typed error, teams never wrap, FillStep is refused, the badge is decided per size step" {
+                let nominal = base24 |> Encode.nominal "kind" (fun x -> x.Kind) [ 0; 1; 2 ] Icon
+                match build themes nominal with
+                | Ok s ->
+                    match Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Kind = 7 } with
+                    | Error [ ValueOutOfRange("kind", _, _) ] -> ()
+                    | other -> failtestf "case 7 of 3 drew: %A" other
+                | Error e -> failtestf "%A" e
+                let nine = base24 |> Encode.team "side" (fun x -> x.Side) (List.replicate 9 Glyphs.Own) TeamMark
+                match build themes nine with
+                | Ok s ->
+                    match Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Side = 9 } with
+                    | Error [ ValueOutOfRange("side", "team 9", _) ] -> ()
+                    | other -> failtestf "team 9 of 9 drew (a wrap): %A" other
+                    match Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Side = 8 } with
+                    | Ok spec -> Expect.equal spec.Badge (Some 9) "team 8 shows digit 9"
+                    | Error e -> failtestf "%A" e
+                | Error e -> failtestf "%A" e
+                let fraction = base24 |> Encode.fraction "share" (fun x -> x.Share) (Amplifier Below)
+                match build themes fraction with
+                | Ok s -> Expect.isError (Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Share = 1.5 }) "a fraction of 1.5"
+                | Error e -> failtestf "%A" e
+                refuses (base24 |> Encode.ordinal "level" (fun x -> x.Level) [ 0; 1; 2 ] FillStep) (function SlotNotInProof("level", FillStep) -> true | _ -> false) "FillStep"
+                let stepped =
+                    Symbology.create<Probe> "unit" 18.0
+                    |> Encode.identity "who" (fun x -> x.Who) Frame
+                    |> Encode.label "name" (fun x -> x.Name)
+                    |> Encode.team "side" (fun x -> x.Side) [ Glyphs.Own; Glyphs.Enemy; Glyphs.Enemy ] TeamMark
+                    |> Encode.ordinal "level" (fun x -> x.Level) [ 0; 1; 2 ] SizeStep
+                match build themes stepped with
+                | Ok s ->
+                    let badgeAt level = (Symbology.spec s { X = 0.0; Y = 0.0 } { probe with Who = Glyphs.Enemy; Side = 1; Level = level } |> function Ok g -> g.Frame, g.Badge | Error e -> failtestf "%A" e)
+                    Expect.equal (badgeAt 0) (18.0, None) "18 units: under the badge minimum, the label carries team"
+                    Expect.equal (badgeAt 1) (22.0, Some 2) "22 units: the badge"
+                    Expect.equal (badgeAt 2) (26.0, Some 2) "26 units: the badge"
+                | Error e -> failtestf "18 to 26 with a label and no icon: %A" e
+            }
+
+            test "N6: hue capacity is checked at the smallest frame, and team colouring is decided once per scene" {
+                let hc = theme "highContrast"
+                Expect.equal (hueCapacity hc 20.0, hueCapacity hc 32.0) (4, 5) "highContrast holds 4 hues under 24 units, 5 from 24"
+                let stepped =
+                    Symbology.create<Probe> "unit" 20.0
+                    |> Encode.identity "who" (fun x -> x.Who) Frame
+                    |> Encode.nominal "kind" (fun x -> x.Kind) [ 0..4 ] Fill
+                    |> Encode.nominal "kind" (fun x -> x.Kind) [ 0..4 ] Icon
+                    |> Encode.ordinal "level" (fun x -> x.Level) [ 0; 1; 2 ] SizeStep
+                refuses stepped (function OverCapacity("kind", Fill, 5, 4, Some "highContrast") -> true | _ -> false) "5 hues from 20 units"
+                let players = build themes ArenaExample.playerDraft |> function Ok s -> s | Error e -> failtestf "%A" e
+                Expect.equal
+                    (themes |> List.map (fun t -> t.Name, teamColouring t players))
+                    [ "classic", true; "light", true; "highContrast", true; "colourBlindSafe", false; "monochrome", false ]
+                    "four teams keep team colours where the capacity holds them"
+            }
+
+            test "N10: WrongSlot names the allowed slots" {
+                let errors = errorsOf (build themes (base24 |> Encode.fraction "share" (fun x -> x.Share) Icon))
+                match errors with
+                | [ WrongSlot("share", "fraction", Icon, [ Amplifier Below ]) as e ] -> Expect.stringContains (explain e) "Slot.Amplifier Below" "names the slot to use"
+                | other -> failtestf "%A" other
+            }
+
+            test "N2 and N12: icon ink and status meaning are validated" {
+                let classic = theme "classic"
+                let token alias (c: Color) =
+                    let path = alias |> fun (a: string) -> a.Split '.'
+                    let leaf = sprintf "{ \"$type\": \"color\", \"$value\": { \"colorSpace\": \"srgb\", \"components\": [ 0, 0, 0 ], \"hex\": \"%s\" } }" (hex c)
+                    Array.foldBack (fun (k: string) inner -> sprintf "{ \"%s\": %s }" k inner) path leaf
+                match ofDtcg classic (token "glyph.icon.ink" (colour classic "glyph.allegiance.neutral")) with
+                | Error reasons -> Expect.isTrue (reasons |> List.exists (fun r -> r.Contains "glyph.icon.ink")) "icon ink on the neutral fill is refused"
+                | Ok _ -> failtest "icon ink equal to a fill was accepted"
+                match ofDtcg classic (token "status.bad" (colour classic "status.good")) with
+                | Error reasons -> Expect.isTrue (reasons |> List.exists (fun r -> r.Contains "status.bad")) "a green bad is refused"
+                | Ok _ -> failtest "status.bad as green was accepted"
+                for t in themes |> List.filter (fun t -> t.Map.ColourCarries) do
+                    for alias in [ "status.good"; "status.warn"; "status.bad" ] do
+                        Expect.isTrue (statusReads alias (colour t alias)) (sprintf "%s %s keeps its meaning" t.Name alias)
+                    Expect.isTrue (statusOrdered (colour t "status.warn") (colour t "status.bad")) (sprintf "%s: amber is lighter than red" t.Name)
+            }
+
+            test "N3: a DTCG colour with alpha, without a hex, or with a malformed hex is refused" {
+                let classic = theme "classic"
+                let tok v = sprintf "{ \"glyph\": { \"team\": { \"0\": { \"$type\": \"color\", \"$value\": %s } } } }" v
+                for name, value, needle in
+                    [
+                        "alpha", "{ \"colorSpace\": \"srgb\", \"components\": [ 1, 0, 0 ], \"alpha\": 0.2, \"hex\": \"#ff0000\" }", "alpha"
+                        "no hex", "{ \"colorSpace\": \"srgb\", \"components\": [ 0.13, 0.16, 0.19 ] }", "no hex"
+                        "malformed", "{ \"colorSpace\": \"srgb\", \"components\": [ 0, 0, 0 ], \"hex\": \"#12345\" }", "malformed"
+                    ] do
+                    match ofDtcg classic (tok value) with
+                    | Error reasons -> Expect.isTrue (reasons |> List.exists (fun r -> r.Contains "glyph.team.0" && r.Contains needle)) (sprintf "%s: %A" name reasons)
+                    | Ok _ -> failtestf "%s was accepted" name
             }
         ]

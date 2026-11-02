@@ -1,7 +1,7 @@
 // Bake the theme presets (FS.GG.Game#795; glyph ADR D11 and Q12: presets are baked at build time and compared with a
 // fresh derivation in CI). Derives every preset from its seed and algorithm list, then writes:
 // - src/ReferenceGame/ExperimentalPresetData.fs: every alias's hex per preset, the data the .NET test and the browser
-//   smoke compare a fresh .NET and Fable derivation with;
+//   smoke compare a fresh .NET and Fable derivation with, and the OKLCH grid digest;
 // - docs/roadmaps/game-render-02-themes/themes/<preset>.tokens.json: DTCG 2025.10 token files;
 // - docs/roadmaps/game-render-02-themes/resolver.json: a DTCG Resolver document with a `theme` modifier;
 // - docs/roadmaps/game-render-02-themes/presets.css: the CSS custom properties of every preset.
@@ -36,6 +36,9 @@ let data =
                 yield sprintf "                \"%s\", \"%s\"" alias hex
             yield "            ]"
         yield "        ]"
+        yield ""
+        yield "    /// `Colour.gridDigest ()` as .NET computes it: the browser smoke compares Fable's with it."
+        yield sprintf "    let gridDigest = %s" (Colour.fixedText 1 (Colour.gridDigest ()))
     ]
 File.WriteAllLines(Path.Combine(root, "src", "ReferenceGame", "ExperimentalPresetData.fs"), data)
 for theme in themes do

@@ -5,11 +5,18 @@ open FS.GG.UI.Scene
 /// EXPERIMENTAL (FS.GG.Game#795, GAME-RENDER-02.8). The colour science under the theme machinery the design
 /// `docs/roadmaps/game-render-02-themes.md` proposes: OKLab and OKLCH, CSS Color 4 gamut mapping, half-up 8-bit
 /// quantisation, WCAG 2 contrast on 8-bit values through a committed table, CIELAB and CIEDE2000, and Machado 2009
-/// colour-vision simulation. Everything is F#, so .NET and Fable derive the same bytes (glyph ADR D11). Not a contract:
-/// the implementation lands in FS.GG.Game.Render after #789's types.
+/// colour-vision simulation. Everything is F#, so .NET and Fable derive the same bytes (glyph ADR D11).
+///
+/// STAND-IN, replaced by #802 on merge: OKLab/OKLCH, gamut mapping, quantisation, the sRGB table, contrast and hex are
+/// #802's `ThemeColour` (`toOklch`, `ofOklch`, `quantise`, `linear`, `luminance`, `contrast`, `hex`, `ofHex`); #795's
+/// implementation uses those and keeps only what #802 does not ship: CIELAB, CIEDE2000, Machado simulation and the
+/// Leonardo-style `solve`.
 ///
 /// Sources (published facts and formulas, cited; no code is ported):
-/// - OKLab: B. Ottosson, "A perceptual color space for image processing" (2020), and CSS Color 4 section 9;
+/// - OKLab: the direct linear-sRGB matrices of B. Ottosson, "A perceptual color space for image processing" (2020).
+///   CSS Color 4 (section 9) defines OKLab through XYZ D65 with its own matrices; the two paths differ by at most
+///   1.2e-4 in an OKLab component over the 8-bit colours (measured by the #805 review). Hue, polar form and gamut
+///   mapping follow CSS Color 4;
 /// - gamut mapping: CSS Color 4, section 13.2 (binary search on OKLCH chroma with a deltaEOK JND of 0.02);
 /// - relative luminance and contrast ratio: WCAG 2.2, SC 1.4.11 and its definitions;
 /// - CIEDE2000: Sharma, Wu and Dalal, Color Res. Appl. 30(1), 2005;
@@ -98,8 +105,10 @@ module Colour =
             0.9734452903984125; 0.9822505503331171; 0.9911020971138298; 1.0
         |]
 
-    /// The real cube root: `Math.Cbrt` on .NET and `Math.cbrt` in JavaScript (Fable has no mapping for it). The two may
-    /// differ in the last ULP, which half-up quantisation absorbs (glyph ADR D11).
+    /// The real cube root: `Math.Cbrt` on .NET and `Math.cbrt` in JavaScript (Fable has no mapping for it). Measured by
+    /// the #805 review over the cube-root inputs of every 8-bit colour: about 58 % differ between .NET and Node by 1-3
+    /// ULP, and every output byte is still identical, because half-up quantisation absorbs them (glyph ADR D11). The
+    /// browser smoke keeps a byte-identity check over the full 8-bit domain and an OKLCH grid.
     let cbrt (x: float) : float =
 #if FABLE_COMPILER
         Fable.Core.JsInterop.emitJsExpr x "Math.cbrt($0)"
@@ -376,3 +385,30 @@ module Colour =
         let fracText = string (int64 frac)
         let padded = if decimals > fracText.Length then System.String('0', decimals - fracText.Length) + fracText else fracText
         (if value < 0.0 && scaled > 0.0 then "-" else "") + string (int64 whole) + (if decimals > 0 then "." + padded else "")
+
+    /// How many of the 16,777,216 8-bit colours fail the OKLCH round trip (8-bit -> OKLCH -> gamut map -> half up). A
+    /// plain loop, outside any `async`, so the browser smoke runs the whole domain (N9 of the #805 review).
+    let roundTripFailures () : int =
+        let mutable failures = 0
+        for r in 0..255 do
+            for g in 0..255 do
+                for b in 0..255 do
+                    let lin = linearOfOklab (oklabOfOklch (oklchOf (rgb r g b)))
+                    let back = ofLinear lin
+                    if int back.Red <> r || int back.Green <> g || int back.Blue <> b then failures <- failures + 1
+        failures
+
+    /// A digest of `ofOklch` over an OKLCH grid (L 0 to 1 by 0.01, C 0 to 0.36 by 0.03, h 0 to 357 by 3: 157,560
+    /// colours), so a byte that differs between .NET and Fable anywhere in derivation's domain changes it. The hash is
+    /// `h = (h * 257 + byte) mod 2147483647` in floats, exact in IEEE doubles on both runtimes.
+    let gridDigest () : float =
+        let mutable h = 0.0
+        let add (v: byte) = h <- (h * 257.0 + float v) % 2147483647.0
+        for i in 0..100 do
+            for k in 0..12 do
+                for j in 0..119 do
+                    let c = ofOklch { L = float i * 0.01; C = float k * 0.03; H = float j * 3.0 }
+                    add c.Red
+                    add c.Green
+                    add c.Blue
+        h

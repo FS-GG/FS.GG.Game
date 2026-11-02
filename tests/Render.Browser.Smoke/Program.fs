@@ -2913,22 +2913,32 @@ let runBadgesAndDenseBoard () : Async<unit> =
     }
 
 /// FS.GG.Game#795 (GAME-RENDER-02.8) proof: the theme machinery under Fable and on the three backends.
-/// - The five presets are derived again in the browser (Fable's JavaScript maths) and every alias's hex must equal the
-///   baked .NET derivation (glyph ADR D11: .NET and Node give the same bytes); the full 8-bit OKLCH round trip runs
-///   under Node's maths too.
+/// - .NET and Fable give the same bytes: the five presets derive to the 175 alias hex values .NET baked, an OKLCH grid
+///   of 157,560 colours gives .NET's digest, and every one of the 16,777,216 8-bit colours round-trips (a plain loop,
+///   outside the async block, N9 of the #805 review).
 /// - The encoding grammar refuses the worked example's role icon with the same typed error as on .NET, and DTCG export
 ///   and import round-trips every preset.
 /// - The worked example (a symbology generated from the arena-like `ArenaExample.Player` type) is drawn in every preset
 ///   on SVG, Pixi and Babylon, and every pixel ScenePixels decides must match; a theme-swap control must not.
 /// - A runtime switch through the theme reader, classic -> every other preset -> classic, on one mount with the same
 ///   game state, shows each preset's pixels and then classic's again.
-/// - In monochrome, two teams that share an allegiance, and two identities, still differ in drawn decided pixels.
+/// - In monochrome, after a positive control that the glyph is drawn: two teams that share an allegiance (badges), and
+///   two identities with no team (frames only), still differ in drawn decided pixels.
 let runThemeProof () : Async<unit> =
+    let roundTripStarted = System.DateTime.Now
+    let roundTripFailures = Experimental.Colour.roundTripFailures ()
+    let roundTripMs = int (System.DateTime.Now - roundTripStarted).TotalMilliseconds
+    let gridStarted = System.DateTime.Now
+    let gridDigest = Experimental.Colour.gridDigest ()
+    let gridMs = int (System.DateTime.Now - gridStarted).TotalMilliseconds
+
     async {
         let derivedAt = System.DateTime.Now
         let presets = Experimental.Themes.presets
         let themes = presets |> List.map Experimental.Themes.deriveOrFail
         info "themes (#795) derivation time" (sprintf "%d ms for %d presets" (int (System.DateTime.Now - derivedAt).TotalMilliseconds) themes.Length)
+        info "themes (#795) round-trip time" (sprintf "%d ms for 16777216 colours" roundTripMs)
+        info "themes (#795) grid digest time" (sprintf "%d ms" gridMs)
         let themeNamed name = themes |> List.find (fun t -> t.Name = name)
 
         // .NET and Fable derive the same bytes.
@@ -2942,26 +2952,16 @@ let runThemeProof () : Async<unit> =
         let aliasCount = themes |> List.sumBy (fun t -> (Experimental.Themes.hexes t).Length)
         check
             (sprintf "themes (#795): Fable derives every preset alias's hex exactly as .NET baked it (%d presets, %d aliases)" themes.Length aliasCount)
-            (differences.IsEmpty && aliasCount = 140)
+            (differences.IsEmpty && aliasCount = 175)
             (String.concat "; " (List.truncate 4 differences))
-
-        // Every third value per channel (86^3 = 636,056 colours) under the browser's maths; the full 16,777,216 run
-        // under .NET in ExperimentalThemesTests, and would take most of the smoke's time budget here.
-        let started = System.DateTime.Now
-        let mutable failuresHalfUp = 0
-        let mutable sampled = 0
-        for r in 0..3..255 do
-            for g in 0..3..255 do
-                for b in 0..3..255 do
-                    sampled <- sampled + 1
-                    let c = Experimental.Colour.rgb r g b
-                    let back = Experimental.Colour.ofLinear (Experimental.Colour.linearOfOklab (Experimental.Colour.oklabOfOklch (Experimental.Colour.oklchOf c)))
-                    if back.Red <> c.Red || back.Green <> c.Green || back.Blue <> c.Blue then failuresHalfUp <- failuresHalfUp + 1
-        info "themes (#795) round-trip time" (sprintf "%d ms" (int (System.DateTime.Now - started).TotalMilliseconds))
         check
-            (sprintf "themes (#795): under the browser's maths %d sampled 8-bit colours (every third value per channel) round-trip through OKLCH with half-up quantisation" sampled)
-            (failuresHalfUp = 0 && sampled = 636056)
-            (sprintf "%d failures" failuresHalfUp)
+            "themes (#795): under the browser's maths every one of the 16777216 8-bit colours round-trips through OKLCH with half-up quantisation"
+            (roundTripFailures = 0)
+            (sprintf "%d failures" roundTripFailures)
+        check
+            "themes (#795): the OKLCH grid digest (157560 colours) under Fable equals .NET's"
+            (gridDigest = Experimental.PresetData.gridDigest)
+            (sprintf "Fable %g, .NET %g" gridDigest Experimental.PresetData.gridDigest)
 
         let refused =
             match Experimental.Symbology.build themes Experimental.ArenaExample.playerDraftWithRoleIcon with
@@ -2985,7 +2985,7 @@ let runThemeProof () : Async<unit> =
         let view = Experimental.ArenaExample.view themes
         let state = Experimental.ArenaExample.sample
         let width, height = Experimental.ArenaExample.width, Experimental.ArenaExample.height
-        let rec colours (nodes: SceneNode list) =
+        let colours (nodes: SceneNode list) =
             nodes |> List.collect (function SceneNode.Rectangle(_, c) -> [ c ] | _ -> [])
         let cssMisses =
             [
@@ -3001,6 +3001,25 @@ let runThemeProof () : Async<unit> =
             | RendererBackend.Svg -> SvgSurface.mountScene container (SvgSurface.defaultOptions name width height) scene
             | RendererBackend.Pixi -> PixiSurface.mountScene container (PixiSurface.defaultOptions name width height) scene
             | RendererBackend.Babylon -> BabylonSurface.mountScene container (BabylonSurface.defaultOptions name width height) scene
+
+        let unwrap (r: Result<'T, Experimental.Symbology.SymbologyError list>) =
+            match r with
+            | Ok v -> v
+            | Error e -> failwithf "refused: %A" e
+
+        let mono = themeNamed "monochrome"
+        let players = Experimental.Symbology.build themes Experimental.ArenaExample.playerDraft |> unwrap
+        let teamColours = Experimental.Symbology.teamColouring mono players
+        let single (p: Experimental.ArenaExample.Player) : Scene =
+            Experimental.Symbology.scene mono 48.0 64.0 [ Experimental.Symbology.draw mono teamColours (Experimental.Symbology.spec players { X = 24.0; Y = 30.0 } p |> unwrap) false ]
+        // Frames only: the same identities with no team encoded, so only the frame tells them apart.
+        let framesOnly =
+            Experimental.Symbology.create<Experimental.ArenaExample.Player> "unit" 24.0
+            |> Experimental.Symbology.Encode.identity "allegiance" (fun p -> p.Allegiance) Experimental.Symbology.Frame
+            |> Experimental.Symbology.build themes
+            |> unwrap
+        let frameOnly (p: Experimental.ArenaExample.Player) : Scene =
+            Experimental.Symbology.scene mono 48.0 64.0 [ Experimental.Symbology.draw mono false (Experimental.Symbology.spec framesOnly { X = 24.0; Y = 30.0 } p |> unwrap) false ]
 
         for backend in RendererBackend.all do
             let id = RendererBackend.id backend
@@ -3051,32 +3070,35 @@ let runThemeProof () : Async<unit> =
                 mount.Dispose()
 
             container.remove ()
-
             info (sprintf "themes (#795) %s time" id) (sprintf "%d ms since derivation" (int (System.DateTime.Now - derivedAt).TotalMilliseconds))
 
-            // Monochrome redundancy: team badges and identity frames, drawn alone.
-            let mono = themeNamed "monochrome"
-            let players =
-                match Experimental.Symbology.build themes Experimental.ArenaExample.playerDraft with
-                | Ok s -> s
-                | Error _ -> failwith "worked example refused"
-            let single (p: Experimental.ArenaExample.Player) : Scene =
-                Experimental.Symbology.scene mono 48.0 64.0 [ Experimental.Symbology.draw mono 4 (Experimental.Symbology.spec players { X = 24.0; Y = 30.0 } p) false ]
+            // Monochrome redundancy, N4 of the #805 review: each case first waits until its own drawing shows all its
+            // decided pixels (the positive control), then reads the other drawing's decided pixels, which must differ.
             let a = state.Players.[1]
-            let others = [ { a with Team = 2 }; { a with Team = 3 }; { a with Allegiance = Experimental.Glyphs.Own; Team = 0 } ]
+            let cases =
+                [
+                    "badge: team 2 against team 3", single, a, { a with Team = 2 }
+                    "badge: team 2 against team 4", single, a, { a with Team = 3 }
+                    "frame and badge: enemy team 2 against own team 1", single, a, { a with Allegiance = Experimental.Glyphs.Own; Team = 0 }
+                    "frame only: enemy against own", frameOnly, a, { a with Allegiance = Experimental.Glyphs.Own; Team = 0 }
+                    "frame only: enemy against ally", frameOnly, a, { a with Allegiance = Experimental.Glyphs.Ally }
+                ]
             let monoMisses = ResizeArray<string>()
-            let host = document.createElement "div"
-            document.body.appendChild host |> ignore
-            match mountOn backend host (name + " monochrome") 48.0 64.0 (single a) with
-            | Error reason -> monoMisses.Add reason
-            | Ok mount ->
-                for b in others do
-                    let! other = drawnMismatches host 48.0 64.0 backend (fun () -> mount.Present(single a)) (ScenePixels.expectations 48.0 64.0 (single b)) 0
-                    if other.IsEmpty then monoMisses.Add(sprintf "team %d %A passes team %d %A" a.Team a.Allegiance b.Team b.Allegiance)
-                mount.Dispose()
-            host.remove ()
+            for label, draw, x, y in cases do
+                let host = document.createElement "div"
+                document.body.appendChild host |> ignore
+                match mountOn backend host (name + " monochrome") 48.0 64.0 (draw x) with
+                | Error reason -> monoMisses.Add(label + ": " + reason)
+                | Ok mount ->
+                    let! own = drawnMismatches host 48.0 64.0 backend (fun () -> mount.Present(draw x)) (ScenePixels.expectations 48.0 64.0 (draw x)) 600
+                    if not own.IsEmpty then monoMisses.Add(sprintf "%s: the control is not drawn (%d pixels)" label own.Length)
+                    else
+                        let! other = drawnMismatches host 48.0 64.0 backend (fun () -> mount.Present(draw x)) (ScenePixels.expectations 48.0 64.0 (draw y)) 0
+                        if other.IsEmpty then monoMisses.Add(sprintf "%s: the same drawn pixels" label)
+                    mount.Dispose()
+                host.remove ()
             check
-                (sprintf "%s: in monochrome, a team-2 enemy differs in drawn decided pixels from teams 3 and 4 (badges) and from the own frame" name)
+                (sprintf "%s: in monochrome, with a positive control each, team badges and identity frames (also frame-only) differ in drawn decided pixels (%d cases)" name cases.Length)
                 (monoMisses.Count = 0)
                 (String.concat "; " monoMisses)
     }

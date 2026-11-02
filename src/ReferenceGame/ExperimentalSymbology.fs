@@ -6,9 +6,20 @@ open FS.GG.Game.Reference.Experimental.Themes
 /// EXPERIMENTAL (FS.GG.Game#795, GAME-RENDER-02.8): the encoding grammar the design
 /// `docs/roadmaps/game-render-02-themes.md` proposes. A game declares a `Symbology<'Entity>`: named field accessors bound
 /// to the glyph slots of the glyph ADR (D1) through a typed measure, and the theme supplies the ranges. `Symbology.build`
-/// enforces the glyph ADR's D12 rules at build time and returns every broken rule as a typed error that names the
-/// field and says what to change. Not a contract: the target types (`GlyphSpec`, slots, `Theme`) are #789's; the
-/// stand-ins here use its names so the swap is a rename.
+/// enforces the glyph ADR's D12 rules at build time, and `Symbology.spec` checks each entity's values at run time; both
+/// return every broken rule as a typed error that names the field and says what to change.
+///
+/// **What the checks can and cannot see (N5 of the #805 review).** Fable cannot read an accessor's name or body, so the
+/// grammar trusts the author's declarations: the measure (`nominal` or `ordinal`) and the field name. Two encodings with
+/// the same name are taken to be the same field, so redundancy (rule 2) is checked by name, and ordered data declared
+/// `nominal` is not caught at build time. What the grammar does check at run time is every value against its declared
+/// domain (an out-of-range case, level, fraction or team is a typed error, never case 0) and every entity's identity
+/// against the team roster.
+///
+/// STAND-INS, replaced on merge: `GlyphSpec`, `Identity` and the drawing are #789's (`FS.GG.Game.Render.GlyphSpec`,
+/// `[<RequireQualifiedAccess>] Identity`, part 3's `Glyphs.draw`, with erratum E1's ring layout); `minBadgeFrame`,
+/// `minIdentityFrame` and `sideBySideFrame` are part 3's `Glyphs.minBadgeFrame`, `Glyphs.minIdentityFrame` and
+/// `Glyphs.minIconAndBadgeFrame`.
 module Symbology =
 
     type Identity = Glyphs.Identity
@@ -45,7 +56,7 @@ module Symbology =
         | Text
         | Team of roster: Identity list
 
-    /// A field's value for one entity.
+    /// A field's value for one entity. A case or level outside the declared list reads as -1, a typed error in `spec`.
     type Value =
         | VIdentity of Identity
         | VCase of int
@@ -77,6 +88,8 @@ module Symbology =
         | IdentityNotOnFrame of field: string * slot: Slot
         /// D1: below the 12-unit minimum identity frame, the mirror label is the redundant channel.
         | IdentityBelowMinimumWithoutLabel of field: string * frame: float
+        /// D12 rule 6: team is double-encoded with the allegiance frame, so a team encoding needs identity on the frame.
+        | TeamWithoutIdentity of teamField: string
         /// D12 rule 6: teams share an allegiance, so the badge is mandatory; below 22 units it is omitted, and only a
         /// label can carry team.
         | TeamBadgeBelowMinimumWithoutLabel of field: string * frame: float * shared: Identity
@@ -87,15 +100,20 @@ module Symbology =
         | SlotTaken of slot: Slot * first: string * second: string
         /// The slot needs the stroked profile (#773), and the symbology targets the portable one.
         | NeedsStrokedProfile of field: string * slot: Slot
-        /// A measure on a slot that cannot show it at all.
-        | WrongSlot of field: string * measure: string * slot: Slot
+        /// The design accepts the slot, but the proof does not draw it yet (FillStep waits for #789's part 3).
+        | SlotNotInProof of field: string * slot: Slot
+        /// A measure on a slot that cannot show it; `allowed` lists the slots that can.
+        | WrongSlot of field: string * measure: string * slot: Slot * allowed: Slot list
         /// A nominal or ordinal field with no values.
         | EmptyDomain of field: string
         /// One field encoded twice on the same slot.
         | DuplicateField of field: string
-        /// A theme the player may choose cannot carry this symbology (for example the game's team colours fail its
-        /// rules).
+        /// A theme the player may choose cannot carry this symbology.
         | ThemeRefuses of theme: string * reason: string
+        /// Run time: an entity's value is outside its field's declared domain.
+        | ValueOutOfRange of field: string * value: string * domain: string
+        /// Run time: an entity's identity is not its team's allegiance in the roster.
+        | RosterMismatch of teamField: string * team: int * roster: Identity * entity: Identity
 
     let rec slotName (slot: Slot) =
         match slot with
@@ -123,19 +141,32 @@ module Symbology =
         | Text -> "label"
         | Team _ -> "team"
 
-    /// The smallest frame an inside team badge fits (glyph ADR D1, measured on all five frames).
+    /// The slots each measure may use (the design's measure table).
+    let allowedSlots (measure: Measure) : Slot list =
+        match measure with
+        | IdentityMeasure -> [ Frame ]
+        | Nominal _ -> [ Icon; Fill ]
+        | Ordinal _ -> [ Amplifier Above; SizeStep; FillStep ]
+        | Fraction -> [ Amplifier Below ]
+        | Angle -> [ Amplifier Facing ]
+        | Flag -> [ Modifier; Amplifier Corner ]
+        | Text -> [ Label ]
+        | Team _ -> [ TeamMark ]
+
+    /// The smallest frame an inside team badge fits (glyph ADR D1, measured on all five frames). STAND-IN for part 3's
+    /// `Glyphs.minBadgeFrame`.
     let minBadgeFrame = Glyphs.minBadgeFrame
-    /// From this size the inner box holds the icon (left) and the badge (right) (glyph ADR Q15: provisional until
-    /// measured per frame by #789).
+    /// From this size the inner box holds the icon (left) and the badge (right) (glyph ADR Q15). STAND-IN for part 3's
+    /// `Glyphs.minIconAndBadgeFrame`.
     let sideBySideFrame = 40.0
-    /// The minimum identity frame (glyph ADR D1).
+    /// The minimum identity frame (glyph ADR D1). STAND-IN for part 3's `Glyphs.minIdentityFrame`.
     let minIdentityFrame = 12.0
     /// Pips: a design default from subitizing, not a measured limit (glyph ADR D12 rule 3).
     let maxPips = 5
     /// Size and lightness steps (glyph ADR D12 rule 3).
     let maxSteps = 4
-    /// One seven-segment digit; the proof never wraps team numbers (Root's #794 merge comment), so above 9 the build
-    /// fails until #789's two-digit badge lands.
+    /// One seven-segment digit; team numbers never wrap (Root's #794 merge comment), so above 9 the build fails until
+    /// part 3's two-digit badge (from 33 units) lands.
     let maxBadgeTeams = 9
     /// The size-step increment, in units.
     let sizeStepUnits = 4.0
@@ -147,7 +178,7 @@ module Symbology =
         match error with
         | HueOnlyOrderedData(field, measure) ->
             sprintf
-                "%s is %s data on hue alone; hue has no order. Encode it on Slot.Amplifier Below (a bar), Slot.Amplifier Above (pips), Slot.SizeStep or Slot.FillStep."
+                "%s is %s data on hue alone; hue has no order. Encode it on Slot.Amplifier Below (a bar), Slot.Amplifier Above (pips) or Slot.SizeStep."
                 field
                 measure
         | CategoricalHueWithoutRedundancy field ->
@@ -172,6 +203,10 @@ module Symbology =
                 minIdentityFrame
                 field
                 minIdentityFrame
+        | TeamWithoutIdentity field ->
+            sprintf
+                "%s is on Slot.TeamMark, but no field is on Slot.Frame; team is double-encoded with the allegiance frame. Add Encode.identity on Slot.Frame."
+                field
         | TeamBadgeBelowMinimumWithoutLabel(field, frame, shared) ->
             sprintf
                 "two or more teams of %s share the %s allegiance, so the team badge is mandatory, but a %g-unit frame is under the %g-unit badge minimum. Use frames of at least %g, give each team its own allegiance, or add Encode.label."
@@ -195,15 +230,31 @@ module Symbology =
             sprintf "%s and %s are both on %s. Each slot shows one field; move %s to another slot." first second (slotName slot) second
         | NeedsStrokedProfile(field, slot) ->
             sprintf "%s is on %s, which needs the stroked profile (#773). Set Symbology.stroked, or drop the field until it lands." field (slotName slot)
-        | WrongSlot(field, measure, slot) ->
-            sprintf "%s is %s data and %s cannot show it. See the slot table in the theme design (Encode.%s)." field measure (slotName slot) measure
+        | SlotNotInProof(field, slot) ->
+            sprintf "%s is on %s, which the design accepts but this proof does not draw (#789's part 3 draws it). Use Slot.Amplifier Above or Slot.SizeStep for now." field (slotName slot)
+        | WrongSlot(field, measure, slot, allowed) ->
+            sprintf
+                "%s is %s data and %s cannot show it. Use %s."
+                field
+                measure
+                (slotName slot)
+                (allowed |> List.map slotName |> String.concat " or ")
         | EmptyDomain field -> sprintf "%s declares no values. List its cases or levels." field
         | DuplicateField field -> sprintf "%s is encoded twice on one slot. Remove one." field
         | ThemeRefuses(theme, reason) -> sprintf "theme %s cannot carry this symbology: %s" theme reason
+        | ValueOutOfRange(field, value, domain) ->
+            sprintf "%s is %s, outside its declared %s. Add the value to the declaration, or fix the state." field value domain
+        | RosterMismatch(field, team, roster, entity) ->
+            sprintf
+                "%s %d is %s in the roster, but this entity's identity is %s. Make the roster match the game's teams, or fix the entity's allegiance."
+                field
+                team
+                (identityText roster)
+                (identityText entity)
 
     /// A built symbology: the draft that passed every rule, and the notes for fallbacks (team colour falling back to
     /// allegiance colouring above a theme's hue capacity, a hue dropped in monochrome).
-    type Symbology<'Entity> = { Draft: Draft<'Entity>; Notes: string list; BadgeShown: bool }
+    type Symbology<'Entity> = { Draft: Draft<'Entity>; Notes: string list; Shared: Identity option; Roster: Identity list option }
 
     /// `Symbology.create family frame`: a portable-profile draft at a frame size in units.
     let create<'Entity> (family: string) (frame: float) : Draft<'Entity> =
@@ -222,7 +273,7 @@ module Symbology =
         let private indexIn (cases: 'v list) (value: 'v) =
             match List.tryFindIndex ((=) value) cases with
             | Some i -> i
-            | None -> 0
+            | None -> -1
 
         /// Identity (own, ally, neutral, enemy, unknown) on the frame: shape plus colour, double-encoded.
         let identity (field: string) (read: 'Entity -> Identity) (slot: Slot) (draft: Draft<'Entity>) =
@@ -252,8 +303,9 @@ module Symbology =
         let label (field: string) (read: 'Entity -> string) (draft: Draft<'Entity>) =
             add { Field = field; Measure = Text; Slot = Label; Read = read >> VText } draft
 
-        /// The team index, with the game's roster: the allegiance of each team, by index. Whether two of the game's
-        /// teams share an allegiance (so the badge is mandatory) depends on the roster, never on which are visible.
+        /// The team index (0 to roster length - 1), with the game's roster: the allegiance of each team, by index.
+        /// Whether two of the game's teams share an allegiance (so the badge is mandatory) depends on the roster, never
+        /// on which are visible; `spec` refuses an entity whose identity is not its team's.
         let team (field: string) (read: 'Entity -> int) (roster: Identity list) (slot: Slot) (draft: Draft<'Entity>) =
             add { Field = field; Measure = Team roster; Slot = slot; Read = read >> VTeam } draft
 
@@ -261,21 +313,23 @@ module Symbology =
     let sharedAllegiance (roster: Identity list) : Identity option =
         roster |> List.countBy id |> List.tryFind (fun (_, n) -> n > 1) |> Option.map fst
 
-    /// The largest frame a size step can reach.
-    let private frameRange (draft: Draft<'Entity>) =
+    /// The smallest and largest frames a symbology can draw (its size steps).
+    let frameRange (draft: Draft<'Entity>) =
         let steps =
             draft.Encodings
             |> List.tryPick (fun e -> match e.Measure, e.Slot with Ordinal n, SizeStep -> Some n | _ -> None)
             |> Option.defaultValue 1
-        draft.Frame, draft.Frame + sizeStepUnits * float (steps - 1)
+        draft.Frame, draft.Frame + sizeStepUnits * float (max 1 steps - 1)
 
     /// Apply every rule of the glyph ADR's D12 against the themes the game lets the player choose. Theme-dependent
-    /// capacities (hue) are checked against every theme whose colour carries categories; in `monochrome` hue is
-    /// dropped and the redundant channel carries the field.
+    /// capacities (hue) are checked at the SMALLEST frame the symbology can draw, against every theme whose colour
+    /// carries categories; in `monochrome` hue is dropped and the redundant channel carries the field. Errors are
+    /// de-duplicated.
     let build (themes: Theme list) (draft: Draft<'Entity>) : Result<Symbology<'Entity>, SymbologyError list> =
         let es = draft.Encodings
         let small, large = frameRange draft
         let hasLabel = es |> List.exists (fun e -> e.Slot = Label)
+        let hasIdentity = es |> List.exists (fun e -> e.Measure = IdentityMeasure && e.Slot = Frame)
         let colourThemes = themes |> List.filter (fun t -> t.Map.ColourCarries)
         let roster = es |> List.tryPick (fun e -> match e.Measure with Team r -> Some(e.Field, r) | _ -> None)
         let shared = roster |> Option.bind (fun (_, r) -> sharedAllegiance r)
@@ -287,13 +341,15 @@ module Symbology =
                 let drawn = es |> List.filter (fun e -> e.Slot <> Label)
                 for i in 0 .. drawn.Length - 1 do
                     for j in i + 1 .. drawn.Length - 1 do
-                        if drawn.[i].Slot = drawn.[j].Slot then yield SlotTaken(drawn.[i].Slot, drawn.[i].Field, drawn.[j].Field)
-                // The team mark is the frame's colour in the portable proof, so it takes the fill too.
+                        if drawn.[i].Slot = drawn.[j].Slot && drawn.[i].Field <> drawn.[j].Field then
+                            yield SlotTaken(drawn.[i].Slot, drawn.[i].Field, drawn.[j].Field)
+                // The team ring and a categorical fill would both colour the frame's interior.
                 match es |> List.tryFind (fun e -> e.Slot = Fill), es |> List.tryFind (fun e -> e.Slot = TeamMark) with
                 | Some fill, Some team -> yield SlotTaken(Fill, team.Field, fill.Field)
                 | _ -> ()
                 for e in es do
                     let measure = measureName e.Measure
+                    let wrong () = WrongSlot(e.Field, measure, e.Slot, allowedSlots e.Measure)
                     match e.Measure, e.Slot with
                     // Identity.
                     | IdentityMeasure, Frame -> if small < minIdentityFrame && not hasLabel then yield IdentityBelowMinimumWithoutLabel(e.Field, small)
@@ -303,34 +359,39 @@ module Symbology =
                     | Nominal n, Icon -> if n > 4 then yield OverCapacity(e.Field, Icon, n, 4, None)
                     | Nominal n, Fill ->
                         for theme in colourThemes do
-                            let capacity = hueCapacity theme large
+                            let capacity = hueCapacity theme small
                             if n > capacity then yield OverCapacity(e.Field, Fill, n, capacity, Some theme.Name)
-                    | Nominal _, slot -> yield WrongSlot(e.Field, measure, slot)
+                    | Nominal _, _ -> yield wrong ()
                     // Ordinal.
                     | Ordinal n, _ when n = 0 -> yield EmptyDomain e.Field
                     | Ordinal _, Fill -> yield HueOnlyOrderedData(e.Field, measure)
                     | Ordinal n, Amplifier Above -> if n > maxPips then yield OverCapacity(e.Field, Amplifier Above, n, maxPips, None)
-                    | Ordinal n, (SizeStep | FillStep) -> if n > maxSteps then yield OverCapacity(e.Field, e.Slot, n, maxSteps, None)
-                    | Ordinal _, slot -> yield WrongSlot(e.Field, measure, slot)
+                    | Ordinal n, SizeStep -> if n > maxSteps then yield OverCapacity(e.Field, SizeStep, n, maxSteps, None)
+                    | Ordinal n, FillStep ->
+                        if n > maxSteps then yield OverCapacity(e.Field, FillStep, n, maxSteps, None)
+                        yield SlotNotInProof(e.Field, FillStep)
+                    | Ordinal _, _ -> yield wrong ()
                     // Fraction.
                     | Fraction, Fill -> yield HueOnlyOrderedData(e.Field, measure)
                     | Fraction, SizeStep -> yield FractionAsArea e.Field
                     | Fraction, Amplifier Below -> ()
-                    | Fraction, slot -> yield WrongSlot(e.Field, measure, slot)
+                    | Fraction, _ -> yield wrong ()
                     // Angle.
                     | Angle, Fill -> yield HueOnlyOrderedData(e.Field, measure)
                     | Angle, Amplifier Facing -> if not draft.Stroked then yield NeedsStrokedProfile(e.Field, e.Slot)
-                    | Angle, slot -> yield WrongSlot(e.Field, measure, slot)
+                    | Angle, _ -> yield wrong ()
                     // Flag.
                     | Flag, (Modifier | Amplifier Corner) -> ()
                     | Flag, slot -> yield FlagNotSelective(e.Field, slot)
                     // Label.
                     | Text, Label -> ()
-                    | Text, slot -> yield WrongSlot(e.Field, measure, slot)
+                    | Text, _ -> yield wrong ()
                     // Team.
-                    | Team r, TeamMark -> if r.Length > maxBadgeTeams then yield OverCapacity(e.Field, TeamMark, r.Length, maxBadgeTeams, None)
-                    | Team _, slot -> yield WrongSlot(e.Field, measure, slot)
-                // Rule 2: categorical hue needs a redundant non-hue channel: the same field encoded again on the icon.
+                    | Team r, TeamMark ->
+                        if r.Length > maxBadgeTeams then yield OverCapacity(e.Field, TeamMark, r.Length, maxBadgeTeams, None)
+                        if not hasIdentity then yield TeamWithoutIdentity e.Field
+                    | Team _, _ -> yield wrong ()
+                // Rule 2: categorical hue needs a redundant non-hue channel: the same field (by name) on the icon.
                 for e in es do
                     match e.Measure, e.Slot with
                     | Nominal _, Fill ->
@@ -342,11 +403,10 @@ module Symbology =
                 match roster with
                 | Some(_, r) ->
                     for theme in themes do
-                        let coloured = min r.Length (hueCapacity theme large)
-                        for violation in validateFor (max 2 coloured) theme do
+                        for violation in validateFor (max 2 (min r.Length (hueCapacity theme small))) theme do
                             yield ThemeRefuses(theme.Name, explainViolation violation)
                 | None -> ()
-                // Rule 6 and the icon-slot case.
+                // Rule 6 and the icon-slot case, for every size the symbology can reach.
                 match roster, shared with
                 | Some(teamField, _), Some allegiance ->
                     if small < minBadgeFrame && not hasLabel then yield TeamBadgeBelowMinimumWithoutLabel(teamField, small, allegiance)
@@ -356,12 +416,13 @@ module Symbology =
                     | _ -> ()
                 | _ -> ()
             ]
+            |> List.distinct
         let notes =
             [
                 match roster with
                 | Some(field, r) ->
                     for theme in themes do
-                        let capacity = hueCapacity theme draft.Frame
+                        let capacity = hueCapacity theme small
                         if r.Length > capacity then
                             yield
                                 sprintf
@@ -370,19 +431,19 @@ module Symbology =
                                     r.Length
                                     theme.Name
                                     capacity
-                                    draft.Frame
+                                    small
                 | None -> ()
                 for e in es do
                     if e.Slot = Fill && themes |> List.exists (fun t -> not t.Map.ColourCarries) then
                         yield sprintf "%s: its hue is dropped in monochrome; its icon carries it" e.Field
             ]
         match errors with
-        | [] -> Ok { Draft = draft; Notes = notes; BadgeShown = shared.IsSome && small >= minBadgeFrame }
+        | [] -> Ok { Draft = draft; Notes = notes; Shared = shared; Roster = roster |> Option.map snd }
         | _ -> Error errors
 
     // ---- The experimental glyph spec and its drawing ----------------------------------------------------------------
 
-    /// EXPERIMENTAL stand-in for #789's opaque `GlyphSpec` (glyph ADR D1), with its builder functions' names.
+    /// STAND-IN for #789's opaque `GlyphSpec` (glyph ADR D1), with its builder functions' names.
     type GlyphSpec =
         {
             Family: string
@@ -391,10 +452,11 @@ module Symbology =
             Identity: Identity option
             Icon: int option
             Team: int option
+            /// The team's badge digit (team + 1), when the badge is mandatory and this glyph's frame (after its size
+            /// step) reaches the badge minimum.
             Badge: int option
             FillCase: int option
             SizeStep: int
-            FillStep: int
             Pips: int option
             Bar: float option
             Modifier: bool
@@ -402,46 +464,73 @@ module Symbology =
             Label: string
         }
 
-    /// What `Symbology.spec` produces for one entity.
-    let spec (symbology: Symbology<'Entity>) (anchor: Point) (entity: 'Entity) : GlyphSpec =
+    /// Whether a scene in `theme` shows team colours: decided once per scene (N6), from the roster and the theme's hue
+    /// capacity at the symbology's smallest frame, so a size step never mixes team and allegiance colouring.
+    let teamColouring (theme: Theme) (symbology: Symbology<'Entity>) : bool =
+        match symbology.Roster with
+        | Some roster -> theme.Map.ColourCarries && roster.Length <= hueCapacity theme (fst (frameRange symbology.Draft))
+        | None -> false
+
+    /// What `Symbology.spec` produces for one entity, or every value that breaks its declaration: a case, level,
+    /// fraction or team outside its domain, or an identity that is not the entity's team's allegiance in the roster.
+    let spec (symbology: Symbology<'Entity>) (anchor: Point) (entity: 'Entity) : Result<GlyphSpec, SymbologyError list> =
         let values = symbology.Draft.Encodings |> List.map (fun e -> e, e.Read entity)
         let pick f = values |> List.tryPick f
-        let team = pick (function { Slot = TeamMark }, VTeam t -> Some t | _ -> None)
-        let sizeStep = pick (function { Slot = SizeStep }, VLevel l -> Some l | _ -> None) |> Option.defaultValue 0
-        let labelParts =
-            values
-            |> List.map (fun (e, v) ->
-                match v with
-                | VText s -> s
-                | VIdentity i -> Themes.identityName i
-                | VTeam t -> sprintf "team %d" (t + 1)
-                | VFraction f -> sprintf "%s %d%%" e.Field (int (System.Math.Floor(f * 100.0 + 0.5)))
-                | VLevel l -> sprintf "%s %d" e.Field (l + 1)
-                | VCase c -> sprintf "%s %d" e.Field (c + 1)
-                | VFlag true -> e.Field
-                | VFlag false -> ""
-                | VAngle a -> sprintf "%s %d deg" e.Field (int (System.Math.Floor(a * 180.0 / System.Math.PI + 0.5))))
-            |> List.filter (fun s -> s <> "")
-        {
-            Family = symbology.Draft.Family
-            Anchor = anchor
-            Frame = symbology.Draft.Frame + sizeStepUnits * float sizeStep
-            Identity = pick (function _, VIdentity i -> Some i | _ -> None)
-            Icon = pick (function { Slot = Icon }, VCase c -> Some c | _ -> None)
-            Team = team
-            Badge = (if symbology.BadgeShown then team else None)
-            FillCase = pick (function { Slot = Fill }, VCase c -> Some c | _ -> None)
-            SizeStep = sizeStep
-            FillStep = pick (function { Slot = FillStep }, VLevel l -> Some l | _ -> None) |> Option.defaultValue 0
-            Pips = pick (function { Slot = Amplifier Above }, VLevel l -> Some(l + 1) | _ -> None)
-            Bar = pick (function { Slot = Amplifier Below }, VFraction f -> Some f | _ -> None)
-            Modifier = pick (function { Slot = Modifier }, VFlag b -> Some b | _ -> None) |> Option.defaultValue false
-            Corner = pick (function { Slot = Amplifier Corner }, VFlag b -> Some b | _ -> None) |> Option.defaultValue false
-            Label = String.concat ", " labelParts
-        }
+        let errors =
+            [
+                for e, v in values do
+                    match e.Measure, v with
+                    | Nominal n, VCase c when c < 0 || c >= n -> yield ValueOutOfRange(e.Field, "not one of its cases", sprintf "%d cases" n)
+                    | Ordinal n, VLevel l when l < 0 || l >= n -> yield ValueOutOfRange(e.Field, "not one of its levels", sprintf "%d levels" n)
+                    | Fraction, VFraction f when not (f >= 0.0 && f <= 1.0) -> yield ValueOutOfRange(e.Field, sprintf "%g" f, "range 0 to 1")
+                    | Team roster, VTeam t when t < 0 || t >= roster.Length ->
+                        yield ValueOutOfRange(e.Field, sprintf "team %d" t, sprintf "roster of %d teams (team numbers never wrap)" roster.Length)
+                    | Team roster, VTeam t ->
+                        match pick (function { Slot = Frame }, VIdentity i -> Some i | _ -> None) with
+                        | Some identity when identity <> roster.[t] -> yield RosterMismatch(e.Field, t, roster.[t], identity)
+                        | _ -> ()
+                    | _ -> ()
+            ]
+        if not errors.IsEmpty then Error errors
+        else
+            let team = pick (function { Slot = TeamMark }, VTeam t -> Some t | _ -> None)
+            let sizeStep = pick (function { Slot = SizeStep }, VLevel l -> Some l | _ -> None) |> Option.defaultValue 0
+            let frame = symbology.Draft.Frame + sizeStepUnits * float sizeStep
+            let labelParts =
+                values
+                |> List.map (fun (e, v) ->
+                    match v with
+                    | VText s -> s
+                    | VIdentity i -> Themes.identityName i
+                    | VTeam t -> sprintf "team %d" (t + 1)
+                    | VFraction f -> sprintf "%s %d%%" e.Field (int (System.Math.Floor(f * 100.0 + 0.5)))
+                    | VLevel l -> sprintf "%s %d" e.Field (l + 1)
+                    | VCase c -> sprintf "%s %d" e.Field (c + 1)
+                    | VFlag true -> e.Field
+                    | VFlag false -> ""
+                    | VAngle a -> sprintf "%s %d deg" e.Field (int (System.Math.Floor(a * 180.0 / System.Math.PI + 0.5))))
+                |> List.filter (fun s -> s <> "")
+            Ok
+                {
+                    Family = symbology.Draft.Family
+                    Anchor = anchor
+                    Frame = frame
+                    Identity = pick (function _, VIdentity i -> Some i | _ -> None)
+                    Icon = pick (function { Slot = Icon }, VCase c -> Some c | _ -> None)
+                    Team = team
+                    Badge = (if symbology.Shared.IsSome && frame >= minBadgeFrame then team |> Option.map (fun t -> t + 1) else None)
+                    FillCase = pick (function { Slot = Fill }, VCase c -> Some c | _ -> None)
+                    SizeStep = sizeStep
+                    Pips = pick (function { Slot = Amplifier Above }, VLevel l -> Some(l + 1) | _ -> None)
+                    Bar = pick (function { Slot = Amplifier Below }, VFraction f -> Some f | _ -> None)
+                    Modifier = pick (function { Slot = Modifier }, VFlag b -> Some b | _ -> None) |> Option.defaultValue false
+                    Corner = pick (function { Slot = Amplifier Corner }, VFlag b -> Some b | _ -> None) |> Option.defaultValue false
+                    Label = String.concat ", " labelParts
+                }
 
     /// The mirror label of an entity (glyph ADR D1: the label names identity and team in every case).
-    let label (symbology: Symbology<'Entity>) (entity: 'Entity) : string = (spec symbology { X = 0.0; Y = 0.0 } entity).Label
+    let label (symbology: Symbology<'Entity>) (entity: 'Entity) : Result<string, SymbologyError list> =
+        spec symbology { X = 0.0; Y = 0.0 } entity |> Result.map (fun s -> s.Label)
 
     let private box (x: float) (y: float) (w: float) (h: float) (colour: Color) = SceneNode.Rectangle((x, y, w, h), colour)
 
@@ -460,34 +549,46 @@ module Symbology =
     /// The cue reserve around a frame, in units (glyph ADR D10's defaults: band 2, gap 2, bracket stroke 2).
     let reserve = 8.0
 
-    /// A drawn glyph, in the glyph ADR's passes (D10): amplifiers, the body (frame then badge or icon), brackets.
+    /// A drawn glyph, in the glyph ADR's passes (D10): amplifiers, the body (frame, keyline, ring, body fill, then
+    /// badge or icon), brackets.
     type Drawing = { Amplifiers: SceneNode list; Body: SceneNode list; Brackets: SceneNode list; Frame: Rect }
 
-    /// The frame colour: the team colour while the game's teams fit the theme's hue capacity, the allegiance colour
-    /// otherwise (glyph ADR D1), a categorical fill hue when one is encoded, else the body.
-    let frameColour (theme: Theme) (teams: int) (spec: GlyphSpec) : Color =
-        match spec.Team, spec.FillCase, spec.Identity with
-        | Some t, _, _ when teams <= hueCapacity theme spec.Frame -> Themes.team theme t
-        | _, Some c, _ when theme.Map.ColourCarries -> Themes.team theme c
-        | _, _, Some identity -> Themes.allegiance theme identity
-        | _ -> colour theme "glyph.unit.body"
-
-    /// Draw one spec, portable profile (bars only). `teams` is the size of the game's roster.
-    let draw (theme: Theme) (teams: int) (spec: GlyphSpec) (selected: bool) : Drawing =
+    /// Draw one spec, portable profile (bars only), with erratum E1's layout: from the edge in, the identity frame in
+    /// its identity colour (band `max 1 (floor (w / 8))`), a 1-unit keyline in the body colour, a 2-unit ring in the
+    /// team colour (the allegiance colour when the scene's `teamColours` is false), or in the categorical fill hue,
+    /// then the body fill (no ring without a team or a fill); the badge or icon in their ink on top. Each layer is the same identity frame, smaller. STAND-IN for part 3's
+    /// `Glyphs.draw`.
+    let draw (theme: Theme) (teamColours: bool) (spec: GlyphSpec) (selected: bool) : Drawing =
         let identity = spec.Identity |> Option.defaultValue Glyphs.Neutral
-        let fill = frameColour theme teams spec
-        let frameNodes = Glyphs.identityFrame identity spec.Anchor spec.Frame fill
+        let w = System.Math.Floor spec.Frame
+        let band = max 1.0 (System.Math.Floor(w / 8.0))
+        let identityColour = Themes.allegiance theme identity
+        let body = colour theme "glyph.unit.body"
+        let layer size c = Glyphs.identityFrame identity spec.Anchor size c
+        let frameNodes = layer w identityColour
         let frame = Glyphs.boundsOf frameNodes
+        // The ring carries the team, or a categorical fill hue (the team colours are the category range), on the body.
+        let ringColour =
+            match spec.Team, spec.FillCase with
+            | Some t, _ -> Some(if teamColours then Themes.team theme t else identityColour)
+            | None, Some c -> Some(if theme.Map.ColourCarries then Themes.team theme c else identityColour)
+            | None, None -> None
+        let rings =
+            match ringColour with
+            | Some ring -> layer (w - 2.0 * band) body @ layer (w - 2.0 * (band + 1.0)) ring @ layer (w - 2.0 * (band + 3.0)) body
+            | None -> layer (w - 2.0 * band) body
         let cx, cy = Glyphs.snap spec.Anchor.X, Glyphs.snap spec.Anchor.Y
         let ink = colour theme "glyph.badge.ink"
         let inner =
             match spec.Badge, spec.Icon with
-            | Some t, Some i when spec.Frame >= sideBySideFrame ->
+            | Some digit, Some i when w >= sideBySideFrame ->
                 icon i { X = cx - 8.0; Y = cy - 5.0 } (colour theme "glyph.icon.ink")
-                @ Glyphs.badge ((t % 9) + 1) { X = cx + 2.0; Y = cy - 5.0 } 2.0 ink
-            | Some t, _ -> Glyphs.badge ((t % 9) + 1) { X = cx - 3.0; Y = cy - 5.0 } 2.0 ink
+                @ Glyphs.badge digit { X = cx + 2.0; Y = cy - 5.0 } 2.0 ink
+            | Some digit, _ -> Glyphs.badge digit { X = cx - 3.0; Y = cy - 5.0 } 2.0 ink
             | None, Some i -> icon i { X = cx - 3.0; Y = cy - 5.0 } (colour theme "glyph.icon.ink")
             | None, None -> []
+        // Amplifiers sit on the ground, so they take `status.keyline` (the body colour, held to the ground floor).
+        let mark = colour theme "status.keyline"
         let amplifiers =
             [
                 match spec.Pips with
@@ -495,23 +596,23 @@ module Symbology =
                     let width = float n * 4.0 - 1.0
                     let x0 = cx - System.Math.Floor(width / 2.0)
                     for i in 0 .. n - 1 do
-                        yield box (x0 + 4.0 * float i) (frame.Y - reserve - 4.0) 3.0 3.0 (colour theme "glyph.modifier")
+                        yield box (x0 + 4.0 * float i) (frame.Y - reserve - 4.0) 3.0 3.0 mark
                 | None -> ()
                 match spec.Bar with
                 | Some f ->
                     let f = f |> max 0.0 |> min 1.0
-                    let w = max 16.0 frame.Width
-                    let x = cx - System.Math.Floor(w / 2.0)
+                    let bw = max 16.0 frame.Width
+                    let x = cx - System.Math.Floor(bw / 2.0)
                     let y = frame.Y + frame.Height + reserve
                     let status = if f > 0.6 then "status.good" elif f > 0.3 then "status.warn" else "status.bad"
-                    yield box x y w 6.0 (colour theme "status.keyline")
-                    yield box (x + 1.0) (y + 1.0) (w - 2.0) 4.0 (colour theme "status.track")
-                    yield box (x + 1.0) (y + 1.0) (System.Math.Floor((w - 2.0) * f)) 4.0 (colour theme status)
+                    yield box x y bw 6.0 (colour theme "status.keyline")
+                    yield box (x + 1.0) (y + 1.0) (bw - 2.0) 4.0 (colour theme "status.track")
+                    yield box (x + 1.0) (y + 1.0) (System.Math.Floor((bw - 2.0) * f)) 4.0 (colour theme status)
                 | None -> ()
                 if spec.Corner then
-                    yield box (frame.X + frame.Width + reserve) (frame.Y - reserve - 4.0) 4.0 4.0 (colour theme "glyph.modifier")
+                    yield box (frame.X + frame.Width + reserve) (frame.Y - reserve - 4.0) 4.0 4.0 mark
                 if spec.Modifier then
-                    yield box (frame.X - reserve - 4.0) (frame.Y - reserve - 4.0) 4.0 4.0 (colour theme "glyph.modifier")
+                    yield box (frame.X - reserve - 4.0) (frame.Y - reserve - 4.0) 4.0 4.0 mark
             ]
         let brackets =
             if not selected then []
@@ -531,12 +632,12 @@ module Symbology =
                     box (r + s - arm) b arm s c
                     box r (b + s - arm) s arm c
                 ]
-        { Amplifiers = amplifiers; Body = frameNodes @ inner; Brackets = brackets; Frame = frame }
+        { Amplifiers = amplifiers; Body = frameNodes @ rings @ inner; Brackets = brackets; Frame = frame }
 
     /// A scene of drawings on the theme's ground, in passes: every amplifier, then every body, then every bracket.
     let scene (theme: Theme) (width: float) (height: float) (drawings: Drawing list) : Scene =
         { Nodes =
-            SceneNode.Rectangle((0.0, 0.0, width, height), colour theme "ground")
+            SceneNode.Rectangle((0.0, 0.0, width, height), colour theme "surface.ground")
             :: (drawings |> List.collect (fun d -> d.Amplifiers))
             @ (drawings |> List.collect (fun d -> d.Body))
             @ (drawings |> List.collect (fun d -> d.Brackets)) }
@@ -631,27 +732,28 @@ module ArenaExample =
 
     let private centre (col: int, row: int) = { X = tile * float col + tile / 2.0; Y = tile * float row + tile / 2.0 + 2.0 }
 
-    let private unwrap (result: Result<Symbology<'E>, SymbologyError list>) =
+    let private unwrap (result: Result<'T, SymbologyError list>) =
         match result with
         | Ok s -> s
         | Error errors -> failwithf "symbology refused: %s" (errors |> List.map explain |> String.concat "; ")
 
     /// The game's view: the state and a theme reader in, a Scene out. The symbologies are built once against every
-    /// preset the player may choose.
+    /// preset the player may choose; whether team colours show is decided once per scene.
     let view (themes: Theme list) : (unit -> Theme) -> ArenaState -> Scene =
         let players = Symbology.build themes playerDraft |> unwrap
         let features = Symbology.build themes featureDraft |> unwrap
         fun read state ->
             let theme = read ()
+            let teamColours = Symbology.teamColouring theme players
             let drawings =
                 [
-                    for f in state.Features -> Symbology.draw theme 1 (Symbology.spec features (centre f.Cell) f) false
+                    for f in state.Features -> Symbology.draw theme false (Symbology.spec features (centre f.Cell) f |> unwrap) false
                     for p in state.Players ->
-                        Symbology.draw theme roster.Length (Symbology.spec players (centre p.Cell) p) (state.Selected = Some p.Name)
+                        Symbology.draw theme teamColours (Symbology.spec players (centre p.Cell) p |> unwrap) (state.Selected = Some p.Name)
                 ]
             Symbology.scene theme width height drawings
 
     /// The mirror labels of the sample (the accessible names a game's mirror would show).
     let labels (themes: Theme list) (state: ArenaState) : string list =
         let players = Symbology.build themes playerDraft |> unwrap
-        state.Players |> List.map (Symbology.label players)
+        state.Players |> List.map (Symbology.label players >> unwrap)
