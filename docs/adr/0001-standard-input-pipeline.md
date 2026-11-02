@@ -511,18 +511,27 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
 - **Cue layer on Babylon.** The cue nodes are drawn with unlit materials. With `disableLighting` a material shows only
   its emissive colour, so the cue colour is the emissive colour and the diffuse colour is black (#797 review B1). The
   frame's own Scene stays lit.
-- **Presented density on the canvases.** An input-host canvas is drawn at the device pixel ratio times its CSS scale,
-  so both 2 CSS px bands reach their declared tones at any presented size and on a high-DPI screen.
-  - **Pixi** sets its renderer resolution.
-  - **Babylon** sets a hardware scaling level of 1 / DPR and resizes its engine to the presented size. Its pick takes
-    the point at that level.
-  - **Both** re-evaluate at each draw and on a `ResizeObserver`.
-  - **Page sizing wins.** A page that sizes the canvas, inline or by a stylesheet rule, keeps its size. Only a canvas
-    the page does not size gets its scene size as an inline CSS size, as Pixi's `autoDensity` does, so a larger backing
-    store never grows it.
-  - **The smoke checks this** on all three backends from the presented pixels, using the driver's screenshot rather
-    than a backing-store read: the ring's two tones at 1x CSS, 2x CSS (an inline style after mount) and DPR 2. A board
-    sized by a page stylesheet must be presented at the stylesheet's size, hit-test at it, and show both tones.
+- **Canvas sizing: one model for Pixi and Babylon** (`CanvasSizing`; #797's third review). Three earlier fixes each
+  changed density or sizing in a way that broke something else. This model replaces them:
+  - **Who owns the presented CSS size.** Either the page (an inline style or a stylesheet rule sizes the canvas) or the
+    host (the scene size). It is decided once, right after `appendChild` and before any backing-store change: the host
+    tests whether the canvas's computed width follows its width attribute. If the page does not size the canvas, the
+    host sets its inline CSS width and height to the scene size.
+  - **The backing store is derived only:** presented CSS size × device pixel ratio, rounded. It never feeds back into the
+    CSS size.
+    - Pixi sets its renderer resolution to backing width / scene width.
+    - Babylon sets its engine size to the backing store, and its hardware scaling level to CSS width / backing width,
+      which its pick reads.
+  - **When it is re-derived:** at each draw, and when a `ResizeObserver` (`contentBoxSize`) reports a presented size.
+    Either way only when the CSS size or the DPR differs from the last one applied, so the host's own backing-store
+    writes never trigger a resize.
+  - **A sanity cap:** a backing store over 8192 device pixels on either side is refused with a console diagnostic.
+    The canvas keeps its last backing store; it never grows.
+  - **The smoke checks the matrix:** {unsized, inline-sized, stylesheet-sized} × {DPR 1, DPR 2 at mount, DPR 1→2
+    after mount, a CSS resize after mount}, on all three backends. Each case must have the expected presented size,
+    stable over three animation frames, both focus-ring tones in the presented pixels, and correct picking. The ring's
+    tones are also read at 1x CSS, at 2x CSS (an inline style after mount) and at DPR 2. Presented pixels come from a CDP
+    screenshot that honours the DPR override.
 - **`withInteraction` keeps its own hosts** (Root's ruling). `SceneRenderers.withInteraction` and `withInput` replace
   each other on one registry. A game moves to the input host by declaring `withInput` and binding its route, to a
   pipeline or to `InputEvent.toSelectionRequest`. Migrating `withInteraction` onto the input host is a separate

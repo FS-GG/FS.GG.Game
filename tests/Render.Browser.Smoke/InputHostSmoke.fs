@@ -498,54 +498,102 @@ let private playGrid
 [<Emit("document.head.insertAdjacentHTML('beforeend', '<style>' + $0 + '</style>')")>]
 let private addStylesheet (_css: string) : unit = jsNative
 
-/// The board sized by a page STYLESHEET (no inline style) to twice its scene: every backend must be presented at the
-/// stylesheet's size, hit-test at it, and present the focus ring's two tones at it.
-let private playSheet
+/// Who sizes the presented canvas or SVG root in a sizing case.
+type private Owner =
+    | Unsized
+    | Inline
+    | Stylesheet
+
+/// When the presented density or size changes in a sizing case.
+type private Timing =
+    | Dpr1
+    | Dpr2AtMount
+    | Dpr1To2AfterMount
+    | CssResizeAfterMount
+
+[<Emit("($0.style.width = $1 + 'px', $0.style.height = $2 + 'px')")>]
+let private sizeInline (_element: Element) (_width: float) (_height: float) : unit = jsNative
+
+/// One case of the sizing matrix (FS.GG.Game#788, ADR 0001 "Canvas sizing"): the presented size is the expected one and
+/// stays it over three animation frames (no feedback between backing store and CSS size), both focus-ring tones are
+/// presented, and presses hit the objects at that size.
+let private playSizing
     (check: string -> bool -> string -> unit)
     (container: HTMLElement)
     (late: LateFailureRoute)
     (route: InputRoute)
     (registry: RendererRegistry<InputFixture.Board>)
+    (owner: Owner)
+    (timing: Timing)
     (backend: RendererBackend)
     : Async<unit> =
     async {
-        let name = RendererBackend.id backend + " stylesheet"
+        let name = sprintf "%s %A %A" (RendererBackend.id backend) owner timing
         let events = ResizeArray<InputEvent>()
         InputRoute.bind events.Add route
         let board: InputFixture.Board = { Tick = 0; Selected = None }
+
+        if timing = Dpr2AtMount then
+            do! BrowserConformance.deviceScale 2.0
+
         let driver = BrowserRenderers.start late registry board ignore
 
         if backend <> RendererBackend.Svg then
             driver.Dispatch(RendererMsg.SelectBackend backend)
 
         let! _ = BrowserConformance.waitUntil 600 (fun () -> driver.Mounted = Some backend)
-        do! settle 3
         let surface = surfaceOf container backend
-        let width, height = InputFixture.width, InputFixture.height
-        let bounds = surface.getBoundingClientRect ()
+
+        if owner = Inline then
+            sizeInline surface 480.0 320.0
+
+        do! settle 3
+
+        match timing with
+        | Dpr1To2AfterMount -> do! BrowserConformance.deviceScale 2.0
+        | CssResizeAfterMount -> sizeInline surface 360.0 240.0
+        | _ -> ()
+
+        driver.Dispatch(RendererMsg.StateChanged driver.Model.State)
+        do! settle 4
+
+        let expectedWidth, expectedHeight =
+            match timing, owner with
+            | CssResizeAfterMount, _ -> 360.0, 240.0
+            | _, Unsized -> 240.0, 160.0
+            | _ -> 480.0, 320.0
+
+        let sizes = ResizeArray<float * float>()
+
+        for _ in 1..3 do
+            let bounds = surface.getBoundingClientRect ()
+            sizes.Add(bounds.width, bounds.height)
+            do! settle 1
 
         check
-            (sprintf "input host %s: a page stylesheet sizes the surface (480 x 320 CSS px, no inline style overrides it)" name)
-            (bounds.width = 480.0 && bounds.height = 320.0)
-            (sprintf "%gx%g inline=%s" bounds.width bounds.height (surface.getAttribute "style"))
+            (sprintf "input host sizing %s: presented at %gx%g CSS px, stable over three frames" name expectedWidth expectedHeight)
+            (sizes |> Seq.forall (fun (w, h) -> abs (w - expectedWidth) < 0.5 && abs (h - expectedHeight) < 0.5))
+            (sprintf "%A dpr=%g inline=%s" (List.ofSeq sizes) window.devicePixelRatio (surface.getAttribute "style"))
+
+        let width, height = InputFixture.width, InputFixture.height
 
         let centre id =
             InputFixture.objects board
             |> List.find (fun target -> target.Id = id)
             |> fun target -> { X = target.Bounds.X + target.Bounds.Width / 2.0; Y = target.Bounds.Y + target.Bounds.Height / 2.0 }
 
-        let edge id =
+        let corner id =
             InputFixture.objects board
             |> List.find (fun target -> target.Id = id)
             |> fun target -> { X = target.Bounds.X + target.Bounds.Width - 2.0; Y = target.Bounds.Y + 2.0 }
 
         events.Clear()
         do! inputAt surface width height "click" (centre "u1")
-        do! inputAt surface width height "click" (edge "t12")
+        do! inputAt surface width height "click" (corner "t12")
         let pressed = texts events |> List.filter (fun e -> e.Contains "activate")
 
         check
-            (sprintf "input host %s: presses hit the objects at the stylesheet's size (a centre, and 2 units inside a corner)" name)
+            (sprintf "input host sizing %s: presses hit the objects (a centre, and 2 units inside a corner)" name)
             (pressed = [ "pointer:activate:u1"; "pointer:activate:t12" ])
             (String.concat "," pressed)
 
@@ -559,13 +607,14 @@ let private playSheet
         do! settle 2
         let! tones, detail = ringTones surface width height (InputFixture.objects board |> List.find (fun t -> t.Id = "t00")).Bounds
 
-        check
-            (sprintf "input host %s: the focus ring's two presented tones hold at the stylesheet's 2x size" name)
-            tones
-            detail
+        check (sprintf "input host sizing %s: both focus-ring tones are presented" name) tones detail
 
         (driver :> System.IDisposable).Dispose()
         InputRoute.unbind route
+
+        if window.devicePixelRatio <> 1.0 then
+            do! BrowserConformance.deviceScale 1.0
+
         do! settle 2
     }
 
@@ -605,24 +654,29 @@ let run (check: string -> bool -> string -> unit) : Async<unit> =
 
         container.remove ()
 
-        addStylesheet "#stage-input-sheet canvas, #stage-input-sheet svg { width: 480px; height: 320px; }"
-        let sheet = document.createElement "div"
-        sheet.id <- "stage-input-sheet"
-        document.body.appendChild sheet |> ignore
+        // The sizing matrix: {unsized, inline-sized, stylesheet-sized} x {DPR 1, DPR 2 at mount, DPR 1 -> 2 after mount,
+        // a CSS resize after mount}, on every backend.
+        addStylesheet "#stage-sizing-stylesheet canvas, #stage-sizing-stylesheet svg { width: 480px; height: 320px; }"
 
-        let sheetRegistry =
-            match BrowserRenderers.surfaces sheet (BrowserRenderers.options "Input board" InputFixture.width InputFixture.height) late with
-            | (svg :: _) as all ->
-                all
-                |> List.fold
-                    (fun renderers surface -> SceneRenderers.withSurface surface renderers)
-                    (SceneRenderers.create InputFixture.view (SceneSurface.mountScene svg))
-                |> SceneRenderers.withInput InputFixture.interaction route
-                |> SceneRenderers.registry
-            | [] -> failwith "no surfaces"
+        for owner in [ Unsized; Inline; Stylesheet ] do
+            let stage = document.createElement "div"
+            stage.id <- sprintf "stage-sizing-%s" ((sprintf "%A" owner).ToLowerInvariant())
+            document.body.appendChild stage |> ignore
 
-        for backend in RendererBackend.all do
-            do! playSheet check sheet late route sheetRegistry backend
+            let registry =
+                match BrowserRenderers.surfaces stage (BrowserRenderers.options "Input board" InputFixture.width InputFixture.height) late with
+                | (svg :: _) as all ->
+                    all
+                    |> List.fold
+                        (fun renderers surface -> SceneRenderers.withSurface surface renderers)
+                        (SceneRenderers.create InputFixture.view (SceneSurface.mountScene svg))
+                    |> SceneRenderers.withInput InputFixture.interaction route
+                    |> SceneRenderers.registry
+                | [] -> failwith "no surfaces"
 
-        sheet.remove ()
+            for timing in [ Dpr1; Dpr2AtMount; Dpr1To2AfterMount; CssResizeAfterMount ] do
+                for backend in RendererBackend.all do
+                    do! playSizing check stage late route registry owner timing backend
+
+            stage.remove ()
     }

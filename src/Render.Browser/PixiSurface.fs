@@ -107,25 +107,9 @@ module PixiSurface =
     [<Emit("$0.hitTest($1, $2)")>]
     let private boundaryHitTest (_boundary: obj) (_x: float) (_y: float) : obj = jsNative
 
-    [<Emit("$0.renderer.resolution")>]
-    let private resolutionOf (_app: P.Application) : float = jsNative
-
     /// Resize the renderer to `width` x `height` CSS pixels at `resolution` device pixels per CSS pixel.
     [<Emit("$0.renderer.resize($1, $2, $3)")>]
     let private resizeAt (_app: P.Application) (_width: float) (_height: float) (_resolution: float) : unit = jsNative
-
-    /// Give a canvas the page does not size its scene size as its inline CSS size, so a larger backing store never grows
-    /// it (what Pixi's `autoDensity` does). A canvas the page sizes (an inline style, or a stylesheet rule: its computed
-    /// width does not follow its width attribute) is left alone. Run at mount, before the canvas has a context.
-    [<Emit("(() => { const c = $0; if (c.style.width) return; const before = getComputedStyle(c).width; c.width = c.width + 1; const after = getComputedStyle(c).width; c.width = c.width - 1; if (before !== after) { c.style.width = $1 + 'px'; c.style.height = $2 + 'px' } })()")>]
-    let private pinPresentedSize (_canvas: HTMLCanvasElement) (_width: float) (_height: float) : unit = jsNative
-
-    /// Call `action` whenever `element`'s presented size changes; returns the function that stops observing.
-    [<Emit("(() => { const o = new ResizeObserver(() => $1()); o.observe($0); return () => o.disconnect() })()")>]
-    let private observeSize (_element: HTMLElement) (_action: unit -> unit) : (unit -> unit) = jsNative
-
-    [<Emit("(window.devicePixelRatio || 1)")>]
-    let private devicePixelRatio () : float = jsNative
 
     let private rgb (color: Color) =
         (int color.Red <<< 16) ||| (int color.Green <<< 8) ||| int color.Blue
@@ -206,13 +190,15 @@ module PixiSurface =
                 canvas.width <- options.Width
                 canvas.height <- options.Height
                 canvas.setAttribute ("data-renderer", "pixi")
-
-                if sharpens then
-                    pinPresentedSize canvas options.Width options.Height
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
                 container.appendChild canvas |> ignore
                 acquire (fun () -> container.removeChild canvas |> ignore)
+
+                // FS.GG.Game#788, the canvas sizing model (CanvasSizing): who owns the presented size is decided now,
+                // attached and before any backing-store change.
+                if sharpens then
+                    CanvasSizing.claim canvas options.Width options.Height |> ignore
 
                 let app = P.application ()
                 applicationsCreated <- applicationsCreated + 1
@@ -353,22 +339,25 @@ module PixiSurface =
                     // application's own ticker renders every later frame.
                     P.renderApplication app
 
-                // FS.GG.Game#788: an input-host mount renders at the presented density (the device pixel ratio times the
-                // CSS scale of the canvas), so the cue layer's 2 CSS px bands are drawn sharp, at their declared tones, on a
-                // canvas styled larger than its scene (inline or by a stylesheet) or on a high-DPI screen. A canvas the page
-                // does not size gets its scene size inline at mount (see above), so a larger backing store never changes
-                // the size it is presented at; a canvas the page sizes keeps the page's size. A ResizeObserver redraws at
-                // the new density when the presented size changes.
-                let sharpen () =
-                    if sharpens && ready.Value && not destroyed.Value then
-                        let bounds = canvas.getBoundingClientRect ()
+                // FS.GG.Game#788: an input-host mount renders at the presented density, its backing store derived from
+                // the presented CSS size and the device pixel ratio (CanvasSizing), so the cue layer's 2 CSS px bands are
+                // drawn sharp at any presented size and on a high-DPI screen.
+                let tracker =
+                    if sharpens then
+                        Some(
+                            CanvasSizing.track canvas (fun backingWidth _ _ _ ->
+                                if ready.Value && not destroyed.Value && not disposed.Value then
+                                    resizeAt app options.Width options.Height (float backingWidth / options.Width)
+                                    reconcile latest.Value
+                                    true
+                                else
+                                    false)
+                        )
+                    else
+                        None
 
-                        if bounds.width > 0.0 then
-                            let wanted = devicePixelRatio () * bounds.width / options.Width
-
-                            if abs (wanted - resolutionOf app) > 0.01 then
-
-                                resizeAt app options.Width options.Height wanted
+                acquire (fun () -> tracker |> Option.iter (fun t -> t.Dispose()))
+                let sharpen () = tracker |> Option.iter (fun t -> t.Ensure())
 
                 // The input host: `update frame` presents a frame to it, and `drawsItself` says whether it draws the frame
                 // (with its cue layer) or leaves that to `Present`.
@@ -430,15 +419,6 @@ module PixiSurface =
                         0x000000
                         options.Antialias
                         "webgl"
-
-                if sharpens then
-                    let stop =
-                        observeSize (unbox<HTMLElement> (box canvas)) (fun () ->
-                            if ready.Value && not destroyed.Value && not disposed.Value then
-                                sharpen ()
-                                reconcile latest.Value)
-
-                    acquire stop
 
                 initialised.``then`` (
                     (fun () ->

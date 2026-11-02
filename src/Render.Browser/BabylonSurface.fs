@@ -92,14 +92,11 @@ module BabylonSurface =
     [<Emit("$0.canvasTabIndex = 0")>]
     let private keepDocumentTabOrder (_engine: B.Engine) : unit = jsNative
 
-    /// FS.GG.Game#788: render an input-host canvas at the device pixel ratio (a hardware scaling level of 1 / DPR) and
-    /// at its presented CSS size, so the cue layer's 2 CSS px bands are drawn sharp; whether it changed anything.
-    [<Emit("(() => { const want = 1 / (window.devicePixelRatio || 1); const w = $0.getRenderWidth(); const h = $0.getRenderHeight(); if (Math.abs($0.getHardwareScalingLevel() - want) > 0.001) $0.setHardwareScalingLevel(want); $0.resize(); return $0.getRenderWidth() !== w || $0.getRenderHeight() !== h })()")>]
-    let private adaptDensity (_engine: B.Engine) : bool = jsNative
-
-    /// Call `action` whenever `element`'s presented size changes; returns the function that stops observing.
-    [<Emit("(() => { const o = new ResizeObserver(() => $1()); o.observe($0); return () => o.disconnect() })()")>]
-    let private observeSize (_element: HTMLElement) (_action: unit -> unit) : (unit -> unit) = jsNative
+    /// FS.GG.Game#788 (CanvasSizing): give the engine a backing store of exactly `width` x `height` device pixels for a
+    /// canvas presented at `cssWidth` CSS px, with the hardware scaling level that maps one to the other (its pick reads
+    /// it). The CSS size is never written here.
+    [<Emit("(($0.setHardwareScalingLevel($3 / $1)), $0.setSize($1, $2))")>]
+    let private applyBacking (_engine: B.Engine) (_width: int) (_height: int) (_cssWidth: float) : unit = jsNative
 
     let private channel (value: byte) = float value / 255.0
 
@@ -219,6 +216,16 @@ module BabylonSurface =
                 canvas.setAttribute ("aria-label", options.Label)
                 container.appendChild canvas |> ignore
                 acquire (fun () -> container.removeChild canvas |> ignore)
+
+                // FS.GG.Game#788, the canvas sizing model (CanvasSizing): who owns the presented size is decided now,
+                // attached and before the engine touches the backing store.
+                let sharpens =
+                    match host with
+                    | Some(InputHost.CanvasHost.Input _) -> true
+                    | _ -> false
+
+                if sharpens then
+                    CanvasSizing.claim canvas options.Width options.Height |> ignore
 
                 // `webGlEngine` throws when the browser has no WebGL context.
                 let engine = B.webGlEngine (unbox<B.Canvas>(box canvas)) options.Antialias
@@ -447,17 +454,19 @@ module BabylonSurface =
                         Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), false)
                     | Some(InputHost.CanvasHost.Input(spec, report)) ->
                         reregion first.Objects
-                        // FS.GG.Game#788: the device pixel ratio and the presented size, now and on every resize.
+                        // FS.GG.Game#788: the backing store is derived from the presented CSS size and the device pixel
+                        // ratio (CanvasSizing), at each draw and when the presented size changes.
                         let lastDrawn = ref (first.Scene, ([]: SceneNode list))
-                        adaptDensity engine |> ignore
 
-                        acquire (
-                            observeSize (unbox<HTMLElement> (box canvas)) (fun () ->
+                        let tracker =
+                            CanvasSizing.track canvas (fun width height cssWidth _ ->
+                                applyBacking engine width height cssWidth
                                 let next, cues = lastDrawn.Value
+                                reconcileWith next { Nodes = cues }
+                                true)
 
-                                if adaptDensity engine then
-                                    reconcileWith next { Nodes = cues })
-                        )
+                        acquire (fun () -> tracker.Dispose())
+                        tracker.Ensure()
 
                         let attached =
                             InputHost.attach
@@ -473,7 +482,7 @@ module BabylonSurface =
                                 report
                                 (fun next cues ->
                                     lastDrawn.Value <- (next, cues)
-                                    adaptDensity engine |> ignore
+                                    tracker.Ensure()
                                     reconcileWith next { Nodes = cues })
                                 first
 
