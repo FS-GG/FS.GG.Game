@@ -134,8 +134,10 @@ than a theme value. The cue layer reads it on every draw, and a runtime theme sw
 cue change. `CueContext` stays as it is (cues, objects, `cssPerUnit`), and #793 adds no theme or view field. This
 split, with the node-list type and `CueContext` itself, is agreed with the #789 owner.
 
-**Compatibility.** `SelectionRequest`, `SelectionRoute` and `SceneRenderers.withInteraction` keep their meaning.
-#788 re-implements them over the input host through `InputEvent.toSelectionRequest`.
+**Compatibility.** `SelectionRequest`, `SelectionRoute` and `SceneRenderers.withInteraction` keep their meaning and,
+in #788, their own input hosts (Root's ruling on #797). A game gets the input host, its drawn focus and its
+single-Tab-stop mirror by declaring `SceneRenderers.withInput`. Moving `withInteraction` itself onto the input host,
+which would give existing games the same through `InputEvent.toSelectionRequest`, is a separate Delivery: FS.GG.Game#800.
 
 ### 2. Guest stage (stage 2)
 
@@ -292,15 +294,26 @@ selected and active, the rule of `RendererDriver.failBackend`.
   - **No cell group:** the surface is a `role=listbox`. Each keyboard-reachable object is a `role=option` with
     `aria-selected`. A `grouped` set is nested in a labelled `role=group`.
   - **Any cell group (a mixed scene):** the surface is ONE `role=grid`.
-    - Each cell group is a labelled `rowgroup` of `row`s and `gridcell`s, at its declared rows and columns.
-    - Every other object, or `grouped` set, is a labelled `rowgroup` whose rows each hold a single `gridcell`.
-    - `aria-selected` is on the cells.
+    - Each cell group is a labelled `rowgroup` of `row`s and `gridcell`s, at its declared rows and columns, with
+      `aria-rowindex` and `aria-colindex` so a sparse group keeps its positions (the grid carries `aria-rowcount` and
+      `aria-colcount`).
+    - Each `grouped` set is a labelled `rowgroup` whose rows each hold a single `gridcell`. All ungrouped objects
+      share ONE such `rowgroup`.
+    - The group's name is part of each cell's accessible name (`Label, Group`), and `aria-selected` is on the cells.
   - **Ownership.** The mirror's options or cells belong to the surface. For an SVG root, the surface owns them with
     `aria-owns`. For a canvas, they are the canvas's fallback content, its DOM children. Either way, the surface's
     `aria-activedescendant` names the active one.
-  - **Keys.** Arrow keys move the active option or cell (in two dimensions inside a cell group). Home and End jump to
-    the ends, and Page Up and Page Down move between groups. Enter, Space and the secondary keys act on the active
-    item.
+  - **Keys.**
+    - On a listbox, the arrows move the active option in order, and Home and End jump to the ends.
+    - On a grid, the keys follow the ARIA Authoring Practices grid pattern:
+      - Left and Right move along the row and stop at its ends.
+      - Up and Down move to the nearest cell of the previous or next row by `aria-rowindex`, across rowgroups, so an
+        arrow can leave a cell group.
+      - Home and End go to the ends of the row, and Control+Home and Control+End to the ends of the grid.
+    - Page Up and Page Down move between groups.
+    - Enter, Space and the secondary keys act on the active item.
+    - A navigation key with Alt or Meta held is left to the browser (history back and forward).
+  - **Never hidden from assistive technology.** No item is `aria-hidden`, `display:none` or `visibility:hidden`.
   - **Hidden mirror.** The mirror stays visually hidden and never expands the layout. The drawn focus ring is the
     visible indicator. #788 may also place each hidden option transparently over its object's bounds, with
     `pointer-events: none`, so that screen-reader highlight boxes line up with the drawing.
@@ -325,8 +338,8 @@ selected and active, the rule of `RendererDriver.failBackend`.
 | **#768**: late-failure routing without `RendererDriver` | `BrowserRenderers.bindTo model dispatch route`, covered by I15 | **Satisfied by the contract.** Finished by #788. |
 | **#783**: kit probes on object edges | Not a pipeline concern. Recorded for I14: hit regions are closed, and probes stay at least 1 CSS px inside or outside each edge at the presented scale. Edge probes skip objects smaller than 2 units in either dimension. | **Left open.** It stays its own kit Delivery. |
 | **#784**: pointer-only and grouped objects | `ObjectAccess` (`pointerOnly`, `grouped`, `cell`), the listbox or grid surface | **Satisfied by the contract.** Finished by #788. |
-| #787 comment N4: invisible keyboard focus | `InteractionCues`, `CueContext`, `standardCues`, `withCues` | Satisfied; implemented in #788. |
-| #787 comment N5: Tab stops, mirror expansion, `role=group` on SVG, Escape on a mirror button | The single-Tab-stop listbox or grid with `aria-activedescendant`, a hidden mirror, Escape is `Cancel` | Satisfied; implemented in #788. |
+| #787 comment N4: invisible keyboard focus | `InteractionCues`, `CueContext`, `standardCues`, `withCues` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the migration Delivery, FS.GG.Game#800. |
+| #787 comment N5: Tab stops, mirror expansion, `role=group` on SVG, Escape on a mirror button | The single-Tab-stop listbox or grid with `aria-activedescendant`, a hidden mirror, Escape is `Cancel` | Implemented in #788 for `withInput` games. `withInteraction` games get it from the migration Delivery, FS.GG.Game#800. |
 
 ### 6. Kit specification
 
@@ -469,6 +482,111 @@ These settle details the contract left open. The laws in `tests/Game.Render.Pipe
 - **Elmish.** `PipelineRunner.performAll effects runner` performs one `update`'s effects in order. An Elmish program
   runs it inside one `Cmd.ofEffect`, never split across `Cmd.batch` entries or run through `Cmd.OfAsync` or
   `Cmd.OfPromise`, so `ApplyLocal` messages are dispatched before `StartNext` (P7b).
+
+## Implementation decisions of the input host (FS.GG.Game#788 PR B)
+
+- **The input-host mount receives an `InputHostSpec`.** `SceneSurface.withInputHost`'s mount takes `spec report frame`:
+  `InteractiveScene` carries no access or cue layer, so `SceneSurface.inputAdapter` passes
+  `SceneInteraction.inputHost interaction` (its `withAccess` declaration and its `withCues` layer). The contract was
+  unreleased, so its signature changed rather than adding a second mount.
+- **One host, three backends.** One browser input host (`InputHost`) serves all three surfaces, so the same input gives
+  the same events: the SVG root owns a visually hidden mirror through `aria-owns`, and a canvas holds its items as
+  fallback content. Its listeners are capture-phase listeners on the surface. On SVG they also stop the retained root's
+  own press, wheel and keys, so the input host's surface never pans, zooms or moves an SVG focus of its own. The
+  pointer hit test is the backend's own (Pixi's `EventBoundary`, Babylon's pick), and `SceneInteraction.hitTest` on
+  SVG.
+- **Events.**
+  - A primary or secondary mouse or pen press reports on `pointerdown`.
+  - A touch press reports `Activate` on release, if it moved less than 10 CSS px and was held less than 500 ms. It
+    reports `ActivateSecondary` after 500 ms. The page's `contextmenu` is always prevented on the surface.
+  - `Focus` is reported when a navigation key moves the focus. A key that leaves it in place (the end of a grid row)
+    reports nothing but is still contained.
+  - Both the keydown and the keyup of every reported key are contained. A navigation key with Alt or Meta held is
+    neither reported nor contained.
+  - Enter, Space and the secondary keys report only when an object is focused. Escape always reports `Cancel`, with
+    the focused object as its target, if any.
+  - Tabbing in focuses the selected object, or the first item, without an event.
+  - A pointer press moves the focus to a keyboard-reachable object without showing it.
+  - A mirror click (a screen reader's default action) reports `Activate` from the `Mirror` and shows focus.
+- **Cue layer on Babylon.** The cue nodes are drawn with unlit materials. With `disableLighting` a material shows only
+  its emissive colour, so the cue colour is the emissive colour and the diffuse colour is black (#797 review B1). The
+  frame's own Scene stays lit.
+- **Surface sizing: one model for SVG, Pixi and Babylon** (`CanvasSizing`; #797's fourth and fifth reviews, Root's
+  rulings). Two invariants, both structural: the output's width and height attributes, which are the backing store,
+  never influence layout; and whatever size the frame ends up, the scene is drawn, pressed and cued at ONE uniform scale.
+  - **The frame.** The host mounts a frame it owns (`data-input-frame="svg|pixi|babylon"`). Its inline style is
+    `position: relative; display: inline-block; vertical-align: top; aspect-ratio: auto W / H` (the scene's, applied to
+    the content box) and `align-self: start; justify-self: start`, so a flex or grid parent does not stretch it. Its
+    only in-flow child is a sizer at the scene width and no height, whose inline style also zeroes padding, border and
+    margin.
+  - **What sizes the frame.** Exactly:
+    - by default, the sizer gives it the scene width and the aspect ratio gives it the scene height, in any parent
+      (block, flex row or column, grid, `display: contents`, positioned, transformed, zoomed or scrolled);
+    - a page rule or inline style that sets the frame's own `width` and/or `height` wins: with one of them set, the
+      other follows the scene's aspect ratio; with both set, the box may have any aspect;
+    - nothing else. A container's size does not size the frame (an earlier draft of this section said a container
+      with a definite size did; it does not). A page that wants the surface to follow its container says so on the
+      frame, for example `#stage [data-input-frame] { width: 100%; }`.
+    The host never writes the frame's size, so page sizing that is added, changed or withdrawn after mount always wins
+    or falls back to the scene size, with no transition to track.
+  - **Page rules on host-internal elements.** The frame and the sizer are `div`s inside the container, so a page rule
+    such as `#stage div { … }` reaches them. The sizer's inline style ignores it, and the frame's alignment, display and
+    aspect ratio are inline too. A rule that sets the frame's width, height, padding or border does apply, and
+    contain-fit keeps the scene uniform within whatever content box results. Style the frame by `[data-input-frame]`
+    only; never style the canvas or SVG root, which the host places.
+  - **Contain-fit.** `CanvasSizing.fit` computes, from the frame's content box (its own CSS px), `scale = min(boxWidth /
+    sceneWidth, boxHeight / sceneHeight)` and the centred rectangle of `scene × scale`. The tracker places the output
+    there (`position: absolute` at that left, top, width and height, out of layout) and nowhere else, snapped to whole
+    device px (its size and its offset in the frame, at the DPR × the presented scale) so a backing store maps 1:1
+    onto it. A canvas is presented with `image-rendering: pixelated` only while its backing store equals its presented
+    device size on both axes and no page transform rotates or skews it. There nearest sampling is exact, where the
+    default filter blended a solid band edge under a `scale()` transform (#797 round 5, found by the layout smoke).
+    Anywhere else the browser must resample (a non-uniform `scale(2, 1)`, whose density is the area scale; a backing
+    store refused at the cap), and the default filter keeps art smooth instead of stepped (#797 round 6). Outside the fit is letterbox: page background, no
+    scene and no press.
+    - Drawing: the output's box is the fit, and a canvas's backing store is the fit × DPR (× the scale at which a page
+      transform or zoom presents the frame), rounded. Pixi sets its renderer resolution to backing width / scene
+      width. Babylon sets its engine size to the backing store, and its hardware scaling level to fitted width /
+      backing width, which its pick reads. The SVG root keeps `preserveAspectRatio="xMidYMid meet"`, which never has
+      to letterbox, because its box already has the scene's aspect.
+    - Input and cues invert the same placement, with ONE scale for both axes. The cue layer's CSS px per scene unit
+      (the ring's 2 CSS px bands) is the fit's scale (the output's own width / scene width) × the scale at which the
+      page presents it (`CanvasSizing.presentedScale`: the product of every ancestor's CSS `zoom` and the area scale
+      of every CSS `transform`); the same presented scale sets the backing store's density. The pointer maps an SVG
+      root's event through its screen CTM (viewBox units are scene units), and a canvas's through the event's offset
+      in the canvas's own CSS px (which the browser maps through every transform, rotations included; zoom is divided
+      out) over the fit's scale. Pixi's `EventBoundary` and Babylon's pick take those scene points. The host draws the
+      cue layer's top-level rectangles with their edges on whole device px (nearest), so the ring's 2 CSS px bands are
+      solid device px at any fractional scale, and two bands that share an edge still share it. Because the
+      output box is the fit, drawing, input and cues cannot disagree, under any page layout, transform or zoom.
+  - **When it is re-derived:** on a `ResizeObserver` of the frame's content box and of its `device-pixel-content-box`
+    (which changes with the DPR), on a `matchMedia` resolution query re-armed at each change, on the window's resize, and
+    at each draw. A per-frame comparison of `devicePixelRatio` (one property read a frame) catches the changes that fire
+    none of those, such as a device-metrics override. Only when the fit or ratio differs from the last one applied.
+  - **A sanity cap:** a backing store over 8192 device pixels a side is refused with a console diagnostic, never grown.
+  - **Migration (before release, so not a published break).** A page that sized the output directly, such as
+    `#stage canvas { … }` or `#stage svg { … }`, now sizes the frame (`#stage [data-input-frame] { … }`). In this
+    repository, the only such selectors were in this delivery's own browser smoke. The template, ReferenceGame and the
+    other smoke pages style no input-host output. Plain mounts (`mountScene`, `mountInteractive`) are unchanged.
+  - **The smoke** checks each case on all three backends:
+    - the sizing cases: unsized, inline-sized and stylesheet-sized, each at DPR 1 and 2; page sizing withdrawn after
+      mount (a stylesheet removed, a media query turned off by a narrower viewport, an inline size removed) and added
+      after mount (a stylesheet), at DPR 1 and 2; a CSS resize after mount; DPR 1→2 after mount; and DPR 1→2 and 2→1
+      with no draw. For each: the presented size, stable over three animation frames; the backing store as presented
+      size × DPR; and, for the cases that draw, picking and both focus-ring tones from presented pixels;
+    - the layout cases: flex-column (at DPR 1 and 2), flex-row and grid `1fr` parents (also with a 400 px row),
+      `#stage div { width: 100%; padding: 10px }`, border-box with a border on every stage div, a width-only and a
+      height-only frame, a frame much wider (600×100) and much taller (120×600) than the scene, and absolutely
+      positioned, fixed, transformed (`scale(1.5)`), zoomed (`zoom: 2`) and scrolled parents. For each: the output is
+      the uniform contain-fit of the frame's content box (and the expected size); a square tile is drawn square at the
+      fit's scale (screenshot); the letterbox shows no scene and a press there activates nothing; a press activates the
+      tile where it is drawn, and at the point a stretched mapping would use only if the screenshot shows the tile
+      there; and both focus-ring bands are presented;
+    - and on each backend, output attributes of 4096 × 4096 leave the layout box unchanged.
+- **`withInteraction` keeps its own hosts** (Root's ruling). `SceneRenderers.withInteraction` and `withInput` replace
+  each other on one registry. A game moves to the input host by declaring `withInput` and binding its route, to a
+  pipeline or to `InputEvent.toSelectionRequest`. Migrating `withInteraction` onto the input host is a separate
+  Delivery, FS.GG.Game#800.
 
 ## Consequences
 

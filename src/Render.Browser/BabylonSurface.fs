@@ -73,7 +73,9 @@ module BabylonSurface =
     /// `(x, y)` (board units). `scene.pick` takes render pixels, and the engine sizes its backing store to the canvas's
     /// CSS size, so a canvas styled to another size than the board has another render size: the point is scaled by
     /// the live render size over the board size (FS.GG.Game#753).
-    [<Emit("(() => { const p = $0.pick($1 * $3.getRenderWidth() / $4, $2 * $3.getRenderHeight() / $5, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
+    // `Scene.pick` multiplies its point by 1 / the hardware scaling level, so the point is given in render pixels times
+    // that level (FS.GG.Game#788: an input-host mount scales for the device pixel ratio).
+    [<Emit("(() => { const k = $3.getHardwareScalingLevel(); const p = $0.pick($1 * $3.getRenderWidth() * k / $4, $2 * $3.getRenderHeight() * k / $5, m => m.fsggSelectable !== undefined); return p && p.hit && p.pickedMesh ? p.pickedMesh.fsggSelectable : null })()")>]
     let private pickRegion
         (_scene: B.Scene)
         (_x: float)
@@ -89,6 +91,12 @@ module BabylonSurface =
     /// document order, like the SVG root and the Pixi canvas.
     [<Emit("$0.canvasTabIndex = 0")>]
     let private keepDocumentTabOrder (_engine: B.Engine) : unit = jsNative
+
+    /// FS.GG.Game#788 (CanvasSizing): give the engine a backing store of exactly `width` x `height` device pixels for a
+    /// canvas presented at `cssWidth` CSS px, with the hardware scaling level that maps one to the other (its pick reads
+    /// it). The CSS size is never written here.
+    [<Emit("(($0.setHardwareScalingLevel($3 / $1)), $0.setSize($1, $2))")>]
+    let private applyBacking (_engine: B.Engine) (_width: int) (_height: int) (_cssWidth: float) : unit = jsNative
 
     let private channel (value: byte) = float value / 255.0
 
@@ -132,6 +140,12 @@ module BabylonSurface =
     [<Emit("$0.specularColor.copyFromFloats(0, 0, 0)")>]
     let private noSpecular (_material: B.StandardMaterial) : unit = jsNative
 
+    /// FS.GG.Game#786/#788: an unlit material has no light term at all (`disableLighting`), so its colour is its
+    /// EMISSIVE colour, with a black diffuse; a lit one is diffuse with a black emissive. The cue layer is unlit so it
+    /// keeps its declared tones and contrast on Babylon; the scene's own shapes stay lit.
+    [<Emit("(($0.disableLighting = $1), ($0.emissiveColor = $1 ? $2 : $3), ($0.diffuseColor = $1 ? $3 : $2))")>]
+    let private paint (_material: B.StandardMaterial) (_unlit: bool) (_colour: B.Color3) (_black: B.Color3) : unit = jsNative
+
     /// Take `mesh` out of the scene's mesh list: it is never drawn or picked, and keeps only the geometry its clones share.
     [<Emit("$0.getScene().removeMesh($0)")>]
     let private takeOutOfScene (_mesh: B.Mesh) : unit = jsNative
@@ -143,16 +157,18 @@ module BabylonSurface =
             Mesh: B.Mesh
             Material: B.StandardMaterial
             mutable Fill: Color
+            /// Whether the material is unlit (a cue-layer shape).
+            mutable Unlit: bool
             /// What the mesh was last placed and sized for; `None` until it is placed.
             mutable Placed: Shape option
         }
 
-    /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
-    /// whose hit test is Babylon's own pick over one invisible mesh per selectable object.
+    /// The mount behind `mountScene`, `mountInteractive` and `mountInput`: with a `host`, the mount also holds an input
+    /// host whose hit test is Babylon's own pick over one invisible mesh per selectable object.
     let private mountWith
         (container: HTMLElement)
         (options: BabylonOptions)
-        (interactive: (SelectionRequest -> unit) option)
+        (host: InputHost.CanvasHost option)
         (first: InteractiveScene)
         : Result<RendererMount<InteractiveScene>, string> =
         let scene = first.Scene
@@ -198,8 +214,24 @@ module BabylonSurface =
                 canvas.setAttribute ("data-renderer", "babylon")
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
-                container.appendChild canvas |> ignore
-                acquire (fun () -> container.removeChild canvas |> ignore)
+                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas sits in a frame the
+                // host owns, out of layout at the frame's contain-fit, so its width and height attributes (the engine's
+                // backing store) never size anything and the scene is never drawn at two scales.
+                let frame =
+                    match host with
+                    | Some(InputHost.CanvasHost.Input _) ->
+                        let made = CanvasSizing.frame container "babylon" options.Width options.Height
+                        made.appendChild canvas |> ignore
+                        CanvasSizing.place canvas options.Width options.Height
+                        Some made
+                    | _ ->
+                        container.appendChild canvas |> ignore
+                        None
+
+                acquire (fun () ->
+                    match frame with
+                    | Some frame -> frame.remove ()
+                    | None -> container.removeChild canvas |> ignore)
 
                 // `webGlEngine` throws when the browser has no WebGL context.
                 let engine = B.webGlEngine (unbox<B.Canvas>(box canvas)) options.Antialias
@@ -277,7 +309,7 @@ module BabylonSurface =
                 // How many layers the camera is backed off for.
                 let depth = ref -1
 
-                let create (index: int) (shape: Shape) : Slot =
+                let create (index: int) (shape: Shape) (unlit: bool) : Slot =
                     created.Value <- true
                     serial.Value <- serial.Value + 1
                     let name = sprintf "shape-%d" serial.Value
@@ -297,7 +329,7 @@ module BabylonSurface =
                             noSpecular fresh
                             fresh
 
-                    B.setDiffuseColor material (colour shape.Fill)
+                    paint material unlit (colour shape.Fill) (B.color3 0.0 0.0 0.0)
                     B.setMaterial mesh material
 
                     {
@@ -305,13 +337,19 @@ module BabylonSurface =
                         Mesh = mesh
                         Material = material
                         Fill = shape.Fill
+                        Unlit = unlit
                         Placed = None
                     }
 
                 let sameBox (a: Shape) (b: Shape) =
                     a.X = b.X && a.Y = b.Y && a.Width = b.Width && a.Height = b.Height
 
-                let place (index: int) (slot: Slot) (shape: Shape) =
+                let place (index: int) (slot: Slot) (shape: Shape) (unlit: bool) =
+                    if slot.Unlit <> unlit || slot.Fill <> shape.Fill then
+                        paint slot.Material unlit (colour shape.Fill) (B.color3 0.0 0.0 0.0)
+                        slot.Unlit <- unlit
+                        slot.Fill <- shape.Fill
+
                     // A shape that is where and what size it was needs no new vectors and does not dirty its mesh
                     // (the same scene presented again costs a render and nothing else).
                     match slot.Placed with
@@ -324,27 +362,28 @@ module BabylonSurface =
                         B.setScaling slot.Mesh (B.vector3 shape.Width shape.Height thickness)
                         slot.Placed <- Some shape
 
-                    if slot.Fill <> shape.Fill then
-                        B.setDiffuseColor slot.Material (colour shape.Fill)
-                        slot.Fill <- shape.Fill
 
-                /// Reconcile the meshes with `next`: reuse slot i for shape i, recreate it when the kind changes,
-                /// create the missing ones and dispose the surplus.
-                let reconcile (next: Scene) =
+
+                /// Reconcile the meshes with `next` and then the unlit cue layer `cues` above it: reuse slot i for shape
+                /// i, recreate it when the kind changes, create the missing ones and dispose the surplus.
+                let reconcileWith (next: Scene) (cues: Scene) =
                     created.Value <- false
                     let shapes = ResizeArray<Shape>()
                     unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) next shapes
+                    let lit = shapes.Count
+                    unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) cues shapes
 
                     for index in 0 .. shapes.Count - 1 do
                         let shape = shapes.[index]
+                        let unlit = index >= lit
 
                         if index < slots.Count && slots.[index].Kind <> shape.Kind then
                             release slots.[index]
-                            slots.[index] <- create index shape
+                            slots.[index] <- create index shape unlit
                         elif index >= slots.Count then
-                            slots.Add(create index shape)
+                            slots.Add(create index shape unlit)
 
-                        place index slots.[index] shapes.[index]
+                        place index slots.[index] shapes.[index] unlit
 
                     while slots.Count > shapes.Count do
                         release slots.[slots.Count - 1]
@@ -356,6 +395,8 @@ module BabylonSurface =
                         backOffCamera camera (float (max shapes.Count 1)) layerStep clearance
 
                     renderNow babylon created.Value
+
+                let reconcile (next: Scene) = reconcileWith next { Nodes = [] }
 
                 reconcile scene
 
@@ -399,22 +440,62 @@ module BabylonSurface =
                 acquire clearRegions
 
                 let input =
-                    interactive
-                    |> Option.map (fun report ->
+                    match host with
+                    | None -> None
+                    | Some(InputHost.CanvasHost.Selection report) ->
                         reregion first.Objects
 
-                        CanvasInput.attach
-                            container
-                            canvas
-                            RendererBackend.Babylon
-                            options.Label
-                            options.Width
-                            options.Height
-                            (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
-                            report
-                            first)
+                        let attached =
+                            CanvasInput.attach
+                                container
+                                canvas
+                                RendererBackend.Babylon
+                                options.Label
+                                options.Width
+                                options.Height
+                                (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
+                                report
+                                first
 
-                acquire (fun () -> input |> Option.iter (fun host -> host.Dispose()))
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), false)
+                    | Some(InputHost.CanvasHost.Input(spec, report)) ->
+                        reregion first.Objects
+                        // FS.GG.Game#788: the canvas is placed at the frame's contain-fit and its backing store is
+                        // derived from that fit and the device pixel ratio (CanvasSizing), at each draw and when the
+                        // presented size changes.
+                        let lastDrawn = ref (first.Scene, ([]: SceneNode list))
+
+                        let tracker =
+                            CanvasSizing.track frame.Value canvas options.Width options.Height (fun width height fit ->
+                                applyBacking engine width height fit.Width
+                                let next, cues = lastDrawn.Value
+                                reconcileWith next { Nodes = cues }
+                                true)
+
+                        acquire (fun () -> tracker.Dispose())
+                        tracker.Ensure()
+
+                        let attached =
+                            InputHost.attach
+                                canvas
+                                InputHost.Ownership.Fallback
+                                RendererBackend.Babylon
+                                options.Label
+                                options.Width
+                                options.Height
+                                false
+                                (fun point -> pickRegion babylon point.X point.Y engine options.Width options.Height)
+                                spec
+                                report
+                                (fun next cues ->
+                                    lastDrawn.Value <- (next, cues)
+                                    tracker.Ensure()
+                                    reconcileWith next { Nodes = cues })
+                                first
+
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), true)
+
+                acquire (fun () -> input |> Option.iter (fun (_, dispose, _) -> dispose ()))
 
                 runPendingRenderLoop engine babylon
                 loopsStarted <- loopsStarted + 1
@@ -431,7 +512,7 @@ module BabylonSurface =
                             fun frame ->
                                 if not disposed.Value then
                                     match input with
-                                    | Some host ->
+                                    | Some(update, _, drawsItself) ->
                                         match SceneInteraction.problems frame.Objects with
                                         | [] -> ()
                                         | problems ->
@@ -440,10 +521,11 @@ module BabylonSurface =
                                                 (String.concat "; " problems)
 
                                         reregion frame.Objects
-                                        host.Update frame
-                                    | None -> ()
+                                        update frame
 
-                                    reconcile frame.Scene
+                                        if not drawsItself then
+                                            reconcile frame.Scene
+                                    | None -> reconcile frame.Scene
                         Dispose =
                             fun () ->
                                 if not disposed.Value then
@@ -485,12 +567,24 @@ module BabylonSurface =
         (frame: InteractiveScene)
         : Result<RendererMount<InteractiveScene>, string> =
         match SceneInteraction.problems frame.Objects with
-        | [] -> mountWith container options (Some report) frame
+        | [] -> mountWith container options (Some(InputHost.CanvasHost.Selection report)) frame
+        | problems -> Error(sprintf "Babylon surface refused the objects: %s" (String.concat "; " problems))
+
+    let mountInput
+        (container: HTMLElement)
+        (options: BabylonOptions)
+        (spec: InputHostSpec)
+        (report: InputEvent -> unit)
+        (frame: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        match SceneInteraction.problems frame.Objects with
+        | [] -> mountWith container options (Some(InputHost.CanvasHost.Input(spec, report))) frame
         | problems -> Error(sprintf "Babylon surface refused the objects: %s" (String.concat "; " problems))
 
     let surface (container: HTMLElement) (options: BabylonOptions) : SceneSurface =
         SceneSurface.create RendererBackend.Babylon (mountScene container options)
         |> SceneSurface.withInteraction (mountInteractive container options)
+        |> SceneSurface.withInputHost (mountInput container options)
 
     let adapter (container: HTMLElement) (options: BabylonOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
         SceneSurface.adapter view (surface container options)

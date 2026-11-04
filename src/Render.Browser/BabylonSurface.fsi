@@ -76,6 +76,19 @@ module BabylonSurface =
         frame: InteractiveScene ->
             Result<RendererMount<InteractiveScene>, string>
 
+    /// The Babylon input-host mount (FS.GG.Game#788): `mountScene` with each frame's Scene and `spec`'s cue layer above
+    /// it, plus the input host of `SceneSurface.withInputHost`. The hit test is Babylon's own `Scene.pick` over one invisible mesh per selectable object. The canvas is the single Tab stop,
+    /// a `role=listbox` or `role=grid` labelled `options`' label, and the mirror's items are its fallback content (its
+    /// children); `aria-activedescendant` names the focused object's item. The cue layer is drawn unlit (its declared colours, with no light term), the Scene lit as before. Objects that `SceneInteraction.problems`
+    /// rejects are refused at mount and raise from `Present`. `Dispose` removes the input host with everything else.
+    val mountInput:
+        container: HTMLElement ->
+        options: BabylonOptions ->
+        spec: InputHostSpec ->
+        report: (InputEvent -> unit) ->
+        frame: InteractiveScene ->
+            Result<RendererMount<InteractiveScene>, string>
+
     /// `mountScene container options` as the Babylon `SceneSurface` for `SceneRenderers.withSurface`, interactive
     /// through `mountInteractive container options`.
     val surface: container: HTMLElement -> options: BabylonOptions -> SceneSurface

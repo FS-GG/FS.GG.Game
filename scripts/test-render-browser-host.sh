@@ -18,6 +18,10 @@
 # generator's sample (scripts/new-game-renderers.sh), on all three real backends; the reference game's run includes
 # the kit's interaction section (FS.GG.Game#751: hit test, keyboard, accessible mirror and input-host disposal on
 # every backend), and the reference game is then played by pointer through its renderer driver on each backend.
+# Last, the input host of SceneRenderers.withInput (FS.GG.Game#788) is played with real input on every backend, as a
+# listbox and as a grid: mouse, touch, long-press, secondary, hover and mirror events, the single Tab stop and its owned
+# ARIA items, the APG grid keyboard, keydown and keyup containment, the focus ring's two tones at 1x and 2x CSS scale and
+# DPR 2, and release.
 #
 # The JavaScript bindings are not vendored. scripts/materialize-js-bindings.sh generates them from the pinned
 # FS.GG.Templates commit (eng/js-bindings/pin.env) under artifacts/js-bindings, and the committed
@@ -31,13 +35,30 @@
 #                                                 "--headless=new --no-sandbox --use-angle=vulkan
 #                                                 --enable-features=Vulkan --ignore-gpu-blocklist"
 #          RENDER_SMOKE_KEEP=1                    keep the temp directory for inspection
+#          RENDER_SMOKE_PART=all|main|layout      the page's part (default all). CI runs `main` and `layout` as two
+#                                                 jobs: `layout` is the input host's page-layout matrix (FS.GG.Game#788),
+#                                                 `main` is every other section
+#          RENDER_SMOKE_TIMEOUT_SECONDS=<s>       the page's timeout (default 300). Every run prints each section's
+#                                                 duration and the page's time against this timeout, and warns below 2x
+#                                                 headroom
 #          JS_BINDINGS_TEMPLATES_ROOT=<dir>       a FS.GG.Templates checkout at the pinned commit (offline use)
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-MIN_CHECKS=613
+PART="${RENDER_SMOKE_PART:-all}"
+# The checks each part must run at least (main 909 + layout 252; main includes 35 theme-proof and 14 partial-mount checks).
+# Layout retains its 246 checks and adds two below-cap controls plus four actual-fit cap preconditions.
+case "$PART" in
+  all) MIN_CHECKS=1161 ;;
+  main) MIN_CHECKS=909 ;;
+  layout) MIN_CHECKS=252 ;;
+  *)
+    echo "test-render-browser-host: RENDER_SMOKE_PART must be all, main or layout (got '$PART')" >&2
+    exit 2
+    ;;
+esac
 PACK_VERSION="0.0.0-render-smoke"
 PACKAGE="FS.GG.Game.Render.${PACK_VERSION}.nupkg"
 
@@ -47,6 +68,9 @@ for command in dotnet node npm git python3 unzip cmp grep sed; do
     exit 2
   }
 done
+
+# Exercise CDP session ownership before package materialisation or a browser is started.
+node --test tests/Render.Browser.Smoke/driver/run-smoke.test.mjs
 
 BROWSER="${RENDER_SMOKE_BROWSER:-}"
 if [[ -z $BROWSER ]]; then
@@ -222,14 +246,14 @@ printf '%s\n' \
 #    The default flags give WebGL through SwiftShader (software), which is what a CI runner has;
 #    RENDER_SMOKE_BROWSER_FLAGS selects a GPU instead. The result names the WebGL renderer that ran.
 BROWSER_FLAGS="${RENDER_SMOKE_BROWSER_FLAGS:---headless=new --no-sandbox --disable-gpu --enable-unsafe-swiftshader --use-angle=swiftshader}"
-BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-180}"
+BROWSER_TIMEOUT="${RENDER_SMOKE_TIMEOUT_SECONDS:-300}"
 mkdir -p "$TMP/driver"
 cp tests/Render.Browser.Smoke/driver/package.json tests/Render.Browser.Smoke/driver/package-lock.json \
   tests/Render.Browser.Smoke/driver/run-smoke.mjs "$TMP/driver/"
 (cd "$TMP/driver" && npm ci --ignore-scripts --no-audit --no-fund >/dev/null)
 : >"$TMP/browser.stderr"
 # shellcheck disable=SC2086
-node "$TMP/driver/run-smoke.mjs" "$TMP/js/index.html" "$BROWSER" "$TMP/browser.stderr" "$BROWSER_TIMEOUT" $BROWSER_FLAGS || {
+RENDER_SMOKE_PART="$PART" node "$TMP/driver/run-smoke.mjs" "$TMP/js/index.html" "$BROWSER" "$TMP/browser.stderr" "$BROWSER_TIMEOUT" $BROWSER_FLAGS || {
   echo "test-render-browser-host: the real-input driver failed" >&2
   grep -E 'CONSOLE|Uncaught|DRIVER' "$TMP/browser.stderr" | head -n 40 >&2 || true
   exit 1
@@ -260,6 +284,17 @@ PY
 read -r CHECKS FAILURES <"$TMP/result.counts"
 grep -E '^(PASS|FAIL|INFO) ' "$TMP/result.txt" || true
 
+# The margin, on every run: each section's duration, and the page's time against its timeout.
+sed -n 's/^CONSOLE RENDER-SMOKE-SECTION \(.*\) \([0-9.]*\)$/test-render-browser-host: section \1: \2 s/p' "$TMP/browser.stderr"
+PAGE_SECONDS="$(sed -n 's/^DRIVER page-seconds \([0-9.]*\) of .*/\1/p' "$TMP/browser.stderr" | tail -n 1)"
+if [[ -n $PAGE_SECONDS ]]; then
+  HEADROOM="$(python3 -I -c "import sys; print(f'{float(sys.argv[2]) / max(float(sys.argv[1]), 0.1):.1f}')" "$PAGE_SECONDS" "$BROWSER_TIMEOUT")"
+  echo "test-render-browser-host: part $PART page took ${PAGE_SECONDS} s of its ${BROWSER_TIMEOUT} s timeout (${HEADROOM}x headroom)"
+  if python3 -I -c "import sys; sys.exit(0 if float(sys.argv[1]) * 2 > float(sys.argv[2]) else 1)" "$PAGE_SECONDS" "$BROWSER_TIMEOUT"; then
+    echo "::warning::test-render-browser-host: part $PART page took ${PAGE_SECONDS} s of its ${BROWSER_TIMEOUT} s timeout, under 2x headroom; shard or speed up the page rather than raising the timeout"
+  fi
+fi
+
 if [[ -z $CHECKS || -z $FAILURES ]]; then
   echo "test-render-browser-host: could not read the smoke result" >&2
   exit 1
@@ -277,4 +312,4 @@ if [[ $FAILURES -ne 0 ]] || grep -q '^FAIL ' "$TMP/result.txt"; then
 fi
 
 WEBGL="$(grep -E '^INFO webgl: ' "$TMP/result.txt" | head -n 1 | sed 's/^INFO webgl: //')"
-echo "test-render-browser-host: OK — $CHECKS browser checks passed; package=$PACKAGE browser=$("$BROWSER" --version 2>/dev/null | head -n 1) flags=[$BROWSER_FLAGS] webgl=[$WEBGL]"
+echo "test-render-browser-host: OK — part $PART: $CHECKS browser checks passed; package=$PACKAGE browser=$("$BROWSER" --version 2>/dev/null | head -n 1) flags=[$BROWSER_FLAGS] webgl=[$WEBGL]"

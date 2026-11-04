@@ -25,6 +25,10 @@
     <Compile Include="ThemeDerivationTests.fs" />
     <Compile Include="SceneInteractionTests.fs" />
     <Compile Include="InputPipelineContractTests.fs" />
+    <!-- The input host's pure half (FS.GG.Game#788), compiled here so .NET checks it directly. -->
+    <Compile Include="..\..\src\Render.Browser\InputLayout.fsi" Link="InputLayout.fsi" />
+    <Compile Include="..\..\src\Render.Browser\InputLayout.fs" Link="InputLayout.fs" />
+    <Compile Include="InputLayoutTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

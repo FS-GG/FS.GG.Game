@@ -1,6 +1,7 @@
 namespace FS.GG.Game.Render.Browser
 
 open Browser.Types
+open Fable.Core
 open FS.GG.Game.Render
 open FS.GG.UI.Scene
 open FS.GG.UI.Scene.SvgBrowser
@@ -239,9 +240,123 @@ module SvgSurface =
                         Dispose = fun () -> (host :> System.IDisposable).Dispose()
                     }
 
+    [<Emit("$0.querySelectorAll(':scope > [data-scene-controls]:not([data-input-host])')")>]
+    let private ownControls (_container: HTMLElement) : NodeListOf<Element> = jsNative
+
+    [<Emit("$0.querySelector(':scope > desc')")>]
+    let private descriptionOf (_root: Element) : Element = jsNative
+
+    let mountInput
+        (container: HTMLElement)
+        (options: SvgBrowserOptions)
+        (spec: InputHostSpec)
+        (report: InputEvent -> unit)
+        (frame: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        match refusal frame with
+        | (_ :: _) as problems -> Error(sprintf "SVG surface refused the objects: %s" (String.concat "; " problems))
+        | [] ->
+            // The retained root draws the frame's Scene with the cue layer above it as ONE non-selectable object; the
+            // input host, not the root, owns every input (its capture listeners stop the root's own press, wheel and
+            // keys, so the root never pans, zooms or moves its own focus).
+            // FS.GG.Game#788, the surface sizing model (CanvasSizing): the root sits in a frame the host owns, out of
+            // layout at the frame's contain-fit, as the canvases do, so one page rule on the frame sizes every backend
+            // and the root's own `xMidYMid meet` never has to letterbox (the pointer maps through the same box).
+            let surfaceFrame = CanvasSizing.frame container "svg" options.Width options.Height
+
+            match SvgBrowser.mount surfaceFrame options (retained options 1 frame.Scene) ignore with
+            | Error error ->
+                surfaceFrame.remove ()
+                Error(sprintf "SVG surface refused the scene: %A" error)
+            | Ok host ->
+                let mutable revision = 1
+                let current = ref frame
+                let root = host.Root
+                root.setAttribute ("data-renderer", "svg")
+                root.setAttribute ("preserveAspectRatio", "xMidYMid meet")
+                CanvasSizing.place root options.Width options.Height
+                let placement = CanvasSizing.follow surfaceFrame root options.Width options.Height
+                placement.Ensure()
+
+                // The root's own (empty) object-selection group is replaced by the input host's mirror, and its
+                // description, which names that group, goes with it.
+                let made = ownControls surfaceFrame
+
+                for index in 0 .. made.length - 1 do
+                    let element = made.[index]
+                    element.parentNode.removeChild element |> ignore
+
+                match descriptionOf root with
+                | null -> ()
+                | description -> root.removeChild description |> ignore
+
+                let draw (scene: Scene) (cues: SceneNode list) =
+                    placement.Ensure()
+                    revision <- revision + 1
+
+                    let result =
+                        host.Dispatch(
+                            RetainedInteractionMessage.ReplaceScene(
+                                retained options revision { scene with Nodes = scene.Nodes @ cues }
+                            )
+                        )
+
+                    match result.Error with
+                    | None -> ()
+                    | Some error -> failwithf "SVG surface rejected the scene: %A" error
+
+                try
+                    let input =
+                        InputHost.attach
+                            root
+                            (InputHost.Ownership.Owns container)
+                            RendererBackend.Svg
+                            options.AccessibleLabel
+                            options.Width
+                            options.Height
+                            true
+                            (fun point -> SceneInteraction.hitTest point current.Value.Objects)
+                            spec
+                            report
+                            draw
+                            frame
+
+                    let disposed = ref false
+
+                    Ok
+                        {
+                            Present =
+                                fun next ->
+                                    if not disposed.Value then
+                                        match refusal next with
+                                        | [] -> ()
+                                        | problems ->
+                                            failwithf "SVG surface refused the objects: %s" (String.concat "; " problems)
+
+                                        current.Value <- next
+                                        input.Update next
+                            Dispose =
+                                fun () ->
+                                    if not disposed.Value then
+                                        disposed.Value <- true
+
+                                        try
+                                            input.Dispose()
+                                        finally
+                                            placement.Dispose()
+                                            (host :> System.IDisposable).Dispose()
+                                            surfaceFrame.remove ()
+                        }
+                with ex ->
+                    placement.Dispose()
+                    (host :> System.IDisposable).Dispose()
+                    surfaceFrame.remove ()
+                    Error(sprintf "SVG surface could not start its input host: %s" ex.Message)
+
     let surface (container: HTMLElement) (options: SvgBrowserOptions) : SceneSurface =
         SceneSurface.create RendererBackend.Svg (mountScene container options)
         |> SceneSurface.withInteraction (mountInteractive container options)
+        |> SceneSurface.withInputHost (mountInput container options)
 
     let registry (container: HTMLElement) (options: SvgBrowserOptions) (view: 'State -> Scene) =
         RendererRegistry.svg view (mountScene container options)

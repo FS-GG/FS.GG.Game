@@ -68,6 +68,8 @@ module BrowserRenderers =
             SceneSurface.create RendererBackend.Pixi (fun scene -> PixiSurface.mountScene container (pixiOptions ()) scene)
             |> SceneSurface.withInteraction (fun request frame ->
                 PixiSurface.mountInteractive container (pixiOptions ()) request frame)
+            |> SceneSurface.withInputHost (fun spec report frame ->
+                PixiSurface.mountInput container (pixiOptions ()) spec report frame)
 
         [
             SvgSurface.surface container (SvgSurface.defaultOptions options.Label options.Width options.Height)

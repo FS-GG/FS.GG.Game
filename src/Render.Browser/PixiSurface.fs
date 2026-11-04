@@ -49,8 +49,8 @@ module PixiSurface =
     let mutable private initFailures = 0
     let mutable private unsupportedNodes = 0
 
-    /// An application the adapter created, and where its asynchronous initialisation stands: an application has no
-    /// ticker or stage before it is initialised, and one whose initialisation failed never held anything to destroy.
+    /// An application the adapter created, and where its asynchronous initialisation stands. Pixi allocates a stage
+    /// in the constructor; the renderer and ticker become available only during asynchronous initialisation.
     type private Entry =
         {
             App: P.Application
@@ -70,8 +70,8 @@ module PixiSurface =
             UnsupportedNodes = unsupportedNodes
         }
 
-    /// Pixi's own record of destruction: `Application.destroy` leaves `stage` null (before initialisation it is
-    /// undefined). The adapter's books say what it asked for; this says what Pixi did.
+    /// Pixi's own record of destruction: `Application.destroy` leaves `stage` null (construction creates a Container).
+    /// The adapter's books say what it asked for; this says what Pixi did.
     [<Emit("$0.stage === null")>]
     let private destroyedByPixi (app: P.Application) : bool = jsNative
 
@@ -107,6 +107,10 @@ module PixiSurface =
     [<Emit("$0.hitTest($1, $2)")>]
     let private boundaryHitTest (_boundary: obj) (_x: float) (_y: float) : obj = jsNative
 
+    /// Resize the renderer to `width` x `height` CSS pixels at `resolution` device pixels per CSS pixel.
+    [<Emit("$0.renderer.resize($1, $2, $3)")>]
+    let private resizeAt (_app: P.Application) (_width: float) (_height: float) (_resolution: float) : unit = jsNative
+
     let private rgb (color: Color) =
         (int color.Red <<< 16) ||| (int color.Green <<< 8) ||| int color.Blue
 
@@ -131,14 +135,20 @@ module PixiSurface =
 
         P.fill slot.Node (rgb slot.Fill) (float slot.Fill.Alpha / 255.0)
 
-    /// The mount behind `mountScene` and `mountInteractive`: with `interactive`, the mount also holds an input host
-    /// whose hit test is Pixi's own `EventBoundary` over one hit region per selectable object.
+    /// The mount behind `mountScene`, `mountInteractive` and `mountInput`: with a `host`, the mount also holds an input
+    /// host whose hit test is Pixi's own `EventBoundary` over one hit region per selectable object.
     let private mountWith
         (container: HTMLElement)
         (options: PixiOptions)
-        (interactive: (SelectionRequest -> unit) option)
+        (host: InputHost.CanvasHost option)
         (first: InteractiveScene)
         : Result<RendererMount<InteractiveScene>, string> =
+        // FS.GG.Game#788: an input-host mount renders at the presented density.
+        let sharpens =
+            match host with
+            | Some(InputHost.CanvasHost.Input _) -> true
+            | _ -> false
+
         let scene = first.Scene
 
         if System.String.IsNullOrWhiteSpace options.Label then
@@ -182,20 +192,35 @@ module PixiSurface =
                 canvas.setAttribute ("data-renderer", "pixi")
                 canvas.setAttribute ("role", "img")
                 canvas.setAttribute ("aria-label", options.Label)
-                container.appendChild canvas |> ignore
-                acquire (fun () -> container.removeChild canvas |> ignore)
+                // FS.GG.Game#788, the surface sizing model (CanvasSizing): an input-host canvas sits in a frame the
+                // host owns, out of layout at the frame's contain-fit, so its width and height attributes never size
+                // anything and the scene is never drawn at two scales.
+                let frame =
+                    if sharpens then
+                        let made = CanvasSizing.frame container "pixi" options.Width options.Height
+                        made.appendChild canvas |> ignore
+                        CanvasSizing.place canvas options.Width options.Height
+                        Some made
+                    else
+                        container.appendChild canvas |> ignore
+                        None
 
-                let app = P.application ()
-                applicationsCreated <- applicationsCreated + 1
+                acquire (fun () ->
+                    match frame with
+                    | Some frame -> frame.remove ()
+                    | None -> container.removeChild canvas |> ignore)
+
                 let ready = ref false
                 let failedInit = ref false
-
-                liveApplications.Add
-                    {
-                        App = app
-                        Ready = ready
-                        Failed = failedInit
-                    }
+                // Initial access/cue callbacks can fail before initialisation starts. Do not acquire an application
+                // (and its stage) or retain it in the registry until those synchronous host callbacks have succeeded.
+                let app =
+                    lazy (
+                        let made = P.application ()
+                        applicationsCreated <- applicationsCreated + 1
+                        liveApplications.Add { App = made; Ready = ready; Failed = failedInit }
+                        made
+                    )
 
                 // FS.GG.Game#751: the hit regions live in their own tree, never on the stage, so they are not drawn and
                 // the stage keeps one display object per drawable scene node. Drawn at their scene coordinates, which are
@@ -245,24 +270,6 @@ module PixiSurface =
                     |> Seq.tryFind (fun (region, _) -> obj.ReferenceEquals(box region, hit))
                     |> Option.map snd
 
-                let input =
-                    interactive
-                    |> Option.map (fun report ->
-                        reregion first.Objects
-
-                        CanvasInput.attach
-                            container
-                            canvas
-                            RendererBackend.Pixi
-                            options.Label
-                            options.Width
-                            options.Height
-                            hitTest
-                            report
-                            first)
-
-                acquire (fun () -> input |> Option.iter (fun host -> host.Dispose()))
-
                 let slots = ResizeArray<Slot>()
                 let latest = ref scene
                 let failed: string option ref = ref None
@@ -279,14 +286,14 @@ module PixiSurface =
                         slots.Clear()
 
                         try
-                            P.destroyApplication app
+                            P.destroyApplication app.Value
                         finally
                             CanvasSupport.loseContext canvas
 
                 let reconcile (next: Scene) =
                     let shapes = ResizeArray<Shape>()
                     unsupportedNodes <- unsupportedNodes + collect (0.0, 0.0) next shapes
-                    let stage = P.stage app
+                    let stage = P.stage app.Value
                     P.setSortableChildren stage true
 
                     for index in 0 .. shapes.Count - 1 do
@@ -340,11 +347,87 @@ module PixiSurface =
 
                     // Render now, in this task, so the presented state is what a reader of the canvas sees; the
                     // application's own ticker renders every later frame.
-                    P.renderApplication app
+                    P.renderApplication app.Value
+
+                // FS.GG.Game#788: an input-host mount renders at the presented density, its backing store derived from
+                // the frame's contain-fit and the device pixel ratio (CanvasSizing), so the cue layer's 2 CSS px bands
+                // are drawn sharp at any presented size and on a high-DPI screen. The fit is uniform, so one resolution
+                // serves both axes.
+                let tracker =
+                    match frame with
+                    | Some frame ->
+                        Some(
+                            CanvasSizing.track frame canvas options.Width options.Height (fun backingWidth backingHeight _ ->
+                                if ready.Value && not destroyed.Value && not disposed.Value then
+                                    // One resolution for both axes (the fit is uniform): the screen is the scene width
+                                    // and the backing height at that resolution, so the backing store is exactly the
+                                    // snapped fit.
+                                    let resolution = float backingWidth / options.Width
+                                    resizeAt app.Value options.Width (float backingHeight / resolution) resolution
+                                    reconcile latest.Value
+                                    true
+                                else
+                                    false)
+                        )
+                    | None -> None
+
+                acquire (fun () -> tracker |> Option.iter (fun t -> t.Dispose()))
+                let sharpen () = tracker |> Option.iter (fun t -> t.Ensure())
+
+                // The input host: `update frame` presents a frame to it, and `drawsItself` says whether it draws the frame
+                // (with its cue layer) or leaves that to `Present`.
+                let input =
+                    match host with
+                    | None -> None
+                    | Some(InputHost.CanvasHost.Selection report) ->
+                        reregion first.Objects
+
+                        let attached =
+                            CanvasInput.attach
+                                container
+                                canvas
+                                RendererBackend.Pixi
+                                options.Label
+                                options.Width
+                                options.Height
+                                hitTest
+                                report
+                                first
+
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), false)
+                    | Some(InputHost.CanvasHost.Input(spec, report)) ->
+                        reregion first.Objects
+
+                        let draw (next: Scene) (cues: SceneNode list) =
+                            let drawn = { next with Nodes = next.Nodes @ cues }
+                            latest.Value <- drawn
+
+                            if ready.Value then
+                                sharpen ()
+                                reconcile drawn
+
+                        let attached =
+                            InputHost.attach
+                                canvas
+                                InputHost.Ownership.Fallback
+                                RendererBackend.Pixi
+                                options.Label
+                                options.Width
+                                options.Height
+                                false
+                                hitTest
+                                spec
+                                report
+                                draw
+                                first
+
+                        Some((fun frame -> attached.Update frame), (fun () -> attached.Dispose()), true)
+
+                acquire (fun () -> input |> Option.iter (fun (_, dispose, _) -> dispose ()))
 
                 let initialised =
                     P.initApplication
-                        app
+                        app.Value
                         (unbox<P.Canvas>(box canvas))
                         (int options.Width)
                         (int options.Height)
@@ -361,6 +444,7 @@ module PixiSurface =
                             ready.Value <- true
 
                             try
+                                sharpen ()
                                 reconcile latest.Value
                             with ex ->
                                 failed.Value <- Some ex.Message
@@ -404,23 +488,26 @@ module PixiSurface =
                                     | None ->
                                         let next = frame.Scene
 
-                                        match input with
-                                        | Some host ->
-                                            match SceneInteraction.problems frame.Objects with
-                                            | [] -> ()
-                                            | problems ->
-                                                failwithf
-                                                    "Pixi surface refused the objects: %s"
-                                                    (String.concat "; " problems)
+                                        let drawsItself =
+                                            match input with
+                                            | Some(update, _, drawsItself) ->
+                                                match SceneInteraction.problems frame.Objects with
+                                                | [] -> ()
+                                                | problems ->
+                                                    failwithf
+                                                        "Pixi surface refused the objects: %s"
+                                                        (String.concat "; " problems)
 
-                                            reregion frame.Objects
-                                            host.Update frame
-                                        | None -> ()
+                                                reregion frame.Objects
+                                                update frame
+                                                drawsItself
+                                            | None -> false
 
-                                        latest.Value <- next
+                                        if not drawsItself then
+                                            latest.Value <- next
 
-                                        if ready.Value then
-                                            reconcile next
+                                            if ready.Value then
+                                                reconcile next
                         Dispose =
                             fun () ->
                                 if not disposed.Value then
@@ -468,11 +555,23 @@ module PixiSurface =
                     (String.concat "; " (SceneInteraction.problems frame.Objects))
             )
         else
-            mountWith container options (Some report) frame
+            mountWith container options (Some(InputHost.CanvasHost.Selection report)) frame
+
+    let mountInput
+        (container: HTMLElement)
+        (options: PixiOptions)
+        (spec: InputHostSpec)
+        (report: InputEvent -> unit)
+        (frame: InteractiveScene)
+        : Result<RendererMount<InteractiveScene>, string> =
+        match SceneInteraction.problems frame.Objects with
+        | [] -> mountWith container options (Some(InputHost.CanvasHost.Input(spec, report))) frame
+        | problems -> Error(sprintf "Pixi surface refused the objects: %s" (String.concat "; " problems))
 
     let surface (container: HTMLElement) (options: PixiOptions) : SceneSurface =
         SceneSurface.create RendererBackend.Pixi (mountScene container options)
         |> SceneSurface.withInteraction (mountInteractive container options)
+        |> SceneSurface.withInputHost (mountInput container options)
 
     let adapter (container: HTMLElement) (options: PixiOptions) (view: 'State -> Scene) : RendererAdapter<'State> =
         SceneSurface.adapter view (surface container options)

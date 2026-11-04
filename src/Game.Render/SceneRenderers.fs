@@ -10,17 +10,20 @@ type SceneSurface
         backend: RendererBackend,
         mountScene: Scene -> Result<RendererMount<Scene>, string>,
         mountInteractive:
-            ((SelectionRequest -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>) option
+            ((SelectionRequest -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>) option,
+        mountInput:
+            (InputHostSpec -> (InputEvent -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>) option
     ) =
     member internal _.Backend = backend
     member internal _.MountScene = mountScene
     member internal _.MountInteractive = mountInteractive
+    member internal _.MountInput = mountInput
 
 [<RequireQualifiedAccess>]
 module SceneSurface =
 
     let create (backend: RendererBackend) (mountScene: Scene -> Result<RendererMount<Scene>, string>) =
-        SceneSurface(backend, mountScene, None)
+        SceneSurface(backend, mountScene, None, None)
 
     let backend (surface: SceneSurface) = surface.Backend
 
@@ -40,18 +43,14 @@ module SceneSurface =
         }
 
     let withInteraction mountInteractive (surface: SceneSurface) =
-        SceneSurface(surface.Backend, surface.MountScene, Some mountInteractive)
+        SceneSurface(surface.Backend, surface.MountScene, Some mountInteractive, surface.MountInput)
 
     let isInteractive (surface: SceneSurface) = surface.MountInteractive.IsSome
 
-    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
-    let withInputHost
-        (_: (InputEvent -> unit) -> InteractiveScene -> Result<RendererMount<InteractiveScene>, string>)
-        (_: SceneSurface)
-        : SceneSurface =
-        failwith "SceneSurface.withInputHost is a contract stub; FS.GG.Game#788 implements it."
+    let withInputHost mountInput (surface: SceneSurface) =
+        SceneSurface(surface.Backend, surface.MountScene, surface.MountInteractive, Some mountInput)
 
-    let hasInputHost (_: SceneSurface) = false
+    let hasInputHost (surface: SceneSurface) = surface.MountInput.IsSome
 
     let interactiveAdapter
         (view: 'State -> Scene)
@@ -77,6 +76,31 @@ module SceneSurface =
                             })
             }
 
+    let inputAdapter
+        (view: 'State -> Scene)
+        (interaction: SceneInteraction<'State>)
+        (route: InputRoute)
+        (surface: SceneSurface)
+        : RendererAdapter<'State> =
+        match surface.MountInput with
+        | None -> adapter view surface
+        | Some mountInput ->
+            let frame = SceneInteraction.frame view interaction
+            let spec = SceneInteraction.inputHost interaction
+            let report event = InputRoute.report event route
+
+            {
+                Backend = surface.Backend
+                Mount =
+                    fun state ->
+                        mountInput spec report (frame state)
+                        |> Result.map (fun mounted ->
+                            {
+                                Present = fun next -> mounted.Present(frame next)
+                                Dispose = mounted.Dispose
+                            })
+            }
+
 /// Opaque behind the .fsi: `create` is the only constructor and always declares the SVG surface.
 [<NoEquality; NoComparison>]
 type SceneRenderers<'State> =
@@ -85,6 +109,8 @@ type SceneRenderers<'State> =
         Views: Map<RendererBackend, 'State -> Scene>
         Surfaces: Map<RendererBackend, SceneSurface>
         Interaction: (SceneInteraction<'State> * SelectionRoute) option
+        /// FS.GG.Game#788: the input route, which replaces `Interaction` (the two are exclusive).
+        Input: (SceneInteraction<'State> * InputRoute) option
     }
 
 [<RequireQualifiedAccess>]
@@ -100,6 +126,7 @@ module SceneRenderers =
                         RendererBackend.Svg, SceneSurface.create RendererBackend.Svg svg
                     ]
             Interaction = None
+            Input = None
         }
 
     let withSurface (surface: SceneSurface) (renderers: SceneRenderers<'State>) =
@@ -124,19 +151,24 @@ module SceneRenderers =
     let withInteraction (interaction: SceneInteraction<'State>) (route: SelectionRoute) (renderers: SceneRenderers<'State>) =
         { renderers with
             Interaction = Some(interaction, route)
+            Input = None
         }
 
-    /// Contract only (FS.GG.Game#787); FS.GG.Game#788 implements it.
-    let withInput (_: SceneInteraction<'State>) (_: InputRoute) (_: SceneRenderers<'State>) : SceneRenderers<'State> =
-        failwith "SceneRenderers.withInput is a contract stub; FS.GG.Game#788 implements it."
+    let withInput (interaction: SceneInteraction<'State>) (route: InputRoute) (renderers: SceneRenderers<'State>) =
+        { renderers with
+            Interaction = None
+            Input = Some(interaction, route)
+        }
 
     let registry (renderers: SceneRenderers<'State>) : RendererRegistry<'State> =
         let svg = renderers.Surfaces.[RendererBackend.Svg]
 
         let adapterOf backend =
-            match renderers.Interaction with
-            | None -> SceneSurface.adapter (view backend renderers) renderers.Surfaces.[backend]
-            | Some(interaction, route) ->
+            match renderers.Input, renderers.Interaction with
+            | Some(interaction, route), _ ->
+                SceneSurface.inputAdapter (view backend renderers) interaction route renderers.Surfaces.[backend]
+            | None, None -> SceneSurface.adapter (view backend renderers) renderers.Surfaces.[backend]
+            | None, Some(interaction, route) ->
                 SceneSurface.interactiveAdapter (view backend renderers) interaction route renderers.Surfaces.[backend]
 
         let plain =
@@ -145,8 +177,9 @@ module SceneRenderers =
         backends renderers
         |> List.filter ((<>) RendererBackend.Svg)
         |> List.fold (fun registry backend -> RendererRegistry.register (adapterOf backend) registry) plain
-        // With an interaction, the SVG adapter is the interactive one too; the plain default only made the registry.
+        // With an interaction or an input route, the SVG adapter is the interactive one too; the plain default only made the registry.
         |> fun registry ->
-            match renderers.Interaction with
-            | Some _ -> RendererRegistry.register (adapterOf RendererBackend.Svg) registry
-            | None -> registry
+            if renderers.Interaction.IsSome || renderers.Input.IsSome then
+                RendererRegistry.register (adapterOf RendererBackend.Svg) registry
+            else
+                registry

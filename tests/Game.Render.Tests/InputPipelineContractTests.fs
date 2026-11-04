@@ -358,7 +358,75 @@ let tests =
                 Expect.equal sent.Count 2 "a disposed host unbinds its route"
             }
 
-            test "the input host and kit functions are stubs until their FS.GG.Game#788 PR" {
+            test "withInput gives every declared backend the input adapter: the spec, the frame and the route" {
+                let objects = [ tile "a"; tile "b" ]
+                let route = InputRoute.create ()
+                let reported = ResizeArray<InputEvent>()
+                InputRoute.bind reported.Add route
+                let specs = ResizeArray<InputHostSpec>()
+                let frames = ResizeArray<InteractiveScene>()
+
+                let surface backend =
+                    SceneSurface.create backend (fun _ -> Error "the plain mount is not used")
+                    |> SceneSurface.withInputHost (fun spec report frame ->
+                        specs.Add spec
+                        frames.Add frame
+                        report (InputEvent.create InputSource.Pointer InputAction.Activate (Some "a") None InputModifiers.none false)
+
+                        Ok
+                            {
+                                Present = frames.Add
+                                Dispose = ignore
+                            })
+
+                Expect.isTrue (SceneSurface.hasInputHost (surface RendererBackend.Pixi)) "an input-host mount is declared"
+
+                Expect.isFalse
+                    (SceneSurface.hasInputHost (SceneSurface.create RendererBackend.Pixi (fun _ -> Error "plain")))
+                    "a plain surface has none"
+
+                let interaction =
+                    SceneInteraction.create (fun (selected: string option) -> objects) id (fun _ s -> s)
+                    |> SceneInteraction.withAccess (fun target ->
+                        if target.Id = "b" then ObjectAccess.pointerOnly else ObjectAccess.full)
+
+                let registry =
+                    SceneRenderers.create (fun _ -> Scene.empty) (fun _ -> Error "the plain SVG mount is not used")
+                    |> SceneRenderers.withSurface (surface RendererBackend.Svg)
+                    |> SceneRenderers.withSurface (surface RendererBackend.Pixi)
+                    |> SceneRenderers.withInput interaction route
+                    |> SceneRenderers.registry
+
+                for backend in [ RendererBackend.Svg; RendererBackend.Pixi ] do
+                    let adapter = (RendererRegistry.tryFind backend registry).Value
+                    let mount = (adapter.Mount(Some "a")) |> Result.defaultWith failwith
+                    mount.Present None
+
+                Expect.equal reported.Count 2 "each backend's input host reports to the route"
+                Expect.equal (frames |> Seq.map (fun f -> f.Selected) |> List.ofSeq) [ Some "a"; None; Some "a"; None ] "frames of each state"
+
+                Expect.isFalse
+                    (specs |> Seq.exists (fun spec -> ObjectAccess.isKeyboardReachable (InputHostSpec.access spec (tile "b"))))
+                    "the spec carries the interaction's declared access"
+
+                Expect.isTrue
+                    (specs |> Seq.forall (fun spec -> ObjectAccess.isKeyboardReachable (InputHostSpec.access spec (tile "a"))))
+                    "undeclared objects stay full"
+
+                let interactive =
+                    SceneRenderers.create (fun _ -> Scene.empty) (fun _ -> Error "plain")
+                    |> SceneRenderers.withSurface (surface RendererBackend.Pixi)
+                    |> SceneRenderers.withInput interaction route
+                    |> SceneRenderers.withInteraction interaction (SelectionRoute.create ())
+                    |> SceneRenderers.registry
+
+                let before = specs.Count
+                let pixi = (RendererRegistry.tryFind RendererBackend.Pixi interactive).Value
+                Expect.isError (pixi.Mount None) "withInteraction replaced the input route (the surface has no interactive mount)"
+                Expect.equal specs.Count before "no input host was mounted"
+            }
+
+            test "the kit's input functions are stubs until their FS.GG.Game#788 PR" {
                 let objects = [ tile "a" ]
 
                 let frame =
@@ -380,16 +448,10 @@ let tests =
                 let interaction =
                     SceneInteraction.create (fun () -> objects) (fun () -> None) (fun _ s -> s)
 
-                raisesFor788 "SceneRenderers.withInput" (fun () ->
-                    SceneRenderers.create (fun () -> Scene.empty) (fun _ -> Error "unused")
-                    |> SceneRenderers.withInput interaction (InputRoute.create ())
-                    |> ignore)
-
-                raisesFor788 "SceneSurface.withInputHost" (fun () ->
-                    SceneSurface.create RendererBackend.Svg (fun _ -> Error "unused")
-                    |> SceneSurface.withInputHost (fun _ _ -> Error "unused")
-                    |> ignore)
-
+                ignore frame
+                ignore model
+                ignore io
+                ignore interaction
                 let subject =
                     RendererConformance.subject
                         (RendererRegistry.svg (fun () -> Scene.empty) (fun _ -> Error "unused"))

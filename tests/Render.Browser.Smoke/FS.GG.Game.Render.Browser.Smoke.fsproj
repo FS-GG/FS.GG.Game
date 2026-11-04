@@ -17,6 +17,8 @@
     <Compile Include="../Game.Render.Themes.Fuzz/Numerics.fs" Link="ThemeNumerics.fs" />
     <Compile Include="GeneratedRenderers.fs" />
     <Compile Include="RetainedSurface.fs" />
+    <Compile Include="InputFixture.fs" />
+    <Compile Include="InputHostSmoke.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
